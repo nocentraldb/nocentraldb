@@ -21,7 +21,7 @@ Rust crates form a Cargo workspace (`Cargo.toml`, `crates/*`); TypeScript projec
 - [proto](https://moonrepo.dev/proto) installs the pinned moon, Node and pnpm from `.prototools`.
 - [rustup](https://rustup.rs) installs the pinned Rust from `rust-toolchain.toml`, with `rustfmt` and `clippy`, on first use of `cargo`.
 
-Every tool version has exactly one source: `.prototools` for moon, Node and pnpm, `rust-toolchain.toml` for Rust. `.nvmrc` and the `packageManager` field in `package.json` repeat the Node and pnpm pins, and `scripts/check-pins.mjs` fails the gate when they differ. Node 24 is the minimum; `pnpm install` refuses an older Node.
+Every tool version has exactly one source: `.prototools` for moon, Node and pnpm, `rust-toolchain.toml` for Rust. proto reads `.prototools` only (`detect-strategy = "only-prototools"`) and leaves Rust to rustup: when proto installed the toolchain from `rust-toolchain.toml` it came out without `cargo`. `.nvmrc` and the `packageManager` field in `package.json` repeat the Node and pnpm pins, and `scripts/check-pins.mjs` fails the gate when they differ. Node 24 is the minimum; `pnpm install` refuses an older Node.
 
 From a fresh clone:
 
@@ -40,7 +40,7 @@ export PROTO_HOME="$HOME/.proto"
 export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
 ```
 
-Check with `which node pnpm moon`: each must resolve to `~/.proto/shims/…`.
+Check with `which node pnpm moon`: each must resolve to `~/.proto/shims/…`. Inside the repository the proto shims run the Node pinned in `.prototools`, even when another Node comes earlier on PATH; `devEngines.runtime` in `package.json` rejects Node < 24 wherever pnpm runs without proto (`ERR_PNPM_BAD_RUNTIME_VERSION`).
 
 ## Gates
 
