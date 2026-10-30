@@ -13,6 +13,12 @@ implicitInputs:
   - "/rust-toolchain.toml"
   - "/crates/**/*"
 
+# rustup has no install lock: parallel cargo calls that each auto-install a
+# missing toolchain corrupt one another. Every Rust task waits for the one
+# install task in the root project instead.
+implicitDeps:
+  - "repo:rust-toolchain"
+
 tasks:
   format-check:
     command: "cargo fmt --check -p $project"
