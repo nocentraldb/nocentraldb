@@ -1,0 +1,8 @@
+moon = "2.6.5"
+node = "24.22.2"
+pnpm = "12.17.0"
+
+[settings]
+# Read tool versions from this file only. Rust is pinned in
+# rust-toolchain.toml and installed by rustup, not by proto.
+detect-strategy = "only-prototools"

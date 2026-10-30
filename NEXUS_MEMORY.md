@@ -5,10 +5,11 @@
 
 > **You have already been given the index below** — all of it, or as much of it as a session start could carry. It is the same index `nxm prime` replays, which stops at the byte budget the host delivers and says so when it does (`nxm index` prints the whole of it), so there is nothing to gain by reading it again here. Underneath it stands the FULL TEXT of each memory — that is what `nxm recall <key>` serves, and it is meant to be read one memory at a time, when the index tells you a particular one matters. Reading this file end to end is the expensive way to obtain what you already have.
 
-## Index (2)
+## Index (3)
 
 - **english-artifacts**: Write design docs, code, code comments, memories, tickets and ticket notes in English, even when the session is in German.
-- **commit-memory-on-remember**: After every nxm remember/forget, commit the regenerated NEXUS_MEMORY.md right away so it ships with the current work's PR.
+- **commit-memory-on-remember**: After every nxm remember/forget, commit the regenerated NEXUS_MEMORY.md at once, on the current branch, so it ships with the current work's PR.
+- **watch-nxc-operation**: Watch a running nxc operation with: nxc status --thread <root id> --json; act on needs_decision, escalated, awaiting_human, live=false.
 
 ## Full text
 
@@ -20,4 +21,10 @@ All durable artifacts are written in English: design documents, code, code comme
 
 ### `commit-memory-on-remember`
 
-Every nxm remember or nxm forget regenerates NEXUS_MEMORY.md. Commit that file immediately afterwards (plus AGENTS.md if its NEXUS block changed), staging only those files. The memory arose from the current work, so the commit belongs in the next PR alongside it.
+Every nxm remember or nxm forget regenerates NEXUS_MEMORY.md. That file exists so that sessions without nxs installed still learn the project's rules. Commit it immediately after every remember/forget (plus AGENTS.md if its NEXUS block changed), staging only those files, on whatever branch is checked out. It then ships in the next PR, which is correct: the rule arose from that PR's work. Do not postpone the commit, not even while a coding chain holds the working copy; commit only the path (git commit -- NEXUS_MEMORY.md) so the chain's staged files stay untouched.
+
+---
+
+### `watch-nxc-operation`
+
+To follow a running nxc operation (e.g. a coding chain commissioned with nxc send), poll its status as JSON: nxc status --thread <root thread id> --json. The fields that matter: operations[].live, open, needs_decision, interrupted, holds_working_tree, and per thread state, outstanding, session_state, escalated, awaiting_human, stale. Watch it from the session that commissioned the work rather than leaving it unobserved; react when needs_decision, escalated or awaiting_human turns true, or when live turns false.

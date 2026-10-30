@@ -1,0 +1,25 @@
+{
+  "name": "nocentraldb",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "packageManager": "pnpm@12.17.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": ">=24",
+      "onFail": "error"
+    }
+  },
+  "scripts": {
+    "gates": "moon exec :gates --force --on-failure continue --summary normal",
+    "gates:dev": "moon run :gates"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

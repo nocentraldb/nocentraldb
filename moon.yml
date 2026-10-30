@@ -1,0 +1,39 @@
+# Root project: gates the root config files that belong to no other project.
+id: repo
+language: javascript
+layer: configuration
+
+tasks:
+  format-check:
+    # The inputs below mirror the paths in the command; add a root file to both.
+    command: "biome check --error-on-warnings package.json biome.json tsconfig.base.json pnpm-workspace.yaml moon.yml .moon scripts"
+    inputs:
+      - "/package.json"
+      - "/biome.json"
+      - "/tsconfig.base.json"
+      - "/pnpm-workspace.yaml"
+      - "/moon.yml"
+      - "/.moon/**/*.yml"
+      - "/scripts/**/*"
+  pins:
+    command: "node scripts/check-pins.mjs"
+    inputs:
+      - "/.prototools"
+      - "/.nvmrc"
+      - "/scripts/check-pins.mjs"
+      - "/package.json"
+      - "/apps/*/package.json"
+      - "/packages/*/package.json"
+  test:
+    # Tests of the repository tooling (scripts/check-pins.mjs).
+    command: "node --test scripts/*.test.mjs"
+    inputs:
+      - "/scripts/**/*"
+  rust-toolchain:
+    # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
+    # task runs; a no-op (and offline) when it is already installed.
+    command: "rustup toolchain install --no-self-update"
+    inputs:
+      - "/rust-toolchain.toml"
+  gates:
+    deps: ["~:format-check", "~:pins", "~:test"]

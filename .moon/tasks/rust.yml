@@ -1,0 +1,30 @@
+# Tasks inherited by every Rust project (crates/*). A project's moon.yml
+# holds only its identity and real differences.
+inheritedBy:
+  language: rust
+
+# Root files every Rust task depends on. All crate sources are inputs of
+# every Rust task: coarse, but a change in one crate re-runs the checks of
+# the crates that depend on it. A Rust toolchain fingerprint beyond
+# rust-toolchain.toml is best effort; `pnpm gates` never reads this cache.
+implicitInputs:
+  - "/Cargo.toml"
+  - "/Cargo.lock"
+  - "/rust-toolchain.toml"
+  - "/crates/**/*"
+
+# rustup has no install lock: parallel cargo calls that each auto-install a
+# missing toolchain corrupt one another. Every Rust task waits for the one
+# install task in the root project instead.
+implicitDeps:
+  - "repo:rust-toolchain"
+
+tasks:
+  format-check:
+    command: "cargo fmt --check -p $project"
+  lint:
+    command: "cargo clippy --locked -p $project --all-targets -- -D warnings"
+  test:
+    command: "cargo test --locked -p $project"
+  gates:
+    deps: ["~:format-check", "~:lint", "~:test"]
