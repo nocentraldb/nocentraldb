@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "gates": "moon exec :gates --force --on-failure continue",
+    "gates": "moon exec :gates --force --on-failure continue --summary normal",
     "gates:dev": "moon run :gates"
   },
   "devDependencies": {

@@ -44,7 +44,7 @@ Check with `which node pnpm moon`: each must resolve to `~/.proto/shims/…`.
 
 ## Gates
 
-**The project gate is `pnpm gates`.** It runs every gate task of every project through moon, uncached (`moon exec :gates --force --on-failure continue`): every task is forced, no cached result is read, and a failing task does not stop the others, so every gate has a result. It exits non-zero if any task failed.
+**The project gate is `pnpm gates`.** It runs every gate task of every project through moon, uncached (`moon exec :gates --force --on-failure continue --summary normal`): every task is forced, no cached result is read, and a failing task does not stop the others, so every gate has a result. The closing summary lists every task as `pass`, `fail` or `skip`; it exits non-zero if any task failed.
 
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
