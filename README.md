@@ -54,7 +54,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`); `rust-toolchain` runs before every Rust task |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test scripts/*.test.mjs`, the tests of check-pins); `rust-toolchain` runs before every Rust task |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -70,6 +70,7 @@ moon run sdk:typecheck --force
 moon run sdk:test --force
 moon run repo:format-check --force
 moon run repo:pins --force
+moon run repo:test --force
 ```
 
 Re-running one test in isolation, e.g. to check a suspected flake:
@@ -77,6 +78,7 @@ Re-running one test in isolation, e.g. to check a suspected flake:
 ```sh
 cargo test --locked -p ncdb-core <test name>
 pnpm --filter @nocentraldb/sdk exec vitest run -t "<test name>"
+node --test --test-name-pattern "<test name>" scripts/check-pins.test.mjs
 ```
 
 ### Caching and what moon buys

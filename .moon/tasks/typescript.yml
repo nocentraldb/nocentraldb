@@ -12,6 +12,9 @@ implicitInputs:
   - "/.prototools"
 
 tasks:
+  # format-check and lint run the same `biome check` on purpose: one Biome
+  # pass covers both, and every language keeps the same task names. Split them
+  # (`biome format .` / `biome lint .`) once they need to differ.
   format-check:
     command: "biome check --error-on-warnings ."
   lint:
