@@ -1,0 +1,9 @@
+# Versions are not repeated here: proto reads .prototools (moon, node,
+# pnpm) and rustup reads rust-toolchain.toml (Rust).
+javascript:
+  packageManager: pnpm
+  inferTasksFromScripts: false
+  syncPackageManagerField: false
+node: {}
+pnpm: {}
+rust: {}

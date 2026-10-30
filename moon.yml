@@ -1,0 +1,27 @@
+# Root project: gates the root config files that belong to no other project.
+id: repo
+language: javascript
+layer: configuration
+
+tasks:
+  format-check:
+    command: "biome check --error-on-warnings package.json biome.json tsconfig.base.json pnpm-workspace.yaml moon.yml .moon scripts"
+    inputs:
+      - "/package.json"
+      - "/biome.json"
+      - "/tsconfig.base.json"
+      - "/pnpm-workspace.yaml"
+      - "/moon.yml"
+      - "/.moon/**/*.yml"
+      - "/scripts/**/*"
+  pins:
+    command: "node scripts/check-pins.mjs"
+    inputs:
+      - "/.prototools"
+      - "/.nvmrc"
+      - "/scripts/check-pins.mjs"
+      - "/package.json"
+      - "/apps/*/package.json"
+      - "/packages/*/package.json"
+  gates:
+    deps: ["~:format-check", "~:pins"]

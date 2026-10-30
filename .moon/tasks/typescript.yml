@@ -1,0 +1,24 @@
+# Tasks inherited by every TypeScript project (apps/*, packages/*). A
+# project's moon.yml holds only its identity and real differences.
+inheritedBy:
+  language: typescript
+
+# Root files every TypeScript task depends on.
+implicitInputs:
+  - "/biome.json"
+  - "/tsconfig.base.json"
+  - "/package.json"
+  - "/pnpm-lock.yaml"
+  - "/.prototools"
+
+tasks:
+  format-check:
+    command: "biome check --error-on-warnings ."
+  lint:
+    command: "biome check --error-on-warnings ."
+  typecheck:
+    command: "tsc --noEmit -p tsconfig.json"
+  test:
+    command: "vitest run"
+  gates:
+    deps: ["~:format-check", "~:lint", "~:typecheck", "~:test"]
