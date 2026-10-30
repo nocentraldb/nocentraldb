@@ -19,7 +19,7 @@ Rust crates form a Cargo workspace (`Cargo.toml`, `crates/*`); TypeScript projec
 ## Prerequisites
 
 - [proto](https://moonrepo.dev/proto) installs the pinned moon, Node and pnpm from `.prototools`.
-- [rustup](https://rustup.rs) installs the pinned Rust from `rust-toolchain.toml`, with `rustfmt` and `clippy`, on first use of `cargo`.
+- [rustup](https://rustup.rs) installs the pinned Rust from `rust-toolchain.toml`, with `rustfmt` and `clippy`. The gate does this itself in the task `repo:rust-toolchain` (`rustup toolchain install --no-self-update`), which every Rust task waits for: rustup has no install lock, so parallel Cargo tasks that each auto-install a missing toolchain break each other.
 
 Every tool version has exactly one source: `.prototools` for moon, Node and pnpm, `rust-toolchain.toml` for Rust. proto reads `.prototools` only (`detect-strategy = "only-prototools"`) and leaves Rust to rustup: when proto installed the toolchain from `rust-toolchain.toml` it came out without `cargo`. `.nvmrc` and the `packageManager` field in `package.json` repeat the Node and pnpm pins, and `scripts/check-pins.mjs` fails the gate when they differ. Node 24 is the minimum; `pnpm install` refuses an older Node.
 
@@ -54,7 +54,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`) |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`); `rust-toolchain` runs before every Rust task |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 

@@ -27,7 +27,7 @@ tasks:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
     # task runs; a no-op (and offline) when it is already installed.
     command: "rustup toolchain install --no-self-update"
-    options:
-      cache: false
+    inputs:
+      - "/rust-toolchain.toml"
   gates:
     deps: ["~:format-check", "~:pins"]
