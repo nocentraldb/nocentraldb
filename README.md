@@ -44,7 +44,9 @@ Check with `which node pnpm moon`: each must resolve to `~/.proto/shims/…`. In
 
 ## Gates
 
-**The project gate is `pnpm gates`.** It runs every gate task of every project through moon, uncached (`moon exec :gates --force --on-failure continue --summary normal`): every task is forced, no cached result is read, and a failing task does not stop the others, so every gate has a result. The closing summary lists every task as `pass`, `fail` or `skip`; it exits non-zero if any task failed.
+**The project gate is `pnpm gates`.** It runs every gate task of every project through moon, uncached (`moon exec :gates --force --base HEAD --head HEAD --on-failure continue --summary normal`): every task is forced, no cached result is read, and a failing task does not stop the others, so every gate has a result. `--base HEAD --head HEAD` only keeps moon's changed-file query (which `moon exec` runs even when forced) resolvable in a shallow CI checkout; the gate selects no task by changed files. The closing summary lists every task as `pass`, `fail` or `skip`; it exits non-zero if any task failed.
+
+CI (`.github/workflows/ci.yml`) runs `pnpm gates` on pull requests and on pushes to `main`, as the check named `gates`.
 
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
