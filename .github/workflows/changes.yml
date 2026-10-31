@@ -1,0 +1,37 @@
+# The `changes` check: a pull request that changes a path outside the
+# allowlist in scripts/release/check-fragments.mjs must add a fragment under
+# changes/, unless it carries the label skip-changes. The label is read from
+# the event payload, so labeled/unlabeled re-run the check. Read-only; the
+# full history is fetched so the merge base with the PR's base exists.
+# scripts/changes-workflow.test.mjs asserts these rules.
+name: changes
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: changes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - run: pnpm install --frozen-lockfile
+      - name: Required fragment
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}
+        run: node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP
