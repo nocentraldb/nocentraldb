@@ -1,6 +1,7 @@
 // Asserts the invariants of .github/workflows/ci.yml that the design review
-// made binding: the full uncached gate, the supply-chain rules and the cache
-// scope. Text checks on the committed workflow, no YAML parser needed.
+// made binding: the full uncached gate, the supply-chain rules, the cache
+// scope and bounds, the job timeout and the concurrency policy.
+// Text checks on the committed workflow, no YAML parser needed.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -95,4 +96,38 @@ test("pnpm gates forces every task and diffs HEAD against itself", () => {
   assert.ok(args.includes("--force"), gates);
   assert.match(gates, /--base HEAD --head HEAD/);
   assert.doesNotMatch(gates, /--affected|--query/);
+});
+
+// A hung step must not burn the free-plan Actions minutes until GitHub's
+// 6-hour default job timeout.
+test("bounds the gates job with timeout-minutes", () => {
+  const job = code.match(/^ {2}gates:\n((?: {4}.*\n|\n)*)/m)?.[1] ?? "";
+  const minutes = job.match(/^ {4}timeout-minutes: (\d+)$/m)?.[1];
+  assert.ok(minutes, "the gates job declares no timeout-minutes");
+  assert.ok(Number(minutes) >= 10 && Number(minutes) <= 60, minutes);
+});
+
+// Superseded pull-request runs are cancelled; every push to main runs to the
+// end. A shared group would still cancel a *pending* main run when the next
+// push queues behind it, so push runs get a group of their own per commit.
+test("cancels superseded pull-request runs only, never a run on main", () => {
+  const block = code.match(/^concurrency:\n((?: {2}.*\n)+)/m)?.[1] ?? "";
+  assert.match(
+    block,
+    /^ {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m,
+  );
+  const group = block.match(/^ {2}group: (.*)$/m)?.[1] ?? "";
+  assert.match(group, /github\.event_name == 'pull_request'/, group);
+  assert.match(group, /github\.sha/, group);
+});
+
+// actions/cache saves only on a key miss, so one entry holds at most one
+// build per toolchain and lockfile. A restore-keys fallback would seed every
+// new entry with the previous target/ and let it grow across entries.
+test("bounds the Cargo target cache: exact key, no restore-keys fallback", () => {
+  const steps = code.split(/\n(?= {6}- )/);
+  const cargo = steps.filter((step) => /^\s*target$/m.test(step));
+  assert.equal(cargo.length, 1, "exactly one step caches target/");
+  assert.match(cargo[0], /uses: actions\/cache@/);
+  assert.doesNotMatch(cargo[0], /restore-keys/);
 });
