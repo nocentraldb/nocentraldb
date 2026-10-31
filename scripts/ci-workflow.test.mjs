@@ -116,9 +116,11 @@ test("cancels superseded pull-request runs only, never a run on main", () => {
     block,
     /^ {2}cancel-in-progress: \$\{\{ github\.event_name == 'pull_request' \}\}$/m,
   );
-  const group = block.match(/^ {2}group: (.*)$/m)?.[1] ?? "";
-  assert.match(group, /github\.event_name == 'pull_request'/, group);
-  assert.match(group, /github\.sha/, group);
+  // Pull requests share a group per ref; each push gets its own, per SHA.
+  assert.match(
+    block,
+    /^ {2}group: ci-\$\{\{ github\.event_name == 'pull_request' && github\.ref \|\| github\.sha \}\}$/m,
+  );
 });
 
 // actions/cache saves only on a key miss, so one entry holds at most one
@@ -129,5 +131,9 @@ test("bounds the Cargo target cache: exact key, no restore-keys fallback", () =>
   const cargo = steps.filter((step) => /^\s*target$/m.test(step));
   assert.equal(cargo.length, 1, "exactly one step caches target/");
   assert.match(cargo[0], /uses: actions\/cache@/);
+  assert.match(
+    cargo[0],
+    /^ {10}key: cargo-\$\{\{ runner\.os \}\}-\$\{\{ hashFiles\('rust-toolchain\.toml', 'Cargo\.lock'\) \}\}$/m,
+  );
   assert.doesNotMatch(cargo[0], /restore-keys/);
 });
