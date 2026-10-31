@@ -40,6 +40,8 @@ pnpm gates
 
 **Tests.** Every fix comes with a test that fails without the fix. Every new behaviour comes with a test that shows it. In the pull request, "How it was tested" lists only what you actually ran and saw.
 
+**Versions.** Do not change a version in a manifest: everything the project publishes shares one version, and releases set it. A new crate says `version.workspace = true`; a dependency on another workspace crate is declared once in `[workspace.dependencies]` of `Cargo.toml`, as `name = { path = "crates/name", version = "=X.Y.Z" }` with the workspace version, and used as `name.workspace = true`; a new package under `packages/` or `apps/` carries the workspace version. The gate task `repo:version` fails otherwise; the rules are in [Versioning](docs/release-management.md#versioning).
+
 **Change fragments.** A pull request that changes the product, meaning anything a user could notice in a crate, a package or an app, adds one fragment: `changes/<slug>.md`. Documentation, `.github/`, `scripts/`, tests and repository config need none; the exact allowlist is in [Writing a change fragment](docs/release-management.md#writing-a-change-fragment). A fix, for example, as `changes/sync-retry-after-timeout.md`:
 
 ```md

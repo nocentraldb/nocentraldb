@@ -14,7 +14,7 @@ docs/release-flow.svg       the release flow diagram
 changes/              change fragments, one per product-changing pull request (writer's guide: changes/README.md)
 scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs and changes-workflow.test.mjs, and contributor-kit.test.mjs
 scripts/lib/          shared test helpers (workflow-checks.mjs: the workflow contracts' mutant runner)
-scripts/release/      release tooling (check-fragments.mjs; lib/: fragments, git, glob, test-repo) and its tests
+scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, set-version.mjs; lib/: fragments, git, glob, manifests, semver, test-repo) and its tests
 .github/workflows/    ci.yml (the `gates` check) and changes.yml (the `changes` check)
 .github/              the contributor kit: issue forms, the RFC feedback discussion form, the pull request template, AI_POLICY.md, SECURITY.md, CODE_OF_CONDUCT.md
 .moon/                moon workspace, toolchains and the tasks every project inherits
@@ -71,7 +71,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and the tests of the release tooling under `scripts/release/`), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)); `rust-toolchain` runs before every Rust task |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and the tests of the release tooling under `scripts/release/`, among them a `set-version` test that runs `cargo` in a two-crate fixture), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)), `version` (`node scripts/release/check-version.mjs`: `Cargo.toml` `[workspace.package]` holds a plain `X.Y.Z`, every crate inherits it, dependencies between workspace crates are pinned to it in `[workspace.dependencies]`, and every workspace `package.json` and `Cargo.lock` carry it; see [Versioning](docs/release-management.md#versioning)); `rust-toolchain` runs before every Rust task and before `test` |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -89,6 +89,7 @@ moon run repo:format-check --force
 moon run repo:pins --force
 moon run repo:test --force
 moon run repo:fragments --force
+moon run repo:version --force
 ```
 
 Re-running one test in isolation, e.g. to check a suspected flake:
@@ -104,6 +105,10 @@ node --test --test-name-pattern "<test name>" scripts/release/lib/fragments.test
 node --test --test-name-pattern "<test name>" scripts/release/check-fragments.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/glob.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/git.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/lib/semver.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/lib/manifests.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/check-version.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/set-version.test.mjs
 ```
 
 ### Caching and what moon buys
@@ -115,6 +120,8 @@ For the inner loop, every task also takes the root files it depends on as inputs
 ### Releases
 
 How versions, change fragments, release notes and the alpha, beta and release stages work, and who does what at each stage, is in [docs/release-management.md](docs/release-management.md). Its tooling is being built; the page marks every part that is not active yet.
+
+Versioning: everything the project publishes shares one version, held as a plain `X.Y.Z` (today `0.1.0`) in `Cargo.toml` `[workspace.package]` and every workspace `package.json`; `repo:version` checks it and `node scripts/release/set-version.mjs <version>` writes it (see [Versioning](docs/release-management.md#versioning)).
 
 ## Package names
 
