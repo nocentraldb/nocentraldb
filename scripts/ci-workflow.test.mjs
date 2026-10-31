@@ -10,12 +10,12 @@
 // against mutants of the real files, each with one property removed or
 // changed, and must reject every one of them: a check that cannot fail is
 // caught here, on every run.
-import assert, { AssertionError } from "node:assert/strict";
+import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse, parseDocument } from "yaml";
+import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(join(root, file), "utf8");
@@ -480,19 +480,4 @@ const checks = [
   },
 ];
 
-const files = load();
-
-for (const { name, check, mutants } of checks) {
-  test(name, () => check(files));
-
-  test(`${name}: rejects every mutant`, async (t) => {
-    assert.ok(Object.keys(mutants).length > 0, "the check has no mutant");
-    for (const [mutant, mutate] of Object.entries(mutants)) {
-      await t.test(mutant, () => {
-        const ctx = clone(files);
-        mutate(ctx);
-        assert.throws(() => check(ctx), AssertionError);
-      });
-    }
-  });
-}
+runWorkflowChecks({ files: load(), clone, checks });
