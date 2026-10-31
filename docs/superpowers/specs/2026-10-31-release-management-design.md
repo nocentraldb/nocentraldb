@@ -16,7 +16,7 @@ The sibling project nexus-flow (`../../nxsflow/nexus-flow`, `docs/specs/release-
 - Its notes are long, dense, grouped only by added/changed/fixed/removed, and read like commit messages (see https://nxsflow.com/changelog). Here they are curated and structured for a reader.
 - Its stable notes aggregate every fragment since the last stable, including bugs that only ever existed between two releases. Here those are filtered out.
 
-![Release flow: alpha on every merge to main, beta on the release branch after the owner's approval, release after the promotion conditions, and where each stage is published](release-flow.svg)
+![Release flow: alpha on every merge to main, beta on the release branch after the owner's approval, release after the promotion conditions, and where each stage is published](../../release-flow.svg)
 
 `release-flow.svg` is plain SVG. GitHub renders it in this document (no Mermaid), and it follows the reader's light or dark colour scheme. The release documentation can reuse it.
 
