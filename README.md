@@ -12,10 +12,11 @@ docs/rfc/             design documents
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 changes/              change fragments, one per product-changing pull request (writer's guide: changes/README.md)
-scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs and changes-workflow.test.mjs
+scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs and changes-workflow.test.mjs, and contributor-kit.test.mjs
 scripts/lib/          shared test helpers (workflow-checks.mjs: the workflow contracts' mutant runner)
 scripts/release/      release tooling (check-fragments.mjs; lib/: fragments, git, glob, test-repo) and its tests
 .github/workflows/    ci.yml (the `gates` check) and changes.yml (the `changes` check)
+.github/              the contributor kit: issue forms, the RFC feedback discussion form, the pull request template, AI_POLICY.md, SECURITY.md, CODE_OF_CONDUCT.md
 .moon/                moon workspace, toolchains and the tasks every project inherits
 moon.yml              the root project `repo`: gates the root config files
 ```
@@ -70,7 +71,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, and the tests of the release tooling under `scripts/release/`), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)); `rust-toolchain` runs before every Rust task |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and the tests of the release tooling under `scripts/release/`), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)); `rust-toolchain` runs before every Rust task |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -98,6 +99,7 @@ pnpm --filter @nocentraldb/sdk exec vitest run -t "<test name>"
 node --test --test-name-pattern "<test name>" scripts/check-pins.test.mjs
 node --test --test-name-pattern "<test name>" scripts/ci-workflow.test.mjs
 node --test --test-name-pattern "<test name>" scripts/changes-workflow.test.mjs
+node --test --test-name-pattern "<test name>" scripts/contributor-kit.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/fragments.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/check-fragments.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/glob.test.mjs
@@ -126,6 +128,10 @@ The project holds these names on the public registries. The unscoped ones carry 
 | crates.io | `nocentraldb` | placeholder |
 | crates.io | `ncdb-core` | placeholder; the core crate in `crates/ncdb-core` takes it over with its first real release |
 | crates.io | `ncdb` | placeholder |
+
+## Contributing
+
+Feedback on the RFCs, bug reports with a reproduction and offers to take a roadmap milestone are the contributions we ask for most. How to make each of them, and what a pull request needs, is in [CONTRIBUTING.md](CONTRIBUTING.md). Agents are welcome under the [AI policy](.github/AI_POLICY.md); vulnerabilities are reported privately as the [security policy](.github/SECURITY.md) describes; everyone follows the [code of conduct](.github/CODE_OF_CONDUCT.md).
 
 ## License
 

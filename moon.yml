@@ -30,18 +30,23 @@ tasks:
     # contracts: scripts/changes-workflow.test.mjs, and the CI contract in
     # scripts/ci-workflow.test.mjs, which also reads the root `gates` script in
     # package.json and .github/dependabot.yml; both parse YAML with the `yaml`
-    # devDependency, hence the lockfile input) and of the release tooling under
-    # scripts/release/ (incl. lib/). Both patterns are quoted: node --test
-    # expands them itself, so the run does not depend on the shell's globstar.
+    # devDependency, hence the lockfile input), the contributor kit check in
+    # scripts/contributor-kit.test.mjs (it reads .github/, CONTRIBUTING.md,
+    # README.md and the docs its links point into), and the tests of the
+    # release tooling under scripts/release/ (incl. lib/). Both patterns are
+    # quoted: node --test expands them itself, so the run does not depend on
+    # the shell's globstar.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     inputs:
       - "/scripts/**/*"
       - "/package.json"
-      - "/.github/workflows/**/*"
-      - "/.github/dependabot.yml"
+      - "/.github/**/*"
       - "/pnpm-workspace.yaml"
       - "/pnpm-lock.yaml"
       - "/changes/**/*"
+      - "/CONTRIBUTING.md"
+      - "/README.md"
+      - "/docs/**/*"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not
