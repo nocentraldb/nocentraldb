@@ -9,7 +9,7 @@ crates/ncdb-core/     Rust core (placeholder)
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder)
 apps/                 applications (empty for now)
 docs/rfc/             design documents
-scripts/              repository tooling (check-pins.mjs)
+scripts/              repository tooling (check-pins.mjs) and its tests, incl. ci-workflow.test.mjs (the CI contract)
 .moon/                moon workspace, toolchains and the tasks every project inherits
 moon.yml              the root project `repo`: gates the root config files
 ```
@@ -50,6 +50,8 @@ CI (`.github/workflows/ci.yml`) runs `pnpm gates` on pull requests and on pushes
 
 The job times out after 30 minutes. A new push to a pull request cancels that pull request's superseded run; runs on `main` are never cancelled, so every commit on `main` gets a completed `gates` run. The Cargo cache (registry and `target/`) is keyed exactly on `rust-toolchain.toml` and `Cargo.lock`, with no fallback key: an entry is saved once and never grows, and a toolchain or lockfile change starts a cold build.
 
+`scripts/ci-workflow.test.mjs` holds the workflow to these rules: it parses `ci.yml`, `package.json` and `pnpm-workspace.yaml` and asserts the triggers, `contents: read`, the job id `gates`, the SHA-pinned actions, the exact `pnpm gates` command (`--on-failure continue` included), the default checkout depth, the 30-minute timeout, the concurrency block, both cache keys with no Cargo fallback key, and the empty `onlyBuiltDependencies` allow-list. Each check also runs against mutated copies of those files and must reject every one, so a check that cannot fail turns the gate red. A deliberate change to any of these rules changes the test with it.
+
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
 What each project's `gates` task runs:
@@ -58,7 +60,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test scripts/*.test.mjs`, the tests of check-pins); `rust-toolchain` runs before every Rust task |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test scripts/*.test.mjs`: the tests of check-pins, and `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script and `pnpm-workspace.yaml` and asserts the CI contract described above); `rust-toolchain` runs before every Rust task |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -83,6 +85,7 @@ Re-running one test in isolation, e.g. to check a suspected flake:
 cargo test --locked -p ncdb-core <test name>
 pnpm --filter @nocentraldb/sdk exec vitest run -t "<test name>"
 node --test --test-name-pattern "<test name>" scripts/check-pins.test.mjs
+node --test --test-name-pattern "<test name>" scripts/ci-workflow.test.mjs
 ```
 
 ### Caching and what moon buys
