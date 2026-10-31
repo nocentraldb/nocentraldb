@@ -3,6 +3,8 @@
 # cache. Only self-validating caches are reused: the Cargo registry and
 # target dir, the pnpm store, and the proto tool installs that
 # setup-toolchain caches itself (~/.proto, keyed on .prototools).
+# The job is bounded in time, superseded pull-request runs are cancelled while
+# every push to main runs to the end, and the Cargo cache is bounded in size.
 # scripts/ci-workflow.test.mjs asserts these rules.
 name: ci
 
@@ -14,13 +16,18 @@ on:
 permissions:
   contents: read
 
+# A new push to a pull request cancels its superseded run. Pushes to main are
+# never cancelled: each commit gets a group of its own (by SHA), because a
+# shared group would still cancel a *pending* main run once the next one queues.
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gates:
     runs-on: ubuntu-latest
+    # A hung step stops here instead of at GitHub's 6-hour default.
+    timeout-minutes: 30
     steps:
       # Default (shallow) checkout depth on purpose: CI runs every task of
       # every project and uses no moon affected detection, so it needs no history.
@@ -39,6 +46,10 @@ jobs:
           rustup toolchain install --no-self-update
           rustup show active-toolchain
 
+      # Bounded: actions/cache saves only on a key miss, so an entry holds one
+      # build for one toolchain and lockfile. No restore-keys on purpose: a
+      # fallback would seed each new entry with the previous target/ and let
+      # it grow across entries. A toolchain or Cargo.lock change builds cold.
       - name: Cache Cargo registry and target
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -47,7 +58,6 @@ jobs:
             ~/.cargo/git
             target
           key: cargo-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
-          restore-keys: cargo-${{ runner.os }}-
 
       - name: Locate the pnpm store
         id: pnpm-store

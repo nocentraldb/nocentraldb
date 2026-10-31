@@ -48,6 +48,8 @@ Check with `which node pnpm moon`: each must resolve to `~/.proto/shims/…`. In
 
 CI (`.github/workflows/ci.yml`) runs `pnpm gates` on pull requests and on pushes to `main`, as the check named `gates`.
 
+The job times out after 30 minutes. A new push to a pull request cancels that pull request's superseded run; runs on `main` are never cancelled, so every commit on `main` gets a completed `gates` run. The Cargo cache (registry and `target/`) is keyed exactly on `rust-toolchain.toml` and `Cargo.lock`, with no fallback key: an entry is saved once and never grows, and a toolchain or lockfile change starts a cold build.
+
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
 What each project's `gates` task runs:
