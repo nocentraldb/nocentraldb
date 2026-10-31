@@ -73,8 +73,12 @@ function* scan(text, { reads, rejects = () => false }) {
       // Step over the rest of the value.
       let d = open;
       while (++i < lines.length) {
-        if (quote ? lines[i].includes(quote) : (d += depth(lines[i])) <= 0)
-          break;
+        if (quote) {
+          if (lines[i].includes(quote)) break;
+          continue;
+        }
+        d += depth(lines[i]);
+        if (d <= 0) break;
       }
       continue;
     }
