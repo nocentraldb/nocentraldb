@@ -1,0 +1,36 @@
+name: Offer to take a milestone
+description: Offer to build a milestone from the RFC roadmap. This starts a conversation, not a pull request.
+labels: ["milestone-offer"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for offering. A milestone is a large piece of work, so we agree on the approach before anyone writes code. Please do not open a pull request for it yet.
+  - type: input
+    id: milestone
+    attributes:
+      label: Which roadmap milestone
+      description: Its name as the RFC or the roadmap gives it.
+    validations:
+      required: true
+  - type: textarea
+    id: experience
+    attributes:
+      label: Relevant experience
+      description: Links to merged pull requests in other open-source projects, or other work that shows how you build this kind of thing.
+    validations:
+      required: true
+  - type: textarea
+    id: approach
+    attributes:
+      label: How you would approach it
+      description: The design in a few paragraphs, what you would build first, and the open questions you see.
+    validations:
+      required: true
+  - type: input
+    id: timeframe
+    attributes:
+      label: Time frame
+      description: Roughly how much time you can give it, and over how many weeks.
+    validations:
+      required: true
