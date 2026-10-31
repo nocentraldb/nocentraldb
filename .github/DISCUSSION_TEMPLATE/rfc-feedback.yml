@@ -1,0 +1,35 @@
+title: "[RFC 0001] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Feedback on the design is wanted while it is still cheap to change. Tell us about your app, your situation and where the design would break for you: answers about problems help us more than feature requests.
+
+        We read every reply, answer within a week, and publish a summary of what changed in the next draft. To change the text of an RFC itself, open a pull request against its file under docs/rfc/.
+  - type: input
+    id: rfc
+    attributes:
+      label: Which RFC and section
+      placeholder: RFC 0001, Where we want your advice, point 1
+    validations:
+      required: true
+  - type: textarea
+    id: feedback
+    attributes:
+      label: Your feedback
+    validations:
+      required: true
+  - type: textarea
+    id: situation
+    attributes:
+      label: The app or situation behind it
+      description: What you build or run, and what the design would have to do there.
+    validations:
+      required: false
+  - type: textarea
+    id: breaks
+    attributes:
+      label: Where the design would break
+      description: The point where it would stop working for you, and what you would need instead.
+    validations:
+      required: false
