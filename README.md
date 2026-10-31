@@ -96,6 +96,19 @@ moon gives the repository one task graph over Rust and TypeScript, runs independ
 
 For the inner loop, every task also takes the root files it depends on as inputs: `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` for Rust tasks; `biome.json`, `tsconfig.base.json`, `package.json`, `pnpm-lock.yaml`, `.prototools` for TypeScript tasks. Every Rust task takes the sources of ALL crates as inputs: coarse, but a change in one crate re-runs the checks of every crate that may depend on it. Tracking the installed Rust toolchain beyond `rust-toolchain.toml` is best effort; a stale inner-loop result is caught by `pnpm gates`.
 
+## Package names
+
+The project holds these names on the public registries. The unscoped ones carry a placeholder release `0.0.0` that contains no code and points back to this repository.
+
+| Registry | Name | Status |
+| --- | --- | --- |
+| npm | `@nocentraldb/*` | npm organisation `nocentraldb`; the SDK will be published as `@nocentraldb/sdk` |
+| npm | `nocentraldb` | placeholder |
+| npm | `ncdb` | not publishable: npm rejects it as too similar to existing packages, so nobody else can take it either |
+| crates.io | `nocentraldb` | placeholder |
+| crates.io | `ncdb-core` | placeholder; the core crate in `crates/ncdb-core` takes it over with its first real release |
+| crates.io | `ncdb` | placeholder |
+
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT) at your option. See [CONTRIBUTING.md](CONTRIBUTING.md).
