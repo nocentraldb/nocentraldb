@@ -5,11 +5,12 @@
 
 > **You have already been given the index below** — all of it, or as much of it as a session start could carry. It is the same index `nxm prime` replays, which stops at the byte budget the host delivers and says so when it does (`nxm index` prints the whole of it), so there is nothing to gain by reading it again here. Underneath it stands the FULL TEXT of each memory — that is what `nxm recall <key>` serves, and it is meant to be read one memory at a time, when the index tells you a particular one matters. Reading this file end to end is the expensive way to obtain what you already have.
 
-## Index (3)
+## Index (4)
 
 - **english-artifacts**: Write design docs, code, code comments, memories, tickets and ticket notes in English, even when the session is in German.
 - **commit-memory-on-remember**: After every nxm remember/forget, commit the regenerated NEXUS_MEMORY.md at once, on the current branch, so it ships with the current work's PR.
 - **watch-nxc-operation**: Watch a running nxc operation with: nxc status --thread <root id> --json; act on needs_decision, escalated, awaiting_human, live=false.
+- **owner-reviews-every-pr**: Never merge a PR before the owner ticked its Authorship box; agents never tick it or mark a PR ready themselves.
 
 ## Full text
 
@@ -28,3 +29,9 @@ Every nxm remember or nxm forget regenerates NEXUS_MEMORY.md. That file exists s
 ### `watch-nxc-operation`
 
 To follow a running nxc operation (e.g. a coding chain commissioned with nxc send), poll its status as JSON: nxc status --thread <root thread id> --json. The fields that matter: operations[].live, open, needs_decision, interrupted, holds_working_tree, and per thread state, outstanding, session_state, escalated, awaiting_human, stale. Watch it from the session that commissioned the work rather than leaving it unobserved; react when needs_decision, escalated or awaiting_human turns true, or when live turns false.
+
+---
+
+### `owner-reviews-every-pr`
+
+Every pull request in this repo, including those the project's own agents open, follows .github/AI_POLICY.md: it is opened as a draft with the Authorship section unticked; the owner reads it, ticks the true Authorship box and only then may it be marked ready and merged. Agents (finisher, merger, the commissioning session) never tick the box or mark a PR ready on their own; the merger escalates a draft PR to the owner instead of merging. When the owner explicitly says to merge after ticking the box, the commissioning session may mark the PR ready. The owner decided on 2026-10-31 to keep this for all agent PRs, accepting that each merge waits for the owner's review.
