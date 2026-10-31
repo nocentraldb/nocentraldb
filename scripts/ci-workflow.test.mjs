@@ -83,3 +83,16 @@ test("pnpm build scripts stay an explicit allow-list", () => {
   assert.match(workspace, /^onlyBuiltDependencies:/m);
   assert.doesNotMatch(workspace, /dangerouslyAllowAllBuilds/);
 });
+
+// `moon exec` queries changed files on every run, even with --force. In a
+// GitHub pull request it takes the base from GITHUB_BASE_REF (`main`), which a
+// shallow checkout does not contain, and git fails before any task runs.
+// Pinning base and head to HEAD keeps that query resolvable in any checkout.
+test("pnpm gates forces every task and diffs HEAD against itself", () => {
+  const gates = JSON.parse(read("package.json")).scripts.gates;
+  const args = gates.split(/\s+/);
+  assert.deepEqual(args.slice(0, 3), ["moon", "exec", ":gates"]);
+  assert.ok(args.includes("--force"), gates);
+  assert.match(gates, /--base HEAD --head HEAD/);
+  assert.doesNotMatch(gates, /--affected|--query/);
+});

@@ -24,6 +24,9 @@ jobs:
     steps:
       # Default (shallow) checkout depth on purpose: CI runs every task of
       # every project and uses no moon affected detection, so it needs no history.
+      # moon still queries changed files on every `moon exec`, and in a pull
+      # request it would diff against GITHUB_BASE_REF (`main`), which a shallow
+      # checkout lacks; `pnpm gates` pins --base HEAD --head HEAD for that.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Installs proto, then moon, node and pnpm as pinned in .prototools.

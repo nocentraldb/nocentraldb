@@ -26,10 +26,12 @@ tasks:
       - "/packages/*/package.json"
   test:
     # Tests of the repository tooling (scripts/check-pins.mjs) and of the CI
-    # workflow invariants (scripts/ci-workflow.test.mjs).
+    # workflow invariants (scripts/ci-workflow.test.mjs, which also reads the
+    # root `gates` script in package.json).
     command: "node --test scripts/*.test.mjs"
     inputs:
       - "/scripts/**/*"
+      - "/package.json"
       - "/.github/workflows/**/*"
       - "/pnpm-workspace.yaml"
   rust-toolchain:
