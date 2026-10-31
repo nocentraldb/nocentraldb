@@ -16,6 +16,10 @@ The sibling project nexus-flow (`../../nxsflow/nexus-flow`, `docs/specs/release-
 - Its notes are long, dense, grouped only by added/changed/fixed/removed, and read like commit messages (see https://nxsflow.com/changelog). Here they are curated and structured for a reader.
 - Its stable notes aggregate every fragment since the last stable, including bugs that only ever existed between two releases. Here those are filtered out.
 
+![Release flow: alpha on every merge to main, beta on the release branch after the owner's approval, release after the promotion conditions, and where each stage is published](release-flow.svg)
+
+`release-flow.svg` is plain SVG. GitHub renders it in this document (no Mermaid), and it follows the reader's light or dark colour scheme. The release documentation can reuse it.
+
 ## Goals
 
 1. One version number for everything the project publishes (crates, npm packages, CLI, relay), always in lockstep.
@@ -109,9 +113,15 @@ Merges whose fragments are all `internal` (or that need no fragment) produce no 
 1. When the release epic is no longer blocked, an agent checks the epic's description against what was delivered.
    - If the scope is met, it proposes a beta to the owner and attaches a draft of the release notes.
    - If not, it says what is missing.
-   - **My call:** the proposal travels as an `nxc` escalation to the owner. The builder may choose the trigger, for example a scheduled check or a hook on closing the last blocker.
-   - **My call:** these checks, and the promotion checks below, run as a local agent on the owner's machine, driven by the nexus-flow background service. They do not run in GitHub Actions, because the board (`.nxs/`) is local and not synced; CI cannot read it.
-   - The agent reads GitHub (`gh`) for the facts that live there: CI status, release dates and tags.
+   - **How the owner hears about it (owner's decision):**
+     - `nxc` has no way to reach a person, so nothing is pushed.
+     - The release in progress is recorded as a memory: `nxm remember … --key active-release`, naming the version and the release epic's id. It is updated when a release ships or the next one is planned.
+     - The PM persona receives both `nxm prime` and `nxf prime` at session start. It therefore sees the active release and whether its epic is still blocked.
+     - Once the epic is no longer blocked, the PM raises it with the owner in its next session, and checks the scope.
+     - The promotion conditions below are checked the same way.
+     - These checks run in agent sessions, not in GitHub Actions: the board (`.nxs/`) is local and not synced, so CI cannot read it.
+     - The agent reads GitHub (`gh`) for the facts that live there: CI status, release dates and tags.
+     - A way for `nxc` to notify the owner has been requested from nexus-flow. It is not needed for this design.
 2. Curation. The agent drafts `release-notes/<version>.md` (see Release notes) from two sources:
    - every fragment since the previous release;
    - every board item created or closed since the release epic was created.
@@ -128,9 +138,8 @@ The agent checks these conditions continuously and proposes the release to the o
 
 1. **Soak:** the latest beta has been out for at least 7 days with no newer beta.
 2. **No open regressions:** no open bug of P0 or P1 whose `introduced` is this cycle. Lower ones are listed under Known issues.
-   - Open bugs have no fragment yet, so the board item carries the information.
-   - **My call:** use an nxf custom field `introduced` if the active plugin supports one (check with `nxf schema`); otherwise a fixed first line in the bug's description, `Introduced: cycle | <version>`.
-   - The bug's fragment copies the value when the fix lands.
+   - Open bugs have no fragment yet, so the agent derives `introduced` from the bug ticket's description: when it was first seen, and which version or change it came with. If the description does not say, the agent asks rather than guesses.
+   - The bug's fragment records the value when the fix lands.
 3. **Upgrade tested:** an automated test upgrades from the previous release to the candidate.
    - It covers stored data, `model.lock.json`, an old client against the new relay, and a new client against the old relay.
    - Convergence must hold throughout.
@@ -238,5 +247,6 @@ Required body sections by type:
 ## Related
 
 - nexus-flow `6j6v.qv39`: GitHub Issues and milestone integration for nxf (requested, not built).
+- nexus-flow `6j6v.ek9g`: a way for nxc to notify the owner (requested, not built). Once it exists, the PM can tell the owner about a ready beta or release without waiting for the next session.
 - `mt08.may6`: make `gates` a required check once the plan allows.
 - `mt08.debh`, `mt08.sfqn`: Dependabot follow-ups.

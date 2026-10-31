@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 860" width="1400" height="860" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>NoCentralDB release flow: alpha on every merge, beta on the release branch, release after the promotion conditions</title>
+  <style>
+    .bg { fill: #ffffff; }
+    .lane { fill: #f6f8fa; stroke: #d1d9e0; }
+    .t { fill: #1f2328; }
+    .m { fill: #59636e; }
+    .box { fill: #ffffff; stroke: #d1d9e0; }
+    .own { fill: #fff8c5; stroke: #9a6700; }
+    .pm { fill: #ddf4ff; stroke: #0969da; }
+    .main { stroke: #0969da; }
+    .mainf { fill: #0969da; }
+    .rel { stroke: #8250df; }
+    .relf { fill: #8250df; }
+    .fix { stroke: #cf222e; }
+    .fixf { fill: #cf222e; }
+    .pub { fill: #dafbe1; stroke: #1a7f37; }
+    .pubh { fill: #1a7f37; }
+    .arrow { stroke: #59636e; fill: none; }
+    .ah { fill: #59636e; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .lane { fill: #161b22; stroke: #3d444d; }
+      .t { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .box { fill: #0d1117; stroke: #3d444d; }
+      .own { fill: #2e2a14; stroke: #d29922; }
+      .pm { fill: #0c2d4a; stroke: #4493f8; }
+      .main { stroke: #4493f8; }
+      .mainf { fill: #4493f8; }
+      .rel { stroke: #ab7df8; }
+      .relf { fill: #ab7df8; }
+      .fix { stroke: #f85149; }
+      .fixf { fill: #f85149; }
+      .pub { fill: #12261e; stroke: #3fb950; }
+      .pubh { fill: #3fb950; }
+      .arrow { stroke: #9198a1; }
+      .ah { fill: #9198a1; }
+    }
+  </style>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="ah"/>
+    </marker>
+    <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="fixf"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1400" height="860"/>
+  <text class="t" x="24" y="38" font-size="22" font-weight="600">Release flow — one release, e.g. 0.3.0</text>
+  <text class="m" x="24" y="60" font-size="13">Time runs left to right. Every product-changing merge is an alpha; the owner decides beta and release; the release ships the last beta's product code.</text>
+
+  <!-- lanes -->
+  <rect class="lane" x="16" y="78" width="1368" height="190" rx="8"/>
+  <rect class="lane" x="16" y="278" width="1368" height="96" rx="8"/>
+  <rect class="lane" x="16" y="384" width="1368" height="96" rx="8"/>
+  <rect class="lane" x="16" y="490" width="1368" height="200" rx="8"/>
+  <text class="t" x="30" y="104" font-size="14" font-weight="600">Board &amp; owner</text>
+  <text class="m" x="30" y="122" font-size="12">nxf, nxm, PM</text>
+  <text class="t" x="30" y="322" font-size="14" font-weight="600">main</text>
+  <text class="m" x="30" y="340" font-size="12">alphas</text>
+  <text class="t" x="30" y="428" font-size="14" font-weight="600">release/0.3</text>
+  <text class="m" x="30" y="446" font-size="12">betas, release</text>
+  <text class="t" x="30" y="516" font-size="14" font-weight="600">Published</text>
+  <text class="m" x="30" y="534" font-size="12">by CI from the tag</text>
+
+  <!-- board lane boxes -->
+  <rect class="box" x="160" y="92" width="210" height="140" rx="6"/>
+  <text class="t" x="172" y="114" font-size="14" font-weight="600">1 · Plan the release</text>
+  <text class="t" x="172" y="136" font-size="12.5">Release epic "0.3.0"</text>
+  <text class="t" x="172" y="154" font-size="12.5">blocked by epics + tickets</text>
+  <text class="t" x="172" y="172" font-size="12.5">(nxf dep add, not children)</text>
+  <text class="m" x="172" y="194" font-size="12.5">nxm: active-release</text>
+  <text class="m" x="172" y="212" font-size="12.5">GitHub milestone · roadmap</text>
+
+  <rect class="pm" x="470" y="92" width="180" height="140" rx="6"/>
+  <text class="t" x="482" y="114" font-size="14" font-weight="600">2 · Epic unblocked</text>
+  <text class="t" x="482" y="136" font-size="12.5">PM sees it at session</text>
+  <text class="t" x="482" y="154" font-size="12.5">start (nxm + nxf prime),</text>
+  <text class="t" x="482" y="172" font-size="12.5">checks the scope, drafts</text>
+  <text class="t" x="482" y="190" font-size="12.5">release notes, proposes</text>
+  <text class="t" x="482" y="208" font-size="12.5">a beta</text>
+
+  <rect class="own" x="672" y="92" width="178" height="140" rx="6"/>
+  <text class="t" x="684" y="114" font-size="14" font-weight="600">3 · Owner: beta?</text>
+  <text class="t" x="684" y="136" font-size="12.5">Edits + approves the</text>
+  <text class="t" x="684" y="154" font-size="12.5">curated notes (PR).</text>
+  <text class="t" x="684" y="176" font-size="12.5">Then: cut release/0.3,</text>
+  <text class="t" x="684" y="194" font-size="12.5">tag v0.3.0-beta.1</text>
+
+  <rect class="pm" x="960" y="92" width="244" height="168" rx="6"/>
+  <text class="t" x="972" y="114" font-size="14" font-weight="600">4 · Promotion conditions</text>
+  <text class="t" x="972" y="135" font-size="12">1 latest beta out ≥ 7 days</text>
+  <text class="t" x="972" y="152" font-size="12">2 no open P0/P1 regression</text>
+  <text class="t" x="972" y="169" font-size="12">3 upgrade test from last release</text>
+  <text class="t" x="972" y="186" font-size="12">4 same product code as last beta</text>
+  <text class="t" x="972" y="203" font-size="12">5 audits clean, no open advisory</text>
+  <text class="t" x="972" y="220" font-size="12">6 notes final + approved</text>
+  <text class="t" x="972" y="237" font-size="12">7 used by one of our projects</text>
+  <text class="m" x="972" y="254" font-size="11.5">PM checks them, proposes the release</text>
+
+  <rect class="own" x="1222" y="92" width="150" height="140" rx="6"/>
+  <text class="t" x="1234" y="114" font-size="14" font-weight="600">5 · Owner:</text>
+  <text class="t" x="1234" y="132" font-size="14" font-weight="600">release?</text>
+  <text class="t" x="1234" y="154" font-size="12.5">Tag v0.3.0 on</text>
+  <text class="t" x="1234" y="172" font-size="12.5">the branch head.</text>
+  <text class="m" x="1234" y="194" font-size="12.5">No clicks in the</text>
+  <text class="m" x="1234" y="212" font-size="12.5">GitHub UI.</text>
+
+  <line class="arrow" x1="370" y1="162" x2="466" y2="162" stroke-width="1.5" marker-end="url(#a)"/>
+  <text class="m" x="378" y="152" font-size="11.5">blockers close</text>
+  <line class="arrow" x1="650" y1="162" x2="668" y2="162" stroke-width="1.5" marker-end="url(#a)"/>
+  <line class="arrow" x1="1204" y1="162" x2="1218" y2="162" stroke-width="1.5" marker-end="url(#a)"/>
+
+  <!-- main line -->
+  <line class="main" x1="150" y1="326" x2="1378" y2="326" stroke-width="3"/>
+  <g class="mainf">
+    <circle cx="200" cy="326" r="7"/><circle cx="260" cy="326" r="7"/><circle cx="320" cy="326" r="7"/><circle cx="380" cy="326" r="7"/><circle cx="440" cy="326" r="7"/><circle cx="540" cy="326" r="7"/><circle cx="620" cy="326" r="7"/>
+  </g>
+  <text class="m" x="182" y="356" font-size="11.5">v0.3.0-alpha.1 … alpha.7: one per merge</text>
+  <circle class="mainf" cx="880" cy="326" r="7"/>
+  <text class="m" x="892" y="314" font-size="11.5">cut</text>
+  <g class="mainf">
+    <circle cx="1120" cy="326" r="7"/><circle cx="1240" cy="326" r="7"/><circle cx="1330" cy="326" r="7"/>
+  </g>
+  <text class="m" x="1106" y="356" font-size="11.5">v0.4.0-alpha.N: next version</text>
+  <!-- fix on main -->
+  <circle class="fixf" cx="1000" cy="326" r="8"/>
+  <text class="fixf" x="972" y="312" font-size="11.5" font-weight="600">fix</text>
+
+  <!-- branch cut -->
+  <path class="rel" d="M880,326 C900,400 905,432 930,432" stroke-width="3" fill="none"/>
+  <line class="rel" x1="930" y1="432" x2="1330" y2="432" stroke-width="3"/>
+  <circle class="relf" cx="950" cy="432" r="8"/>
+  <text class="t" x="928" y="462" font-size="12" font-weight="600">beta.1</text>
+  <path class="fix" d="M1000,334 C1010,390 1030,420 1046,428" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#af)"/>
+  <text class="fixf" x="1016" y="404" font-size="11">cherry-pick</text>
+  <circle class="relf" cx="1080" cy="432" r="8"/>
+  <text class="t" x="1058" y="462" font-size="12" font-weight="600">beta.2</text>
+  <rect class="relf" x="1200" y="426" width="12" height="12" rx="2"/>
+  <text class="m" x="1128" y="414" font-size="11">notes final, fragments removed</text>
+  <circle class="relf" cx="1300" cy="432" r="11"/>
+  <text class="t" x="1278" y="464" font-size="13" font-weight="700">v0.3.0</text>
+
+  <!-- decisions to tags -->
+  <path class="arrow" d="M761,232 L761,280 C761,380 900,380 942,424" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a)"/>
+  <path class="arrow" d="M1297,232 L1297,418" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#a)"/>
+  <!-- PM watches -->
+  <line class="arrow" x1="1082" y1="420" x2="1082" y2="264" stroke-width="1.2" stroke-dasharray="2 4" marker-end="url(#a)"/>
+  <text class="m" x="1090" y="290" font-size="11">soak starts</text>
+
+  <!-- published -->
+  <rect class="pub" x="160" y="548" width="300" height="128" rx="6"/>
+  <text class="pubh" x="172" y="570" font-size="14" font-weight="700">Alpha</text>
+  <text class="t" x="172" y="592" font-size="12.5">GitHub prerelease + binaries</text>
+  <text class="t" x="172" y="610" font-size="12.5">npm @nocentraldb/sdk@alpha</text>
+  <text class="m" x="172" y="628" font-size="12.5">not crates.io (git tag instead)</text>
+  <text class="m" x="172" y="652" font-size="12.5">Notes: raw fragments of the merge</text>
+  <line class="arrow" x1="320" y1="364" x2="320" y2="544" stroke-width="1.2" stroke-dasharray="2 4" marker-end="url(#a)"/>
+
+  <rect class="pub" x="860" y="548" width="290" height="128" rx="6"/>
+  <text class="pubh" x="872" y="570" font-size="14" font-weight="700">Beta</text>
+  <text class="t" x="872" y="592" font-size="12.5">GitHub prerelease + binaries</text>
+  <text class="t" x="872" y="610" font-size="12.5">npm @beta · crates.io prerelease</text>
+  <text class="m" x="872" y="634" font-size="12.5">Notes: curated file + "changes</text>
+  <text class="m" x="872" y="652" font-size="12.5">since beta N-1" (generated)</text>
+  <line class="arrow" x1="1010" y1="470" x2="1010" y2="544" stroke-width="1.2" stroke-dasharray="2 4" marker-end="url(#a)"/>
+
+  <rect class="pub" x="1166" y="548" width="206" height="128" rx="6"/>
+  <text class="pubh" x="1178" y="570" font-size="14" font-weight="700">Release</text>
+  <text class="t" x="1178" y="592" font-size="12.5">GitHub latest + binaries</text>
+  <text class="t" x="1178" y="610" font-size="12.5">npm latest · crates.io</text>
+  <text class="t" x="1178" y="628" font-size="12.5">landing page · CLI</text>
+  <text class="m" x="1178" y="652" font-size="12.5">milestone closed</text>
+  <line class="arrow" x1="1300" y1="444" x2="1300" y2="544" stroke-width="1.2" stroke-dasharray="2 4" marker-end="url(#a)"/>
+
+  <!-- notes legend -->
+  <rect class="box" x="16" y="706" width="1368" height="138" rx="8"/>
+  <text class="t" x="30" y="732" font-size="14" font-weight="600">Curated release notes (beta and release) — release-notes/0.3.0.md, one file from beta.1 to the release</text>
+  <text class="t" x="30" y="758" font-size="12.5">Summary  →  Breaking changes (problem · use · migration)  →  New features (problem · use)  →  Deprecations  →  Fixes (symptom · when · cause · fix)  →  Security  →  Known issues</text>
+  <text class="t" x="30" y="784" font-size="12.5">Left out: fixes for bugs introduced in this cycle (introduced: cycle). Nobody on 0.2.x ever saw them; they appear only in alpha notes and in "changes since beta N-1".</text>
+  <text class="m" x="30" y="810" font-size="12.5">Same Markdown in three places: GitHub release body · ncdb changes in the CLI · landing page. Each renders it itself.</text>
+  <text class="m" x="30" y="832" font-size="12.5">Every product-changing PR brings changes/&lt;slug&gt;.md: type, tickets, components, introduced (fixes) and the sections its type requires.</text>
+</svg>
