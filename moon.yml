@@ -27,13 +27,14 @@ tasks:
   test:
     # Tests of the repository tooling (scripts/check-pins.mjs) and of the CI
     # workflow invariants (scripts/ci-workflow.test.mjs, which also reads the
-    # root `gates` script in package.json and parses YAML with the `yaml`
-    # devDependency, hence the lockfile input).
+    # root `gates` script in package.json and .github/dependabot.yml, and
+    # parses YAML with the `yaml` devDependency, hence the lockfile input).
     command: "node --test scripts/*.test.mjs"
     inputs:
       - "/scripts/**/*"
       - "/package.json"
       - "/.github/workflows/**/*"
+      - "/.github/dependabot.yml"
       - "/pnpm-workspace.yaml"
       - "/pnpm-lock.yaml"
   rust-toolchain:

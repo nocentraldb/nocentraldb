@@ -1,0 +1,11 @@
+# Dependabot keeps the SHA-pinned actions in .github/workflows current: it
+# resolves each `uses: owner/name@<sha> # vX.Y.Z` pin with its version comment
+# and opens a pull request that moves both to the new release, so the SHA
+# and the comment never drift apart. npm and cargo are left out on purpose;
+# the README says why. scripts/ci-workflow.test.mjs asserts this file.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

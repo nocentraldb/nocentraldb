@@ -1,7 +1,8 @@
 // Asserts the invariants of .github/workflows/ci.yml that the design review
 // made binding: the triggers and permissions, the check name `gates`, the
 // full uncached gate and its exact command, the supply-chain rules, the cache
-// scope and bounds, the job timeout and the concurrency policy.
+// scope and bounds, the job timeout and the concurrency policy, and the
+// Dependabot configuration that keeps the action pins current.
 //
 // Every file is parsed (YAML with the `yaml` package, JSON with JSON.parse)
 // and checked by structure, never by matching lines of text, and every check
@@ -10,7 +11,7 @@
 // changed, and must reject every one of them: a check that cannot fail is
 // caught here, on every run.
 import assert, { AssertionError } from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -18,6 +19,7 @@ import { parse, parseDocument } from "yaml";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(join(root, file), "utf8");
+const DEPENDABOT = ".github/dependabot.yml";
 
 /**
  * The parsed inputs every check reads. `doc` keeps the workflow's comments
@@ -31,6 +33,10 @@ const load = () => {
     doc,
     pkg: JSON.parse(read("package.json")),
     workspace: parse(read("pnpm-workspace.yaml")),
+    // null when the file is missing, so the check fails as an assertion.
+    dependabot: existsSync(join(root, DEPENDABOT))
+      ? parse(read(DEPENDABOT))
+      : null,
   };
 };
 
@@ -38,6 +44,7 @@ const clone = (ctx) => ({
   doc: ctx.doc.clone(),
   pkg: structuredClone(ctx.pkg),
   workspace: structuredClone(ctx.workspace),
+  dependabot: structuredClone(ctx.dependabot),
 });
 
 const workflow = (ctx) => ctx.doc.toJS();
@@ -118,6 +125,16 @@ const CONCURRENCY = {
   "cancel-in-progress": gh("github.event_name == 'pull_request'"),
 };
 const CARGO_KEY = `cargo-${gh("runner.os")}-${gh("hashFiles('rust-toolchain.toml', 'Cargo.lock')")}`;
+// Dependabot proposes updates for the SHA-pinned actions only, resolving each
+// pin together with its version comment. npm and cargo are left out on
+// purpose (see the README): adding one changes this declared list.
+const DEPENDABOT_UPDATES = [
+  {
+    "package-ecosystem": "github-actions",
+    directory: "/",
+    schedule: { interval: "weekly" },
+  },
+];
 const PNPM_KEY = `pnpm-${gh("runner.os")}-${gh("hashFiles('.prototools', 'pnpm-lock.yaml')")}`;
 
 /**
@@ -419,6 +436,45 @@ const checks = [
       },
       "allows every build script": (ctx) => {
         ctx.workspace.dangerouslyAllowAllBuilds = true;
+      },
+    },
+  },
+  {
+    name: "Dependabot keeps the action pins current, weekly, and nothing else",
+    check: (ctx) => {
+      assert.ok(ctx.dependabot, `${DEPENDABOT} is missing`);
+      assert.equal(ctx.dependabot.version, 2);
+      assert.deepEqual(ctx.dependabot.updates, DEPENDABOT_UPDATES);
+    },
+    mutants: {
+      "has no dependabot.yml": (ctx) => {
+        ctx.dependabot = null;
+      },
+      "uses config version 1": (ctx) => {
+        ctx.dependabot.version = 1;
+      },
+      "drops the github-actions ecosystem": (ctx) => {
+        ctx.dependabot.updates = [];
+      },
+      "checks monthly": (ctx) => {
+        ctx.dependabot.updates[0].schedule.interval = "monthly";
+      },
+      "watches a subdirectory only": (ctx) => {
+        ctx.dependabot.updates[0].directory = "/.github/workflows";
+      },
+      "adds the npm ecosystem": (ctx) => {
+        ctx.dependabot.updates.push({
+          "package-ecosystem": "npm",
+          directory: "/",
+          schedule: { interval: "weekly" },
+        });
+      },
+      "adds the cargo ecosystem": (ctx) => {
+        ctx.dependabot.updates.push({
+          "package-ecosystem": "cargo",
+          directory: "/",
+          schedule: { interval: "weekly" },
+        });
       },
     },
   },
