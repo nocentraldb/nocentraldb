@@ -9,6 +9,8 @@ crates/ncdb-core/     Rust core (placeholder)
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder)
 apps/                 applications (empty for now)
 docs/rfc/             design documents
+docs/release-management.md  how releases are made
+docs/release-flow.svg       the release flow diagram
 scripts/              repository tooling (check-pins.mjs) and its tests, incl. ci-workflow.test.mjs (the CI contract)
 .moon/                moon workspace, toolchains and the tasks every project inherits
 moon.yml              the root project `repo`: gates the root config files
@@ -95,6 +97,10 @@ node --test --test-name-pattern "<test name>" scripts/ci-workflow.test.mjs
 moon gives the repository one task graph over Rust and TypeScript, runs independent tasks in parallel, and caches task results for the inner loop (`pnpm gates:dev`). Independent checks (`pnpm gates`, CI) do not trust moon's task cache, but they still reuse the self-validating caches of the compilers and package manager (Cargo's `target/`, the pnpm store), so compilation stays incremental there too.
 
 For the inner loop, every task also takes the root files it depends on as inputs: `Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml` for Rust tasks; `biome.json`, `tsconfig.base.json`, `package.json`, `pnpm-lock.yaml`, `.prototools` for TypeScript tasks. Every Rust task takes the sources of ALL crates as inputs: coarse, but a change in one crate re-runs the checks of every crate that may depend on it. Tracking the installed Rust toolchain beyond `rust-toolchain.toml` is best effort; a stale inner-loop result is caught by `pnpm gates`.
+
+### Releases
+
+How versions, change fragments, release notes and the alpha, beta and release stages work, and who does what at each stage, is in [docs/release-management.md](docs/release-management.md). Its tooling is being built; the page marks every part that is not active yet.
 
 ## Package names
 
