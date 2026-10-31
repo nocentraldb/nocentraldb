@@ -18,4 +18,6 @@ pnpm install
 pnpm gates
 ```
 
+Does your change ship to a user? Add a fragment under `changes/`, see [Writing a change fragment](docs/release-management.md#writing-a-change-fragment) and the writer's guide [changes/README.md](changes/README.md). `pnpm gates` checks every fragment against the schema.
+
 `pnpm gates` runs every check uncached. `pnpm gates:dev` is faster during development but replays cached results, so it does not replace `pnpm gates`. See [Gates](README.md#gates) for the individual checks and how to re-run a single test.
