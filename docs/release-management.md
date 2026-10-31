@@ -48,7 +48,7 @@ The diagram is plain SVG (no Mermaid); GitHub renders it here and it follows the
 
 ## Writing a change fragment
 
-**Checks: not yet active, built by the fragments and `changes` tickets** — the schema check `repo:fragments` and `changes/README.md` by `mt08.5hj4`, the required-fragment check `changes`, its allowlist and the `skip-changes` label by `mt08.776f`, the breaking-change detection by `mt08.nrt0`. Until then nothing enforces the rules below.
+**Checks:** the schema check is active: `node scripts/release/check-fragments.mjs` (the gate task `repo:fragments`, part of `pnpm gates`) validates every fragment in `changes/`, and `changes/README.md` is the writer's guide. Not yet active: the required-fragment check `changes`, its allowlist and the `skip-changes` label, built by `mt08.776f`, and the breaking-change detection, built by `mt08.nrt0`. Until then nothing enforces that a pull request carries a fragment.
 
 Every pull request that changes the product carries one change fragment.
 
@@ -73,7 +73,7 @@ Required body sections (level-2 headings) by type:
 
 The checks:
 
-- **Schema check (gate task `repo:fragments`):** every `changes/*.md` parses, has the required fields with allowed values, and has the required body sections for its type. Runs locally in `pnpm gates` and in CI. A malformed fragment turns `pnpm gates` red.
+- **Schema check (gate task `repo:fragments`, `node scripts/release/check-fragments.mjs`):** every `changes/*.md` except `README.md` parses, has the required fields with allowed values and no other field, and has exactly the body sections its type requires (level-2 headings; a `## ` line inside a fenced code block is not a section). Runs locally in `pnpm gates` and in CI. A malformed fragment turns `pnpm gates` red; each violation is one line, `check-fragments: changes/<slug>.md: <rule>`. A repository without `changes/` passes.
 - **Required-fragment check (workflow `changes.yml`, check name `changes`, on pull requests to any base):** the pull request's changed paths are compared with the allowlist below. If any path is outside it and the pull request adds no file under `changes/`, the check fails and names those paths. The check needs only `contents: read`; labels come with the event payload.
 - **Breaking-change detection** (also in `changes`): `cargo-semver-checks` compares each workspace crate against the pull request's base commit, and the TypeScript SDK's API report is regenerated and diffed. A reported breaking Rust change, or a removed or changed line in the API report, fails `changes` unless the pull request adds a `breaking` fragment, naming the item.
 - **The `skip-changes` label** on the pull request passes the required-fragment check. It never waives a detected breaking change: that still needs a `breaking` fragment. The label is created once with `gh label create`.
@@ -288,8 +288,8 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 
 | Unit | Does | Status |
 |---|---|---|
-| `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | not yet active (`mt08.5hj4`, `mt08.776f`, `mt08.b3j4`) |
-| `scripts/release/check-fragments.mjs` | validates every `changes/*.md`; with `--base <rev> --head <rev> [--skip]` also applies the allowlist and the required-fragment rule; `--require-breaking` ignores `--skip` | not yet active (`mt08.5hj4`, `mt08.776f`, `mt08.nrt0`) |
+| `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | `fragments.mjs` active; the rest not yet active (`mt08.776f`, `mt08.b3j4`) |
+| `scripts/release/check-fragments.mjs [--dir <changes>]` | validates every `changes/*.md`; with `--base <rev> --head <rev> [--skip]` also applies the allowlist and the required-fragment rule; `--require-breaking` ignores `--skip` | schema mode active; `--base/--head/--skip` not yet active (`mt08.776f`), `--require-breaking` not yet active (`mt08.nrt0`) |
 | `scripts/release/check-version.mjs [--tag <v…>]` | manifests agree on `X.Y.Z`; with `--tag`, tag = manifests for beta and release | not yet active (`mt08.b3j4`) |
 | `scripts/release/set-version.mjs <version>` | writes the version into `Cargo.toml` `[workspace.package]` and every workspace `package.json`, then `cargo update --workspace --offline` | not yet active (`mt08.b3j4`) |
 | `scripts/release/next-version.mjs [--json]` | the next alpha tag from tags, fragments and `release-notes/index.json` | not yet active (`mt08.x49q`) |
@@ -303,16 +303,16 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 | `scripts/release/cut.mjs <X.Y.Z>` | creates `release/X.Y`, sets the manifests, prints the push, raise-PR and beta-tag commands | not yet active (`mt08.4fp9`) |
 | `scripts/release/promotion-check.mjs <X.Y.Z>` | reports promotion conditions 1, 4 and 5 with evidence | not yet active (`mt08.4fp9`) |
 | `scripts/release/api-report.mjs`, `packages/sdk/etc/` | the TypeScript SDK's API report | not yet active (`mt08.nrt0`) |
-| moon task `repo:fragments` | `node scripts/release/check-fragments.mjs` in `pnpm gates` | not yet active (`mt08.5hj4`) |
+| moon task `repo:fragments` | `node scripts/release/check-fragments.mjs` in `pnpm gates` | active |
 | moon task `repo:version` | `node scripts/release/check-version.mjs` in `pnpm gates` | not yet active (`mt08.b3j4`) |
 | moon task `repo:api-report` | the API report in `pnpm gates` | not yet active (`mt08.nrt0`) |
-| moon task `repo:test`, widened | also runs the tests under `scripts/release/` | not yet active (`mt08.5hj4`) |
+| moon task `repo:test`, widened | also runs the tests under `scripts/release/` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`) | active |
 | workflow `changes.yml` (check `changes`) | required fragment, `cargo-semver-checks`, API report diff | not yet active (`mt08.776f`, `mt08.nrt0`) |
 | workflow `release.yml`, job `alpha` | alpha on a green `ci` run on `main`; dispatch dry run | not yet active (`mt08.x49q`) |
 | workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; dispatch dry run | not yet active (`mt08.a4xv`) |
 | `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants | not yet active (`mt08.776f`, `mt08.x49q`, `mt08.a4xv`) |
 | label `skip-changes` | waives the required fragment, never a detected breaking change | not yet active (`mt08.776f`) |
-| `changes/README.md` | the fragments' writer guide | not yet active (`mt08.5hj4`) |
+| `changes/README.md` | the fragments' writer guide | active |
 | `release-notes/index.json` and its test | the notes archive index | not yet active (`mt08.ss3j`) |
 | memory `active-release` | the release in progress, for the PM | written by the PM when a release is planned |
 

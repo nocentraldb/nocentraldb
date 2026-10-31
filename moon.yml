@@ -26,17 +26,32 @@ tasks:
       - "/apps/*/package.json"
       - "/packages/*/package.json"
   test:
-    # Tests of the repository tooling (scripts/check-pins.mjs) and of the CI
-    # workflow invariants (scripts/ci-workflow.test.mjs, which also reads the
-    # root `gates` script in package.json and .github/dependabot.yml, and
-    # parses YAML with the `yaml` devDependency, hence the lockfile input).
-    command: "node --test scripts/*.test.mjs"
+    # Tests of the repository tooling (scripts/*.test.mjs, the CI contract in
+    # scripts/ci-workflow.test.mjs, which also reads the root `gates` script in
+    # package.json and .github/dependabot.yml and parses YAML with the `yaml`
+    # devDependency, hence the lockfile input) and of the release tooling under
+    # scripts/release/ (incl. lib/). Both patterns are quoted: node --test
+    # expands them itself, so the run does not depend on the shell's globstar.
+    command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     inputs:
       - "/scripts/**/*"
       - "/package.json"
       - "/.github/workflows/**/*"
       - "/.github/dependabot.yml"
       - "/pnpm-workspace.yaml"
+      - "/pnpm-lock.yaml"
+      - "/changes/**/*"
+  fragments:
+    # Every change fragment under changes/ follows the schema in
+    # docs/release-management.md. The PR-level required-fragment rule is not
+    # here: it needs the PR's base, so it belongs to the `changes` check
+    # (mt08.776f). The front matter is parsed with the `yaml` devDependency,
+    # hence the lockfile input.
+    command: "node scripts/release/check-fragments.mjs"
+    inputs:
+      - "/changes/**/*"
+      - "/scripts/release/check-fragments.mjs"
+      - "/scripts/release/lib/fragments.mjs"
       - "/pnpm-lock.yaml"
   rust-toolchain:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
@@ -45,4 +60,4 @@ tasks:
     inputs:
       - "/rust-toolchain.toml"
   gates:
-    deps: ["~:format-check", "~:pins", "~:test"]
+    deps: ["~:format-check", "~:pins", "~:test", "~:fragments"]
