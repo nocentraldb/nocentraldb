@@ -3,7 +3,5 @@
 
 This project uses **nexus-flow** (flow, chat, memory) — run `nxs prime` for project context and how to work with it.
 
-The project's durable memory is projected into `NEXUS_MEMORY.md`, which is generated — change it with `nxm remember`, never by hand:
-
-@NEXUS_MEMORY.md
+The project's durable memory is projected into `NEXUS_MEMORY.md`, which is generated — change it with `nxm remember`, never by hand.
 <!-- END NEXUS -->
