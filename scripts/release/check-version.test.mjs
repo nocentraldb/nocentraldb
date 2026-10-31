@@ -229,7 +229,7 @@ test("R6: Cargo.lock listing a crate at another version fails", (t) => {
 test("R6: Cargo.lock without a workspace crate, or no Cargo.lock at all, fails", (t) => {
   const missing = run(
     fixture(t, {
-      "Cargo.lock": LOCK.replace(/\n\[\[package\]\]\nname = "b"[^]*$/, "\n"),
+      "Cargo.lock": LOCK.replace(/\n\[\[package\]\]\nname = "b"[\s\S]*$/, "\n"),
     }),
   );
   red(
