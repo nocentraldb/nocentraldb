@@ -25,10 +25,13 @@ tasks:
       - "/apps/*/package.json"
       - "/packages/*/package.json"
   test:
-    # Tests of the repository tooling (scripts/check-pins.mjs).
+    # Tests of the repository tooling (scripts/check-pins.mjs) and of the CI
+    # workflow invariants (scripts/ci-workflow.test.mjs).
     command: "node --test scripts/*.test.mjs"
     inputs:
       - "/scripts/**/*"
+      - "/.github/workflows/**/*"
+      - "/pnpm-workspace.yaml"
   rust-toolchain:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
     # task runs; a no-op (and offline) when it is already installed.
