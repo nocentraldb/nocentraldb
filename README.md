@@ -12,8 +12,10 @@ docs/rfc/             design documents
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 changes/              change fragments, one per product-changing pull request (writer's guide: changes/README.md)
-scripts/              repository tooling (check-pins.mjs) and its tests, incl. ci-workflow.test.mjs (the CI contract)
-scripts/release/      release tooling (check-fragments.mjs, lib/fragments.mjs) and its tests
+scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs and changes-workflow.test.mjs
+scripts/lib/          shared test helpers (workflow-checks.mjs: the workflow contracts' mutant runner)
+scripts/release/      release tooling (check-fragments.mjs; lib/: fragments, git, glob, test-repo) and its tests
+.github/workflows/    ci.yml (the `gates` check) and changes.yml (the `changes` check)
 .moon/                moon workspace, toolchains and the tasks every project inherits
 moon.yml              the root project `repo`: gates the root config files
 ```
@@ -58,6 +60,8 @@ Every action in the workflow is pinned to a full commit SHA, with its release as
 
 `scripts/ci-workflow.test.mjs` holds the workflow to these rules: it parses `ci.yml`, `package.json`, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the triggers, `contents: read`, the job id `gates`, the SHA-pinned actions, the exact `pnpm gates` command (`--on-failure continue` included), the default checkout depth, the 30-minute timeout, the concurrency block, both cache keys with no Cargo fallback key, the empty `onlyBuiltDependencies` allow-list, and the Dependabot configuration (`github-actions` weekly, nothing else). Each check also runs against mutated copies of those files and must reject every one, so a check that cannot fail turns the gate red. A deliberate change to any of these rules changes the test with it.
 
+A second check, `changes` (`.github/workflows/changes.yml`), runs on every pull request, and again when a label is added or removed. A pull request that changes a path outside the allowlist (`ALLOWLIST` in `scripts/release/check-fragments.mjs`, listed in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment): docs, `scripts/`, `.github/`, moon config, tests and similar) must add a change fragment under `changes/`; otherwise the check fails and names each such path. The label `skip-changes` waives that rule for a pull request that changes product paths but ships nothing to a user (a version raise, a lockfile refresh); it never waives the validation of the fragments the pull request adds or modifies. The check reads only (`contents: read`), fetches the full history for the merge base, and runs `node scripts/release/check-fragments.mjs --base <base sha> --head <head sha> [--skip]`, which reproduces it locally. `scripts/changes-workflow.test.mjs` holds the workflow to that contract (triggers incl. `labeled`/`unlabeled`, permissions, the job id `changes`, SHA pins, full history, the exact command and its environment, concurrency, a 15-minute timeout), with mutants like the CI contract; both share the runner in `scripts/lib/workflow-checks.mjs`.
+
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
 What each project's `gates` task runs:
@@ -66,7 +70,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, and the tests of the release tooling under `scripts/release/`), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)); `rust-toolchain` runs before every Rust task |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, and the tests of the release tooling under `scripts/release/`), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)); `rust-toolchain` runs before every Rust task |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -93,8 +97,11 @@ cargo test --locked -p ncdb-core <test name>
 pnpm --filter @nocentraldb/sdk exec vitest run -t "<test name>"
 node --test --test-name-pattern "<test name>" scripts/check-pins.test.mjs
 node --test --test-name-pattern "<test name>" scripts/ci-workflow.test.mjs
+node --test --test-name-pattern "<test name>" scripts/changes-workflow.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/fragments.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/check-fragments.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/lib/glob.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/lib/git.test.mjs
 ```
 
 ### Caching and what moon buys

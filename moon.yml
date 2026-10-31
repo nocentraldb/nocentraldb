@@ -26,9 +26,10 @@ tasks:
       - "/apps/*/package.json"
       - "/packages/*/package.json"
   test:
-    # Tests of the repository tooling (scripts/*.test.mjs, the CI contract in
+    # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
+    # contracts: scripts/changes-workflow.test.mjs, and the CI contract in
     # scripts/ci-workflow.test.mjs, which also reads the root `gates` script in
-    # package.json and .github/dependabot.yml and parses YAML with the `yaml`
+    # package.json and .github/dependabot.yml; both parse YAML with the `yaml`
     # devDependency, hence the lockfile input) and of the release tooling under
     # scripts/release/ (incl. lib/). Both patterns are quoted: node --test
     # expands them itself, so the run does not depend on the shell's globstar.
@@ -45,13 +46,16 @@ tasks:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not
     # here: it needs the PR's base, so it belongs to the `changes` check
-    # (mt08.776f). The front matter is parsed with the `yaml` devDependency,
-    # hence the lockfile input.
+    # (.github/workflows/changes.yml). The front matter is parsed with the
+    # `yaml` devDependency, hence the lockfile input; the script also imports
+    # lib/git.mjs and lib/glob.mjs for its PR mode.
     command: "node scripts/release/check-fragments.mjs"
     inputs:
       - "/changes/**/*"
       - "/scripts/release/check-fragments.mjs"
       - "/scripts/release/lib/fragments.mjs"
+      - "/scripts/release/lib/git.mjs"
+      - "/scripts/release/lib/glob.mjs"
       - "/pnpm-lock.yaml"
   rust-toolchain:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
