@@ -4,5 +4,3 @@
 pub fn name() -> &'static str {
     "ncdb-core"
 }
-
-// Demo for mt08.776f DoD step 11: a product change without a fragment.
