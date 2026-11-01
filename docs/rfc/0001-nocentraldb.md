@@ -61,6 +61,8 @@ const page = await db.find(model.tasks.views.ready.take(50));             // fir
 const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor)); // the next 50, when needed
 ```
 
+How this plays out in practice: [eight use cases](../use-cases.md). Five show where a central database is the weaker choice by design. Three show that working local-first gives up nothing: collaborative editing, subscriptions and streaming. Each ends with a question for you.
+
 ## Three people we are designing for
 
 ### The developer whose agents work on shared data
