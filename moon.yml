@@ -27,7 +27,8 @@ tasks:
       - "/packages/*/package.json"
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
-    # contracts: scripts/changes-workflow.test.mjs, and the CI contract in
+    # contracts: scripts/changes-workflow.test.mjs and
+    # scripts/release-workflow.test.mjs, and the CI contract in
     # scripts/ci-workflow.test.mjs, which also reads the root `gates` script in
     # package.json and .github/dependabot.yml; both parse YAML with the `yaml`
     # devDependency, hence the lockfile input), the contributor kit check in
