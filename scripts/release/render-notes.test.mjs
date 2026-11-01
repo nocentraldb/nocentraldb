@@ -142,6 +142,12 @@ test("an invalid fragment fails the run, naming the file, and prints no notes", 
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
   assert.match(r.stderr, /^render-notes: changes\/bad\.md: type must be/m);
+  for (const line of r.stderr.trimEnd().split("\n"))
+    assert.match(
+      line,
+      /^render-notes: changes\/bad\.md: /,
+      "not a clean failure",
+    );
 });
 
 test("--since must be an alpha tag that exists, or none", (t) => {

@@ -79,7 +79,7 @@ const coveredFragments = ({ since, head }) => {
   );
   for (const { file, errors } of covered)
     for (const error of errors) fail(`${file}: ${error}`);
-  return process.exitCode ? null : covered;
+  return covered.some((f) => f.errors.length > 0) ? null : covered;
 };
 
 const entry = ({ slug, front, body }) =>
