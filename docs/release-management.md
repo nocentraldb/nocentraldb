@@ -16,7 +16,7 @@ The diagram is plain SVG (no Mermaid); GitHub renders it here and it follows the
 
 ## Versioning
 
-**Status:** the rules below are the process. The manifest version and its checks (`check-version`, `set-version`, `repo:version`) are not yet active, built by `mt08.b3j4`. The computation of the next version (`next-version`) is not yet active, built by `mt08.x49q`.
+**Status:** the rules below are the process. The manifest version and its checks are active: the manifests say `0.1.0`, `check-version` holds them to it (the gate task `repo:version`, part of `pnpm gates`), and `set-version` writes a full version into a checkout. The computation of the next version (`next-version`) is not yet active, built by `mt08.x49q`.
 
 - SemVer with prerelease suffixes. Tags look like `v0.3.1-alpha.4`, `v0.3.1-beta.2`, `v0.3.1`. The stage is part of the version, so the registries understand it. Any other tag shape is refused.
 - One version for everything the project publishes (crates, npm packages, CLI, relay), always in lockstep. The unscoped npm `nocentraldb` stays a parked `0.0.0` placeholder outside the shared version.
@@ -24,6 +24,19 @@ The diagram is plain SVG (no Mermaid); GitHub renders it here and it follows the
   - Committed manifests hold only the plain version `X.Y.Z`, never a stage suffix: `[workspace.package] version` in `Cargo.toml` (every crate inherits it with `version.workspace = true`) and the `version` of every `package.json` under `packages/*` and `apps/*`. Inter-crate dependencies are declared in `[workspace.dependencies]` with `path` and `version = "=<version>"` and used as `name.workspace = true`.
   - CI writes the full version (`X.Y.Z-alpha.N`, `X.Y.Z-beta.N` or `X.Y.Z`) into the manifests of its build checkout from the tag, right before building and publishing, and refreshes the workspace members' entries in `Cargo.lock` with `cargo update --workspace --offline`. Nothing about the stage is committed; that is what lets a release sit on exactly the beta's product code.
   - A gate task fails when the manifests disagree with each other. For beta and release tags the release workflow also fails when the tag's `X.Y.Z` differs from the manifests.
+- **The checks.** `node scripts/release/check-version.mjs` (the gate task `repo:version`) fails, naming the file, when:
+  1. `Cargo.toml` has no `[workspace.package] version`, or it is not a plain `X.Y.Z` (a `-` or `+` suffix: committed manifests never carry a stage suffix);
+  2. a `crates/*/Cargo.toml` declares its own `version` or does not say `version.workspace = true`;
+  3. a `crates/*/Cargo.toml` declares a `path =` dependency itself, in `[dependencies]`, `[dev-dependencies]`, `[build-dependencies]` or their `[target.….…]` forms;
+  4. a `[workspace.dependencies]` entry with a `path` is not pinned with `version = "=<workspace version>"`;
+  5. a `package.json` under `packages/*` or `apps/*` has another `version`, or none;
+  6. `Cargo.lock` does not list a workspace crate at the workspace version (run `cargo update --workspace --offline`);
+  7. with `--tag <tag>`: the tag is not `vX.Y.Z` or `vX.Y.Z-beta.N` (an alpha tag is refused: alphas are never checked against the manifests), or its `X.Y.Z` is not the workspace version.
+
+  Its reader of `Cargo.toml` and the crate manifests is narrow and fails closed: inside the tables it reads, only single-line keys of the shapes above are understood; a multi-line value, a trailing comment on a line it parses, a dotted dependency key other than `name.workspace = true`, or a dependency sub-table such as `[workspace.dependencies.x]` fails with "unsupported manifest syntax at line N".
+- **Dependencies between workspace crates** are declared once, in `[workspace.dependencies]` of `Cargo.toml`, as `name = { path = "crates/name", version = "=X.Y.Z" }`, and used in a crate as `name.workspace = true`. The exact `=` pin is what lets a prerelease resolve: Cargo matches a requirement `0.1.0` (that is `^0.1.0`) against no prerelease, so `0.1.0-beta.1` of a sibling crate would not resolve without it.
+- **Writing a version.** `node scripts/release/set-version.mjs <version> [--no-lock]` writes a full version (`X.Y.Z`, `X.Y.Z-alpha.N` or `X.Y.Z-beta.N`) into `[workspace.package]`, pins every `[workspace.dependencies]` path entry to `=<version>` (inserting the pin where it is missing), sets `version` in every `packages/*/package.json` and `apps/*/package.json`, and then runs `cargo update --workspace --offline` (skipped with `--no-lock`). It validates the version and reads every manifest before it writes any. The alpha and publish jobs run it in their build checkout; the cut runs it on the release branch, with a plain version.
+- **The lock refresh offline.** `cargo update --workspace --offline` was verified on a two-crate fixture (the test of `set-version`), where it moves both workspace members to a prerelease version. The workspace has no third-party crates yet: the ticket that adds the first one must re-verify that the command still succeeds offline with that crate in the lock. Should it fail offline, `set-version` falls back to rewriting the `version` lines of the workspace members' `[[package]]` blocks in `Cargo.lock` directly, with the lock reader `lockVersions` of `scripts/release/lib/manifests.mjs`.
 - **The first real release is `0.1.0`**, above the `0.0.0` placeholders on the registries.
 - **The next version** is derived from the change fragments since the last release:
   - The last release is read from `release-notes/index.json`: the highest entry with stage `release`. It is never inferred from the existence of a `vX.Y.Z` tag (a refused release tag stays in place). Before the first release there is none.
@@ -292,10 +305,10 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 
 | Unit | Does | Status |
 |---|---|---|
-| `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | `fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs` active; `semver.mjs`, `manifests.mjs` not yet active (`mt08.b3j4`) |
+| `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | active |
 | `scripts/release/check-fragments.mjs [--dir <changes>]` | validates every `changes/*.md`; with `--base <rev> --head <rev> [--skip]` also applies the allowlist and the required-fragment rule; `--require-breaking` ignores `--skip` | schema mode and `--base/--head/--skip` active; `--require-breaking` exists, but nothing passes it until the breaking-change detection (`mt08.nrt0`) |
-| `scripts/release/check-version.mjs [--tag <v…>]` | manifests agree on `X.Y.Z`; with `--tag`, tag = manifests for beta and release | not yet active (`mt08.b3j4`) |
-| `scripts/release/set-version.mjs <version>` | writes the version into `Cargo.toml` `[workspace.package]` and every workspace `package.json`, then `cargo update --workspace --offline` | not yet active (`mt08.b3j4`) |
+| `scripts/release/check-version.mjs [--tag <v…>]` | manifests agree on a plain `X.Y.Z`, inter-crate dependencies pinned in `[workspace.dependencies]`, `Cargo.lock` follows; with `--tag`, tag = manifests for beta and release | active (gate task `repo:version`); `--tag` active, used by the publish job once it exists (`mt08.a4xv`) |
+| `scripts/release/set-version.mjs <version> [--no-lock]` | writes the version into `Cargo.toml` `[workspace.package]`, pins the `[workspace.dependencies]` path entries to `=<version>`, sets every workspace `package.json`, then `cargo update --workspace --offline` | active; run by the alpha and publish jobs and the cut once they exist (`mt08.x49q`, `mt08.a4xv`, `mt08.4fp9`) |
 | `scripts/release/next-version.mjs [--json]` | the next alpha tag from tags, fragments and `release-notes/index.json` | not yet active (`mt08.x49q`) |
 | `scripts/release/render-notes.mjs` | the GitHub release body: `--alpha`, and for beta and release | not yet active (`mt08.x49q`, `mt08.ss3j`) |
 | `scripts/release/verify-tag.mjs` | the refusal rules for beta and release tags | not yet active (`mt08.ss3j`) |
@@ -308,7 +321,7 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 | `scripts/release/promotion-check.mjs <X.Y.Z>` | reports promotion conditions 1, 4 and 5 with evidence | not yet active (`mt08.4fp9`) |
 | `scripts/release/api-report.mjs`, `packages/sdk/etc/` | the TypeScript SDK's API report | not yet active (`mt08.nrt0`) |
 | moon task `repo:fragments` | `node scripts/release/check-fragments.mjs` in `pnpm gates` | active |
-| moon task `repo:version` | `node scripts/release/check-version.mjs` in `pnpm gates` | not yet active (`mt08.b3j4`) |
+| moon task `repo:version` | `node scripts/release/check-version.mjs` in `pnpm gates` | active |
 | moon task `repo:api-report` | the API report in `pnpm gates` | not yet active (`mt08.nrt0`) |
 | moon task `repo:test`, widened | also runs the tests under `scripts/release/` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`) | active |
 | workflow `changes.yml` (check `changes`) | required fragment, `cargo-semver-checks`, API report diff | required fragment active; `cargo-semver-checks` and the API report diff not yet active (`mt08.nrt0`) |

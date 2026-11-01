@@ -35,9 +35,12 @@ tasks:
     # README.md and the docs its links point into), and the tests of the
     # release tooling under scripts/release/ (incl. lib/). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on
-    # the shell's globstar.
+    # the shell's globstar. The set-version test runs cargo in a two-crate
+    # fixture on the pinned toolchain, hence the rust-toolchain dependency.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
+    deps: ["~:rust-toolchain"]
     inputs:
+      - "/rust-toolchain.toml"
       - "/scripts/**/*"
       - "/package.json"
       - "/.github/**/*"
@@ -62,6 +65,21 @@ tasks:
       - "/scripts/release/lib/git.mjs"
       - "/scripts/release/lib/glob.mjs"
       - "/pnpm-lock.yaml"
+  version:
+    # The one version of the project: Cargo.toml [workspace.package] holds a
+    # plain X.Y.Z, every crate inherits it, inter-crate dependencies are
+    # pinned to it in [workspace.dependencies], and every workspace
+    # package.json and Cargo.lock carry it (docs/release-management.md,
+    # "Versioning").
+    command: "node scripts/release/check-version.mjs"
+    inputs:
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+      - "/crates/*/Cargo.toml"
+      - "/packages/*/package.json"
+      - "/apps/*/package.json"
+      - "/scripts/release/check-version.mjs"
+      - "/scripts/release/lib/*.mjs"
   rust-toolchain:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
     # task runs; a no-op (and offline) when it is already installed.
@@ -69,4 +87,4 @@ tasks:
     inputs:
       - "/rust-toolchain.toml"
   gates:
-    deps: ["~:format-check", "~:pins", "~:test", "~:fragments"]
+    deps: ["~:format-check", "~:pins", "~:test", "~:fragments", "~:version"]

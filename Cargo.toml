@@ -3,6 +3,12 @@ members = ["crates/*"]
 resolver = "3"
 
 [workspace.package]
+version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nocentraldb/nocentraldb"
+
+[workspace.dependencies]
+# Dependencies between workspace crates are declared here, with their path and
+# `version = "=<workspace version>"`, and used as `name.workspace = true`;
+# set-version keeps the pin equal to the version (check-version checks it).
