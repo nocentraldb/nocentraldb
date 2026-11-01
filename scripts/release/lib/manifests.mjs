@@ -239,6 +239,17 @@ export function crateManifest(text) {
 }
 
 /**
+ * The value of `publish` in the [package] table of a crate manifest, as
+ * written (`false`, `true`, `["crates-io"]`), or null when it has none.
+ */
+export function publishLine(text) {
+  let value = null;
+  for (const e of scan(text, { reads: (t) => t === "package" }))
+    if (e.key === "publish") value = e.value.trim();
+  return value;
+}
+
+/**
  * name -> version of every [[package]] block of a Cargo.lock. When a name
  * appears more than once, the block without a `source` (a workspace member)
  * wins.
