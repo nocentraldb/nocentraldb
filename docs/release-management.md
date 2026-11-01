@@ -101,17 +101,17 @@ The checks:
 
 ## Release notes
 
-**Status:** the format below is the process. The index file, its test and the curated-notes rendering are not yet active, built by `mt08.ss3j`; the skeleton generator `draft-notes` by `mt08.4fp9`.
+**Status:** the format below is the process. The index file `release-notes/index.json`, its shape test in `repo:test`, `index.mjs add` and the curated-notes rendering (`render-notes --beta`, `--release`) are active; the publish job that runs them is built by `mt08.a4xv`, the skeleton generator `draft-notes` by `mt08.4fp9`.
 
 - **One Markdown file per release version**, `release-notes/<X.Y.Z>.md`. It is the same file from `beta.1` to the release, edited on `release/X.Y` before each beta, and archived on `main` by the release.
-- **"Changes since beta N-1"** in a beta's GitHub notes is generated at publish time from the fragments added on the branch since the previous beta tag, and never committed.
+- **"Changes since beta N-1"** in a beta's GitHub notes is generated at publish time from the fragments added on the branch since the previous beta tag, and never committed. `render-notes --beta X.Y.Z --since <previous beta tag|none>` prints the curated file as it is at the commit and, after a previous beta, a section `## Changes since <tag>` with those fragments, unfiltered (a cycle fix appears there), each under `### <slug>`; `render-notes --release X.Y.Z` prints the file only.
 - **`release-notes/index.json`** lists one entry per published beta and release, newest last (sorted ascending, tags unique):
 
   ```json
   { "releases": [ { "version": "0.1.0", "stage": "beta", "tag": "v0.1.0-beta.1", "date": "YYYY-MM-DD", "path": "release-notes/0.1.0.md" } ] }
   ```
 
-  `stage` is `beta` or `release`. `tag` lets a consumer fetch the file as it was at that tag. `date` is a UTC calendar day. The release workflow updates the file and commits it to `main`; adding an identical entry again is a no-op. A test in `repo:test` holds the committed file to this shape.
+  Every entry has exactly these five keys. `version` is a plain `X.Y.Z`; `stage` is `beta` or `release`, and `tag` matches it: `vX.Y.Z` for a release, `vX.Y.Z-beta.N` for a beta. `tag` lets a consumer fetch the file as it was at that tag. `date` is the UTC calendar day of publishing, `YYYY-MM-DD` (a real day; no time, no time zone). `path` is `release-notes/<version>.md`. The release workflow adds an entry with `node scripts/release/index.mjs add --version X.Y.Z --stage beta|release --tag <tag> --date <UTC day>` and commits the file to `main`. Adding an identical entry again is a no-op (`already indexed`, the file untouched); an entry for an indexed tag that differs in any field fails. `validateIndex` in `scripts/release/index.mjs` holds the committed file to this shape in `repo:test`; before the first beta the file is `{ "releases": [] }`.
 - **Order of sections** in curated notes:
   1. a two- or three-sentence summary of the release;
   2. **Breaking changes** (each with problem, use, migration);
@@ -165,7 +165,7 @@ Its log shows the guard's verdict, the answer of next-version (the content of `n
 
 ## Beta
 
-**Status:** the steps are the process. The tools are not yet active: `draft-notes` and `cut` are built by `mt08.4fp9`, the publish job by `mt08.a4xv` (with its scripts from `mt08.ss3j`). Registry publishing waits for the repository to go public (`mt08.1213`).
+**Status:** the steps are the process. The publish job's scripts are active (`verify-tag`, `render-notes --beta`, `index.mjs`, `publishable`); the job itself is not yet active, built by `mt08.a4xv`, and `draft-notes` and `cut` are built by `mt08.4fp9`. Registry publishing waits for the repository to go public (`mt08.1213`).
 
 1. **Propose (PM).** When the release epic is no longer blocked, the PM checks the epic's description against what was delivered. If the scope is met, it proposes a beta to the owner and attaches a draft of the release notes; if not, it says what is missing.
 2. **Draft (PM or agent).** Draft `release-notes/<X.Y.Z>.md` (see [Release notes](#release-notes)) from two sources: every fragment since the previous release, rendered into the skeleton by `draft-notes` with the filter applied and the sections in order, and every board item created or closed since the release epic was created (read with `nxf`; Known issues in particular).
@@ -180,7 +180,18 @@ Its log shows the guard's verdict, the answer of next-version (the content of `n
 
 What the publish job does on the tag: the `release` workflow runs on `push` of tags `v*`, excluding `-alpha.` tags. It runs the full gate `pnpm gates` on the tagged commit itself, checks the tag against the manifests, writes the full version into the build checkout, builds, and publishes a GitHub prerelease whose body is the curated file, plus, for betas after the first, the generated section "Changes since beta N-1" (the fragments added on the branch between the two beta tags: `git diff --diff-filter=A --name-only <previous beta tag> <this tag> -- changes/`). Once the repository is public and the packages are publishable, it also publishes to npm under the dist-tag `beta` and to crates.io as a prerelease version. It then appends the beta to `release-notes/index.json` on `main`.
 
-A tag whose `X.Y.Z` differs from the manifests turns `publish` red before anything is built or published. The tag is left in place for the owner to delete or move.
+A tag the publish job may not publish turns `publish` red before anything is built or published; the tag is left in place for the owner to delete or move. The rules are `scripts/release/verify-tag.mjs --tag <tag> --commit <sha>`, checked in this order and stopping at the first failure:
+
+1. the tag is `vX.Y.Z` or `vX.Y.Z-beta.N` (alpha tags are never published by this job);
+2. `X.Y.Z` is the workspace version in `Cargo.toml` at the commit;
+3. the commit is reachable from `origin/release/X.Y`;
+4. a release only: a `vX.Y.Z-beta.N` tag exists, because every release passes through beta;
+5. a release only: the commit is the head of `origin/release/X.Y`;
+6. a release only: since the last beta (the highest `vX.Y.Z-beta.N` of the same `X.Y.Z`, compared numerically, so `beta.10` is above `beta.2`) only `release-notes/` and `changes/` changed;
+7. a release only: `changes/` holds no fragment at the commit;
+8. `release-notes/X.Y.Z.md` exists at the commit.
+
+With `--json` it prints `{ "stage", "version", "lastBeta" }` for the job: `version` is the plain `X.Y.Z`, `lastBeta` the beta rule 6 compared against for a release, and for a beta the previous beta of the same version (the `--since` of `render-notes --beta`), or `null`. `scripts/release/publishable.mjs --json` tells the registry steps which packages to skip: an npm package is publishable when it is not `private` and its `exports` or `main` point under `dist/`, a crate when its `[package]` has no `publish` key or `publish = true`. Today neither `@nocentraldb/sdk` nor `ncdb-core` is.
 
 **Fixes during beta:**
 
@@ -194,7 +205,7 @@ A tag whose `X.Y.Z` differs from the manifests turns `publish` red before anythi
 
 ## Release
 
-**Status:** the checklist is the process. `promotion-check` is not yet active, built by `mt08.4fp9`; the publish job and its commit back to `main` by `mt08.a4xv`; the upgrade test waits for the relay (`mt08.nptg`, behind `mt08.7wjb`).
+**Status:** the checklist is the process. The publish job's scripts are active (`verify-tag`, `render-notes --release`, `index.mjs`, `shipped-fragments`, `publishable`); the publish job and its commit back to `main` are not yet active, built by `mt08.a4xv`; `promotion-check` by `mt08.4fp9`; the upgrade test waits for the relay (`mt08.nptg`, behind `mt08.7wjb`).
 
 The PM checks the promotion conditions in its sessions and proposes the release to the owner when all hold. The owner decides.
 
@@ -222,9 +233,9 @@ Steps:
    ```
 
 3. **What the publish job does:**
-   1. runs the gate, checks tag = manifests, checks the diff rule of condition 4 (`git diff --name-only <last beta tag> <release tag>` may only show `release-notes/` and `changes/`), and requires `release-notes/<X.Y.Z>.md` to exist at the tag. Any failure turns `publish` red before anything is built or published, and the tag is left in place for the owner to delete or move;
+   1. runs the gate and `verify-tag` (the eight rules listed under [Beta](#beta)): tag = manifests, on the head of `release/X.Y` after a beta, the diff rule of condition 4 (`git diff --name-only <last beta tag> <release tag>` may only show `release-notes/` and `changes/`), no fragment left in `changes/`, and `release-notes/<X.Y.Z>.md` at the tag. Any failure turns `publish` red before anything is built or published, and the tag is left in place for the owner to delete or move;
    2. writes the version into the checkout, builds (the version is embedded, so the bytes differ from the beta's), and publishes: crates.io, npm under `latest`, and a GitHub release marked latest whose body is the file's content, without a manual step (the registries once the repository is public and the packages are publishable);
-   3. commits back to `main`, in one commit pushed by the workflow: the updated `release-notes/index.json`, the final `release-notes/<X.Y.Z>.md` as it stands at the tag (so `main` is the archive the landing page renders from), and the removal of every fragment that shipped. The shipped fragments are exactly the files deleted under `changes/` on the branch between the merge base with `main` and the release tag (`git log --diff-filter=D --name-only --format= <merge-base>..<tag> -- changes/`); those still present on `main` are deleted;
+   3. commits back to `main`, in one commit pushed by the workflow: the updated `release-notes/index.json`, the final `release-notes/<X.Y.Z>.md` as it stands at the tag (so `main` is the archive the landing page renders from), and the removal of every fragment that shipped. The shipped fragments are exactly the files deleted under `changes/` on the branch between the merge base with `main` and the release tag (`git log --diff-filter=D --name-only --format= <merge-base>..<tag> -- changes/`), listed with the content that shipped by `node scripts/release/shipped-fragments.mjs --tag vX.Y.Z`. With `--delete` on a checkout of `main`, a fragment is deleted only when its content is the blob that shipped; one whose slug was reused for a new fragment on `main` is kept and named (`kept <path>: differs from the shipped fragment (slug reused?)`), never deleted by its name alone;
    4. closes the GitHub milestone with `gh`; the landing page picks the change up from `main` once it exists.
 
    A push to `main` made with the workflow's token does not start the `ci` workflow. That commit touches only `release-notes/` and `changes/`; the fragment schema check and the index test cover those paths on the next pull request.
@@ -315,16 +326,16 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 
 | Unit | Does | Status |
 |---|---|---|
-| `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | active |
+| `scripts/release/lib/` (`cli.mjs`, `fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared command-line helpers, and shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | active |
 | `scripts/release/check-fragments.mjs [--dir <changes>]` | validates every `changes/*.md`; with `--base <rev> --head <rev> [--skip]` also applies the allowlist and the required-fragment rule; `--require-breaking` ignores `--skip` | schema mode and `--base/--head/--skip` active; `--require-breaking` exists, but nothing passes it until the breaking-change detection (`mt08.nrt0`) |
 | `scripts/release/check-version.mjs [--tag <v…>]` | manifests agree on a plain `X.Y.Z`, inter-crate dependencies pinned in `[workspace.dependencies]`, `Cargo.lock` follows; with `--tag`, tag = manifests for beta and release | active (gate task `repo:version`); `--tag` active, used by the publish job once it exists (`mt08.a4xv`) |
 | `scripts/release/set-version.mjs <version> [--no-lock]` | writes the version into `Cargo.toml` `[workspace.package]`, pins the `[workspace.dependencies]` path entries to `=<version>`, sets every workspace `package.json`, then `cargo update --workspace --offline` | active; run by the publish job and the cut once they exist (`mt08.a4xv`, `mt08.4fp9`), and by the alpha job once it builds binaries (`mt08.h4rh`) |
 | `scripts/release/next-version.mjs [--json] [--head <ref>] [--index <file>]` | the next alpha tag from the tags, the fragments and the workspace version at the commit and `release-notes/index.json`, or `skip` with its reason | active (alpha job) |
-| `scripts/release/render-notes.mjs --alpha --since <tag\|none> --repo <owner/name> [--head <ref>]` | the GitHub release body: `--alpha`, and for beta and release | `--alpha` active (alpha job); `--beta` and `--release` exit 2 until `mt08.ss3j` |
-| `scripts/release/verify-tag.mjs` | the refusal rules for beta and release tags | not yet active (`mt08.ss3j`) |
-| `scripts/release/index.mjs add --version --stage --tag --date` | appends to `release-notes/index.json` | not yet active (`mt08.ss3j`) |
-| `scripts/release/shipped-fragments.mjs <release tag>` | lists the fragments that shipped | not yet active (`mt08.ss3j`) |
-| `scripts/release/publishable.mjs` | which packages the publish steps may publish | not yet active (`mt08.ss3j`) |
+| `scripts/release/render-notes.mjs --alpha --since <tag\|none> --repo <owner/name> \| --beta <X.Y.Z> --since <tag\|none> \| --release <X.Y.Z> [--head <ref>]` | the GitHub release body: the alpha notes; the curated file plus "Changes since" the previous beta; the curated file only | active; `--alpha` run by the alpha job, `--beta` and `--release` by the publish job once it exists (`mt08.a4xv`) |
+| `scripts/release/verify-tag.mjs --tag <tag> --commit <sha> [--remote <name>] [--json]` | the refusal rules for beta and release tags (see [Beta](#beta)) | active; run by the publish job once it exists (`mt08.a4xv`) |
+| `scripts/release/index.mjs add --version --stage --tag --date [--file]` | appends to `release-notes/index.json`, sorted, idempotent; exports `validateIndex` | active; run by the publish job once it exists (`mt08.a4xv`) |
+| `scripts/release/shipped-fragments.mjs --tag <vX.Y.Z> [--main <ref>] [--delete]` | lists the fragments that shipped with their blobs; `--delete` removes those on `main` whose content is that blob | active; run by the commit back to `main` once it exists (`mt08.a4xv`) |
+| `scripts/release/publishable.mjs [--json]` | which packages the publish steps may publish, each with its reason | active; run by the publish job once it exists (`mt08.a4xv`) |
 | `scripts/release/commit-back.mjs` | the release workflow's commit to `main` | not yet active (`mt08.a4xv`) |
 | `scripts/release/draft-notes.mjs <X.Y.Z>` | the curated-notes skeleton, filter applied, sections in order | not yet active (`mt08.4fp9`) |
 | `scripts/release/cut.mjs <X.Y.Z>` | creates `release/X.Y`, sets the manifests, prints the push, raise-PR and beta-tag commands | not yet active (`mt08.4fp9`) |
@@ -340,7 +351,7 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 | `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants | active; `release-workflow.test.mjs` covers the job `alpha`, the publish jobs join it with `mt08.a4xv` |
 | label `skip-changes` | waives the required fragment, never a detected breaking change | active |
 | `changes/README.md` | the fragments' writer guide | active |
-| `release-notes/index.json` and its test | the notes archive index | not yet active (`mt08.ss3j`) |
+| `release-notes/index.json` and its test | the notes archive index, held to its shape by `scripts/release/index.test.mjs` in `repo:test` | active |
 | memory `active-release` | the release in progress, for the PM | written by the PM when a release is planned |
 
 ## Not yet active

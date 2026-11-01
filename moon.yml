@@ -34,7 +34,8 @@ tasks:
     # devDependency, hence the lockfile input), the contributor kit check in
     # scripts/contributor-kit.test.mjs (it reads .github/, CONTRIBUTING.md,
     # README.md and the docs its links point into), and the tests of the
-    # release tooling under scripts/release/ (incl. lib/). Both patterns are
+    # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
+    # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on
     # the shell's globstar. The set-version test runs cargo in a two-crate
     # fixture on the pinned toolchain, hence the rust-toolchain dependency.
@@ -48,6 +49,7 @@ tasks:
       - "/pnpm-workspace.yaml"
       - "/pnpm-lock.yaml"
       - "/changes/**/*"
+      - "/release-notes/**/*"
       - "/CONTRIBUTING.md"
       - "/README.md"
       - "/docs/**/*"
