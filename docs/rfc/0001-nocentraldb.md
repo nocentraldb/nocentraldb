@@ -61,6 +61,8 @@ const page = await db.find(model.tasks.views.ready.take(50));             // fir
 const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor)); // the next 50, when needed
 ```
 
+[Eight use cases](../use-cases.md) show what this design means in practice. In five of them, a central database is the weaker choice by design. The other three show that collaborative editing, subscriptions and streaming work without a central server. Each use case ends with a question for you.
+
 ## Three people we are designing for
 
 ### The developer whose agents work on shared data
