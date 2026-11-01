@@ -59,3 +59,27 @@ test("describeNearest still throws on a bad ref", (t) => {
   repo.commit("one", { a: "1\n" });
   assert.throws(() => lib.describeNearest("v*", "nope", opts), /failed/);
 });
+
+test("fileAt reads a file as it stands at the ref, and is null where it does not exist", (t) => {
+  const { repo, opts } = repoFor(t);
+  const first = repo.commit("one", { "d/a.md": "1\n" });
+  repo.commit("two", { "d/a.md": "2\n", "d/b.md": "b\n" });
+  assert.equal(lib.fileAt("HEAD", "d/a.md", opts), "2\n");
+  assert.equal(lib.fileAt(first, "d/a.md", opts), "1\n");
+  assert.equal(lib.fileAt(first, "d/b.md", opts), null);
+  assert.equal(lib.fileAt(first, "nope.md", opts), null);
+  assert.throws(() => lib.fileAt("nope", "d/a.md", opts), /failed/);
+});
+
+test("filesAt lists the entries directly in a directory at the ref, -z safe", (t) => {
+  const { repo, opts } = repoFor(t);
+  const first = repo.commit("one", { "d/a b.md": "1\n", "d/sub/c.md": "c\n" });
+  repo.commit("two", { "d/z.md": "z\n" });
+  assert.deepEqual(lib.filesAt(first, "d", opts), ["d/a b.md", "d/sub"]);
+  assert.deepEqual(lib.filesAt("HEAD", "d", opts), [
+    "d/a b.md",
+    "d/sub",
+    "d/z.md",
+  ]);
+  assert.deepEqual(lib.filesAt("HEAD", "none", opts), []);
+});

@@ -29,8 +29,8 @@
 //
 // Exit 0 with the answer (also when skipping), 1 with one line per
 // violation, 2 on a usage error.
-import { parseFragment, validateFragment } from "./lib/fragments.mjs";
-import { addedPaths, describeNearest, git, tags, zList } from "./lib/git.mjs";
+import { fragmentsAt, fragmentsIn } from "./lib/fragments.mjs";
+import { addedPaths, describeNearest, fileAt, git, tags } from "./lib/git.mjs";
 import { readWorkspaceVersion } from "./lib/manifests.mjs";
 import {
   bumpFor,
@@ -76,35 +76,18 @@ const parseArgs = (args) => {
   return opts;
 };
 
-/** A file as it stands at `head`, or null when it does not exist there. */
-const readAt = (head, path) =>
-  git(["ls-tree", "--name-only", head, "--", path]).trim() === ""
-    ? null
-    : git(["show", `${head}:${path}`]);
-
-const isFragment = (path) =>
-  /^changes\/[^/]+\.md$/.test(path) && path !== "changes/README.md";
-const slugOf = (path) => path.slice("changes/".length, -".md".length);
-
 /** Every fragment at `head`, sorted, with its type; null after reporting an invalid one. */
 const presentFragments = (head) => {
-  const paths = zList(git(["ls-tree", "-z", "--name-only", head, "changes/"]))
-    .filter(isFragment)
-    .sort();
-  const fragments = [];
-  for (const path of paths) {
-    const text = readAt(head, path);
-    const errors = validateFragment(slugOf(path), text);
-    for (const error of errors) fail(`${path}: ${error}`);
-    if (errors.length === 0)
-      fragments.push({ path, type: parseFragment(text).front.type });
-  }
-  return process.exitCode ? null : fragments;
+  const fragments = fragmentsAt(head);
+  for (const { file, errors } of fragments)
+    for (const error of errors) fail(`${file}: ${error}`);
+  if (fragments.some((f) => f.errors.length > 0)) return null;
+  return fragments.map(({ file, front }) => ({ path: file, type: front.type }));
 };
 
 /** The plain workspace version at `head`; null after reporting the problem. */
 const workspaceVersion = (head) => {
-  const text = readAt(head, "Cargo.toml");
+  const text = fileAt(head, "Cargo.toml");
   if (text === null) {
     fail(`Cargo.toml: missing at ${head}`);
     return null;
@@ -123,7 +106,7 @@ const workspaceVersion = (head) => {
 
 /** The highest release version of the index at `head`; undefined after reporting a problem. */
 const lastRelease = (head, file) => {
-  const text = readAt(head, file);
+  const text = fileAt(head, file);
   if (text === null) return null;
   try {
     const { releases } = JSON.parse(text);
@@ -173,10 +156,9 @@ const compute = ({ head, index }) => {
   const added =
     previousAlpha === null
       ? present
-      : addedPaths(previousAlpha, head, "changes/")
-          .filter(isFragment)
-          .sort()
-          .map((path) => present.find((f) => f.path === path));
+      : fragmentsIn(addedPaths(previousAlpha, head, "changes/")).map(
+          ({ file }) => present.find((f) => f.path === file),
+        );
   if (!added.some((f) => f.type !== "internal")) {
     return {
       skip: true,

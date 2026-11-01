@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   COMPONENTS,
+  demoteSections,
+  fragmentsAt,
+  fragmentsIn,
   listFragments,
   parseFragment,
   RELEASED,
@@ -15,6 +18,7 @@ import {
   TYPES,
   validateFragment,
 } from "./fragments.mjs";
+import { GIT_ENV, makeRepo } from "./test-repo.mjs";
 
 const feature = `---
 type: feature
@@ -234,5 +238,54 @@ test("the exported vocabularies match docs/release-management.md", () => {
       !RELEASED.test("v0.1.0") &&
       !RELEASED.test("0.1.0-beta.1") &&
       !RELEASED.test("0.1"),
+  );
+});
+
+test("fragmentsIn picks the fragments among repository paths, as listFragments does", () => {
+  assert.deepEqual(
+    fragmentsIn([
+      "changes/z-y.md",
+      "changes/README.md",
+      "changes/a-x.md",
+      "changes/sub/deep.md",
+      "changes/notes.txt",
+      "other/b.md",
+      "changesx/c.md",
+    ]),
+    [
+      { slug: "a-x", file: "changes/a-x.md" },
+      { slug: "z-y", file: "changes/z-y.md" },
+    ],
+  );
+});
+
+test("fragmentsAt reads and validates every fragment as it stands at a commit", (t) => {
+  const repo = makeRepo();
+  t.after(() => repo.dispose());
+  const first = repo.commit("one", {
+    "changes/README.md": "# guide\n",
+    "changes/add-y.md": feature,
+  });
+  repo.commit("two", { "changes/bad.md": "no front matter\n" });
+  const opts = { cwd: repo.dir, env: GIT_ENV };
+  const [valid] = fragmentsAt(first, opts);
+  assert.equal(fragmentsAt(first, opts).length, 1);
+  assert.equal(valid.slug, "add-y");
+  assert.equal(valid.file, "changes/add-y.md");
+  assert.deepEqual(valid.errors, []);
+  assert.equal(valid.front.type, "feature");
+  assert.deepEqual(valid.sections, ["Problem", "Use"]);
+  const [, bad] = fragmentsAt("HEAD", opts);
+  assert.equal(bad.file, "changes/bad.md");
+  assert.match(bad.errors[0], /no front matter/);
+  assert.equal(bad.front, undefined);
+});
+
+test("demoteSections turns ## headings into ### outside fenced code blocks only", () => {
+  const body =
+    "## Problem\nText ## not a heading\n### Deeper\n```md\n## inside\n```\n~~~\n## also inside\n~~~\n## Use\n";
+  assert.equal(
+    demoteSections(body),
+    "### Problem\nText ## not a heading\n### Deeper\n```md\n## inside\n```\n~~~\n## also inside\n~~~\n### Use\n",
   );
 });

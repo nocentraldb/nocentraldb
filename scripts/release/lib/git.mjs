@@ -99,3 +99,16 @@ export function describeNearest(match, ref, opts) {
     throw error;
   }
 }
+
+/**
+ * The text of the file `path` as it stands at `ref`; null when no such path
+ * exists there. A bad ref throws.
+ */
+export function fileAt(ref, path, opts) {
+  const listed = git(["ls-tree", "--name-only", ref, "--", path], opts);
+  return listed.trim() === "" ? null : git(["show", `${ref}:${path}`], opts);
+}
+
+/** The paths of the entries directly in directory `dir` at `ref`. */
+export const filesAt = (ref, dir, opts) =>
+  zList(git(["ls-tree", "-z", "--name-only", ref, "--", `${dir}/`], opts));
