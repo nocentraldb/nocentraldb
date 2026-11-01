@@ -68,7 +68,7 @@ The other types and their sections are in the writer's guide [changes/README.md]
 
 The label `skip-changes` passes the `changes` check without a fragment. It is legitimate only when the pull request changes product paths but ships nothing a user would notice: a version raise or a lockfile refresh. Anything a user could notice (a feature, a fix, a changed dependency that alters behaviour, a deprecation) needs a fragment, with `type: internal` when it is not worth a line in the curated notes. The label never waives a detected breaking change. Adding or removing the label re-runs the check.
 
-How fragments become release notes, and how releases are made, is in [docs/release-management.md](docs/release-management.md).
+Once a pull request with a fragment other than `internal` is merged and `ci` is green on `main`, the `release` workflow turns it into an alpha: a tag `vX.Y.Z-alpha.N` and a GitHub prerelease whose notes are the fragments added since the previous alpha ([Alpha](docs/release-management.md#alpha)). How fragments become release notes, and how releases are made, is in [docs/release-management.md](docs/release-management.md).
 
 **The pull request.** Fill in every section of the template, Authorship and `Follow-up:` included.
 

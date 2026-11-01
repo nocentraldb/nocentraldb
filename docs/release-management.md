@@ -16,7 +16,7 @@ The diagram is plain SVG (no Mermaid); GitHub renders it here and it follows the
 
 ## Versioning
 
-**Status:** the rules below are the process. The manifest version and its checks are active: the manifests say `0.1.0`, `check-version` holds them to it (the gate task `repo:version`, part of `pnpm gates`), and `set-version` writes a full version into a checkout. The computation of the next version (`next-version`) is not yet active, built by `mt08.x49q`.
+**Status:** the rules below are the process. The manifest version and its checks are active: the manifests say `0.1.0`, `check-version` holds them to it (the gate task `repo:version`, part of `pnpm gates`), and `set-version` writes a full version into a checkout. The computation of the next alpha is active too: `node scripts/release/next-version.mjs`, run by the alpha job (see [Alpha](#alpha)).
 
 - SemVer with prerelease suffixes. Tags look like `v0.3.1-alpha.4`, `v0.3.1-beta.2`, `v0.3.1`. The stage is part of the version, so the registries understand it. Any other tag shape is refused.
 - One version for everything the project publishes (crates, npm packages, CLI, relay), always in lockstep. The unscoped npm `nocentraldb` stays a parked `0.0.0` placeholder outside the shared version.
@@ -129,29 +129,39 @@ The checks:
 
 ## Alpha
 
-**Status:** not yet active, built by `mt08.x49q` (the `release` workflow's job `alpha`, `next-version`, `render-notes --alpha`). Until then no alpha is produced.
+**Status:** active: the `release` workflow's job `alpha` (`.github/workflows/release.yml`), with `next-version` and `render-notes --alpha`. While the repository is private, an alpha is a GitHub prerelease visible to collaborators, and nothing goes to a registry.
 
-There is nothing to do by hand. Merge a product-changing pull request with its fragment to `main`; the alpha follows.
+There is nothing to do by hand. Merge a product-changing pull request with its fragment to `main`; the alpha follows once `ci` is green.
 
-What the job does: the `release` workflow runs on `workflow_run` of the `ci` workflow (`types: [completed]`, `branches: [main]`) and proceeds only when that run's `conclusion` is `success`. It checks out the run's `head_sha` with full history and tags, in a concurrency group `alpha` that never cancels a run in progress, and then:
+What the job does: the `release` workflow runs on `workflow_run` of the `ci` workflow (`types: [completed]`, `branches: [main]`). The job `alpha` proceeds only for a run whose `conclusion` is `success`, whose `event` is `push`, whose `head_branch` is `main` and whose `head_repository` is this repository: never for a run that a pull request triggered, a fork's included, because the job holds `contents: write` (the workflow itself is `contents: read`). It runs in the concurrency group `release-alpha`, which never cancels a run in progress, for at most 20 minutes, and every step runs in `bash` with `pipefail`. The commit is the run's `head_sha` (`github.event.workflow_run.head_sha`, or `github.sha` on a dispatch). Then:
 
-1. **Guard:** if the commit is no longer the head of `origin/main`, it stops with a neutral result and a log line.
-2. Computes the next version (see [Versioning](#versioning)). It commits nothing.
-3. Collects the fragments added since the previous alpha tag, the nearest alpha tag reachable from the commit (`git diff --diff-filter=A --name-only <previous alpha tag> HEAD -- changes/`; before the first alpha, every fragment present). If none of them has a `type` other than `internal`, it stops with a neutral result.
-4. Tags `v<next>-alpha.<n>` on the commit and pushes the tag.
-5. Publishes a GitHub prerelease whose body is the alpha notes: those fragments rendered as Markdown, each under a heading made from its slug, plus a link to the previous alpha's release. CLI and relay binaries are attached once they exist; npm gets the alpha under the dist-tag `alpha` once the repository is public and the SDK is publishable (see [Not yet active](#not-yet-active)).
+1. **Guard**, before any checkout: with the runner's own git and the job's token, `git ls-remote --exit-code` reads the head of `main`. If the commit is no longer that head, the job stops green with a notice and every later step is skipped. A failing `ls-remote` fails the job; it is never read as "skip".
+2. Checks out the commit with full history and tags, installs the toolchain and runs `node scripts/release/next-version.mjs --json` (see [Versioning](#versioning)), which prints the answer to the log (and to `next.json` in the checkout). It commits nothing.
+3. If next-version answers `"skip": true`, the job stops green: none of the fragments added since the previous alpha (the nearest alpha tag reachable from the commit; before the first alpha, every fragment present) has a `type` other than `internal`.
+4. Renders the alpha notes with `node scripts/release/render-notes.mjs --alpha --since <previous alpha | none> --repo <owner/name>`: every fragment added since the previous alpha, in slug order, each as `## <slug>`, a line `*<type>* · components: … · tickets: …` and its body with its sections demoted to `###`, then `Previous alpha: [<tag>](<its release>)` or `First alpha.` Alpha notes are raw: `internal` fragments and `introduced: cycle` fixes are listed too.
+5. Tags `v<next>-alpha.<n>` on the commit, pushes the tag, and publishes a GitHub prerelease with that title and the notes as its body. Both steps first check whether the tag and the release exist and skip what does, so a re-run is idempotent. CLI and relay binaries are attached once they exist; npm gets the alpha under the dist-tag `alpha` once the repository is public and the SDK is publishable (see [Not yet active](#not-yet-active)).
 
 Alphas never go to crates.io: crates.io versions are permanent, and one per merge would bury the real versions. Rust users who want an alpha depend on the git tag.
 
 When no alpha appears, and why that is fine:
 
-- **All-internal merges:** a merge whose fragments are all `internal`, or that needed no fragment, produces no alpha.
-- **The commit is no longer the head of `main`:** two merges in quick succession must not produce an alpha with a higher number on older code, so the older one is skipped. The next alpha covers it, because alpha notes are computed since the previous alpha tag, not per merge. Nothing is lost.
-- **The workflow's own pushes to `main`** (the release workflow's commit after a beta or release) can delay an alpha by one run.
+- **All-internal merges:** a merge whose fragments are all `internal`, or that needed no fragment, produces no alpha (next-version's `skip`).
+- **The commit is no longer the head of `main`:** two merges in quick succession must not produce an alpha with a higher number on older code, so the older one is skipped at the guard. The next alpha covers it, because alpha notes are computed since the previous alpha tag, not per merge. Nothing is lost.
+- **The workflow's own pushes to `main`** (the release workflow's commit after a beta or release) start no `ci` run, so no alpha follows them, and while such a push is the head of `main` the guard skips the run of the merge before it. That merge's alpha is delayed by one run: the next product-changing merge's alpha covers it.
 
-A tag pushed with the workflow's own `GITHUB_TOKEN` does not start another workflow run; the publish job also ignores `-alpha.` tags explicitly.
+A tag pushed with the workflow's own `GITHUB_TOKEN` does not start another workflow run; the publish job (`mt08.a4xv`) also ignores `-alpha.` tags explicitly.
 
-**Dry run** (once the workflow exists): `gh workflow run release.yml -f tag=` — a `workflow_dispatch` with an empty `tag` input computes and prints everything and tags and publishes nothing. A dispatch is always a dry run.
+**Dry run.** A `workflow_dispatch` is always a dry run; with an empty `tag` input it runs the alpha job:
+
+```sh
+gh workflow run release.yml --ref main
+gh run watch "$(gh run list --workflow release.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+git ls-remote --tags origin 'v*-alpha.*'   # unchanged: a dry run tags nothing
+```
+
+Its log shows the guard's verdict, the answer of next-version (the content of `next.json`: `"skip": true` and the reason, or the version, the tag, the previous alpha and the fragments), and, when it does not skip, the rendered notes. The tag-and-publish step is skipped (`DRY_RUN`), so nothing is tagged or published. A dispatch on another ref than `main` stops at the guard, because its commit is not the head of `main`. A dispatch with a non-empty `tag` is the publish dry run of `mt08.a4xv` and does not run the alpha job.
+
+**Reproducing it locally.** `node scripts/release/next-version.mjs [--json] [--head <ref>]` and `node scripts/release/render-notes.mjs --alpha --since <tag|none> --repo nocentraldb/nocentraldb [--head <ref>]` give the same answer for the same commit, provided the local tags match `origin` (`git fetch --tags`): both read every file as it stands at the commit, never from the working tree.
 
 ## Beta
 
@@ -308,9 +318,9 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 | `scripts/release/lib/` (`fragments.mjs`, `git.mjs`, `glob.mjs`, `test-repo.mjs`, `semver.mjs`, `manifests.mjs`) | shared parsing: fragments, git, allowlist globs, SemVer and tags, manifests; isolated git repositories for tests | active |
 | `scripts/release/check-fragments.mjs [--dir <changes>]` | validates every `changes/*.md`; with `--base <rev> --head <rev> [--skip]` also applies the allowlist and the required-fragment rule; `--require-breaking` ignores `--skip` | schema mode and `--base/--head/--skip` active; `--require-breaking` exists, but nothing passes it until the breaking-change detection (`mt08.nrt0`) |
 | `scripts/release/check-version.mjs [--tag <v…>]` | manifests agree on a plain `X.Y.Z`, inter-crate dependencies pinned in `[workspace.dependencies]`, `Cargo.lock` follows; with `--tag`, tag = manifests for beta and release | active (gate task `repo:version`); `--tag` active, used by the publish job once it exists (`mt08.a4xv`) |
-| `scripts/release/set-version.mjs <version> [--no-lock]` | writes the version into `Cargo.toml` `[workspace.package]`, pins the `[workspace.dependencies]` path entries to `=<version>`, sets every workspace `package.json`, then `cargo update --workspace --offline` | active; run by the alpha and publish jobs and the cut once they exist (`mt08.x49q`, `mt08.a4xv`, `mt08.4fp9`) |
-| `scripts/release/next-version.mjs [--json]` | the next alpha tag from tags, fragments and `release-notes/index.json` | not yet active (`mt08.x49q`) |
-| `scripts/release/render-notes.mjs` | the GitHub release body: `--alpha`, and for beta and release | not yet active (`mt08.x49q`, `mt08.ss3j`) |
+| `scripts/release/set-version.mjs <version> [--no-lock]` | writes the version into `Cargo.toml` `[workspace.package]`, pins the `[workspace.dependencies]` path entries to `=<version>`, sets every workspace `package.json`, then `cargo update --workspace --offline` | active; run by the publish job and the cut once they exist (`mt08.a4xv`, `mt08.4fp9`), and by the alpha job once it builds binaries (`mt08.h4rh`) |
+| `scripts/release/next-version.mjs [--json] [--head <ref>] [--index <file>]` | the next alpha tag from the tags, the fragments and the workspace version at the commit and `release-notes/index.json`, or `skip` with its reason | active (alpha job) |
+| `scripts/release/render-notes.mjs --alpha --since <tag\|none> --repo <owner/name> [--head <ref>]` | the GitHub release body: `--alpha`, and for beta and release | `--alpha` active (alpha job); `--beta` and `--release` exit 2 until `mt08.ss3j` |
 | `scripts/release/verify-tag.mjs` | the refusal rules for beta and release tags | not yet active (`mt08.ss3j`) |
 | `scripts/release/index.mjs add --version --stage --tag --date` | appends to `release-notes/index.json` | not yet active (`mt08.ss3j`) |
 | `scripts/release/shipped-fragments.mjs <release tag>` | lists the fragments that shipped | not yet active (`mt08.ss3j`) |
@@ -325,9 +335,9 @@ The PM persona receives `nxm prime` and `nxf prime` at session start, so it sees
 | moon task `repo:api-report` | the API report in `pnpm gates` | not yet active (`mt08.nrt0`) |
 | moon task `repo:test`, widened | also runs the tests under `scripts/release/` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`) | active |
 | workflow `changes.yml` (check `changes`) | required fragment, `cargo-semver-checks`, API report diff | required fragment active; `cargo-semver-checks` and the API report diff not yet active (`mt08.nrt0`) |
-| workflow `release.yml`, job `alpha` | alpha on a green `ci` run on `main`; dispatch dry run | not yet active (`mt08.x49q`) |
+| workflow `release.yml`, job `alpha` | alpha on a green `ci` run of a push to `main`; tagless dispatch dry run | active |
 | workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; dispatch dry run | not yet active (`mt08.a4xv`) |
-| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants | `changes-workflow.test.mjs` and `workflow-checks.mjs` active; `release-workflow.test.mjs` not yet active (`mt08.x49q`, `mt08.a4xv`) |
+| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants | active; `release-workflow.test.mjs` covers the job `alpha`, the publish jobs join it with `mt08.a4xv` |
 | label `skip-changes` | waives the required fragment, never a detected breaking change | active |
 | `changes/README.md` | the fragments' writer guide | active |
 | `release-notes/index.json` and its test | the notes archive index | not yet active (`mt08.ss3j`) |

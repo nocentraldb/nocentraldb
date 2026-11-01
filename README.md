@@ -12,10 +12,10 @@ docs/rfc/             design documents
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 changes/              change fragments, one per product-changing pull request (writer's guide: changes/README.md)
-scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs and changes-workflow.test.mjs, and contributor-kit.test.mjs
+scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs, changes-workflow.test.mjs and release-workflow.test.mjs, and contributor-kit.test.mjs
 scripts/lib/          shared test helpers (workflow-checks.mjs: the workflow contracts' mutant runner)
-scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, set-version.mjs; lib/: fragments, git, glob, manifests, semver, test-repo) and its tests
-.github/workflows/    ci.yml (the `gates` check) and changes.yml (the `changes` check)
+scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, set-version.mjs, next-version.mjs, render-notes.mjs; lib/: fragments, git, glob, manifests, semver, test-repo) and its tests
+.github/workflows/    ci.yml (the `gates` check), changes.yml (the `changes` check) and release.yml (alphas after a green `ci` on `main`)
 .github/              the contributor kit: issue forms, the RFC feedback discussion form, the pull request template, AI_POLICY.md, SECURITY.md, CODE_OF_CONDUCT.md
 .moon/                moon workspace, toolchains and the tasks every project inherits
 moon.yml              the root project `repo`: gates the root config files
@@ -63,6 +63,8 @@ Every action in the workflow is pinned to a full commit SHA, with its release as
 
 A second check, `changes` (`.github/workflows/changes.yml`), runs on every pull request, and again when a label is added or removed. A pull request that changes a path outside the allowlist (`ALLOWLIST` in `scripts/release/check-fragments.mjs`, listed in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment): docs, `scripts/`, `.github/`, moon config, tests and similar) must add a change fragment under `changes/`; otherwise the check fails and names each such path. The label `skip-changes` waives that rule for a pull request that changes product paths but ships nothing to a user (a version raise, a lockfile refresh); it never waives the validation of the fragments the pull request adds or modifies. The check reads only (`contents: read`), fetches the full history for the merge base, and runs `node scripts/release/check-fragments.mjs --base <base sha> --head <head sha> [--skip]`, which reproduces it locally. `scripts/changes-workflow.test.mjs` holds the workflow to that contract (triggers incl. `labeled`/`unlabeled`, permissions, the job id `changes`, SHA pins, full history, the exact command and its environment, concurrency, a 15-minute timeout), with mutants like the CI contract; both share the runner in `scripts/lib/workflow-checks.mjs`.
 
+A third workflow, `release` (`.github/workflows/release.yml`), is not a pull-request check: it runs after every completed `ci` run on `main` and, through its job `alpha`, turns a green run of a push to `main` that added a fragment other than `internal` into an alpha, a tag `vX.Y.Z-alpha.N` and a GitHub prerelease ([Alpha](docs/release-management.md#alpha)). It is the only workflow with a write permission (`contents: write` on the job `alpha`; the workflow is `contents: read`), and it never runs for a `ci` run that a pull request triggered. A `workflow_dispatch` is always a dry run that tags and publishes nothing: `gh workflow run release.yml --ref main`. `scripts/release-workflow.test.mjs` holds it to its contract (the triggers, the job's `if` with each of its five conditions and the tagless dispatch, the permissions, the head guard as the first step before any checkout and every later step gated on it, the checkout of the run's `head_sha` with full history and tags, `bash` with `pipefail`, no tag or release on a dispatch, next-version's skip honoured, a prerelease with the rendered notes, the `release-alpha` concurrency group that never cancels, SHA pins and a 20-minute timeout), with mutants and the same runner.
+
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
 What each project's `gates` task runs:
@@ -71,7 +73,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
-| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs`, which asserts the contract of `changes.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and the tests of the release tooling under `scripts/release/`, among them a `set-version` test that runs `cargo` in a two-crate fixture), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)), `version` (`node scripts/release/check-version.mjs`: `Cargo.toml` `[workspace.package]` holds a plain `X.Y.Z`, every crate inherits it, dependencies between workspace crates are pinned to it in `[workspace.dependencies]`, and every workspace `package.json` and `Cargo.lock` carry it; see [Versioning](docs/release-management.md#versioning)); `rust-toolchain` runs before every Rust task and before `test` |
+| Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs` and `release-workflow.test.mjs`, which assert the contracts of `changes.yml` and `release.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and the tests of the release tooling under `scripts/release/`, among them a `set-version` test that runs `cargo` in a two-crate fixture), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](docs/release-management.md#writing-a-change-fragment)), `version` (`node scripts/release/check-version.mjs`: `Cargo.toml` `[workspace.package]` holds a plain `X.Y.Z`, every crate inherits it, dependencies between workspace crates are pinned to it in `[workspace.dependencies]`, and every workspace `package.json` and `Cargo.lock` carry it; see [Versioning](docs/release-management.md#versioning)); `rust-toolchain` runs before every Rust task and before `test` |
 
 Any formatting difference, clippy warning, Biome diagnostic (warnings included), type error or failing test fails the gate. Cargo commands that resolve dependencies run with `--locked`, so a `Cargo.toml` change without the matching `Cargo.lock` fails.
 
@@ -100,6 +102,7 @@ pnpm --filter @nocentraldb/sdk exec vitest run -t "<test name>"
 node --test --test-name-pattern "<test name>" scripts/check-pins.test.mjs
 node --test --test-name-pattern "<test name>" scripts/ci-workflow.test.mjs
 node --test --test-name-pattern "<test name>" scripts/changes-workflow.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release-workflow.test.mjs
 node --test --test-name-pattern "<test name>" scripts/contributor-kit.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/lib/fragments.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/check-fragments.test.mjs
@@ -109,6 +112,8 @@ node --test --test-name-pattern "<test name>" scripts/release/lib/semver.test.mj
 node --test --test-name-pattern "<test name>" scripts/release/lib/manifests.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/check-version.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/set-version.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/next-version.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/render-notes.test.mjs
 ```
 
 ### Caching and what moon buys
@@ -119,7 +124,7 @@ For the inner loop, every task also takes the root files it depends on as inputs
 
 ### Releases
 
-How versions, change fragments, release notes and the alpha, beta and release stages work, and who does what at each stage, is in [docs/release-management.md](docs/release-management.md). Its tooling is being built; the page marks every part that is not active yet.
+How versions, change fragments, release notes and the alpha, beta and release stages work, and who does what at each stage, is in [docs/release-management.md](docs/release-management.md). Its tooling is being built; the page marks every part that is not active yet. Alphas are active: every merge to `main` that adds a fragment other than `internal` becomes a tag `vX.Y.Z-alpha.N` and a GitHub prerelease once `ci` is green (`node scripts/release/next-version.mjs` shows what the next one would be); betas and releases are not yet active.
 
 Versioning: everything the project publishes shares one version, held as a plain `X.Y.Z` (today `0.1.0`) in `Cargo.toml` `[workspace.package]` and every workspace `package.json`; `repo:version` checks it and `node scripts/release/set-version.mjs <version>` writes it (see [Versioning](docs/release-management.md#versioning)).
 
