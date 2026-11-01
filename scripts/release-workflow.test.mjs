@@ -7,7 +7,8 @@
 // own git, fails closed and gates every later step; the checkout is the run's
 // head_sha with full history and tags; every step runs in bash with
 // pipefail; a dispatch never tags or publishes; the alpha honours
-// next-version's skip and publishes a prerelease with the rendered notes;
+// next-version's skip and publishes a prerelease with the rendered notes,
+// creating its tag in the same act, with no write token left in the checkout;
 // alphas run one at a time, uncancelled, bounded in time, with SHA-pinned
 // actions.
 //
@@ -82,6 +83,7 @@ const CHECKOUT_WITH = {
   ref: gh("env.SHA"),
   "fetch-depth": 0,
   "fetch-tags": true,
+  "persist-credentials": false,
 };
 const CONCURRENCY = { group: "release-alpha", "cancel-in-progress": false };
 const TIMEOUT_MINUTES = 20;
@@ -234,6 +236,11 @@ const checks = [
         ctx.doc.deleteIn([...STEPS, checkoutStep(ctx), "with", "ref"]),
       "fetches depth 1": (ctx) =>
         ctx.doc.setIn([...STEPS, checkoutStep(ctx), "with", "fetch-depth"], 1),
+      "persists the write token in .git/config": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, checkoutStep(ctx), "with", "persist-credentials"],
+          true,
+        ),
       "sets SHA to github.sha only": (ctx) =>
         ctx.doc.setIn([...ALPHA, "env", "SHA"], gh("github.sha")),
     },
@@ -273,9 +280,32 @@ const checks = [
       const step = steps(ctx)[publishStep(ctx)];
       assert.ok(String(step.if).includes(NOT_SKIPPED), "publish ignores skip");
       assert.equal(step.env?.TAG, gh("steps.next.outputs.tag"));
+      assert.equal(step.env?.GH_REPO, gh("github.repository"));
+      // One act: the API creates the tag on $SHA together with the release,
+      // so a failed create leaves no tag that would make a re-run skip.
       assert.match(
         step.run,
-        /gh release create "\$TAG" --prerelease --verify-tag --title "\$TAG" --notes-file alpha-notes\.md/,
+        /gh release create "\$TAG" --target "\$SHA" --prerelease --title "\$TAG" --notes-file alpha-notes\.md/,
+      );
+      // A re-run after a successful create does not create it twice.
+      const view = step.run.indexOf('gh release view "$TAG"');
+      assert.ok(view !== -1, "no check for an existing release");
+      assert.ok(
+        view < step.run.indexOf("gh release create"),
+        "check after create",
+      );
+      for (const other of steps(ctx))
+        assert.doesNotMatch(
+          String(other.run ?? ""),
+          /git (?:tag|push)\b/,
+          "a step tags or pushes with git: the tag must come with its release",
+        );
+      const next = steps(ctx)[at(ctx, runs("next-version.mjs"))];
+      assert.ok(
+        next.run.includes(
+          `previous=$(jq -r '.previousAlpha // "none"' next.json)`,
+        ),
+        "the previous alpha does not fall back to none, the value render-notes takes",
       );
       const notes = steps(ctx)[at(ctx, runs("render-notes.mjs"))];
       assert.ok(String(notes.if).includes(NOT_SKIPPED), "notes ignore skip");
@@ -292,6 +322,30 @@ const checks = [
             "",
           ),
         ),
+      "tags with git before the release": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, publishStep(ctx), "run"],
+          `git tag "$TAG" "$SHA"\ngit push origin "refs/tags/$TAG"\n${steps(ctx)[publishStep(ctx)].run}`,
+        ),
+      "creates the release without --target": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, publishStep(ctx), "run"],
+          steps(ctx)[publishStep(ctx)].run.replace(' --target "$SHA"', ""),
+        ),
+      "drops the existing-release check": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, publishStep(ctx), "run"],
+          'gh release create "$TAG" --target "$SHA" --prerelease --title "$TAG" --notes-file alpha-notes.md\n',
+        ),
+      "falls back to an empty previous alpha": (ctx) => {
+        const i = at(ctx, runs("next-version.mjs"));
+        ctx.doc.setIn(
+          [...STEPS, i, "run"],
+          steps(ctx)[i].run.replace('// "none"', '// ""'),
+        );
+      },
+      "drops GH_REPO": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, publishStep(ctx), "env", "GH_REPO"]),
       "publishes a full release": (ctx) =>
         ctx.doc.setIn(
           [...STEPS, publishStep(ctx), "run"],

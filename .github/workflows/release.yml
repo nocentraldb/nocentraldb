@@ -79,6 +79,10 @@ jobs:
           ref: ${{ env.SHA }}
           fetch-depth: 0
           fetch-tags: true
+          # The job's write token stays out of .git/config, where the
+          # dependency install below could read it; only the release step
+          # gets it, as GH_TOKEN.
+          persist-credentials: false
       - if: steps.guard.outputs.skip != 'true'
         uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
         with:
@@ -100,20 +104,19 @@ jobs:
         run: node scripts/release/render-notes.mjs --alpha --since "$PREVIOUS" --repo "$GITHUB_REPOSITORY" | tee alpha-notes.md
         env:
           PREVIOUS: ${{ steps.next.outputs.previous }}
+      # One act: the API creates the tag on $SHA together with the release.
+      # A failed create leaves no tag behind, so a re-run computes the same
+      # alpha again instead of skipping on an orphan tag; after a successful
+      # create, a re-run finds the release and creates nothing.
       - name: Tag and publish the alpha
         if: steps.guard.outputs.skip != 'true' && steps.next.outputs.skip != 'true' && env.DRY_RUN != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ steps.next.outputs.tag }}
         run: |
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "tag $TAG exists, not re-tagging"
-          else
-            git tag "$TAG" "$SHA"
-            git push origin "refs/tags/$TAG"
-          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG exists, not re-creating"
           else
-            gh release create "$TAG" --prerelease --verify-tag --title "$TAG" --notes-file alpha-notes.md
+            gh release create "$TAG" --target "$SHA" --prerelease --title "$TAG" --notes-file alpha-notes.md
           fi
