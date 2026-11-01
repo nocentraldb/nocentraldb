@@ -1,0 +1,119 @@
+# Releases. The alpha job turns every product-changing merge to main into a
+# tagged GitHub prerelease once `ci` is green; the publish jobs (added by the
+# publish ticket) react to beta and release tags. Every decision is in
+# scripts/release/*.mjs with tests; this file only wires them. A
+# workflow_dispatch is ALWAYS a dry run: nothing is tagged or published.
+# scripts/release-workflow.test.mjs asserts these rules.
+name: release
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Publish dry run: check this tag name against the dispatched ref. Leave empty for an alpha dry run."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  alpha:
+    # Only a green ci run of a push to this repository's main — never a run
+    # that a pull request (a fork's included) triggered, since this job holds
+    # contents: write. A dispatch with no tag is the dry run.
+    if: >-
+      (github.event_name == 'workflow_run'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.event == 'push'
+        && github.event.workflow_run.head_branch == 'main'
+        && github.event.workflow_run.head_repository.full_name == github.repository)
+      || (github.event_name == 'workflow_dispatch' && inputs.tag == '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    concurrency:
+      group: release-alpha
+      cancel-in-progress: false
+    # bash runs with -eo pipefail, so a failing script piped into tee fails
+    # its step (the default shell has no pipefail).
+    defaults:
+      run:
+        shell: bash
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      # Runs before any checkout, with the runner's own git, so nothing from
+      # the commit under test executes before it is known to be the head of
+      # main. Two merges in quick succession: the older one is skipped here,
+      # and the next alpha covers it (alpha notes are computed since the
+      # previous alpha tag, not per merge). The repository may be private, so
+      # git authenticates with the job's token; a failing ls-remote, or no
+      # main at all (--exit-code), fails the job instead of skipping it.
+      - name: Still the head of main?
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
+          GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          head="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
+          if [ "$head" != "$SHA" ]; then
+            echo "::notice::$SHA is no longer the head of main ($head); the next alpha covers it"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$SHA is the head of main"
+          fi
+      - if: steps.guard.outputs.skip != 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+          fetch-depth: 0
+          fetch-tags: true
+      - if: steps.guard.outputs.skip != 'true'
+        uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - if: steps.guard.outputs.skip != 'true'
+        run: pnpm install --frozen-lockfile
+      - name: Next version
+        id: next
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          node scripts/release/next-version.mjs --json | tee next.json
+          {
+            echo "skip=$(jq -r '.skip' next.json)"
+            echo "tag=$(jq -r '.tag // ""' next.json)"
+            echo "previous=$(jq -r '.previousAlpha // "none"' next.json)"
+          } >> "$GITHUB_OUTPUT"
+      - name: Alpha notes
+        if: steps.guard.outputs.skip != 'true' && steps.next.outputs.skip != 'true'
+        run: node scripts/release/render-notes.mjs --alpha --since "$PREVIOUS" --repo "$GITHUB_REPOSITORY" | tee alpha-notes.md
+        env:
+          PREVIOUS: ${{ steps.next.outputs.previous }}
+      - name: Tag and publish the alpha
+        if: steps.guard.outputs.skip != 'true' && steps.next.outputs.skip != 'true' && env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.next.outputs.tag }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "tag $TAG exists, not re-tagging"
+          else
+            git tag "$TAG" "$SHA"
+            git push origin "refs/tags/$TAG"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists, not re-creating"
+          else
+            gh release create "$TAG" --prerelease --verify-tag --title "$TAG" --notes-file alpha-notes.md
+          fi
