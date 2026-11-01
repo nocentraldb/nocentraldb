@@ -174,6 +174,7 @@ test("the pull request template has its sections, in order", () => {
     .filter((line) => line.startsWith("## "));
   assert.deepEqual(headings, [
     "## Summary",
+    "## How it is implemented",
     "## How it was tested",
     "## Change fragment",
     "## Security considerations",
@@ -189,6 +190,48 @@ test("the pull request template has its sections, in order", () => {
   }
   assert.ok(!/\bnobody\b/i.test(text), "no 'nobody answers review' option");
   assert.match(text, /Follow-up:/);
+});
+
+/** The text under one `## ` heading of the pull request template. */
+const prSection = (heading) => {
+  const text = `\n${read(PR_TEMPLATE)}`;
+  const start = text.indexOf(`\n## ${heading}\n`);
+  assert.ok(start >= 0, `no section ${heading}`);
+  const body = text.slice(start + heading.length + 5);
+  const end = body.indexOf("\n## ");
+  return end < 0 ? body : body.slice(0, end);
+};
+
+test("the pull request template's Summary asks for the goal and how it is reached", () => {
+  const summary = prSection("Summary");
+  assert.match(summary, /goal/i);
+  assert.match(summary, /how .*reach/i);
+  assert.match(summary, /Closes #123/, "the issue or RFC reference stays");
+});
+
+test("the pull request template asks for approaches and affected packages, not files", () => {
+  const implemented = prSection("How it is implemented");
+  assert.match(implemented, /approach/i);
+  assert.match(implemented, /affected packages/i);
+  assert.match(implemented, /no list of files/i);
+});
+
+test("the pull request template asks for kinds of tests and what they prove, not commands", () => {
+  const tested = prSection("How it was tested");
+  assert.match(tested, /kinds? of tests?/i);
+  assert.match(tested, /existing tests/i);
+  assert.match(tested, /prove/i);
+  assert.match(tested, /no command/i);
+  assert.match(tested, /actually ran/i, "only what was actually run");
+  assert.ok(
+    !/the command, and what it printed/i.test(tested),
+    "no request for command transcripts",
+  );
+});
+
+test("the pull request template has no section for open points", () => {
+  const text = read(PR_TEMPLATE);
+  assert.ok(!/^## Open/im.test(text), "no Open section");
 });
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
