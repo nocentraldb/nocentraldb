@@ -5,12 +5,14 @@
 
 > **You have already been given the index below** — all of it, or as much of it as a session start could carry. It is the same index `nxm prime` replays, which stops at the byte budget the host delivers and says so when it does (`nxm index` prints the whole of it), so there is nothing to gain by reading it again here. Underneath it stands the FULL TEXT of each memory — that is what `nxm recall <key>` serves, and it is meant to be read one memory at a time, when the index tells you a particular one matters. Reading this file end to end is the expensive way to obtain what you already have.
 
-## Index (4)
+## Index (6)
 
 - **english-artifacts**: Write design docs, code, code comments, memories, tickets and ticket notes in English, even when the session is in German.
 - **commit-memory-on-remember**: After every nxm remember/forget, commit the regenerated NEXUS_MEMORY.md at once, on the current branch, so it ships with the current work's PR.
 - **watch-nxc-operation**: Watch a running nxc operation with: nxc status --thread <root id> --json; act on needs_decision, escalated, awaiting_human, live=false.
 - **owner-reviews-every-pr**: Never merge a PR before the owner ticked its Authorship box; agents never tick it or mark a PR ready themselves.
+- **ticket-ids-in-commits-and-prs**: Never start commit subjects or PR titles with ticket ids; cite ids only in parentheses/at the end (solves mt08.abcd) or at the very end of a PR body.
+- **pr-body-structure**: PR bodies: Summary, How it is implemented (approaches + affected packages), How it was tested (kinds of tests), then template sections; no file lists, no 'Open' section.
 
 ## Full text
 
@@ -35,3 +37,15 @@ To follow a running nxc operation (e.g. a coding chain commissioned with nxc sen
 ### `owner-reviews-every-pr`
 
 Every pull request in this repo, including those the project's own agents open, follows .github/AI_POLICY.md: it is opened as a draft with the Authorship section unticked; the owner reads it, ticks the true Authorship box and only then may it be marked ready and merged. Agents (finisher, merger, the commissioning session) never tick the box or mark a PR ready on their own; the merger escalates a draft PR to the owner instead of merging. When the owner explicitly says to merge after ticking the box, the commissioning session may mark the PR ready. The owner decided on 2026-10-31 to keep this for all agent PRs, accepting that each merge waits for the owner's review.
+
+---
+
+### `ticket-ids-in-commits-and-prs`
+
+Visitors on github.com cannot open nxf tickets, so ticket ids must never lead or carry meaning in commits and PRs. Commit subjects never start with a ticket id; if a ticket is referenced at all, it goes in parentheses at the end or as a final line such as 'solves mt08.abcd'. PR titles never contain ticket ids; a PR body may cite ticket ids only at its very end (e.g. a 'Ticket: mt08.abcd' line), never in the running text. Squash merges take the PR title as the commit subject, so the title must follow the commit rule too.
+
+---
+
+### `pr-body-structure`
+
+A pull request body explains the goal and the approach, not a file-by-file change list, and is readable without prior context: it may link documents but must not assume the reader knows them. Sections: (1) Summary: short and to the point, the goal of the PR and how it is reached. (2) How it is implemented: the approaches taken, plus the list of affected packages/components; no file lists. (3) How it was tested: which kinds of new tests were introduced and which existing tests changed; no command transcripts. (4) Change fragment, Security considerations and Authorship as in .github/PULL_REQUEST_TEMPLATE.md. There is no 'Open' section: unfinished items go to the board as tickets, not into the PR.
