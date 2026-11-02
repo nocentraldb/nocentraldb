@@ -52,7 +52,7 @@ Not yet. We have started building the core, and the RFC describes the design we 
 
 ### Under which licence is it published?
 
-The code is dual-licensed under the MIT licence and the Apache licence 2.0, at your choice. Contributions are licensed the same way. If we offer a hosted relay, we have not decided its pricing yet.
+The code is dual-licensed under the MIT licence and the Apache licence 2.0, at your choice. Contributions are licensed the same way. The licence lets anyone run a relay as a service, and we welcome companies that offer hosting. We only ask them to take an active part in developing NoCentralDB.
 
 ### Which platforms and languages does it support?
 
@@ -84,7 +84,7 @@ Not from the app's point of view. Each member folds its encrypted log into a loc
 
 ### What happens when two members change the same data at the same time?
 
-Both changes are kept, and every copy converges to the same result, whatever order the changes arrive in. Each field declares how it merges: the last writer wins, sets combine, links combine, or shared text merges the edits of both members. Computed fields follow from the merged values, so they converge too.
+Both changes are kept, and every copy converges to the same result, whatever order the changes arrive in. Each field's type declares how it merges. For basic values the last writer wins, sets and links combine, and rich text merges the edits of both members. A field type you add yourself brings its own merge rules. Computed fields follow from the merged values, so they converge too.
 
 ### Can I enforce unique values, such as usernames?
 
@@ -110,7 +110,7 @@ The relay sees which key is a member of which space, when each key writes, and h
 
 ### Who runs the relay?
 
-That is open, and the RFC asks for your view in question 6, "Hosting the relay". The options are running it yourself on Postgres, running it serverless in your own cloud account, or using a hosted relay that can only ever see ciphertext. We design the relay to run on SQLite, Postgres, or DynamoDB with S3. Because the relay holds no keys, a hosted relay can read no more than one you run yourself.
+That is open, and the RFC asks for your view in question 6, "Hosting the relay". The options are running it yourself on Postgres, running it serverless in your own cloud account, or using a hosted relay that can only ever see ciphertext. We design the relay to run on SQLite, Postgres, or DynamoDB with S3. Because the relay holds no keys, a hosted relay can read no more than one you run yourself. Whether we will offer hosting ourselves is open. We welcome companies that offer it, and we ask them to take an active part in developing NoCentralDB.
 
 ### What happens if I lose my device?
 
