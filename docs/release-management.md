@@ -192,9 +192,25 @@ Its log shows the guard's verdict and the answer of next-version, which is the c
    git tag vX.Y.Z-beta.1 && git push origin refs/tags/vX.Y.Z-beta.1
    ```
 
-On the tag, the publish job takes over. The `release` workflow runs on `push` of tags `v*` and excludes `-alpha.` tags. It runs the full gate `pnpm gates` on the tagged commit itself, checks the tag against the manifests, writes the full version into the build checkout, and builds. It then publishes a GitHub prerelease whose body is the curated file. For betas after the first, it adds the generated section "Changes since beta N-1", which lists the fragments added on the branch between the two beta tags (`git diff --diff-filter=A --name-only <previous beta tag> <this tag> -- changes/`). It also publishes every publishable package to npm under the dist-tag `beta`, and to crates.io as a prerelease version. Finally it appends the beta to `release-notes/index.json` on `main`. A `workflow_dispatch` with a non-empty `tag` input runs the same jobs as a dry run and publishes nothing.
+On the tag, the publish job takes over. The `release` workflow runs on `push` of tags `v*` and excludes `-alpha.` tags. Four jobs run in order, each with its own permissions:
 
-If the publish job may not publish a tag, `publish` turns red before anything is built or published. The tag stays in place for the owner to delete or move. `scripts/release/verify-tag.mjs --tag <tag> --commit <sha>` holds the rules. It checks them in this order and stops at the first failure:
+- **`verify`** (read-only) fetches the release branches, checks the tag with `verify-tag` on the tagged commit, and then runs the full gate `pnpm gates` on that commit itself.
+- **`build`** (read-only) writes the full version from the tag into its own checkout with `set-version`, and builds.
+- **`publish`** (`contents: write`) publishes.
+- **`commit-back`** (`contents: write`) makes the one commit to `main`.
+
+The `publish` job publishes a GitHub prerelease whose body is the curated file. For betas after the first, it adds the generated section "Changes since beta N-1", which lists the fragments added on the branch between the two beta tags (`git diff --diff-filter=A --name-only <previous beta tag> <this tag> -- changes/`). It also publishes every publishable package to npm under the dist-tag `beta`, and to crates.io as a prerelease version. Finally `commit-back` appends the beta to `release-notes/index.json` on `main`, with `commit-back.mjs` (see [Release](#release)). The GitHub release step first checks whether the release exists and creates nothing if it does, so a re-run is safe. Each registry step reports `skip <name>: <reason>` for every package that `publishable` says no to.
+
+**Dry run.** A `workflow_dispatch` with a non-empty `tag` input is the publish dry run. It runs `verify` and `build` and never `publish` or `commit-back`. The tag is only a name: `verify-tag` checks it against the dispatched ref's head commit, which need not carry the tag yet. Dispatch on the release branch to prove a tag before you push it:
+
+```sh
+gh workflow run release.yml --ref release/X.Y -f tag=vX.Y.Z-beta.N
+gh run watch "$(gh run list --workflow release.yml --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+The log shows the verdict of `verify-tag`, the gate and the build. A tag whose version is not the version in the manifests at that commit fails `verify` at rule 2 of the list below. A dispatch on a ref that is not on `release/X.Y`, such as `main`, fails at rule 3.
+
+If the publish job may not publish a tag, `verify` turns red before anything is built or published. The tag stays in place for the owner to delete or move. `scripts/release/verify-tag.mjs --tag <tag> --commit <sha>` holds the rules. It checks them in this order and stops at the first failure:
 
 1. The tag is `vX.Y.Z` or `vX.Y.Z-beta.N`. This job never publishes alpha tags.
 2. `X.Y.Z` is the workspace version in `Cargo.toml` at the commit.
@@ -247,18 +263,29 @@ Steps:
    ```
 
 3. **What the publish job does:**
-   1. It runs the gate and `verify-tag`, with the eight rules listed under [Beta](#beta). The tag must match the manifests and sit on the head of `release/X.Y` after a beta. The diff rule of condition 4 must hold: `git diff --name-only <last beta tag> <release tag>` may show only `release-notes/` and `changes/`. No fragment may be left in `changes/`, and `release-notes/<X.Y.Z>.md` must exist at the tag. Any failure turns `publish` red before anything is built or published, and the tag stays in place for the owner to delete or move.
+   1. It runs the gate and `verify-tag`, with the eight rules listed under [Beta](#beta). The tag must match the manifests and sit on the head of `release/X.Y` after a beta. The diff rule of condition 4 must hold: `git diff --name-only <last beta tag> <release tag>` may show only `release-notes/` and `changes/`. No fragment may be left in `changes/`, and `release-notes/<X.Y.Z>.md` must exist at the tag. Any failure turns `verify` red before anything is built or published, and the tag stays in place for the owner to delete or move. The [dry run](#beta) proves the release tag on the branch head before the owner pushes it.
    2. It writes the version into the checkout and builds. The version is embedded, so the bytes differ from the beta's. Then it publishes every publishable package to crates.io and to npm under `latest`, and a GitHub release marked latest whose body is the file's content, without a manual step.
-   3. It commits back to `main`, in one commit that the workflow pushes with `node scripts/release/commit-back.mjs`. The commit contains the updated `release-notes/index.json`, the final `release-notes/<X.Y.Z>.md` as it stands at the tag, and the removal of every fragment that shipped. With the notes file on `main`, `main` becomes the archive that the landing page renders from. The shipped fragments are exactly the files deleted under `changes/` on the branch between the merge base with `main` and the release tag (`git log --diff-filter=D --name-only --format= <merge-base>..<tag> -- changes/`). `node scripts/release/shipped-fragments.mjs --tag vX.Y.Z` lists them with the content that shipped. With `--delete` on a checkout of `main`, it deletes a fragment only when the fragment's content is the blob that shipped. If a new fragment on `main` reused the slug, the script keeps it and names it (`kept <path>: differs from the shipped fragment (slug reused?)`). It never deletes a fragment by its name alone.
+   3. It commits back to `main`, in one commit that the job `commit-back` makes and pushes with `node scripts/release/commit-back.mjs`, in a checkout of `main`. The commit is `Release vX.Y.Z: index, notes archive and shipped fragments` (after a beta: `Beta vX.Y.Z-beta.N: index`, with the index entry only). It contains the updated `release-notes/index.json`, the final `release-notes/<X.Y.Z>.md` as it stands at the tag, and the removal of every fragment that shipped. With the notes file on `main`, `main` becomes the archive that the landing page renders from. The shipped fragments are exactly the files deleted under `changes/` on the branch between the merge base with `main` and the release tag (`git log --diff-filter=D --name-only --format= <merge-base>..<tag> -- changes/`). `node scripts/release/shipped-fragments.mjs --tag vX.Y.Z` lists them with the content that shipped. With `--delete` on a checkout of `main`, it deletes a fragment only when the fragment's content is the blob that shipped. If a new fragment on `main` reused the slug, the script keeps it and names it (`kept <path>: differs from the shipped fragment (slug reused?)`). It never deletes a fragment by its name alone. Before it commits, `commit-back.mjs` holds the index to its shape with `validateIndex` and runs `check-fragments` on what is left in `changes/`. If either fails, it commits nothing. When nothing changed, as on a re-run after a successful one, it prints `nothing to commit` and makes no commit.
    4. It closes the GitHub milestone with `gh`. The landing page picks up the change from `main`.
 
    A push to `main` made with the workflow's token does not start the `ci` workflow. That commit touches only `release-notes/` and `changes/`, and the fragment schema check and the index test cover those paths on the next pull request.
-4. **When something fails.** A partial publish, where the GitHub release exists but a registry step failed, leaves the job red and retracts nothing. Re-run it. Every publish step first checks whether its tag, release or package version already exists, and skips it if so. If the commit to `main` fails to push because `main` moved, the job fetches and retries once. If it still fails, the job is red, and a maintainer makes the commit by hand with `commit-back.mjs`.
+4. **When something fails.** A partial publish, where the GitHub release exists but a registry step failed, leaves the job red and retracts nothing. Re-run it. Every publish step first checks whether its tag, release or package version already exists, and skips it if so. If the commit to `main` fails to push because `main` moved, the job fetches, rebases onto `origin/main`, checks again and retries once. If it still fails, the job is red, and a maintainer makes the commit by hand (see [If the commit to main failed](#if-the-commit-to-main-failed)).
 5. **After the release.** The PM updates the `active-release` memory (see [Planning a release](#planning-a-release)).
 
 **Patch releases** `X.Y.(Z+1)` go through the same branch and through beta again. The owner approves, the branch's manifests are set to `X.Y.(Z+1)`, `release-notes/X.Y.(Z+1).md` is drafted, and `vX.Y.(Z+1)-beta.1` is pushed on the branch head.
 
 **Withdrawal.** If a published version is broken, we yank it on crates.io and deprecate it on npm, and a fixed version follows at once. Nothing is deleted.
+
+### If the commit to main failed
+
+When the job `commit-back` is red, the GitHub release exists and only the commit to `main` is missing. Re-run the failed job first. If it fails again, make the commit by hand from an up-to-date `main`, with the tag, stage and version from the job's log:
+
+```sh
+git switch main && git pull && git fetch --tags
+node scripts/release/commit-back.mjs --tag vX.Y.Z --stage release --version X.Y.Z --date "$(date -u +%F)"
+```
+
+For a beta, pass `--stage beta` and its tag. `--date` is the UTC day the release was published, which the GitHub release shows. The script makes the same commit as the job and pushes it. With `--no-push` it only commits, so you can inspect the commit first and push it yourself. A run that finds nothing to commit prints `nothing to commit`, which means the commit is already on `main`.
 
 ## Planning a release
 
@@ -344,7 +371,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | `scripts/release/index.mjs add --version --stage --tag --date [--file]` | appends to `release-notes/index.json`, sorted and idempotent; exports `validateIndex` |
 | `scripts/release/shipped-fragments.mjs --tag <vX.Y.Z> [--main <ref>] [--delete]` | lists the fragments that shipped, with their blobs; `--delete` removes those on `main` whose content is that blob |
 | `scripts/release/publishable.mjs [--json]` | lists which packages the publish steps may publish, each with its reason |
-| `scripts/release/commit-back.mjs` | makes the release workflow's commit to `main` |
+| `scripts/release/commit-back.mjs --tag <tag> --stage <beta\|release> --version <X.Y.Z> --date <YYYY-MM-DD> [--main <remote/branch>] [--no-push]` | makes the release workflow's commit to `main`: the index entry; for a release also the notes archive and the removal of the shipped fragments; checks the index and the fragments first, commits nothing when nothing changed, and retries a rejected push once after a rebase |
 | `scripts/release/draft-notes.mjs <X.Y.Z>` | writes the curated-notes skeleton, with the filter applied and the sections in order |
 | `scripts/release/cut.mjs <X.Y.Z>` | creates `release/X.Y`, sets the manifests, and prints the push, raise-PR and beta-tag commands |
 | `scripts/release/promotion-check.mjs <X.Y.Z>` | reports promotion conditions 1, 4 and 5 with evidence |
@@ -355,7 +382,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | moon task `repo:test` | also runs the tests under `scripts/release/` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`) |
 | workflow `changes.yml` (check `changes`) | required fragment, `cargo-semver-checks`, API report diff |
 | workflow `release.yml`, job `alpha` | publishes an alpha after a green `ci` run of a push to `main`; tagless dispatch dry run |
-| workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; dispatch dry run with a `tag` |
+| workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; `verify` and `build` read-only, `publish` and `commit-back` with `contents: write`; a dispatch with a `tag` runs `verify` and `build` only |
 | `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants |
 | label `skip-changes` | waives the required fragment, never a detected breaking change |
 | `changes/README.md` | the writer's guide for fragments |
