@@ -1,0 +1,293 @@
+import assert from "node:assert/strict";
+import { execFileSync, spawnSync } from "node:child_process";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { GIT_ENV, makeRepo } from "./lib/test-repo.mjs";
+
+const script = join(dirname(fileURLToPath(import.meta.url)), "commit-back.mjs");
+
+const fragment = (line) =>
+  `---\ntype: internal\ntickets: [mt08.aaaa]\ncomponents: [core]\n---\n${line}\n`;
+const EMPTY_INDEX = '{\n  "releases": []\n}\n';
+const FINAL_NOTES = "# 0.1.0\n\nFinal notes.\n";
+const RELEASE_MESSAGE =
+  "Release v0.1.0: index, notes archive and shipped fragments";
+
+const git = (cwd, ...args) =>
+  execFileSync("git", args, {
+    cwd,
+    env: GIT_ENV,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  }).trim();
+
+/**
+ * A bare origin and a clone of its main. On origin: main with fragments a, b
+ * and c and an empty index; release/0.1 cut from it with the beta notes,
+ * tagged v0.1.0-beta.1, then a and b deleted and the notes made final,
+ * tagged v0.1.0; on main meanwhile b rewritten under the same slug.
+ * `mainFiles` are committed on main last. The clone has main checked out.
+ */
+const releasedOrigin = (t, mainFiles = {}) => {
+  const author = makeRepo();
+  const origin = mkdtempSync(join(tmpdir(), "release-origin-"));
+  const clone = mkdtempSync(join(tmpdir(), "release-clone-"));
+  t.after(() => {
+    author.dispose();
+    rmSync(origin, { recursive: true, force: true });
+    rmSync(clone, { recursive: true, force: true });
+  });
+  author.commit("fragments", {
+    "changes/README.md": "# guide\n",
+    "changes/a.md": fragment("A."),
+    "changes/b.md": fragment("B."),
+    "changes/c.md": fragment("C."),
+    "release-notes/index.json": EMPTY_INDEX,
+  });
+  author.run("switch", "-q", "-c", "release/0.1");
+  author.commit("beta notes", { "release-notes/0.1.0.md": "# 0.1.0\n" });
+  author.tag("v0.1.0-beta.1");
+  author.remove("changes/a.md");
+  author.remove("changes/b.md");
+  author.commit("final notes", { "release-notes/0.1.0.md": FINAL_NOTES });
+  author.tag("v0.1.0");
+  author.run("switch", "-q", "main");
+  author.commit("b reused", { "changes/b.md": fragment("Another B.") });
+  if (Object.keys(mainFiles).length > 0) author.commit("main", mainFiles);
+  git(origin, "init", "-q", "--bare", "-b", "main");
+  author.run("push", "-q", origin, "main", "release/0.1", "--tags");
+  git(tmpdir(), "clone", "-q", origin, clone);
+  git(clone, "config", "commit.gpgsign", "false");
+  return { author, origin, clone };
+};
+
+const run = (cwd, ...args) =>
+  spawnSync(process.execPath, [script, ...args], {
+    cwd,
+    env: GIT_ENV,
+    encoding: "utf8",
+  });
+
+const RELEASE = [
+  "--tag",
+  "v0.1.0",
+  "--stage",
+  "release",
+  "--version",
+  "0.1.0",
+  "--date",
+  "2026-11-02",
+];
+const BETA = [
+  "--tag",
+  "v0.1.0-beta.1",
+  "--stage",
+  "beta",
+  "--version",
+  "0.1.0",
+  "--date",
+  "2026-11-02",
+];
+
+const entry = (stage, tag) => ({
+  version: "0.1.0",
+  stage,
+  tag,
+  date: "2026-11-02",
+  path: "release-notes/0.1.0.md",
+});
+const indexAt = (cwd, ref) =>
+  JSON.parse(git(cwd, "show", `${ref}:release-notes/index.json`));
+
+test("a release commits the index entry, the notes as they stand at the tag and the removal of the shipped fragments", (t) => {
+  const { origin, clone } = releasedOrigin(t);
+  const before = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...RELEASE, "--no-push");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(git(clone, "rev-parse", "HEAD~1"), before);
+  assert.equal(git(clone, "log", "-1", "--format=%s"), RELEASE_MESSAGE);
+  assert.equal(
+    git(clone, "diff", "--name-status", "HEAD~1", "HEAD"),
+    "D\tchanges/a.md\nA\trelease-notes/0.1.0.md\nM\trelease-notes/index.json",
+  );
+  assert.deepEqual(indexAt(clone, "HEAD"), {
+    releases: [entry("release", "v0.1.0")],
+  });
+  assert.equal(
+    git(clone, "show", "HEAD:release-notes/0.1.0.md"),
+    FINAL_NOTES.trim(),
+  );
+  assert.equal(git(clone, "status", "--porcelain"), "");
+  // --no-push leaves origin as it was.
+  assert.equal(git(origin, "rev-parse", "main"), before);
+});
+
+test("a release keeps a fragment on main whose content differs from the shipped one, and still commits", (t) => {
+  const { clone } = releasedOrigin(t);
+  const r = run(clone, ...RELEASE, "--no-push");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /kept changes\/b\.md: differs from the shipped fragment/,
+  );
+  assert.equal(git(clone, "log", "-1", "--format=%s"), RELEASE_MESSAGE);
+  assert.equal(
+    git(clone, "show", "HEAD:changes/b.md"),
+    fragment("Another B.").trim(),
+  );
+  assert.ok(existsSync(join(clone, "changes/c.md")));
+});
+
+test("a second identical run prints nothing to commit and makes no commit", (t) => {
+  const { clone } = releasedOrigin(t);
+  assert.equal(run(clone, ...RELEASE, "--no-push").status, 0);
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...RELEASE, "--no-push");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^commit-back: nothing to commit$/m);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+});
+
+test("a beta commits only its index entry", (t) => {
+  const { clone } = releasedOrigin(t);
+  const r = run(clone, ...BETA, "--no-push");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    git(clone, "log", "-1", "--format=%s"),
+    "Beta v0.1.0-beta.1: index",
+  );
+  assert.equal(
+    git(clone, "diff", "--name-status", "HEAD~1", "HEAD"),
+    "M\trelease-notes/index.json",
+  );
+  assert.deepEqual(indexAt(clone, "HEAD"), {
+    releases: [entry("beta", "v0.1.0-beta.1")],
+  });
+});
+
+test("an index entry that conflicts with the indexed one is exit 1 and commits nothing", (t) => {
+  const indexed = { ...entry("release", "v0.1.0"), date: "2026-11-01" };
+  const { clone } = releasedOrigin(t, {
+    "release-notes/index.json": `${JSON.stringify({ releases: [indexed] }, null, 2)}\n`,
+  });
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...RELEASE, "--no-push");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /index entry for v0\.1\.0 differs/);
+  assert.match(r.stderr, /^commit-back: .*nothing committed/m);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+});
+
+test("a fragment on main that fails the schema check is exit 1 and commits nothing", (t) => {
+  const { clone } = releasedOrigin(t, {
+    "changes/broken.md": "no front matter\n",
+  });
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...RELEASE, "--no-push");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /changes\/broken\.md/);
+  assert.match(r.stderr, /^commit-back: .*nothing committed/m);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+});
+
+test("a malformed index on main is exit 1 and commits nothing", (t) => {
+  const { clone } = releasedOrigin(t, {
+    "release-notes/index.json": '{ "releases": {} }\n',
+  });
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...BETA, "--no-push");
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /release-notes\/index\.json/);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+});
+
+test("pushes the commit to main on origin", (t) => {
+  const { origin, clone } = releasedOrigin(t);
+  const r = run(clone, ...BETA);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    git(origin, "rev-parse", "main"),
+    git(clone, "rev-parse", "HEAD"),
+  );
+  assert.equal(
+    git(origin, "log", "-1", "--format=%s", "main"),
+    "Beta v0.1.0-beta.1: index",
+  );
+});
+
+test("a push rejected because main moved is retried once after a rebase onto it", (t) => {
+  const { author, origin, clone } = releasedOrigin(t);
+  // main moves on origin after the clone was made, before the script pushes.
+  author.commit("meanwhile", { "docs/meanwhile.md": "x\n" });
+  author.run("push", "-q", origin, "main");
+  const r = run(clone, ...RELEASE);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    git(origin, "log", "-2", "--format=%s", "main"),
+    `${RELEASE_MESSAGE}\nmeanwhile`,
+  );
+  assert.equal(
+    git(origin, "rev-parse", "main~1"),
+    author.run("rev-parse", "HEAD"),
+  );
+});
+
+test("a push that is still rejected after the rebase is exit 1 and points at the runbook", (t) => {
+  const { origin, clone } = releasedOrigin(t);
+  const hook = join(origin, "hooks", "pre-receive");
+  writeFileSync(hook, "#!/bin/sh\necho 'rejected by the test' >&2\nexit 1\n");
+  chmodSync(hook, 0o755);
+  const before = git(origin, "rev-parse", "main");
+  const r = run(clone, ...BETA);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^commit-back: .*rejected.*docs\/release-management\.md#if-the-commit-to-main-failed/m,
+  );
+  assert.equal(git(origin, "rev-parse", "main"), before);
+});
+
+test("a stage that does not match the tag is exit 1 and commits nothing", (t) => {
+  const { clone } = releasedOrigin(t);
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(
+    clone,
+    "--tag",
+    "v0.1.0",
+    "--stage",
+    "beta",
+    "--version",
+    "0.1.0",
+    "--date",
+    "2026-11-02",
+    "--no-push",
+  );
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /the new entry \(v0\.1\.0\): tag "v0\.1\.0" is not v0\.1\.0-beta\.N/,
+  );
+  assert.match(r.stderr, /^commit-back: .*nothing committed/m);
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(
+    readFileSync(join(clone, "release-notes/index.json"), "utf8"),
+    EMPTY_INDEX,
+  );
+});
+
+test("a missing option is a usage error, exit 2", (t) => {
+  const { clone } = releasedOrigin(t);
+  const r = run(clone, "--tag", "v0.1.0", "--stage", "release");
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /^usage: commit-back/);
+});
