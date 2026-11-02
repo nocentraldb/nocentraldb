@@ -14,6 +14,7 @@ import {
   readFragments,
   SECTIONS,
   SLUG,
+  splitSections,
   TICKET,
   TYPES,
   validateFragment,
@@ -296,4 +297,17 @@ test("demoteSections demotes sections by the given number of levels, fences unto
     demoteSections(body, 2),
     "#### Problem\n### Deeper\n```md\n## inside\n```\n#### Use\n",
   );
+});
+
+test("splitSections splits a body at its ## headings outside fences, text trimmed, the preamble kept", () => {
+  const body =
+    "Lead.\n\n## Problem\n\nNo x.\n\n## Use\n\n```md\n## not a section\n```\n\n## Empty\n";
+  assert.deepEqual(splitSections(body), {
+    preamble: "Lead.",
+    sections: [
+      { name: "Problem", text: "No x." },
+      { name: "Use", text: "```md\n## not a section\n```" },
+      { name: "Empty", text: "" },
+    ],
+  });
 });

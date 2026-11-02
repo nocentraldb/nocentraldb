@@ -84,6 +84,27 @@ export function demoteSections(body, levels = 1) {
   ).join("\n");
 }
 
+/**
+ * A body split at its sections (`## ` headings outside fences): the text
+ * before the first one, and each section's name and text, both trimmed.
+ */
+export function splitSections(body) {
+  let current = { lines: [] };
+  const parts = [current];
+  for (const { line, prose } of classifyLines(body)) {
+    const heading = prose && SECTION.exec(line);
+    if (heading) {
+      current = { name: heading[1], lines: [] };
+      parts.push(current);
+    } else current.lines.push(line);
+  }
+  const text = ({ lines }) => lines.join("\n").trim();
+  return {
+    preamble: text(parts[0]),
+    sections: parts.slice(1).map((p) => ({ name: p.name, text: text(p) })),
+  };
+}
+
 const isList = (value, ok) =>
   Array.isArray(value) &&
   value.length > 0 &&
