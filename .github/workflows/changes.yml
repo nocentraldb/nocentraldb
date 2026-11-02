@@ -10,7 +10,9 @@
 # refuses the repository's symlink that points outside the tree), with
 # `rust-toolchain: manual`, so it uses the toolchain rust-toolchain.toml pins,
 # installed by the step before it. It may fail without failing the job, so
-# the fragment step still runs and turns its finding into a requirement. The
+# the fragment step still runs and turns its finding into a requirement; a
+# warning then says that a failure without a failed lint is the tool's own
+# and wants a re-run, not a breaking fragment. The
 # TypeScript API report is diffed against the base's committed report
 # (exit 3: a removed or changed line). Either finding adds
 # --require-breaking, which the skip-changes label never waives.
@@ -41,7 +43,7 @@ jobs:
           auto-install: true
       - run: pnpm install --frozen-lockfile
       - name: Base for the Rust API
-        id: baseline
+        id: base-worktree
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"
@@ -53,6 +55,10 @@ jobs:
           baseline-root: ${{ runner.temp }}/baseline
           rust-toolchain: manual
         continue-on-error: true
+      - name: Explain a failed semver step
+        id: semver-failed
+        if: steps.semver.outcome == 'failure'
+        run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."'
       - name: TypeScript API against the base
         id: api
         env:

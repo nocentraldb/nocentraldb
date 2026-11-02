@@ -47,7 +47,9 @@ const fragmentsStep = (ctx) =>
   at(ctx, (step) => String(step.run).includes("check-fragments.mjs"));
 const semverStep = (ctx) => at(ctx, (step) => step.id === "semver");
 const apiStep = (ctx) => at(ctx, (step) => step.id === "api");
-const baselineStep = (ctx) => at(ctx, (step) => step.id === "baseline");
+const baselineStep = (ctx) => at(ctx, (step) => step.id === "base-worktree");
+const semverNoticeStep = (ctx) =>
+  at(ctx, (step) => step.id === "semver-failed");
 const toolchainStep = (ctx) =>
   at(ctx, (step) => step.run === "rustup toolchain install --no-self-update");
 
@@ -70,6 +72,10 @@ const FRAGMENTS_RUN =
 const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
 const BASELINE_RUN =
   'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"';
+const SEMVER_NOTICE = {
+  if: "steps.semver.outcome == 'failure'",
+  run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."',
+};
 const API_RUN = `set +e
 node scripts/release/api-report.mjs --base "$BASE"
 code=$?
@@ -245,6 +251,11 @@ const checks = [
       assert.equal(report.run, API_RUN);
       assert.equal(report["continue-on-error"], undefined);
 
+      const notice = semverNoticeStep(ctx);
+      assert.ok(semver < notice && notice < fragments, "notice out of order");
+      assert.equal(all[notice].if, SEMVER_NOTICE.if);
+      assert.equal(all[notice].run, SEMVER_NOTICE.run);
+
       const step = all[fragments];
       assert.equal(step.env.BREAKING, FRAGMENTS_ENV.BREAKING);
       assert.ok(step.run.endsWith(" $SKIP $BREAKING"), step.run);
@@ -314,6 +325,13 @@ const checks = [
             '"$code" = 9 ] && echo true',
           ),
         ),
+      "the semver notice runs always": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, semverNoticeStep(ctx), "if"]),
+      "the semver notice after the fragment step": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(semverNoticeStep(ctx), 1)[0];
+        list.items.push(step);
+      },
       "api with continue-on-error": (ctx) =>
         ctx.doc.setIn([...STEPS, apiStep(ctx), "continue-on-error"], true),
     },
