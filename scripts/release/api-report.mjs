@@ -11,8 +11,11 @@
 //    --noEmit false --removeComments --rootDir <project> --outDir <tmp>`
 //    (rootDir fixes the output layout, so src/ is always <tmp>/src/). A tsc
 //    error fails the run with tsc's output; a tsc that cannot start or runs
-//    longer than five minutes fails it with the cause. Comments are
-//    removed, so a doc comment edit is never reported as an API change.
+//    longer than five minutes (API_REPORT_TSC_TIMEOUT_MS overrides that,
+//    for the tests) or prints more than TSC_MAX_BUFFER fails it with the
+//    cause. Comments are removed, so a doc comment edit is never reported
+//    as an API change. A value of --base or --project that starts with a
+//    dash is a usage error.
 // R2 The report is every <tmp>/src/**/*.d.ts in sorted path order, each
 //    preceded by `// file: <path relative to src/>`, normalised to LF. The
 //    project's tests (anything outside src/) are not part of it.
@@ -85,6 +88,9 @@ const lf = (text) => text.replace(/\r\n?/g, "\n");
 /** tsc's time limit; API_REPORT_TSC_TIMEOUT_MS is a test seam. */
 const TSC_TIMEOUT_MS = Number(process.env.API_REPORT_TSC_TIMEOUT_MS) || 300_000;
 
+/** tsc's output limit, far above what a declaration emit prints. */
+const TSC_MAX_BUFFER = 64 * 1024 * 1024;
+
 /** A failure `main` reports once, after what is already on stderr. */
 class Failure extends Error {}
 
@@ -110,7 +116,7 @@ function generate(project) {
       ],
       {
         encoding: "utf8",
-        maxBuffer: 64 * 1024 * 1024,
+        maxBuffer: TSC_MAX_BUFFER,
         timeout: TSC_TIMEOUT_MS,
       },
     );
@@ -177,6 +183,9 @@ function main(args) {
     defaults: { project: "packages/sdk" },
   });
   if (opts.write && opts.base) usageError();
+  // A value that starts with a dash would reach git or tsc as an option.
+  if ([opts.base, opts.project].some((value) => value?.startsWith("-")))
+    usageError();
   const path = join(opts.project, "etc", "api-report.d.ts")
     .split(sep)
     .join("/");

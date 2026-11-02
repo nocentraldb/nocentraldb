@@ -12,10 +12,10 @@
 # installed by the step before it. It may fail without failing the job, so
 # the fragment step still runs and turns its finding into a requirement; a
 # warning then says that a failure without a failed lint is the tool's own
-# and wants a re-run, not a breaking fragment. The
-# TypeScript API report is diffed against the base's committed report
-# (exit 3: a removed or changed line). Either finding adds
-# --require-breaking, which the skip-changes label never waives.
+# and wants a re-run, not a breaking fragment. The TypeScript API report is
+# diffed against the base's committed report (exit 3: a removed or changed
+# line). Either finding adds --require-breaking, which the skip-changes
+# label never waives.
 # scripts/changes-workflow.test.mjs asserts these rules.
 name: changes
 

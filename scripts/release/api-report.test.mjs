@@ -271,3 +271,15 @@ test("a tsc that does not finish in time fails the run with the cause", (t) => {
     /api-report: tsc did not run to the end .*ETIMEDOUT/,
   );
 });
+
+test("removedLines: a line moved to another declaration is not reported (documented blind spot)", () => {
+  const before = "interface A {\n  id: string;\n}\ninterface B {\n}\n";
+  const after = "interface A {\n}\ninterface B {\n  id: string;\n}\n";
+  assert.deepEqual(removedLines(before, after), []);
+});
+
+test("--base with a value that starts with a dash is a usage error (2)", (t) => {
+  const { repo } = committed(t);
+  const result = run(repo, "--base", "--output=/tmp/x");
+  assert.equal(result.status, 2);
+});
