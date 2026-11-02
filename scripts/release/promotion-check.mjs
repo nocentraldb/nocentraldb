@@ -69,7 +69,7 @@ const options = (args) => {
   });
   const now = opts.now === undefined ? Date.now() : Date.parse(opts.now);
   if (Number.isNaN(now)) usageError();
-  return { ...opts, version, now };
+  return { ...opts, version, now, nowGiven: opts.now !== undefined };
 };
 
 /** Runs a command; { status, stdout, stderr, missing }. */
@@ -100,7 +100,15 @@ const latestBeta = (version) =>
     .map((t) => `v${t.version}`)
     .at(-1) ?? null;
 
-const soak = ({ beta, version, now }) => {
+const soak = (ctx) => {
+  const [result, evidence] = soakRow(ctx);
+  return [
+    result,
+    process.env.PROMOTION_CHECK_GH ? `gh (override): ${evidence}` : evidence,
+  ];
+};
+
+const soakRow = ({ beta, version, now }) => {
   if (beta === null) return [FAIL, `no beta tag v${version}-beta.N`];
   const gh = exec(process.env.PROMOTION_CHECK_GH || "gh", [
     "release",
@@ -152,8 +160,9 @@ const sameCode = ({ beta, version, ref, head }) => {
 };
 
 /** One audit: [ok, evidence]. */
-const audit = (name, seam, command, args, missingHint, cwd) => {
+const audit = (tool, seam, command, args, missingHint, cwd) => {
   const override = process.env[seam];
+  const name = override ? `${tool} (override)` : tool;
   const r = override ? exec(override, [], cwd) : exec(command, args, cwd);
   if (r.missing || /no such (sub)?command/.test(r.stderr))
     return [false, missingHint];
@@ -168,8 +177,10 @@ const audit = (name, seam, command, args, missingHint, cwd) => {
 const security = ({ ref, head }) => {
   if (head === null) return [FAIL, `${ref} does not exist`];
   const dir = mkdtempSync(join(tmpdir(), "promotion-check-"));
+  let added = false;
   try {
     git(["worktree", "add", "-q", "--detach", dir, head]);
+    added = true;
     const results = [
       audit(
         "cargo audit",
@@ -191,7 +202,9 @@ const security = ({ ref, head }) => {
     const evidence = `${results.map(([, e]) => e).join("; ")}; at ${head.slice(0, 12)}; open security advisories are checked by hand`;
     return [results.every(([ok]) => ok) ? PASS : FAIL, evidence];
   } finally {
-    git(["worktree", "remove", "--force", dir]);
+    // Only a worktree that was added is removed, so a failed add keeps its
+    // own error instead of being replaced by the remove's.
+    if (added) git(["worktree", "remove", "--force", dir]);
     rmSync(dir, { recursive: true, force: true });
   }
 };
@@ -291,11 +304,22 @@ const main = () => {
       false,
     ],
   ];
+  const overrides = [
+    "PROMOTION_CHECK_GH",
+    "PROMOTION_CHECK_CARGO_AUDIT",
+    "PROMOTION_CHECK_PNPM_AUDIT",
+  ].filter((name) => process.env[name]);
+  if (opts.nowGiven) overrides.push("--now");
   const at =
     head === null ? `${ref} (missing)` : `${ref} at ${head.slice(0, 12)}`;
   console.log(
     [
       `promotion-check ${version}: ${at}, latest beta ${ctx.beta ?? "none"}, now ${new Date(now).toISOString()}`,
+      ...(overrides.length === 0
+        ? []
+        : [
+            `overrides in effect: ${overrides.join(", ")}; this table is not evidence for a release`,
+          ]),
       "",
       "| # | Condition | Result | Evidence |",
       "| --- | --- | --- | --- |",

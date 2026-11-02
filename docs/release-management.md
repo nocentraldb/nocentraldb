@@ -269,6 +269,7 @@ The PM checks the promotion conditions in its sessions and proposes the release 
 - **5** runs `cargo audit` and `pnpm audit --audit-level low` in a temporary checkout of `origin/release/X.Y`. A missing `cargo-audit`, `pnpm` or `gh` is a `FAIL` with the install hint. Open security advisories you check by hand.
 - **6** is `FAIL` when a `breaking` fragment on the branch has none of its tickets in `release-notes/X.Y.Z.md` there. Once the final notes pull request removed the fragments, the row says the PM checked it. The approval itself is `MANUAL`.
 - **2, 3 and 7** are `MANUAL`, with what to check.
+- The environment variables `PROMOTION_CHECK_GH`, `PROMOTION_CHECK_CARGO_AUDIT` and `PROMOTION_CHECK_PNPM_AUDIT` and the option `--now` exist for the tests. When one is set, the table says so above the rows and in the rows it affects, and it is not evidence for a release.
 
 Conditions 1, 2, 4, 5 and 6 apply to every release. Condition 3 applies as soon as there is a relay, and condition 7 as soon as one of our projects uses NoCentralDB.
 

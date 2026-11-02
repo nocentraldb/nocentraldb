@@ -243,9 +243,9 @@ test("an audit that reports something FAILs condition 5 with its last lines", (t
   assert.equal(row(r.stdout, 5).result, "FAIL");
   assert.match(
     row(r.stdout, 5).evidence,
-    /cargo audit exited 1: Crate: foo<br>error: 1 vulnerability found!/,
+    /cargo audit \(override\) exited 1: Crate: foo<br>error: 1 vulnerability found!/,
   );
-  assert.match(row(r.stdout, 5).evidence, /pnpm audit: clean/);
+  assert.match(row(r.stdout, 5).evidence, /pnpm audit \(override\): clean/);
 });
 
 test("a missing cargo-audit FAILs condition 5 with the install hint, whether cargo or the subcommand is missing", (t) => {
@@ -375,4 +375,21 @@ test("a version that is not X.Y.Z, or a --now that is not a date, is a usage err
     assert.equal(r.status, 2, args.join(" "));
     assert.match(r.stderr, /^usage: promotion-check/);
   }
+});
+
+test("rows whose command a seam overrides say so in their evidence, and the header names the seams", (t) => {
+  const repo = releaseRepo(t);
+  const r = run(repo, t, { gh: ghFor("v0.1.0-beta.2") });
+  assert.match(
+    row(r.stdout, 1).evidence,
+    /^gh \(override\): v0\.1\.0-beta\.2 published/,
+  );
+  assert.match(
+    row(r.stdout, 5).evidence,
+    /^cargo audit \(override\): clean; pnpm audit \(override\): clean/,
+  );
+  assert.match(
+    r.stdout,
+    /^overrides in effect: PROMOTION_CHECK_GH, PROMOTION_CHECK_CARGO_AUDIT, PROMOTION_CHECK_PNPM_AUDIT, --now; this table is not evidence for a release$/m,
+  );
 });
