@@ -1,2 +1,2 @@
 // file: index.d.ts
-export declare function name(scope: string): string;
+export declare function name(): string;
