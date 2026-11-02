@@ -9,8 +9,10 @@
 // checkout is the run's head_sha with full history and tags; every step of
 // every job runs in bash with pipefail; a dispatch never tags or publishes;
 // the alpha honours next-version's skip and publishes a prerelease with the
-// rendered notes, creating its tag in the same act, with no write token left
-// in the checkout.
+// rendered notes, creating its tag in the same act, refusing a tag that
+// already exists on the remote without a release, with no write token left
+// in the checkout; a dry run off main fails at the guard. A step that derives
+// the basic-auth header from the token masks it before git sees it.
 //
 // The publish side: verify, build, publish and commit-back run for v* tags
 // that are not alphas, or for a dispatch with a tag, which is a dry run that
@@ -21,8 +23,8 @@
 // for a release) and only reports on the registries; commit-back checks out
 // main and leaves the commit to commit-back.mjs; no job that holds contents:
 // write leaves its token in the checkout. Every job is bounded in time, the
-// publish side never cancels a run of the same ref, and every action is
-// SHA-pinned.
+// jobs of the publish side share one concurrency group per ref that never
+// cancels a running job, and every action is SHA-pinned.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -140,6 +142,13 @@ const PUBLISH_CONCURRENCY = {
   "cancel-in-progress": false,
 };
 const WRITE = { contents: "write" };
+const PUBLISH_SIDE = ["verify", "build", "publish", "commit-back"];
+/** The one way a step derives the basic-auth header from GH_TOKEN. */
+const AUTH = `auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`;
+const OFF_MAIN =
+  'if [ "$DRY_RUN" = true ] && [ "$GITHUB_REF" != refs/heads/main ]; then';
+const REMOTE_TAG =
+  'existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$TAG" | jq -r --arg ref "refs/tags/$TAG" \'.[] | select(.ref == $ref) | .ref\')"';
 
 /** Sets the alpha job's `if` to the expected one with `clause` removed. */
 const ifWithout = (clause) => (ctx) =>
@@ -282,8 +291,8 @@ const checks = [
         ctx.doc.setIn(
           [...STEPS, 0, "run"],
           String(ctx.doc.getIn([...STEPS, 0, "run"])).replace(
-            "refs/heads/main",
-            "refs/heads/dev",
+            /(ls-remote [^\n]*)refs\/heads\/main/,
+            "$1refs/heads/dev",
           ),
         ),
       "reads anonymously": (ctx) => ctx.doc.deleteIn([...STEPS, 0, "env"]),
@@ -956,9 +965,11 @@ const checks = [
     },
   },
   {
-    name: "publish concurrency is per ref and never cancels",
-    check: (ctx) =>
-      assert.deepEqual(job(ctx, "verify").concurrency, PUBLISH_CONCURRENCY),
+    name: "every job of the publish side is in the one group of its ref, which never cancels a running job",
+    check: (ctx) => {
+      for (const id of PUBLISH_SIDE)
+        assert.deepEqual(job(ctx, id).concurrency, PUBLISH_CONCURRENCY, id);
+    },
     mutants: {
       "cancels in progress": (ctx) =>
         ctx.doc.setIn(
@@ -969,6 +980,164 @@ const checks = [
         ctx.doc.setIn(
           ["jobs", "verify", "concurrency", "group"],
           "release-publish",
+        ),
+      "build outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "build", "concurrency"]),
+      "publish outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "concurrency"]),
+      "commit-back outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "commit-back", "concurrency"]),
+      "commit-back in a group of its own": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "commit-back", "concurrency", "group"],
+          `release-commit-back-${gh("github.ref")}`,
+        ),
+    },
+  },
+  {
+    name: "every step that derives the basic-auth header from the token masks it before git can see it",
+    check: (ctx) => {
+      const derives = JOBS.flatMap((id) =>
+        stepsOf(ctx, id)
+          .filter((step) => /GIT_CONFIG_VALUE_0|base64/.test(step.run ?? ""))
+          .map((step) => [id, String(step.run)]),
+      );
+      assert.deepEqual(
+        derives.map(([id]) => id),
+        ["alpha", "commit-back"],
+        "the steps that derive the header",
+      );
+      for (const [id, run] of derives) {
+        const derive = run.indexOf(AUTH);
+        const mask = run.indexOf('echo "::add-mask::$auth"');
+        const use = run.indexOf(
+          'GIT_CONFIG_VALUE_0="Authorization: basic $auth"',
+        );
+        assert.notEqual(
+          derive,
+          -1,
+          `${id}: the header is not derived into auth`,
+        );
+        assert.ok(
+          mask > derive,
+          `${id}: auth is not masked after it is derived`,
+        );
+        assert.ok(
+          use > mask,
+          `${id}: the header is exported before it is masked`,
+        );
+        assert.equal(
+          run.match(/base64/g).length,
+          1,
+          `${id}: a second base64 value is derived`,
+        );
+      }
+    },
+    mutants: {
+      "drops the guard's mask": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", 'echo "::add-mask::$auth"\n', ""),
+      "drops commit-back's mask": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'echo "::add-mask::$auth"\n',
+          "",
+        ),
+      "masks the token instead": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'echo "::add-mask::$auth"',
+          'echo "::add-mask::$GH_TOKEN"',
+        ),
+      "derives the header inline, unmasked": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'GIT_CONFIG_VALUE_0="Authorization: basic $auth"',
+          `GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`,
+        ),
+      "exports the header before the mask": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "ls-remote",
+          'echo "::add-mask::$auth"\n',
+          'export GIT_CONFIG_VALUE_0="Authorization: basic $auth"\necho "::add-mask::$auth"\n',
+        ),
+    },
+  },
+  {
+    name: "a dry run off main fails at the guard instead of skipping green",
+    check: (ctx) => {
+      const run = String(steps(ctx)[0]?.run ?? "");
+      const refused = run.indexOf(OFF_MAIN);
+      assert.notEqual(refused, -1, "the guard does not test a dry run's ref");
+      const exit = run.indexOf("exit 1", refused);
+      assert.ok(
+        exit !== -1 && exit < run.indexOf("fi", refused),
+        "a dry run off main does not fail",
+      );
+      assert.ok(
+        refused < run.indexOf("ls-remote"),
+        "the dry run's ref is tested after ls-remote",
+      );
+    },
+    mutants: {
+      "drops the check": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", OFF_MAIN, "if false; then"),
+      "lets it pass": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", /exit 1/, "exit 0"),
+      "tests another branch": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "ls-remote",
+          "refs/heads/main ]",
+          "refs/heads/dev ]",
+        ),
+    },
+  },
+  {
+    name: "the alpha refuses a tag that already exists on the remote without a release",
+    check: (ctx) => {
+      const run = String(steps(ctx)[publishStep(ctx)].run);
+      const lookup = run.indexOf(REMOTE_TAG);
+      assert.notEqual(lookup, -1, "the remote is not asked for the tag");
+      assert.ok(
+        lookup > run.indexOf('gh release view "$TAG"'),
+        "the tag is looked up before the release is",
+      );
+      const create = run.indexOf("gh release create");
+      assert.ok(lookup < create, "the tag is looked up after the create");
+      assert.match(
+        run.slice(lookup, create),
+        /if \[ -n "\$existing" \]; then\n[^\n]*::error::[^\n]*\n\s*exit 1\n/,
+      );
+    },
+    mutants: {
+      "drops the lookup": (ctx) =>
+        editRun(ctx, "alpha", "gh release create", REMOTE_TAG, 'existing=""'),
+      "looks up after the create": (ctx) => {
+        editRun(ctx, "alpha", "gh release create", REMOTE_TAG, 'existing=""');
+        editRun(
+          ctx,
+          "alpha",
+          "gh release create",
+          /(\n\s*)(gh release create [^\n]*)/,
+          (_, indent, create) => `${indent}${create}${indent}${REMOTE_TAG}`,
+        );
+      },
+      "only warns": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "gh release create",
+          /(::error::[^\n]*\n\s*)exit 1/,
+          "$1true",
         ),
     },
   },

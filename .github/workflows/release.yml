@@ -58,15 +58,24 @@ jobs:
       # and the next alpha covers it (alpha notes are computed since the
       # previous alpha tag, not per merge). The repository may be private, so
       # git authenticates with the job's token; a failing ls-remote, or no
-      # main at all (--exit-code), fails the job instead of skipping it.
+      # main at all (--exit-code), fails the job instead of skipping it. A dry
+      # run on any ref but main fails here: its commit is never the head of
+      # main, so it would skip every step and end green, proving nothing. The
+      # runner masks GH_TOKEN but not the header derived from it, so the
+      # header is masked before git sees it.
       - name: Still the head of main?
         id: guard
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if [ "$DRY_RUN" = true ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo "::error::a dry run proves the alpha job only on main; this is $GITHUB_REF (dispatch it with --ref main)"
+            exit 1
+          fi
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
-          GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          export GIT_CONFIG_VALUE_0
+          export GIT_CONFIG_VALUE_0="Authorization: basic $auth"
           head="$(git ls-remote --exit-code "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
           if [ "$head" != "$SHA" ]; then
             echo "::notice::$SHA is no longer the head of main ($head); the next alpha covers it"
@@ -108,7 +117,9 @@ jobs:
       # One act: the API creates the tag on $SHA together with the release.
       # A failed create leaves no tag behind, so a re-run computes the same
       # alpha again instead of skipping on an orphan tag; after a successful
-      # create, a re-run finds the release and creates nothing.
+      # create, a re-run finds the release and creates nothing. A tag that
+      # exists on the remote without a release is refused: gh release create
+      # would attach the release to it and ignore --target.
       - name: Tag and publish the alpha
         if: steps.guard.outputs.skip != 'true' && steps.next.outputs.skip != 'true' && env.DRY_RUN != 'true'
         env:
@@ -119,6 +130,11 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG exists, not re-creating"
           else
+            existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$TAG" | jq -r --arg ref "refs/tags/$TAG" '.[] | select(.ref == $ref) | .ref')"
+            if [ -n "$existing" ]; then
+              echo "::error::tag $TAG exists on the remote without a release, and a release would attach to it instead of $SHA; delete the tag if it is an orphan, then re-run"
+              exit 1
+            fi
             gh release create "$TAG" --target "$SHA" --prerelease --title "$TAG" --notes-file alpha-notes.md
           fi
 
@@ -130,6 +146,12 @@ jobs:
       || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    # One group for every job of the publish side, per ref: two runs of one
+    # tag (a re-run while one is in flight) never run two of these jobs at
+    # once, so they never overlap in publish or commit-back. A running job is
+    # never cancelled; GitHub still cancels an older PENDING job of the group
+    # when a newer one queues, which leaves that run unfinished and the newer
+    # run doing the whole work.
     concurrency:
       group: release-publish-${{ github.ref }}
       cancel-in-progress: false
@@ -175,6 +197,9 @@ jobs:
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
     defaults:
       run:
         shell: bash
@@ -210,6 +235,9 @@ jobs:
     if: needs.verify.outputs.dry_run != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     defaults:
@@ -273,6 +301,9 @@ jobs:
     needs: [verify, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     defaults:
@@ -305,9 +336,10 @@ jobs:
           STAGE: ${{ needs.verify.outputs.stage }}
           VERSION: ${{ needs.verify.outputs.version }}
         run: |
+          auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          echo "::add-mask::$auth"
           export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
-          GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
-          export GIT_CONFIG_VALUE_0
+          export GIT_CONFIG_VALUE_0="Authorization: basic $auth"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PUBLISHED="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"
