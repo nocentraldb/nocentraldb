@@ -279,6 +279,45 @@ export function lockVersions(cargoLock) {
   return out;
 }
 
+const JSON_STRING = /"(?:[^"\\]|\\.)*"/y;
+const JSON_COLON = /\s*:\s*/y;
+
+/**
+ * The package.json text with the value of its top-level "version" replaced
+ * by `version`, and every other byte as it was: indentation, key order,
+ * spacing and the final newline stay. Walks the text keeping track of the
+ * object depth, so a "version" nested deeper (devEngines) or inside a string
+ * is never taken. Throws on text that is not JSON and when the top level has
+ * no "version" string.
+ */
+export function writePackageVersion(text, version) {
+  const parsed = JSON.parse(text);
+  if (typeof parsed?.version !== "string")
+    throw new Error('no top-level "version" string');
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "{" || c === "[") depth++;
+    else if (c === "}" || c === "]") depth--;
+    else if (c === '"') {
+      JSON_STRING.lastIndex = i;
+      const key = JSON_STRING.exec(text)[0];
+      const end = i + key.length;
+      JSON_COLON.lastIndex = end;
+      const colon = depth === 1 ? JSON_COLON.exec(text) : null;
+      if (key === '"version"' && colon && text[end + colon[0].length] === '"') {
+        const start = end + colon[0].length;
+        JSON_STRING.lastIndex = start;
+        const value = JSON_STRING.exec(text)[0];
+        return `${text.slice(0, start)}${JSON.stringify(version)}${text.slice(start + value.length)}`;
+      }
+      i = end - 1;
+    }
+  }
+  // JSON.parse found a top-level version string, so the walk finds it too.
+  throw new Error('no top-level "version" string');
+}
+
 const glob = (root, patterns) =>
   patterns.flatMap((p) => globSync(p, { cwd: root })).sort();
 
