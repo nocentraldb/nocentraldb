@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { removedLines } from "./api-report.mjs";
 import { GIT_ENV, makeRepo } from "./lib/test-repo.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -229,3 +230,44 @@ test("--help prints the usage", (t) => {
 });
 
 const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+test("removedLines: lines of closing brackets, blank lines and export {}; are never reported", () => {
+  const before = "interface A {\n  a: string;\n}\n\nexport {};\n]);\n";
+  const after = "interface A {\n  a: string;\n";
+  assert.deepEqual(removedLines(before, after), []);
+});
+
+test("removedLines: counts duplicates, so one of two equal lines removed is reported", () => {
+  const line = "    id: string;";
+  assert.deepEqual(removedLines(`${line}\n${line}\n`, `${line}\n`), [line]);
+  assert.deepEqual(removedLines(`${line}\n`, `${line}\n${line}\n`), []);
+});
+
+test("--base: removing a member of a multi-line interface exits 3 and names it", (t) => {
+  const shape = (members) =>
+    `${INDEX}export interface Options {\n${members}}\n`;
+  const { repo, base } = committed(t, {
+    "packages/sdk/src/index.ts": shape("  id: string;\n  label?: string;\n"),
+  });
+  repo.write("packages/sdk/src/index.ts", shape("  id: string;\n"));
+  assert.equal(run(repo, "--write").status, 0);
+  repo.commit("head");
+  const result = run(repo, "--base", base);
+  assert.equal(result.status, 3, result.stderr);
+  assert.match(result.stdout, /api-report: breaking: - {5}label\?: string;/);
+  assert.doesNotMatch(result.stdout, /id: string/);
+});
+
+test("a tsc that does not finish in time fails the run with the cause", (t) => {
+  const repo = fixture(t);
+  const result = spawnSync(process.execPath, [script, "--write"], {
+    cwd: repo.dir,
+    env: { ...GIT_ENV, API_REPORT_TSC_TIMEOUT_MS: "1" },
+    encoding: "utf8",
+  });
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /api-report: tsc did not run to the end .*ETIMEDOUT/,
+  );
+});
