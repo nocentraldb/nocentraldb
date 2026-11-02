@@ -149,13 +149,51 @@ test("a release keeps a fragment on main whose content differs from the shipped 
 });
 
 test("a second identical run prints nothing to commit and makes no commit", (t) => {
-  const { clone } = releasedOrigin(t);
-  assert.equal(run(clone, ...RELEASE, "--no-push").status, 0);
+  const { origin, clone } = releasedOrigin(t);
+  assert.equal(run(clone, ...RELEASE).status, 0);
   const head = git(clone, "rev-parse", "HEAD");
-  const r = run(clone, ...RELEASE, "--no-push");
+  const r = run(clone, ...RELEASE);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^commit-back: nothing to commit$/m);
   assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(git(origin, "rev-parse", "main"), head);
+  assert.equal(git(clone, "status", "--porcelain"), "");
+});
+
+test("a staged change of someone else's is exit 1 and is neither committed nor touched", (t) => {
+  const { clone } = releasedOrigin(t);
+  writeFileSync(join(clone, "local.md"), "mine\n");
+  git(clone, "add", "local.md");
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...BETA);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^commit-back: the working tree is not clean \(local\.md\); nothing committed$/m,
+  );
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(git(clone, "status", "--porcelain"), "A  local.md");
+  assert.equal(
+    readFileSync(join(clone, "release-notes/index.json"), "utf8"),
+    EMPTY_INDEX,
+  );
+});
+
+test("a local commit that is not on origin/main is exit 1 and nothing is committed or pushed", (t) => {
+  const { origin, clone } = releasedOrigin(t);
+  writeFileSync(join(clone, "local.md"), "mine\n");
+  git(clone, "add", "local.md");
+  git(clone, "commit", "-q", "-m", "local");
+  const head = git(clone, "rev-parse", "HEAD");
+  const before = git(origin, "rev-parse", "main");
+  const r = run(clone, ...BETA);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^commit-back: HEAD [0-9a-f]{40} is not origin\/main [0-9a-f]{40}; nothing committed$/m,
+  );
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(git(origin, "rev-parse", "main"), before);
 });
 
 test("a beta commits only its index entry", (t) => {
@@ -186,6 +224,7 @@ test("an index entry that conflicts with the indexed one is exit 1 and commits n
   assert.match(r.stderr, /index entry for v0\.1\.0 differs/);
   assert.match(r.stderr, /^commit-back: .*nothing committed/m);
   assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(git(clone, "status", "--porcelain"), "");
 });
 
 test("a fragment on main that fails the schema check is exit 1 and commits nothing", (t) => {
@@ -198,6 +237,8 @@ test("a fragment on main that fails the schema check is exit 1 and commits nothi
   assert.match(r.stderr, /changes\/broken\.md/);
   assert.match(r.stderr, /^commit-back: .*nothing committed/m);
   assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  // The index entry, the notes archive and the fragment removal are undone.
+  assert.equal(git(clone, "status", "--porcelain"), "");
 });
 
 test("a malformed index on main is exit 1 and commits nothing", (t) => {
@@ -232,6 +273,10 @@ test("a push rejected because main moved is retried once after a rebase onto it"
   author.run("push", "-q", origin, "main");
   const r = run(clone, ...RELEASE);
   assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^commit-back: the push to origin\/main failed; fetching, rebasing onto it and retrying once$/m,
+  );
   assert.equal(
     git(origin, "log", "-2", "--format=%s", "main"),
     `${RELEASE_MESSAGE}\nmeanwhile`,
@@ -251,8 +296,55 @@ test("a push that is still rejected after the rebase is exit 1 and points at the
   const r = run(clone, ...BETA);
   assert.equal(r.status, 1);
   assert.match(
+    r.stdout,
+    /^commit-back: the push to origin\/main failed; fetching, rebasing onto it and retrying once$/m,
+  );
+  assert.match(
     r.stderr,
-    /^commit-back: .*rejected.*docs\/release-management\.md#if-the-commit-to-main-failed/m,
+    /^commit-back: .*failed again.*docs\/release-management\.md#if-the-commit-to-main-failed/m,
+  );
+  assert.equal(git(origin, "rev-parse", "main"), before);
+});
+
+test("a rebase that conflicts is aborted, exit 1 with the runbook, and nothing is pushed", (t) => {
+  const { author, origin, clone } = releasedOrigin(t);
+  // Meanwhile another commit-back indexed the beta on main.
+  author.commit("Beta v0.1.0-beta.1: index", {
+    "release-notes/index.json": `${JSON.stringify({ releases: [entry("beta", "v0.1.0-beta.1")] }, null, 2)}\n`,
+  });
+  author.run("push", "-q", origin, "main");
+  const before = git(origin, "rev-parse", "main");
+  const r = run(clone, ...RELEASE);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stdout,
+    /^commit-back: the push to origin\/main failed; fetching, rebasing onto it and retrying once$/m,
+  );
+  assert.match(
+    r.stderr,
+    /^commit-back: .*the commit is not on origin\/main.*docs\/release-management\.md#if-the-commit-to-main-failed$/m,
+  );
+  assert.equal(git(origin, "rev-parse", "main"), before);
+  assert.equal(git(clone, "status", "--porcelain"), "");
+  assert.ok(!existsSync(join(clone, ".git", "rebase-merge")));
+  assert.ok(!existsSync(join(clone, ".git", "rebase-apply")));
+});
+
+test("a fragment that main gained meanwhile and that fails the schema stops the retried push", (t) => {
+  const { author, origin, clone } = releasedOrigin(t);
+  author.commit("broken", { "changes/broken.md": "no front matter\n" });
+  author.run("push", "-q", origin, "main");
+  const before = git(origin, "rev-parse", "main");
+  const r = run(clone, ...BETA);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stdout,
+    /^commit-back: the push to origin\/main failed; fetching, rebasing onto it and retrying once$/m,
+  );
+  assert.match(r.stderr, /changes\/broken\.md/);
+  assert.match(
+    r.stderr,
+    /^commit-back: .*not pushed.*if-the-commit-to-main-failed$/m,
   );
   assert.equal(git(origin, "rev-parse", "main"), before);
 });

@@ -4,6 +4,10 @@
 // the repository root; the job `commit-back` of .github/workflows/release.yml
 // runs it, and a maintainer runs it by hand when that job failed. Rules:
 //
+// C0 It starts only from a clean working tree whose HEAD is <main>: anything
+//    staged, modified or untracked, or a local commit not on <main>, is
+//    exit 1 with "nothing committed", and nothing is touched. So the commit
+//    holds only what this script writes, and the push carries only it.
 // C1 Both stages first add the entry to release-notes/index.json (`index
 //    add`). It refuses a tag that is not v<version> for a release or
 //    v<version>-beta.N for a beta, a stage other than those two and a
@@ -15,16 +19,17 @@
 //    main whose content differs from the shipped one is kept, and named).
 // C3 Before anything is committed, the index passes validateIndex and every
 //    fragment left in changes/ passes `check-fragments`; a failure there, or
-//    in any step before, is exit 1 with "nothing committed".
+//    in any step before, is exit 1 with "nothing committed", and the working
+//    tree is reset to HEAD (it was clean, C0).
 // C4 Nothing staged is "nothing to commit", exit 0: a re-run after a
 //    successful one makes no commit and pushes nothing.
 // C5 Otherwise one commit, "Release <tag>: index, notes archive and shipped
 //    fragments" (beta: "Beta <tag>: index"), with only those paths, pushed
 //    to the branch of <main> on its remote (default origin/main), unless
 //    --no-push.
-// C6 A rejected push is retried once: fetch, rebase onto <main>, C3 again,
-//    push. Still rejected (or a failed rebase, which is aborted) is exit 1
-//    naming the runbook section that redoes the commit by hand.
+// C6 A failed push is retried once: fetch, rebase onto <main>, C3 again,
+//    push. A second failure, a failed rebase (aborted) or a failed C3 is
+//    exit 1 naming the runbook section that redoes the commit by hand.
 //
 // Exit 0 when the commit is pushed (or made, with --no-push) or there was
 // nothing to commit, 1 with `commit-back: <message>`, 2 on a usage error.
@@ -104,6 +109,30 @@ const prepare = ({ tag, stage, version, date, main }) => {
   }
 };
 
+/** C0: a clean tree on <main>; throws otherwise. */
+const checkStart = (main) => {
+  const dirty = git(["status", "--porcelain"])
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.slice(3));
+  if (dirty.length > 0)
+    throw new Error(`the working tree is not clean (${dirty.join(", ")})`);
+  const head = git(["rev-parse", "HEAD"]).trim();
+  let base;
+  try {
+    base = git(["rev-parse", "--verify", `${main}^{commit}`]).trim();
+  } catch {
+    throw new Error(`--main ${main} is not a commit`);
+  }
+  if (head !== base) throw new Error(`HEAD ${head} is not ${main} ${base}`);
+};
+
+/** Undoes what prepare wrote; safe because the tree was clean (C0). */
+const restore = () => {
+  git(["reset", "-q", "--hard", "HEAD"]);
+  git(["clean", "-fdq", "--", "release-notes", "changes"]);
+};
+
 const nothingStaged = () => {
   try {
     git(["diff", "--cached", "--quiet"]);
@@ -129,24 +158,34 @@ const push = (main) => {
     }
   };
   if (tryPush()) return;
+  // Rejected because main moved, or refused for another reason (rights, a
+  // protection rule, the network): git said which above. One retry either
+  // way; a refusal fails again and ends in the runbook.
   console.log(
-    `commit-back: the push to ${main} was rejected; rebasing onto it and retrying once`,
+    `commit-back: the push to ${main} failed; fetching, rebasing onto it and retrying once`,
   );
   try {
     git(["fetch", remote]);
     git(["rebase", main]);
   } catch (error) {
+    console.error(error.message);
     try {
       git(["rebase", "--abort"]);
     } catch {}
     throw new Error(
-      `${error.message}; the commit is not on ${main}, make it by hand: ${RUNBOOK}`,
+      `the rebase onto ${main} failed and was aborted; the commit is not on ${main}, make it by hand: ${RUNBOOK}`,
     );
   }
-  checkTree();
+  try {
+    checkTree();
+  } catch (error) {
+    throw new Error(
+      `${error.message} after the rebase onto ${main}; the commit is not pushed, make it by hand: ${RUNBOOK}`,
+    );
+  }
   if (!tryPush())
     throw new Error(
-      `the push to ${main} was rejected again after the rebase; make the commit by hand: ${RUNBOOK}`,
+      `the push to ${main} failed again after the rebase; make the commit by hand: ${RUNBOOK}`,
     );
 };
 
@@ -155,9 +194,15 @@ const main = () => {
   for (const key of ["tag", "stage", "version", "date"])
     if (opts[key] === undefined) usageError();
   try {
+    checkStart(opts.main);
+  } catch (error) {
+    return fail(`${error.message}; nothing committed`);
+  }
+  try {
     prepare(opts);
     checkTree();
   } catch (error) {
+    restore();
     return fail(`${error.message}; nothing committed`);
   }
   if (nothingStaged()) return console.log("commit-back: nothing to commit");
@@ -165,7 +210,7 @@ const main = () => {
     opts.stage === "release"
       ? `Release ${opts.tag}: index, notes archive and shipped fragments`
       : `Beta ${opts.tag}: index`;
-  git(["commit", "-q", "-m", message]);
+  git(["commit", "-q", "-m", message, "--", "release-notes", "changes"]);
   console.log(`commit-back: committed "${message}"`);
   if (opts.noPush) return;
   try {
