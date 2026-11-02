@@ -15,7 +15,7 @@ changes/              change fragments, one per product-changing pull request (w
 release-notes/        curated release notes, one X.Y.Z.md per release, and index.json: every published beta and release
 scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs, changes-workflow.test.mjs and release-workflow.test.mjs, and contributor-kit.test.mjs
 scripts/lib/          shared test helpers (workflow-checks.mjs: the workflow contracts' mutant runner)
-scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, set-version.mjs, next-version.mjs, render-notes.mjs, verify-tag.mjs, index.mjs, shipped-fragments.mjs, publishable.mjs; lib/: cli, fragments, git, glob, manifests, semver, test-repo) and its tests
+scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, set-version.mjs, next-version.mjs, render-notes.mjs, verify-tag.mjs, index.mjs, shipped-fragments.mjs, publishable.mjs, commit-back.mjs; the PM's draft-notes.mjs, cut.mjs, promotion-check.mjs; lib/: cli, fragments, git, glob, manifests, semver, test-repo) and its tests
 .github/workflows/    ci.yml (the `gates` check), changes.yml (the `changes` check) and release.yml (alphas after a green `ci` on `main`)
 .github/              the contributor kit: issue forms, the RFC feedback discussion form, the pull request template, AI_POLICY.md, SECURITY.md, CODE_OF_CONDUCT.md
 .moon/                moon workspace, toolchains and the tasks every project inherits
@@ -115,6 +115,9 @@ node --test --test-name-pattern "<test name>" scripts/release/check-version.test
 node --test --test-name-pattern "<test name>" scripts/release/set-version.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/next-version.test.mjs
 node --test --test-name-pattern "<test name>" scripts/release/render-notes.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/draft-notes.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/cut.test.mjs
+node --test --test-name-pattern "<test name>" scripts/release/promotion-check.test.mjs
 ```
 
 ### Caching and what moon buys

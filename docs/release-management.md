@@ -71,7 +71,7 @@ You do not need nexus-flow to contribute. Everything that matters for a contribu
   - The cut tool creates `release/X.Y` locally and prints the push command. The owner pushes the branch, or the PM does on the owner's word.
 - **Fixes during beta** land on `main` first, with their fragment. Then they are cherry-picked to the branch, fragment included. The branch holds nothing that is not on `main`, except the release notes and the manifest version.
 - **Which fragments belong to which release.** A release ships the fragments present at the cut, plus every fragment cherry-picked to the branch afterwards. After the release, the release workflow's commit on `main` removes every fragment that shipped in `X.Y.Z`, so the next release's notes never repeat it.
-- **Patch releases** `X.Y.(Z+1)` follow on the same branch and go through beta again. The owner approves, the branch's manifests are set to `X.Y.(Z+1)`, a new notes file `release-notes/X.Y.(Z+1).md` is drafted, and `vX.Y.(Z+1)-beta.1` is pushed on the branch head.
+- **Patch releases** `X.Y.(Z+1)` follow on the same branch and go through beta again. The owner approves, `node scripts/release/cut.mjs X.Y.(Z+1)` sets the branch's manifests to `X.Y.(Z+1)` on its head, a new notes file `release-notes/X.Y.(Z+1).md` is drafted, and `vX.Y.(Z+1)-beta.1` is pushed on the branch head.
 - Never commit `NEXUS_MEMORY.md`, or anything else that is not a cherry-picked fix, the release notes or the version, on a `release/*` branch.
 
 ## Writing a change fragment
@@ -115,7 +115,7 @@ The checks:
 
 ## Release notes
 
-- **One Markdown file per release version**, `release-notes/<X.Y.Z>.md`. The same file serves from `beta.1` to the release. It is edited on `release/X.Y` before each beta, and the release archives it on `main`. `node scripts/release/draft-notes.mjs <X.Y.Z>` writes its skeleton.
+- **One Markdown file per release version**, `release-notes/<X.Y.Z>.md`. The same file serves from `beta.1` to the release. It is edited on `release/X.Y` before each beta, and the release archives it on `main`. `node scripts/release/draft-notes.mjs <X.Y.Z>` writes its skeleton (see [Beta](#beta)). Under each entry's heading, the skeleton keeps a comment with the fragment's slug and tickets. Leave it in: `promotion-check` looks up the tickets of every breaking change in the notes.
 - **"Changes since beta N-1".** For a beta's GitHub notes, the publish job generates this section at publish time from the fragments added on the branch since the previous beta tag. The section is never committed. `render-notes --beta X.Y.Z --since <previous beta tag|none>` prints the curated file as it is at the commit. After a previous beta it adds a section `## Changes since <tag>` with those fragments, unfiltered, so a cycle fix appears there, each under `### <slug>`. `render-notes --release X.Y.Z` prints only the file.
 - **`release-notes/index.json`** lists one entry per published beta and release, newest last, sorted ascending, with unique tags:
 
@@ -183,13 +183,26 @@ Its log shows the guard's verdict and the answer of next-version, which is the c
 
 1. **Propose (PM).** When the release epic is no longer blocked, the PM compares the epic's description with what was delivered. If the scope is met, the PM proposes a beta to the owner and attaches a draft of the release notes. If not, the PM says what is missing.
 2. **Draft (PM or agent).** The PM or an agent drafts `release-notes/<X.Y.Z>.md` (see [Release notes](#release-notes)) from two sources. The first is every fragment since the previous release, which `draft-notes` renders into the skeleton with the filter applied and the sections in order. The second is every board item created or closed since the release epic was created, read with `nxf`; it matters most for Known issues.
-3. **Pull request to `main`.** The draft goes into a pull request against `main`. The owner edits and approves it there. Merging it is the approval.
-4. **Cut (`cut`).** After the merge, `node scripts/release/cut.mjs <X.Y.Z>` cuts `release/X.Y` from the merge commit (see [Branches](#branches)). It sets the manifests on the branch. It prints the push command, and the command for the pull request that raises `main` to `X.(Y+1).0` with the label `skip-changes`.
-5. **Push the branch.** The owner pushes `release/X.Y`, or the PM does on the owner's word.
-6. **Tag (owner).** The owner pushes the beta tag on the branch head:
 
    ```sh
-   git tag vX.Y.Z-beta.1 && git push origin refs/tags/vX.Y.Z-beta.1
+   node scripts/release/draft-notes.mjs X.Y.Z
+   ```
+
+   It writes `release-notes/X.Y.Z.md` and refuses to overwrite an existing file unless you pass `--force`. Each entry is titled by the first line of its first section and shows the sections as bold labels; rewrite the titles and the text for the user. A trailing comment lists the fragments the filter left out. The script also warns about every `introduced: cycle` fix that was added before the previous release was cut (the highest release in `release-notes/index.json`, or `--previous vA.B.C`). Such a bug may have shipped in that release. The script does not change the fragment, because only the PM can tell whether the bug reached the release branch. If it did, change the fragment to `introduced: A.B.C` in the same pull request.
+3. **Pull request to `main`.** The draft goes into a pull request against `main`. The owner edits and approves it there. Merging it is the approval.
+4. **Cut (`cut`).** After the merge, cut `release/X.Y` from the merge commit (see [Branches](#branches)):
+
+   ```sh
+   node scripts/release/cut.mjs X.Y.Z --from <merge commit of the notes pull request> [--push]
+   ```
+
+   It refuses a detached HEAD, a working tree that is not clean, and a `release/X.Y` that already exists locally or on `origin`. It sets the manifests on the branch and commits only if they changed; for the first cut of a minor they already say `X.Y.0`, and it makes no commit. It always switches back to the branch it started from, also when a step fails, so the next commit, such as a `NEXUS_MEMORY.md` commit, cannot land on the release branch. Then it prints the next steps: the push command (unless `--push`), the commands for the pull request that raises `main` to `X.(Y+1).0` with the label `skip-changes`, and the owner's beta tag command.
+5. **Push the branch.** The owner pushes `release/X.Y`, or the PM does on the owner's word, with `--push` or the printed command.
+6. **Raise `main`.** The PM opens the raise pull request with the printed commands.
+7. **Tag (owner).** The owner pushes the beta tag on the branch head:
+
+   ```sh
+   git tag vX.Y.Z-beta.1 release/X.Y && git push origin refs/tags/vX.Y.Z-beta.1
    ```
 
 On the tag, the publish job takes over. The `release` workflow runs on `push` of tags `v*` and excludes `-alpha.` tags. Four jobs run in order, each with its own permissions:
@@ -246,10 +259,18 @@ The PM checks the promotion conditions in its sessions and proposes the release 
 | 3 | **Upgrade tested.** An automated test upgrades from the previous release to the candidate. It covers stored data, `model.lock.json`, an old client against the new relay and a new client against the old relay, and checks convergence throughout. | the upgrade test |
 | 4 | **Same product code.** The release is tagged on the head of `release/X.Y`, and since the last beta tag only `release-notes/` and `changes/` have changed. | `promotion-check`; the publish job also refuses the tag otherwise |
 | 5 | **Security.** `cargo audit` and `pnpm audit` report nothing, and no security advisory is open. A missing `cargo-audit` counts as a failed condition, never as a pass. | `promotion-check` |
-| 6 | **Notes approved.** The owner approved the final curated notes, and every breaking change has a Migration section. | the PM, in the notes pull request |
+| 6 | **Notes approved.** The owner approved the final curated notes, and every breaking change has a Migration section. | the PM, in the notes pull request; `promotion-check` checks that every breaking fragment's ticket is in the notes |
 | 7 | **Real use.** At least one of our own projects runs the beta, with no new bug report. | the PM, on the board |
 
-`node scripts/release/promotion-check.mjs <X.Y.Z>` reports conditions 1, 4 and 5 with evidence. Conditions 1, 2, 4, 5 and 6 apply to every release. Condition 3 applies as soon as there is a relay, and condition 7 as soon as one of our projects uses NoCentralDB.
+`node scripts/release/promotion-check.mjs X.Y.Z` fetches `origin` and prints one row per condition, `PASS`, `FAIL` or `MANUAL`, with its evidence. The PM pastes the table into the proposal to the owner. It exits 1 when a mechanical condition fails.
+
+- **1** reads the latest beta, the highest `vX.Y.Z-beta.N` tag by number, and the `publishedAt` of its GitHub release from `gh`. It is `FAIL` when the release is younger than 7 days (shown as `6d 23h`), and also when the tag has no GitHub release or only a draft: a tag alone is not a published beta.
+- **4** lists every path changed on `origin/release/X.Y` since that beta outside `release-notes/` and `changes/`.
+- **5** runs `cargo audit` and `pnpm audit --audit-level low` in a temporary checkout of `origin/release/X.Y`. A missing `cargo-audit`, `pnpm` or `gh` is a `FAIL` with the install hint. Open security advisories you check by hand.
+- **6** is `FAIL` when a `breaking` fragment on the branch has none of its tickets in `release-notes/X.Y.Z.md` there. Once the final notes pull request removed the fragments, the row says the PM checked it. The approval itself is `MANUAL`.
+- **2, 3 and 7** are `MANUAL`, with what to check.
+
+Conditions 1, 2, 4, 5 and 6 apply to every release. Condition 3 applies as soon as there is a relay, and condition 7 as soon as one of our projects uses NoCentralDB.
 
 For condition 2, open bugs have no fragment yet. The PM therefore derives `introduced` from the bug ticket's description: when the bug was first seen, and which version or change it came with. If the description does not say, the PM asks and does not guess. The bug's fragment records the value when the fix lands.
 
@@ -339,7 +360,8 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 - **Surface the active release** at session start, from the `active-release` memory and the board.
 - **Check the scope** when the release epic is no longer blocked. Raise it with the owner in the next session, compare the epic's description with what was delivered, and either propose a beta with a draft of the release notes or say what is missing.
 - **Derive `introduced`** for open bugs from the bug ticket's description: when the bug was first seen, and which version or change it came with. Ask when the description does not say. Never guess.
-- **Run `promotion-check`** for conditions 1, 4 and 5, and check conditions 2, 6 and 7 on the board and in the notes pull request.
+- **Settle the stale-cycle warnings** of `draft-notes`: for each flagged fix, decide whether the bug reached the previous release, and if it did, set `introduced` to that version in the notes pull request.
+- **Run `promotion-check`** for conditions 1, 4, 5 and the mechanical part of 6, and check conditions 2, 6 and 7 on the board and in the notes pull request.
 - **Propose** the beta and the release to the owner. The owner decides and pushes the tag.
 - **Write the `active-release` memory** at the three moments above, and commit `NEXUS_MEMORY.md`, never on a `release/*` branch.
 - **Mirror the release epic** as a milestone (see [Planning a release](#planning-a-release)).
@@ -373,9 +395,9 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | `scripts/release/shipped-fragments.mjs --tag <vX.Y.Z> [--main <ref>] [--delete]` | lists the fragments that shipped, with their blobs; `--delete` removes those on `main` whose content is that blob |
 | `scripts/release/publishable.mjs [--json]` | lists which packages the publish steps may publish, each with its reason |
 | `scripts/release/commit-back.mjs --tag <tag> --stage <beta\|release> --version <X.Y.Z> --date <YYYY-MM-DD> [--main <remote/branch>] [--no-push]` | makes the release workflow's commit to `main`: the index entry; for a release also the notes archive and the removal of the shipped fragments; starts only from a clean tree on `origin/main`, checks the index and the fragments first, commits nothing when nothing changed, and retries a failed push once after a rebase |
-| `scripts/release/draft-notes.mjs <X.Y.Z>` | writes the curated-notes skeleton, with the filter applied and the sections in order |
-| `scripts/release/cut.mjs <X.Y.Z>` | creates `release/X.Y`, sets the manifests, and prints the push, raise-PR and beta-tag commands |
-| `scripts/release/promotion-check.mjs <X.Y.Z>` | reports promotion conditions 1, 4 and 5 with evidence |
+| `scripts/release/draft-notes.mjs <X.Y.Z> [--out <file>] [--previous <vA.B.C>\|auto] [--force]` | writes the curated-notes skeleton, with the filter applied and the sections in order; warns about cycle fixes added before the previous release |
+| `scripts/release/cut.mjs <X.Y.Z> [--from <commit>] [--push]` | creates `release/X.Y` (or, for a patch, uses its head), sets the manifests and commits only a change, returns to the starting branch, and prints the push, raise-PR and beta-tag commands |
+| `scripts/release/promotion-check.mjs <X.Y.Z> [--now <ISO date>] [--remote <name>]` | reports the promotion conditions as a table, `PASS`, `FAIL` or `MANUAL` with evidence: soak from the GitHub release, the product code since the last beta, the audits, the breaking changes' tickets in the notes |
 | `scripts/release/api-report.mjs`, `packages/sdk/etc/` | the TypeScript SDK's API report |
 | moon task `repo:fragments` | runs `node scripts/release/check-fragments.mjs` in `pnpm gates` |
 | moon task `repo:version` | runs `node scripts/release/check-version.mjs` in `pnpm gates` |
