@@ -344,3 +344,47 @@ test("issues: a bad value is rejected and named", () => {
     );
   }
 });
+
+test("a type that names a prototype key is an unknown type, never a crash", () => {
+  for (const type of [
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+  ]) {
+    const text = feature.replace("type: feature", `type: ${type}`);
+    let errors;
+    assert.doesNotThrow(() => {
+      errors = validateFragment("add-y", text);
+    }, type);
+    assert.ok(
+      errors.some((e) => /^type must be one of/.test(e)),
+      `${type}: ${JSON.stringify(errors)}`,
+    );
+  }
+});
+
+test("CRLF line endings are named as such", () => {
+  const crlf = feature.replaceAll("\n", "\r\n");
+  assert.deepEqual(validateFragment("add-y", crlf), [
+    "has CRLF line endings; save it with LF line endings",
+  ]);
+  assert.throws(() => parseFragment(crlf), /CRLF/);
+});
+
+test("the front matter closes only at a line that is exactly ---", () => {
+  const closers = {
+    "--- with text after it": feature.replace("\n---\n", "\n---extra\n"),
+    "a longer rule": feature.replace("\n---\n", "\n----\n"),
+    "--- with trailing spaces": feature.replace("\n---\n", "\n---  \n"),
+  };
+  for (const [name, text] of Object.entries(closers))
+    assert.throws(() => parseFragment(text), /no front matter/, name);
+  // A closer at the very end, with nothing after it, is a closer.
+  const bare =
+    "---\ntype: internal\ntickets: [mt08.1qaz]\ncomponents: [core]\n---";
+  assert.equal(parseFragment(bare).body, "");
+  assert.deepEqual(validateFragment("bump", bare), [
+    "internal has a one-line body and no sections",
+  ]);
+});

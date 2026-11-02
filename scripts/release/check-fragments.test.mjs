@@ -168,6 +168,49 @@ test("--dir checks another directory", (t) => {
   );
 });
 
+test("--dir naming a file, not a directory, fails with a named message", (t) => {
+  const dir = fixture(t, { "notes.md": ok });
+  const r = run(dir, "--dir", "notes.md");
+  assert.equal(r.status, 1);
+  assert.equal(
+    r.stderr,
+    "check-fragments: --dir notes.md is not a directory\n",
+  );
+});
+
+test("a fragment path that cannot be read fails naming it, and the others are still checked", (t) => {
+  const dir = fixture(t, {
+    "changes/a-dir.md/inner.txt": "x\n",
+    "changes/no-use.md": ok.replace("## Use\nb\n", ""),
+  });
+  const r = run(dir);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /^check-fragments: changes\/a-dir\.md: .*EISDIR/m);
+  assert.match(
+    r.stderr,
+    /^check-fragments: changes\/no-use\.md: missing section ## Use$/m,
+  );
+  assert.doesNotMatch(r.stderr, /\n\s+at /, "a stack trace");
+});
+
+test("type: constructor and CRLF line endings fail with a named rule, not a crash", (t) => {
+  const dir = fixture(t, {
+    "changes/proto.md": ok.replace("type: feature", "type: constructor"),
+    "changes/crlf.md": ok.replaceAll("\n", "\r\n"),
+  });
+  const r = run(dir);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^check-fragments: changes\/proto\.md: type must be one of/m,
+  );
+  assert.match(
+    r.stderr,
+    /^check-fragments: changes\/crlf\.md: has CRLF line endings; save it with LF line endings$/m,
+  );
+  assert.doesNotMatch(r.stderr, /\n\s+at /, "a stack trace");
+});
+
 test("--dir without a value is a usage error", () => {
   assert.equal(run(tmpdir(), "--dir").status, 2);
 });
@@ -556,4 +599,63 @@ test("PR mode: --require-breaking with a malformed added fragment reports, never
     /breaking change was detected and no breaking fragment/,
   );
   assert.doesNotMatch(r.stderr, /at .*\.mjs:\d+/);
+});
+
+test("PR mode: the missing-fragment failure says once, after the paths, how to add one", (t) => {
+  const repo = repoFor(t);
+  const base = repo.commit("base", {
+    "Cargo.toml": "a\n",
+    "Cargo.lock": "a\n",
+  });
+  const head = repo.commit("change", {
+    "Cargo.toml": "b\n",
+    "Cargo.lock": "b\n",
+  });
+  const r = runIn(repo, "--base", base, "--head", head);
+  assert.equal(r.status, 1);
+  const lines = r.stderr.trimEnd().split("\n");
+  const howTo = lines.findIndex((line) =>
+    line.startsWith(
+      "check-fragments: to add a fragment, create changes/<slug>.md",
+    ),
+  );
+  assert.notEqual(howTo, -1, r.stderr);
+  assert.equal(
+    lines.filter((line) => line.includes("to add a fragment")).length,
+    1,
+  );
+  for (const path of ["Cargo.toml", "Cargo.lock"]) {
+    const named = lines.findIndex((line) =>
+      line.startsWith(`check-fragments: ${path} ships to a user`),
+    );
+    assert.ok(named !== -1 && named < howTo, `${path} after the how-to`);
+  }
+  const text = lines.slice(howTo).join("\n");
+  assert.ok(text.includes("^[a-z0-9][a-z0-9-]*$"), "the slug rule");
+  for (const field of ["type:", "tickets:", "issues:", "components:"])
+    assert.ok(text.includes(`  ${field}`), field);
+  assert.ok(
+    text.includes("breaking, feature, fix, deprecation, security, internal"),
+    "the types",
+  );
+  assert.ok(
+    text.includes("core, sdk-rust, sdk-ts, cli, relay"),
+    "the components",
+  );
+  assert.ok(text.includes("changes/README.md"), "the writer's guide");
+  assert.ok(
+    text.includes("docs/release-management.md#writing-a-change-fragment"),
+    "the full rules",
+  );
+});
+
+test("PR mode: no how-to when only a fragment is invalid", (t) => {
+  const repo = repoFor(t);
+  const base = repo.commit("base", { "README.md": "x\n" });
+  const head = repo.commit("bad fragment", {
+    "changes/add-y.md": ok.replace("## Use\nb\n", ""),
+  });
+  const r = runIn(repo, "--base", base, "--head", head);
+  assert.equal(r.status, 1);
+  assert.doesNotMatch(r.stderr, /to add a fragment/);
 });

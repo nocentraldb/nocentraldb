@@ -34,14 +34,20 @@ const FIELDS = new Set([
   "components",
 ]);
 
+// The front matter: `---` as the first line, closed by the first line that is
+// exactly `---`, followed by a newline or the end of the file.
+const FRONT_MATTER = /^---\n([\s\S]*?)\n---(?:\n([\s\S]*))?$/;
+
 export function parseFragment(text) {
-  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
+  if (text.includes("\r\n"))
+    throw new Error("has CRLF line endings; save it with LF line endings");
+  const match = FRONT_MATTER.exec(text);
   if (!match) throw new Error("no front matter block (--- … ---) at the top");
   const front = parse(match[1]);
   if (front === null || typeof front !== "object" || Array.isArray(front)) {
     throw new Error("front matter is not a mapping");
   }
-  const body = match[2];
+  const body = match[2] ?? "";
   return { front, body, sections: headings(body) };
 }
 
@@ -162,7 +168,10 @@ export function validateFragment(slug, text) {
   } else if ("introduced" in front) {
     errors.push(`introduced is only allowed on fix, not on ${front.type}`);
   }
-  const required = SECTIONS[front.type] ?? [];
+  // Own keys only: `type: constructor` must not find Object's constructor.
+  const required = Object.hasOwn(SECTIONS, front.type)
+    ? SECTIONS[front.type]
+    : [];
   for (const name of required)
     if (!sections.includes(name)) errors.push(`missing section ## ${name}`);
   for (const name of sections)

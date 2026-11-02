@@ -15,18 +15,21 @@
 // - Every fragment the PR adds or modifies is validated as it stands at head.
 // - Required fragment: when the PR changes a path outside ALLOWLIST and adds
 //   no fragment (a new changes/<slug>.md; a modified or renamed one is not
-//   new), each such path is named. --skip (the PR's skip-changes label)
-//   waives this rule and nothing else.
+//   new), each such path is named, followed once by how to add a fragment.
+//   --skip (the PR's skip-changes label) waives this rule and nothing else.
 // - --require-breaking (a detected breaking change): the PR must add a
 //   fragment of type breaking. --skip does not waive it.
 //
 // Exit 0 when every rule holds, 1 with one line per violation (a git error
 // is a violation too, never a pass), 2 on a usage error.
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
+  COMPONENTS,
   listFragments,
   parseFragment,
+  SLUG,
+  TYPES,
   validateFragment,
 } from "./lib/fragments.mjs";
 import { addedPaths, changedPaths, git, mergeBase } from "./lib/git.mjs";
@@ -98,14 +101,35 @@ const parseArgs = (args) => {
   return { ...opts, pr };
 };
 
+/**
+ * How to add a fragment, printed once after the paths that need one: an
+ * outside contributor may have nothing but the CI log.
+ */
+const HOW_TO = `check-fragments: to add a fragment, create changes/<slug>.md, its slug matching ${SLUG.source} (e.g. changes/add-sync-retry.md), starting with this front matter:
+  ---
+  type: <one of ${TYPES.join(", ")}>
+  tickets: [<ticket id>]
+  issues: [<GitHub issue number>]   (optional)
+  components: [<one or more of ${COMPONENTS.join(", ")}>]
+  ---
+then the body sections its type requires (a fix also needs introduced:). The writer's guide with a template: changes/README.md; the full rules: docs/release-management.md#writing-a-change-fragment`;
+
 const checkDirectory = (dir) => {
   if (!existsSync(dir)) {
     console.log(`check-fragments: no ${dir}/ directory, nothing to check`);
     return;
   }
+  if (!statSync(dir).isDirectory())
+    return fail(`--dir ${dir} is not a directory`);
   for (const { slug, file } of listFragments(dir)) {
-    for (const rule of validateFragment(slug, readFileSync(file, "utf8")))
-      fail(`${file}: ${rule}`);
+    let text;
+    try {
+      text = readFileSync(file, "utf8");
+    } catch (error) {
+      fail(`${file}: ${error.message}`);
+      continue;
+    }
+    for (const rule of validateFragment(slug, text)) fail(`${file}: ${rule}`);
   }
 };
 
@@ -130,12 +154,14 @@ const checkPullRequest = ({ base, head, skip, requireBreaking }) => {
       fail(`${path}: ${rule}`);
   }
   if (added.length === 0 && !skip) {
-    for (const path of changedPaths(base, head)) {
-      if (!matchesAny(path, ALLOWLIST))
-        fail(
-          `${path} ships to a user and the pull request adds no fragment under changes/ (add one, or label the PR skip-changes)`,
-        );
-    }
+    const shipping = changedPaths(base, head).filter(
+      (path) => !matchesAny(path, ALLOWLIST),
+    );
+    for (const path of shipping)
+      fail(
+        `${path} ships to a user and the pull request adds no fragment under changes/ (add one, or label the PR skip-changes)`,
+      );
+    if (shipping.length > 0) console.error(HOW_TO);
   }
   if (
     requireBreaking &&
