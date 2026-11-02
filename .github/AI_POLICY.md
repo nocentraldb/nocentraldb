@@ -2,7 +2,7 @@
 
 AI tools and agents are welcome in NoCentralDB. Much of this project is built with them, and we expect contributors to use them too.
 
-This policy applies to everyone: outside contributors, the maintainer, and the project's own agents. There is no exemption for the maintainer, on purpose: the rules that make an outside pull request trustworthy make ours trustworthy too.
+This policy applies to everyone: outside contributors, the maintainers, and the project's own agents. There is no exemption for maintainers, on purpose. The rules that make an outside pull request trustworthy make ours trustworthy too.
 
 ## The rule
 

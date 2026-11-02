@@ -19,7 +19,7 @@ A change to the design or to documented behaviour starts as an issue or as an RF
 
 | Label | Meaning |
 | --- | --- |
-| `needs triage` | New, not yet read by the maintainer. The bug report form sets it. |
+| `needs triage` | New, not yet read by a maintainer. The bug report form sets it. |
 | `help wanted` | Open for an outside pull request; the issue has written acceptance criteria. |
 | `good first issue` | Like `help wanted`, and small enough to be a first contribution. |
 | `needs-design` | Closed to pull requests until the design is agreed. |
@@ -64,7 +64,7 @@ The retry timer was cleared together with the connection.
 The timer is now owned by the sync loop and survives a reconnect.
 ```
 
-The other types and their sections are in the writer's guide [changes/README.md](changes/README.md). `pnpm gates` checks every fragment against the schema, and on the pull request the `changes` check fails when a path outside the allowlist changed and no fragment was added; it names each such path. You may not know the right ticket id or type: for an outside pull request the maintainer, or an agent acting for them, may write or fix the fragment instead of sending the pull request back.
+The other types and their sections are in the writer's guide [changes/README.md](changes/README.md). `pnpm gates` checks every fragment against the schema, and on the pull request the `changes` check fails when a path outside the allowlist changed and no fragment was added; it names each such path. You may not know the right ticket id or type: for an outside pull request a maintainer, or an agent acting for them, may write or fix the fragment instead of sending the pull request back.
 
 The label `skip-changes` passes the `changes` check without a fragment. It is legitimate only when the pull request changes product paths but ships nothing a user would notice: a version raise or a lockfile refresh. Anything a user could notice (a feature, a fix, a changed dependency that alters behaviour, a deprecation) needs a fragment, with `type: internal` when it is not worth a line in the curated notes. The label never waives a detected breaking change. Adding or removing the label re-runs the check.
 
@@ -74,7 +74,7 @@ Once a pull request with a fragment other than `internal` is merged and `ci` is 
 
 ## Review
 
-One maintainer reviews everything: issues, discussions and pull requests. There is no fixed response time for issues and pull requests, and some will wait. RFC feedback is the exception: it is answered within a week, as the RFC promises. A pull request that follows this page, with an issue, a test, a fragment and a filled-in template, is the quickest one to review.
+A small team of maintainers reviews everything: issues, discussions and pull requests. There is no fixed response time for issues and pull requests, and some will wait. RFC feedback is the exception: it is answered within a week, as the RFC promises. A pull request that follows this page, with an issue, a test, a fragment and a filled-in template, is the quickest one to review.
 
 ## AI, security and conduct
 
