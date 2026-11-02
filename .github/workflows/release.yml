@@ -1,9 +1,10 @@
 # Releases. The alpha job turns every product-changing merge to main into a
-# tagged GitHub prerelease once `ci` is green; the publish jobs (added by the
-# publish ticket) react to beta and release tags. Every decision is in
-# scripts/release/*.mjs with tests; this file only wires them. A
+# tagged GitHub prerelease once `ci` is green; the publish jobs (verify,
+# build, publish, commit-back) react to beta and release tags. Every decision
+# is in scripts/release/*.mjs with tests; this file only wires them. A
 # workflow_dispatch is ALWAYS a dry run: nothing is tagged or published.
-# scripts/release-workflow.test.mjs asserts these rules.
+# Without a tag it runs the alpha job; with a tag, verify and build against
+# the dispatched ref. scripts/release-workflow.test.mjs asserts these rules.
 name: release
 
 on:
@@ -120,3 +121,188 @@ jobs:
           else
             gh release create "$TAG" --target "$SHA" --prerelease --title "$TAG" --notes-file alpha-notes.md
           fi
+
+  verify:
+    # Beta and release tags, or a dispatch that names a tag (the dry run, on
+    # the dispatched ref). Read-only: it inherits contents: read.
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-alpha.'))
+      || (github.event_name == 'workflow_dispatch' && inputs.tag != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      stage: ${{ steps.verify.outputs.stage }}
+      version: ${{ steps.verify.outputs.version }}
+      last_beta: ${{ steps.verify.outputs.last_beta }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' }}
+      tag: ${{ inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - run: rustup toolchain install --no-self-update
+      - run: pnpm install --frozen-lockfile
+      # verify-tag reads the release branch as origin/release/X.Y, which a
+      # tag checkout does not fetch. On a push, GITHUB_SHA is the tagged
+      # commit; on a dispatch, the head of the dispatched ref.
+      - name: Verify the tag
+        id: verify
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*'
+          node scripts/release/verify-tag.mjs --tag "$TAG" --commit "$GITHUB_SHA" --json | tee verify.json
+          {
+            echo "stage=$(jq -r '.stage' verify.json)"
+            echo "version=$(jq -r '.version' verify.json)"
+            echo "last_beta=$(jq -r '.lastBeta // "none"' verify.json)"
+          } >> "$GITHUB_OUTPUT"
+      # The full gate on the tagged commit itself: ci does not run on pushes
+      # to release branches, and the tag may sit on a commit no PR ran.
+      - run: pnpm gates
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - run: rustup toolchain install --no-self-update
+      - run: pnpm install --frozen-lockfile
+      # The tag is vX.Y.Z or vX.Y.Z-beta.N; the version to embed drops the v.
+      # set-version refreshes Cargo.lock, so the --locked build passes.
+      - name: Write the full version into this checkout
+        env:
+          TAG: ${{ needs.verify.outputs.tag }}
+        run: node scripts/release/set-version.mjs "${TAG#v}"
+      - run: cargo build --release --locked
+      - run: pnpm -r --if-present run build
+      - name: Publishable packages
+        run: node scripts/release/publishable.mjs --json | tee publishable.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: manifests-${{ needs.verify.outputs.tag }}
+          path: |
+            Cargo.toml
+            Cargo.lock
+            packages/*/package.json
+            publishable.json
+
+  publish:
+    needs: [verify, build]
+    # A dispatch is a dry run: it ends after build.
+    if: needs.verify.outputs.dry_run != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          # The job's write token stays out of .git/config, where the
+          # dependency install below could read it; only the release step
+          # gets it, as GH_TOKEN.
+          persist-credentials: false
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - run: pnpm install --frozen-lockfile
+      - name: Release notes
+        env:
+          STAGE: ${{ needs.verify.outputs.stage }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          LAST_BETA: ${{ needs.verify.outputs.last_beta }}
+        run: |
+          if [ "$STAGE" = beta ]; then
+            node scripts/release/render-notes.mjs --beta "$VERSION" --since "$LAST_BETA" > notes.md
+          else
+            node scripts/release/render-notes.mjs --release "$VERSION" > notes.md
+          fi
+          cat notes.md
+      # A re-run after a successful create finds the release and creates
+      # nothing; --verify-tag refuses to create a tag the push did not make.
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          STAGE: ${{ needs.verify.outputs.stage }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists, not re-creating"
+          elif [ "$STAGE" = beta ]; then
+            gh release create "$TAG" --prerelease --verify-tag --title "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" --latest --verify-tag --title "$TAG" --notes-file notes.md
+          fi
+      # Registry publishing: present, and only reporting while publishable
+      # says no. The registry commands and Trusted Publishing come with the
+      # repository going public, and change the permissions check with them.
+      - name: npm
+        run: |
+          node scripts/release/publishable.mjs --json \
+            | jq -r '.npm[] | if .publishable then "would publish \(.name)" else "skip \(.name): \(.reason)" end'
+      - name: crates.io
+        run: |
+          node scripts/release/publishable.mjs --json \
+            | jq -r '.crates[] | if .publishable then "would publish \(.name)" else "skip \(.name): \(.reason)" end'
+
+  commit-back:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          fetch-tags: true
+          # As in publish: the token is not left in .git/config; the commit
+          # step below hands it to git for the push only.
+          persist-credentials: false
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+      - run: pnpm install --frozen-lockfile
+      # The push with the job's token starts no ci run; the next pull
+      # request's gate covers release-notes/ and changes/ (index test,
+      # fragment schema), which commit-back.mjs also checks before it commits.
+      - name: Index, notes archive and shipped fragments to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.verify.outputs.tag }}
+          STAGE: ${{ needs.verify.outputs.stage }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.extraHeader
+          GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          node scripts/release/commit-back.mjs --tag "$TAG" --stage "$STAGE" --version "$VERSION" --date "$(date -u +%F)"
