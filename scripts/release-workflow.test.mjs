@@ -591,7 +591,12 @@ const checks = [
         verify[v].run,
         /node scripts\/release\/verify-tag\.mjs --tag "\$TAG" --commit "\$GITHUB_SHA" --json \| tee verify\.json/,
       );
-      assert.equal(verify[v].env?.TAG, gh("inputs.tag || github.ref_name"));
+      // One source for the tag: the job's env, read by the step and the output.
+      assert.equal(
+        job(ctx, "verify").env?.TAG,
+        gh("inputs.tag || github.ref_name"),
+      );
+      assert.equal(verify[v].env?.TAG, undefined);
       for (const [output, step] of [
         ["stage", "stage"],
         ["version", "version"],
@@ -601,10 +606,7 @@ const checks = [
           job(ctx, "verify").outputs?.[output],
           gh(`steps.verify.outputs.${step}`),
         );
-      assert.equal(
-        job(ctx, "verify").outputs?.tag,
-        gh("inputs.tag || github.ref_name"),
-      );
+      assert.equal(job(ctx, "verify").outputs?.tag, gh("env.TAG"));
       assert.ok(
         verify[v].run.includes(
           "last_beta=$(jq -r '.lastBeta // \"none\"' verify.json)",
@@ -629,6 +631,22 @@ const checks = [
           "steps",
           stepAt(ctx, "verify", (step) => step.run === "pnpm gates"),
         ]),
+      "sets TAG on the step again": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "verify",
+            "steps",
+            stepAt(ctx, "verify", (step) => step.id === "verify"),
+            "env",
+          ],
+          { TAG: gh("inputs.tag || github.ref_name") },
+        ),
+      "outputs the tag from github.ref_name": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "outputs", "tag"],
+          gh("github.ref_name"),
+        ),
       "verifies github.ref instead of the commit": (ctx) =>
         editRun(ctx, "verify", "verify-tag.mjs", '"$GITHUB_SHA"', '"$TAG"'),
       "build without needs": (ctx) =>
@@ -825,8 +843,25 @@ const checks = [
       const step = steps[stepAt(ctx, "commit-back", runs("commit-back.mjs"))];
       assert.match(
         step.run,
-        /node scripts\/release\/commit-back\.mjs --tag "\$TAG" --stage "\$STAGE" --version "\$VERSION" --date "\$\(date -u \+%F\)"/,
+        /node scripts\/release\/commit-back\.mjs --tag "\$TAG" --stage "\$STAGE" --version "\$VERSION" --date "\$PUBLISHED"/,
       );
+      // The index date is fixed at publishing: the release's own UTC day,
+      // never the clock of this job, so a re-run indexes the same day.
+      const published = step.run.indexOf(
+        `PUBLISHED="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"`,
+      );
+      assert.notEqual(
+        published,
+        -1,
+        "the date is not the release's publishedAt",
+      );
+      assert.ok(published < step.run.indexOf("commit-back.mjs"));
+      assert.doesNotMatch(
+        step.run,
+        /\bdate\b -u/,
+        "the date is the job's clock",
+      );
+      assert.equal(step.env?.GH_REPO, gh("github.repository"));
       assert.equal(step.env?.TAG, gh("needs.verify.outputs.tag"));
       assert.equal(step.env?.STAGE, gh("needs.verify.outputs.stage"));
       assert.equal(step.env?.VERSION, gh("needs.verify.outputs.version"));
@@ -860,8 +895,24 @@ const checks = [
           ctx,
           "commit-back",
           "commit-back.mjs",
-          ' --date "$(date -u +%F)"',
+          ' --date "$PUBLISHED"',
           "",
+        ),
+      "dates by the job's clock": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          '--date "$PUBLISHED"',
+          '--date "$(date -u +%F)"',
+        ),
+      "reads the date from the clock into PUBLISHED": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          `"$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"`,
+          '"$(date -u +%F)"',
         ),
     },
   },

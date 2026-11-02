@@ -136,12 +136,14 @@ jobs:
     defaults:
       run:
         shell: bash
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     outputs:
       stage: ${{ steps.verify.outputs.stage }}
       version: ${{ steps.verify.outputs.version }}
       last_beta: ${{ steps.verify.outputs.last_beta }}
       dry_run: ${{ github.event_name == 'workflow_dispatch' }}
-      tag: ${{ inputs.tag || github.ref_name }}
+      tag: ${{ env.TAG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -157,8 +159,6 @@ jobs:
       # commit; on a dispatch, the head of the dispatched ref.
       - name: Verify the tag
         id: verify
-        env:
-          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*'
           node scripts/release/verify-tag.mjs --tag "$TAG" --commit "$GITHUB_SHA" --json | tee verify.json
@@ -293,9 +293,13 @@ jobs:
       # The push with the job's token starts no ci run; the next pull
       # request's gate covers release-notes/ and changes/ (index test,
       # fragment schema), which commit-back.mjs also checks before it commits.
+      # The index date is the UTC day the GitHub release was published, read
+      # from the release, so a re-run on a later day (or a run that crosses
+      # midnight) indexes the same day and finds nothing to commit.
       - name: Index, notes archive and shipped fragments to main
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.verify.outputs.tag }}
           STAGE: ${{ needs.verify.outputs.stage }}
           VERSION: ${{ needs.verify.outputs.version }}
@@ -305,4 +309,5 @@ jobs:
           export GIT_CONFIG_VALUE_0
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          node scripts/release/commit-back.mjs --tag "$TAG" --stage "$STAGE" --version "$VERSION" --date "$(date -u +%F)"
+          PUBLISHED="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"
+          node scripts/release/commit-back.mjs --tag "$TAG" --stage "$STAGE" --version "$VERSION" --date "$PUBLISHED"
