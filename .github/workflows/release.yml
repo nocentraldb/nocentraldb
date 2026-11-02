@@ -256,9 +256,10 @@ jobs:
           else
             gh release create "$TAG" --latest --verify-tag --title "$TAG" --notes-file notes.md
           fi
-      # Registry publishing: present, and only reporting while publishable
-      # says no. The registry commands and Trusted Publishing come with the
-      # repository going public, and change the permissions check with them.
+      # Registry publishing is not wired yet: these steps never publish. They
+      # report what publishable says, "would publish" or "skip <reason>". The
+      # registry commands and Trusted Publishing come with the repository
+      # going public, and change the permissions check with them.
       - name: npm
         run: |
           node scripts/release/publishable.mjs --json \

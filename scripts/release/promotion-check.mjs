@@ -24,7 +24,8 @@
 // P6 Notes approved: MANUAL (the owner approves the notes in the pull
 //    request), plus a mechanical part: every breaking fragment at
 //    <remote>/release/X.Y has at least one of its tickets mentioned (as a
-//    whole id, not a prefix of a longer one) in
+//    whole id, not a prefix of a longer one; a full stop after it ends the
+//    sentence) in
 //    release-notes/X.Y.Z.md there, otherwise FAIL naming the fragment. When
 //    changes/ holds no fragment there any more, the PM checked it.
 // P7 Real use: MANUAL.
@@ -219,7 +220,7 @@ const security = ({ ref, head }) => {
  */
 const mentions = (text, ticket) => {
   const id = ticket.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?<![\\w.])${id}(?![\\w.])`).test(text);
+  return new RegExp(`(?<![\\w.])${id}(?!\\w|\\.\\w)`).test(text);
 };
 
 const notesApproved = ({ version, ref, head }) => {
@@ -300,7 +301,7 @@ const main = () => {
       "Upgrade tested",
       [
         MANUAL,
-        "waits on the relay and its upgrade test (WAIT: the relay exists, mt08.7wjb)",
+        "waits on the relay and its upgrade test (the chore 'WAIT: the relay exists')",
       ],
       false,
     ],

@@ -140,6 +140,27 @@ test("--push pushes the branch to origin", (t) => {
   assert.equal(branch(repo), "main");
 });
 
+test("a failed --push after the version commit keeps the commit locally, says so and ends on the start branch", (t) => {
+  const repo = repoWithOrigin(t);
+  assert.equal(run(repo, ["0.1.0", "--push"]).status, 0);
+  const origin = repo.run("remote", "get-url", "origin");
+  writeFileSync(join(origin, "hooks", "pre-receive"), "#!/bin/sh\nexit 1\n");
+  chmodSync(join(origin, "hooks", "pre-receive"), 0o755);
+  const before = onOrigin(repo, "release/0.1");
+  const r = run(repo, ["0.1.1", "--push"]);
+  assert.equal(r.status, 1);
+  assert.equal(branch(repo), "main");
+  assert.equal(version(repo, "release/0.1"), "0.1.1");
+  assert.equal(onOrigin(repo, "release/0.1"), before);
+  const sha = head(repo, "release/0.1");
+  assert.match(
+    r.stderr,
+    new RegExp(
+      `cut: release/0\\.1 keeps the version commit ${sha.slice(0, 12)} locally; push it with git push -u origin release/0\\.1`,
+    ),
+  );
+});
+
 test("refuses a minor whose release branch exists locally or on origin", (t) => {
   const repo = repoWithOrigin(t);
   repo.run("branch", "release/0.1");

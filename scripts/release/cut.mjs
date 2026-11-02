@@ -122,8 +122,8 @@ const prepare = ({ version, from }, branch) => {
   return { start: local, created: false };
 };
 
-/** C5 and C6, on the release branch; returns what happened. */
-const onBranch = ({ version, push }, branch) => {
+/** C5 on the release branch; returns whether it made a commit. */
+const onBranch = ({ version }, branch) => {
   const args = [setVersion, version];
   if (process.env.CUT_NO_LOCK === "1") args.push("--no-lock");
   const r = spawnSync(process.execPath, args, { encoding: "utf8" });
@@ -139,7 +139,6 @@ const onBranch = ({ version, push }, branch) => {
     git(["commit", "-q", "-m", `Set the version to ${version} on ${branch}`]);
     committed = true;
   }
-  if (push) git(["push", "-q", "-u", "origin", branch]);
   return committed;
 };
 
@@ -175,13 +174,16 @@ const main = () => {
   let original;
   let switched = false;
   let created = false;
+  let committed = false;
   try {
     original = currentBranch();
     const prepared = prepare(opts, branch);
     created = prepared.created;
     git(["switch", "-q", branch]);
     switched = true;
-    const committed = onBranch(opts, branch);
+    committed = onBranch(opts, branch);
+    // C6: a failed push keeps the commit; the catch below says where it is.
+    if (opts.push) git(["push", "-q", "-u", "origin", branch]);
     console.log(
       `cut: ${branch} ${created ? "created" : "used"} at ${prepared.start.slice(0, 12)}`,
     );
@@ -191,6 +193,10 @@ const main = () => {
         : `cut: manifests already at ${opts.version}, no commit`,
     );
   } catch (error) {
+    if (committed)
+      fail(
+        `${branch} keeps the version commit ${commitOf("HEAD").slice(0, 12)} locally; push it with git push -u origin ${branch}`,
+      );
     if (switched) {
       git(["reset", "-q", "--hard"]);
       git(["clean", "-q", "-fd"]);

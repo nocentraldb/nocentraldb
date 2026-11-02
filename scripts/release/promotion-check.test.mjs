@@ -354,6 +354,14 @@ test("a ticket id that is only a prefix of an id in the notes does not satisfy c
   assert.match(row(r.stdout, 6).evidence, /none of mt08\.brk is in/);
 });
 
+test("a ticket id at the end of a sentence in the notes satisfies condition 6", (t) => {
+  const repo = releaseRepo(t, {
+    notes: "# 0.1.0\n\n### Open takes a URL\n\nSee mt08.brk2.\n",
+  });
+  const r = run(repo, t, { gh: ghFor("v0.1.0-beta.2") });
+  assert.equal(row(r.stdout, 6).result, "MANUAL", r.stdout);
+});
+
 test("with the fragments already removed, condition 6 is MANUAL", (t) => {
   const repo = releaseRepo(t, { fragments: {} });
   const r = run(repo, t, { gh: ghFor("v0.1.0-beta.2") });
