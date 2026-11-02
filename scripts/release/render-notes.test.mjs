@@ -161,13 +161,150 @@ test("--since must be an alpha tag that exists, or none", (t) => {
   }
 });
 
-test("--beta and --release are not implemented in this ticket", (t) => {
+const NOTES =
+  "# NoCentralDB 0.1.0\n\nThe first release.\n\n## New features\n\nX.\n";
+
+/** A repository with the curated notes of 0.1.0 and one fragment, tagged v0.1.0-beta.1. */
+const betaRepo = (t) => {
   const repo = repoFor(t);
-  for (const mode of ["--beta", "--release"]) {
-    const r = run(repo, mode, "0.1.0");
-    assert.equal(r.status, 2, mode);
-    assert.match(r.stderr, /not implemented in this ticket/);
+  repo.commit("notes", {
+    "release-notes/0.1.0.md": NOTES,
+    "changes/early.md": FEATURE,
+  });
+  repo.tag("v0.1.0-beta.1");
+  return repo;
+};
+
+test("--beta --since none prints the curated file exactly as it is at the head", (t) => {
+  const repo = betaRepo(t);
+  const r = run(repo, "--beta", "0.1.0", "--since", "none");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stderr, "");
+  assert.equal(r.stdout, NOTES);
+});
+
+test("--beta --since <previous beta> adds the fragments added since that tag, unfiltered, one level down", (t) => {
+  const repo = betaRepo(t);
+  repo.commit("cycle fix", { "changes/zeta-fix.md": FIX });
+  repo.commit("tidy", { "changes/b-tidy.md": INTERNAL });
+  const r = run(repo, "--beta", "0.1.0", "--since", "v0.1.0-beta.1");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stderr, "");
+  assert.equal(
+    r.stdout,
+    [
+      NOTES.trimEnd(),
+      "",
+      "## Changes since v0.1.0-beta.1",
+      "",
+      "### b-tidy",
+      "",
+      "*internal* · components: core · tickets: mt08.dddd",
+      "",
+      "Tidied the build.",
+      "",
+      "### zeta-fix",
+      "",
+      "*fix* · components: relay · tickets: mt08.cccc",
+      "",
+      "#### Symptom",
+      "s",
+      "#### When",
+      "w",
+      "#### Cause",
+      "c",
+      "#### Fix",
+      "f",
+      "",
+    ].join("\n"),
+  );
+  assert.doesNotMatch(r.stdout, /early/, "a fragment of beta.1 is listed");
+});
+
+test("--beta --since <previous beta> with no fragment added says so", (t) => {
+  const repo = betaRepo(t);
+  repo.commit("notes edited", {
+    "release-notes/0.1.0.md": `${NOTES}\nMore.\n`,
+  });
+  const r = run(repo, "--beta", "0.1.0", "--since", "v0.1.0-beta.1");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(
+    r.stdout,
+    `${NOTES}\nMore.\n\n## Changes since v0.1.0-beta.1\n\nNo change fragment was added since v0.1.0-beta.1.\n`,
+  );
+});
+
+test("--beta reads the file and the fragments at --head, never from the working tree", (t) => {
+  const repo = betaRepo(t);
+  const head = repo.commit("fix", { "changes/zeta-fix.md": FIX });
+  repo.commit("later", { "changes/later.md": INTERNAL });
+  repo.write("release-notes/0.1.0.md", "uncommitted\n");
+  const r = run(
+    repo,
+    "--beta",
+    "0.1.0",
+    "--since",
+    "v0.1.0-beta.1",
+    "--head",
+    head,
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(r.stdout.startsWith(NOTES.trimEnd()), r.stdout);
+  assert.match(r.stdout, /### zeta-fix/);
+  assert.doesNotMatch(r.stdout, /later|uncommitted/);
+});
+
+test("--release prints only the curated file, whatever fragments exist", (t) => {
+  const repo = betaRepo(t);
+  repo.commit("fix", { "changes/zeta-fix.md": FIX });
+  const r = run(repo, "--release", "0.1.0");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stderr, "");
+  assert.equal(r.stdout, NOTES);
+});
+
+test("--beta and --release fail naming the notes file when it does not exist at the head", (t) => {
+  const repo = repoFor(t);
+  repo.commit("one", { "changes/a-fix.md": FIX });
+  for (const args of [
+    ["--beta", "0.2.0", "--since", "none"],
+    ["--release", "0.2.0"],
+  ]) {
+    const r = run(repo, ...args);
+    assert.equal(r.status, 1, args.join(" "));
+    assert.equal(r.stdout, "", args.join(" "));
+    assert.equal(
+      r.stderr,
+      "render-notes: release-notes/0.2.0.md does not exist at HEAD\n",
+      args.join(" "),
+    );
   }
+});
+
+test("--beta --since must be an existing beta tag of the same version, or none", (t) => {
+  const repo = betaRepo(t);
+  repo.tag("v0.1.0-alpha.1");
+  repo.tag("v0.2.0-beta.1");
+  for (const since of [
+    "v0.1.0-alpha.1",
+    "v0.2.0-beta.1",
+    "v0.1.0-beta.9",
+    "v0.1.0",
+  ]) {
+    const r = run(repo, "--beta", "0.1.0", "--since", since);
+    assert.equal(r.status, 1, since);
+    assert.equal(r.stdout, "", since);
+    assert.match(r.stderr, new RegExp(`^render-notes: .*${since}`), since);
+  }
+});
+
+test("--beta with an invalid fragment added since the tag fails naming it", (t) => {
+  const repo = betaRepo(t);
+  repo.commit("bad", { "changes/bad.md": "---\ntype: nope\n---\n" });
+  const r = run(repo, "--beta", "0.1.0", "--since", "v0.1.0-beta.1");
+  assert.equal(r.status, 1);
+  assert.equal(r.stdout, "");
+  assert.match(r.stderr, /^render-notes: changes\/bad\.md: type must be/m);
 });
 
 test("--help prints the usage; missing or malformed arguments are usage errors", (t) => {
@@ -176,6 +313,14 @@ test("--help prints the usage; missing or malformed arguments are usage errors",
   assert.equal(help.status, 0);
   assert.match(help.stdout, /^usage: render-notes/);
   for (const args of [
+    ["--beta", "0.1.0"],
+    ["--beta", "0.1", "--since", "none"],
+    ["--beta", "v0.1.0", "--since", "none"],
+    ["--release", "0.1.0-beta.1"],
+    ["--release", "0.1.0", "--since", "none"],
+    ["--release", "0.1.0", "--beta", "0.1.0", "--since", "none"],
+    ["--alpha", "--since", "none", "--repo", "acme/db", "--release", "0.1.0"],
+    ["--beta", "0.1.0", "--since", "none", "--repo", "acme/db"],
     ["--since", "none", "--repo", "acme/db"],
     ["--alpha", "--repo", "acme/db"],
     ["--alpha", "--since", "none"],

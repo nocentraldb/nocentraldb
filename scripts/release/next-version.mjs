@@ -29,6 +29,7 @@
 //
 // Exit 0 with the answer (also when skipping), 1 with one line per
 // violation, 2 on a usage error.
+import { cli } from "./lib/cli.mjs";
 import { fragmentsAt, fragmentsIn } from "./lib/fragments.mjs";
 import { addedPaths, describeNearest, fileAt, git, tags } from "./lib/git.mjs";
 import { readWorkspaceVersion } from "./lib/manifests.mjs";
@@ -47,33 +48,12 @@ no fragment other than internal was added since the previous alpha. With
 stands at <ref> (default release-notes/index.json); the last release is read
 from it, never from tags.`;
 
-const fail = (message) => {
-  console.error(`next-version: ${message}`);
-  process.exitCode = 1;
-};
+const { fail, parseArgs } = cli("next-version", USAGE);
 
-const usageError = () => {
-  console.error(USAGE);
-  process.exit(2);
-};
-
-const parseArgs = (args) => {
-  const opts = {
-    json: false,
-    head: "HEAD",
-    index: "release-notes/index.json",
-  };
-  for (let i = 0; i < args.length; i++) {
-    const value = () => (args[i + 1] ? args[++i] : usageError());
-    if (args[i] === "--help") {
-      console.log(USAGE);
-      process.exit(0);
-    } else if (args[i] === "--json") opts.json = true;
-    else if (args[i] === "--head") opts.head = value();
-    else if (args[i] === "--index") opts.index = value();
-    else usageError();
-  }
-  return opts;
+const ARGS = {
+  flags: ["--json"],
+  values: ["--head", "--index"],
+  defaults: { json: false, head: "HEAD", index: "release-notes/index.json" },
 };
 
 /** Every fragment at `head`, sorted, with its type; null after reporting an invalid one. */
@@ -193,7 +173,7 @@ const compute = ({ head, index }) => {
 };
 
 const main = () => {
-  const opts = parseArgs(process.argv.slice(2));
+  const opts = parseArgs(process.argv.slice(2), ARGS);
   let answer;
   try {
     answer = compute(opts);

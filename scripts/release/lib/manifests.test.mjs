@@ -9,6 +9,7 @@ import {
   lockVersions,
   packageJsonFiles,
   pinWorkspaceDependencies,
+  publishLine,
   readWorkspaceVersion,
   workspaceDependencies,
   writeWorkspaceVersion,
@@ -224,4 +225,23 @@ test("packageJsonFiles and crateManifestFiles list the workspace manifests", (t)
     "crates/a/Cargo.toml",
     "crates/b/Cargo.toml",
   ]);
+});
+
+test("publishLine reads the publish value of [package], or null when there is none", () => {
+  const crate = (extra) =>
+    `[package]\nname = "x"\nversion.workspace = true\n${extra}\n[package.metadata.docs]\npublish = true\n`;
+  assert.equal(publishLine(crate("publish = false")), "false");
+  assert.equal(publishLine(crate('publish = ["crates-io"]')), '["crates-io"]');
+  assert.equal(publishLine(crate("")), null);
+  assert.equal(
+    publishLine('[dependencies]\npublish = "1"\n[package]\nname = "x"\n'),
+    null,
+  );
+});
+
+test("publishLine refuses a value it cannot read on one line", () => {
+  assert.throws(
+    () => publishLine('[package]\nname = "x"\npublish = [\n  "a",\n]\n'),
+    /unsupported manifest syntax at line 3/,
+  );
 });

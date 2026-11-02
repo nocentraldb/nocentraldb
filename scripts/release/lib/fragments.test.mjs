@@ -289,3 +289,11 @@ test("demoteSections turns ## headings into ### outside fenced code blocks only"
     "### Problem\nText ## not a heading\n### Deeper\n```md\n## inside\n```\n~~~\n## also inside\n~~~\n### Use\n",
   );
 });
+
+test("demoteSections demotes sections by the given number of levels, fences untouched", () => {
+  const body = "## Problem\n### Deeper\n```md\n## inside\n```\n## Use\n";
+  assert.equal(
+    demoteSections(body, 2),
+    "#### Problem\n### Deeper\n```md\n## inside\n```\n#### Use\n",
+  );
+});

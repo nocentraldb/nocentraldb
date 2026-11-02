@@ -73,10 +73,14 @@ function headings(body) {
   return found;
 }
 
-/** The body with its sections (`## ` headings outside fences) demoted to `### `. */
-export function demoteSections(body) {
+/**
+ * The body with its sections (`## ` headings outside fences) demoted by
+ * `levels`: to `### ` by default.
+ */
+export function demoteSections(body, levels = 1) {
+  const prefix = "#".repeat(levels);
   return Array.from(classifyLines(body), ({ line, prose }) =>
-    prose && SECTION.test(line) ? `#${line}` : line,
+    prose && SECTION.test(line) ? `${prefix}${line}` : line,
   ).join("\n");
 }
 

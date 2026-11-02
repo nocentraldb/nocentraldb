@@ -6,7 +6,7 @@ Report a vulnerability through GitHub private vulnerability reporting: on the re
 
 Never report a vulnerability in a public issue, discussion or pull request. A public report puts every user at risk before a fix exists. If you are unsure whether something is a vulnerability, report it privately anyway.
 
-Please include what is affected, how to reproduce it, and what an attacker gains. One maintainer reads the reports; you get an answer on the report itself, and we agree with you on a disclosure date once a fix is ready.
+Please include what is affected, how to reproduce it, and what an attacker gains. The maintainers read the reports. You get an answer on the report itself, and we agree with you on a disclosure date once a fix is ready.
 
 ## Supported versions
 

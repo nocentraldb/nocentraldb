@@ -48,8 +48,8 @@
   </defs>
 
   <rect class="bg" x="0" y="0" width="1400" height="860"/>
-  <text class="t" x="24" y="38" font-size="22" font-weight="600">Release flow — one release, e.g. 0.3.0</text>
-  <text class="m" x="24" y="60" font-size="13">Time runs left to right. Every product-changing merge is an alpha; the owner decides beta and release; the release ships the last beta's product code.</text>
+  <text class="t" x="24" y="38" font-size="22" font-weight="600">Release flow for one release, for example 0.3.0</text>
+  <text class="m" x="24" y="60" font-size="13">Time runs left to right. Every product-changing merge becomes an alpha. The owner decides beta and release. A release ships the product code of its last beta.</text>
 
   <!-- lanes -->
   <rect class="lane" x="16" y="78" width="1368" height="190" rx="8"/>
@@ -69,7 +69,7 @@
   <rect class="box" x="160" y="92" width="210" height="140" rx="6"/>
   <text class="t" x="172" y="114" font-size="14" font-weight="600">1 · Plan the release</text>
   <text class="t" x="172" y="136" font-size="12.5">Release epic "0.3.0"</text>
-  <text class="t" x="172" y="154" font-size="12.5">blocked by epics + tickets</text>
+  <text class="t" x="172" y="154" font-size="12.5">blocked by epics and tickets</text>
   <text class="t" x="172" y="172" font-size="12.5">(nxf dep add, not children)</text>
   <text class="m" x="172" y="194" font-size="12.5">nxm: active-release</text>
   <text class="m" x="172" y="212" font-size="12.5">GitHub milestone · roadmap</text>
@@ -84,19 +84,19 @@
 
   <rect class="own" x="672" y="92" width="178" height="140" rx="6"/>
   <text class="t" x="684" y="114" font-size="14" font-weight="600">3 · Owner: beta?</text>
-  <text class="t" x="684" y="136" font-size="12.5">Edits + approves the</text>
-  <text class="t" x="684" y="154" font-size="12.5">curated notes (PR).</text>
-  <text class="t" x="684" y="176" font-size="12.5">Then: cut release/0.3,</text>
+  <text class="t" x="684" y="136" font-size="12.5">Approves the notes PR</text>
+  <text class="t" x="684" y="154" font-size="12.5">on main by merging it.</text>
+  <text class="t" x="684" y="176" font-size="12.5">Cut release/0.3, push,</text>
   <text class="t" x="684" y="194" font-size="12.5">tag v0.3.0-beta.1</text>
 
   <rect class="pm" x="960" y="92" width="244" height="168" rx="6"/>
   <text class="t" x="972" y="114" font-size="14" font-weight="600">4 · Promotion conditions</text>
-  <text class="t" x="972" y="135" font-size="12">1 latest beta out ≥ 7 days</text>
+  <text class="t" x="972" y="135" font-size="12">1 latest beta out for 7+ days</text>
   <text class="t" x="972" y="152" font-size="12">2 no open P0/P1 regression</text>
   <text class="t" x="972" y="169" font-size="12">3 upgrade test from last release</text>
   <text class="t" x="972" y="186" font-size="12">4 same product code as last beta</text>
   <text class="t" x="972" y="203" font-size="12">5 audits clean, no open advisory</text>
-  <text class="t" x="972" y="220" font-size="12">6 notes final + approved</text>
+  <text class="t" x="972" y="220" font-size="12">6 notes final and approved</text>
   <text class="t" x="972" y="237" font-size="12">7 used by one of our projects</text>
   <text class="m" x="972" y="254" font-size="11.5">PM checks them, proposes the release</text>
 
@@ -105,8 +105,8 @@
   <text class="t" x="1234" y="132" font-size="14" font-weight="600">release?</text>
   <text class="t" x="1234" y="154" font-size="12.5">Tag v0.3.0 on</text>
   <text class="t" x="1234" y="172" font-size="12.5">the branch head.</text>
-  <text class="m" x="1234" y="194" font-size="12.5">No clicks in the</text>
-  <text class="m" x="1234" y="212" font-size="12.5">GitHub UI.</text>
+  <text class="m" x="1234" y="194" font-size="12.5">CI publishes</text>
+  <text class="m" x="1234" y="212" font-size="12.5">from the tag.</text>
 
   <line class="arrow" x1="370" y1="162" x2="466" y2="162" stroke-width="1.5" marker-end="url(#a)"/>
   <text class="m" x="378" y="152" font-size="11.5">blockers close</text>
@@ -156,7 +156,7 @@
   <text class="t" x="172" y="592" font-size="12.5">GitHub prerelease + binaries</text>
   <text class="t" x="172" y="610" font-size="12.5">npm @nocentraldb/sdk@alpha</text>
   <text class="m" x="172" y="628" font-size="12.5">not crates.io (git tag instead)</text>
-  <text class="m" x="172" y="652" font-size="12.5">Notes: raw fragments of the merge</text>
+  <text class="m" x="172" y="652" font-size="12.5">Notes: fragments since last alpha</text>
   <line class="arrow" x1="320" y1="364" x2="320" y2="544" stroke-width="1.2" stroke-dasharray="2 4" marker-end="url(#a)"/>
 
   <rect class="pub" x="860" y="548" width="290" height="128" rx="6"/>
@@ -177,8 +177,8 @@
 
   <!-- notes legend -->
   <rect class="box" x="16" y="706" width="1368" height="138" rx="8"/>
-  <text class="t" x="30" y="732" font-size="14" font-weight="600">Curated release notes (beta and release) — release-notes/0.3.0.md, one file from beta.1 to the release</text>
-  <text class="t" x="30" y="758" font-size="12.5">Summary  →  Breaking changes (problem · use · migration)  →  New features (problem · use)  →  Deprecations  →  Fixes (symptom · when · cause · fix)  →  Security  →  Known issues</text>
+  <text class="t" x="30" y="732" font-size="14" font-weight="600">Curated release notes for beta and release: release-notes/0.3.0.md, one file from beta.1 to the release</text>
+  <text class="t" x="30" y="758" font-size="12.5">Sections in order: summary, breaking changes (problem, use, migration), new features (problem, use), deprecations, fixes (symptom, when, cause, fix), security, known issues</text>
   <text class="t" x="30" y="784" font-size="12.5">Left out: fixes for bugs introduced in this cycle (introduced: cycle). Nobody on 0.2.x ever saw them; they appear only in alpha notes and in "changes since beta N-1".</text>
   <text class="m" x="30" y="810" font-size="12.5">Same Markdown in three places: GitHub release body · ncdb changes in the CLI · landing page. Each renders it itself.</text>
   <text class="m" x="30" y="832" font-size="12.5">Every product-changing PR brings changes/&lt;slug&gt;.md: type, tickets, components, introduced (fixes) and the sections its type requires.</text>
