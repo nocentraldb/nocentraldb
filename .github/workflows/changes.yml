@@ -3,6 +3,17 @@
 # changes/, unless it carries the label skip-changes. The label is read from
 # the event payload, so labeled/unlabeled re-run the check. Read-only; the
 # full history is fetched so the merge base with the PR's base exists.
+#
+# Breaking-change detection: cargo-semver-checks compares the workspace
+# crates with the PR's base commit, checked out as a worktree (action input
+# `baseline-root`; `baseline-rev` would extract the base as an archive, which
+# refuses the repository's symlink that points outside the tree), with
+# `rust-toolchain: manual`, so it uses the toolchain rust-toolchain.toml pins,
+# installed by the step before it. It may fail without failing the job, so
+# the fragment step still runs and turns its finding into a requirement. The
+# TypeScript API report is diffed against the base's committed report
+# (exit 3: a removed or changed line). Either finding adds
+# --require-breaking, which the skip-changes label never waives.
 # scripts/changes-workflow.test.mjs asserts these rules.
 name: changes
 
@@ -29,9 +40,34 @@ jobs:
         with:
           auto-install: true
       - run: pnpm install --frozen-lockfile
+      - name: Base for the Rust API
+        id: baseline
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"
+      - run: rustup toolchain install --no-self-update
+      - name: Rust API against the base
+        id: semver
+        uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
+        with:
+          baseline-root: ${{ runner.temp }}/baseline
+          rust-toolchain: manual
+        continue-on-error: true
+      - name: TypeScript API against the base
+        id: api
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set +e
+          node scripts/release/api-report.mjs --base "$BASE"
+          code=$?
+          set -e
+          echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          [ "$code" = 0 ] || [ "$code" = 3 ]
       - name: Required fragment
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
           SKIP: ${{ contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || '' }}
-        run: node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP
+          BREAKING: ${{ (steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || '' }}
+        run: node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP $BREAKING

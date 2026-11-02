@@ -5,6 +5,10 @@
 // `changes`; its actions are pinned by SHA; it fetches the history the merge
 // base needs; it passes the PR's base and head and the label-derived --skip
 // to check-fragments; superseded runs are cancelled and the job is bounded.
+// Breaking-change detection (epic §14.2): cargo-semver-checks against the
+// PR's base, allowed to fail so the fragment step still runs, and the
+// TypeScript API report against the base; either one's finding turns into
+// --require-breaking for check-fragments, which --skip never waives.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -41,6 +45,11 @@ const checkoutStep = (ctx) =>
   at(ctx, (step) => step.uses?.startsWith("actions/checkout@"));
 const fragmentsStep = (ctx) =>
   at(ctx, (step) => String(step.run).includes("check-fragments.mjs"));
+const semverStep = (ctx) => at(ctx, (step) => step.id === "semver");
+const apiStep = (ctx) => at(ctx, (step) => step.id === "api");
+const baselineStep = (ctx) => at(ctx, (step) => step.id === "baseline");
+const toolchainStep = (ctx) =>
+  at(ctx, (step) => step.run === "rustup toolchain install --no-self-update");
 
 /** A GitHub Actions expression, `${{ … }}`, as the workflow spells it. */
 const gh = (expression) => `\${{ ${expression} }}`;
@@ -52,9 +61,22 @@ const FRAGMENTS_ENV = {
   SKIP: gh(
     "contains(github.event.pull_request.labels.*.name, 'skip-changes') && '--skip' || ''",
   ),
+  BREAKING: gh(
+    "(steps.semver.outcome == 'failure' || steps.api.outputs.breaking == 'true') && '--require-breaking' || ''",
+  ),
 };
 const FRAGMENTS_RUN =
-  'node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP';
+  'node scripts/release/check-fragments.mjs --base "$BASE" --head "$HEAD" $SKIP $BREAKING';
+const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
+const BASELINE_RUN =
+  'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"';
+const API_RUN = `set +e
+node scripts/release/api-report.mjs --base "$BASE"
+code=$?
+set -e
+echo "breaking=$([ "$code" = 3 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+[ "$code" = 0 ] || [ "$code" = 3 ]
+`;
 const CONCURRENCY = {
   group: `changes-${gh("github.ref")}`,
   "cancel-in-progress": true,
@@ -131,7 +153,8 @@ const checks = [
       assert.ok(uses.length > 0, "the workflow uses no action");
       for (const node of uses) {
         assert.match(node.value, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
-        assert.match(node.comment ?? "", /^ v\d+\.\d+\.\d+$/, node.value);
+        // cargo-semver-checks-action tags its releases vX.Y only.
+        assert.match(node.comment ?? "", /^ v\d+\.\d+(?:\.\d+)?$/, node.value);
       }
     },
     mutants: {
@@ -177,6 +200,122 @@ const checks = [
           [...STEPS, fragmentsStep(ctx), "run"],
           FRAGMENTS_RUN.replace(" $SKIP", ""),
         ),
+    },
+  },
+  {
+    name: "the semver and API steps run before the required-fragment step and feed --require-breaking",
+    check: (ctx) => {
+      const all = steps(ctx);
+      const [baseline, toolchain, semver, api, fragments] = [
+        baselineStep(ctx),
+        toolchainStep(ctx),
+        semverStep(ctx),
+        apiStep(ctx),
+        fragmentsStep(ctx),
+      ];
+      assert.ok(baseline < semver, "the baseline is checked out after semver");
+      assert.ok(toolchain < semver, "the toolchain is installed after semver");
+      assert.ok(semver < api, "semver runs after the API report");
+      assert.ok(api < fragments, "the API report runs after check-fragments");
+      const install = all.findIndex((step) =>
+        String(step.run).startsWith("pnpm install"),
+      );
+      assert.ok(
+        install !== -1 && install < api,
+        "api runs before pnpm install",
+      );
+
+      assert.deepEqual(all[baseline].env, {
+        BASE: gh("github.event.pull_request.base.sha"),
+      });
+      assert.equal(all[baseline].run, BASELINE_RUN);
+
+      const sv = all[semver];
+      assert.ok(sv.uses?.startsWith(SEMVER_ACTION), "semver uses no action");
+      assert.deepEqual(sv.with, {
+        "baseline-root": `${gh("runner.temp")}/baseline`,
+        "rust-toolchain": "manual",
+      });
+      assert.equal(sv["continue-on-error"], true);
+
+      const report = all[api];
+      assert.deepEqual(report.env, {
+        BASE: gh("github.event.pull_request.base.sha"),
+      });
+      assert.equal(report.run, API_RUN);
+      assert.equal(report["continue-on-error"], undefined);
+
+      const step = all[fragments];
+      assert.equal(step.env.BREAKING, FRAGMENTS_ENV.BREAKING);
+      assert.ok(step.run.endsWith(" $SKIP $BREAKING"), step.run);
+    },
+    mutants: {
+      "drops BREAKING from the env": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, fragmentsStep(ctx), "env", "BREAKING"]),
+      "hard-codes BREAKING to ''": (ctx) =>
+        ctx.doc.setIn([...STEPS, fragmentsStep(ctx), "env", "BREAKING"], ""),
+      "reads only the semver outcome": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, fragmentsStep(ctx), "env", "BREAKING"],
+          gh("steps.semver.outcome == 'failure' && '--require-breaking' || ''"),
+        ),
+      "drops $BREAKING from the command": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, fragmentsStep(ctx), "run"],
+          FRAGMENTS_RUN.replace(" $BREAKING", ""),
+        ),
+      "moves the required-fragment step before api": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(fragmentsStep(ctx), 1)[0];
+        list.items.splice(apiStep(ctx), 0, step);
+      },
+      "semver without continue-on-error": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, semverStep(ctx), "continue-on-error"]),
+      "semver against baseline-rev (an archive the repository's symlink breaks)":
+        (ctx) => {
+          ctx.doc.deleteIn([
+            ...STEPS,
+            semverStep(ctx),
+            "with",
+            "baseline-root",
+          ]);
+          ctx.doc.setIn(
+            [...STEPS, semverStep(ctx), "with", "baseline-rev"],
+            gh("github.event.pull_request.base.sha"),
+          );
+        },
+      "the baseline is the head": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, baselineStep(ctx), "env", "BASE"],
+          gh("github.sha"),
+        ),
+      "the baseline step comes after semver": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(baselineStep(ctx), 1)[0];
+        list.items.splice(semverStep(ctx) + 1, 0, step);
+      },
+      "semver with the action's own toolchain": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, semverStep(ctx), "with", "rust-toolchain"]),
+      "semver before the toolchain install": (ctx) => {
+        const list = ctx.doc.getIn(STEPS);
+        const step = list.items.splice(toolchainStep(ctx), 1)[0];
+        list.items.splice(semverStep(ctx) + 1, 0, step);
+      },
+      "api lets every exit code pass": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, apiStep(ctx), "run"],
+          API_RUN.replace('[ "$code" = 0 ] || [ "$code" = 3 ]\n', ""),
+        ),
+      "api never reports breaking": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, apiStep(ctx), "run"],
+          API_RUN.replace(
+            '"$code" = 3 ] && echo true',
+            '"$code" = 9 ] && echo true',
+          ),
+        ),
+      "api with continue-on-error": (ctx) =>
+        ctx.doc.setIn([...STEPS, apiStep(ctx), "continue-on-error"], true),
     },
   },
   {
