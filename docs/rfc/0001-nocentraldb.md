@@ -33,12 +33,12 @@ So "trust the server" no longer has to be the default security model. Many apps 
 - **Spaces.** A space is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. Groups can be members of many spaces, so you can rearrange rights without moving data.
 - **A full copy per member.** Each device and each agent keeps the complete, encrypted log of every space it belongs to, and folds it locally into an SQLite view. Reads never leave the device.
 - **A relay that holds no keys.** The relay appends signed, encrypted changes to a space's log and hands them out from a cursor. It checks signatures and membership. It folds nothing and cannot read content. It can see metadata: which key is in which space, and when and how much each key writes. We design the relay to run on SQLite, Postgres, or DynamoDB with S3.
-- **Convergence.** The same set of changes produces the same state on every device, in any order of arrival, computed fields included. Each field merges by its declared semantics: last writer wins, sets, links or shared text.
+- **Convergence.** The same set of changes produces the same state on every device, in any order of arrival, computed fields included. Each field merges by the rules of its field type.
 - **Island mode.** With no relay at all, you keep working. When you reconnect, every copy converges.
 - **One schema, two SDKs.** You describe the model once in TypeScript. `ncdb model build` turns it into a versioned `model.lock.json`, which the Rust core and both SDKs (Rust and TypeScript) read. Schema changes are additive, and old clients keep data they do not understand yet.
 - **Reads cost only their result.** Queries run only through declared indexes. You declare counts, blockers and rankings as computed fields and views, and the database updates them as it folds new changes. A list of 100 entries is one range lookup, not a hundred fetches.
 - **Ordered pages.** Every index and every view keeps its order, so results arrive sorted, and you load the next page from a cursor only when you need it. "What should I work on next?" returns the first 50 ready tasks in rank order. The next 50 come when you ask for them.
-- **Collision-free edits.** Long text is a shared document, built on Yjs, with Yrs in the core. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the engine turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
+- **Field types.** Every field has a type, and the type declares how concurrent changes to the field merge. NoCentralDB ships a set of field types (see [Field types we ship](#field-types-we-ship)). You can add your own as a plugin, with its own merge rules, and use it in the schema next to the built-in ones. Each member's core runs the same field types, so every copy merges the same way.
 - **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. The relay sees only an opaque envelope and content-free effects.
 - **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person. Erasing a person destroys that key, and the erasure reaches archives and old snapshots too. Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design shredding to leave the signatures intact while the person's fields become unreadable.
 
@@ -60,6 +60,26 @@ export const model = nc.model({
 const page = await db.find(model.tasks.views.ready.take(50));             // first 50, in rank order
 const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor)); // the next 50, when needed
 ```
+
+## Architecture
+
+The first diagram shows the components. Every member, whether a browser, a phone, a laptop, an agent or a cloud function, runs the same core with a full copy of the spaces it belongs to. The relay stores and forwards encrypted changes and holds no keys. Field types are plugins of the core. Adapters connect a space's change stream to other systems, such as EventBridge on AWS.
+
+![Components: your app or agent on top of the TypeScript or Rust SDK, the core on every member with schema, keys, encrypted log, local SQLite view, subscriptions and field types as plugins; in the cloud the relay that holds no keys, adapters such as the AWS adapter, and servers that must read joining as regular members](0001-architecture.svg)
+
+The second diagram follows one change through two spaces. Bob writes in the space "Project A". Every member of Project A receives the change and reads it: Alice's laptop, an agent and a cloud function. Carol is only a member of the space "HR", so she receives nothing from Project A and has no key to read it.
+
+![How one change travels: Bob signs and encrypts a change in Project A; the relay checks his signature and membership and appends the ciphertext; Alice, Agent X and a cloud function, all members of Project A, decrypt and fold it; Carol, a member of HR only, receives nothing](0001-change-flow.svg)
+
+## Field types we ship
+
+Each field type defines how a field stores its value and how concurrent changes merge. NoCentralDB ships the following field types. You can add your own as a plugin.
+
+- **Basic values.** Strings, numbers, booleans and a choice from a fixed list. The last writer wins.
+- **Sets and links.** A set merges additions and removals from every member. A link points to another object in the same space, and computed fields and views can follow links, for example to find the open tasks a task depends on.
+- **Rich text.** A shared document, built on Yjs, with Yrs in the core. People edit it in an editor such as TipTap, and concurrent edits merge without conflicts. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the engine turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
+- **Stream.** A field that grows chunk by chunk, for example an agent's answer that appears word by word in the user interface. Each chunk travels over the same encrypted change stream as every other change. When the writer closes the stream, the field holds the complete value.
+- **Personal fields.** Any field can be marked as personal and tied to a person. The SDK then encrypts it with that person's own key, so that destroying the key erases it everywhere (see [Shred and audit](#the-design-in-one-page)).
 
 [Eight use cases](../use-cases.md) show what this design means in practice. In five of them, a central database is the weaker choice by design. The other three show that collaborative editing, subscriptions and streaming work without a central server. Each use case ends with a question for you. The [FAQ](../faq.md) answers the questions readers ask most often.
 
@@ -98,6 +118,17 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **What she would tell a colleague:** "The agent edits like a careful co-author. It quotes what it changes and leaves the rest alone."
 
+## Example applications
+
+We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above.
+
+1. **Agent task board.** A team's tasks with dependencies, and an agent that is a member of the project's space. The agent picks the next ready task from a local view and writes its changes under its own key. It shows spaces, membership, views, computed fields and ordered pages.
+2. **Customer records with erasure.** A small customer database with personal fields. An erasure is a work order that one member performs and a second account signs off, and the audit trail survives it. It shows personal fields, work orders and the audit.
+3. **Proposal editor with an agent co-author.** A shared document edited in TipTap by two people and an agent at the same time, including a stretch without network. It shows the rich-text field type, anchored edits and island mode.
+4. **Agent chat.** A chat in which an agent's answer streams into the interface and a new message triggers a notification. It shows the stream field type and subscriptions.
+
+Which example would show you whether NoCentralDB fits your app? Tell us, or propose your own (see [Where we want your advice](#where-we-want-your-advice), point 7).
+
 ## What it is not
 
 - **Not for every app.** Apps that need queries on the server, analytics across all users' data, or one global truth enforced at write time (unique names, transactions across everyone) belong on a central database.
@@ -119,8 +150,9 @@ We are deciding the points below. Each answer from your own experience helps us 
 4. **Computed fields.** We plan a fixed set of declarative functions (follow, count, any, min, max, reach, cycle), and custom reducers in Rust later. Which derived value in your app would not fit that set?
 5. **Nobody online.** A work order needs one member that can perform it and one that can check it. If no eligible device comes online before a deadline, such as the one-month deadline for a data-subject request, should the relay escalate to the admins, or should an operator be able to run a dedicated helper member?
 6. **Hosting the relay.** Would you rather run the relay yourself on Postgres, run it serverless in your own cloud account, or use a hosted relay that can only ever see ciphertext?
+7. **Example applications.** Which of the planned example applications would help you most, which is missing, and would you contribute one from your own domain?
 
-With your answers we will decide the v1 scope of rights, the server-member model, the erasure evidence, the computed-field set, the escalation path for work orders and which relay backend comes first.
+With your answers we will decide the v1 scope of rights, the server-member model, the erasure evidence, the computed-field set, the escalation path for work orders, which relay backend comes first, and which example applications we build first.
 
 ## How to give advice
 
