@@ -30,11 +30,15 @@
 // C6 A failed push is retried once: fetch, rebase onto <main>, C3 again,
 //    push. A second failure, a failed rebase (aborted) or a failed C3 is
 //    exit 1 naming the runbook section that redoes the commit by hand.
+// C7 <main> must be <remote>/<branch>; anything else is exit 1 with
+//    "nothing committed", before anything is touched. A failure to restore
+//    the tree after a failed C1-C3 is added to the original message, never
+//    put in its place.
 //
 // Exit 0 when the commit is pushed (or made, with --no-push) or there was
 // nothing to commit, 1 with `commit-back: <message>`, 2 on a usage error.
 import { execFileSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateIndex } from "./index.mjs";
@@ -133,6 +137,20 @@ const restore = () => {
   git(["clean", "-fdq", "--", "release-notes", "changes"]);
 };
 
+/**
+ * C3: the message for a failure before the commit, after `restore` ran. A
+ * failing restore never replaces the original failure; it is added to it,
+ * with how to clean the tree by hand.
+ */
+export function nothingCommitted(error, restoreTree) {
+  try {
+    restoreTree();
+  } catch (restoreError) {
+    return `${error.message}; nothing committed, but restoring the working tree failed (${restoreError.message}): reset it by hand with git reset --hard HEAD and git clean -fd -- release-notes changes`;
+  }
+  return `${error.message}; nothing committed`;
+}
+
 const nothingStaged = () => {
   try {
     git(["diff", "--cached", "--quiet"]);
@@ -143,17 +161,31 @@ const nothingStaged = () => {
   }
 };
 
-/** C5, C6: pushes HEAD to the branch of `main`, retrying once after a rebase. */
-const push = (main) => {
+/** C5: `<remote>/<branch>`, split at the first slash; throws otherwise. */
+export function parseMain(main) {
   const slash = main.indexOf("/");
-  if (slash <= 0) throw new Error(`--main ${main} is not <remote>/<branch>`);
-  const remote = main.slice(0, slash);
-  const target = `HEAD:refs/heads/${main.slice(slash + 1)}`;
+  if (slash <= 0 || slash === main.length - 1)
+    throw new Error(`--main ${main} is not <remote>/<branch>`);
+  return { remote: main.slice(0, slash), branch: main.slice(slash + 1) };
+}
+
+/**
+ * C6: pushes HEAD to `branch` on `remote`. When that fails, fetches, rebases
+ * onto <remote>/<branch>, runs `check` on the rebased tree and pushes once
+ * more; throws, naming the runbook, when any of that fails. `git` holds the
+ * options of every git call (cwd, env); `log` prints the retry notice.
+ */
+export function pushWithRetry(
+  { remote, branch },
+  { check, git: opts = {}, log = console.log },
+) {
+  const main = `${remote}/${branch}`;
   const tryPush = () => {
     try {
-      execFileSync("git", ["push", remote, target], { stdio: "inherit" });
+      git(["push", remote, `HEAD:refs/heads/${branch}`], opts);
       return true;
-    } catch {
+    } catch (error) {
+      console.error(error.message);
       return false;
     }
   };
@@ -161,23 +193,29 @@ const push = (main) => {
   // Rejected because main moved, or refused for another reason (rights, a
   // protection rule, the network): git said which above. One retry either
   // way; a refusal fails again and ends in the runbook.
-  console.log(
+  log(
     `commit-back: the push to ${main} failed; fetching, rebasing onto it and retrying once`,
   );
   try {
-    git(["fetch", remote]);
-    git(["rebase", main]);
+    git(["fetch", remote], opts);
+    git(["rebase", main], opts);
   } catch (error) {
     console.error(error.message);
     try {
-      git(["rebase", "--abort"]);
-    } catch {}
+      git(["rebase", "--abort"], opts);
+    } catch (abortError) {
+      // Not rethrown: the failed fetch or rebase is the cause to report, and
+      // the runbook starts from a fresh checkout of main, so a tree left
+      // without a rebase in progress (a failed fetch) or mid-rebase does not
+      // change what the maintainer does next.
+      console.error(`commit-back: git rebase --abort: ${abortError.message}`);
+    }
     throw new Error(
       `the rebase onto ${main} failed and was aborted; the commit is not on ${main}, make it by hand: ${RUNBOOK}`,
     );
   }
   try {
-    checkTree();
+    check();
   } catch (error) {
     throw new Error(
       `${error.message} after the rebase onto ${main}; the commit is not pushed, make it by hand: ${RUNBOOK}`,
@@ -187,13 +225,15 @@ const push = (main) => {
     throw new Error(
       `the push to ${main} failed again after the rebase; make the commit by hand: ${RUNBOOK}`,
     );
-};
+}
 
 const main = () => {
   const opts = parseArgs(process.argv.slice(2), ARGS);
   for (const key of ["tag", "stage", "version", "date"])
     if (opts[key] === undefined) usageError();
+  let target;
   try {
+    target = parseMain(opts.main);
     checkStart(opts.main);
   } catch (error) {
     return fail(`${error.message}; nothing committed`);
@@ -202,8 +242,7 @@ const main = () => {
     prepare(opts);
     checkTree();
   } catch (error) {
-    restore();
-    return fail(`${error.message}; nothing committed`);
+    return fail(nothingCommitted(error, restore));
   }
   if (nothingStaged()) return console.log("commit-back: nothing to commit");
   const message =
@@ -214,11 +253,17 @@ const main = () => {
   console.log(`commit-back: committed "${message}"`);
   if (opts.noPush) return;
   try {
-    push(opts.main);
+    pushWithRetry(target, { check: checkTree });
   } catch (error) {
     return fail(error.message);
   }
   console.log(`commit-back: pushed to ${opts.main}`);
 };
 
-main();
+// Run only as a script; the tests import parseMain, pushWithRetry and
+// nothingCommitted.
+if (
+  process.argv[1] &&
+  realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))
+)
+  main();

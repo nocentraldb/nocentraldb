@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { nothingCommitted, parseMain, pushWithRetry } from "./commit-back.mjs";
 import { GIT_ENV, makeRepo } from "./lib/test-repo.mjs";
 
 const script = join(dirname(fileURLToPath(import.meta.url)), "commit-back.mjs");
@@ -382,4 +383,122 @@ test("a missing option is a usage error, exit 2", (t) => {
   const r = run(clone, "--tag", "v0.1.0", "--stage", "release");
   assert.equal(r.status, 2);
   assert.match(r.stderr, /^usage: commit-back/);
+});
+
+test("parseMain splits <remote>/<branch> at the first slash and refuses anything else", () => {
+  assert.deepEqual(parseMain("origin/main"), {
+    remote: "origin",
+    branch: "main",
+  });
+  assert.deepEqual(parseMain("upstream/release/0.1"), {
+    remote: "upstream",
+    branch: "release/0.1",
+  });
+  for (const bad of ["main", "/main", "origin/"])
+    assert.throws(
+      () => parseMain(bad),
+      new RegExp(`^Error: --main ${bad} is not <remote>/<branch>$`),
+      bad,
+    );
+});
+
+test("a --main that is not <remote>/<branch> is exit 1 before anything is committed", (t) => {
+  const { clone } = releasedOrigin(t);
+  const head = git(clone, "rev-parse", "HEAD");
+  const r = run(clone, ...BETA, "--main", "main");
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /^commit-back: --main main is not <remote>\/<branch>; nothing committed$/m,
+  );
+  assert.equal(git(clone, "rev-parse", "HEAD"), head);
+  assert.equal(git(clone, "status", "--porcelain"), "");
+});
+
+/** A clone with one local commit on top of origin/main, ready to push. */
+const withLocalCommit = (t) => {
+  const fixture = releasedOrigin(t);
+  writeFileSync(join(fixture.clone, "release-notes", "note.md"), "x\n");
+  git(fixture.clone, "add", ".");
+  git(fixture.clone, "commit", "-q", "-m", "local");
+  return fixture;
+};
+const ORIGIN_MAIN = { remote: "origin", branch: "main" };
+const quiet = () => {};
+
+test("pushWithRetry pushes once and never runs the check when the first push lands", (t) => {
+  const { origin, clone } = withLocalCommit(t);
+  let checks = 0;
+  pushWithRetry(ORIGIN_MAIN, {
+    check: () => checks++,
+    git: { cwd: clone, env: GIT_ENV },
+    log: quiet,
+  });
+  assert.equal(checks, 0);
+  assert.equal(
+    git(origin, "rev-parse", "main"),
+    git(clone, "rev-parse", "HEAD"),
+  );
+});
+
+test("pushWithRetry rebases onto the moved branch, runs the check on the rebased tree, then pushes", (t) => {
+  const { author, origin, clone } = withLocalCommit(t);
+  author.commit("meanwhile", { "docs/meanwhile.md": "x\n" });
+  author.run("push", "-q", origin, "main");
+  const logged = [];
+  let checkedOn = null;
+  pushWithRetry(ORIGIN_MAIN, {
+    check: () => {
+      checkedOn = git(clone, "rev-parse", "HEAD~1");
+    },
+    git: { cwd: clone, env: GIT_ENV },
+    log: (line) => logged.push(line),
+  });
+  assert.equal(checkedOn, author.run("rev-parse", "HEAD"));
+  assert.equal(
+    git(origin, "log", "-2", "--format=%s", "main"),
+    "local\nmeanwhile",
+  );
+  assert.deepEqual(logged, [
+    "commit-back: the push to origin/main failed; fetching, rebasing onto it and retrying once",
+  ]);
+});
+
+test("pushWithRetry stops when the check fails after the rebase, and pushes nothing", (t) => {
+  const { author, origin, clone } = withLocalCommit(t);
+  author.commit("meanwhile", { "docs/meanwhile.md": "x\n" });
+  author.run("push", "-q", origin, "main");
+  const before = git(origin, "rev-parse", "main");
+  assert.throws(
+    () =>
+      pushWithRetry(ORIGIN_MAIN, {
+        check: () => {
+          throw new Error("changes/broken.md: no front matter");
+        },
+        git: { cwd: clone, env: GIT_ENV },
+        log: quiet,
+      }),
+    /^Error: changes\/broken\.md: no front matter after the rebase onto origin\/main; the commit is not pushed, make it by hand: docs\/release-management\.md#if-the-commit-to-main-failed$/,
+  );
+  assert.equal(git(origin, "rev-parse", "main"), before);
+});
+
+test("nothingCommitted restores the tree and says nothing was committed", () => {
+  let restored = false;
+  assert.equal(
+    nothingCommitted(new Error("index entry differs"), () => {
+      restored = true;
+    }),
+    "index entry differs; nothing committed",
+  );
+  assert.ok(restored);
+});
+
+test("nothingCommitted keeps the original failure when restoring the tree fails too", () => {
+  assert.equal(
+    nothingCommitted(new Error("index entry differs"), () => {
+      throw new Error("git reset -q --hard HEAD failed: index.lock exists");
+    }),
+    "index entry differs; nothing committed, but restoring the working tree failed (git reset -q --hard HEAD failed: index.lock exists): reset it by hand with git reset --hard HEAD and git clean -fd -- release-notes changes",
+  );
 });
