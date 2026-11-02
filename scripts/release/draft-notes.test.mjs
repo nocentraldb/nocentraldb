@@ -290,3 +290,23 @@ test("--previous that is not a release tag, or a tag that does not exist, is exi
   assert.equal(beta.status, 2);
   assert.equal(existsSync(join(repo.dir, "release-notes/0.2.0.md")), false);
 });
+
+test("an entry carries its fragment's issues as GitHub references under its comment", (t) => {
+  const repo = repoWith(t, {
+    "changes/a-feature.md": FEATURE.replace(
+      "components:",
+      "issues: [42, 57]\ncomponents:",
+    ),
+    "changes/b-feature.md": FEATURE.replace("mt08.fea1", "mt08.fea2"),
+  });
+  assert.equal(run(repo, "0.2.0").status, 0);
+  const text = notes(repo);
+  assert.match(
+    text,
+    /\n<!-- a-feature · tickets: mt08\.fea1 -->\n\nIssues: #42, #57\n\n\*\*Problem\.\*\*/,
+  );
+  assert.match(
+    text,
+    /\n<!-- b-feature · tickets: mt08\.fea2 -->\n\n\*\*Problem\.\*\*/,
+  );
+});

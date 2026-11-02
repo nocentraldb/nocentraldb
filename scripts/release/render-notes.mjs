@@ -8,16 +8,19 @@
 //    present when it is none), every type included: alpha notes are raw
 //    fragments, the curated-notes filter does not apply to them.
 // A2 Alpha: in slug order, each as `## <slug>`, a metadata line
-//    `*<type>* · components: a, b · tickets: x, y`, and its body with its
-//    sections (`## ` headings outside code fences) demoted to `### `.
+//    `*<type>* · components: a, b · tickets: x, y`, followed by
+//    ` · issues: [#42](https://github.com/<owner/name>/issues/42), …` when
+//    the fragment lists issues, and its body with its sections (`## `
+//    headings outside code fences) demoted to `### `.
 // A3 Alpha: then a link to the previous alpha's GitHub release of
 //    <owner/name>, or `First alpha.` when there is none.
 // A4 Alpha: <tag> is none or an alpha tag that exists.
 // B1 Beta: the curated file release-notes/<X.Y.Z>.md as it is, then, when
 //    <tag> is not none, a section `## Changes since <tag>` with the fragments
 //    added between <tag> and <head>, unfiltered (a cycle fix appears here),
-//    rendered as in A2 one level down (`### <slug>`, sections `#### `), or a
-//    line saying no fragment was added.
+//    rendered as in A2 one level down (`### <slug>`, sections `#### `), its
+//    issues as GitHub references (`#42`, which GitHub links in a release
+//    body), or a line saying no fragment was added.
 // B2 Beta: <tag> is none or an existing beta tag of the same X.Y.Z.
 // R1 Release: the curated file release-notes/<X.Y.Z>.md only.
 // F1 The curated file must exist at <head>, and every fragment rendered must
@@ -103,12 +106,27 @@ const fragmentsSince = (since, head) => {
   return covered.some((f) => f.errors.length > 0) ? null : covered;
 };
 
+/**
+ * A fragment's issues for its metadata line: links into <repo>'s issues, or
+ * GitHub references (#N) without one; empty when it has none.
+ */
+const issues = (front, repo) =>
+  front.issues === undefined
+    ? ""
+    : ` · issues: ${front.issues
+        .map((n) =>
+          repo === undefined
+            ? `#${n}`
+            : `[#${n}](https://github.com/${repo}/issues/${n})`,
+        )
+        .join(", ")}`;
+
 /** One fragment as a release-notes entry, its heading at `level`. */
-const entry = ({ slug, front, body }, level) =>
+const entry = ({ slug, front, body }, level, repo) =>
   [
     `${"#".repeat(level)} ${slug}`,
     "",
-    `*${front.type}* · components: ${front.components.join(", ")} · tickets: ${front.tickets.join(", ")}`,
+    `*${front.type}* · components: ${front.components.join(", ")} · tickets: ${front.tickets.join(", ")}${issues(front, repo)}`,
     "",
     demoteSections(body.trim(), level - 1),
   ].join("\n");
@@ -135,7 +153,7 @@ const alpha = ({ since, head, repo }) => {
       ? "First alpha."
       : `Previous alpha: [${since}](https://github.com/${repo}/releases/tag/${since})`;
   process.stdout.write(
-    `${[...covered.map((f) => entry(f, 2)), footer].join("\n\n")}\n`,
+    `${[...covered.map((f) => entry(f, 2, repo)), footer].join("\n\n")}\n`,
   );
 };
 

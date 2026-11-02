@@ -12,8 +12,10 @@
 //    always, with a placeholder comment (Known issues come from the board).
 // D3 Each entry is `### <first line of its first section, or its slug>`, a
 //    comment naming its slug and tickets (promotion-check looks the tickets
-//    of a breaking change up in the notes), then its sections as bold
-//    labels (`**Problem.** …`), in slug order within a section.
+//    of a breaking change up in the notes), a line `Issues: #42, #57` when
+//    the fragment lists issues (GitHub links #N in a release body), then its
+//    sections as bold labels (`**Problem.** …`), in slug order within a
+//    section.
 // D4 The filter: an `internal` fragment and a `fix` with `introduced: cycle`
 //    never appear in the body; a trailing comment lists them by slug.
 // D5 Stale cycle fixes: with a previous release (--previous <vA.B.C>, or by
@@ -72,6 +74,9 @@ const entry = ({ slug, front, body }) => {
   return [
     `### ${title}`,
     `<!-- ${slug} · tickets: ${front.tickets.join(", ")} -->`,
+    ...(front.issues === undefined
+      ? []
+      : [`Issues: ${front.issues.map((n) => `#${n}`).join(", ")}`]),
     ...(preamble === "" ? [] : [preamble]),
     ...sections.map(label),
   ].join("\n\n");

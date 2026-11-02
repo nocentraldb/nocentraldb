@@ -311,3 +311,36 @@ test("splitSections splits a body at its ## headings outside fences, text trimme
     ],
   });
 });
+
+const withIssues = (value) =>
+  feature.replace("components:", `issues: ${value}\ncomponents:`);
+
+test("issues is optional; a list of positive issue numbers is valid", () => {
+  assert.deepEqual(validateFragment("add-y", withIssues("[42, 57]")), []);
+  assert.deepEqual(validateFragment("add-y", withIssues("[1]")), []);
+  assert.deepEqual(
+    parseFragment(withIssues("[42, 57]")).front.issues,
+    [42, 57],
+  );
+});
+
+test("issues: a bad value is rejected and named", () => {
+  const rejected = {
+    "an empty list": ["[]", /^issues must be a non-empty list/],
+    "a number, not a list": ["42", /^issues must be a non-empty list.*got 42$/],
+    "no value": ["", /^issues must be a non-empty list.*got null$/],
+    zero: ["[0]", /^issues: 0 is not a positive integer$/],
+    "a negative number": ["[42, -1]", /^issues: -1 is not a positive integer$/],
+    "a fraction": ["[4.5]", /^issues: 4\.5 is not a positive integer$/],
+    "a string": ['["57"]', /^issues: "57" is not a positive integer$/],
+    "a reference": ['["#57"]', /^issues: "#57" is not a positive integer$/],
+    "a duplicate": ["[42, 57, 42]", /^issues: 42 is listed twice$/],
+  };
+  for (const [name, [value, rule]] of Object.entries(rejected)) {
+    const errors = validateFragment("add-y", withIssues(value));
+    assert.ok(
+      errors.some((e) => rule.test(e)),
+      `${name}: ${JSON.stringify(errors)}`,
+    );
+  }
+});

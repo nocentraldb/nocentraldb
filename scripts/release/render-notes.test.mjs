@@ -332,3 +332,42 @@ test("--help prints the usage; missing or malformed arguments are usage errors",
     assert.match(r.stderr, /^usage: render-notes/, args.join(" "));
   }
 });
+
+test("alpha: a fragment's issues are links on its metadata line; one without issues has none", (t) => {
+  const repo = repoFor(t);
+  repo.commit("two", {
+    "changes/a-issues.md": FEATURE.replace(
+      "components:",
+      "issues: [42, 7]\ncomponents:",
+    ),
+    "changes/b-plain.md": INTERNAL,
+  });
+  const r = alpha(repo, "none");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^\*feature\* · components: core, sdk-ts · tickets: mt08\.aaaa, mt08\.bbbb · issues: \[#42\]\(https:\/\/github\.com\/acme\/db\/issues\/42\), \[#7\]\(https:\/\/github\.com\/acme\/db\/issues\/7\)$/m,
+  );
+  assert.match(
+    r.stdout,
+    /^\*internal\* · components: core · tickets: mt08\.dddd$/m,
+  );
+});
+
+test("beta: a fragment's issues in Changes since are GitHub references (#N)", (t) => {
+  const repo = repoFor(t);
+  repo.commit("notes", { "release-notes/0.1.0.md": "# 0.1.0\n" });
+  repo.tag("v0.1.0-beta.1");
+  repo.commit("fix", {
+    "changes/a-issues.md": FIX.replace(
+      "components:",
+      "issues: [42]\ncomponents:",
+    ),
+  });
+  const r = run(repo, "--beta", "0.1.0", "--since", "v0.1.0-beta.1");
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^\*fix\* · components: relay · tickets: mt08\.cccc · issues: #42$/m,
+  );
+});

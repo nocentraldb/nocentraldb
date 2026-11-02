@@ -73,6 +73,10 @@ test("passes valid fragments of every type", (t) => {
     "changes/a-breaking.md":
       "---\ntype: breaking\ntickets: [mt08.1qaz]\ncomponents: [core]\n---\n## Problem\na\n## Use\nb\n## Migration\nc\n",
     "changes/a-feature.md": ok,
+    "changes/a-feature-issues.md": ok.replace(
+      "components:",
+      "issues: [42, 57]\ncomponents:",
+    ),
     "changes/a-fix.md": fix,
     "changes/a-fix-cycle.md": fix.replace("0.1.0", "cycle"),
     "changes/a-deprecation.md":
@@ -116,6 +120,10 @@ test("exits 1 and names file and rule for every rule of the schema", (t) => {
     "unknown-field": [
       ok.replace("components:", "author: me\ncomponents:"),
       /unknown field author/,
+    ],
+    "bad-issues": [
+      ok.replace("components:", "issues: [42, 0]\ncomponents:"),
+      /issues: 0 is not a positive integer/,
     ],
     "internal-section": [
       "---\ntype: internal\ntickets: [mt08.1qaz]\ncomponents: [core]\n---\n## Problem\nx\n",

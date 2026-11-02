@@ -26,7 +26,13 @@ export const SECTIONS = {
   security: ["Description", "Advisory"],
   internal: [],
 };
-const FIELDS = new Set(["type", "tickets", "introduced", "components"]);
+const FIELDS = new Set([
+  "type",
+  "tickets",
+  "issues",
+  "introduced",
+  "components",
+]);
 
 export function parseFragment(text) {
   const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
@@ -110,6 +116,23 @@ const isList = (value, ok) =>
   value.length > 0 &&
   value.every((v) => typeof v === "string" && ok(v));
 
+/** The rules for `issues`, optional: GitHub issue numbers of this repository. */
+const issueErrors = (issues) => {
+  if (!Array.isArray(issues) || issues.length === 0)
+    return [
+      `issues must be a non-empty list of GitHub issue numbers, like [42, 57]; got ${JSON.stringify(issues)}`,
+    ];
+  const errors = [];
+  const seen = new Set();
+  for (const issue of issues) {
+    if (!Number.isInteger(issue) || issue <= 0)
+      errors.push(`issues: ${JSON.stringify(issue)} is not a positive integer`);
+    else if (seen.has(issue)) errors.push(`issues: ${issue} is listed twice`);
+    seen.add(issue);
+  }
+  return errors;
+};
+
 export function validateFragment(slug, text) {
   const errors = [];
   if (!SLUG.test(slug))
@@ -127,6 +150,7 @@ export function validateFragment(slug, text) {
     errors.push(`type must be one of ${TYPES.join(", ")}`);
   if (!isList(front.tickets, (t) => TICKET.test(t)))
     errors.push("tickets must be a non-empty list of ids like mt08.1qaz");
+  if ("issues" in front) errors.push(...issueErrors(front.issues));
   if (!isList(front.components, (c) => COMPONENTS.includes(c)))
     errors.push(
       `components must be a non-empty list from ${COMPONENTS.join(", ")}`,
