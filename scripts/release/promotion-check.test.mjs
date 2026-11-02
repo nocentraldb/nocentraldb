@@ -221,6 +221,19 @@ test("a product change on the branch since the last beta FAILs condition 4, nami
   assert.match(row(r.stdout, 4).evidence, /changes\/: src\/lib\.rs$/);
 });
 
+test("a product file renamed into release-notes/ FAILs condition 4, naming the old path", (t) => {
+  const repo = releaseRepo(t, {
+    afterBeta: (repo) => {
+      repo.run("mv", "src/lib.rs", "release-notes/lib.rs");
+      repo.commit("move the product code under release-notes/");
+    },
+  });
+  const r = run(repo, t, { gh: ghFor("v0.1.0-beta.2") });
+  assert.equal(r.status, 1);
+  assert.equal(row(r.stdout, 4).result, "FAIL", r.stdout);
+  assert.match(row(r.stdout, 4).evidence, /changes\/: src\/lib\.rs$/);
+});
+
 test("only release-notes/ and changes/ changed since the last beta PASSes condition 4", (t) => {
   const repo = releaseRepo(t, {
     afterBeta: (repo) =>
@@ -324,6 +337,21 @@ test("a breaking fragment none of whose tickets is in the notes FAILs condition 
     /changes\/open-url\.md \(breaking\): none of mt08\.brk1, mt08\.brk2 is in release-notes\/0\.1\.0\.md/,
   );
   assert.match(r.stderr, /failed: 6\n/);
+});
+
+test("a ticket id that is only a prefix of an id in the notes does not satisfy condition 6", (t) => {
+  const repo = releaseRepo(t, {
+    fragments: {
+      "changes/open-url.md": BREAKING.replace(
+        "[mt08.brk1, mt08.brk2]",
+        "[mt08.brk]",
+      ),
+    },
+  });
+  const r = run(repo, t, { gh: ghFor("v0.1.0-beta.2") });
+  assert.equal(r.status, 1);
+  assert.equal(row(r.stdout, 6).result, "FAIL", r.stdout);
+  assert.match(row(r.stdout, 6).evidence, /none of mt08\.brk is in/);
 });
 
 test("with the fragments already removed, condition 6 is MANUAL", (t) => {

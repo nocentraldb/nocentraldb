@@ -15,14 +15,16 @@
 // P3 Upgrade tested: MANUAL until the relay and its upgrade test exist.
 // P4 Same product code: every path that differs between the latest beta and
 //    <remote>/release/X.Y is under release-notes/ or changes/; FAIL lists
-//    the others.
+//    the others. Renames count as delete plus add (--no-renames), so a
+//    product file moved under release-notes/ is named by its old path.
 // P5 Security: cargo audit and pnpm audit --audit-level low, run in a
 //    temporary checkout of <remote>/release/X.Y, both exit 0. FAIL with the
 //    last lines of a non-zero exit; a missing tool is a FAIL with the
 //    install hint, never a pass.
 // P6 Notes approved: MANUAL (the owner approves the notes in the pull
 //    request), plus a mechanical part: every breaking fragment at
-//    <remote>/release/X.Y has at least one of its tickets mentioned in
+//    <remote>/release/X.Y has at least one of its tickets mentioned (as a
+//    whole id, not a prefix of a longer one) in
 //    release-notes/X.Y.Z.md there, otherwise FAIL naming the fragment. When
 //    changes/ holds no fragment there any more, the PM checked it.
 // P7 Real use: MANUAL.
@@ -144,7 +146,9 @@ const soakRow = ({ beta, version, now }) => {
 const sameCode = ({ beta, version, ref, head }) => {
   if (head === null) return [FAIL, `${ref} does not exist`];
   if (beta === null) return [FAIL, `no beta tag v${version}-beta.N`];
-  const paths = zList(git(["diff", "-z", "--name-only", beta, head]));
+  const paths = zList(
+    git(["diff", "-z", "--no-renames", "--name-only", beta, head]),
+  );
   const product = paths.filter(
     (p) => !p.startsWith("release-notes/") && !p.startsWith("changes/"),
   );
@@ -209,6 +213,15 @@ const security = ({ ref, head }) => {
   }
 };
 
+/**
+ * Whether `text` names the ticket id `ticket` as a whole id: `mt08.brk` is
+ * not mentioned by `mt08.brk2`.
+ */
+const mentions = (text, ticket) => {
+  const id = ticket.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![\\w.])${id}(?![\\w.])`).test(text);
+};
+
 const notesApproved = ({ version, ref, head }) => {
   if (head === null) return [FAIL, `${ref} does not exist`];
   const fragments = fragmentsAt(head);
@@ -225,7 +238,7 @@ const notesApproved = ({ version, ref, head }) => {
   if (notes === null) return [FAIL, `${path} does not exist at ${ref}`];
   const breaking = fragments.filter((f) => f.front.type === "breaking");
   const missing = breaking.filter(
-    (f) => !f.front.tickets.some((ticket) => notes.includes(ticket)),
+    (f) => !f.front.tickets.some((ticket) => mentions(notes, ticket)),
   );
   if (missing.length > 0)
     return [
