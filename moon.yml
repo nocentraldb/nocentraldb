@@ -83,6 +83,21 @@ tasks:
       - "/apps/*/package.json"
       - "/scripts/release/check-version.mjs"
       - "/scripts/release/lib/*.mjs"
+  api-report:
+    # The TypeScript SDK's API report is current: tsc regenerates the public
+    # declarations of packages/sdk/src and they must equal the committed
+    # packages/sdk/etc/api-report.d.ts (docs/release-management.md, "Supply
+    # chain and policies"). The `changes` check diffs it against the PR's base.
+    command: "node scripts/release/api-report.mjs"
+    inputs:
+      - "/packages/sdk/src/**/*"
+      - "/packages/sdk/etc/**/*"
+      - "/packages/sdk/tsconfig.json"
+      - "/tsconfig.base.json"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+      - "/scripts/release/api-report.mjs"
+      - "/scripts/release/lib/*.mjs"
   rust-toolchain:
     # Installs the toolchain rust-toolchain.toml pins, once, before any Rust
     # task runs; a no-op (and offline) when it is already installed.
@@ -90,4 +105,10 @@ tasks:
     inputs:
       - "/rust-toolchain.toml"
   gates:
-    deps: ["~:format-check", "~:pins", "~:test", "~:fragments", "~:version"]
+    deps:
+      - "~:format-check"
+      - "~:pins"
+      - "~:test"
+      - "~:fragments"
+      - "~:version"
+      - "~:api-report"
