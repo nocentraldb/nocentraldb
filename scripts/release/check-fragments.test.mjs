@@ -223,6 +223,12 @@ const runIn = (repo, ...args) =>
     encoding: "utf8",
     env: GIT_ENV,
   });
+/** The paths the missing-fragment failure names, in the order printed. */
+const shipping = (stderr) =>
+  stderr
+    .split("\n")
+    .map((line) => /^check-fragments: (.+) ships to a user/.exec(line)?.[1])
+    .filter(Boolean);
 const repoFor = (t) => {
   const repo = makeRepo();
   t.after(() => repo.dispose());
@@ -256,12 +262,8 @@ test("PR mode: every product path is named, allowlisted ones are not", (t) => {
   });
   const r = runIn(repo, "--base", base, "--head", head);
   assert.equal(r.status, 1);
-  const named = r.stderr
-    .trim()
-    .split("\n")
-    .map((line) =>
-      line.replace(/^check-fragments: (\S+) ships to a user.*$/, "$1"),
-    );
+  // The path lines only; the how-to after them has a test of its own.
+  const named = shipping(r.stderr);
   assert.deepEqual(named.sort(), ["Cargo.toml", "packages/sdk/package.json"]);
 });
 
@@ -299,11 +301,7 @@ test("PR mode: path names are read verbatim (-z), not C-quoted", (t) => {
   });
   const r = runIn(repo, "--base", base, "--head", head);
   assert.equal(r.status, 1);
-  assert.match(
-    r.stderr,
-    /^check-fragments: crates\/c\/src\/\u00fcber\.rs ships/m,
-  );
-  assert.doesNotMatch(r.stderr, /docs/);
+  assert.deepEqual(shipping(r.stderr), ["crates/c/src/\u00fcber.rs"]);
 });
 
 test("PR mode: an added fragment satisfies the rule, and is itself validated", (t) => {
