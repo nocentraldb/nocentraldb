@@ -385,7 +385,9 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 
 **Published packages.** On crates.io: `ncdb-core` (core), `nocentraldb` (Rust SDK) and `ncdb` (the CLI, so that `cargo install ncdb` works). On npm: `@nocentraldb/sdk`. GitHub releases carry the CLI and relay binaries. All packages share one version. The publish steps skip a package that is not publishable (`private: true`, `publish = false`, or no package at all) and do not fail because of it.
 
-**A new package's first publish.** Trusted Publishing can only be configured for a package that exists. The owner therefore publishes each new package once by hand, before configuring it. Every later publish goes through CI.
+**A new package's first publish.** Trusted Publishing can only be configured for a package that exists. The owner therefore publishes each new package once by hand, before configuring it. Every later publish goes through CI. Each name is held on its registry by a `0.0.0` placeholder, so the first real version of a package must be above `0.0.0`. A crate drops `publish = false` when it first ships, and `@nocentraldb/sdk` drops `private: true` and gets a build output under `dist/`, so that `publishable` lets it through.
+
+**A public repository.** The repository is public from the first release on. Provenance, artifact attestations, the public milestone and the required checks on `main` all need a public repository, and on a private one GitHub releases and their binaries are visible to collaborators only.
 
 ## Tooling reference
 
