@@ -12,6 +12,7 @@ import {
   publishLine,
   readWorkspaceVersion,
   workspaceDependencies,
+  writePackageVersion,
   writeWorkspaceVersion,
 } from "./manifests.mjs";
 
@@ -244,4 +245,45 @@ test("publishLine refuses a value it cannot read on one line", () => {
     () => publishLine('[package]\nname = "x"\npublish = [\n  "a",\n]\n'),
     /unsupported manifest syntax at line 3/,
   );
+});
+
+// A package.json as a person formats it: four spaces, a nested "version"
+// before the top-level one, a string that contains "version", no final newline.
+const ODD_PACKAGE = `{
+    "name": "@x/odd",
+    "devEngines": { "runtime": { "name": "node", "version": ">=24" } },
+    "description": "the \\"version\\": \\"9.9.9\\" of nothing",
+    "version"  :  "0.1.0",
+    "private": true
+}`;
+
+test("writePackageVersion replaces only the top-level version value, byte for byte", () => {
+  const after = writePackageVersion(ODD_PACKAGE, "0.2.0-beta.1");
+  assert.equal(
+    after,
+    ODD_PACKAGE.replace(
+      '"version"  :  "0.1.0"',
+      '"version"  :  "0.2.0-beta.1"',
+    ),
+  );
+  assert.equal(JSON.parse(after).version, "0.2.0-beta.1");
+  assert.equal(JSON.parse(after).devEngines.runtime.version, ">=24");
+});
+
+test("writePackageVersion is idempotent: the same version leaves the text as it is", () => {
+  const once = writePackageVersion(ODD_PACKAGE, "0.2.0");
+  assert.equal(writePackageVersion(once, "0.2.0"), once);
+  assert.equal(writePackageVersion(ODD_PACKAGE, "0.1.0"), ODD_PACKAGE);
+});
+
+test("writePackageVersion throws without a top-level version, on a non-string version and on bad JSON", () => {
+  assert.throws(
+    () => writePackageVersion('{ "dev": { "version": "1.0.0" } }\n', "0.2.0"),
+    /no top-level "version" string/,
+  );
+  assert.throws(
+    () => writePackageVersion('{ "version": 1 }\n', "0.2.0"),
+    /no top-level "version" string/,
+  );
+  assert.throws(() => writePackageVersion("{ nope", "0.2.0"), SyntaxError);
 });

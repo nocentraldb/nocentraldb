@@ -1,16 +1,30 @@
 // Asserts the invariants of .github/workflows/release.yml (epic mt08.q8rt
-// §11, docs/release-management.md "Alpha"): the triggers; read-only by
-// default, contents: write on the alpha job only; the alpha job runs only for
-// a green ci run of a push to this repository's main, or a dispatch without
-// a tag, never for a run a pull request (a fork's included) triggered; the
-// head guard is the first step, runs before any checkout with the runner's
-// own git, fails closed and gates every later step; the checkout is the run's
-// head_sha with full history and tags; every step runs in bash with
-// pipefail; a dispatch never tags or publishes; the alpha honours
-// next-version's skip and publishes a prerelease with the rendered notes,
-// creating its tag in the same act, with no write token left in the checkout;
-// alphas run one at a time, uncancelled, bounded in time, with SHA-pinned
-// actions.
+// §11, docs/release-management.md "Alpha", "Beta" and "Release"): the
+// triggers; read-only by default, contents: write on the jobs alpha, publish
+// and commit-back only, verify and build inheriting read; the alpha job runs
+// only for a green ci run of a push to this repository's main, or a dispatch
+// without a tag, never for a run a pull request (a fork's included)
+// triggered; the head guard is the first step, runs before any checkout with
+// the runner's own git, fails closed and gates every later step; the
+// checkout is the run's head_sha with full history and tags; every step of
+// every job runs in bash with pipefail; a dispatch never tags or publishes;
+// the alpha honours next-version's skip and publishes a prerelease with the
+// rendered notes, creating its tag in the same act, refusing a tag that
+// already exists on the remote without a release, with no write token left
+// in the checkout; a dry run off main fails at the guard. A step that derives
+// the basic-auth header from the token masks it before git sees it.
+//
+// The publish side: verify, build, publish and commit-back run for v* tags
+// that are not alphas, or for a dispatch with a tag, which is a dry run that
+// never reaches publish or commit-back; verify fetches the release branches,
+// runs verify-tag on the commit and then the full gate, before build starts;
+// build writes the tag's version into its own checkout before it builds;
+// publish makes an idempotent GitHub release (a prerelease for a beta, latest
+// for a release) and only reports on the registries; commit-back checks out
+// main and leaves the commit to commit-back.mjs; no job that holds contents:
+// write leaves its token in the checkout. Every job is bounded in time, the
+// jobs of the publish side share one concurrency group per ref that never
+// cancels a running job, and every action is SHA-pinned.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -38,6 +52,30 @@ const ALPHA = ["jobs", "alpha"];
 const STEPS = [...ALPHA, "steps"];
 const alpha = (ctx) => workflow(ctx).jobs?.alpha ?? {};
 const steps = (ctx) => alpha(ctx).steps ?? [];
+const JOBS = ["alpha", "verify", "build", "publish", "commit-back"];
+const job = (ctx, id) => workflow(ctx).jobs?.[id] ?? {};
+const stepsOf = (ctx, id) => job(ctx, id).steps ?? [];
+/** The index of the first step of job `id` that satisfies `pred`. */
+const stepAt = (ctx, id, pred) => {
+  const index = stepsOf(ctx, id).findIndex(pred);
+  assert.notEqual(index, -1, `no step of ${id} matches`);
+  return index;
+};
+const usesAction = (name) => (step) =>
+  String(step.uses ?? "").startsWith(`${name}@`);
+/** Replaces `from` by `to` in the run of the first step of `id` that runs `text`. */
+const editRun = (ctx, id, text, from, to) => {
+  const i = stepAt(ctx, id, runs(text));
+  ctx.doc.setIn(
+    ["jobs", id, "steps", i, "run"],
+    String(stepsOf(ctx, id)[i].run).replace(from, to),
+  );
+};
+const moveStepOf = (ctx, id, from, to) => {
+  const list = ctx.doc.getIn(["jobs", id, "steps"], true).items;
+  const [step] = list.splice(from, 1);
+  list.splice(to, 0, step);
+};
 
 /** The index of the first step that satisfies `pred`. */
 const at = (ctx, pred) => {
@@ -86,7 +124,31 @@ const CHECKOUT_WITH = {
   "persist-credentials": false,
 };
 const CONCURRENCY = { group: "release-alpha", "cancel-in-progress": false };
-const TIMEOUT_MINUTES = 20;
+const TIMEOUTS = {
+  alpha: 20,
+  verify: 45,
+  build: 45,
+  publish: 20,
+  "commit-back": 15,
+};
+
+const PUBLISH_IF = [
+  "(github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-alpha.'))",
+  "(github.event_name == 'workflow_dispatch' && inputs.tag != '')",
+].join(" || ");
+const NOT_DRY_RUN = "needs.verify.outputs.dry_run != 'true'";
+const PUBLISH_CONCURRENCY = {
+  group: `release-publish-${gh("github.ref")}`,
+  "cancel-in-progress": false,
+};
+const WRITE = { contents: "write" };
+const PUBLISH_SIDE = ["verify", "build", "publish", "commit-back"];
+/** The one way a step derives the basic-auth header from GH_TOKEN. */
+const AUTH = `auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`;
+const OFF_MAIN =
+  'if [ "$DRY_RUN" = true ] && [ "$GITHUB_REF" != refs/heads/main ]; then';
+const REMOTE_TAG =
+  'existing="$(gh api "repos/$GH_REPO/git/matching-refs/tags/$TAG" | jq -r --arg ref "refs/tags/$TAG" \'.[] | select(.ref == $ref) | .ref\')"';
 
 /** Sets the alpha job's `if` to the expected one with `clause` removed. */
 const ifWithout = (clause) => (ctx) =>
@@ -144,7 +206,15 @@ const checks = [
     check: (ctx) => {
       const wf = workflow(ctx);
       assert.deepEqual(wf.permissions, { contents: "read" });
-      assert.deepEqual(wf.jobs.alpha.permissions, { contents: "write" });
+      assert.deepEqual(Object.keys(wf.jobs).sort(), [...JOBS].sort());
+      assert.deepEqual(wf.jobs.alpha.permissions, WRITE);
+      // verify and build inherit contents: read from the workflow.
+      assert.equal(wf.jobs.verify.permissions, undefined);
+      assert.equal(wf.jobs.build.permissions, undefined);
+      // Exactly contents: write; id-token and attestations come with the
+      // registry publishing, which changes this check.
+      assert.deepEqual(wf.jobs.publish.permissions, WRITE);
+      assert.deepEqual(wf.jobs["commit-back"].permissions, WRITE);
     },
     mutants: {
       "grants write at the top": (ctx) =>
@@ -153,6 +223,18 @@ const checks = [
         ctx.doc.deleteIn([...ALPHA, "permissions"]),
       "grants the alpha id-token: write": (ctx) =>
         ctx.doc.setIn([...ALPHA, "permissions", "id-token"], "write"),
+      "grants verify contents: write": (ctx) =>
+        ctx.doc.setIn(["jobs", "verify", "permissions"], WRITE),
+      "grants build contents: write": (ctx) =>
+        ctx.doc.setIn(["jobs", "build", "permissions"], WRITE),
+      "grants publish id-token: write": (ctx) =>
+        ctx.doc.setIn(["jobs", "publish", "permissions", "id-token"], "write"),
+      "drops the commit-back permissions": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "commit-back", "permissions"]),
+      "drops the publish permissions": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "permissions"]),
+      "adds a job": (ctx) =>
+        ctx.doc.setIn(["jobs", "extra"], { "runs-on": "ubuntu-latest" }),
     },
   },
   {
@@ -209,20 +291,31 @@ const checks = [
         ctx.doc.setIn(
           [...STEPS, 0, "run"],
           String(ctx.doc.getIn([...STEPS, 0, "run"])).replace(
-            "refs/heads/main",
-            "refs/heads/dev",
+            /(ls-remote [^\n]*)refs\/heads\/main/,
+            "$1refs/heads/dev",
           ),
         ),
       "reads anonymously": (ctx) => ctx.doc.deleteIn([...STEPS, 0, "env"]),
     },
   },
   {
-    name: "runs every step in bash with pipefail",
-    check: (ctx) => assert.equal(alpha(ctx).defaults?.run?.shell, "bash"),
+    name: "runs every step of every job in bash with pipefail",
+    check: (ctx) => {
+      for (const id of JOBS)
+        assert.equal(job(ctx, id).defaults?.run?.shell, "bash", id);
+    },
     mutants: {
       "drops the defaults": (ctx) => ctx.doc.deleteIn([...ALPHA, "defaults"]),
       "runs sh": (ctx) =>
         ctx.doc.setIn([...ALPHA, "defaults", "run", "shell"], "sh"),
+      "drops the defaults of verify": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "verify", "defaults"]),
+      "drops the defaults of build": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "build", "defaults"]),
+      "drops the defaults of publish": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "defaults"]),
+      "drops the defaults of commit-back": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "commit-back", "defaults"]),
     },
   },
   {
@@ -374,10 +467,12 @@ const checks = [
   {
     name: "pins every action by full commit SHA with its version as a comment",
     check: (ctx) => {
-      const uses = ctx.doc
-        .getIn(STEPS, true)
-        .items.map((step) => step.get("uses", true))
-        .filter(Boolean);
+      const uses = JOBS.flatMap((id) =>
+        ctx.doc
+          .getIn(["jobs", id, "steps"], true)
+          .items.map((step) => step.get("uses", true))
+          .filter(Boolean),
+      );
       assert.ok(uses.length > 0, "the workflow uses no action");
       for (const node of uses) {
         assert.match(node.value, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/);
@@ -394,17 +489,656 @@ const checks = [
         ctx.doc.getIn([...STEPS, checkoutStep(ctx), "uses"], true).comment =
           undefined;
       },
+      "pins upload-artifact by tag": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "build",
+            "steps",
+            stepAt(ctx, "build", usesAction("actions/upload-artifact")),
+            "uses",
+          ],
+          "actions/upload-artifact@v7",
+        ),
+      "pins the commit-back checkout by tag": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "commit-back",
+            "steps",
+            stepAt(ctx, "commit-back", usesAction("actions/checkout")),
+            "uses",
+          ],
+          "actions/checkout@v7",
+        ),
     },
   },
   {
-    name: "bounds the job in time",
-    check: (ctx) =>
-      assert.equal(alpha(ctx)["timeout-minutes"], TIMEOUT_MINUTES),
+    name: "bounds every job in time",
+    check: (ctx) => {
+      for (const id of JOBS)
+        assert.equal(job(ctx, id)["timeout-minutes"], TIMEOUTS[id], id);
+    },
     mutants: {
       "deletes the timeout": (ctx) =>
         ctx.doc.deleteIn([...ALPHA, "timeout-minutes"]),
       "sets the timeout to 0": (ctx) =>
         ctx.doc.setIn([...ALPHA, "timeout-minutes"], 0),
+      "deletes the timeout of verify": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "verify", "timeout-minutes"]),
+      "deletes the timeout of build": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "build", "timeout-minutes"]),
+      "deletes the timeout of publish": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "timeout-minutes"]),
+      "deletes the timeout of commit-back": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "commit-back", "timeout-minutes"]),
+    },
+  },
+  {
+    name: "the publish side runs for v* tags that are not alphas, or for a dispatch with a tag",
+    check: (ctx) => {
+      assert.equal(normalise(job(ctx, "verify").if), PUBLISH_IF);
+      // Every other job of the publish side follows verify.
+      for (const id of ["build", "publish", "commit-back"])
+        assert.ok(
+          [job(ctx, id).needs].flat().includes("verify"),
+          `${id} does not need verify`,
+        );
+    },
+    mutants: {
+      "drops the alpha exclusion": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "if"],
+          PUBLISH_IF.replace(" && !contains(github.ref_name, '-alpha.')", ""),
+        ),
+      "drops the tag prefix": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "if"],
+          PUBLISH_IF.replace(" && startsWith(github.ref, 'refs/tags/v')", ""),
+        ),
+      "dispatch clause with inputs.tag == ''": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "if"],
+          PUBLISH_IF.replace("inputs.tag != ''", "inputs.tag == ''"),
+        ),
+      "drops the if": (ctx) => ctx.doc.deleteIn(["jobs", "verify", "if"]),
+    },
+  },
+  {
+    name: "a dispatch never publishes: publish waits for a non-dry run and commit-back for publish",
+    check: (ctx) => {
+      assert.equal(
+        job(ctx, "verify").outputs?.dry_run,
+        gh("github.event_name == 'workflow_dispatch'"),
+      );
+      assert.ok(
+        String(job(ctx, "publish").if ?? "").includes(NOT_DRY_RUN),
+        "publish runs on a dry run",
+      );
+      assert.ok(
+        [job(ctx, "commit-back").needs].flat().includes("publish"),
+        "commit-back does not wait for publish",
+      );
+    },
+    mutants: {
+      "drops the if of publish": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "if"]),
+      "hard-codes dry_run": (ctx) =>
+        ctx.doc.setIn(["jobs", "verify", "outputs", "dry_run"], "false"),
+      "commit-back needs only verify": (ctx) =>
+        ctx.doc.setIn(["jobs", "commit-back", "needs"], ["verify"]),
+    },
+  },
+  {
+    name: "verify checks the tag on the commit before the full gate, and before build starts",
+    check: (ctx) => {
+      const verify = stepsOf(ctx, "verify");
+      const v = stepAt(ctx, "verify", (step) => step.id === "verify");
+      const gates = stepAt(ctx, "verify", (step) => step.run === "pnpm gates");
+      assert.ok(v < gates, "the gate runs before verify-tag");
+      assert.match(
+        verify[v].run,
+        /node scripts\/release\/verify-tag\.mjs --tag "\$TAG" --commit "\$GITHUB_SHA" --json \| tee verify\.json/,
+      );
+      // One source for the tag: the job's env, read by the step and the output.
+      assert.equal(
+        job(ctx, "verify").env?.TAG,
+        gh("inputs.tag || github.ref_name"),
+      );
+      assert.equal(verify[v].env?.TAG, undefined);
+      for (const [output, step] of [
+        ["stage", "stage"],
+        ["version", "version"],
+        ["last_beta", "last_beta"],
+      ])
+        assert.equal(
+          job(ctx, "verify").outputs?.[output],
+          gh(`steps.verify.outputs.${step}`),
+        );
+      assert.equal(job(ctx, "verify").outputs?.tag, gh("env.TAG"));
+      assert.ok(
+        verify[v].run.includes(
+          "last_beta=$(jq -r '.lastBeta // \"none\"' verify.json)",
+        ),
+        "the last beta does not fall back to none, the value render-notes takes",
+      );
+      assert.equal(job(ctx, "build").needs, "verify");
+      assert.deepEqual(job(ctx, "publish").needs, ["verify", "build"]);
+    },
+    mutants: {
+      "runs the gate before verify-tag": (ctx) =>
+        moveStepOf(
+          ctx,
+          "verify",
+          stepAt(ctx, "verify", (step) => step.run === "pnpm gates"),
+          0,
+        ),
+      "drops the gate": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "verify",
+          "steps",
+          stepAt(ctx, "verify", (step) => step.run === "pnpm gates"),
+        ]),
+      "sets TAG on the step again": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "verify",
+            "steps",
+            stepAt(ctx, "verify", (step) => step.id === "verify"),
+            "env",
+          ],
+          { TAG: gh("inputs.tag || github.ref_name") },
+        ),
+      "outputs the tag from github.ref_name": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "outputs", "tag"],
+          gh("github.ref_name"),
+        ),
+      "verifies github.ref instead of the commit": (ctx) =>
+        editRun(ctx, "verify", "verify-tag.mjs", '"$GITHUB_SHA"', '"$TAG"'),
+      "build without needs": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "build", "needs"]),
+      "publish needs verify only": (ctx) =>
+        ctx.doc.setIn(["jobs", "publish", "needs"], ["verify"]),
+      "falls back to an empty last beta": (ctx) =>
+        editRun(ctx, "verify", "verify-tag.mjs", '// "none"', '// ""'),
+    },
+  },
+  {
+    name: "verify fetches the release branches and every tag before verify-tag runs",
+    check: (ctx) => {
+      const step = stepsOf(ctx, "verify")[
+        stepAt(ctx, "verify", (s) => s.id === "verify")
+      ];
+      const fetch = step.run.indexOf(
+        "git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*'",
+      );
+      assert.notEqual(fetch, -1, "the release branches are not fetched");
+      assert.ok(fetch < step.run.indexOf("verify-tag.mjs"), "fetched too late");
+      const checkout = stepsOf(ctx, "verify")[
+        stepAt(ctx, "verify", usesAction("actions/checkout"))
+      ];
+      assert.equal(checkout.with?.["fetch-depth"], 0);
+      assert.equal(checkout.with?.["fetch-tags"], true);
+    },
+    mutants: {
+      "drops the fetch": (ctx) =>
+        editRun(
+          ctx,
+          "verify",
+          "verify-tag.mjs",
+          "git fetch origin '+refs/heads/release/*:refs/remotes/origin/release/*'\n",
+          "",
+        ),
+      "fetches depth 1": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "verify",
+            "steps",
+            stepAt(ctx, "verify", usesAction("actions/checkout")),
+            "with",
+            "fetch-depth",
+          ],
+          1,
+        ),
+    },
+  },
+  {
+    name: "build writes the version from the tag into its own checkout before it builds",
+    check: (ctx) => {
+      const set = stepAt(ctx, "build", runs("set-version.mjs"));
+      const step = stepsOf(ctx, "build")[set];
+      assert.match(
+        step.run,
+        /node scripts\/release\/set-version\.mjs "\$\{TAG#v\}"/,
+      );
+      assert.equal(step.env?.TAG, gh("needs.verify.outputs.tag"));
+      assert.ok(
+        set < stepAt(ctx, "build", runs("cargo build --release --locked")),
+      );
+      assert.ok(
+        set < stepAt(ctx, "build", runs("pnpm -r --if-present run build")),
+      );
+    },
+    mutants: {
+      "drops set-version": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "build",
+          "steps",
+          stepAt(ctx, "build", runs("set-version.mjs")),
+        ]),
+      "sets the version after cargo build": (ctx) =>
+        moveStepOf(
+          ctx,
+          "build",
+          stepAt(ctx, "build", runs("set-version.mjs")),
+          stepsOf(ctx, "build").length - 1,
+        ),
+      "builds without --locked": (ctx) =>
+        editRun(ctx, "build", "cargo build", " --locked", ""),
+    },
+  },
+  {
+    name: "the GitHub release is a prerelease for a beta and latest for a release, and idempotent",
+    check: (ctx) => {
+      const step = stepsOf(ctx, "publish")[
+        stepAt(ctx, "publish", runs("gh release create"))
+      ];
+      const view = step.run.indexOf('gh release view "$TAG"');
+      assert.notEqual(view, -1, "no check for an existing release");
+      assert.ok(
+        view < step.run.indexOf("gh release create"),
+        "check after create",
+      );
+      assert.match(
+        step.run,
+        /gh release create "\$TAG" --prerelease --verify-tag --title "\$TAG" --notes-file notes\.md/,
+      );
+      assert.match(
+        step.run,
+        /gh release create "\$TAG" --latest --verify-tag --title "\$TAG" --notes-file notes\.md/,
+      );
+      assert.match(
+        step.run,
+        /if \[ "\$STAGE" = beta \]|elif \[ "\$STAGE" = beta \]/,
+      );
+      assert.equal(step.env?.GH_TOKEN, gh("github.token"));
+      assert.equal(step.env?.GH_REPO, gh("github.repository"));
+      assert.equal(step.env?.TAG, gh("needs.verify.outputs.tag"));
+      assert.equal(step.env?.STAGE, gh("needs.verify.outputs.stage"));
+      const notes = stepsOf(ctx, "publish")[
+        stepAt(ctx, "publish", runs("render-notes.mjs"))
+      ];
+      assert.match(
+        notes.run,
+        /--beta "\$VERSION" --since "\$LAST_BETA" > notes\.md/,
+      );
+      assert.match(notes.run, /--release "\$VERSION" > notes\.md/);
+      assert.equal(notes.env?.LAST_BETA, gh("needs.verify.outputs.last_beta"));
+    },
+    mutants: {
+      "drops --prerelease": (ctx) =>
+        editRun(ctx, "publish", "gh release create", " --prerelease", ""),
+      "drops the existing-release check": (ctx) =>
+        editRun(
+          ctx,
+          "publish",
+          "gh release create",
+          'gh release view "$TAG"',
+          "false",
+        ),
+      "drops --latest": (ctx) =>
+        editRun(ctx, "publish", "gh release create", " --latest", ""),
+      "drops --verify-tag": (ctx) =>
+        editRun(ctx, "publish", "gh release create", " --verify-tag", ""),
+      "renders beta notes since nothing": (ctx) =>
+        editRun(ctx, "publish", "render-notes.mjs", '"$LAST_BETA"', "none"),
+    },
+  },
+  {
+    name: "the registry steps only report what publishable says, and publish nothing yet",
+    check: (ctx) => {
+      for (const registry of ["npm", "crates.io"]) {
+        const step = stepsOf(ctx, "publish")[
+          stepAt(ctx, "publish", (s) => s.name === registry)
+        ];
+        assert.match(
+          step.run,
+          /node scripts\/release\/publishable\.mjs --json/,
+        );
+        assert.match(step.run, /skip \\\(\.name\): \\\(\.reason\)/);
+      }
+      for (const step of stepsOf(ctx, "publish"))
+        assert.doesNotMatch(
+          String(step.run ?? ""),
+          /\b(?:npm|pnpm|cargo) publish\b/,
+          "a registry is published to",
+        );
+    },
+    mutants: {
+      "publishes to npm": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "publish",
+            "steps",
+            stepAt(ctx, "publish", (s) => s.name === "npm"),
+            "run",
+          ],
+          "pnpm -r publish --tag beta",
+        ),
+      "drops the crates.io step": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "publish",
+          "steps",
+          stepAt(ctx, "publish", (s) => s.name === "crates.io"),
+        ]),
+    },
+  },
+  {
+    name: "commit-back checks out main and leaves the commit to commit-back.mjs",
+    check: (ctx) => {
+      const steps = stepsOf(ctx, "commit-back");
+      const checkout =
+        steps[stepAt(ctx, "commit-back", usesAction("actions/checkout"))];
+      assert.equal(checkout.with?.ref, "main");
+      assert.equal(checkout.with?.["fetch-depth"], 0);
+      assert.equal(checkout.with?.["fetch-tags"], true);
+      const step = steps[stepAt(ctx, "commit-back", runs("commit-back.mjs"))];
+      assert.match(
+        step.run,
+        /node scripts\/release\/commit-back\.mjs --tag "\$TAG" --stage "\$STAGE" --version "\$VERSION" --date "\$PUBLISHED"/,
+      );
+      // The index date is fixed at publishing: the release's own UTC day,
+      // never the clock of this job, so a re-run indexes the same day.
+      const published = step.run.indexOf(
+        `PUBLISHED="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"`,
+      );
+      assert.notEqual(
+        published,
+        -1,
+        "the date is not the release's publishedAt",
+      );
+      assert.ok(published < step.run.indexOf("commit-back.mjs"));
+      assert.doesNotMatch(
+        step.run,
+        /\bdate\b -u/,
+        "the date is the job's clock",
+      );
+      assert.equal(step.env?.GH_REPO, gh("github.repository"));
+      assert.equal(step.env?.TAG, gh("needs.verify.outputs.tag"));
+      assert.equal(step.env?.STAGE, gh("needs.verify.outputs.stage"));
+      assert.equal(step.env?.VERSION, gh("needs.verify.outputs.version"));
+      for (const other of steps)
+        assert.doesNotMatch(
+          String(other.run ?? ""),
+          /git (?:commit|push)\b/,
+          "a step commits or pushes by itself",
+        );
+    },
+    mutants: {
+      "drops the ref": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "commit-back",
+          "steps",
+          stepAt(ctx, "commit-back", usesAction("actions/checkout")),
+          "with",
+          "ref",
+        ]),
+      "commits inline instead": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          /node scripts\/release\/commit-back\.mjs[^\n]*/,
+          'git commit -am "index" && git push origin HEAD:main',
+        ),
+      "drops the date": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          ' --date "$PUBLISHED"',
+          "",
+        ),
+      "dates by the job's clock": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          '--date "$PUBLISHED"',
+          '--date "$(date -u +%F)"',
+        ),
+      "reads the date from the clock into PUBLISHED": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          `"$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"`,
+          '"$(date -u +%F)"',
+        ),
+    },
+  },
+  {
+    name: "publish and commit-back keep their write token out of the checkout; only the commit-back step gets it",
+    check: (ctx) => {
+      for (const id of ["publish", "commit-back"]) {
+        const checkout = stepsOf(ctx, id)[
+          stepAt(ctx, id, usesAction("actions/checkout"))
+        ];
+        assert.equal(checkout.with?.["persist-credentials"], false, id);
+      }
+      const step = stepsOf(ctx, "commit-back")[
+        stepAt(ctx, "commit-back", runs("commit-back.mjs"))
+      ];
+      assert.equal(step.env?.GH_TOKEN, gh("github.token"));
+      assert.match(step.run, /GIT_CONFIG_KEY_0=http\.extraHeader/);
+    },
+    mutants: {
+      "persists the publish token": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            "publish",
+            "steps",
+            stepAt(ctx, "publish", usesAction("actions/checkout")),
+            "with",
+            "persist-credentials",
+          ],
+          true,
+        ),
+      "persists the commit-back token": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "commit-back",
+          "steps",
+          stepAt(ctx, "commit-back", usesAction("actions/checkout")),
+          "with",
+          "persist-credentials",
+        ]),
+    },
+  },
+  {
+    name: "every job of the publish side is in the one group of its ref, which never cancels a running job",
+    check: (ctx) => {
+      for (const id of PUBLISH_SIDE)
+        assert.deepEqual(job(ctx, id).concurrency, PUBLISH_CONCURRENCY, id);
+    },
+    mutants: {
+      "cancels in progress": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "concurrency", "cancel-in-progress"],
+          true,
+        ),
+      "one group for every ref": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "verify", "concurrency", "group"],
+          "release-publish",
+        ),
+      "build outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "build", "concurrency"]),
+      "publish outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish", "concurrency"]),
+      "commit-back outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "commit-back", "concurrency"]),
+      "commit-back in a group of its own": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "commit-back", "concurrency", "group"],
+          `release-commit-back-${gh("github.ref")}`,
+        ),
+    },
+  },
+  {
+    name: "every step that derives the basic-auth header from the token masks it before git can see it",
+    check: (ctx) => {
+      const derives = JOBS.flatMap((id) =>
+        stepsOf(ctx, id)
+          .filter((step) => /GIT_CONFIG_VALUE_0|base64/.test(step.run ?? ""))
+          .map((step) => [id, String(step.run)]),
+      );
+      assert.deepEqual(
+        derives.map(([id]) => id),
+        ["alpha", "commit-back"],
+        "the steps that derive the header",
+      );
+      for (const [id, run] of derives) {
+        const derive = run.indexOf(AUTH);
+        const mask = run.indexOf('echo "::add-mask::$auth"');
+        const use = run.indexOf(
+          'GIT_CONFIG_VALUE_0="Authorization: basic $auth"',
+        );
+        assert.notEqual(
+          derive,
+          -1,
+          `${id}: the header is not derived into auth`,
+        );
+        assert.ok(
+          mask > derive,
+          `${id}: auth is not masked after it is derived`,
+        );
+        assert.ok(
+          use > mask,
+          `${id}: the header is exported before it is masked`,
+        );
+        assert.equal(
+          run.match(/base64/g).length,
+          1,
+          `${id}: a second base64 value is derived`,
+        );
+      }
+    },
+    mutants: {
+      "drops the guard's mask": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", 'echo "::add-mask::$auth"\n', ""),
+      "drops commit-back's mask": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'echo "::add-mask::$auth"\n',
+          "",
+        ),
+      "masks the token instead": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'echo "::add-mask::$auth"',
+          'echo "::add-mask::$GH_TOKEN"',
+        ),
+      "derives the header inline, unmasked": (ctx) =>
+        editRun(
+          ctx,
+          "commit-back",
+          "commit-back.mjs",
+          'GIT_CONFIG_VALUE_0="Authorization: basic $auth"',
+          `GIT_CONFIG_VALUE_0="Authorization: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`,
+        ),
+      "exports the header before the mask": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "ls-remote",
+          'echo "::add-mask::$auth"\n',
+          'export GIT_CONFIG_VALUE_0="Authorization: basic $auth"\necho "::add-mask::$auth"\n',
+        ),
+    },
+  },
+  {
+    name: "a dry run off main fails at the guard instead of skipping green",
+    check: (ctx) => {
+      const run = String(steps(ctx)[0]?.run ?? "");
+      const refused = run.indexOf(OFF_MAIN);
+      assert.notEqual(refused, -1, "the guard does not test a dry run's ref");
+      const exit = run.indexOf("exit 1", refused);
+      assert.ok(
+        exit !== -1 && exit < run.indexOf("fi", refused),
+        "a dry run off main does not fail",
+      );
+      assert.ok(
+        refused < run.indexOf("ls-remote"),
+        "the dry run's ref is tested after ls-remote",
+      );
+    },
+    mutants: {
+      "drops the check": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", OFF_MAIN, "if false; then"),
+      "lets it pass": (ctx) =>
+        editRun(ctx, "alpha", "ls-remote", /exit 1/, "exit 0"),
+      "tests another branch": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "ls-remote",
+          "refs/heads/main ]",
+          "refs/heads/dev ]",
+        ),
+    },
+  },
+  {
+    name: "the alpha refuses a tag that already exists on the remote without a release",
+    check: (ctx) => {
+      const run = String(steps(ctx)[publishStep(ctx)].run);
+      const lookup = run.indexOf(REMOTE_TAG);
+      assert.notEqual(lookup, -1, "the remote is not asked for the tag");
+      assert.ok(
+        lookup > run.indexOf('gh release view "$TAG"'),
+        "the tag is looked up before the release is",
+      );
+      const create = run.indexOf("gh release create");
+      assert.ok(lookup < create, "the tag is looked up after the create");
+      assert.match(
+        run.slice(lookup, create),
+        /if \[ -n "\$existing" \]; then\n[^\n]*::error::[^\n]*\n\s*exit 1\n/,
+      );
+    },
+    mutants: {
+      "drops the lookup": (ctx) =>
+        editRun(ctx, "alpha", "gh release create", REMOTE_TAG, 'existing=""'),
+      "looks up after the create": (ctx) => {
+        editRun(ctx, "alpha", "gh release create", REMOTE_TAG, 'existing=""');
+        editRun(
+          ctx,
+          "alpha",
+          "gh release create",
+          /(\n\s*)(gh release create [^\n]*)/,
+          (_, indent, create) => `${indent}${create}${indent}${REMOTE_TAG}`,
+        );
+      },
+      "only warns": (ctx) =>
+        editRun(
+          ctx,
+          "alpha",
+          "gh release create",
+          /(::error::[^\n]*\n\s*)exit 1/,
+          "$1true",
+        ),
     },
   },
 ];

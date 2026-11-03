@@ -8,15 +8,17 @@ Check your fragments with `node scripts/release/check-fragments.mjs` (part of `p
 |---|---|---|
 | `type` | `breaking`, `feature`, `fix`, `deprecation`, `security`, `internal` | yes |
 | `tickets` | nxf ids, e.g. `[mt08.1qaz]` | yes |
+| `issues` | GitHub issue numbers of this repository, e.g. `[42, 57]`; each a positive integer, none twice. The release notes link them. | no |
 | `introduced` | `cycle` (the bug only existed since the last release) or the released version `X.Y.Z` that introduced it | yes for `fix`, forbidden otherwise |
 | `components` | non-empty list from `core`, `sdk-rust`, `sdk-ts`, `cli`, `relay` | yes |
 
-A template (here for a `feature`); the body's level-2 headings are the sections, exactly those of the type:
+A template (here for a `feature` that closes two GitHub issues; leave `issues` out when there are none); the body's level-2 headings are the sections, exactly those of the type:
 
 ```md
 ---
 type: feature
 tickets: [mt08.1qaz]
+issues: [42, 57]
 components: [core]
 ---
 ## Problem

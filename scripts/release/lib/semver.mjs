@@ -4,11 +4,11 @@
 // leading v.
 
 /** A full version: X.Y.Z or X.Y.Z-alpha.N or X.Y.Z-beta.N. */
-export const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?$/;
+const VERSION = /^(\d+)\.(\d+)\.(\d+)(?:-(alpha|beta)\.(\d+))?$/;
 /** A plain version, as committed manifests hold it. */
 export const PLAIN = /^\d+\.\d+\.\d+$/;
 /** A version tag. */
-export const TAG = /^v(\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?)$/;
+const TAG = /^v(\d+\.\d+\.\d+(?:-(?:alpha|beta)\.\d+)?)$/;
 
 const STAGE = { alpha: 0, beta: 1, release: 2 };
 

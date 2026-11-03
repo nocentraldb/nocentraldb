@@ -26,16 +26,28 @@ export const SECTIONS = {
   security: ["Description", "Advisory"],
   internal: [],
 };
-const FIELDS = new Set(["type", "tickets", "introduced", "components"]);
+const FIELDS = new Set([
+  "type",
+  "tickets",
+  "issues",
+  "introduced",
+  "components",
+]);
+
+// The front matter: `---` as the first line, closed by the first line that is
+// exactly `---`, followed by a newline or the end of the file.
+const FRONT_MATTER = /^---\n([\s\S]*?)\n---(?:\n([\s\S]*))?$/;
 
 export function parseFragment(text) {
-  const match = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(text);
+  if (text.includes("\r\n"))
+    throw new Error("has CRLF line endings; save it with LF line endings");
+  const match = FRONT_MATTER.exec(text);
   if (!match) throw new Error("no front matter block (--- … ---) at the top");
   const front = parse(match[1]);
   if (front === null || typeof front !== "object" || Array.isArray(front)) {
     throw new Error("front matter is not a mapping");
   }
-  const body = match[2];
+  const body = match[2] ?? "";
   return { front, body, sections: headings(body) };
 }
 
@@ -84,10 +96,48 @@ export function demoteSections(body, levels = 1) {
   ).join("\n");
 }
 
+/**
+ * A body split at its sections (`## ` headings outside fences): the text
+ * before the first one, and each section's name and text, both trimmed.
+ */
+export function splitSections(body) {
+  let current = { lines: [] };
+  const parts = [current];
+  for (const { line, prose } of classifyLines(body)) {
+    const heading = prose && SECTION.exec(line);
+    if (heading) {
+      current = { name: heading[1], lines: [] };
+      parts.push(current);
+    } else current.lines.push(line);
+  }
+  const text = ({ lines }) => lines.join("\n").trim();
+  return {
+    preamble: text(parts[0]),
+    sections: parts.slice(1).map((p) => ({ name: p.name, text: text(p) })),
+  };
+}
+
 const isList = (value, ok) =>
   Array.isArray(value) &&
   value.length > 0 &&
   value.every((v) => typeof v === "string" && ok(v));
+
+/** The rules for `issues`, optional: GitHub issue numbers of this repository. */
+const issueErrors = (issues) => {
+  if (!Array.isArray(issues) || issues.length === 0)
+    return [
+      `issues must be a non-empty list of GitHub issue numbers, like [42, 57]; got ${JSON.stringify(issues)}`,
+    ];
+  const errors = [];
+  const seen = new Set();
+  for (const issue of issues) {
+    if (!Number.isInteger(issue) || issue <= 0)
+      errors.push(`issues: ${JSON.stringify(issue)} is not a positive integer`);
+    else if (seen.has(issue)) errors.push(`issues: ${issue} is listed twice`);
+    seen.add(issue);
+  }
+  return errors;
+};
 
 export function validateFragment(slug, text) {
   const errors = [];
@@ -106,6 +156,7 @@ export function validateFragment(slug, text) {
     errors.push(`type must be one of ${TYPES.join(", ")}`);
   if (!isList(front.tickets, (t) => TICKET.test(t)))
     errors.push("tickets must be a non-empty list of ids like mt08.1qaz");
+  if ("issues" in front) errors.push(...issueErrors(front.issues));
   if (!isList(front.components, (c) => COMPONENTS.includes(c)))
     errors.push(
       `components must be a non-empty list from ${COMPONENTS.join(", ")}`,
@@ -117,7 +168,10 @@ export function validateFragment(slug, text) {
   } else if ("introduced" in front) {
     errors.push(`introduced is only allowed on fix, not on ${front.type}`);
   }
-  const required = SECTIONS[front.type] ?? [];
+  // Own keys only: `type: constructor` must not find Object's constructor.
+  const required = Object.hasOwn(SECTIONS, front.type)
+    ? SECTIONS[front.type]
+    : [];
   for (const name of required)
     if (!sections.includes(name)) errors.push(`missing section ## ${name}`);
   for (const name of sections)

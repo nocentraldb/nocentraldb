@@ -14,6 +14,7 @@ import {
   readFragments,
   SECTIONS,
   SLUG,
+  splitSections,
   TICKET,
   TYPES,
   validateFragment,
@@ -296,4 +297,94 @@ test("demoteSections demotes sections by the given number of levels, fences unto
     demoteSections(body, 2),
     "#### Problem\n### Deeper\n```md\n## inside\n```\n#### Use\n",
   );
+});
+
+test("splitSections splits a body at its ## headings outside fences, text trimmed, the preamble kept", () => {
+  const body =
+    "Lead.\n\n## Problem\n\nNo x.\n\n## Use\n\n```md\n## not a section\n```\n\n## Empty\n";
+  assert.deepEqual(splitSections(body), {
+    preamble: "Lead.",
+    sections: [
+      { name: "Problem", text: "No x." },
+      { name: "Use", text: "```md\n## not a section\n```" },
+      { name: "Empty", text: "" },
+    ],
+  });
+});
+
+const withIssues = (value) =>
+  feature.replace("components:", `issues: ${value}\ncomponents:`);
+
+test("issues is optional; a list of positive issue numbers is valid", () => {
+  assert.deepEqual(validateFragment("add-y", withIssues("[42, 57]")), []);
+  assert.deepEqual(validateFragment("add-y", withIssues("[1]")), []);
+  assert.deepEqual(
+    parseFragment(withIssues("[42, 57]")).front.issues,
+    [42, 57],
+  );
+});
+
+test("issues: a bad value is rejected and named", () => {
+  const rejected = {
+    "an empty list": ["[]", /^issues must be a non-empty list/],
+    "a number, not a list": ["42", /^issues must be a non-empty list.*got 42$/],
+    "no value": ["", /^issues must be a non-empty list.*got null$/],
+    zero: ["[0]", /^issues: 0 is not a positive integer$/],
+    "a negative number": ["[42, -1]", /^issues: -1 is not a positive integer$/],
+    "a fraction": ["[4.5]", /^issues: 4\.5 is not a positive integer$/],
+    "a string": ['["57"]', /^issues: "57" is not a positive integer$/],
+    "a reference": ['["#57"]', /^issues: "#57" is not a positive integer$/],
+    "a duplicate": ["[42, 57, 42]", /^issues: 42 is listed twice$/],
+  };
+  for (const [name, [value, rule]] of Object.entries(rejected)) {
+    const errors = validateFragment("add-y", withIssues(value));
+    assert.ok(
+      errors.some((e) => rule.test(e)),
+      `${name}: ${JSON.stringify(errors)}`,
+    );
+  }
+});
+
+test("a type that names a prototype key is an unknown type, never a crash", () => {
+  for (const type of [
+    "constructor",
+    "toString",
+    "__proto__",
+    "hasOwnProperty",
+  ]) {
+    const text = feature.replace("type: feature", `type: ${type}`);
+    let errors;
+    assert.doesNotThrow(() => {
+      errors = validateFragment("add-y", text);
+    }, type);
+    assert.ok(
+      errors.some((e) => /^type must be one of/.test(e)),
+      `${type}: ${JSON.stringify(errors)}`,
+    );
+  }
+});
+
+test("CRLF line endings are named as such", () => {
+  const crlf = feature.replaceAll("\n", "\r\n");
+  assert.deepEqual(validateFragment("add-y", crlf), [
+    "has CRLF line endings; save it with LF line endings",
+  ]);
+  assert.throws(() => parseFragment(crlf), /CRLF/);
+});
+
+test("the front matter closes only at a line that is exactly ---", () => {
+  const closers = {
+    "--- with text after it": feature.replace("\n---\n", "\n---extra\n"),
+    "a longer rule": feature.replace("\n---\n", "\n----\n"),
+    "--- with trailing spaces": feature.replace("\n---\n", "\n---  \n"),
+  };
+  for (const [name, text] of Object.entries(closers))
+    assert.throws(() => parseFragment(text), /no front matter/, name);
+  // A closer at the very end, with nothing after it, is a closer.
+  const bare =
+    "---\ntype: internal\ntickets: [mt08.1qaz]\ncomponents: [core]\n---";
+  assert.equal(parseFragment(bare).body, "");
+  assert.deepEqual(validateFragment("bump", bare), [
+    "internal has a one-line body and no sections",
+  ]);
 });
