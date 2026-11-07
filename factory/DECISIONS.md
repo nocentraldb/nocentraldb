@@ -80,8 +80,38 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
 
+### 2026-11-07 · NOC-6 · RFC 0002 names its conflicts with GENESIS.md and RFC 0001 instead of resolving them
+
+- Decided by: coding agent (NOC-6)
+- Why: parked changes (D9) bend principle 2, and the relay sees more metadata than RFC 0001 lists; both touch what GENESIS.md reserves for the owner, so the RFC proposes a reading and leaves the ruling to the owner.
+- Instead of: editing RFC 0001, the FAQ or GENESIS.md in this PR, which is outside the ticket's scope.
+
+### 2026-11-07 · NOC-6 · The docs-only RFC is held by a test in the repository tooling
+
+- Decided by: coding agent (NOC-6)
+- Why: `scripts/rfc.test.mjs` runs in `repo:test` and checks that RFC 0002 exists and links back to RFC 0001, so the gate fails if either is lost.
+- Instead of: no test, which leaves the gate unchanged for a docs-only PR.
+
+### 2026-11-07 · NOC-6 · RFC 0002: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
 ### 2026-11-07 · no ticket · A PR that waits only for the owner holds no lane
 
 - Decided by: Carsten
 - Why: four reviewed PRs waited for the owner and blocked all four lanes, so no ready ticket could start; the lanes now count only work in progress, and a waiting session stays open to answer review.
 - Instead of: a lane held until merge, which keeps the owner's queue short but stops the factory while the owner reviews.
+
+### 2026-11-07 · NOC-22 · RFC 0002's two gaps become an errata ticket, not fixes in the later RFCs
+
+- Decided by: pm
+- Why: RFC 0002 (merged) says a change is atomic and also parks single operations, and has no log state for a change that failed a check; RFC 0003, 0005, 0006 and 0007 each lean on one reading. An amendment to RFC 0002 settles it once, and the owner signs it off as a format change.
+- Instead of: letting each later RFC define its own reading, which would leave four RFCs to reconcile later.
+
+### 2026-11-07 · NOC-14 · The change and log implementation stacks on NOC-10 and NOC-9
+
+- Decided by: pm
+- Why: all three change `crates/ncdb-core`, and new test files need NOC-10's wasm32 test routing; stacking avoids merge conflicts in Cargo.toml and Cargo.lock while #29 and #34 wait for the owner.
+- Instead of: branching from main and resolving conflicts after the owner merges #29 and #34.

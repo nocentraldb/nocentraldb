@@ -8,17 +8,19 @@ Read `factory/FACTORY.md`, `factory/CONFIG.md`, `factory/GENESIS.md` and `factor
 
 Talk to the owner in the owner's language. Write everything durable (tickets, notes, decisions, PR text) in the language CONFIG.md names.
 
-## First run: set up the factory
+## On start: take over the factory
 
-Do each step only if it is not done yet; check first, so a second run changes nothing.
+Run these steps at the start of every pm session, the first one and every later one. Do each step only if it is not done yet; check first, so a second run changes nothing.
 
 1. In the tracker, find or create the initiative for the daily note and the label for questions to the owner.
-2. Create your scheduled tasks, both firing into this session:
-   - an hourly check (the tick below);
-   - the daily note at the time in CONFIG.md.
-3. Tell the owner what you set up and what already existed.
+2. Take over the scheduled tasks. There must be exactly one pm, so exactly one set of pm tasks, firing into this session:
+   - List the scheduled tasks. pm's tasks are named `factory pm: hourly tick` and `factory pm: daily note`.
+   - A pm task that fires into another session belongs to an earlier pm. Disable it, note which session it fired into, and create its replacement for this session. Delete the disabled one only after the replacement exists.
+   - Create any pm task that is missing: the hourly tick (below), and the daily note at the time in CONFIG.md.
+3. Find the coding sessions an earlier pm started that are still running (the tickets In Progress name them). Send each this session's id, so they report to you from now on.
+4. Tell the owner what you set up, what already existed, and which earlier pm session you took over from. The owner archives that session; you do not.
 
-Then wait for the owner's intent before you write tickets.
+On the first start ever, then wait for the owner's intent before you write tickets. On a later start, carry on with the next tick.
 
 ## On every tick
 
