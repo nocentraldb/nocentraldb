@@ -159,3 +159,38 @@ fn duplicate_deliveries_break_a_subject_that_is_not_idempotent() {
         "{divergence:?}"
     );
 }
+
+/// Seeds the minimality tests run with; shrinking must not depend on luck.
+const SEEDS: core::ops::Range<u64> = 0..64;
+
+fn deliveries(divergence: &convergence::Divergence) -> usize {
+    divergence.orders.iter().map(Vec::len).sum()
+}
+
+#[test]
+fn every_seed_shrinks_to_two_writes_delivered_once() {
+    for seed in SEEDS {
+        let config = Config {
+            seed,
+            ..Config::default()
+        };
+        let divergence = convergence::check::<FirstArrivalWins>(&config, write)
+            .expect_err("the harness missed a divergent subject");
+        assert_eq!(divergence.changes.len(), 2, "{divergence}");
+        assert_eq!(deliveries(&divergence), 2 * config.copies, "{divergence}");
+    }
+}
+
+#[test]
+fn every_seed_shrinks_to_one_change_delivered_twice_once() {
+    for seed in SEEDS {
+        let config = Config {
+            seed,
+            ..Config::default()
+        };
+        let divergence = convergence::check::<DeliveryCounter>(&config, |_| Just(()).boxed())
+            .expect_err("the harness never delivered a change twice");
+        assert_eq!(divergence.changes.len(), 1, "{divergence}");
+        assert_eq!(deliveries(&divergence), config.copies + 1, "{divergence}");
+    }
+}
