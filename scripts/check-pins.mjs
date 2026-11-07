@@ -15,7 +15,9 @@
 //   [build-dependencies], their target.<cfg> forms and
 //   [workspace.dependencies], must be an exact `=x.y.z` requirement.
 //   `name.workspace = true` passes: the workspace entry it inherits is
-//   checked where it is declared.
+//   checked where it is declared. A `path =` entry is left to
+//   scripts/release/check-version.mjs, which pins it to the workspace
+//   version. Git dependencies and [patch] and [replace] sections fail.
 // Cargo.toml is read with the pinned smol-toml devDependency, so the Cargo
 // part needs `pnpm install` (`pnpm gates` runs after it). The npm part uses
 // Node built-ins only. pnpm-workspace.yaml is read by a narrow parser: the three sections above must be
@@ -288,8 +290,14 @@ const checkCargoTable = (file, where, table) => {
       if (!CARGO_EXACT.test(spec)) {
         fail(`${entry} = "${spec}" is not exact (use "=x.y.z")`);
       }
-    } else if (spec?.workspace === true) {
-      // Inherited from [workspace.dependencies], which is checked itself.
+    } else if (spec?.git !== undefined) {
+      fail(
+        `${entry} is a git dependency; use a registry release pinned to "=x.y.z"`,
+      );
+    } else if (spec?.workspace === true || spec?.path !== undefined) {
+      // Inherited from [workspace.dependencies], which is checked itself; or
+      // a path dependency between workspace crates, whose rule (version =
+      // "=<workspace version>") scripts/release/check-version.mjs enforces.
     } else if (typeof spec?.version !== "string") {
       fail(`${entry} has no version (use version = "=x.y.z")`);
     } else if (!CARGO_EXACT.test(spec.version)) {
@@ -304,6 +312,13 @@ const cargoFiles = globSync("**/Cargo.toml", {
 for (const file of cargoFiles) {
   const manifest = readToml(file);
   if (!manifest) continue;
+  for (const section of ["patch", "replace"]) {
+    if (manifest[section] !== undefined) {
+      fail(
+        `${file} has a [${section}] section; it replaces pinned dependencies and is not allowed`,
+      );
+    }
+  }
   checkCargoTable(
     file,
     "workspace.dependencies",
