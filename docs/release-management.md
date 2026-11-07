@@ -85,7 +85,7 @@ Front matter:
 | field | values | required |
 | --- | --- | --- |
 | `type` | `breaking`, `feature`, `fix`, `deprecation`, `security`, `internal` | yes |
-| `tickets` | nexus-flow ticket ids, e.g. `[mt08.1qaz]`; each matches `^[a-z0-9]+\.[a-z0-9]+$` | yes |
+| `tickets` | nexus-flow ticket ids or Linear issue ids, e.g. `[mt08.1qaz]` or `[NOC-12]`; each matches `^[a-z0-9]+\.[a-z0-9]+$` or `^[A-Z][A-Z0-9]*-[1-9][0-9]*$` | yes |
 | `issues` | GitHub issue numbers of this repository, e.g. `[42, 57]`; a non-empty list, each a positive integer, none twice. The notes link each one: alpha notes with a link to the issue, the generated part of beta notes and the `draft-notes` skeleton as `#42`, which GitHub links in a release body. | no |
 | `introduced` | for `fix`: `cycle` (the bug only existed since the last release) or the released version `X.Y.Z` that introduced it | yes for `fix`, forbidden otherwise |
 | `components` | non-empty list from `core`, `sdk-rust`, `sdk-ts`, `cli`, `relay` | yes |

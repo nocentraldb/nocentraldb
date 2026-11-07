@@ -16,7 +16,8 @@ export const TYPES = [
 ];
 export const COMPONENTS = ["core", "sdk-rust", "sdk-ts", "cli", "relay"];
 export const SLUG = /^[a-z0-9][a-z0-9-]*$/;
-export const TICKET = /^[a-z0-9]+\.[a-z0-9]+$/;
+/** A nexus-flow id (`mt08.1qaz`) or a Linear issue id (`NOC-12`). */
+export const TICKET = /^(?:[a-z0-9]+\.[a-z0-9]+|[A-Z][A-Z0-9]*-[1-9][0-9]*)$/;
 export const RELEASED = /^\d+\.\d+\.\d+$/;
 export const SECTIONS = {
   breaking: ["Problem", "Use", "Migration"],
@@ -155,7 +156,9 @@ export function validateFragment(slug, text) {
   if (!TYPES.includes(front.type))
     errors.push(`type must be one of ${TYPES.join(", ")}`);
   if (!isList(front.tickets, (t) => TICKET.test(t)))
-    errors.push("tickets must be a non-empty list of ids like mt08.1qaz");
+    errors.push(
+      "tickets must be a non-empty list of ids like mt08.1qaz or NOC-12",
+    );
   if ("issues" in front) errors.push(...issueErrors(front.issues));
   if (!isList(front.components, (c) => COMPONENTS.includes(c)))
     errors.push(

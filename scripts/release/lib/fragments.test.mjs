@@ -56,7 +56,7 @@ const cases = {
     /type must be one of/,
   ],
   "empty tickets": ["add-y", feature.replace("[mt08.1qaz]", "[]"), /tickets/],
-  "bad ticket id": ["add-y", feature.replace("mt08.1qaz", "MT08-1"), /tickets/],
+  "bad ticket id": ["add-y", feature.replace("mt08.1qaz", "noc-12"), /tickets/],
   "empty components": ["add-y", feature.replace("[core]", "[]"), /components/],
   "unknown component": [
     "add-y",
@@ -230,9 +230,16 @@ test("the exported vocabularies match docs/release-management.md", () => {
     assert.ok(!SLUG.test(slug), slug);
   assert.ok(
     TICKET.test("mt08.1qaz") &&
+      TICKET.test("NOC-12") &&
+      TICKET.test("AB2-1") &&
       !TICKET.test("mt08") &&
       !TICKET.test("MT08.1qaz") &&
-      !TICKET.test("mt08.1qaz.x"),
+      !TICKET.test("mt08.1qaz.x") &&
+      !TICKET.test("noc-12") &&
+      !TICKET.test("NOC-0") &&
+      !TICKET.test("NOC-") &&
+      !TICKET.test("NOC-12a") &&
+      !TICKET.test("2NOC-12"),
   );
   assert.ok(
     RELEASED.test("0.1.0") &&
