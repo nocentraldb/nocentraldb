@@ -5,3 +5,13 @@ This project uses **nexus-flow** (flow, chat, memory) — run `nxs prime` for pr
 
 The project's durable memory is projected into `NEXUS_MEMORY.md`, which is generated — change it with `nxm remember`, never by hand.
 <!-- END NEXUS -->
+
+## The software factory
+
+Before any work, read these three files in `factory/`:
+
+- `GENESIS.md`: what we build and what you must protect. It wins on what to build.
+- `FACTORY.md`: how work moves from ticket to merged code, and what pm and coding agents do.
+- `CONFIG.md`: this repository's values: the tracker, the owner, the gate command, the merge rule.
+
+Record your decisions in `factory/DECISIONS.md`, in the format `FACTORY.md` gives.

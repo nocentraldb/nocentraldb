@@ -513,7 +513,7 @@ test("PR mode: an unknown revision fails, naming git's error", (t) => {
   );
 });
 
-test("ALLOWLIST is the 21 patterns of epic \u00a712, verbatim", async () => {
+test("ALLOWLIST is the 21 patterns of epic \u00a712 plus factory/**, verbatim", async () => {
   const { ALLOWLIST } = await import("./check-fragments.mjs");
   assert.deepEqual(ALLOWLIST, [
     "docs/**",
@@ -521,6 +521,7 @@ test("ALLOWLIST is the 21 patterns of epic \u00a712, verbatim", async () => {
     "AGENTS.md",
     "CONTRIBUTING.md",
     "NEXUS_MEMORY.md",
+    "factory/**",
     "LICENSE-*",
     ".github/**",
     "scripts/**",
