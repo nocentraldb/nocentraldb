@@ -132,3 +132,30 @@ fn the_report_names_the_seed() {
     assert_eq!(divergence.seed, 42);
     assert!(divergence.to_string().contains("seed 42"), "{divergence}");
 }
+
+/// Broken on purpose: counts every delivery, so a copy that receives a change
+/// twice counts it twice. In any order without duplicates it converges.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct DeliveryCounter(u32);
+
+impl Mergeable for DeliveryCounter {
+    type Change = ();
+
+    fn apply(&mut self, _: &()) {
+        self.0 += 1;
+    }
+}
+
+#[test]
+fn duplicate_deliveries_break_a_subject_that_is_not_idempotent() {
+    let divergence =
+        convergence::check::<DeliveryCounter>(&Config::default(), |_| Just(()).boxed())
+            .expect_err("the harness never delivered a change twice");
+
+    // One change, received twice by some copy, is the smallest case.
+    assert_eq!(divergence.changes.len(), 1, "{divergence:?}");
+    assert!(
+        divergence.orders.iter().any(|order| order == &[0, 0]),
+        "{divergence:?}"
+    );
+}
