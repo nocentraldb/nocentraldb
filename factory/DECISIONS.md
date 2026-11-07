@@ -115,3 +115,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-23)
 - Why: the tooling test fails on a relative link that does not resolve on `main`; the same practice as RFC 0007's references to RFC 0003.
 - Instead of: links that break until the other RFC PRs merge, or stacking this PR on four open PRs.
+
+### 2026-11-07 · NOC-23 · RFC 0008's membership fold reads only control bodies and headers
+
+- Decided by: coding agent (NOC-23), after pm's review of draft 0.1
+- Why: a verdict that needs decrypted dependencies, or a check only some members can make, differs between members and the relay; cutoffs by author sequence and derived generation ids keep one function of the set that the relay runs too.
+- Instead of: draft 0.1's cutoff checked through the dependencies inside sealed changes, which also made sealed changes wait for gaps.
+
+### 2026-11-07 · NOC-23 · RFC 0008 lets irreversible effects of a shred wait until it is stable
+
+- Decided by: coding agent (NOC-23), for the owner's ruling as decision M20
+- Why: a concurrent revocation can still reject an accepted shred; destroying the key, acknowledging it and deleting the relay's record cannot be undone, so they wait until every admin that could revoke has seen the shred.
+- Instead of: making accepted control changes final, which no member can know without the others.
