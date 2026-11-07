@@ -32,6 +32,8 @@ pub struct Config {
     pub max_changes_per_member: usize,
     /// Number of generated cases.
     pub cases: u32,
+    /// Seeds the generator: the same seed generates the same cases.
+    pub seed: u64,
 }
 
 impl Default for Config {
@@ -41,6 +43,7 @@ impl Default for Config {
             copies: 3,
             max_changes_per_member: 4,
             cases: 256,
+            seed: 0,
         }
     }
 }
@@ -49,6 +52,8 @@ impl Default for Config {
 /// harness found.
 #[derive(Clone, Debug)]
 pub struct Divergence {
+    /// The seed of the run that found it.
+    pub seed: u64,
     /// The changes the members made, in the order they were generated.
     pub changes: Vec<String>,
     /// Per copy, the order in which it received the changes, as indexes
@@ -163,6 +168,7 @@ where
             let orders = orders_of(&case);
             let states = deliver::<S>(&case.changes, &orders);
             Err(Divergence {
+                seed: 0,
                 changes: case.changes.iter().map(|c| format!("{c:?}")).collect(),
                 orders,
                 states: states.iter().map(|s| format!("{s:?}")).collect(),

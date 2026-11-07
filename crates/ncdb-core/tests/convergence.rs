@@ -3,6 +3,7 @@
 
 mod support;
 
+use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
@@ -83,4 +84,51 @@ fn a_divergence_shrinks_and_reports_the_orders_that_diverged() {
         report.contains(&format!("copy {diverged} differs from copy 0")),
         "{report}"
     );
+}
+
+thread_local! {
+    /// Every change a `Recording` copy applied, on this test's thread.
+    static APPLIED: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+}
+
+/// A grow-only set that records every change it applies.
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Recording(GrowOnlySet);
+
+impl Mergeable for Recording {
+    type Change = u8;
+
+    fn apply(&mut self, change: &u8) {
+        APPLIED.with(|applied| applied.borrow_mut().push(*change));
+        self.0.apply(change);
+    }
+}
+
+fn changes_applied_with(seed: u64) -> Vec<u8> {
+    APPLIED.with(|applied| applied.borrow_mut().clear());
+    let config = Config {
+        seed,
+        cases: 8,
+        ..Config::default()
+    };
+    convergence::check::<Recording>(&config, |_| any::<u8>().boxed()).expect("a grow-only set");
+    APPLIED.with(|applied| applied.take())
+}
+
+#[test]
+fn the_seed_decides_the_generated_cases() {
+    assert_eq!(changes_applied_with(7), changes_applied_with(7));
+    assert_ne!(changes_applied_with(7), changes_applied_with(8));
+}
+
+#[test]
+fn the_report_names_the_seed() {
+    let config = Config {
+        seed: 42,
+        ..Config::default()
+    };
+    let divergence = convergence::check::<FirstArrivalWins>(&config, write)
+        .expect_err("the harness missed a divergent subject");
+    assert_eq!(divergence.seed, 42);
+    assert!(divergence.to_string().contains("seed 42"), "{divergence}");
 }
