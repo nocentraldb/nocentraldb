@@ -97,3 +97,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
+### 2026-11-07 · NOC-22 · RFC 0002's amendment is a new section plus marked sentences, and keeps "refused by the relay" apart from "rejected"
+
+- Decided by: coding agent (NOC-22)
+- Why: the amendment needs one place for the owner's decisions D10 to D12, and the old sentences must not contradict it, so each changed sentence carries an *(Amendment 1)* mark and a dated changelog line sits at the top. "Rejected" is a log state that only the member's own checks set; the relay's refusal is recorded beside it, so the state stays a function of the changes a member holds (principle 2).
+- Instead of: rewriting the sections silently, or letting RFC 0007's "marked as rejected" for a relay refusal set the log state.
