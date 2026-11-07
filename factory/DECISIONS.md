@@ -79,3 +79,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · NOC-18 · check-pins reads Cargo.toml with the pinned smol-toml devDependency
+
+- Decided by: coding agent (NOC-18)
+- Why: a real TOML 1.0 parser (zero dependencies, pinned to `1.9.1`) reads every table form Cargo accepts, so a loose requirement cannot hide in a sub-table or a quoted key; the Cargo part therefore runs after `pnpm install`, as `pnpm gates` already does.
+- Instead of: a hand-written line parser like `scripts/release/lib/manifests.mjs`, or keeping check-pins on Node built-ins only.
+
+### 2026-11-07 · NOC-18 · check-pins leaves path dependencies to check-version
+
+- Decided by: coding agent (NOC-18)
+- Why: `scripts/release/check-version.mjs` already owns the rule for dependencies between workspace crates (declared in `[workspace.dependencies]` with `version = "=<workspace version>"`, never `path =` in a crate); one rule, one owner, one message.
+- Instead of: check-pins checking `path =` entries a second time and reporting the same mistake twice.
