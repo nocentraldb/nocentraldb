@@ -115,3 +115,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-8), after RFC 0002 (PR #28) met O1 to O5
 - Why: RFC 0002 fixed the stamp as a 64-bit hybrid logical clock and carries the author member id in the header; RFC 0004 now names both and keeps O1 to O5 as its reasoning. Updates the entry "RFC 0004 needs five properties from RFC 0002's clock, not a specific clock".
 - Instead of: keeping the stamp abstract after RFC 0002 had fixed it.
+
+### 2026-11-07 · NOC-8 · RFC 0004: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner merged RFC 0004, which accepts its recommendations: last writer wins on read with losing writes kept as conflicts, ties broken by author member id then operation id, add wins for sets, deletion as a converged boolean until its own RFC, links to absent targets kept as missing, no field type relies on causal delivery, and working names until the SDK's API review.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0004-merge-rules-basic-types.md`.
+
+### 2026-11-07 · no ticket · "Late" in principle 3 means lost to a change its author had not seen
+
+- Decided by: Carsten
+- Why: the time a change arrives differs per member, so storing it in the shared state would break principle 2; what every member can identify the same way is that a change lost to a change its author had not seen (RFC 0002, RFC 0004). GENESIS.md principle 3 and its no-go now say so.
+- Instead of: "arrives late", which no converged state can record.
