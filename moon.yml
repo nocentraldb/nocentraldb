@@ -16,6 +16,8 @@ tasks:
       - "/.moon/**/*.yml"
       - "/scripts/**/*"
   pins:
+    # Reads every Cargo.toml with the smol-toml devDependency, hence the
+    # Cargo.toml globs and the lockfile input.
     command: "node scripts/check-pins.mjs"
     inputs:
       - "/.prototools"
@@ -25,6 +27,9 @@ tasks:
       - "/pnpm-workspace.yaml"
       - "/apps/*/package.json"
       - "/packages/*/package.json"
+      - "/pnpm-lock.yaml"
+      - "/Cargo.toml"
+      - "/**/Cargo.toml"
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
