@@ -11,6 +11,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
+  globSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -93,6 +94,22 @@ test("ncdb-core's gates run the crate's tests under the pinned wasm runner", () 
   assert.match(args[args.indexOf("--version") + 1] ?? "", /^=\d+\.\d+\.\d+$/);
   assert.ok(args.includes("--locked"), "the runner installs unlocked");
   assert.equal(args[args.indexOf("--root") + 1], "target/tools");
+});
+
+// wasm-bindgen-test runs only functions marked #[wasm_bindgen_test]; a
+// plain #[test] is skipped on wasm32 and the runner still exits 0 ("no tests
+// to run!"). So every Rust file of ncdb-core with a #[test] must route the
+// attribute to wasm_bindgen_test when it compiles for wasm32.
+const ROUTE =
+  /#\[cfg\(target_arch = "wasm32"\)\]\s*use wasm_bindgen_test::wasm_bindgen_test as test;/;
+
+test("every test of ncdb-core also runs on wasm32", () => {
+  const files = globSync("crates/ncdb-core/{src,tests}/**/*.rs", { cwd: root });
+  const withTests = files.filter((file) => read(file).includes("#[test]"));
+  assert.ok(withTests.length > 0, "ncdb-core has no #[test] at all");
+  for (const file of withTests) {
+    assert.match(read(file), ROUTE, `${file}: #[test] skips wasm32`);
+  }
 });
 
 test("the wasm build task fails on a crate that uses a platform-only API, which builds natively (needs cargo)", (t) => {
