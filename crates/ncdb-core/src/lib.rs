@@ -13,6 +13,7 @@ pub mod change;
 pub mod clock;
 pub mod ids;
 pub mod log;
+mod redact;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {

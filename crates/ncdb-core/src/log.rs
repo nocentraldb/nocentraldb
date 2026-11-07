@@ -48,12 +48,22 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
-/// The log of one space.
-#[derive(Clone, Debug)]
+/// The log of one space. Its `Debug` output shows the space and the number
+/// of entries.
+#[derive(Clone)]
 pub struct Log {
     space: SpaceId,
     entries: Vec<Change>,
     positions: BTreeMap<ChangeId, Position>,
+}
+
+impl fmt::Debug for Log {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Log")
+            .field("space", &self.space)
+            .field("entries", &self.entries.len())
+            .finish()
+    }
 }
 
 impl Log {

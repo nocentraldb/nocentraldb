@@ -17,8 +17,13 @@ use std::fmt;
 use minicbor::data::{Int, Type};
 use minicbor::{Decoder, Encoder};
 
+use crate::redact::{Hidden, Size};
+
 /// A CBOR value of the profile.
-#[derive(Clone, Debug)]
+///
+/// Its `Debug` output shows the kind and size of a value, never the value:
+/// a value can be content.
+#[derive(Clone)]
 pub enum Value {
     /// An unsigned integer, major type 0.
     Unsigned(u64),
@@ -65,14 +70,54 @@ impl PartialEq for Value {
 
 impl Eq for Value {}
 
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Unsigned(_) => f.debug_tuple("Unsigned").field(&Hidden).finish(),
+            Value::Negative(_) => f.debug_tuple("Negative").field(&Hidden).finish(),
+            Value::Bytes(bytes) => f
+                .debug_tuple("Bytes")
+                .field(&Size(bytes.len(), "bytes"))
+                .finish(),
+            Value::Text(text) => f
+                .debug_tuple("Text")
+                .field(&Size(text.len(), "bytes"))
+                .finish(),
+            Value::Array(items) => f
+                .debug_tuple("Array")
+                .field(&Size(items.len(), "items"))
+                .finish(),
+            Value::Map(entries) => f
+                .debug_tuple("Map")
+                .field(&Size(entries.len(), "entries"))
+                .finish(),
+            Value::Bool(_) => f.debug_tuple("Bool").field(&Hidden).finish(),
+            Value::Null => f.write_str("Null"),
+            Value::Float(_) => f.debug_tuple("Float").field(&Hidden).finish(),
+        }
+    }
+}
+
 /// A map key: an unsigned integer or a text string. Keys order by the bytes
-/// of their encoding.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// of their encoding. Its `Debug` output hides the key.
+#[derive(Clone, PartialEq, Eq)]
 pub enum Key {
     /// An unsigned integer key.
     Unsigned(u64),
     /// A text key, allowed in the values of field types.
     Text(String),
+}
+
+impl fmt::Debug for Key {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Key::Unsigned(_) => f.debug_tuple("Unsigned").field(&Hidden).finish(),
+            Key::Text(text) => f
+                .debug_tuple("Text")
+                .field(&Size(text.len(), "bytes"))
+                .finish(),
+        }
+    }
 }
 
 impl PartialOrd for Key {

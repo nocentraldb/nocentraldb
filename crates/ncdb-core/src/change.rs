@@ -20,6 +20,7 @@ use std::fmt;
 use crate::cbor::{self, DecodeError, Key, Value};
 use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
+use crate::redact::Size;
 
 /// The highest key of the "must understand" range.
 pub const LAST_MUST_UNDERSTAND_KEY: u64 = 63;
@@ -42,7 +43,7 @@ impl Kind {
 
 /// Unknown keys of a header, payload or operation map, kept to be encoded
 /// again unchanged.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct Extensions(BTreeMap<u64, Value>);
 
 impl Extensions {
@@ -71,8 +72,9 @@ impl Extensions {
     }
 }
 
-/// The header of a change: what the relay reads.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The header of a change: what the relay reads. Its `Debug` output shows
+/// the payload only by its length.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Header {
     /// Key 1: the space the change belongs to.
     pub space: SpaceId,
@@ -94,8 +96,10 @@ pub struct Header {
     extensions: Extensions,
 }
 
-/// The payload of a change, after decryption: only members read it.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// The payload of a change, after decryption: only members read it. Its
+/// `Debug` output shows the ordering metadata and how many operations it
+/// holds, not the operations.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Payload {
     /// Key 1: the payload format.
     pub format: u64,
@@ -112,7 +116,9 @@ pub struct Payload {
 }
 
 /// One edit inside a payload: one operation on one field of one object.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Its `Debug` output shows only its unknown keys: everything else is
+/// content.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Operation {
     /// Key 1: the object.
     pub object: ObjectId,
@@ -128,14 +134,73 @@ pub struct Operation {
     extensions: Extensions,
 }
 
-/// A change: the frame's exact bytes, its header, signature and id.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A change: the frame's exact bytes, its header, signature and id. Its
+/// `Debug` output shows the id and the header, and the signature only by
+/// its length.
+#[derive(Clone, PartialEq, Eq)]
 pub struct Change {
     bytes: Vec<u8>,
     header: Header,
     header_bytes: Vec<u8>,
     signature: Vec<u8>,
     id: ChangeId,
+}
+
+impl fmt::Debug for Extensions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let keys: Vec<u64> = self.0.keys().copied().collect();
+        f.debug_struct("Extensions").field("keys", &keys).finish()
+    }
+}
+
+impl fmt::Debug for Header {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Header")
+            .field("space", &self.space)
+            .field("author", &self.author)
+            .field("sequence", &self.sequence)
+            .field("key_generation", &self.key_generation)
+            .field("kind", &self.kind)
+            .field("payload", &Size(self.payload.len(), "bytes"))
+            .field("format", &self.format)
+            .field("suite", &self.suite)
+            .field("extensions", &self.extensions)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Payload {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Payload")
+            .field("format", &self.format)
+            .field("clock", &self.clock)
+            .field("dependencies", &self.dependencies)
+            .field("operations", &Size(self.operations.len(), "operations"))
+            .field(
+                "padding",
+                &self.padding.as_ref().map(|p| Size(p.len(), "bytes")),
+            )
+            .field("extensions", &self.extensions)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Operation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Operation")
+            .field("extensions", &self.extensions)
+            .finish_non_exhaustive()
+    }
+}
+
+impl fmt::Debug for Change {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Change")
+            .field("id", &self.id)
+            .field("header", &self.header)
+            .field("signature", &Size(self.signature.len(), "bytes"))
+            .finish()
+    }
 }
 
 /// Why bytes are not a change, header, payload or operation. Names keys

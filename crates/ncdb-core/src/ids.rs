@@ -10,21 +10,23 @@ use std::fmt;
 
 use sha2::{Digest, Sha256};
 
+use crate::redact;
+
 /// The id of a space: 16 random bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SpaceId(pub [u8; 16]);
 
 /// The id of an object: 16 random bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ObjectId(pub [u8; 16]);
 
 /// The id of a member: RFC 0003's SHA-256 hash of its public keys.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct MemberId(pub [u8; 32]);
 
 /// The id of a change: SHA-256 of `"nocentraldb/change-id"`, the frame
 /// version as one byte, and the signed header bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ChangeId(pub [u8; 32]);
 
 /// The id of an operation: its change's id and its position in the change's
@@ -36,6 +38,21 @@ pub struct OperationId {
     /// The operation's position in the change's operation array.
     pub position: u64,
 }
+
+/// Ids show as hex: `SpaceId(0001…)`.
+macro_rules! debug_as_hex {
+    ($($id:ident),*) => {$(
+        impl fmt::Debug for $id {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                f.write_str(concat!(stringify!($id), "("))?;
+                redact::hex(f, &self.0)?;
+                f.write_str(")")
+            }
+        }
+    )*};
+}
+
+debug_as_hex!(SpaceId, ObjectId, MemberId, ChangeId);
 
 impl SpaceId {
     /// A new space id from the platform's secure random generator.
@@ -81,6 +98,6 @@ impl ChangeId {
 impl fmt::Display for ChangeId {
     /// The id in lower-case hex.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.iter().try_for_each(|byte| write!(f, "{byte:02x}"))
+        redact::hex(f, &self.0)
     }
 }
