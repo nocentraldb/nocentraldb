@@ -109,3 +109,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-8), flagged to pm and the owner in RFC 0004
 - Why: arrival time differs per member, so recording it in the converged state breaks principle 2, which ranks higher.
 - Instead of: storing an "arrived late" mark in the field state.
+
+### 2026-11-07 · NOC-8 · RFC 0004 names RFC 0002's clock as its stamp
+
+- Decided by: coding agent (NOC-8), after RFC 0002 (PR #28) met O1 to O5
+- Why: RFC 0002 fixed the stamp as a 64-bit hybrid logical clock and carries the author member id in the header; RFC 0004 now names both and keeps O1 to O5 as its reasoning. Updates the entry "RFC 0004 needs five properties from RFC 0002's clock, not a specific clock".
+- Instead of: keeping the stamp abstract after RFC 0002 had fixed it.

@@ -34,7 +34,9 @@ tasks:
     # devDependency, hence the lockfile input), the contributor kit check in
     # scripts/contributor-kit.test.mjs (it reads .github/, CONTRIBUTING.md,
     # README.md and the docs its links point into), the RFC check in
-    # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001), and
+    # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
+    # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
+    # its sections), and
     # the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
