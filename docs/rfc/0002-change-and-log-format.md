@@ -158,6 +158,10 @@ H is the hash function RFC 0003 picks; this RFC assumes 32 bytes of output. The 
 
 The id does not change when a member forwards a change, and it identifies the exact bytes: a member can check that the change it holds is the change another member refers to.
 
+### Operation ids
+
+An operation is identified by its change's id and its position in the change's operation array, counted from 0. Field types use it where they need to name one operation, for example as the tag of a set addition (RFC 0004). It is unique because change ids are, and every member computes it the same way.
+
 | Rejected | Why |
 | --- | --- |
 | Author key plus author sequence | Not unique when a device is restored from a backup and writes again under a sequence number it already used. |
@@ -174,7 +178,7 @@ Every payload carries a **hybrid logical clock** (key 2): one unsigned 64-bit in
 
 When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter would overflow, the member waits for its wall clock to reach the next millisecond.
 
-The total order of two changes is their clocks, and on equal clocks their change ids, compared as bytes. No two changes compare equal, because no two changes share an id. Within one change, a later operation on the same field comes after an earlier one.
+The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author key and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author key and id from the same change, and a change's clock is higher than the clock of every change its author had seen.
 
 ### Dependencies
 
@@ -191,11 +195,13 @@ Principle 3 of GENESIS.md asks that a change which arrives late and loses to a n
 - When one change overwrites another and **saw it** (the winner depends on the loser), the loser was simply overwritten. Its author's intent was replaced knowingly.
 - When the winner **did not see** the loser (the two are concurrent), the loser is a **concurrent loser**. The fold records it as such, next to the field, and the SDK can show it. The change stays in the log; nothing is dropped.
 
+How each field type tells the two cases apart is RFC 0004's: a write may name the writes it replaces, and the dependencies give every field type the causal order of the whole space.
+
 The classic late change is a laptop that edits a field while offline for weeks. When it reconnects, its change is concurrent with every change made in the meantime. If a newer change wins, the laptop's change is a concurrent loser. If the laptop's clock was ahead and its change wins instead, the changes it overwrote without seeing them are the concurrent losers. Both cases stay identifiable on every member.
 
 "Concurrent loser" depends only on the changes, never on when they arrived, so every member computes the same set, and convergence (principle 2) holds for it too. How long a change took to arrive is still visible as a diagnostic: its clock against the time the relay received it. That diagnostic depends on the relay and is not part of the converged state.
 
-**What the clock does not do.** A member whose wall clock runs ahead writes changes with later clocks, so for "the last writer wins" its writes win until the other clocks catch up, and every member's clock follows it forward. Convergence holds, but "last" then means "latest by that member's clock". The core warns when a received clock is more than a minute ahead of the local wall clock. It does not reject the change, because rejecting it on some members and not on others would break convergence.
+**What the clock does not do.** A member whose wall clock runs ahead writes changes with later clocks, so for "the last writer wins" its writes win until the other clocks catch up, and every member's clock follows it forward. Convergence holds, but "last" then means "latest by that member's clock". The core warns when a received clock is more than a minute ahead of the local wall clock. It does not reject the change, because rejecting it on some members and not on others would break convergence. Nor does the writing core refuse to create a change: it cannot tell that its own clock is wrong, only that it disagrees with another member's. This answers RFC 0004's question whether far-future stamps are refused: they are not, and the limit is stated here and there.
 
 | Rejected | Why |
 | --- | --- |
@@ -216,7 +222,7 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **Maps have unsigned integer keys only**, sorted by the bytes of their encoding, each key at most once. Values of a field type may use text keys, sorted the same way.
 - **Allowed major types:** unsigned and negative integers, byte strings, text strings, arrays, maps, and the simple values `false`, `true` and `null`.
 - **Floating-point numbers** use the shortest of the 16-, 32- and 64-bit forms that keeps the value exactly, as §4.2.1 says. Every NaN is encoded as the single quiet NaN `0xf97e00`. Negative zero stays negative zero. The envelope and the ordering metadata never contain a float.
-- **Text strings** are valid UTF-8, stored as given. The format does not normalise Unicode, because normalising changes the bytes a user wrote.
+- **Text strings** are valid UTF-8, stored as given. The format does not normalise Unicode. A field type or the SDK may normalise before writing (RFC 0004 has the SDK normalise strings to NFC), but the encoding never changes the bytes it is given.
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
 
