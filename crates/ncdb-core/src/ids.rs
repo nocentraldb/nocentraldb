@@ -40,15 +40,28 @@ pub struct OperationId {
 impl SpaceId {
     /// A new space id from the platform's secure random generator.
     pub fn random() -> SpaceId {
-        todo!()
+        SpaceId(random())
     }
 }
 
 impl ObjectId {
     /// A new object id from the platform's secure random generator.
     pub fn random() -> ObjectId {
-        todo!()
+        ObjectId(random())
     }
+}
+
+/// Random bytes from the platform's secure generator: `getrandom`
+/// natively, `crypto.getRandomValues` in the browser.
+///
+/// # Panics
+///
+/// When the platform has no secure generator. An id from a weaker source
+/// could collide, so the core does not fall back to one.
+fn random<const N: usize>() -> [u8; N] {
+    let mut bytes = [0; N];
+    getrandom::fill(&mut bytes).expect("the platform's secure random generator failed");
+    bytes
 }
 
 impl ChangeId {
