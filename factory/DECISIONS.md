@@ -79,3 +79,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · NOC-6 · RFC 0002 names its conflicts with GENESIS.md and RFC 0001 instead of resolving them
+
+- Decided by: coding agent (NOC-6)
+- Why: parked changes (D9) bend principle 2, and the relay sees more metadata than RFC 0001 lists; both touch what GENESIS.md reserves for the owner, so the RFC proposes a reading and leaves the ruling to the owner.
+- Instead of: editing RFC 0001, the FAQ or GENESIS.md in this PR, which is outside the ticket's scope.
+
+### 2026-11-07 · NOC-6 · The docs-only RFC is held by a test in the repository tooling
+
+- Decided by: coding agent (NOC-6)
+- Why: `scripts/rfc.test.mjs` runs in `repo:test` and checks that RFC 0002 exists and links back to RFC 0001, so the gate fails if either is lost.
+- Instead of: no test, which leaves the gate unchanged for a docs-only PR.
