@@ -60,7 +60,19 @@ pub struct Divergence {
 
 impl core::fmt::Display for Divergence {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "copies diverged")
+        writeln!(f, "copies diverged; minimal counterexample:")?;
+        writeln!(f, "changes:")?;
+        for (i, change) in self.changes.iter().enumerate() {
+            writeln!(f, "  #{i} {change}")?;
+        }
+        for (copy, (order, state)) in self.orders.iter().zip(&self.states).enumerate() {
+            write!(f, "copy {copy} received {order:?} and ended in {state}")?;
+            if copy > 0 && *state != self.states[0] {
+                write!(f, "  <- copy {copy} differs from copy 0")?;
+            }
+            writeln!(f)?;
+        }
+        Ok(())
     }
 }
 
