@@ -4,16 +4,16 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-6
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). Where this RFC and either of them disagree, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md, RFC 0001 and RFC 0003](#conflicts-with-genesismd-rfc-0001-and-rfc-0003).
 
 **Status.** A draft for the owner's decision. The wire and on-disk formats are reserved for the owner, so nothing here is final until the owner approves this RFC. The open decisions are listed in [Decisions for the owner](#decisions-for-the-owner), each with options and a recommendation. Until then, the design below describes the recommended option of each decision.
 
 ## What this RFC does not cover
 
-- **Cryptography and keys.** The signature scheme, the AEAD, the hash function, key ids, key epochs and key rotation belong to RFC 0003 (NOC-7). This RFC says only where a "signature", an "AEAD ciphertext" and a "hash" sit in the format, and what each must cover.
+- **Cryptography and keys.** The signature scheme, the AEAD, the hash function, member ids, person-key ids, space key generations, the suite id and key rotation belong to RFC 0003 (NOC-7). This RFC says only where a "signature", an "AEAD ciphertext" and a "hash" sit in the format, and what each must cover.
 - **Merge rules.** How each field type merges concurrent changes belongs to RFC 0004 (NOC-8). This RFC defines the ordering metadata those rules can use, and nothing about the rules themselves.
 - **The payloads of rich text and streams.** This RFC leaves room for a Yrs update and for a stream chunk as the value of an operation. It does not design either type.
-- **Compaction and the archive, membership changes and work orders.** This RFC reserves their place in the log and in the envelope. Their formats follow in later RFCs.
+- **Compaction and the archive, membership changes and work orders.** This RFC reserves their place in the log and in the header. Their formats follow in later RFCs.
 - **Code.** Nothing in `crates/` or `packages/` changes. The implementation is NOC-14.
 
 ## Terms
@@ -24,7 +24,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Member | A device, agent or server that holds a key in a space and a full copy of its log. |
 | Author | The member whose key signed a change. |
 | Change | One signed, encrypted unit that a member appends to a space's log: one local write transaction. |
-| Envelope | The part of a change the relay can read: enough to route, check and store the change. |
+| Header | The part of a change the relay can read: enough to route, check and store the change. RFC 0003 uses the same word. Not to be confused with RFC 0003's *key envelope*, a space key wrapped for one member. |
 | Payload | The part of a change only members can read: what was changed, and the ordering metadata. |
 | Operation | One edit inside a payload: one operation on one field of one object. |
 | Log | The append-only sequence of changes of one space, on one member or on the relay. |
@@ -33,22 +33,23 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ## A change at a glance
 
-A change has three layers. The outer **frame** never changes, so that every client, however old, can store, forward, identify and verify any change. Inside it, the signed **envelope** carries what the relay needs. Inside the envelope, the **payload** is an AEAD ciphertext that only members of the space can open.
+A change has three layers. The outer **frame** never changes, so that every client, however old, can store, forward, identify and verify any change. Inside it, the signed **header** carries what the relay needs. Inside the header, the **payload** is an AEAD ciphertext that only members of the space can open.
 
 ```text
 frame (CBOR array, fixed forever)
 ├── 0 frame version            uint, 1
-├── 1 signed envelope bytes    bstr: the canonical encoding of the envelope map
+├── 1 signed header bytes      bstr: the canonical encoding of the header map
 └── 2 signature                bstr: the author's signature (RFC 0003)
 
-envelope (CBOR map, readable by the relay)
+header (CBOR map, readable by the relay)
 ├── 1 space id                 16 bytes
-├── 2 author key id            bytes, defined by RFC 0003
-├── 3 author sequence          uint, 1, 2, 3, ... per author key and space
-├── 4 key epoch                uint: which space key sealed the payload (RFC 0003)
+├── 2 author member id         bytes: RFC 0003's member id, a hash of the author's public keys
+├── 3 author sequence          uint, 1, 2, 3, ... per author and space
+├── 4 key generation           uint: which space key generation sealed the payload (RFC 0003)
 ├── 5 kind                     uint: 0 sealed, 1 control
 ├── 6 payload                  bstr: AEAD ciphertext (kind 0), or the control body (kind 1)
-└── 7 envelope format          uint, 1
+├── 7 header format            uint, 1
+└── 8 suite id                 uint: the set of cryptographic primitives (RFC 0003)
 
 payload (CBOR map, after decryption; only members can read it)
 ├── 1 payload format           uint, 1
@@ -62,7 +63,8 @@ operation (CBOR map)
 ├── 2 collection               text, the collection's name in model.lock.json
 ├── 3 field                    text, the field's name in model.lock.json
 ├── 4 op                       uint: the operation, as the field type defines it
-└── 5 value                    any CBOR value the field type defines
+└── 5 value                    any CBOR value the field type defines,
+                               or a sealed personal value: {1: person-key id, 2: ciphertext}
 ```
 
 The rest of this RFC explains each part and why it looks this way.
@@ -71,33 +73,35 @@ The rest of this RFC explains each part and why it looks this way.
 
 ### Space
 
-Every change names its space in the envelope (key 1). The relay needs it to route the change, check membership and append it to the right log. A space id is 16 bytes, generated like an object id (see [Object ids](#object-ids)). A space's id never changes.
+Every change names its space in the header (key 1). The relay needs it to route the change, check membership and append it to the right log. A space id is 16 bytes, generated like an object id (see [Object ids](#object-ids)). A space's id never changes.
 
-### Author key and author sequence
+### Author and author sequence
 
-The author key id (key 2) names the key that signed the change. Its form is RFC 0003's. The relay needs it to verify the signature and to check that the key is a member of the space.
+The author member id (key 2) names the member that signed the change. It is RFC 0003's member id: a hash of the member's two public keys, the id the relay, the member list and the SDK show. The relay needs it to find the signing key, verify the signature and check that the member belongs to the space.
 
 The author sequence (key 3) counts the author's changes in this space: 1 for its first change, then one higher for each next change. It lets a member see at once whether it has every change of an author up to some point. A gap means a change is still missing. The relay already sees how many changes each key writes, so the sequence reveals nothing new to it.
 
-Two different changes with the same author key, space and sequence are an **equivocation**: the author's device was restored from a backup, cloned, or is misbehaving. They do not break the log, because a change's identity is its hash and not its sequence (see [Change ids](#change-ids)). Both changes are kept and both are folded. The member marks the author key as having equivocated, and the SDK reports it, because it means one key now writes from two places.
+Two different changes with the same author, space and sequence are an **equivocation**: the author's device was restored from a backup, cloned, or is misbehaving. They do not break the log, because a change's identity is its hash and not its sequence (see [Change ids](#change-ids)). Both changes are kept and both are folded. The member marks the author as having equivocated, and the SDK reports it, because it means one member key now writes from two places.
 
-### Key epoch and kind
+### Key generation, suite and kind
 
-The key epoch (key 4) says which generation of the space's key sealed the payload. A member needs it to pick the right key. The epochs and their rotation are RFC 0003's.
+The key generation (key 4) says which generation of the space's key sealed the payload. A member needs it to pick the right key; every ciphertext names exactly one key, as RFC 0003 requires. The generations and their rotation are RFC 0003's.
+
+The suite id (key 8) names the set of cryptographic primitives the change uses, so that a future suite, such as a post-quantum one, is a new suite id and not a format break (RFC 0003). Suite 1 is RFC 0003's first suite. A member that does not know a change's suite stores the change and folds nothing from it.
 
 The kind (key 5) has two values:
 
 - **0, sealed.** The payload is an AEAD ciphertext. Content changes and work orders both use this kind, so the relay cannot tell them apart. RFC 0001 promises that the relay sees a work order only as an opaque envelope, and a separate kind would break that.
-- **1, control.** The payload is a body the relay must read: membership changes and key rotations, because the relay checks membership. The body's format is RFC 0003's. A control change carries no content.
+- **1, control.** The payload is a body the relay must read, because the relay checks membership, serves each member its own key envelopes and deletes shredded person-key records. RFC 0003 defines these bodies: membership entries, key envelopes, key chain entries, and shred entries and their acknowledgements. They are log entries like every other change: signed, identified by their hash, stored and forwarded the same way. A control body is a CBOR map whose key 1 names the entry type. A control change carries no content.
 
 Other values are reserved. A member that meets an unknown kind keeps the change and folds nothing from it (see [Versioning](#versioning-old-clients-keep-what-they-do-not-understand)).
 
 ### The payload
 
-The payload (envelope key 6) is the AEAD ciphertext of the canonical encoding of the payload map. RFC 0003 chooses the AEAD and its nonce. This RFC requires two things of it:
+The payload (header key 6) is the AEAD ciphertext of the canonical encoding of the payload map. RFC 0003 chooses the AEAD and its nonce. This RFC requires two things of it:
 
-- **It binds the payload to its envelope.** The associated data covers the frame version and the envelope fields 1 to 5 and 7, so that the relay cannot move a payload to another space, another author or another sequence number.
-- **It is signed as ciphertext.** The signature covers the envelope, ciphertext included, so the relay can verify a change without any key. RFC 0003 decides whether the payload also carries the author's identity inside the encryption.
+- **It binds the payload to its header.** RFC 0003's associated data covers the space id, the generation, the suite id and the author member id. This RFC asks that it also covers the author sequence, the kind and the header format, that is every header field except the payload itself, so that a payload cannot be moved to another sequence number or kind either (see [Conflicts](#conflicts-with-genesismd-rfc-0001-and-rfc-0003), point 4).
+- **It is signed as ciphertext.** The order is encrypt-then-sign, as RFC 0003 defines it: the signature covers the header, ciphertext included, so the relay can verify a change without any key, and the signature stays valid after a person key is destroyed.
 
 Inside the payload, the ordering metadata comes first (see [Ordering metadata](#ordering-metadata)), then the operations.
 
@@ -116,14 +120,14 @@ The format leaves room for the field types that are not designed yet:
 
 - **Rich text.** The value is a byte string holding a Yrs update. A focused edit is a small update, so the change stays small too.
 - **Streams.** The value carries one chunk and its index in the stream. Each chunk is its own change, or several chunks share one change, as the stream type will decide.
-- **Personal fields.** The value is itself an AEAD ciphertext under the person's key (RFC 0003), wrapped in the payload. Destroying the person's key makes that value unreadable, while the signature over the whole change stays valid, because the signature covers the bytes and not the plaintext. This is what [shred and audit](0001-nocentraldb.md#the-design-in-one-page) needs.
+- **Personal fields.** The value is a sealed personal value: a map of the person-key id (key 1) and the AEAD ciphertext of the field's value under that person key (key 2), inside the payload. RFC 0003 defines the encryption and its associated data (space, object, field and person-key id); the field is named by collection and field name (D5). Destroying the person's key makes that value unreadable, while the signature over the whole change stays valid, because the signature covers the bytes and not the plaintext. This is what [shred and audit](0001-nocentraldb.md#the-design-in-one-page) needs.
 - **Custom field types.** A plugin defines its own operation numbers and value shapes, inside the same container.
 
 ### What the change does not carry
 
-- **No wall-clock time in the envelope.** The relay learns when it receives a change, but not when it was written. The clock sits inside the payload.
-- **No dependencies in the envelope.** The relay cannot see which changes a change builds on, so it cannot tell which members saw which changes, or which changes are concurrent.
-- **No object, collection or field names in the envelope.** The relay cannot tell which objects or fields a change touches, or whether two changes touch the same one.
+- **No wall-clock time in the header.** The relay learns when it receives a change, but not when it was written. The clock sits inside the payload.
+- **No dependencies in the header.** The relay cannot see which changes a change builds on, so it cannot tell which members saw which changes, or which changes are concurrent.
+- **No object, collection or field names in the header.** The relay cannot tell which objects or fields a change touches, or whether two changes touch the same one.
 
 ## Ids without a coordinator
 
@@ -141,20 +145,20 @@ A member that wants to create two objects with the same id on purpose can do so:
 | --- | --- |
 | UUIDv7 (48-bit time plus random) | Puts the creation time into every id, and ids travel into links, URLs and exports; members learn when every object was made. The index locality it buys matters little at the size of one space. |
 | Derived from the creating change (hash of change id and position) | The ids are needed inside the payload before the change exists and is hashed, so the derivation is circular. |
-| Derived from author key and author sequence | Collides after a device is restored from a backup and reuses a sequence number. |
+| Derived from author member id and author sequence | Collides after a device is restored from a backup and reuses a sequence number. |
 | Sequential ids from the relay | Needs a coordinator, so it breaks island mode. |
 
 ### Change ids
 
-A change id is the hash of the frame's first two elements: the frame version, as one byte, and the signed envelope bytes, with a fixed context string in front so that the hash of a change can never be confused with any other hash in the system:
+A change id is the hash of the frame's first two elements: the frame version, as one byte, and the signed header bytes, with a fixed context string in front so that the hash of a change can never be confused with any other hash in the system:
 
 ```text
-change id = H("nocentraldb/change-id" || frame version || signed envelope bytes)
+change id = H("nocentraldb/change-id" || frame version || signed header bytes)
 ```
 
 H is the hash function RFC 0003 picks; this RFC assumes 32 bytes of output. The signature is not part of the id, so the id does not depend on the signature scheme, and a scheme with randomised signatures would not change it.
 
-**Why two members cannot collide.** Two different changes have different envelope bytes, because their author, sequence, payload ciphertext or space differs. Two equal ids then need a collision of the hash function, which a 32-byte cryptographic hash makes infeasible. The id is computed from the bytes, so every member and the relay compute the same id for the same change, without being told. A member that receives a change twice, from the relay and from a peer in island mode, recognises it as the same change.
+**Why two members cannot collide.** Two different changes have different header bytes, because their author, sequence, payload ciphertext or space differs. Two equal ids then need a collision of the hash function, which a 32-byte cryptographic hash makes infeasible. The id is computed from the bytes, so every member and the relay compute the same id for the same change, without being told. A member that receives a change twice, from the relay and from a peer in island mode, recognises it as the same change.
 
 The id does not change when a member forwards a change, and it identifies the exact bytes: a member can check that the change it holds is the change another member refers to.
 
@@ -164,7 +168,7 @@ An operation is identified by its change's id and its position in the change's o
 
 | Rejected | Why |
 | --- | --- |
-| Author key plus author sequence | Not unique when a device is restored from a backup and writes again under a sequence number it already used. |
+| Author member id plus author sequence | Not unique when a device is restored from a backup and writes again under a sequence number it already used. |
 | A random id chosen by the author | Does not bind the id to the content, so two different changes can claim one id, and a member cannot check a reference by recomputing it. |
 | An id assigned by the relay | Needs the relay, so it breaks island mode, and the relay could hand out the same id twice. |
 
@@ -178,7 +182,7 @@ Every payload carries a **hybrid logical clock** (key 2): one unsigned 64-bit in
 
 When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter would overflow, the member waits for its wall clock to reach the next millisecond.
 
-The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author key and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author key and id from the same change, and a change's clock is higher than the clock of every change its author had seen.
+The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author member id and operation id from the same change, and a change's clock is higher than the clock of every change its author had seen.
 
 ### Dependencies
 
@@ -186,14 +190,14 @@ Every payload lists its **dependencies** (key 3): the change ids of the space's 
 
 The dependencies make the changes of a space a directed acyclic graph. A change A happened before a change B when B depends on A, directly or through other changes. Two changes are **concurrent** when neither happened before the other. A member computes this from its own copy of the log, without asking anyone. Usually the list holds one or two ids. It grows only while several members write without seeing each other, and shrinks again with the first change that sees them all.
 
-A member folds a change only after it holds all of the change's dependencies. Until then the change waits in the log as pending. The relay hands out changes in the order it received them, which can put a change before its dependencies, for example after a member forwards changes it received in island mode.
+**Causal delivery is not guaranteed.** The relay hands out changes in the order it received them, which can put a change before its dependencies, for example after a member forwards changes it received in island mode, and compaction removes old changes from the log. A member folds every change as soon as it arrives, whether or not it holds the change's dependencies, and the field types of RFC 0004 converge in any order of arrival. A dependency the member does not hold is a **gap**: the SDK reports it, and the member asks the relay or a peer for it. A member never waits for a gap to close, because a gap that never closes, for example when the relay withholds a change, would otherwise stop the member's whole space.
 
 ### A late change stays identifiable
 
 Principle 3 of GENESIS.md asks that a change which arrives late and loses to a newer change stays identifiable as such. With the clock and the dependencies, every member identifies it the same way, whatever order the changes arrived in:
 
 - When one change overwrites another and **saw it** (the winner depends on the loser), the loser was simply overwritten. Its author's intent was replaced knowingly.
-- When the winner **did not see** the loser (the two are concurrent), the loser is a **concurrent loser**. The fold records it as such, next to the field, and the SDK can show it. The change stays in the log; nothing is dropped.
+- When the winner **did not see** the loser (the two are concurrent), the loser is a **concurrent loser** (RFC 0004 calls this outcome *lost*). The fold records it as such, next to the field, and the SDK can show it. The change stays in the log; nothing is dropped.
 
 How each field type tells the two cases apart is RFC 0004's: a write may name the writes it replaces, and the dependencies give every field type the causal order of the whole space.
 
@@ -221,7 +225,7 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **Lengths are definite and minimal.** No indefinite-length items. Every integer and every length uses its shortest form.
 - **Maps have unsigned integer keys only**, sorted by the bytes of their encoding, each key at most once. Values of a field type may use text keys, sorted the same way.
 - **Allowed major types:** unsigned and negative integers, byte strings, text strings, arrays, maps, and the simple values `false`, `true` and `null`.
-- **Floating-point numbers** use the shortest of the 16-, 32- and 64-bit forms that keeps the value exactly, as §4.2.1 says. Every NaN is encoded as the single quiet NaN `0xf97e00`. Negative zero stays negative zero. The envelope and the ordering metadata never contain a float.
+- **Floating-point numbers** use the shortest of the 16-, 32- and 64-bit forms that keeps the value exactly, as §4.2.1 says. Every NaN is encoded as the single quiet NaN `0xf97e00`. Negative zero stays negative zero. The header and the ordering metadata never contain a float.
 - **Text strings** are valid UTF-8, stored as given. The format does not normalise Unicode. A field type or the SDK may normalise before writing (RFC 0004 has the SDK normalise strings to NFC), but the encoding never changes the bytes it is given.
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
@@ -241,9 +245,9 @@ The implementation (NOC-14) commits test vectors: changes as bytes, with their i
 
 The format changes only by adding. Each layer carries its own version, and an old client knows what to do with every layer it cannot read:
 
-- **The frame never changes.** Its version stays 1. Every client can therefore store, forward and identify any change, and verify its signature, as long as the signature scheme is one it knows (RFC 0003).
-- **Envelope keys 1 to 7 keep their meaning forever.** A new envelope format may add keys. Keys 1 to 63 are "must understand": a client that meets one it does not know stores the change but does not fold it. Keys from 64 up are "may ignore": a client that does not know them folds the change as if they were absent. The same rule holds for the payload map and the operation map.
-- **A higher envelope or payload format number** than the client knows means "stored, not folded".
+- **The frame never changes.** Its version stays 1. Every client can therefore store, forward and identify any change, and verify its signature, as long as it knows the change's suite (RFC 0003).
+- **Header keys 1 to 8 keep their meaning forever.** A new header format may add keys. Keys 1 to 63 are "must understand": a client that meets one it does not know stores the change but does not fold it. Keys from 64 up are "may ignore": a client that does not know them folds the change as if they were absent. The same rule holds for the payload map and the operation map.
+- **A higher header or payload format number** than the client knows means "stored, not folded".
 - **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived.
 
 A change that a client keeps without folding is **parked**. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3).
@@ -262,13 +266,13 @@ log
 ├── space id         16 bytes
 ├── change id        32 bytes, unique per space
 ├── relay position   integer, or null while the relay has not confirmed the change
-├── state            pending, folded or parked
+├── state            folded or parked
 └── frame            the exact bytes of the change, as received or written
 ```
 
-Appending a change and folding it happen in one SQLite transaction, so after a crash the log and the view always agree: a change is in both or in neither. Every other table, such as an index from author key and sequence to change id, can be rebuilt from the frames. The frame is the only source of truth.
+Appending a change and folding it happen in one SQLite transaction, so after a crash the log and the view always agree: a change is in both or in neither. Every other table, such as an index from author and sequence to change id, or the list of gaps, can be rebuilt from the frames. The frame is the only source of truth.
 
-The state of an entry is local and may change: pending becomes folded when the dependencies arrive, parked becomes folded after an upgrade. The frame never changes.
+The state of an entry is local and may change: parked becomes folded after an upgrade. The frame never changes.
 
 A change the member writes itself enters the log at once, folded and without a relay position. It is in the member's view before it leaves the device, and the member keeps working without a relay (island mode). When the relay accepts it, the member records the relay position.
 
@@ -286,7 +290,7 @@ The relay keeps one log per space. Each entry holds:
 - **The time of acceptance**, from the relay's clock.
 - **The frame**, as the relay received it.
 
-The relay accepts a change when the frame is well-formed and canonical, the signature is valid for the author key, and the author key is a member of the space at the change's key epoch. It does not need to know who uploaded the change: any member may forward another member's changes, which island mode needs. The relay never decrypts, folds or reorders anything.
+The relay accepts a change when the frame is well-formed and canonical, the signature is valid for the author member's signing key, and the author is a member of the space at the change's key generation. From the moment a membership entry removes a member, the relay refuses that member's changes (RFC 0003). It does not need to know who uploaded the change: any member may forward another member's changes, which island mode needs. The relay never decrypts, folds or reorders anything.
 
 **The cursor** is a relay position. A member asks the relay for "the changes of this space after position p", and the relay answers in position order, a page at a time. Positions are dense, so a member sees at once whether a page is complete. A cursor belongs to one relay: if a space moves to another relay, members start from position 0 there, and recognise the changes they already hold by their ids.
 
@@ -304,8 +308,10 @@ The relay holds no keys. Here is what it learns anyway, stated plainly (principl
 
 The relay **can see**:
 
-- **Which keys are members of which space**, from the control changes it checks, and when the membership and the key epochs change.
-- **Who writes, when and how much.** For each change: the space, the author key, the author's sequence number, the key epoch, the time the relay received it, and the size of the ciphertext. The size reveals roughly how much was written. Padding (see [Decisions for the owner](#decisions-for-the-owner), D8) blurs it but does not hide it.
+- **Which members are in which space**, from the control changes it checks, and when the membership and the key generations change.
+- **The key distribution.** That a key envelope exists for each member id and generation, and the key chain entries. It cannot open them.
+- **Erasures.** When a shred entry destroys a person key, and that person key's id, but not whose key it is or what it protected. The acknowledgements show which members confirmed it.
+- **Who writes, when and how much.** For each change: the space, the author member id, the author's sequence number, the suite id, the key generation, the time the relay received it, and the size of the ciphertext. The size reveals roughly how much was written. Padding (see [Decisions for the owner](#decisions-for-the-owner), D8) blurs it but does not hide it.
 - **The rhythm of work.** A burst of small changes looks like typing; one large change after days of silence looks like a member coming back from offline work.
 - **Who reads what, and from where.** Which connection asks for which space from which cursor, and the network addresses of members, unless they connect through something that hides them.
 - **The ids of changes**, and that a change was uploaded by a member other than its author, when that happens.
@@ -320,10 +326,37 @@ The relay **cannot see**:
 What the relay **can do** despite holding no keys, and what limits it:
 
 - **It cannot forge or alter a change.** Every change is signed, and the signature covers the ciphertext.
-- **It cannot move a payload** to another space, author or sequence number, because the AEAD binds the payload to its envelope.
+- **It cannot move a payload** to another space, author or sequence number, because the AEAD binds the payload to its header.
 - **It can withhold changes.** A member notices a withheld change when a later change depends on it, or when an author's sequence numbers have a gap. A member does not notice a withheld change that nothing depends on and that is its author's last.
 - **It can show different members different subsets** of the log. Members notice it only when they exchange changes directly, as in island mode.
 - **It can delete its log or refuse service.** Every member still holds its full copy, and the members can repopulate a new relay.
+
+## What RFC 0003 and RFC 0004 need from this RFC
+
+RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are written in parallel and depend on this RFC. This section answers each of their requests.
+
+### RFC 0004: merge rules
+
+| Request | Answer in this RFC |
+| --- | --- |
+| **O1.** Every change has an id that no two changes share, and every member computes the same id for the same change. | Met. The change id is the hash of the frame version and the signed header bytes ([Change ids](#change-ids)). An operation id is the change id plus the operation's position ([Operation ids](#operation-ids)). |
+| **O2.** The stamp is computed from the change alone and compares the same way on every member and platform. | Met. The stamp is the hybrid logical clock in the payload, an unsigned 64-bit integer compared as a number. The author member id and the operation id for the tie-breaks are in the same change. No float and no platform-dependent value is involved. |
+| **O3.** If the author of change b had seen change a, a's stamp is lower than b's. | Met. A member's clock is always higher than the clock of every change it has seen ([The clock](#the-clock)). |
+| **O4.** The stamp carries wall-clock time. | Met. The upper 48 bits are milliseconds since the Unix epoch. |
+| **O5.** One canonical encoding per value, NaN and negative zero included. | Met. Every NaN is `0xf97e00`; negative zero is encoded as negative zero, positive zero as positive zero, each in its one shortest form ([The CBOR profile](#the-cbor-profile)). RFC 0004 asks for one encoding each, not for the two to be equal, so a set may hold both 0.0 and −0.0. |
+| Are stamps far in the future refused? | No. Neither the writing member nor a receiving member nor the relay refuses them; members warn. Refusing on some members and not on others would break convergence, and the relay cannot see the clock (D6). |
+| Causal delivery is not guaranteed (RFC 0004, decision 6). | Confirmed. Members fold changes as they arrive, in any order, and report missing dependencies as gaps ([Dependencies](#dependencies)). The dependencies give the causal order for diagnostics and for field types that want it; no field type may rely on them having arrived. |
+
+### RFC 0003: keys and cryptography
+
+| Request | Answer in this RFC |
+| --- | --- |
+| Room for the suite id. | Header key 8, signed, readable by the relay, covered by the associated data. |
+| Room for the space key generation. | Header key 4, the key generation. |
+| The person-key id on each personal field. | A personal field's value is a sealed personal value: the person-key id and the ciphertext ([Operations](#operations-object-field-and-value)). |
+| The author's member id, a hash of its public keys. | Header key 2. |
+| Encrypt-then-sign: the signature covers header and ciphertext, so the relay verifies without decrypting and signatures survive a shred. | Met. The signature covers the signed header bytes, which contain the ciphertext. The change id is computed from the same bytes, so a shred changes neither the id nor the signature. |
+| Key envelopes, membership entries and shred entries are log entries too. | Met. They are control changes (kind 1), with the same frame, signature, id and log as every other change. RFC 0003 defines their bodies. |
 
 ## Decisions for the owner
 
@@ -339,8 +372,8 @@ Recommendation: A. "The last writer wins" matches what users expect in time, and
 
 **D2. Change ids.**
 
-- A. The hash of the signed envelope bytes. *(recommended)*
-- B. Author key plus author sequence.
+- A. The hash of the signed header bytes. *(recommended)*
+- B. Author member id plus author sequence.
 - C. A random id.
 
 Recommendation: A. It is unique without a coordinator, every party computes it independently, and a backup restore cannot make two changes share it.
@@ -370,7 +403,7 @@ Recommendation: A. Names never change, need no id registry that two developers c
 **D6. Where the clock sits.**
 
 - A. Inside the payload, invisible to the relay. *(recommended)*
-- B. In the envelope, so that the relay can refuse changes whose clock is far ahead of its own.
+- B. In the header, so that the relay can refuse changes whose clock is far ahead of its own.
 
 Recommendation: A. B would show the relay when every change was written, offline work included. It would also protect only changes that pass through the relay, not those exchanged in island mode.
 
@@ -396,21 +429,23 @@ Recommendation: A. It hides the exact length of short values, such as "yes" agai
 
 Recommendation: A. It is what GENESIS.md asks: old clients keep data they do not understand yet. It needs the clarification in the next section.
 
-## Conflicts with GENESIS.md and RFC 0001
+## Conflicts with GENESIS.md, RFC 0001 and RFC 0003
 
-This RFC agrees with GENESIS.md and RFC 0001 except in the points below. Each needs the owner's ruling, or a change to the other document.
+This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. Each needs the owner's ruling, or a change to the other document.
 
 1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner should confirm this reading, or choose D9 B.
-2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key epochs and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section.
+2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section.
 3. **Concurrent creates of one object id.** RFC 0001 says every object belongs to exactly one space. A member can deliberately create two objects with the same id in one space (see [Object ids](#object-ids)). It cannot cross spaces, so it does not break that sentence, but RFC 0004 has to define what two creates of one id mean.
+4. **The associated data of the payload (RFC 0003).** RFC 0003 binds the payload to the space id, the generation, the suite id and the author member id. This RFC asks that the associated data cover every header field except the payload, which adds the author sequence, the kind and the header format. The signature already covers those fields, so the gap is small: it matters only if a member re-signs another member's payload under a different sequence number or kind. Binding the whole header costs nothing and leaves no such case to think about.
+5. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
 
 ## Summary of the choices
 
 | Question | This RFC's answer |
 | --- | --- |
-| What is a change? | A signed frame around an envelope the relay reads and an AEAD payload it cannot. One change is one atomic write in one space. |
+| What is a change? | A signed frame around a header the relay reads and an AEAD payload it cannot. One change is one atomic write in one space. |
 | How are objects identified? | 128 random bits, generated by the member that creates the object. |
-| How are changes identified? | The hash of the signed envelope bytes. |
+| How are changes identified? | The hash of the signed header bytes. |
 | How are changes ordered? | A hybrid logical clock for the total order, and dependencies on the author's heads for the causal order. |
 | How does a late change stay identifiable? | A loser that its winner never saw is a concurrent loser, the same on every member. |
 | How is a change encoded? | Deterministic CBOR, restricted further, and checked by re-encoding. |
