@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to RFC 0002 (NOC-6, not yet written), and this RFC refers to it without defining it. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
+**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to RFC 0002 (NOC-6), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
 
@@ -49,7 +49,7 @@ A member is one device or one agent: a laptop, a phone, a browser profile, an ag
 - an **Ed25519 signing key**, which signs every change and every membership entry the member writes;
 - an **X25519 key-agreement key**, to which other members wrap space keys.
 
-Both public halves form the member's public identity. Its **member id** is a hash of the two public keys, and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
+Both public halves form the member's public identity. Its **member id** is the SHA-256 hash of the two public keys, with a fixed context string in front (`"nocentraldb/member-id"`), and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
 We use two keys instead of converting the Ed25519 key into an X25519 key. Converting is possible, but it uses one secret in two protocols, and the analyses that show it safe are narrower than the ones for separate keys.
 
@@ -88,7 +88,8 @@ Each primitive is a published construction, used in widely deployed systems, wit
 | Signatures | Ed25519 (RFC 8032), strict verification | `ed25519-dalek` 2.x on `curve25519-dalek` 4.x | Quarkslab, 2019: in-depth on `curve25519-dalek`, a lighter look at `ed25519-dalek` and `x25519-dalek`; only minor findings | Yes, pure Rust; the backend is chosen automatically |
 | Key agreement and key wrapping | HPKE (RFC 9180), base mode, suite DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, ChaCha20-Poly1305 | `hpke`, on `x25519-dalek` | No paid audit known to its authors; Cloudflare reviewed version 0.8 | Yes, pure Rust, `no_std` |
 | Content encryption | XChaCha20-Poly1305: ChaCha20-Poly1305 (RFC 8439) with a 192-bit nonce through HChaCha20 | `chacha20poly1305` (RustCrypto) | NCC Group, 2020: no significant findings | Yes, pure Rust |
-| Subkey derivation | HKDF (RFC 5869) with SHA-256 | `hkdf`, `sha2` (RustCrypto) | No dedicated audit we know of; HKDF-SHA256 is also inside the audited HPKE suite above | Yes, pure Rust |
+| Subkey derivation | HKDF (RFC 5869) with SHA-256 | `hkdf`, `sha2` (RustCrypto) | No dedicated audit we know of; HKDF-SHA256 is also inside the HPKE suite above | Yes, pure Rust |
+| Hash H, for member ids and change ids | SHA-256 (FIPS 180-4), 32-byte output, always with a context string in front of the input | `sha2` (RustCrypto) | No dedicated audit we know of | Yes, pure Rust |
 | Randomness | The operating system's generator; `crypto.getRandomValues` in the browser | `getrandom`, with its `wasm_js` backend in the browser | Not applicable: it calls the platform | Yes, through the `wasm_js` backend |
 | Secret hygiene | Wipe key bytes from memory when dropped | `zeroize` | Not applicable | Yes |
 
@@ -97,11 +98,11 @@ Notes on each choice:
 - **Ed25519** is deterministic, so a signature never depends on the quality of a random number at signing time. We verify with `verify_strict`, which rejects the malleable and small-order encodings that differ between implementations; every member must accept exactly the same signatures, or the copies diverge. Two advisories touched these crates since the audit: RUSTSEC-2022-0093 (a signing oracle when a caller passes a mismatched public key, fixed in `ed25519-dalek` 2.0 by an API that no longer allows it) and RUSTSEC-2024-0344 (timing variability in scalar subtraction, fixed in `curve25519-dalek` 4.1.3). The pinned versions must include both fixes.
 - **HPKE** is the IETF standard for encrypting to a public key, and it is the building block MLS uses. We use base mode and authenticate the sender with an Ed25519 signature on the whole envelope, instead of HPKE's auth mode, so that one signature scheme authenticates everything a member writes. The `info` input binds the envelope to the space id, the generation and the recipient's member id. The `hpke` crate has no paid audit; we run the RFC 9180 test vectors in CI, and decision 3 asks whether to fund an audit.
 - **XChaCha20-Poly1305** takes a 192-bit nonce, so every member can pick a random nonce for every change without coordinating, and collisions are negligible however many members write under one key. It runs fast in software, which matters in WebAssembly, where there is no hardware AES. XChaCha is specified in an IRTF draft, not an RFC; it is HChaCha20 in front of the RFC 8439 construction and has been deployed in libsodium for years.
-- **HKDF-SHA256** derives subkeys and already sits inside the HPKE suite, so we add no second hash.
+- **SHA-256** is the one hash function H of suite 1. HKDF-SHA256 derives subkeys, and plain SHA-256 computes member ids here and change ids in RFC 0002. Each use puts its own context string in front of the input, so a hash computed for one purpose can never be mistaken for one computed for another. HKDF-SHA256 already sits inside the HPKE suite, so we add no second hash function.
 
 Every ciphertext names exactly one key: the space, the generation, or the person key by id. A member never tries several keys on one ciphertext. ChaCha20-Poly1305 does not commit to its key, so a malicious member could build a ciphertext that decrypts under two different keys; because the key is named and covered by the signature, every member uses the same key and reads the same plaintext.
 
-Each space records a **suite id** that names this set of primitives. RFC 0002 must reserve room for it in the change format. A future suite, for example a post-quantum one, is then a new suite id for new spaces or new generations, not a format break.
+Each space records a **suite id** that names this set of primitives. RFC 0002 carries it in every change's header. A future suite, for example a post-quantum one, is then a new suite id for new spaces or new generations, not a format break.
 
 **Rejected options:**
 
@@ -116,11 +117,11 @@ Each space records a **suite id** that names this set of primitives. RFC 0002 mu
 
 ## How a member signs and encrypts a change
 
-RFC 0002 defines the bytes; it must carry the suite id, the space key generation, the author's member id and, for each personal field, the person-key id. This RFC defines the order and what each step covers:
+RFC 0002 defines the bytes: its header carries the suite id, the space key generation, the author's member id and the author sequence, and each personal field carries its person-key id. This RFC defines the order and what each step covers:
 
 1. **Personal fields first.** For each personal field, the SDK encrypts the value with the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field id and the person-key id, so a ciphertext cannot be moved to another field or another person.
-2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data binds the space id, the generation, the suite id and the author's member id.
-3. **Then the signature.** The author signs the header and the ciphertext with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
+2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted.
+3. **Then the signature.** The author signs the header, which contains the ciphertext, with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
 
 A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept and marked as rejected, not dropped silently (principle 3).
 
@@ -130,8 +131,8 @@ A member with the right to add members (the roles belong to another RFC) adds a 
 
 1. It obtains the new member's public identity: its member id, its two public keys and its member certificate. The SDK takes it from an invitation the new member accepted, never from a developer typing key bytes.
 2. It checks the member certificate against the account key it expects. If the account is new to it, the SDK shows the account's fingerprint, so a person can compare it once, the way messaging apps compare safety numbers.
-3. It writes a signed **membership entry** that adds the member id to the space.
-4. It writes a **key envelope** for the new member: the current space key generation, wrapped with HPKE to the new member's X25519 key, signed by the adding member.
+3. It writes a **membership entry**, a control change, that adds the member id to the space.
+4. It writes a **key envelope** for the new member, also a control change: the current space key generation, wrapped with HPKE to the new member's X25519 key, signed by the adding member.
 5. The new member downloads the space's log, opens its envelope, walks the key chain back to generation 1 and decrypts the whole history. It also opens the person-key store.
 
 The relay sees the membership entry and that one envelope exists for the new member id. It cannot open the envelope. Adding a member costs one envelope.
@@ -142,8 +143,8 @@ By default a new member reads the whole history, because every member holds the 
 
 Removing a member works like this:
 
-1. A member with the right to remove writes a signed **membership entry** that removes the member id. From then on the relay refuses changes signed by the removed member and stops serving it the space.
-2. The same member creates the next space key generation, writes a key envelope for every remaining member, and adds the key chain entry that encrypts the previous generation under the new one. Removing a member costs one envelope per remaining member.
+1. A member with the right to remove writes a **membership entry**, a control change, that removes the member id. From then on the relay refuses changes signed by the removed member and stops serving it the space.
+2. The same member creates the next space key generation, writes a key envelope for every remaining member, and adds the **key chain entry** that encrypts the previous generation under the new one; the envelopes and the key chain entry are control changes too. Removing a member costs one envelope per remaining member.
 3. It re-wraps every record in the person-key store under the new generation and deletes the old wraps, so a removed member that kept an old generation and later gets a copy of the relay's data still cannot open the person keys.
 4. Every member that sees the new generation writes with it from then on.
 
@@ -176,9 +177,9 @@ Copying a personal field into an ad-hoc space would put that person's data under
 
 An erasure is a work order (RFC 0001, "Work orders"): one member performs it, a second account signs it off with its account key, because an erasure cannot be undone. Then:
 
-1. The performing member writes a signed **shred entry** to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
+1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
 2. The relay deletes the person-key record from its store.
-3. Every member that folds the shred entry deletes its local copy of the key and writes a signed acknowledgement. The acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3).
+3. Every member that folds the shred entry deletes its local copy of the key and writes an acknowledgement, another control change. The acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3).
 4. From the shred entry on, the fold treats the person's personal fields as erased on every member, whether or not that member still holds the key. Computed fields and views therefore converge (principle 2): a member that has not deleted its copy yet does not compute a different state from the one that has.
 
 The person's fields stay in the log, in the archive and in old snapshots as ciphertext under a key that no longer exists. The signatures on those changes stay valid, because they cover the ciphertext, so the audit trail survives the erasure.
@@ -288,7 +289,7 @@ It differs from them, or makes them more precise, in these points. pm flags each
 
 ## Sources
 
-- RFC 8032 (EdDSA), RFC 9180 (HPKE), RFC 8439 (ChaCha20-Poly1305), RFC 5869 (HKDF), RFC 9420 (MLS); the IRTF draft for XChaCha20.
+- RFC 8032 (EdDSA), RFC 9180 (HPKE), RFC 8439 (ChaCha20-Poly1305), RFC 5869 (HKDF), FIPS 180-4 (SHA-256), RFC 9420 (MLS); the IRTF draft for XChaCha20.
 - Quarkslab, security audit of the dalek libraries, 2019.
 - NCC Group, RustCrypto AES-GCM and ChaCha20+Poly1305 implementation review, 2020.
 - The `hpke` crate's README, on its audit status.
