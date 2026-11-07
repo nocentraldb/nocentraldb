@@ -365,3 +365,185 @@ test("a catalog: reference without pnpm-workspace.yaml fails", () => {
   assert.equal(status, 1);
   assert.match(stderr, /dependencies\.dep = "catalog:" names no catalog entry/);
 });
+
+// Cargo: every registry dependency in every Cargo.toml of the workspace is
+// pinned to one exact version, `=x.y.z`. A loose requirement such as "1"
+// lets `cargo update` move to any compatible release.
+const CARGO_ROOT = [
+  "[workspace]",
+  'members = ["crates/*"]',
+  'resolver = "3"',
+  "",
+  "[workspace.package]",
+  'version = "0.1.0"',
+  "",
+].join("\n");
+const crate = (body) => ({
+  "Cargo.toml": CARGO_ROOT,
+  "crates/a/Cargo.toml": `[package]\nname = "a"\nversion.workspace = true\n\n${body}`,
+});
+
+test("exact Cargo requirements in every dependency table pass", () => {
+  const { status, stderr } = run({
+    "Cargo.toml": `${CARGO_ROOT}\n[workspace.dependencies]\nserde = { version = "=1.0.228", features = ["derive"] }\n`,
+    "crates/a/Cargo.toml": [
+      "[package]",
+      'name = "a"',
+      "version.workspace = true",
+      "",
+      "[dependencies]",
+      'yrs = "=0.25.0"',
+      "serde.workspace = true",
+      'renamed = { package = "rand", version = "=0.9.2", optional = true }',
+      "",
+      "[dev-dependencies]",
+      'proptest = "=1.12.0"',
+      "",
+      "[build-dependencies]",
+      'cc = { version = "=1.2.41" }',
+      "",
+      "[target.'cfg(unix)'.dependencies]",
+      'libc = "=0.2.177"',
+      "",
+      "[target.'cfg(target_arch = \"wasm32\")'.dev-dependencies]",
+      'wasm-bindgen-test = "=0.3.54"',
+      "",
+    ].join("\n"),
+  });
+  assert.deepEqual({ status, stderr }, { status: 0, stderr: "" });
+});
+
+for (const spec of [
+  "1",
+  "1.12",
+  "1.12.0",
+  "^1.12.0",
+  "~1.12.0",
+  ">=1.12.0",
+  ">=1.12.0, <2",
+  "*",
+  "=1.12",
+  "=1",
+  "",
+]) {
+  test(`the loose Cargo requirement "${spec}" fails and names file and dependency`, () => {
+    const { status, stderr } = run(
+      crate(`[dependencies]\nproptest = "${spec}"\n`),
+    );
+    assert.equal(status, 1);
+    assert.equal(
+      stderr,
+      `check-pins: crates/a/Cargo.toml dependencies.proptest = "${spec}" is not exact (use "=x.y.z")\n`,
+    );
+  });
+}
+
+for (const [table, label] of [
+  ["dependencies", "dependencies"],
+  ["dev-dependencies", "dev-dependencies"],
+  ["build-dependencies", "build-dependencies"],
+  ["dev_dependencies", "dev_dependencies"],
+  ["build_dependencies", "build_dependencies"],
+  ["target.'cfg(unix)'.dependencies", "target.cfg(unix).dependencies"],
+  [
+    "target.x86_64-pc-windows-msvc.dev-dependencies",
+    "target.x86_64-pc-windows-msvc.dev-dependencies",
+  ],
+]) {
+  test(`a loose requirement in [${table}] fails`, () => {
+    const { status, stderr } = run(crate(`[${table}]\nfoo = "1"\n`));
+    assert.equal(status, 1);
+    assert.match(
+      stderr,
+      new RegExp(
+        `crates/a/Cargo\\.toml ${label.replace(/[.()]/g, "\\$&")}\\.foo = "1" is not exact`,
+      ),
+    );
+  });
+}
+
+test("a loose version in an inline table fails", () => {
+  const { status, stderr } = run(
+    crate(
+      '[dev-dependencies]\nproptest = { version = "1", default-features = false }\n',
+    ),
+  );
+  assert.equal(status, 1);
+  assert.match(
+    stderr,
+    /crates\/a\/Cargo\.toml dev-dependencies\.proptest = "1" is not exact/,
+  );
+});
+
+test("a loose version in a dependency sub-table fails", () => {
+  const { status, stderr } = run(
+    crate('[dependencies.proptest]\nversion = "1.12"\n'),
+  );
+  assert.equal(status, 1);
+  assert.match(
+    stderr,
+    /crates\/a\/Cargo\.toml dependencies\.proptest = "1\.12" is not exact/,
+  );
+});
+
+test("a loose requirement in [workspace.dependencies] fails", () => {
+  const { status, stderr } = run({
+    "Cargo.toml": `${CARGO_ROOT}\n[workspace.dependencies]\nproptest = "1"\n`,
+  });
+  assert.equal(status, 1);
+  assert.match(
+    stderr,
+    /^check-pins: Cargo\.toml workspace\.dependencies\.proptest = "1" is not exact/m,
+  );
+});
+
+test("a registry dependency without a version fails", () => {
+  const { status, stderr } = run(
+    crate('[dependencies]\nfoo = { features = ["x"] }\n'),
+  );
+  assert.equal(status, 1);
+  assert.match(
+    stderr,
+    /crates\/a\/Cargo\.toml dependencies\.foo has no version/,
+  );
+});
+
+test("a Cargo.toml outside crates/ is checked too", () => {
+  const { status, stderr } = run({
+    "apps/desktop/src-tauri/Cargo.toml":
+      '[package]\nname = "d"\nversion = "0.1.0"\n\n[dependencies]\ntauri = "2"\n',
+  });
+  assert.equal(status, 1);
+  assert.match(
+    stderr,
+    /apps\/desktop\/src-tauri\/Cargo\.toml dependencies\.tauri = "2" is not exact/,
+  );
+});
+
+test("Cargo.toml files under target/ and node_modules/ are not the workspace's", () => {
+  const loose =
+    '[package]\nname = "x"\nversion = "0.1.0"\n\n[dependencies]\nfoo = "1"\n';
+  const { status } = run({
+    "target/package/x-0.1.0/Cargo.toml": loose,
+    "node_modules/x/Cargo.toml": loose,
+  });
+  assert.equal(status, 0);
+});
+
+test("a Cargo.toml that is not valid TOML fails", () => {
+  const { status, stderr } = run(crate("[dependencies\nfoo = 1\n"));
+  assert.equal(status, 1);
+  assert.match(stderr, /check-pins: crates\/a\/Cargo\.toml is not valid TOML/);
+});
+
+test("the repository's own manifests pass", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const result = spawnSync(process.execPath, [script], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  assert.deepEqual(
+    { status: result.status, stderr: result.stderr },
+    { status: 0, stderr: "" },
+  );
+});
