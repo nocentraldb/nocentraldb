@@ -547,3 +547,68 @@ test("the repository's own manifests pass", () => {
     { status: 0, stderr: "" },
   );
 });
+
+// Path dependencies between workspace crates keep their own rule, which
+// scripts/release/check-version.mjs enforces: declared in
+// [workspace.dependencies] with version = "=<workspace version>" (R4) and
+// never as path = in a crate (R3). check-pins does not report them twice.
+test("a workspace path dependency pinned to the workspace version passes", () => {
+  const { status, stderr } = run({
+    "Cargo.toml": `${CARGO_ROOT}\n[workspace.dependencies]\na = { path = "crates/a", version = "=0.1.0" }\n`,
+    "crates/a/Cargo.toml": '[package]\nname = "a"\nversion.workspace = true\n',
+    "crates/b/Cargo.toml":
+      '[package]\nname = "b"\nversion.workspace = true\n\n[dependencies]\na.workspace = true\n',
+  });
+  assert.deepEqual({ status, stderr }, { status: 0, stderr: "" });
+});
+
+test("a path dependency is left to check-version, not reported as a registry dependency", () => {
+  const { stderr } = run({
+    "Cargo.toml": `${CARGO_ROOT}\n[workspace.dependencies]\na = { path = "crates/a" }\n`,
+    "crates/a/Cargo.toml": '[package]\nname = "a"\nversion.workspace = true\n',
+  });
+  assert.doesNotMatch(stderr, /workspace\.dependencies\.a/);
+});
+
+// Git dependencies and [patch]/[replace] sections bypass the registry pin.
+for (const [name, files, message] of [
+  [
+    "a git dependency",
+    crate(
+      '[dependencies]\nfoo = { git = "https://github.com/a/foo", rev = "abc123" }\n',
+    ),
+    /check-pins: crates\/a\/Cargo\.toml dependencies\.foo is a git dependency; use a registry release pinned to "=x\.y\.z"/,
+  ],
+  [
+    "a git dependency with a version",
+    crate(
+      '[dev-dependencies]\nfoo = { git = "https://github.com/a/foo", version = "=1.0.0" }\n',
+    ),
+    /crates\/a\/Cargo\.toml dev-dependencies\.foo is a git dependency/,
+  ],
+  [
+    "a git entry in [workspace.dependencies]",
+    {
+      "Cargo.toml": `${CARGO_ROOT}\n[workspace.dependencies]\nfoo = { git = "https://github.com/a/foo" }\n`,
+    },
+    /Cargo\.toml workspace\.dependencies\.foo is a git dependency/,
+  ],
+  [
+    "a [patch.crates-io] section",
+    {
+      "Cargo.toml": `${CARGO_ROOT}\n[patch.crates-io]\nfoo = { path = "vendor/foo" }\n`,
+    },
+    /check-pins: Cargo\.toml has a \[patch\] section; it replaces pinned dependencies and is not allowed/,
+  ],
+  [
+    "a [replace] section",
+    crate('[replace]\n"foo:1.0.0" = { path = "vendor/foo" }\n'),
+    /check-pins: crates\/a\/Cargo\.toml has a \[replace\] section; it replaces pinned dependencies and is not allowed/,
+  ],
+]) {
+  test(`${name} is refused with a clear message`, () => {
+    const { status, stderr } = run(files);
+    assert.equal(status, 1);
+    assert.match(stderr, message);
+  });
+}
