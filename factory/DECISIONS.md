@@ -79,3 +79,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · NOC-13 · The relay's checks live in one core; backends only store
+
+- Decided by: coding agent (NOC-13)
+- Why: RFC 0007 puts every signature, membership and frame check in one relay crate, so SQLite, Postgres and DynamoDB with S3 cannot drift apart on a security check and stay interchangeable behind one storage interface and one conformance suite.
+- Instead of: each backend implementing the checks itself.
+
+### 2026-11-07 · NOC-13 · RFC 0007 narrows RFC 0002: the uploader must be a current member
+
+- Decided by: coding agent (NOC-13)
+- Why: keeps strangers from filling a space's log; the author may still be any member, so forwarding from island mode keeps working. Named as a conflict in the RFC for the owner to rule on.
+- Instead of: accepting any validly signed change from any connection, as RFC 0002 allows.
+
+### 2026-11-07 · NOC-13 · The RFC 0007 test lives in its own file and needs no moon.yml change
+
+- Decided by: coding agent (NOC-13)
+- Why: `scripts/rfc-0007.test.mjs` matches the existing `scripts/*.test.mjs` pattern of `repo:test`, so it runs in `pnpm gates` without touching `moon.yml`, which the RFC 0002 PR also edits.
+- Instead of: adding RFC 0007 to a shared RFC test file and conflicting with the other open RFC PRs.
