@@ -139,7 +139,7 @@ An object id is 16 bytes (128 bits) from the platform's cryptographically secure
 
 **Why two members cannot collide.** A collision needs two members to draw the same 128 random bits. Even after 2⁴⁸ (about 280 trillion) objects in one space, the chance that any two of them collide is about one in 8 billion (the birthday bound, n²/2¹²⁹ = 2⁻³³). An id is generated from a secure generator, so no member can predict another's ids, and no member's clock or counter is involved.
 
-A member that wants to create two objects with the same id on purpose can do so: it is the author, and it can write what it likes. The fold then sees two "create" operations for one id and treats them as concurrent creates, the way RFC 0004 defines. It cannot affect objects in a space it is not a member of.
+A member that wants to create two objects with the same id on purpose can do so: it is the author, and it can write what it likes. The fold then sees two "create" operations for one id and treats them as RFC 0004 defines in "Two creates of one object id": one object, whose collection is a converged value with the other create as a readable conflict. It cannot affect objects in a space it is not a member of.
 
 | Rejected | Why |
 | --- | --- |
@@ -182,7 +182,7 @@ Every payload carries a **hybrid logical clock** (key 2): one unsigned 64-bit in
 
 When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter would overflow, the member waits for its wall clock to reach the next millisecond.
 
-The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author member id and operation id from the same change, and a change's clock is higher than the clock of every change its author had seen.
+The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author member id and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author member id and operation id from the same change, and a change's clock is higher than the clock of every change its author had seen.
 
 ### Dependencies
 
@@ -431,12 +431,11 @@ Recommendation: A. It is what GENESIS.md asks: old clients keep data they do not
 
 ## Conflicts with GENESIS.md and RFC 0001
 
-This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. Each needs the owner's ruling, or a change to the other document.
+This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. Each needs the owner's ruling, or a change to the other document. RFC 0003 and RFC 0004 have adopted this RFC's terms, the whole-header associated data and SHA-256, and RFC 0004 defines two creates of one object id, so no conflict with either remains.
 
 1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner should confirm this reading, or choose D9 B.
 2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section.
-3. **Concurrent creates of one object id.** RFC 0001 says every object belongs to exactly one space. A member can deliberately create two objects with the same id in one space (see [Object ids](#object-ids)). It cannot cross spaces, so it does not break that sentence, but RFC 0004 has to define what two creates of one id mean.
-4. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
+3. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
 
 ## Summary of the choices
 
