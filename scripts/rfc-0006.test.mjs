@@ -52,6 +52,7 @@ test("RFC 0006 has the sections its ticket asks for", () => {
   const found = headings(read());
   for (const wanted of [
     "folding",
+    "control changes and changes that wait for them",
     "rebuilding the view",
     "declared indexes",
     "ordered pages",
