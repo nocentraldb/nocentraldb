@@ -115,3 +115,33 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-10)
 - Why: `std::fs` compiles for `wasm32-unknown-unknown` and fails only when called, so it cannot prove the build task fails; the fixture uses `std::os::unix`, which does not exist there. A call into `std::fs` at runtime is caught by the test-wasm task instead, as long as a test reaches it.
 - Instead of: the ticket's example `std::fs`, which would have made the detector test pass the build and prove nothing.
+
+### 2026-11-07 · NOC-14 · minicbor reads the CBOR tokens; the core checks the profile itself
+
+- Decided by: coding agent (NOC-14)
+- Why: RFC 0002's profile is stricter than any library's deterministic mode, so the core decodes into its own `Value`, rejects indefinite lengths, tags, other simple values, key types, unsorted and repeated keys and invalid UTF-8 as it reads, and then encodes again and compares, which catches every non-shortest integer, length and float and every other NaN. minicbor (`=2.3.1`, `alloc` only) supplies the tokens without serde and without `std`; floats are written by the core, because minicbor's half-precision support needs the `half` crate. The test vectors are written by `tests/vectors/generate.py` with Python's cbor2 and hashlib, independently of the crate; the gates check the committed vectors, they do not run the script.
+- Instead of: ciborium with serde (its canonical output is not the profile, and the re-encode check would still be needed), or a hand-written tokenizer.
+
+### 2026-11-07 · NOC-14 · Each red step compiles against a stub API
+
+- Decided by: coding agent (NOC-14)
+- Why: a Rust test that calls a function that does not exist fails to compile, which is the "missing import" failure `roles/coder.md` excludes. The first commit adds the types and signatures with `todo!()` bodies, so each red commit shows its tests failing at run time with "not yet implemented", or for the behaviour (the derived `Debug` of the redaction step).
+- Instead of: red commits that fail to compile.
+
+### 2026-11-07 · NOC-14 · Foldable means format 1, a known kind, and no unknown key from 1 to 63
+
+- Decided by: coding agent (NOC-14)
+- Why: RFC 0002 says a higher header or payload format is stored, not folded; this core knows only format 1, and no lower format exists, so any other number is not foldable. The padding (payload key 5) is kept as given and not checked for zeros, since "the reader ignores" it, and a header whose author member id is not 32 bytes is rejected, since RFC 0002 defines it as RFC 0003's SHA-256 member id. Whether op 0 carries no field is left to the fold, not the codec.
+- Instead of: rejecting non-zero padding or accepting member ids of any length.
+
+### 2026-11-07 · NOC-14 · Debug shows ids and ordering metadata, never content
+
+- Decided by: coding agent (NOC-14)
+- Why: GENESIS.md forbids content and keys in logs and errors. `Value` and `Key` show their kind and size; an operation shows only its unknown keys, since RFC 0002 counts object ids, collection and field names, ops and values as content; the sealed payload, padding and signature show only their length. Space, member and change ids, sequence numbers, key generations, formats, kinds, clocks and dependencies show, as hex where they are bytes: the relay or a member sees them without content. Errors name keys and byte offsets only.
+- Instead of: derived `Debug`, which prints every byte, or hiding ids too, which leaves nothing to debug with.
+
+### 2026-11-07 · NOC-14 · Random ids panic without a secure generator; the clock takes the wall clock as a function
+
+- Decided by: coding agent (NOC-14)
+- Why: an id from a weaker source could collide, so `ObjectId::random` and `SpaceId::random` panic when `getrandom` fails rather than fall back; on wasm32 getrandom's `wasm_js` feature uses `crypto.getRandomValues`. `Clock::now` takes the wall clock as a closure, so the core reads no time itself, the tests drive the counter overflow, and the waiting loop asks it again; a wall clock beyond 48 bits of milliseconds reads as the largest the clock holds.
+- Instead of: a fallible id API every caller must handle for a failure the platform does not have, or a clock that reads `SystemTime` itself, which does not exist on wasm32-unknown-unknown.
