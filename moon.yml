@@ -38,7 +38,11 @@ tasks:
     # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on
     # the shell's globstar. The set-version test runs cargo in a two-crate
-    # fixture on the pinned toolchain, hence the rust-toolchain dependency.
+    # fixture on the pinned toolchain, hence the rust-toolchain dependency;
+    # so does scripts/wasm-gate.test.mjs, which reads the wasm tasks of
+    # crates/ncdb-core/moon.yml, checks that every #[test] of ncdb-core also
+    # runs on wasm32, and builds a platform-only crate for wasm32 to prove the
+    # build-wasm task fails on it.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -53,6 +57,9 @@ tasks:
       - "/CONTRIBUTING.md"
       - "/README.md"
       - "/docs/**/*"
+      - "/crates/ncdb-core/moon.yml"
+      - "/crates/ncdb-core/src/**/*"
+      - "/crates/ncdb-core/tests/**/*"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not
