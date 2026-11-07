@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-13
 
 This RFC defines the relay: the protocol members use to push and pull a space's changes and to follow them live, the checks the relay runs before it appends a change, the interface every relay backend implements, and the first backend, serverless on AWS with DynamoDB and S3.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of RFC 0002 (NOC-6) and the keys, membership entries, key envelopes and person-key store of RFC 0003 (NOC-7), without redefining them. Both are open drafts at the time of writing; where this RFC needs something from them, it says so in [What this RFC needs from RFC 0002 and RFC 0003](#what-this-rfc-needs-from-rfc-0002-and-rfc-0003).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of RFC 0003 (NOC-7), without redefining them. RFC 0003 is an open draft at the time of writing. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002 and RFC 0003](#what-this-rfc-needs-from-rfc-0002-and-rfc-0003).
 
 **Status.** A draft for the owner's decision. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. Nothing here is built or deployed. The open decisions are in [Decisions for the owner](#decisions-for-the-owner), each with options, a recommendation and its cost. Until the owner decides, the design below describes the recommended option of each decision.
 
@@ -30,6 +30,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Position | RFC 0002's relay position: a dense integer per space, 1, 2, 3, ..., in the order the relay accepted the changes. |
 | Cursor | A position. "After cursor p" means the changes at positions p + 1 and up. |
 | Head | The highest position in a space's log on the relay; 0 for an empty log. |
+| Relay epoch | A random 16-byte id of the relay's current history. Positions are valid only within one epoch. The relay draws a new epoch whenever its stored log may have lost appends, such as after a restore from backup. |
 | Connection | One authenticated session between a member and the relay. |
 | Uploader | The member whose connection pushes a change. Often the author, but any member may forward another member's change. |
 
@@ -40,7 +41,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **Every check uses public data.** The relay checks that a frame is well-formed, that its signature is valid for the author's public key, and that the author and the uploader are members. Public keys and membership come from control changes in the log, which are signed but not encrypted. No check needs a key that decrypts anything.
 - **Backends are interchangeable.** All checks live in one relay core. A backend only stores: it appends at the next position if nobody else did, reads a range, and keeps the membership table and the person-key store. SQLite, Postgres and DynamoDB with S3 all implement the same interface and pass the same test suite.
 - **On AWS, it costs nothing while nobody writes.** API Gateway WebSockets, Lambda, DynamoDB and S3. A small team pays about 10 dollars a month. 1,000 agents that each read 1,000 times a minute pay nothing for the reads, because reads are local; their writes cost about 800 dollars a month at one write per agent per minute.
-- **Without the relay, members keep working.** Writes go into the local log at once. On reconnect, a member pulls what it missed and pushes what the relay has not confirmed. The relay recognises changes it already holds by their ids.
+- **Without the relay, members keep working.** Writes go into the local log at once. On reconnect, a member pulls what it missed and pushes what the relay has not confirmed. The relay recognises changes it already holds by their ids. A relay restored from a backup announces a new epoch, so no member trusts a position the restore undid.
 
 ## The protocol
 
@@ -58,13 +59,15 @@ WebSockets work in every browser we target, natively on every platform, and thro
 member → relay   hello      {versions: [1], client: "ncdb-rs/0.3"}
 relay  → member  challenge  {version: 1, relay id, nonce: 32 random bytes, limits}
 member → relay   auth       {signing key, agreement key, signature}
-relay  → member  welcome    {member id, spaces: [space ids this member belongs to]}
+relay  → member  welcome    {member id, relay epoch, spaces: [space ids this member belongs to]}
 ```
 
 - `hello` lists the protocol versions the member speaks. The relay picks the highest it also speaks, or answers `unsupported_version` and closes.
+- `hello` may carry a client string, such as `ncdb-rs/0.3`, to help debug version problems. It is optional, and the relay sees it (see [What the relay sees](#what-the-relay-sees)).
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
-- `auth` carries the member's two public keys and an Ed25519 signature, with its member key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. The context string keeps this signature from ever being mistaken for the signature of a change. Binding the relay id keeps one relay from replaying a member's answer against another.
+- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key (decision R13), over `H("nocentraldb/relay-auth" || relay id || nonce)`. The context string keeps this signature from ever being mistaken for the signature of a change. Binding the relay id keeps one relay from replaying a member's answer against another.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
+- `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
 
@@ -88,7 +91,7 @@ A push is **idempotent**: if the connection drops before `pushed` arrives, the m
 ### Pull: read from a cursor
 
 ```text
-member → relay   pull     {req, space, after: position, limit}
+member → relay   pull     {req, space, epoch, after: position, limit}
 relay  → member  entries  {req, space, entries: [entry, ...], head}
 
 entry = {position, accepted at, frame | {download: url, size}}
@@ -96,12 +99,12 @@ entry = {position, accepted at, frame | {download: url, size}}
 
 The relay answers with the entries after the cursor, in position order, up to `limit` and up to the message size. Positions are dense, so the member sees at once whether the page is complete: the last entry's position is the next cursor, and the member pulls again until it reaches `head`. `accepted at` is the relay's clock when it appended the change; RFC 0002 uses it only as a diagnostic.
 
-A member that has never pulled a space starts at cursor 0. A member that joins a space pulls the whole log, as RFC 0003 requires, so that it can walk the key chain and decrypt the full history.
+A cursor is valid only in the epoch it was taken in. A `pull` or `subscribe` that names another epoch gets `epoch_changed`, never entries. A member that has never pulled a space starts at cursor 0. A member that joins a space pulls the whole log, as RFC 0003 requires, so that it can walk the key chain and decrypt the full history.
 
 ### Subscribe: follow a space live
 
 ```text
-member → relay   subscribe    {req, space, after: position}
+member → relay   subscribe    {req, space, epoch, after: position}
 relay  → member  entries      {req, space, entries, head}        catch-up pages, as for a pull
 relay  → member  entries      {space, entries, head}             later, whenever changes are appended
 member → relay   unsubscribe  {req, space}
@@ -121,12 +124,21 @@ relay  → member  keys              {req, space, envelopes: [entry], chain: [en
                                    the key envelopes addressed to this member id, and the key chain entries
 
 member → relay   person-keys       {req, space}
-relay  → member  person-keys       {req, space, records: [{person-key id, generation, wrapped}]}
-member → relay   put-person-keys   {req, space, records: [...]}
+relay  → member  person-keys       {req, space, records: [record, ...]}
+member → relay   put-person-keys   {req, space, records: [record, ...]}
 relay  → member  ok                {req}
+
+record = {person-key id, generation, wrapped, writer member id, entry: change id}
 ```
 
-A wrapped person-key record is opaque to the relay: a person key wrapped under a space key generation (RFC 0003). The relay stores it, hands it to members of the space, and replaces it when a member re-wraps it after a rotation. The relay deletes a record when it appends a shred entry for its person-key id, in the same backend transaction as the append, so a shred and the deletion cannot come apart.
+A wrapped person key is opaque to the relay: a person key wrapped under a space key generation (RFC 0003). The relay cannot check what is inside, so the store is protected by tying every record to the log (decision R12):
+
+- **Every record is announced in the log.** A member that writes or re-wraps a record first appends a **person-key entry**, a control change that names the person-key id, the generation and the SHA-256 hash of the wrapped bytes. The entry is signed like every change, so its author is known.
+- **The relay accepts a record only with its entry.** `put-person-keys` must name an entry already in the space's log, whose author is the uploader, whose person-key id and generation match, and whose hash matches the wrapped bytes. Otherwise the relay answers `bad_record`. A record replaces an older one only with a higher generation.
+- **Members accept a record only with its entry.** A member checks the hash against the entry in its own copy of the log before it unwraps a record, so a relay that swaps records is caught, and the entry names who wrote each record.
+- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only when it appends a valid shred entry for its person-key id, in the same backend transaction as the append, so a shred and the deletion cannot come apart. A shred entry carries the second account's sign-off, signed with that account key (RFC 0003). The relay verifies it against the account certificates in the membership table. A member therefore cannot erase a person's data alone.
+
+**What this does not prevent.** A member of the space can still announce and upload a wrongly wrapped key under its own name. Every member then fails to unwrap it and reports it, and the entry names the member that wrote it. A member that holds the space key could equally have leaked the person key itself (RFC 0003).
 
 ### Large changes
 
@@ -164,6 +176,8 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `bad_signature` | The signature does not verify against the author's signing key. | Keep the change marked as rejected (RFC 0003); never retry. |
 | `author_not_member` | The author is not a member of the space at the change's key generation, or was removed. | Keep the change marked as rejected. |
 | `membership_rule` | A control change breaks the membership rules (the later membership RFC). | Keep the change marked as rejected. |
+| `epoch_changed` | The cursor belongs to an earlier relay epoch, for example after a restore. | Treat every stored position of this relay as unconfirmed, pull from 0, push every change the relay lacks (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). |
+| `bad_record` | A person-key record has no matching person-key entry in the log, or would replace a newer generation. | Append the entry first; never retry the same record without one. |
 | `compacted` | The cursor points before a range moved into the archive (the compaction RFC). | Fetch the archive, then pull from its end. |
 | `bad_cursor` | The cursor is negative or above the head. | Pull from 0 or from the last confirmed position. |
 | `rate_limited` | The member or the space exceeded its quota. | Retry after the given time. |
@@ -185,6 +199,8 @@ The relay runs every check below in its core, the same on every backend, before 
 | The signature is valid. | The author's public signing key, from the membership table, and the signed header bytes (RFC 0003, Ed25519, strict verification). | Encrypt-then-sign: the signature covers the ciphertext, so it verifies without decrypting (RFC 0003). |
 | The author is a member at the change's key generation and has not been removed. | The membership table: when each member was added and removed, and the space's key generations. | As above: control changes, readable by design. |
 | A control change obeys the membership rules. | The control body, which RFC 0002 makes readable to the relay. | Control bodies carry ids, public keys, wrapped keys and shred ids, never content. A key envelope is HPKE ciphertext to one member; the relay stores it and cannot open it. |
+| A person-key record matches its person-key entry. | The SHA-256 hash of the wrapped bytes against the hash in a signed entry in the log. | A hash of opaque bytes. The relay never unwraps the record. |
+| A shred entry carries the second account's sign-off. | The account signature in the shred entry, against the account certificates in the membership table. | Signature verification uses only public keys. |
 | The change is not already in the log. | The change id, which the relay computes from the frame (RFC 0002). | A hash of the bytes. |
 | The reader may read the space. | The membership table, on every pull, subscribe, keys and person-keys request. | As above. |
 
@@ -212,6 +228,7 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 **From the protocol**:
 
 - **Who is online, and when.** Each connection is authenticated as one member id, so the relay knows when each member connects, for how long, and from which network address.
+- **Which software each member runs**, from the optional client string in `hello`, such as `ncdb-rs/0.3`, and from the protocol versions it offers. Together with the network address, this can fingerprint a device.
 - **What each member follows.** Which spaces each connection subscribes to, and from which cursor. A cursor shows how far behind a member is, and so roughly how long it was offline.
 - **Who exchanged changes directly.** When a member uploads a change another member authored, the relay learns that the two met in island mode or forwarded through each other.
 - **How many people have personal data in a space**, from the number of records in the person-key store, and when a record is added, re-wrapped or deleted.
@@ -222,10 +239,10 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 
 - API Gateway sees every connection, its network address and the size and time of every message.
 - DynamoDB and S3 hold everything the relay stores: the log of frames, the membership table, the person-key store, the connection table.
-- CloudWatch Logs hold what the relay logs: ids, sizes, error codes and times, never a frame, a payload, a key or a person-key record (GENESIS.md, "Never write content, keys or personal fields into logs").
+- CloudWatch Logs hold what the relay logs: member ids, space ids, change ids, sizes, error codes and times, and in access logs network addresses. The relay never logs a frame, a payload, a key envelope, a person-key record or any other key material (GENESIS.md, "Never write content, keys or personal fields into logs"). Retention is decision R11.
 - Backups (DynamoDB point-in-time recovery, S3 versioning if enabled) keep deleted person-key records until they expire. They are wrapped, and RFC 0003 states what follows from that.
 
-**What the relay cannot see**: any content, the ordering metadata (clock, dependencies), whether a sealed change is content or a work order, the model, and which objects or fields a change touches (RFC 0002). A network address is personal data under the GDPR. The relay keeps it only for as long as a connection is open and in access logs of limited retention (decision R9).
+**What the relay cannot see**: any content, the ordering metadata (clock, dependencies), whether a sealed change is content or a work order, the model, and which objects or fields a change touches (RFC 0002). A network address is personal data under the GDPR. The relay keeps it only for as long as a connection is open (decision R9) and in access logs of limited retention (decision R11).
 
 ## The backend interface
 
@@ -270,8 +287,15 @@ pub trait RelayStore {
 
     /// The person-key store (RFC 0003): opaque wrapped records.
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError>;
+    /// Stores records the core has matched to their person-key entries.
+    /// There is no delete: records go only through a shred entry's effect.
     async fn put_person_keys(&self, space: SpaceId, records: Vec<PersonKeyRecord>)
         -> Result<(), StoreError>;
+
+    /// The relay epoch, and setting a new one, which a restore must do
+    /// before the relay serves any request.
+    async fn epoch(&self) -> Result<Epoch, StoreError>;
+    async fn new_epoch(&self) -> Result<Epoch, StoreError>;
 
     /// Large frames: an upload URL, and reading what was uploaded.
     async fn begin_upload(&self, space: SpaceId, size: u64) -> Result<Upload, StoreError>;
@@ -296,6 +320,7 @@ The rules every backend must keep:
 - **An append and its effects are atomic.** A membership entry and the membership table, a shred entry and the deletion of its person-key record, change together or not at all.
 - **Exact bytes.** A backend returns the frame byte for byte as it was appended.
 - **Read your writes.** A read after a successful append sees the appended entries.
+- **A new epoch after any loss.** A backend restored from a backup, or one that may have lost appends for any other reason, draws a new epoch before it serves a request.
 
 One conformance test suite, run against every backend, holds these rules, so a new backend is interchangeable when it passes it. How each backend keeps them:
 
@@ -333,7 +358,7 @@ member ──WebSocket──▶ API Gateway (WebSocket API)
 | Lambda | Runs the relay core, one invocation per incoming message. Rust on arm64, 256 MB. | The same core as every other deployment; pays per message. |
 | DynamoDB, on-demand | Holds the log, the membership table, the person-key store and the connection table. | Conditional transactions give dense positions and atomic effects; no capacity to plan; point-in-time recovery. |
 | S3 | Holds frames above 8 KiB and uploads. | Large items are cheaper there, and DynamoDB items stop at 400 KB. |
-| CloudWatch | Logs (ids, sizes, codes, times; 14 days), metrics, alarms, and a budget alarm. | Built in. |
+| CloudWatch | Logs (ids, sizes, codes, times; no content and no keys; retention per decision R11), metrics, alarms, and a budget alarm. | Built in. |
 
 No VPC, no NAT gateway and no long-running server: all of these cost money while idle.
 
@@ -345,9 +370,9 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | --- | --- | --- | --- | --- |
 | `log` | space id | position | change id, accepted at, author member id, kind, frame (inline) or S3 key and size | One item per change. A pull is one `Query` on the space from `position > after`, in order. |
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
-| `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. |
+| `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, roles, added at (position), removed at (position) | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". |
-| `person_keys` | space id | person-key id | generation, wrapped record | Deleted in the same transaction as the shred entry's append. |
+| `person_keys` | space id | person-key id | generation, wrapped record, writer, entry change id | Written only after the core matched it to its person-key entry; deleted only in the same transaction as a shred entry's append. |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -369,6 +394,23 @@ Different spaces spread across partitions by their random ids, so spaces never c
 ### Delivery to subscribers
 
 After a successful append, the same Lambda invocation looks up the space's subscribers in `connections` and posts the new entries to each, through API Gateway's connection API. Delivery is best-effort: a post that fails is not retried. A member that misses an entry sees the gap at the next entry it receives, because entries carry dense positions and the head, and pulls the range. If no further entry comes, it catches up when it reconnects, which happens at the latest after 2 hours, when API Gateway closes every connection. Decision R3 compares this with fan-out through DynamoDB Streams.
+
+### Restores and the relay epoch
+
+A restore from a backup, such as DynamoDB point-in-time recovery, brings back the relay as it was at the restore point. Every append after that point is gone from the relay, but not from the members. Without care, this breaks RFC 0002's dense positions:
+
+- New appends would reuse the lost positions for different changes. A member whose cursor already passed those positions would skip the new changes and never notice.
+- Members would not re-push their own lost changes, because those already carry a relay position.
+- Person-key records that a later shred deleted would come back.
+
+So a restore always ends with a **new relay epoch**, before the relay serves any request:
+
+1. The operator restores the tables, and the restore procedure draws a new epoch. The relay refuses every request until it has done so.
+2. The relay re-applies the effects of every shred entry in the restored log, so no record survives that a shred in the restored log deleted.
+3. Each member sees the new epoch in `welcome`, or gets `epoch_changed` on a `pull` or `subscribe`. It then treats every position it stored for this relay as unconfirmed, pulls each space from 0 and folds nothing new twice, because it recognises changes by their ids. Finally it pushes every change the relay lacks, in its local order: its own, and the ones it received from others. The relay gives each change a position in the new epoch.
+4. Shred entries appended after the restore point come back in step 3, when the first member that holds one re-pushes it. Their effects delete the restored person-key records again.
+
+**What it does not do.** Until a member that holds a lost shred entry reconnects, the relay serves the person-key record it deleted. The record is wrapped under a space key, so only members of the space can open it. A member could equally have kept the key, as RFC 0003 says for relay backups. A restore also costs every member a full pull of every space it belongs to: about the size of the log, once. The same procedure applies to any loss of appends, not only to a restore. Decision R10 weighs this against having no backups at all.
 
 ### What it does not do
 
@@ -435,7 +477,7 @@ At this scale, a long-running WebSocket server on ECS Fargate behind a load bala
 
 **On reconnect**, a member:
 
-1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head, folding as it goes. It recognises changes it already holds, for example from a peer, by their ids.
+1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head (from 0, if the relay epoch changed), folding as it goes. It recognises changes it already holds, for example from a peer, by their ids.
 2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received from peers. Changes the relay already holds come back as `duplicate`, with their position.
 3. Records the relay position of every change, and **subscribes** from its new cursor.
 
@@ -446,7 +488,7 @@ Pulling first lets the member see a membership entry that removed it before it p
 - Changes made on an island reach the members on other islands only when a path exists again, through the relay or a peer.
 - The relay refuses changes from an author who was removed while the change was on its way (see [What the relay checks](#what-the-relay-checks)). Members that received such a change directly keep it; members that did not never see it. Every member still folds the changes it holds to the same state as any other member holding the same set, but the sets differ, and the SDK reports a change the relay rejected (decision R7).
 - Nothing enforces one global truth at write time, on an island or off it (RFC 0001).
-- A relay that comes back after losing data is repopulated by its members' pushes. Positions on a new or restored relay start again from 1, and members match changes by id (RFC 0002). How a space moves between relays on purpose is a later RFC.
+- A relay that comes back after losing data, restored from a backup or empty, draws a new relay epoch, and its members repopulate it by their pushes (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). Members match changes by id (RFC 0002). How a space moves between relays on purpose is a later RFC.
 
 ## What this RFC needs from RFC 0002 and RFC 0003
 
@@ -456,8 +498,9 @@ Pulling first lets the member see a membership entry that removed it before it p
 | Control bodies (membership entries, key envelopes, key chain entries, shred entries) are readable by the relay and carry the public keys and certificate of an added member. | RFC 0002, RFC 0003 | Met: RFC 0003, "Sharing a space key with a new member", step 1 and 3. |
 | A key envelope names the member id it is for, readable by the relay, so that `keys` can return a member's own envelopes. | RFC 0003 | To confirm. |
 | The first change of a space is a control change that names the creator as its first member, with its public keys. | RFC 0003, or the membership RFC | To define. This RFC assumes it. |
-| The member key may sign a relay challenge, with its own context string. | RFC 0003 | To confirm. It is a second use of the signing key, separated by context. |
-| Person-key records carry their person-key id and generation outside the wrapping. | RFC 0003 | To confirm. |
+| The member key may sign a relay challenge, with its own context string, or each member has a separate authentication key (decision R13). | RFC 0003 | To confirm. It is a second use of the signing key, separated by context. |
+| A person-key entry, a control change that announces each person-key record by id, generation and hash. Shred entries carry the second account's signature, which the relay can verify (decision R12). | RFC 0003 | To define. |
+| Key envelopes carry the recipient member id, and person-key records their person-key id and generation, outside the wrapping. | RFC 0003 | To confirm. |
 
 ## Rejected options
 
@@ -479,6 +522,8 @@ One line each; the decisions below give the options that remain.
 | A long-running server on EC2 | Costs money while idle, and needs patching; Fargate is the long-running option if one is needed (decision R3). |
 | The relay folds membership into its own format, independent of the log | The membership table must be rebuildable from the log; a second source of truth could disagree with the members' fold. |
 | The relay checks the author's sequence numbers | Refusing an equivocating change makes the relay choose a winner between two signed changes; members detect equivocation themselves (RFC 0002). |
+| Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (decision R12). |
+| Restoring a backup under the same epoch | Positions would be reused for different changes, and members past them would skip changes silently. |
 | The relay accepts changes of removed members written under an old generation | The relay cannot see when a change was written, so a removed member could keep writing under the old generation (decision R7). |
 
 ## Decisions for the owner
@@ -547,18 +592,42 @@ Recommendation: A. The first users and the owner are in Europe, so latency is lo
 
 **R9. What the relay keeps about connections.**
 
-- A. Connection records only while the connection is open; access logs with network addresses for 14 days. *(recommended)*
-- B. No network addresses in any log.
-- C. Access logs for 90 days.
+- A. Connection records only while the connection is open, removed by `$disconnect` or by TTL. *(recommended)*
+- B. Connection records kept for 30 days after the connection ends, for abuse investigation.
 
-Recommendation: A. 14 days of addresses is enough to investigate abuse and short enough to say plainly what the relay keeps. B leaves abuse uninvestigable; C keeps personal data longer than the relay needs it. Cost: under 1 USD a month either way.
+Recommendation: A. The relay needs a connection only while it is open. How long logs keep network addresses is R11. Cost: none either way.
 
 **R10. Backups of the relay.**
 
-- A. DynamoDB point-in-time recovery (35 days) and S3 versioning off. *(recommended)*
-- B. No backups; members repopulate a lost relay.
+- A. DynamoDB point-in-time recovery (35 days); every restore draws a new relay epoch, re-applies shred effects, and members re-sync. *(recommended)*
+- B. No backups. A lost relay starts empty under a new epoch, and members repopulate it.
 
-Recommendation: A. Members can repopulate a relay, but a restore is faster and keeps positions, so members need not re-sync from 0. A shredded person-key record stays in the backups for up to 35 days, wrapped, as RFC 0003 states. Cost: 0.20 USD per GB-month, about 0.20 USD a month for a small team, about 11 USD a month per 56 GB in the 1,000-agent case.
+Recommendation: A. In both options members re-sync after a loss, through the same procedure (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). A restore needs fewer re-pushes, and it brings back the membership table and the person-key store before any member reconnects. With B, the person keys for a new member exist only on members until one of them re-uploads them. The price of A is that a shredded person-key record stays in the backups for up to 35 days, wrapped, as RFC 0003 states. Restores also return such a record until a member re-pushes the shred entry. Cost: 0.20 USD per GB-month, about 0.20 USD a month for a small team, about 11 USD a month per 56 GB in the 1,000-agent case.
+
+**R11. How long CloudWatch keeps the relay's logs.**
+
+- A. 14 days for the relay's logs and API Gateway's access logs. *(recommended)*
+- B. 90 days.
+- C. 1 day, and no network addresses in any log.
+
+What the logs hold in every option: member ids, space ids, change ids, sizes, error codes, times, and, in access logs, network addresses. They never hold a frame, a payload, a key envelope, a person-key record or any key material.
+
+Recommendation: A. 14 days is enough to investigate abuse or an outage, and short enough to state plainly what the relay keeps. Network addresses and member ids are personal data under the GDPR. B keeps them longer than the relay needs. C leaves abuse uninvestigable. Cost: storage of 0.03 USD per GB-month on top of ingestion, so under 1 USD a month for a small team. In the 1,000-agent case, about 0.30 USD a month for A and about 2 USD for B.
+
+**R12. Protecting the person-key store.**
+
+- A. Every record is announced by a signed person-key entry in the log; the relay and members accept a record only with a matching entry; records are deleted only by a shred entry carrying the second account's sign-off, which the relay verifies. *(recommended)*
+- B. Records signed by their writer, without an entry in the log, and deletion by a signed request from any member.
+- C. As first drafted: any member may put or delete records, and the relay trusts it.
+
+Recommendation: A. C lets one member erase a person's data without the second account's sign-off, or swap a person key, and nobody can tell who did it. B names the writer, but the relay alone decides which record is current, and a single member can still delete. A ties every record and every deletion to the log, which every member holds and checks. Its cost is one more control change per person-key record written: a few hundred bytes each. It needs RFC 0003 to define the person-key entry and the account signature on shred entries; pm has asked NOC-7 to cover both.
+
+**R13. Which key authenticates a connection.**
+
+- A. The member's Ed25519 signing key, over a challenge with its own context string (`nocentraldb/relay-auth`). *(recommended)*
+- B. A separate authentication key per member, certified by the account key and listed in the membership entry.
+
+Recommendation: A. The context string and the relay id in the signed bytes keep an authentication signature from ever being valid as a change signature, or at another relay. The SDK manages no extra key. B keeps the signing key out of a second protocol entirely. It costs a third key per member, one more certificate field, and a membership entry whenever the key rotates. This is key handling, so RFC 0003 must confirm it; pm has asked NOC-7 to.
 
 ## Conflicts with GENESIS.md and RFC 0001
 
@@ -581,3 +650,5 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. Each ne
 | How does it run on AWS? | API Gateway WebSockets, Lambda, DynamoDB on demand, S3 for frames above 8 KiB, in eu-central-1. |
 | What does it cost? | About 10 USD a month for a small team; about 800 USD for 1,000 agents writing once a minute; nothing for local reads. |
 | What if the relay is down? | Members keep working; on reconnect they pull, then push what the relay has not confirmed. |
+| What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
+| Who may change the person-key store? | Only a member whose signed entry in the log announces the record; only a signed-off shred entry deletes one. |
