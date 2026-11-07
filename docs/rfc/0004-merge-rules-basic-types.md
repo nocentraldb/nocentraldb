@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 
 **Status.** Draft for the owner's sign-off. Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge), so nothing here is built until this RFC is merged. The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9.
 
-**Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6). Object creation and deletion (see [Links](#links) for what this RFC assumes about deletion).
+**Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6). Object deletion (see [Links](#links) for what this RFC assumes about it). Of object creation, this RFC defines only what two creates of one object id mean.
 
 ## Summary
 
@@ -26,25 +26,26 @@ In one sentence: every field's state is a pure function of the set of changes a 
 - **Change.** One signed, encrypted entry in a space's log, as RFC 0002 defines it. A change carries one or more operations; this RFC looks only at the operations on one field of one object.
 - **Operation.** What a change does to one field: for example "set the title to X" or "add the tag Y". Its encoding belongs to RFC 0002; its meaning belongs to this RFC.
 - **Change id.** The id RFC 0002 gives each change. An operation is identified by its change id plus its position in the change; this RFC writes "the operation's id" for that pair.
-- **Stamp.** The ordering metadata of RFC 0002, attached to every change. This RFC needs only the properties listed in [What this RFC needs from RFC 0002](#what-this-rfc-needs-from-rfc-0002).
-- **Stamp order.** The total order on operations that every member computes the same way: by stamp first, then by author key, then by operation id. It is the only tie-break in this RFC.
+- **Stamp.** The ordering metadata of RFC 0002, attached to every change: its 64-bit hybrid logical clock, with 48 bits of milliseconds since the Unix epoch and a 16-bit counter, compared as an unsigned number. The rules below rely only on the properties listed in [What this RFC needs from RFC 0002](#what-this-rfc-needs-from-rfc-0002).
+- **Author member id.** RFC 0003's id of the member that signed a change, a hash of its public keys. RFC 0002 carries it in every change's header.
+- **Stamp order.** The total order on operations that every member computes the same way: by stamp first, then by author member id, then by operation id. It is the only tie-break in this RFC.
 - **Seen.** A member has seen an operation when it applied it to its copy before it made a new change. A later operation can only replace what its author had seen.
 - **Concurrent.** Two operations are concurrent when neither author had seen the other's operation.
 - **Copy.** One member's folded state of a space.
 
 ## What this RFC needs from RFC 0002
 
-RFC 0002 runs in parallel and defines the clock. This RFC keeps the dependency abstract and needs these properties from "the ordering metadata of RFC 0002". The two RFCs must be reconciled before either is merged.
+RFC 0002 defines the clock: a 64-bit hybrid logical clock in every change's payload, 48 bits of milliseconds and a 16-bit counter. The rules in this RFC depend on that clock only through the properties below, so that a later clock that keeps them needs no change here. RFC 0002 meets each of them; its section "What RFC 0003 and RFC 0004 need from this RFC" says how.
 
-| #   | Property                                                                                                                                                                         | Why this RFC needs it                                                                           |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| O1  | Every change has an id that no two changes share, and every member computes the same id for the same change.                                                                     | Duplicates are recognised by id (idempotence). Set additions use it as their tag.               |
-| O2  | The stamp is computed from the change alone, and comparing two stamps gives the same answer on every member and platform, native and WebAssembly.                                | Stamp order must be the same everywhere, or two copies pick different winners.                 |
-| O3  | If the author of change b had seen change a before making b, then a's stamp is lower than b's.                                                                                   | A write must win over the writes its author replaced. Without O3 a correction can lose to the value it corrected. |
-| O4  | The stamp carries the author's wall-clock time (as a hybrid logical clock does), so that among concurrent writes the one made later in real time usually wins. Wanted, not required for convergence. | "Last writer wins" should mean roughly what a user expects. A pure counter would let the busiest member win instead. |
-| O5  | Every value has exactly one canonical encoding: equal values encode to equal bytes, different values to different bytes.                                                         | Set elements are compared by their canonical bytes.                                              |
+| #   | Property                                                                                                                                                                         | Why this RFC needs it                                                                           | RFC 0002 |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------- |
+| O1  | Every change has an id that no two changes share, and every member computes the same id for the same change.                                                                     | Duplicates are recognised by id (idempotence). Set additions use it as their tag.               | Met: the change id is a hash of the signed header; an operation id is the change id plus its position. |
+| O2  | The stamp is computed from the change alone, and comparing two stamps gives the same answer on every member and platform, native and WebAssembly.                                | Stamp order must be the same everywhere, or two copies pick different winners.                 | Met: the clock is an unsigned 64-bit integer; the author member id and the operation id are in the same change. |
+| O3  | If the author of change b had seen change a before making b, then a's stamp is lower than b's.                                                                                   | A write must win over the writes its author replaced. Without O3 a correction can lose to the value it corrected. | Met: a member's clock is always higher than every clock it has seen. |
+| O4  | The stamp carries the author's wall-clock time (as a hybrid logical clock does), so that among concurrent writes the one made later in real time usually wins. Wanted, not required for convergence. | "Last writer wins" should mean roughly what a user expects. A pure counter would let the busiest member win instead. | Met: the upper 48 bits are milliseconds since the Unix epoch. |
+| O5  | Every value has exactly one canonical encoding: equal values encode to equal bytes, different values to different bytes.                                                         | Set elements are compared by their canonical bytes.                                              | Met: one encoding per value; NaN has one encoding, and negative and positive zero have one each. |
 
-This RFC does **not** need causal delivery: no field type may assume that a change arrives after the changes its author had seen. The relay hands out changes in log order, but members exchange changes in island mode, logs are compacted, and the convergence harness (NOC-9) delivers in random order with duplicates. Every rule below converges under any order of arrival.
+RFC 0002 confirms that causal delivery is not guaranteed, and this RFC does **not** need it: no field type may assume that a change arrives after the changes its author had seen. The relay hands out changes in log order, but members exchange changes in island mode, logs are compacted, and the convergence harness (NOC-9) delivers in random order with duplicates. Every rule below converges under any order of arrival.
 
 ## Basic values
 
@@ -81,7 +82,7 @@ A write whose id is already in R arrives after the write that replaced it. Step 
 
 ### Tie-break
 
-Stamp order: compare the stamps of RFC 0002 (O2), then the author's public key as bytes, then the operation id as bytes. Every member holds the same three values for every operation, so every member orders them the same way. The author key comes before the operation id so that, for two writes with equal stamps, which one wins does not depend on the hash of their content. Either order converges; see [owner decision 2](#decisions-for-the-owner).
+Stamp order: compare the stamps of RFC 0002 as unsigned numbers (O2), then the author member id as bytes, then the operation id as bytes. All three are in the change itself, so every member holds the same three values for every operation and orders them the same way. The author member id comes before the operation id so that, for two writes with equal stamps, which one wins does not depend on the hash of their content. Either order converges; see [owner decision 2](#decisions-for-the-owner).
 
 ### Late changes stay identifiable
 
@@ -105,7 +106,7 @@ What "late" means here: the converged state cannot record **when** a change arri
 The merge is the same for all four kinds. The kind only constrains the value:
 
 - **String.** Any Unicode string, stored as written. The SDK normalises to NFC before writing, so that two members typing the same text produce the same bytes (this matters for sets, not for basic values).
-- **Number.** An integer (64-bit signed) or a float (IEEE 754 binary64), as the schema declares. Concurrent writes do not add up: the last writer wins. A counter that adds concurrent increments is a different field type and not part of this RFC. For floats, RFC 0002 must give NaN and negative zero one canonical encoding each (O5).
+- **Number.** An integer (64-bit signed) or a float (IEEE 754 binary64), as the schema declares. Concurrent writes do not add up: the last writer wins. A counter that adds concurrent increments is a different field type and not part of this RFC. For floats, RFC 0002 gives NaN one canonical encoding and negative and positive zero one each (O5). Negative and positive zero stay different values, so a set may hold both.
 - **Boolean.** True or false.
 - **Choice from a list.** One of the options the schema lists. A value that the reader's schema does not list (because a newer schema added the option) is kept as written, not dropped and not replaced. The app reads it as "unknown option", with the raw value. This keeps the promise that old clients keep data they do not understand yet.
 
@@ -176,6 +177,16 @@ The link stays as written, with status **deleted**. It is not removed, because n
 
 This RFC assumes only one thing about object deletion, which belongs to a later RFC: whether an object is deleted is itself a converged value, so every copy with the same changes agrees on it. [Owner decision 4](#decisions-for-the-owner) recommends a rule for it.
 
+### Two creates of one object id
+
+RFC 0002 lets an object be created by a "create" operation (operation 0), and its object ids are 128 random bits, so two honest members never draw the same id. A member can still create one id twice on purpose, or a bug can. Every copy treats two or more creates of one id in one space the same way, consistent with deletion as a converged value (owner decision 4):
+
+- **One object.** The id names one object; it exists once any create of it has arrived. A create neither deletes nor restores: whether the object is deleted stays its own converged value.
+- **Its collection.** A create puts the object into a collection, which is a basic value of the object: the create last in stamp order wins, and a create that names another collection is a conflict the app can read, as for any basic value. Creates replace nothing, so a conflict here stays until the object is deliberately moved, which a later RFC defines.
+- **Its fields.** Writes to the object's fields merge by their field types, whichever create they followed. A field that the winning collection does not declare is kept in the state, as data the reader does not understand, and is not shown as a field of the object.
+
+Every copy computes this from the set of creates and writes alone, so the rule converges by the argument for basic values, and no create or write is dropped.
+
 ### A link to an object the member has not received
 
 The link stays as written, with status **missing**. When the target's changes arrive, the status becomes **ok** (or **deleted**, or **wrong collection**) without any change to the link. A link is never refused or dropped because its target is unknown: in island mode, a member may receive a task's `dependsOn` before the task it depends on, and dropping the link would lose data and make copies diverge.
@@ -241,7 +252,7 @@ GENESIS.md reserves merge rules and public API names for the owner. Each decisio
    - B: Plain last writer wins; losing writes stay only in the log and the archive. Simpler state, but the app cannot see the loss.
    - C: Expose every concurrent value (multi-value register). Every app must handle lists.
 2. **Tie-break order after the stamp.**
-   - A: Author key, then operation id (this RFC). Recommended: who wins a tie depends on who wrote, not on a hash of the content.
+   - A: Author member id, then operation id (this RFC). Recommended: who wins a tie depends on who wrote, not on a hash of the content.
    - B: Operation id only. One comparison fewer; the winner of a tie is effectively random.
 3. **Sets: add wins or remove wins.**
    - A: Add wins (this RFC). Recommended: no addition is lost; a lost removal stays readable.
@@ -266,11 +277,12 @@ This RFC agrees with `factory/GENESIS.md` and [RFC 0001](0001-nocentraldb.md) on
 - **Principle 7, one core.** C3 requires identical results natively and in WebAssembly.
 - **RFC 0001, field types.** Basic values: the last writer wins. Sets: additions and removals from every member merge. Links: point to another object in the same space. The FAQ's answer "both changes are kept" holds: the losing change stays readable.
 - **"A client keeps data it does not understand yet."** A choice outside the reader's list is kept as written.
+- **RFC 0002.** It meets O1 to O5, confirms that causal delivery is not guaranteed, and leaves concurrent creates of one object id to this RFC (its conflict point 3), which [Two creates of one object id](#two-creates-of-one-object-id) answers.
 
 It names these conflicts and limits for the owner and pm:
 
 1. **"Late" in principle 3.** GENESIS.md says a change that "arrives late … and loses to a newer change stays identifiable as such". Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher. This RFC makes identifiable what converges: that a change lost to a change its author had not seen. If the owner wants arrival time as well, it can only be local, per-member information, and GENESIS.md should say so.
-2. **"Last writer" is the highest stamp, not the last in real time.** With the wall-clock component of O4, a member whose clock runs ahead wins concurrent writes it should lose, until the others' clocks pass it. No member can correct this on its own without diverging. RFC 0002 decides whether stamps far in the future are refused when a change is created or appended; this RFC only states the limit (principle 4).
+2. **"Last writer" is the highest stamp, not the last in real time.** With the wall-clock component of O4, a member whose clock runs ahead wins concurrent writes it should lose, until the others' clocks pass it. No member can correct this on its own without diverging. RFC 0002 decides that stamps far in the future are not refused, neither by the writing member, nor by a receiving member, nor by the relay, because refusing them on some members and not on others would break convergence. Members only warn when a received clock is more than a minute ahead of their own. This RFC states the limit (principle 4).
 3. **Concurrent increments do not add up.** RFC 0001's `priority: nc.int()` is last writer wins. Two agents that raise a priority by one at the same time raise it by one, not two, and one write shows as a conflict. RFC 0001 does not promise otherwise, but readers may assume it.
 4. **A missing link target is ambiguous.** A copy cannot tell a target that has not arrived from one that never will.
 5. **State grows.** The replaced ids (R and T) grow with every overwrite and removal. Compaction (a later RFC) must decide when they may be dropped without letting an old, replaced change come back.
