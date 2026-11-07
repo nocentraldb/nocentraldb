@@ -65,7 +65,7 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `hello` lists the protocol versions the member speaks. The relay picks the highest it also speaks, or answers `unsupported_version` and closes.
 - `hello` may carry a client string, such as `ncdb-rs/0.3`, to help debug version problems. It is optional, and the relay sees it (see [What the relay sees](#what-the-relay-sees)).
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
-- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key (decision R13), over `H("nocentraldb/relay-auth" || relay id || nonce)`. The context string keeps this signature from ever being mistaken for the signature of a change. Binding the relay id keeps one relay from replaying a member's answer against another.
+- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its decision 13: the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
@@ -128,17 +128,18 @@ relay  → member  person-keys       {req, space, records: [record, ...]}
 member → relay   put-person-keys   {req, space, records: [record, ...]}
 relay  → member  ok                {req}
 
-record = {person-key id, generation, wrapped, writer member id, entry: change id}
+record = {person-key id, generation, writer member id, wrapped, signature}
 ```
 
-A wrapped person key is opaque to the relay: a person key wrapped under a space key generation (RFC 0003). The relay cannot check what is inside, so the store is protected by tying every record to the log (decision R12):
+The store follows RFC 0003's decision 14. The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
 
-- **Every record is announced in the log.** A member that writes or re-wraps a record first appends a **person-key entry**, a control change that names the person-key id, the generation and the SHA-256 hash of the wrapped bytes. The entry is signed like every change, so its author is known.
-- **The relay accepts a record only with its entry.** `put-person-keys` must name an entry already in the space's log, whose author is the uploader, whose person-key id and generation match, and whose hash matches the wrapped bytes. Otherwise the relay answers `bad_record`. A record replaces an older one only with a higher generation.
-- **Members accept a record only with its entry.** A member checks the hash against the entry in its own copy of the log before it unwraps a record, so a relay that swaps records is caught, and the entry names who wrote each record.
-- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only when it appends a valid shred entry for its person-key id, in the same backend transaction as the append, so a shred and the deletion cannot come apart. A shred entry carries the second account's sign-off, signed with that account key (RFC 0003). The relay verifies it against the account certificates in the membership table. A member therefore cannot erase a person's data alone.
+- **The log names every person key.** A member that creates a person key appends a **person-key entry**, a control change. It holds the person-key id and a commitment to the key (RFC 0003).
+- **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
+- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log and destroyed by no shred entry. Its generation is the same as or newer than the record the relay holds. Otherwise the relay answers `bad_record`.
+- **Members check the commitment.** A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A relay that swaps records is caught, and the signature names who wrote each record.
+- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only when it appends a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003). The deletion happens in the same backend transaction as the append, so a shred and the deletion cannot come apart.
 
-**What this does not prevent.** A member of the space can still announce and upload a wrongly wrapped key under its own name. Every member then fails to unwrap it and reports it, and the entry names the member that wrote it. A member that holds the space key could equally have leaked the person key itself (RFC 0003).
+**What this does not prevent.** A member of the space can still upload a record whose wrapped key does not match the commitment. Every member then rejects that record and reports its writer, and any member that still holds the key writes a correct one. Until then, new members cannot open that person's fields. A member could equally have leaked the person key itself (RFC 0003).
 
 ### Large changes
 
@@ -177,7 +178,7 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `author_not_member` | The author is not a member of the space at the change's key generation, or was removed. | Keep the change marked as rejected. |
 | `membership_rule` | A control change breaks the membership rules (the later membership RFC). | Keep the change marked as rejected. |
 | `epoch_changed` | The cursor belongs to an earlier relay epoch, for example after a restore. | Treat every stored position of this relay as unconfirmed, pull from 0, push every change the relay lacks (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). |
-| `bad_record` | A person-key record has no matching person-key entry in the log, or would replace a newer generation. | Append the entry first; never retry the same record without one. |
+| `bad_record` | A person-key record is unsigned or badly signed, names a person-key id no person-key entry names or a shred entry destroyed, or would replace a newer generation. | Report it as a bug; never retry the same record. |
 | `compacted` | The cursor points before a range moved into the archive (the compaction RFC). | Fetch the archive, then pull from its end. |
 | `bad_cursor` | The cursor is negative or above the head. | Pull from 0 or from the last confirmed position. |
 | `rate_limited` | The member or the space exceeded its quota. | Retry after the given time. |
@@ -199,8 +200,8 @@ The relay runs every check below in its core, the same on every backend, before 
 | The signature is valid. | The author's public signing key, from the membership table, and the signed header bytes (RFC 0003, Ed25519, strict verification). | Encrypt-then-sign: the signature covers the ciphertext, so it verifies without decrypting (RFC 0003). |
 | The author is a member at the change's key generation and has not been removed. | The membership table: when each member was added and removed, and the space's key generations. | As above: control changes, readable by design. |
 | A control change obeys the membership rules. | The control body, which RFC 0002 makes readable to the relay. | Control bodies carry ids, public keys, wrapped keys and shred ids, never content. A key envelope is HPKE ciphertext to one member; the relay stores it and cannot open it. |
-| A person-key record matches its person-key entry. | The SHA-256 hash of the wrapped bytes against the hash in a signed entry in the log. | A hash of opaque bytes. The relay never unwraps the record. |
-| A shred entry carries the second account's sign-off. | The account signature in the shred entry, against the account certificates in the membership table. | Signature verification uses only public keys. |
+| A person-key record is acceptable (RFC 0003, decision 14). | The writer's signature over the record's clear fields and wrapped bytes; the person-key entries and shred entries in the log; the generation of the stored record. | Signature verification and ids only. The relay never unwraps the record; the commitment is checked by members. |
+| A shred entry is signed by a current member and signed off by a second account. | The member's signature, and the account key signature, against the member certificates in the membership table (RFC 0003). | Signature verification uses only public keys. |
 | The change is not already in the log. | The change id, which the relay computes from the frame (RFC 0002). | A hash of the bytes. |
 | The reader may read the space. | The membership table, on every pull, subscribe, keys and person-keys request. | As above. |
 
@@ -221,9 +222,10 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 **From the log** (as RFC 0002 lists it):
 
 - Which member ids are in which space, their public keys and member certificates, and when members are added and removed.
-- That a key envelope exists for each member id and generation, and when the space key rotates.
+- For each key envelope, the member id it is for and the generation it carries, so when the space key rotates and who received each generation (RFC 0003).
+- For each person-key record, its person-key id, its generation and the member id that wrote it, so how many people have personal data in the space, and when a record is added, re-wrapped or shredded. Never who the person is (RFC 0003).
 - For each change: the space, the author's member id and sequence number, the suite, the key generation, the size of the frame and when the relay received it.
-- That a shred entry destroyed a person key, the person-key id, and which members acknowledged it.
+- For each shred entry, which person-key id was destroyed, which accounts signed it off, and which members acknowledged it (RFC 0003).
 
 **From the protocol**:
 
@@ -231,7 +233,6 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 - **Which software each member runs**, from the optional client string in `hello`, such as `ncdb-rs/0.3`, and from the protocol versions it offers. Together with the network address, this can fingerprint a device.
 - **What each member follows.** Which spaces each connection subscribes to, and from which cursor. A cursor shows how far behind a member is, and so roughly how long it was offline.
 - **Who exchanged changes directly.** When a member uploads a change another member authored, the relay learns that the two met in island mode or forwarded through each other.
-- **How many people have personal data in a space**, from the number of records in the person-key store, and when a record is added, re-wrapped or deleted.
 - **Upload and download sizes** of large changes, and when they happen.
 - **The rhythm of work**, per member and per space: bursts of small changes look like typing; a large push after days of silence looks like a member coming back from offline work.
 
@@ -372,7 +373,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, roles, added at (position), removed at (position) | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". |
-| `person_keys` | space id | person-key id | generation, wrapped record, writer, entry change id | Written only after the core matched it to its person-key entry; deleted only in the same transaction as a shred entry's append. |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it (RFC 0003, decision 14); deleted only in the same transaction as a shred entry's append. |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -496,11 +497,11 @@ Pulling first lets the member see a membership entry that removed it before it p
 | --- | --- | --- |
 | The relay can compute a change id, the author, the key generation, the kind and the suite from the frame alone. | RFC 0002 | Met by its header and change ids. |
 | Control bodies (membership entries, key envelopes, key chain entries, shred entries) are readable by the relay and carry the public keys and certificate of an added member. | RFC 0002, RFC 0003 | Met: RFC 0003, "Sharing a space key with a new member", step 1 and 3. |
-| A key envelope names the member id it is for, readable by the relay, so that `keys` can return a member's own envelopes. | RFC 0003 | To confirm. |
-| The first change of a space is a control change that names the creator as its first member, with its public keys. | RFC 0003, or the membership RFC | To define. This RFC assumes it. |
-| The member key may sign a relay challenge, with its own context string, or each member has a separate authentication key (decision R13). | RFC 0003 | To confirm. It is a second use of the signing key, separated by context. |
-| A person-key entry, a control change that announces each person-key record by id, generation and hash. Shred entries carry the second account's signature, which the relay can verify (decision R12). | RFC 0003 | To define. |
-| Key envelopes carry the recipient member id, and person-key records their person-key id and generation, outside the wrapping. | RFC 0003 | To confirm. |
+| A key envelope names the member id it is for and its generation, readable by the relay, so that `keys` can return a member's own envelopes. | RFC 0003 | Met: RFC 0003 lists both as clear metadata. |
+| The first change of a space is a control change that names the creator as its first member, with its public keys, so the relay can accept a new space. | The membership RFC, still to be written | Open. This RFC assumes it and does not define it. |
+| The member's signing key signs the relay challenge, with its own context string. | RFC 0003 | Met: RFC 0003, decision 13. |
+| Person-key entries with a commitment, signed person-key records, and shred entries with a second account's sign-off that the relay can verify. | RFC 0003 | Met: RFC 0003, decision 14. |
+| Person-key records carry their person-key id, generation and writer member id outside the wrapping. | RFC 0003 | Met: RFC 0003, decision 14. |
 
 ## Rejected options
 
@@ -522,7 +523,7 @@ One line each; the decisions below give the options that remain.
 | A long-running server on EC2 | Costs money while idle, and needs patching; Fargate is the long-running option if one is needed (decision R3). |
 | The relay folds membership into its own format, independent of the log | The membership table must be rebuildable from the log; a second source of truth could disagree with the members' fold. |
 | The relay checks the author's sequence numbers | Refusing an equivocating change makes the relay choose a winner between two signed changes; members detect equivocation themselves (RFC 0002). |
-| Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (decision R12). |
+| Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (RFC 0003, decision 14). |
 | Restoring a backup under the same epoch | Positions would be reused for different changes, and members past them would skip changes silently. |
 | The relay accepts changes of removed members written under an old generation | The relay cannot see when a change was written, so a removed member could keep writing under the old generation (decision R7). |
 
@@ -614,20 +615,7 @@ What the logs hold in every option: member ids, space ids, change ids, sizes, er
 
 Recommendation: A. 14 days is enough to investigate abuse or an outage, and short enough to state plainly what the relay keeps. Network addresses and member ids are personal data under the GDPR. B keeps them longer than the relay needs. C leaves abuse uninvestigable. Cost: storage of 0.03 USD per GB-month on top of ingestion, so under 1 USD a month for a small team. In the 1,000-agent case, about 0.30 USD a month for A and about 2 USD for B.
 
-**R12. Protecting the person-key store.**
-
-- A. Every record is announced by a signed person-key entry in the log; the relay and members accept a record only with a matching entry; records are deleted only by a shred entry carrying the second account's sign-off, which the relay verifies. *(recommended)*
-- B. Records signed by their writer, without an entry in the log, and deletion by a signed request from any member.
-- C. As first drafted: any member may put or delete records, and the relay trusts it.
-
-Recommendation: A. C lets one member erase a person's data without the second account's sign-off, or swap a person key, and nobody can tell who did it. B names the writer, but the relay alone decides which record is current, and a single member can still delete. A ties every record and every deletion to the log, which every member holds and checks. Its cost is one more control change per person-key record written: a few hundred bytes each. It needs RFC 0003 to define the person-key entry and the account signature on shred entries; pm has asked NOC-7 to cover both.
-
-**R13. Which key authenticates a connection.**
-
-- A. The member's Ed25519 signing key, over a challenge with its own context string (`nocentraldb/relay-auth`). *(recommended)*
-- B. A separate authentication key per member, certified by the account key and listed in the membership entry.
-
-Recommendation: A. The context string and the relay id in the signed bytes keep an authentication signature from ever being valid as a change signature, or at another relay. The SDK manages no extra key. B keeps the signing key out of a second protocol entirely. It costs a third key per member, one more certificate field, and a membership entry whenever the key rotates. This is key handling, so RFC 0003 must confirm it; pm has asked NOC-7 to.
+The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003 (decisions 14 and 13), not here, because they are key handling.
 
 ## Conflicts with GENESIS.md and RFC 0001
 
@@ -651,4 +639,4 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. Each ne
 | What does it cost? | About 10 USD a month for a small team; about 800 USD for 1,000 agents writing once a minute; nothing for local reads. |
 | What if the relay is down? | Members keep working; on reconnect they pull, then push what the relay has not confirmed. |
 | What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
-| Who may change the person-key store? | Only a member whose signed entry in the log announces the record; only a signed-off shred entry deletes one. |
+| Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, decision 14); only a signed-off shred entry deletes one. |
