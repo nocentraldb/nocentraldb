@@ -76,13 +76,13 @@ impl Log {
         if change.header().space != self.space {
             return Err(AppendError::WrongSpace);
         }
-        if let Some(position) = self.position_of(change.id()) {
+        let id = change.id();
+        if let Some(position) = self.position_of(id) {
             return Ok(Appended::Duplicate(position));
         }
         self.entries.push(change);
         let position = self.head();
-        self.positions
-            .insert(self.entries[self.entries.len() - 1].id(), position);
+        self.positions.insert(id, position);
         Ok(Appended::New(position))
     }
 
