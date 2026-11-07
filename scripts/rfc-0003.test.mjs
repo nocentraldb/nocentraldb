@@ -66,12 +66,7 @@ test("RFC 0003 has a section for every topic of NOC-7", () => {
 
 test("RFC 0003 defines the four kinds of key", () => {
   const text = read();
-  for (const key of [
-    "member key",
-    "account key",
-    "space key",
-    "person key",
-  ]) {
+  for (const key of ["member key", "account key", "space key", "person key"]) {
     assert.match(text, new RegExp(`### .*${key}`, "i"), `no section: ${key}`);
   }
 });
