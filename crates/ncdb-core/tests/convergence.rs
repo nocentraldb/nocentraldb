@@ -50,3 +50,37 @@ fn first_arrival_wins_diverges() {
     let result = convergence::check::<FirstArrivalWins>(&Config::default(), write);
     assert!(result.is_err(), "the harness missed a divergent subject");
 }
+
+#[test]
+fn a_divergence_shrinks_and_reports_the_orders_that_diverged() {
+    let divergence = convergence::check::<FirstArrivalWins>(&Config::default(), write)
+        .expect_err("the harness missed a divergent subject");
+
+    // Two writes in two orders are the smallest case that diverges.
+    assert_eq!(divergence.changes.len(), 2, "{divergence:?}");
+    assert_eq!(divergence.orders.len(), 3, "{divergence:?}");
+    for order in &divergence.orders {
+        assert_eq!(order.len(), 2, "{divergence:?}");
+    }
+
+    let report = divergence.to_string();
+    for (i, change) in divergence.changes.iter().enumerate() {
+        assert!(report.contains(&format!("#{i} {change}")), "{report}");
+    }
+    for (copy, (order, state)) in divergence.orders.iter().zip(&divergence.states).enumerate() {
+        assert!(
+            report.contains(&format!(
+                "copy {copy} received {order:?} and ended in {state}"
+            )),
+            "{report}"
+        );
+    }
+    let diverged = (1..divergence.orders.len())
+        .find(|&copy| divergence.states[copy] != divergence.states[0])
+        .expect("a copy that diverged from copy 0");
+    assert_ne!(divergence.orders[diverged], divergence.orders[0]);
+    assert!(
+        report.contains(&format!("copy {diverged} differs from copy 0")),
+        "{report}"
+    );
+}

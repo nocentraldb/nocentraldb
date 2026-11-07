@@ -58,6 +58,12 @@ pub struct Divergence {
     pub states: Vec<String>,
 }
 
+impl core::fmt::Display for Divergence {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "copies diverged")
+    }
+}
+
 /// One generated case: what the members made and how it arrives.
 #[derive(Clone, Debug)]
 struct Case<C> {
