@@ -1,9 +1,6 @@
 # temporary files, designs etc.
 temp/
 
-# local Kiro agent config (per-session, never committed)
-.kiro/agents/default.json
-
 # macOS Finder metadata
 .DS_Store
 
