@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to RFC 0002 (NOC-6), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
+**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
 
@@ -31,7 +31,12 @@ It does not protect against:
 
 - **A member of the space.** Every member can read everything in its spaces. That is the point of a full copy.
 - **The member's own device and operating system.** A process that runs as you can read what you can read (RFC 0001, "What it is not").
-- **Metadata.** The relay sees which member key is in which space, who writes when and how much, and how many members a space has.
+- **Metadata.** The relay sees which member key is in which space, who writes when and how much, and how many members a space has. From the key material it stores, it also sees:
+  - for each key envelope, the member id it is for and the generation it carries, so it knows when the space key rotates and who received each generation;
+  - for each person-key record, its person-key id, its generation and the member id that wrote it, so it knows how many people have personal data in the space, and when a record is added, re-wrapped or shredded (it never learns who the person is);
+  - for each shred entry, which person-key id was destroyed, which accounts signed it off, and which members acknowledged it.
+
+  These ids sit outside the encryption on purpose: the relay needs them to serve each member its own envelopes and to keep the person-key store.
 
 ## The keys
 
@@ -50,6 +55,8 @@ A member is one device or one agent: a laptop, a phone, a browser profile, an ag
 - an **X25519 key-agreement key**, to which other members wrap space keys.
 
 Both public halves form the member's public identity. Its **member id** is the SHA-256 hash of the two public keys, with a fixed context string in front (`"nocentraldb/member-id"`), and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
+
+The signing key also **authenticates the member to the relay**. The relay sends a fresh random challenge, and the member signs `H("nocentraldb/relay-auth" || relay id || nonce)`, so that one relay cannot replay the answer against another. Every signature a member key makes signs either a canonical CBOR header (RFC 0002), whose first byte marks a CBOR map, or a message that starts with a `"nocentraldb/..."` context string, whose first byte is a letter; one can never be read as the other, so a signed challenge can never pass as a signed change. A separate key just for the relay is the alternative (decision 13).
 
 We use two keys instead of converting the Ed25519 key into an X25519 key. Converting is possible, but it uses one secret in two protocols, and the analyses that show it safe are narrower than the ones for separate keys.
 
@@ -78,6 +85,14 @@ Each member receives the current generation in a **key envelope**: the generatio
 The schema marks personal fields and ties each one to a person (RFC 0001, "Personal fields"). The person need not be a member; it is usually a customer, a patient or an employee the data is about.
 
 For each person and each space that holds that person's data, the SDK creates a **person key**: 32 random bytes. It encrypts the person's personal fields inside the change, before the change as a whole is encrypted with the space key. Unlike everything else in a space, the person key does not live in the append-only log, because a log entry cannot be destroyed. It lives in the space's **person-key store**: one record per person, wrapped under the current space key generation, held by the relay as an opaque record that can be deleted, and by each member in its local keystore. Destroying the key is the erasure; see [Shredding a person's key](#shredding-a-persons-key).
+
+The relay cannot check what a record contains, so the store must not let any one member swap a key or erase one on its own. Three rules hold it together (decision 14):
+
+- **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is) and a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred.
+- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same or a newer generation than the one it holds. A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
+- **Only a shred entry deletes.** The relay deletes a record only when it appends a valid shred entry for it: signed by a current member, and signed off by the account key of a second account, one that has a certified member in the space and is not the performing member's account. No other request deletes a record.
+
+So a member cannot swap a person key without every other member noticing, and cannot erase one without a second account. A member that overwrites a record with garbage can make the key unavailable to new members until another member repairs it, and the signature on the record names it. It cannot make the other members delete their copies; only a shred entry does that.
 
 ## Primitives
 
@@ -178,7 +193,7 @@ Copying a personal field into an ad-hoc space would put that person's data under
 An erasure is a work order (RFC 0001, "Work orders"): one member performs it, a second account signs it off with its account key, because an erasure cannot be undone. Then:
 
 1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
-2. The relay deletes the person-key record from its store.
+2. The relay checks the shred entry's signature and the second account's sign-off, appends it, and deletes the person-key record from its store in the same step (see [The person key](#the-person-key)).
 3. Every member that folds the shred entry deletes its local copy of the key and writes an acknowledgement, another control change. The acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3).
 4. From the shred entry on, the fold treats the person's personal fields as erased on every member, whether or not that member still holds the key. Computed fields and views therefore converge (principle 2): a member that has not deleted its copy yet does not compute a different state from the one that has.
 
@@ -273,6 +288,8 @@ GENESIS.md reserves crypto, key handling and formats for the owner. Each decisio
 10. **Person keys at the relay.** (a) The relay holds each person key wrapped under the space key, in a store it can delete from, so a new member can open personal fields while no other member is online. (b) Person keys never reach the relay; members hand them to each other directly. **Recommendation: (a)**: it adds no reader the design does not already have (see the limits of shredding), and it keeps new members, including cloud agents, working when nobody else is online.
 11. **Personal fields in an ad-hoc space.** (a) The person key is shared into the ad-hoc space, so an erasure reaches the copy. (b) Personal fields are not copied unless the parent asks explicitly, and then as in (a). **Recommendation: (b)**: a sub-agent gets the least it needs.
 12. **Public API names** for the key-related calls (`members.add`, `members.remove`, `workOrders.erase`, invitations). **Recommendation:** invitations and member ids instead of public keys in `members.add`, and a returned notice on every call that changes who can read what.
+13. **How a member authenticates to the relay.** (a) The member's Ed25519 signing key signs the relay's challenge, separated from change signatures by a context string. (b) A third, separate key per member only for relay authentication, certified by the account key. **Recommendation: (a)**: the context string already keeps the two uses apart, the relay must know the signing key anyway to verify changes, and a third key adds a certificate and a rotation without protecting anything more.
+14. **Integrity of the person-key store.** (a) A person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred entry with a second account's sign-off, as in [The person key](#the-person-key). (b) Unsigned records that any member may overwrite or delete, as an opaque store. (c) Person keys only inside control changes in the log, wrapped per member. **Recommendation: (a)**. (b) lets one member swap a key or erase it without a sign-off. (c) puts the key into the append-only log, where a shred can no longer destroy it.
 
 ## Agreement with GENESIS.md and RFC 0001
 
