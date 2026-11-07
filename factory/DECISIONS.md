@@ -97,3 +97,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
+### 2026-11-07 · NOC-7 · RFC 0003's tooling test checks the RFC's shape, not its design
+
+- Decided by: coding agent (NOC-7)
+- Why: a test can prove the file exists, links to RFC 0001, resolves its links and has a section per acceptance criterion; whether the cryptography is right is the owner's review of the PR.
+- Instead of: no test at all, or a test that pins the RFC's recommendations, which would have to change with every owner decision.
