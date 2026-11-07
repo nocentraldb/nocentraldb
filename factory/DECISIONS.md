@@ -91,3 +91,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-6)
 - Why: `scripts/rfc.test.mjs` runs in `repo:test` and checks that RFC 0002 exists and links back to RFC 0001, so the gate fails if either is lost.
 - Instead of: no test, which leaves the gate unchanged for a docs-only PR.
+
+### 2026-11-07 · NOC-6 · RFC 0002: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.

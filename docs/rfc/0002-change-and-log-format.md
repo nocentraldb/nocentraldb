@@ -6,7 +6,7 @@ This RFC defines what a change is, how it is encoded byte for byte, and how a sp
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
-**Status.** A draft for the owner's decision. The wire and on-disk formats are reserved for the owner, so nothing here is final until the owner approves this RFC. The open decisions are listed in [Decisions for the owner](#decisions-for-the-owner), each with options and a recommendation. Until then, the design below describes the recommended option of each decision.
+**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged.
 
 ## What this RFC does not cover
 
@@ -360,7 +360,7 @@ RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are wr
 
 ## Decisions for the owner
 
-These are the decisions this RFC needs from the owner. Each lists the options and a recommendation. The design above describes the recommended option of each.
+These are the decisions this RFC needed from the owner. Each lists the options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07), and the design above describes them.
 
 **D1. Ordering metadata.**
 
@@ -368,7 +368,7 @@ These are the decisions this RFC needs from the owner. Each lists the options an
 - B. Lamport clock plus a list of dependencies.
 - C. Hybrid logical clock plus a version vector.
 
-Recommendation: A. "The last writer wins" matches what users expect in time, and the dependencies give the causal order at a size that does not grow with the number of keys.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. "The last writer wins" matches what users expect in time, and the dependencies give the causal order at a size that does not grow with the number of keys.
 
 **D2. Change ids.**
 
@@ -376,14 +376,14 @@ Recommendation: A. "The last writer wins" matches what users expect in time, and
 - B. Author member id plus author sequence.
 - C. A random id.
 
-Recommendation: A. It is unique without a coordinator, every party computes it independently, and a backup restore cannot make two changes share it.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. It is unique without a coordinator, every party computes it independently, and a backup restore cannot make two changes share it.
 
 **D3. Object and space ids.**
 
 - A. 128 random bits from a secure generator. *(recommended)*
 - B. UUIDv7: 48 bits of creation time and 74 random bits.
 
-Recommendation: A. It leaks nothing about when an object was made into links, URLs and exports.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. It leaks nothing about when an object was made into links, URLs and exports.
 
 **D4. Encoding.**
 
@@ -391,28 +391,28 @@ Recommendation: A. It leaks nothing about when an object was made into links, UR
 - B. postcard.
 - C. A hand-written format.
 
-Recommendation: A. It is deterministic, self-describing (so old clients can keep what they do not understand), and has maintained libraries in Rust and TypeScript.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. It is deterministic, self-describing (so old clients can keep what they do not understand), and has maintained libraries in Rust and TypeScript.
 
 **D5. How an operation names its field.**
 
 - A. The collection's and field's names from `model.lock.json`. *(recommended)*
 - B. Numeric ids that `ncdb model build` assigns.
 
-Recommendation: A. Names never change, need no id registry that two developers could fill differently, and an old client can tell which unknown field an operation is for. They cost a few bytes per operation, inside the ciphertext.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. Names never change, need no id registry that two developers could fill differently, and an old client can tell which unknown field an operation is for. They cost a few bytes per operation, inside the ciphertext.
 
 **D6. Where the clock sits.**
 
 - A. Inside the payload, invisible to the relay. *(recommended)*
 - B. In the header, so that the relay can refuse changes whose clock is far ahead of its own.
 
-Recommendation: A. B would show the relay when every change was written, offline work included. It would also protect only changes that pass through the relay, not those exchanged in island mode.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. B would show the relay when every change was written, offline work included. It would also protect only changes that pass through the relay, not those exchanged in island mode.
 
 **D7. Where a member stores its log.**
 
 - A. A table in the SQLite database of the local view. *(recommended)*
 - B. Separate append-only segment files.
 
-Recommendation: A. Append and fold in one transaction, and the same storage natively and in the browser.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. Append and fold in one transaction, and the same storage natively and in the browser.
 
 **D8. Padding the payload.**
 
@@ -420,21 +420,21 @@ Recommendation: A. Append and fold in one transaction, and the same storage nati
 - B. No padding.
 - C. Pad to the next power of two.
 
-Recommendation: A. It hides the exact length of short values, such as "yes" against "no", at a cost of 128 bytes per change on average. C hides more but doubles the size of large changes such as rich-text pastes. No padding hides the length of a large write. The format allows changing the rule later, because padding is a payload field the reader ignores.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. It hides the exact length of short values, such as "yes" against "no", at a cost of 128 bytes per change on average. C hides more but doubles the size of large changes such as rich-text pastes. No padding hides the length of a large write. The format allows changing the rule later, because padding is a payload field the reader ignores.
 
 **D9. Changes whose meaning a client does not know.**
 
 - A. Store them as parked, report them in the SDK, and fold them after an upgrade. *(recommended)*
 - B. Refuse to sync a space until the client is upgraded.
 
-Recommendation: A. It is what GENESIS.md asks: old clients keep data they do not understand yet. It needs the clarification in the next section.
+Decided: A (Carsten, 2026-11-07). Recommendation: A. It is what GENESIS.md asks: old clients keep data they do not understand yet. It needs the clarification in the next section.
 
 ## Conflicts with GENESIS.md and RFC 0001
 
-This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. Each needs the owner's ruling, or a change to the other document. RFC 0003 and RFC 0004 have adopted this RFC's terms, the whole-header associated data and SHA-256, and RFC 0004 defines two creates of one object id, so no conflict with either remains.
+This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. The owner accepted the reading or proposal of each (Carsten, 2026-11-07). RFC 0003 and RFC 0004 have adopted this RFC's terms, the whole-header associated data and SHA-256, and RFC 0004 defines two creates of one object id, so no conflict with either remains.
 
-1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner should confirm this reading, or choose D9 B.
-2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section.
+1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner confirmed this reading together with D9 A (Carsten, 2026-11-07).
+2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section. The owner agreed (Carsten, 2026-11-07); pm's follow-up ticket makes that change to RFC 0001 and the FAQ.
 3. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
 
 ## Summary of the choices
