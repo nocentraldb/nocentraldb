@@ -8,6 +8,8 @@
 
 use std::fmt;
 
+use sha2::{Digest, Sha256};
+
 /// The id of a space: 16 random bytes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct SpaceId(pub [u8; 16]);
@@ -54,13 +56,18 @@ impl ChangeId {
     pub const CONTEXT: &'static [u8] = b"nocentraldb/change-id";
 
     /// The id of the change with this frame version and signed header bytes.
-    pub fn compute(_frame_version: u8, _header_bytes: &[u8]) -> ChangeId {
-        todo!()
+    pub fn compute(frame_version: u8, header_bytes: &[u8]) -> ChangeId {
+        let mut hash = Sha256::new();
+        hash.update(ChangeId::CONTEXT);
+        hash.update([frame_version]);
+        hash.update(header_bytes);
+        ChangeId(hash.finalize().into())
     }
 }
 
 impl fmt::Display for ChangeId {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+    /// The id in lower-case hex.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.iter().try_for_each(|byte| write!(f, "{byte:02x}"))
     }
 }

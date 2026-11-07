@@ -17,7 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::cbor::{DecodeError, Value};
+use crate::cbor::{self, DecodeError, Key, Value};
 use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 
@@ -36,7 +36,7 @@ impl Kind {
 
     /// Whether this core knows the kind.
     pub fn is_known(self) -> bool {
-        todo!()
+        self == Kind::SEALED || self == Kind::CONTROL
     }
 }
 
@@ -58,7 +58,16 @@ impl Extensions {
 
     /// Whether any unknown key is "must understand" (1 to 63).
     pub fn must_understand(&self) -> bool {
-        todo!()
+        self.0.range(1..=LAST_MUST_UNDERSTAND_KEY).next().is_some()
+    }
+
+    /// Adds an unknown key, unless the map defines it (`1..=known`).
+    fn insert(&mut self, known: u64, key: u64, value: Value) -> bool {
+        if (1..=known).contains(&key) {
+            return false;
+        }
+        self.0.insert(key, value);
+        true
     }
 }
 
@@ -124,6 +133,8 @@ pub struct Operation {
 pub struct Change {
     bytes: Vec<u8>,
     header: Header,
+    header_bytes: Vec<u8>,
+    signature: Vec<u8>,
     id: ChangeId,
 }
 
@@ -150,12 +161,109 @@ pub enum ChangeError {
 }
 
 impl fmt::Display for ChangeError {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ChangeError::Encoding(error) => error.fmt(f),
+            ChangeError::FrameShape => {
+                f.write_str("the frame is not [version, header bytes, signature]")
+            }
+            ChangeError::FrameVersion(version) => write!(f, "unknown frame version {version}"),
+            ChangeError::NotAMap => f.write_str("expected a map"),
+            ChangeError::TextKey => f.write_str("a text key where only unsigned keys are allowed"),
+            ChangeError::MissingKey(key) => write!(f, "key {key} is missing"),
+            ChangeError::InvalidValue(key) => {
+                write!(f, "key {key} holds a value of the wrong type or length")
+            }
+            ChangeError::UnsortedDependencies => {
+                f.write_str("the dependencies are not sorted, or repeat an id")
+            }
+        }
     }
 }
 
 impl std::error::Error for ChangeError {}
+
+impl From<DecodeError> for ChangeError {
+    fn from(error: DecodeError) -> Self {
+        ChangeError::Encoding(error)
+    }
+}
+
+/// The entries of a map with unsigned keys, taken out one by one; what is
+/// left are the unknown keys.
+struct Fields(BTreeMap<u64, Value>);
+
+impl Fields {
+    fn decode(bytes: &[u8]) -> Result<Fields, ChangeError> {
+        Fields::of(cbor::decode(bytes)?)
+    }
+
+    fn of(value: Value) -> Result<Fields, ChangeError> {
+        let Value::Map(entries) = value else {
+            return Err(ChangeError::NotAMap);
+        };
+        entries
+            .into_iter()
+            .map(|(key, value)| match key {
+                Key::Unsigned(key) => Ok((key, value)),
+                Key::Text(_) => Err(ChangeError::TextKey),
+            })
+            .collect::<Result<_, _>>()
+            .map(Fields)
+    }
+
+    fn optional(&mut self, key: u64) -> Option<(u64, Value)> {
+        self.0.remove(&key).map(|value| (key, value))
+    }
+
+    fn required(&mut self, key: u64) -> Result<(u64, Value), ChangeError> {
+        self.optional(key).ok_or(ChangeError::MissingKey(key))
+    }
+
+    fn rest(self) -> Extensions {
+        Extensions(self.0)
+    }
+}
+
+fn unsigned((key, value): (u64, Value)) -> Result<u64, ChangeError> {
+    match value {
+        Value::Unsigned(n) => Ok(n),
+        _ => Err(ChangeError::InvalidValue(key)),
+    }
+}
+
+fn bytes((key, value): (u64, Value)) -> Result<Vec<u8>, ChangeError> {
+    match value {
+        Value::Bytes(bytes) => Ok(bytes),
+        _ => Err(ChangeError::InvalidValue(key)),
+    }
+}
+
+fn fixed<const N: usize>(entry: (u64, Value)) -> Result<[u8; N], ChangeError> {
+    let key = entry.0;
+    bytes(entry)?
+        .try_into()
+        .map_err(|_| ChangeError::InvalidValue(key))
+}
+
+fn text((key, value): (u64, Value)) -> Result<String, ChangeError> {
+    match value {
+        Value::Text(text) => Ok(text),
+        _ => Err(ChangeError::InvalidValue(key)),
+    }
+}
+
+/// A map of known entries and unknown keys, in key order.
+fn map(known: Vec<(u64, Value)>, extensions: &Extensions) -> Value {
+    let unknown = extensions.iter().map(|(key, value)| (key, value.clone()));
+    Value::Map(
+        known
+            .into_iter()
+            .chain(unknown)
+            .map(|(key, value)| (Key::Unsigned(key), value))
+            .collect(),
+    )
+}
 
 impl Header {
     /// The current header format.
@@ -192,24 +300,45 @@ impl Header {
 
     /// Adds a key this core does not know, as a newer client would write
     /// it. Returns `false`, and changes nothing, for a key this core knows.
-    pub fn insert_extension(&mut self, _key: u64, _value: Value) -> bool {
-        todo!()
+    pub fn insert_extension(&mut self, key: u64, value: Value) -> bool {
+        self.extensions.insert(8, key, value)
     }
 
     /// Whether this core can fold the change: a known header format and
     /// kind, and no unknown "must understand" key.
     pub fn foldable(&self) -> bool {
-        todo!()
+        self.format == Header::FORMAT && self.kind.is_known() && !self.extensions.must_understand()
     }
 
     /// The canonical bytes of the header map.
     pub fn encode(&self) -> Vec<u8> {
-        todo!()
+        let known = vec![
+            (1, Value::Bytes(self.space.0.to_vec())),
+            (2, Value::Bytes(self.author.0.to_vec())),
+            (3, Value::Unsigned(self.sequence)),
+            (4, Value::Unsigned(self.key_generation)),
+            (5, Value::Unsigned(self.kind.0)),
+            (6, Value::Bytes(self.payload.clone())),
+            (7, Value::Unsigned(self.format)),
+            (8, Value::Unsigned(self.suite)),
+        ];
+        cbor::encode(&map(known, &self.extensions))
     }
 
     /// Decodes canonical bytes of a header map.
-    pub fn decode(_bytes: &[u8]) -> Result<Header, ChangeError> {
-        todo!()
+    pub fn decode(bytes: &[u8]) -> Result<Header, ChangeError> {
+        let mut fields = Fields::decode(bytes)?;
+        Ok(Header {
+            space: SpaceId(fixed(fields.required(1)?)?),
+            author: MemberId(fixed(fields.required(2)?)?),
+            sequence: unsigned(fields.required(3)?)?,
+            key_generation: unsigned(fields.required(4)?)?,
+            kind: Kind(unsigned(fields.required(5)?)?),
+            payload: self::bytes(fields.required(6)?)?,
+            format: unsigned(fields.required(7)?)?,
+            suite: unsigned(fields.required(8)?)?,
+            extensions: fields.rest(),
+        })
     }
 }
 
@@ -240,25 +369,86 @@ impl Payload {
 
     /// Adds a key this core does not know. Returns `false`, and changes
     /// nothing, for a key this core knows.
-    pub fn insert_extension(&mut self, _key: u64, _value: Value) -> bool {
-        todo!()
+    pub fn insert_extension(&mut self, key: u64, value: Value) -> bool {
+        self.extensions.insert(5, key, value)
     }
 
     /// Whether this core can fold the payload: a known payload format and no
     /// unknown "must understand" key, in the payload or any operation.
     pub fn foldable(&self) -> bool {
-        todo!()
+        self.format == Payload::FORMAT
+            && !self.extensions.must_understand()
+            && !self
+                .operations
+                .iter()
+                .any(|operation| operation.extensions.must_understand())
     }
 
     /// The canonical bytes of the payload map.
     pub fn encode(&self) -> Vec<u8> {
-        todo!()
+        let mut known = vec![
+            (1, Value::Unsigned(self.format)),
+            (2, Value::Unsigned(self.clock.0)),
+            (
+                3,
+                Value::Array(
+                    self.dependencies
+                        .iter()
+                        .map(|id| Value::Bytes(id.0.to_vec()))
+                        .collect(),
+                ),
+            ),
+            (
+                4,
+                Value::Array(self.operations.iter().map(Operation::to_value).collect()),
+            ),
+        ];
+        if let Some(padding) = &self.padding {
+            known.push((5, Value::Bytes(padding.clone())));
+        }
+        cbor::encode(&map(known, &self.extensions))
     }
 
     /// Decodes canonical bytes of a payload map.
-    pub fn decode(_bytes: &[u8]) -> Result<Payload, ChangeError> {
-        todo!()
+    pub fn decode(bytes: &[u8]) -> Result<Payload, ChangeError> {
+        let mut fields = Fields::decode(bytes)?;
+        let format = unsigned(fields.required(1)?)?;
+        let clock = Hlc(unsigned(fields.required(2)?)?);
+        let dependencies = dependencies(fields.required(3)?)?;
+        let Value::Array(operations) = fields.required(4)?.1 else {
+            return Err(ChangeError::InvalidValue(4));
+        };
+        let operations = operations
+            .into_iter()
+            .map(Operation::from_value)
+            .collect::<Result<_, _>>()?;
+        let padding = fields.optional(5).map(self::bytes).transpose()?;
+        Ok(Payload {
+            format,
+            clock,
+            dependencies,
+            operations,
+            padding,
+            extensions: fields.rest(),
+        })
     }
+}
+
+/// The dependencies, which the encoding holds sorted by bytes and without
+/// repeats.
+fn dependencies((key, value): (u64, Value)) -> Result<BTreeSet<ChangeId>, ChangeError> {
+    let Value::Array(items) = value else {
+        return Err(ChangeError::InvalidValue(key));
+    };
+    let mut dependencies = BTreeSet::new();
+    for item in items {
+        let id = ChangeId(fixed((key, item))?);
+        if dependencies.last().is_some_and(|last| *last >= id) {
+            return Err(ChangeError::UnsortedDependencies);
+        }
+        dependencies.insert(id);
+    }
+    Ok(dependencies)
 }
 
 impl Operation {
@@ -290,8 +480,35 @@ impl Operation {
 
     /// Adds a key this core does not know. Returns `false`, and changes
     /// nothing, for a key this core knows.
-    pub fn insert_extension(&mut self, _key: u64, _value: Value) -> bool {
-        todo!()
+    pub fn insert_extension(&mut self, key: u64, value: Value) -> bool {
+        self.extensions.insert(5, key, value)
+    }
+
+    fn to_value(&self) -> Value {
+        let mut known = vec![
+            (1, Value::Bytes(self.object.0.to_vec())),
+            (2, Value::Text(self.collection.clone())),
+        ];
+        if let Some(field) = &self.field {
+            known.push((3, Value::Text(field.clone())));
+        }
+        known.push((4, Value::Unsigned(self.op)));
+        if let Some(value) = &self.value {
+            known.push((5, value.clone()));
+        }
+        map(known, &self.extensions)
+    }
+
+    fn from_value(value: Value) -> Result<Operation, ChangeError> {
+        let mut fields = Fields::of(value).map_err(|_| ChangeError::InvalidValue(4))?;
+        Ok(Operation {
+            object: ObjectId(fixed(fields.required(1)?)?),
+            collection: text(fields.required(2)?)?,
+            field: fields.optional(3).map(text).transpose()?,
+            op: unsigned(fields.required(4)?)?,
+            value: fields.optional(5).map(|(_, value)| value),
+            extensions: fields.rest(),
+        })
     }
 }
 
@@ -300,14 +517,57 @@ impl Change {
     pub const FRAME_VERSION: u64 = 1;
 
     /// The change of this header and signature.
-    pub fn new(_header: Header, _signature: Vec<u8>) -> Change {
-        todo!()
+    pub fn new(header: Header, signature: Vec<u8>) -> Change {
+        let header_bytes = header.encode();
+        let bytes = cbor::encode(&Value::Array(vec![
+            Value::Unsigned(Change::FRAME_VERSION),
+            Value::Bytes(header_bytes.clone()),
+            Value::Bytes(signature.clone()),
+        ]));
+        Change::from_parts(bytes, header, header_bytes, signature)
     }
 
     /// Decodes the canonical bytes of a frame. The change keeps exactly
     /// these bytes.
-    pub fn decode(_bytes: &[u8]) -> Result<Change, ChangeError> {
-        todo!()
+    pub fn decode(bytes: &[u8]) -> Result<Change, ChangeError> {
+        let Value::Array(items) = cbor::decode(bytes)? else {
+            return Err(ChangeError::FrameShape);
+        };
+        let Ok([version, header_bytes, signature]) = <[Value; 3]>::try_from(items) else {
+            return Err(ChangeError::FrameShape);
+        };
+        let (Value::Unsigned(version), Value::Bytes(header_bytes), Value::Bytes(signature)) =
+            (version, header_bytes, signature)
+        else {
+            return Err(ChangeError::FrameShape);
+        };
+        if version != Change::FRAME_VERSION {
+            return Err(ChangeError::FrameVersion(version));
+        }
+        let header = Header::decode(&header_bytes)?;
+        Ok(Change::from_parts(
+            bytes.to_vec(),
+            header,
+            header_bytes,
+            signature,
+        ))
+    }
+
+    fn from_parts(
+        bytes: Vec<u8>,
+        header: Header,
+        header_bytes: Vec<u8>,
+        signature: Vec<u8>,
+    ) -> Change {
+        let version = u8::try_from(Change::FRAME_VERSION).expect("the frame version is 1");
+        let id = ChangeId::compute(version, &header_bytes);
+        Change {
+            bytes,
+            header,
+            header_bytes,
+            signature,
+            id,
+        }
     }
 
     /// The frame's exact bytes.
@@ -322,12 +582,12 @@ impl Change {
 
     /// The signed header bytes, as the frame holds them.
     pub fn header_bytes(&self) -> &[u8] {
-        todo!()
+        &self.header_bytes
     }
 
     /// The signature, as the frame holds it.
     pub fn signature(&self) -> &[u8] {
-        todo!()
+        &self.signature
     }
 
     /// The change id.
