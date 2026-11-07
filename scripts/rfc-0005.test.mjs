@@ -93,6 +93,7 @@ test("RFC 0005 has the sections its ticket asks for", () => {
   for (const wanted of [
     "the schema in typescript",
     "the structure of model.lock.json",
+    "indexes",
     "the additive-change rule",
     "data from a newer model",
     "personal fields",
