@@ -97,7 +97,7 @@ test("exits 1 and names file and rule for every rule of the schema", (t) => {
     "no-front": ["## Problem\na\n## Use\nb\n", /no front matter/],
     "unknown-type": [ok.replace("feature", "chore"), /type must be one of/],
     "empty-tickets": [ok.replace("[mt08.1qaz]", "[]"), /tickets/],
-    "bad-ticket": [ok.replace("mt08.1qaz", "MT08-1"), /tickets/],
+    "bad-ticket": [ok.replace("mt08.1qaz", "noc-12"), /tickets/],
     "empty-components": [ok.replace("[core]", "[]"), /components/],
     "unknown-component": [ok.replace("[core]", "[web]"), /components/],
     "missing-section": [
