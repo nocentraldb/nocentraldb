@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-12
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". RFC 0002 (NOC-6) defines the log and keeps it in the same SQLite database as the view. RFC 0003 (NOC-7) defines the keys that decrypt a change before it is folded. RFC 0004 (NOC-8) defines how a field merges. RFC 0005 (NOC-11) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables. This RFC uses those documents only through the properties it names.
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. RFC 0003 (NOC-7) defines the keys that decrypt a change before it is folded. RFC 0004 (NOC-8) defines how a field merges. RFC 0005 (NOC-11) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
 **Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged.
 
@@ -16,7 +16,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Where does the view live?                  | In one SQLite database per member on a device, next to that member's log (RFC 0002). The log is the source of truth; the view is a cache that can always be rebuilt.         |
 | How do changes get in?                     | The fold: append the frame, decrypt it in memory, apply each operation through its field type, write the read value into a table row, all in one SQLite transaction.        |
-| How is the view rebuilt?                   | From the frames in the log, into fresh tables, swapped in by one transaction. Triggered by a new model, a new fold version, or a damaged view.                               |
+| How is the view rebuilt?                   | From the frames in the log, into fresh tables, swapped in by one transaction. Triggered by a model change (a new rule version included), a new view format, or a damaged view. |
 | How does an app query?                     | Only through an index the model declares. The core generates the SQL; there is no raw SQL for apps. Every generated query is checked to use its index.                       |
 | How does an app page?                      | Keyset pagination: the cursor is the index key of the last row, and the next page is "the rows after this key", in index order.                                             |
 | Which SQLite natively?                     | `rusqlite` with SQLite compiled from source (`bundled`), pinned, on desktop and mobile.                                                                                    |
@@ -33,7 +33,9 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - **View.** Everything in the database except the log: one table per collection, the field types' merge state, indexes, and the bookkeeping this RFC defines. The app reads only the view (GENESIS.md, principle 6).
 - **Read value.** What a field type says an app reads for a field, given its merge state (RFC 0004: for a basic value, the winning write).
 - **Merge state.** What a field type keeps to compute the read value and stay convergent (RFC 0004: for a basic value, the live writes and the replaced ids).
-- **Declared index.** An index named in `model.lock.json`: a collection, an ordered list of fields with a direction each, and optionally an equality prefix the query must give (RFC 0005).
+- **Control change.** A change of kind 1 in RFC 0002, with a body RFC 0003 defines: a membership entry, a key envelope, a key chain entry, a shred entry or an acknowledgement. It carries no content.
+- **Rejected.** A change kept in the log but not folded because it failed a check (signature, membership at its key generation, decryption). The log state is added to RFC 0002 by NOC-22. A rejected change **waits** when a control change it lacks could still make it pass.
+- **Declared index.** An index declared in `model.lock.json`. RFC 0005 defines the declaration. This RFC needs only three things from it: the collection, the ordered list of fields with a direction each, and which leading fields a query must fix with equality.
 - **Cursor.** In this RFC, a **page cursor**: the position after the last row of a page in a declared index. Not to be confused with the relay cursor of RFC 0002, which this RFC calls the **relay position**.
 - **Target.** A platform the core runs on: native desktop (macOS, Linux, Windows), native mobile (iOS, Android), or a browser (Chromium-based, Firefox, Safari).
 
@@ -47,10 +49,11 @@ The database contains these kinds of tables. The names are illustrative; the exa
 
 ```text
 log                 RFC 0002: the frames, the source of truth
-meta                view format version, fold version, model hash, per space the relay position
+meta                view format version, model hash, per space the relay position
 c_<collection>      one row per object: space id, object id, one column per field's read value
 fs_<collection>     merge state per object and field, as the field type encodes it (opaque bytes)
 ix_<collection>_*   one SQLite index per declared index on c_<collection>
+control             per space: membership, key chain, which key generations are held, shreds
 parked, gaps        RFC 0002: changes stored but not folded, and dependencies not yet received
 ```
 
@@ -66,9 +69,9 @@ The fold turns a frame in the log into rows of the view. A member folds every ch
 
 For each change, in one SQLite transaction:
 
-1. **Append.** Insert the frame into `log` (RFC 0002). If the change id is already there, stop: a duplicate changes nothing.
-2. **Check.** Verify the signature and membership as RFC 0003 defines. A change that fails is kept as RFC 0002 says and not folded.
-3. **Decrypt.** Decrypt the payload with the space key of the change's key generation, in memory. If the key is missing (the envelope has not arrived yet) or the suite or format is unknown, mark the change **parked** with its reason (RFC 0002, "Versioning") and stop here.
+1. **Append.** Insert the frame into `log` ([RFC 0002](0002-change-and-log-format.md#the-log-on-disk)). If the change id is already there, stop: a duplicate changes nothing.
+2. **Check.** Verify the signature, and that the author is a member of the space at the change's key generation, as RFC 0003 defines, against the control state this member holds now ([Control changes and changes that wait for them](#control-changes-and-changes-that-wait-for-them)). A change that fails is kept, not folded, in the log state for rejected changes that NOC-22 adds to RFC 0002, with its reason. If the reason is one a later control change can cure, the change **waits**, and is checked again when that control change arrives.
+3. **Decrypt.** Decrypt the payload with the space key of the change's key generation, in memory. If this member holds no key envelope for that generation yet, the change is rejected as in step 2 and waits for the envelope. If the suite or format is unknown, mark the change **parked** with its reason ([RFC 0002](0002-change-and-log-format.md#versioning-old-clients-keep-what-they-do-not-understand)) and stop here. A control change is not decrypted: its body is readable (RFC 0002, kind 1) and it folds as the next section says.
 4. **Apply.** For each operation, in the order of the change:
    1. Look up the collection and field in the member's `model.lock.json`. If either is unknown, store the operation as parked and go on with the next (RFC 0002: the rest of the change is folded).
    2. Load the field's merge state from `fs_<collection>` (empty for a new object).
@@ -82,9 +85,31 @@ The plaintext from step 3 exists only in memory and in the columns and state wri
 
 Because appending and folding are one transaction, the log and the view agree after a crash: a change is in both or in neither (RFC 0002).
 
+### Control changes and changes that wait for them
+
+Some changes carry no content: the control changes of RFC 0002 (kind 1), whose bodies RFC 0003 defines. They decide whether other changes can be checked and decrypted, so the fold handles them first-class, and the order in which they arrive must not change the result.
+
+**The control state.** The view keeps a `control` table set per space: the membership entries, the key chain entries, which key generations this member holds an envelope for, and the shred entries and their acknowledgements. Key material itself is never in the database; the SDK keeps it in the platform keystore (RFC 0003, "How the SDK hides keys"). Like every field's merge state, the control state is a function of the set of control changes the member holds, as RFC 0003 defines membership; it does not depend on their order.
+
+**How each control change folds,** in the same transaction as any change (steps 1, 2, 6 and 7 above; steps 3 to 5 are replaced by this):
+
+| Control change          | What the fold does                                                                                                                                                                              |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Membership entry        | Adds it to the control state. Membership per key generation is then recomputed from all entries the member holds.                                                                               |
+| Key envelope            | If it is for this member, the SDK unwraps it into the keystore, and the control state records that this generation's key is held. Envelopes for other members are kept in the log and not opened. |
+| Key chain entry         | Adds it to the control state, so the member can derive or verify the keys of earlier generations as RFC 0003 defines.                                                                           |
+| Shred entry             | Records the person key as shredded. The fold erases that person's personal fields from the view in every object of the space, deletes the member's copy of the key, and writes an acknowledgement (RFC 0003, "Shredding a person's key"). |
+| Acknowledgement         | Records which member confirmed which shred, for the audit.                                                                                                                                       |
+
+**Re-checking.** After a control change is folded, every rejected change in the same space that waits for it is checked again, in the same transaction: a change from an author whose membership at the change's generation was not yet known, and a change for a key generation whose envelope had not arrived. A change that now passes is decrypted and folded (steps 3 to 6), and its log state becomes folded. A change that still fails keeps waiting. A change whose failure no control change can cure (a bad signature, bytes that are not canonical) is rejected for good and never checked again.
+
+**Un-folding.** A control change can also show that a change already folded should not have been: for example a membership entry, received late, that ends the author's membership before the change's generation. The fold then marks that change rejected and refolds every field it touched from the operations of the changes that are still folded. A field's state is a function of its set of operations (RFC 0004), so removing one operation and refolding gives the state that copy would have had if the change had never been folded. A bookkeeping table from object and field to the operations that touched them, rebuildable from the log, makes this a lookup instead of a scan. What happens when the relay refuses a change the member has already folded is NOC-22's to define in RFC 0002; the fold handles it the same way.
+
+**Why the end state depends only on the set.** A change is folded exactly when it passes its checks against the control state computed from all control changes the member holds. Re-checking and un-folding keep that true after every control change, whatever the order of arrival. Two members that hold the same set of changes therefore hold the same control state, fold the same set of changes, and, by RFC 0004, reach the same view (principle 2). The convergence harness (NOC-9) checks this with control changes in the generated sets, delivered in any order.
+
 ### Many changes
 
-When the relay or a peer hands over a page of changes, the core folds the page in one transaction, which is much faster in SQLite than one transaction per change. The page is atomic as a whole: after a crash, either all of it or none of it is in the log and the view, and the relay position in `meta` moves with it. A change that cannot be folded (step 2 or 3) does not fail the page; it is kept and marked as RFC 0002 says.
+When the relay or a peer hands over a page of changes, the core folds the page in one transaction, which is much faster in SQLite than one transaction per change. The page is atomic as a whole: after a crash, either all of it or none of it is in the log and the view, and the relay position in `meta` moves with it. A change that cannot be folded (step 2 or 3) does not fail the page; it is kept as rejected or parked, as above.
 
 A large first sync is cut into pages of a bounded number of changes, so that readers are never blocked for long ([One writer, many readers](#one-writer-many-readers)).
 
@@ -113,7 +138,7 @@ On open, the core compares `meta` with what it is running:
 | The model adds a declared index                                                         | `CREATE INDEX` on the existing table. No refold.                                                               |
 | The model adds a field or a collection (an additive change, RFC 0005)                   | Add the column or table, and fold the parked operations that are now known (RFC 0002). No full rebuild.        |
 | The view format version changed (a new core lays out the view differently)              | Full rebuild.                                                                                                  |
-| The fold version changed (a new core, or a new version of a field type plugin, folds differently) | Full rebuild.                                                                                      |
+| A field's rule version changed in `model.lock.json` (RFC 0004, RFC 0005)                 | Refold that field in every object of the collection from the log. A different merge rule is always a new rule version, never a new build of the same one: a merge rule never changes under the same type id and rule version (RFC 0004), so two members on different builds of a field type cannot fold differently. |
 | `PRAGMA integrity_check` fails on a view table, or a view table is missing, while `log` is intact | Full rebuild.                                                                                          |
 | `log` itself is damaged or missing                                                      | Not a rebuild: the member restores its log from the relay or a peer, from relay position 0, and folds it.       |
 
@@ -137,7 +162,7 @@ GENESIS.md, principle 6: "Queries run only through declared indexes. [...] Every
 
 ### Declared indexes
 
-`model.lock.json` names each index: its collection, the fields it orders by and the direction of each, and which leading fields a query must fix with equality (RFC 0005). The core turns each one into an SQLite index:
+`model.lock.json` declares each index, as RFC 0005 defines. From the declaration this RFC uses the collection, the fields the index orders by with the direction of each, and which leading fields a query must fix with equality. The core turns each one into an SQLite index:
 
 ```sql
 CREATE INDEX ix_tasks_by_status_priority
@@ -230,7 +255,7 @@ pub fn fold_page(conn: &Connection, frames: &[Frame]) -> Result<Folded, Error> {
 
 The browser's one asynchronous step is installing the VFS, once per worker. After that every SQLite call is synchronous inside the worker, as it is on a native thread. The convergence harness and the wasm32 gate (NOC-9, NOC-10) run the same fold tests on both targets.
 
-**The SQLite version must be the same on every target.** The spike found `rusqlite` 0.41.1 with `bundled` builds SQLite 3.54.1, while `sqlite-wasm-rs` 0.6.2 builds SQLite 3.53.4. A difference in SQLite version is a difference in behaviour (query planner, edge cases of comparison), so the implementation pins both to the same SQLite release and a test compares `sqlite_version()` on both targets. Where the crates cannot be aligned, `libsqlite3-sys` can be built natively from the same amalgamation `sqlite-wasm-rs` uses.
+**The SQLite version must be the same on every target.** The spike found `rusqlite` 0.41.1 with `bundled` builds SQLite 3.54.1, while `sqlite-wasm-rs` 0.6.2 builds SQLite 3.53.4. A difference in SQLite version is a difference in behaviour (query planner, edge cases of comparison), so the implementation ticket for the view pins both to the same SQLite release and adds a test that compares `sqlite_version()` on both targets. Where the crates cannot be aligned, `libsqlite3-sys` can be built natively from the same amalgamation `sqlite-wasm-rs` uses.
 
 ## What the view stores in plaintext
 
@@ -268,7 +293,7 @@ Syncing is the only thing that uses the network, and it writes to the log, never
 
 ## The spike
 
-The ticket asks for a spike that opens SQLite from Rust compiled to `wasm32-unknown-unknown` in a headless browser. It was run on 2026-11-07 and is not merged; its code is in the PR that introduces this RFC.
+The ticket asks for a spike that opens SQLite from Rust compiled to `wasm32-unknown-unknown` in a headless browser. It was run on 2026-11-07 and is not merged. Its code is on no branch: it is in the description of the pull request that introduces this RFC (#36), under "Spike code (not merged)".
 
 **Result: works in Chromium**, with `rusqlite` 0.41.1 (`ffi-sqlite-wasm-rs`), `sqlite-wasm-rs` 0.6.2, `sqlite-wasm-vfs` 0.3.0 (`opfs-sahpool`), `wasm-bindgen` 0.2.130 and Rust 1.99.1, in headless Chromium 153 driven by Playwright.
 
@@ -372,4 +397,4 @@ GENESIS.md reserves the on-disk format and anything a user sees first for the ow
 | "Never write content, keys or personal fields into logs [...]."                             | Plaintext exists only in memory and in the view; notifications carry ids; cursors are redacted.                                                |
 | "Runs on any device [...] web apps in a browser (Chromium-based, Firefox, and Safari)."      | The design uses only APIs those browsers offer. The spike ran in Chromium only; Firefox and Safari are an open check, not a claim.            |
 
-**Conflicts.** None with GENESIS.md. One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit; RFC 0001 may want to say it too, which is for pm to decide.
+**Conflicts.** None with GENESIS.md. One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit; NOC-20 adds it to RFC 0001.
