@@ -19,18 +19,18 @@ impl Hlc {
 
     /// The clock of these milliseconds and counter, or `None` when the
     /// milliseconds do not fit 48 bits.
-    pub fn new(_millis: u64, _counter: u16) -> Option<Hlc> {
-        todo!()
+    pub fn new(millis: u64, counter: u16) -> Option<Hlc> {
+        (millis <= Hlc::MAX_MILLIS).then(|| Hlc(millis << 16 | u64::from(counter)))
     }
 
     /// The milliseconds since the Unix epoch: the upper 48 bits.
     pub fn millis(self) -> u64 {
-        todo!()
+        self.0 >> 16
     }
 
     /// The counter: the lower 16 bits.
     pub fn counter(self) -> u16 {
-        todo!()
+        u16::try_from(self.0 & 0xffff).expect("16 bits")
     }
 }
 
@@ -52,15 +52,31 @@ impl Clock {
     }
 
     /// Raises the highest clock seen to that of a received change.
-    pub fn observe(&mut self, _seen: Hlc) {
-        todo!()
+    pub fn observe(&mut self, seen: Hlc) {
+        self.highest = self.highest.max(seen);
     }
 
     /// The clock for a change this member writes now. `wall` returns the
     /// wall clock in milliseconds since the Unix epoch; it is asked again
     /// while the counter would overflow, until it reaches the next
     /// millisecond.
-    pub fn now(&mut self, _wall: impl FnMut() -> u64) -> Hlc {
-        todo!()
+    ///
+    /// A wall clock beyond 48 bits of milliseconds (the year 10889) reads
+    /// as the largest the clock holds.
+    pub fn now(&mut self, mut wall: impl FnMut() -> u64) -> Hlc {
+        loop {
+            let millis = wall().min(Hlc::MAX_MILLIS);
+            let wall = Hlc::new(millis, 0).expect("at most 48 bits");
+            let next = if wall > self.highest {
+                wall
+            } else if self.highest.counter() < Hlc::MAX_COUNTER {
+                Hlc(self.highest.0 + 1)
+            } else {
+                // The counter is full: wait for the next millisecond.
+                continue;
+            };
+            self.highest = next;
+            return next;
+        }
     }
 }
