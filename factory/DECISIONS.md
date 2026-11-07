@@ -79,3 +79,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · NOC-11 · RFC 0005's tooling test holds the examples to the list of public names
+
+- Decided by: coding agent (NOC-11)
+- Why: the ticket asks the RFC to list every public name it introduces in one place for the owner; the test fails when an example uses an `nc.*` function, a modifier or an `ncdb model` command that the "Public names" section does not list, and when a JSON example does not parse.
+- Instead of: checking only that the file exists and links to RFC 0001, which would let the list drift from the examples unnoticed.
+
+### 2026-11-07 · NOC-11 · RFC 0005 names RFC 0002 to 0004 without linking to them
+
+- Decided by: coding agent (NOC-11)
+- Why: those RFCs are open PRs (#26 to #28), not on `main`; a link to them would break the "every relative link resolves" check until they merge. Links can be added once they do.
+- Instead of: stacking RFC 0005 on one of their branches, which would tie its merge to theirs.
