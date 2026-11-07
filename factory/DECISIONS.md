@@ -97,3 +97,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
+### 2026-11-07 · NOC-23 · RFC 0008 judges a revoked member's late changes by a cutoff the revoking admin names
+
+- Decided by: coding agent (NOC-23), for the owner's ruling as decision M3
+- Why: the relay and the members must agree without a clock; the subject's last change the revoker had seen is readable by both, accepts honest changes the revoker had seen, and refuses backdated ones.
+- Instead of: RFC 0007's R7 A, refusing every change from the removal's relay position on, which depends on the relay's order and loses changes the remover had already seen.
+
+### 2026-11-07 · NOC-23 · RFC 0008 defers groups as members
+
+- Decided by: coding agent (NOC-23), for the owner's ruling as decision M10
+- Why: a group's membership lives in another log, so folding one space would depend on another space's order, which RFC 0002 rules out; the SDK expands a group into one entry per member until a later RFC.
+- Instead of: designing groups as principals now, inside a ticket whose scope is one space's membership.
+
+### 2026-11-07 · NOC-23 · RFC 0008 refers to the unmerged RFCs 0003 to 0007 by name, not by link
+
+- Decided by: coding agent (NOC-23)
+- Why: the tooling test fails on a relative link that does not resolve on `main`; the same practice as RFC 0007's references to RFC 0003.
+- Instead of: links that break until the other RFC PRs merge, or stacking this PR on four open PRs.
