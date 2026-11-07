@@ -43,3 +43,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: every day at 06:00 Europe/Berlin, with the initiative's health; questions to the owner become tickets labelled `needs-owner`.
 - Instead of: a Linear document or a comment, where a question can get lost.
+
+### 2026-11-07 · no ticket · Coding agents work test first
+
+- Decided by: Carsten
+- Why: every acceptance criterion gets a test that failed before its code existed; the test commit comes first, so pm can check the red step in the history.
+- Instead of: tests written after the code, which can pass without ever having caught anything.

@@ -45,7 +45,16 @@ For an urgent ticket the owner names, start one more session in the expedite lan
 
 ## Reviewing a PR
 
-When a coding agent reports a PR as ready for review, check it against its ticket's acceptance criteria, GENESIS.md (principles and no-gos) and FACTORY.md's rules for coding agents. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
+When a coding agent reports a PR as ready for review, check it against its ticket's acceptance criteria, GENESIS.md (principles and no-gos) and FACTORY.md's rules for coding agents.
+
+Check test first on every PR:
+
+- Every acceptance criterion has a test, and the PR description names the failure the agent saw in the red step.
+- In the commit history, each test commit comes before the code that makes it pass.
+- Spot-check at least one: check out the test commit, run that test, and see it fail.
+- No test was weakened or deleted to get green without a stated reason.
+
+A PR that fails this goes back, however good the code is. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
 
 ## The daily note
 

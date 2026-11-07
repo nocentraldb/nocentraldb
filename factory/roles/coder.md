@@ -9,10 +9,15 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 ## Doing the ticket
 
 1. Work on the ticket's branch, as CONFIG.md names it. If the ticket builds on an open PR, branch from that PR's branch.
-2. Build what the ticket's acceptance criteria ask, and nothing outside them. Anything else you find becomes a comment to pm, who decides whether it becomes a ticket.
-3. Run the gate command from CONFIG.md until it passes. Add tests for what you built.
-4. Commit with the ticket id in every message. Add a change fragment when CONFIG.md says the change needs one.
-5. Open a draft PR with the ticket id in its title, following the repository's PR template. Leave every owner checkbox unticked.
+2. Build what the ticket's acceptance criteria ask, and nothing outside them, test first. Anything else you find becomes a comment to pm, who decides whether it becomes a ticket.
+3. Work in red-green-refactor cycles, one behaviour at a time:
+   - **Red.** Write a test for the next acceptance criterion. Run it and see it fail for the reason you expect, not because of a typo or a missing import. Commit the test alone: `<ticket id> test: <behaviour>`.
+   - **Green.** Write the least code that makes it pass, and run the tests. Commit: `<ticket id>: <behaviour>`.
+   - **Refactor.** Clean up with all tests green, and commit if anything changed.
+
+   Every acceptance criterion gets at least one test that failed before its code existed. A bug fix starts with a test that reproduces the bug. Never change a test to make it pass unless the test itself was wrong, and say so in the commit message.
+4. Run the gate command from CONFIG.md until it passes. Commit with the ticket id in every message. Add a change fragment when CONFIG.md says the change needs one.
+5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. Leave every owner checkbox unticked.
 6. Subscribe to your PR, so CI results and review comments wake you.
 7. Send pm a message: the ticket id, the PR link, and one line on what you built.
 
@@ -26,5 +31,6 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
 - Merge, mark your PR ready, or tick an owner checkbox.
 - Weaken a gate: no skipped test, no unpinned dependency, no `--no-verify`.
+- Write production code that no failing test asked for.
 - Work on another ticket, or change files outside your ticket's scope.
 - Keep a promise only in this session: put it on the ticket or the PR.

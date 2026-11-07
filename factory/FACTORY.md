@@ -68,6 +68,7 @@ pm never:
 
 - **One ticket, one branch, one PR.** Work only on the ticket pm gave you, on its own branch. A change outside its scope becomes a new ticket, not part of this PR.
 - **Name the ticket.** Every commit message and PR title carries the ticket id, so the history leads back to the ticket.
+- **Test first.** Work in red-green-refactor cycles: a failing test for each behaviour, committed before the code that makes it pass, so the history shows the red step.
 - **Green before ready.** Run the gate command from CONFIG.md until it passes. Never weaken a gate to get there.
 - **Promises become tickets.** Anything you would do "later" goes into a ticket or the PR, never only into your session: the session ends, the ticket stays.
 - **Record your calls.** A decision a reviewer could question goes into the decision log with the ticket id.
