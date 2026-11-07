@@ -49,3 +49,33 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: every acceptance criterion gets a test that failed before its code existed; the test commit comes first, so pm can check the red step in the history.
 - Instead of: tests written after the code, which can pass without ever having caught anything.
+
+### 2026-11-07 · NOC-6 to NOC-13 · Owner-reserved designs go through an RFC PR before any code
+
+- Decided by: pm
+- Why: GENESIS.md reserves crypto, key handling, wire and on-disk formats, merge rules and public API names for the owner; an RFC as a draft PR gives the owner one place to decide, and the merge is the sign-off.
+- Instead of: coding agents choosing formats and primitives inside implementation PRs, or pm asking each detail as a separate `needs-owner` ticket.
+
+### 2026-11-07 · NOC-9, NOC-10 · The convergence harness and the wasm32 gate come before any field type
+
+- Decided by: pm
+- Why: they are the only core work that needs no owner decision, and every later field type is then built test first against a fixed definition of "converges" on both targets (principles 2 and 7).
+- Instead of: starting with field types and adding the harness and the wasm build afterwards.
+
+### 2026-11-07 · NOC-14 to NOC-17 · Implementation tickets wait in Backlog until their RFC is merged
+
+- Decided by: pm
+- Why: their criteria depend on the merged RFC; pm sharpens them against it and moves them to Todo then.
+- Instead of: writing detailed criteria now that the RFCs may contradict.
+
+### 2026-11-07 · NOC-5 · The daily note goes to the "Core foundation" project until initiatives are enabled
+
+- Decided by: pm
+- Why: initiatives are not enabled in the Linear workspace and the connector cannot create one; the note must not get lost while NOC-5 waits for the owner.
+- Instead of: skipping the daily note until the owner answers.
+
+### 2026-11-07 · NOC-5 · The daily note goes to the initiative NoCentralDB
+
+- Decided by: Carsten
+- Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
+- Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
