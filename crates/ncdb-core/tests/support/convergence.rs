@@ -153,10 +153,9 @@ fn minimise<S: Mergeable>(mut sent: Vec<Sent<S::Change>>, copies: usize) -> Vec<
         }
         for i in 0..sent.len() {
             for copy in 0..copies {
-                for key in 0..sent[i].arrivals[copy].len() {
-                    if sent[i].arrivals[copy].len() == 1 {
-                        break;
-                    }
+                let deliveries = sent[i].arrivals[copy].len();
+                // Every copy keeps at least one delivery of every change.
+                for key in (0..deliveries).filter(|_| deliveries > 1) {
                     let mut fewer = sent.clone();
                     fewer[i].arrivals[copy].remove(key);
                     if diverges::<S>(&fewer, copies) {
