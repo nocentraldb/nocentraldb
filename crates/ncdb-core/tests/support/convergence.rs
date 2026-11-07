@@ -3,10 +3,12 @@
 
 use core::fmt::Debug;
 
+use proptest::arbitrary::any;
 use proptest::collection::vec;
-use proptest::sample::Index;
 use proptest::strategy::{BoxedStrategy, Strategy};
-use proptest::test_runner::{Config as RunnerConfig, TestCaseError, TestError, TestRunner};
+use proptest::test_runner::{
+    Config as RunnerConfig, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner,
+};
 
 /// A state that changes merge into. The harness drives it; every field type
 /// the core ships must pass the harness.
@@ -65,7 +67,11 @@ pub struct Divergence {
 
 impl core::fmt::Display for Divergence {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        writeln!(f, "copies diverged; minimal counterexample:")?;
+        writeln!(
+            f,
+            "copies diverged with seed {}; minimal counterexample:",
+            self.seed
+        )?;
         writeln!(f, "changes:")?;
         for (i, change) in self.changes.iter().enumerate() {
             writeln!(f, "  #{i} {change}")?;
@@ -81,49 +87,38 @@ impl core::fmt::Display for Divergence {
     }
 }
 
-/// One generated case: what the members made and how it arrives.
+/// One generated change and when it arrives: per copy, its arrival key.
+/// A copy receives the changes in the order of their keys, ties in generated
+/// order. Keys travel with their change, so shrinking a change away keeps the
+/// relative order of the others, and keys shrink towards generated order.
 #[derive(Clone, Debug)]
-struct Case<C> {
-    changes: Vec<C>,
-    /// Per copy, the picks that order its delivery (see `delivery_order`).
-    picks: Vec<Vec<Index>>,
+struct Sent<C> {
+    change: C,
+    arrival: Vec<u32>,
 }
 
-/// Turns picks into a delivery order of `n` changes. Each pick takes one of
-/// the changes not yet delivered; changes left when the picks run out follow
-/// in generated order. A pick shrinks towards the first remaining change, so
-/// orders shrink towards generated order.
-fn delivery_order(n: usize, picks: &[Index]) -> Vec<usize> {
-    let mut remaining: Vec<usize> = (0..n).collect();
-    let mut order = Vec::with_capacity(n);
-    for pick in picks {
-        if remaining.is_empty() {
-            break;
-        }
-        order.push(remaining.remove(pick.index(remaining.len())));
-    }
-    order.extend(remaining);
-    order
+/// Per copy, the order in which it receives `sent`, as indexes into it.
+fn orders_of<C>(sent: &[Sent<C>], copies: usize) -> Vec<Vec<usize>> {
+    (0..copies)
+        .map(|copy| {
+            let mut order: Vec<usize> = (0..sent.len()).collect();
+            order.sort_by_key(|&i| (sent[i].arrival[copy], i));
+            order
+        })
+        .collect()
 }
 
-/// Delivers `changes` to each copy in its order and returns the end states.
-fn deliver<S: Mergeable>(changes: &[S::Change], orders: &[Vec<usize>]) -> Vec<S> {
+/// Delivers `sent` to each copy in its order and returns the end states.
+fn deliver<S: Mergeable>(sent: &[Sent<S::Change>], orders: &[Vec<usize>]) -> Vec<S> {
     orders
         .iter()
         .map(|order| {
             let mut state = S::default();
             for &i in order {
-                state.apply(&changes[i]);
+                state.apply(&sent[i].change);
             }
             state
         })
-        .collect()
-}
-
-fn orders_of<C>(case: &Case<C>) -> Vec<Vec<usize>> {
-    case.picks
-        .iter()
-        .map(|picks| delivery_order(case.changes.len(), picks))
         .collect()
 }
 
@@ -141,21 +136,29 @@ where
         config.copies >= 3,
         "the harness needs at least three copies"
     );
-    let max_changes = usize::from(config.members) * config.max_changes_per_member;
+    let copies = config.copies;
     let per_member: Vec<_> = (0..config.members)
-        .map(|member| vec(change(member), 0..=config.max_changes_per_member))
+        .map(|member| {
+            let sent = (change(member), vec(any::<u32>(), copies))
+                .prop_map(|(change, arrival)| Sent { change, arrival });
+            vec(sent, 0..=config.max_changes_per_member)
+        })
         .collect();
-    let changes = per_member.prop_map(|lists| lists.into_iter().flatten().collect::<Vec<_>>());
-    let picks = vec(vec(any_index(), 0..=max_changes), config.copies);
-    let cases = (changes, picks).prop_map(|(changes, picks)| Case { changes, picks });
+    let cases = per_member.prop_map(|lists| lists.into_iter().flatten().collect::<Vec<_>>());
 
-    let mut runner = TestRunner::new(RunnerConfig {
+    // The generator is seeded here, never from the OS, so a run is the same
+    // on every machine and target.
+    let mut seed = [0u8; 32];
+    seed[..8].copy_from_slice(&config.seed.to_le_bytes());
+    let rng = TestRng::from_seed(RngAlgorithm::ChaCha, &seed);
+    let runner_config = RunnerConfig {
         cases: config.cases,
         failure_persistence: None,
         ..RunnerConfig::default()
-    });
-    let result = runner.run(&cases, |case| {
-        let states = deliver::<S>(&case.changes, &orders_of(&case));
+    };
+    let mut runner = TestRunner::new_with_rng(runner_config, rng);
+    let result = runner.run(&cases, |sent| {
+        let states = deliver::<S>(&sent, &orders_of(&sent, copies));
         if states.iter().all(|state| *state == states[0]) {
             Ok(())
         } else {
@@ -164,20 +167,16 @@ where
     });
     match result {
         Ok(()) => Ok(()),
-        Err(TestError::Fail(_, case)) => {
-            let orders = orders_of(&case);
-            let states = deliver::<S>(&case.changes, &orders);
+        Err(TestError::Fail(_, sent)) => {
+            let orders = orders_of(&sent, copies);
+            let states = deliver::<S>(&sent, &orders);
             Err(Divergence {
-                seed: 0,
-                changes: case.changes.iter().map(|c| format!("{c:?}")).collect(),
+                seed: config.seed,
+                changes: sent.iter().map(|s| format!("{:?}", s.change)).collect(),
                 orders,
                 states: states.iter().map(|s| format!("{s:?}")).collect(),
             })
         }
         Err(TestError::Abort(reason)) => panic!("the convergence harness aborted: {reason}"),
     }
-}
-
-fn any_index() -> impl Strategy<Value = Index> {
-    proptest::arbitrary::any::<Index>()
 }
