@@ -77,7 +77,7 @@ Every change names its space in the header (key 1). The relay needs it to route 
 
 ### Author and author sequence
 
-The author member id (key 2) names the member that signed the change. It is RFC 0003's member id: a hash of the member's two public keys, the id the relay, the member list and the SDK show. The relay needs it to find the signing key, verify the signature and check that the member belongs to the space.
+The author member id (key 2) names the member that signed the change. It is RFC 0003's member id: the SHA-256 hash of the member's two public keys, in every suite, the id the relay, the member list and the SDK show. The relay needs it to find the signing key, verify the signature and check that the member belongs to the space.
 
 The author sequence (key 3) counts the author's changes in this space: 1 for its first change, then one higher for each next change. It lets a member see at once whether it has every change of an author up to some point. A gap means a change is still missing. The relay already sees how many changes each key writes, so the sequence reveals nothing new to it.
 
@@ -156,7 +156,7 @@ A change id is the hash of the frame's first two elements: the frame version, as
 change id = H("nocentraldb/change-id" || frame version || signed header bytes)
 ```
 
-H is SHA-256, with 32 bytes of output, as RFC 0003 names it. Change ids use SHA-256 whatever the change's suite, so that a client that does not know a newer suite can still identify the change; a different hash for change ids would need a new frame version. The signature is not part of the id, so the id does not depend on the signature scheme, and a scheme with randomised signatures would not change it.
+H is SHA-256, with 32 bytes of output, as RFC 0003 names it. Change ids use SHA-256 whatever the change's suite, so that a client that does not know a newer suite can still identify the change; a different hash for change ids would need a new frame version. The same holds for the author member id in header key 2: RFC 0003 keeps member ids on SHA-256 in every suite, so an old client can still attribute a change from a suite it does not know. The signature is not part of the id, so the id does not depend on the signature scheme, and a scheme with randomised signatures would not change it.
 
 **Why two members cannot collide.** Two different changes have different header bytes, because their author, sequence, payload ciphertext or space differs. Two equal ids then need a collision of the hash function, which a 32-byte cryptographic hash makes infeasible. The id is computed from the bytes, so every member and the relay compute the same id for the same change, without being told. A member that receives a change twice, from the relay and from a peer in island mode, recognises it as the same change.
 
