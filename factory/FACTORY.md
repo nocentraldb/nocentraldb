@@ -2,7 +2,7 @@
 
 This file says how work moves from the owner's intent to merged code, with agents doing the work in between. It holds nothing about the product: that is `factory/GENESIS.md`. Every value that differs between repositories (the owner, the tracker, the number of agents, the gate command) lives in `factory/CONFIG.md`.
 
-To use the factory in another repository, copy `FACTORY.md` unchanged, fill in `CONFIG.md`, and write that repository's `GENESIS.md`. Every agent reads all three before it starts; where they disagree, GENESIS.md wins on what to build, CONFIG.md on the values, and this file on the process.
+To use the factory in another repository, copy `FACTORY.md` and `roles/` unchanged, fill in `CONFIG.md`, and write that repository's `GENESIS.md`. `roles/pm.md` and `roles/coder.md` are the working instructions for the two kinds of agent sessions. Every agent reads all three before it starts; where they disagree, GENESIS.md wins on what to build, CONFIG.md on the values, and this file on the process.
 
 ## The four parts
 
@@ -113,20 +113,20 @@ pm posts one note a day as a status update on the initiative in CONFIG.md, which
 
 The factory runs in Claude Code cloud sessions, in the environment named in CONFIG.md. Nothing in a session survives it: state lives in the tracker, the repository and the decision log.
 
-| Part          | How it runs                                                                                                                                                     |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pm            | One long-lived cloud session. A scheduled task wakes it at a fixed interval to look at the tracker and the running agents, and once a day for the note.         |
-| Coding agents | One cloud session per ticket, started by pm, each in its own container on its own branch. pm sends it the ticket id and nothing else; the agent reads the rest. |
-| PR follow-up  | Each coding session subscribes to its PR, so CI results and review comments wake it.                                                                            |
-| Messages      | pm and the coding sessions talk through session messages. The owner talks only to pm.                                                                           |
-| Expedite lane | pm starts one more session for an urgent ticket and archives it once the ticket is merged.                                                                      |
+| Part          | How it runs                                                                                                                                                                                                          |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pm            | One long-lived cloud session. A scheduled task wakes it at a fixed interval to look at the tracker and the running agents, and once a day for the note.                                                              |
+| Coding agents | One cloud session per ticket, started by pm, each in its own container on its own branch. pm sends it the ticket id, its own session id and the pointer to `roles/coder.md`, nothing else; the agent reads the rest. |
+| PR follow-up  | Each coding session subscribes to its PR, so CI results and review comments wake it.                                                                                                                                 |
+| Messages      | pm and the coding sessions talk through session messages. The owner talks only to pm.                                                                                                                                |
+| Expedite lane | pm starts one more session for an urgent ticket and archives it once the ticket is merged.                                                                                                                           |
 
 To set up the factory in a new repository:
 
-- [ ] Copy `FACTORY.md` into `factory/`.
+- [ ] Copy `FACTORY.md` and `roles/` into `factory/`.
 - [ ] Write `factory/CONFIG.md` and `factory/GENESIS.md`.
 - [ ] Create an empty `factory/DECISIONS.md`.
 - [ ] Point `AGENTS.md` (or `CLAUDE.md`) at the three files, to be read before any work.
-- [ ] Connect the tracker, create the initiative and the owner label.
+- [ ] Connect the tracker to the cloud sessions.
 - [ ] Set up the cloud environment and test its setup script in a fresh session.
-- [ ] Start pm and create its scheduled tasks.
+- [ ] Start a cloud session with the message "Read factory/roles/pm.md and act as pm." Its first run creates the initiative, the label and its scheduled tasks.
