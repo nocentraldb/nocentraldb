@@ -2,11 +2,18 @@
 // code and message for every rule it enforces.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, matchesGlob } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 const script = join(dirname(fileURLToPath(import.meta.url)), "check-pins.mjs");
 const fixtures = [];
@@ -612,3 +619,29 @@ for (const [name, files, message] of [
     assert.match(stderr, message);
   });
 }
+
+// moon caches repo:pins by its inputs: a Cargo.toml missing from them would
+// let a loose requirement through on a cached run.
+test("the moon task repo:pins lists every Cargo.toml as an input", () => {
+  const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const moon = parseYaml(readFileSync(join(root, "moon.yml"), "utf8"));
+  const inputs = moon.tasks.pins.inputs.map((input) =>
+    input.replace(/^\//, ""),
+  );
+  const tracked = spawnSync("git", ["ls-files", "Cargo.toml", "*/Cargo.toml"], {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .stdout.split("\n")
+    .filter(Boolean);
+  assert.ok(tracked.includes("Cargo.toml"));
+  // Every manifest the check reads, today's and one in a new place.
+  for (const file of [...tracked, "apps/desktop/src-tauri/Cargo.toml"]) {
+    assert.ok(
+      inputs.some((input) => matchesGlob(file, input)),
+      `${file} is not an input of repo:pins`,
+    );
+  }
+  // The TOML parser comes from the lockfile.
+  assert.ok(inputs.includes("pnpm-lock.yaml"));
+});
