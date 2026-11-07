@@ -79,3 +79,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · NOC-8 · RFC 0004 needs five properties from RFC 0002's clock, not a specific clock
+
+- Decided by: coding agent (NOC-8)
+- Why: RFC 0002 runs in parallel; RFC 0004 lists what it needs (unique change ids, a total stamp order computed from the change alone, causality, wall-clock component wanted, one canonical encoding per value) so the two RFCs can be reconciled before merge.
+- Instead of: assuming a hybrid logical clock and its encoding in RFC 0004.
+
+### 2026-11-07 · NOC-8 · "Late" in principle 3 becomes "lost to a change its author had not seen"
+
+- Decided by: coding agent (NOC-8), flagged to pm and the owner in RFC 0004
+- Why: arrival time differs per member, so recording it in the converged state breaks principle 2, which ranks higher.
+- Instead of: storing an "arrived late" mark in the field state.
