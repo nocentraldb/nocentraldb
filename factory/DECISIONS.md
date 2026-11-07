@@ -97,3 +97,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
+### 2026-11-07 · NOC-8 · RFC 0004 needs five properties from RFC 0002's clock, not a specific clock
+
+- Decided by: coding agent (NOC-8)
+- Why: RFC 0002 runs in parallel; RFC 0004 lists what it needs (unique change ids, a total stamp order computed from the change alone, causality, wall-clock component wanted, one canonical encoding per value) so the two RFCs can be reconciled before merge.
+- Instead of: assuming a hybrid logical clock and its encoding in RFC 0004.
+
+### 2026-11-07 · NOC-8 · "Late" in principle 3 becomes "lost to a change its author had not seen"
+
+- Decided by: coding agent (NOC-8), flagged to pm and the owner in RFC 0004
+- Why: arrival time differs per member, so recording it in the converged state breaks principle 2, which ranks higher.
+- Instead of: storing an "arrived late" mark in the field state.
+
+### 2026-11-07 · NOC-8 · RFC 0004 names RFC 0002's clock as its stamp
+
+- Decided by: coding agent (NOC-8), after RFC 0002 (PR #28) met O1 to O5
+- Why: RFC 0002 fixed the stamp as a 64-bit hybrid logical clock and carries the author member id in the header; RFC 0004 now names both and keeps O1 to O5 as its reasoning. Updates the entry "RFC 0004 needs five properties from RFC 0002's clock, not a specific clock".
+- Instead of: keeping the stamp abstract after RFC 0002 had fixed it.
