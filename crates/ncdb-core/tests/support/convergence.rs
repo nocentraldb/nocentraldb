@@ -32,6 +32,8 @@ pub struct Config {
     pub copies: usize,
     /// Most changes one member makes in one case.
     pub max_changes_per_member: usize,
+    /// Most extra times one copy receives the same change.
+    pub max_duplicates: usize,
     /// Number of generated cases.
     pub cases: u32,
     /// Seeds the generator: the same seed generates the same cases.
@@ -44,6 +46,7 @@ impl Default for Config {
             members: 3,
             copies: 3,
             max_changes_per_member: 4,
+            max_duplicates: 2,
             cases: 256,
             seed: 0,
         }
@@ -59,7 +62,8 @@ pub struct Divergence {
     /// The changes the members made, in the order they were generated.
     pub changes: Vec<String>,
     /// Per copy, the order in which it received the changes, as indexes
-    /// into `changes`.
+    /// into `changes`; an index appears once per delivery, so a duplicate
+    /// appears more than once.
     pub orders: Vec<Vec<usize>>,
     /// Per copy, the state it ended in.
     pub states: Vec<String>,
@@ -87,23 +91,29 @@ impl core::fmt::Display for Divergence {
     }
 }
 
-/// One generated change and when it arrives: per copy, its arrival key.
-/// A copy receives the changes in the order of their keys, ties in generated
-/// order. Keys travel with their change, so shrinking a change away keeps the
-/// relative order of the others, and keys shrink towards generated order.
+/// One generated change and when it arrives: per copy, one arrival key per
+/// delivery, so at least one and more for duplicates. A copy receives the
+/// deliveries in the order of their keys, ties in generated order. Keys
+/// travel with their change, so shrinking a change away keeps the relative
+/// order of the others; keys shrink towards generated order and duplicates
+/// shrink away.
 #[derive(Clone, Debug)]
 struct Sent<C> {
     change: C,
-    arrival: Vec<u32>,
+    arrivals: Vec<Vec<u32>>,
 }
 
 /// Per copy, the order in which it receives `sent`, as indexes into it.
 fn orders_of<C>(sent: &[Sent<C>], copies: usize) -> Vec<Vec<usize>> {
     (0..copies)
         .map(|copy| {
-            let mut order: Vec<usize> = (0..sent.len()).collect();
-            order.sort_by_key(|&i| (sent[i].arrival[copy], i));
-            order
+            let mut deliveries: Vec<(u32, usize)> = sent
+                .iter()
+                .enumerate()
+                .flat_map(|(i, s)| s.arrivals[copy].iter().map(move |&key| (key, i)))
+                .collect();
+            deliveries.sort();
+            deliveries.into_iter().map(|(_, i)| i).collect()
         })
         .collect()
 }
@@ -139,8 +149,9 @@ where
     let copies = config.copies;
     let per_member: Vec<_> = (0..config.members)
         .map(|member| {
-            let sent = (change(member), vec(any::<u32>(), copies))
-                .prop_map(|(change, arrival)| Sent { change, arrival });
+            let arrivals = vec(vec(any::<u32>(), 1..=1 + config.max_duplicates), copies);
+            let sent =
+                (change(member), arrivals).prop_map(|(change, arrivals)| Sent { change, arrivals });
             vec(sent, 0..=config.max_changes_per_member)
         })
         .collect();
