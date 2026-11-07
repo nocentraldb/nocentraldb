@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-6
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md, RFC 0001 and RFC 0003](#conflicts-with-genesismd-rfc-0001-and-rfc-0003).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
 **Status.** A draft for the owner's decision. The wire and on-disk formats are reserved for the owner, so nothing here is final until the owner approves this RFC. The open decisions are listed in [Decisions for the owner](#decisions-for-the-owner), each with options and a recommendation. Until then, the design below describes the recommended option of each decision.
 
@@ -100,7 +100,7 @@ Other values are reserved. A member that meets an unknown kind keeps the change 
 
 The payload (header key 6) is the AEAD ciphertext of the canonical encoding of the payload map. RFC 0003 chooses the AEAD and its nonce. This RFC requires two things of it:
 
-- **It binds the payload to its header.** RFC 0003's associated data covers the space id, the generation, the suite id and the author member id. This RFC asks that it also covers the author sequence, the kind and the header format, that is every header field except the payload itself, so that a payload cannot be moved to another sequence number or kind either (see [Conflicts](#conflicts-with-genesismd-rfc-0001-and-rfc-0003), point 4).
+- **It binds the payload to its header.** RFC 0003's associated data is every header field except the payload itself: space id, author member id, author sequence, key generation, kind, header format and suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it.
 - **It is signed as ciphertext.** The order is encrypt-then-sign, as RFC 0003 defines it: the signature covers the header, ciphertext included, so the relay can verify a change without any key, and the signature stays valid after a person key is destroyed.
 
 Inside the payload, the ordering metadata comes first (see [Ordering metadata](#ordering-metadata)), then the operations.
@@ -156,7 +156,7 @@ A change id is the hash of the frame's first two elements: the frame version, as
 change id = H("nocentraldb/change-id" || frame version || signed header bytes)
 ```
 
-H is the hash function RFC 0003 picks; this RFC assumes 32 bytes of output. The signature is not part of the id, so the id does not depend on the signature scheme, and a scheme with randomised signatures would not change it.
+H is SHA-256, with 32 bytes of output, as RFC 0003 names it. Change ids use SHA-256 whatever the change's suite, so that a client that does not know a newer suite can still identify the change; a different hash for change ids would need a new frame version. The signature is not part of the id, so the id does not depend on the signature scheme, and a scheme with randomised signatures would not change it.
 
 **Why two members cannot collide.** Two different changes have different header bytes, because their author, sequence, payload ciphertext or space differs. Two equal ids then need a collision of the hash function, which a 32-byte cryptographic hash makes infeasible. The id is computed from the bytes, so every member and the relay compute the same id for the same change, without being told. A member that receives a change twice, from the relay and from a peer in island mode, recognises it as the same change.
 
@@ -429,15 +429,14 @@ Recommendation: A. It hides the exact length of short values, such as "yes" agai
 
 Recommendation: A. It is what GENESIS.md asks: old clients keep data they do not understand yet. It needs the clarification in the next section.
 
-## Conflicts with GENESIS.md, RFC 0001 and RFC 0003
+## Conflicts with GENESIS.md and RFC 0001
 
 This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. Each needs the owner's ruling, or a change to the other document.
 
 1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner should confirm this reading, or choose D9 B.
 2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section.
 3. **Concurrent creates of one object id.** RFC 0001 says every object belongs to exactly one space. A member can deliberately create two objects with the same id in one space (see [Object ids](#object-ids)). It cannot cross spaces, so it does not break that sentence, but RFC 0004 has to define what two creates of one id mean.
-4. **The associated data of the payload (RFC 0003).** RFC 0003 binds the payload to the space id, the generation, the suite id and the author member id. This RFC asks that the associated data cover every header field except the payload, which adds the author sequence, the kind and the header format. The signature already covers those fields, so the gap is small: it matters only if a member re-signs another member's payload under a different sequence number or kind. Binding the whole header costs nothing and leaves no such case to think about.
-5. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
+4. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
 
 ## Summary of the choices
 
