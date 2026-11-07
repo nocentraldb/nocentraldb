@@ -9,15 +9,23 @@
 //   package.json, and in overrides, catalog and catalogs of
 //   pnpm-workspace.yaml, since a range there bypasses the rule above;
 // - a catalog: reference in a dependency field must name an entry of the
-//   catalog it points at (that entry is checked exact).
-// Node built-ins only, so it runs before `pnpm install`. pnpm-workspace.yaml
-// is therefore read by a narrow parser: the three sections above must be
+//   catalog it points at (that entry is checked exact);
+// - every registry dependency of every Cargo.toml in the repository (outside
+//   target/ and node_modules/), in [dependencies], [dev-dependencies],
+//   [build-dependencies], their target.<cfg> forms and
+//   [workspace.dependencies], must be an exact `=x.y.z` requirement.
+//   `name.workspace = true` passes: the workspace entry it inherits is
+//   checked where it is declared.
+// Cargo.toml is read with the pinned smol-toml devDependency, so the Cargo
+// part needs `pnpm install` (`pnpm gates` runs after it). The npm part uses
+// Node built-ins only. pnpm-workspace.yaml is read by a narrow parser: the three sections above must be
 // block mappings of plain or quoted scalars; anything else in them (flow
 // collections, anchors, aliases, tags, block scalars, escapes, continuation
 // lines) fails as unparseable instead of being skipped. Paths are relative
 // to the working directory, the repository root (scripts/check-pins.test.mjs
 // runs it in fixture trees).
 import { globSync, readFileSync, statSync } from "node:fs";
+import { parse as parseToml } from "smol-toml";
 
 const fail = (message) => {
   console.error(`check-pins: ${message}`);
@@ -247,6 +255,66 @@ for (const file of [
       } else if (!EXACT.test(spec) && !WORKSPACE.test(spec)) {
         fail(`${file} ${field}.${dep} = "${spec}" is not exact`);
       }
+    }
+  }
+}
+
+// --- Cargo.toml: every registry dependency pinned to =x.y.z ---
+
+const CARGO_EXACT = /^=\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+const CARGO_TABLES = [
+  "dependencies",
+  "dev-dependencies",
+  "build-dependencies",
+  "dev_dependencies",
+  "build_dependencies",
+];
+
+const readToml = (file) => {
+  const text = read(file);
+  if (text === null) return null;
+  try {
+    return parseToml(text);
+  } catch (error) {
+    fail(`${file} is not valid TOML: ${error.message.split("\n")[0]}`);
+    return null;
+  }
+};
+
+const checkCargoTable = (file, where, table) => {
+  for (const [dep, spec] of Object.entries(table ?? {})) {
+    const entry = `${file} ${where}.${dep}`;
+    if (typeof spec === "string") {
+      if (!CARGO_EXACT.test(spec)) {
+        fail(`${entry} = "${spec}" is not exact (use "=x.y.z")`);
+      }
+    } else if (spec?.workspace === true) {
+      // Inherited from [workspace.dependencies], which is checked itself.
+    } else if (typeof spec?.version !== "string") {
+      fail(`${entry} has no version (use version = "=x.y.z")`);
+    } else if (!CARGO_EXACT.test(spec.version)) {
+      fail(`${entry} = "${spec.version}" is not exact (use "=x.y.z")`);
+    }
+  }
+};
+
+const cargoFiles = globSync("**/Cargo.toml", {
+  exclude: (path) => /(^|\/)(target|node_modules|\.git)$/.test(path),
+}).sort();
+for (const file of cargoFiles) {
+  const manifest = readToml(file);
+  if (!manifest) continue;
+  checkCargoTable(
+    file,
+    "workspace.dependencies",
+    manifest.workspace?.dependencies,
+  );
+  for (const name of CARGO_TABLES) {
+    checkCargoTable(file, name, manifest[name]);
+  }
+  for (const [cfg, target] of Object.entries(manifest.target ?? {})) {
+    for (const name of CARGO_TABLES) {
+      checkCargoTable(file, `target.${cfg}.${name}`, target?.[name]);
     }
   }
 }
