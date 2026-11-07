@@ -34,7 +34,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - **Read value.** What a field type says an app reads for a field, given its merge state (RFC 0004: for a basic value, the winning write).
 - **Merge state.** What a field type keeps to compute the read value and stay convergent (RFC 0004: for a basic value, the live writes and the replaced ids).
 - **Control change.** A change of kind 1 in RFC 0002, with a body RFC 0003 defines: a membership entry, a key envelope, a key chain entry, a shred entry or an acknowledgement. It carries no content.
-- **Rejected.** A change kept in the log but not folded because it failed a check (signature, membership at its key generation, decryption). The log state is added to RFC 0002 by NOC-22. A rejected change **waits** when a control change it lacks could still make it pass.
+- **Rejected.** A change kept in the log but not folded because it failed a check: its signature, its author's membership at its key generation, or its decryption. The log state and its reasons are defined in RFC 0002, Amendment 1 (NOC-22, PR #38), decision D11. A rejected change **waits** for a control change of its space that may let it pass.
 - **Declared index.** An index declared in `model.lock.json`. RFC 0005 defines the declaration. This RFC needs only three things from it: the collection, the ordered list of fields with a direction each, and which leading fields a query must fix with equality.
 - **Cursor.** In this RFC, a **page cursor**: the position after the last row of a page in a declared index. Not to be confused with the relay cursor of RFC 0002, which this RFC calls the **relay position**.
 - **Target.** A platform the core runs on: native desktop (macOS, Linux, Windows), native mobile (iOS, Android), or a browser (Chromium-based, Firefox, Safari).
@@ -67,21 +67,23 @@ The fold turns a frame in the log into rows of the view. A member folds every ch
 
 ### One change
 
-For each change, in one SQLite transaction:
+Every change goes through the seven steps of RFC 0002, Amendment 1 (NOC-22, PR #38), "What a member does with a change it receives", in that order and in one SQLite transaction. That section defines the steps and the state each one leaves a change in; this RFC says what the view does at each:
 
-1. **Append.** Insert the frame into `log` ([RFC 0002](0002-change-and-log-format.md#the-log-on-disk)). If the change id is already there, stop: a duplicate changes nothing.
-2. **Check.** Verify the signature, and that the author is a member of the space at the change's key generation, as RFC 0003 defines, against the control state this member holds now ([Control changes and changes that wait for them](#control-changes-and-changes-that-wait-for-them)). A change that fails is kept, not folded, in the log state for rejected changes that NOC-22 adds to RFC 0002, with its reason. If the reason is one a later control change can cure, the change **waits**, and is checked again when that control change arrives.
-3. **Decrypt.** Decrypt the payload with the space key of the change's key generation, in memory. If this member holds no key envelope for that generation yet, the change is rejected as in step 2 and waits for the envelope. If the suite or format is unknown, mark the change **parked** with its reason ([RFC 0002](0002-change-and-log-format.md#versioning-old-clients-keep-what-they-do-not-understand)) and stop here. A control change is not decrypted: its body is readable (RFC 0002, kind 1) and it folds as the next section says.
-4. **Apply.** For each operation, in the order of the change:
-   1. Look up the collection and field in the member's `model.lock.json`. If either is unknown, store the operation as parked and go on with the next (RFC 0002: the rest of the change is folded).
+1. **Decode and append** (Amendment step 1). A frame that is not well-formed or not canonical is not appended. Otherwise insert the frame into `log` ([RFC 0002](0002-change-and-log-format.md#the-log-on-disk)). If the change id is already there, stop: a duplicate changes nothing.
+2. **Check and decrypt** (Amendment steps 2 to 6). Understand the header, verify the signature, check that the author is a member at the change's key generation, decrypt the payload in memory, understand the payload. The checks use the control state this member holds now ([Control changes and changes that wait for them](#control-changes-and-changes-that-wait-for-them)). A change that stops here changes nothing in the view:
+   - An unknown suite, kind, header format or payload format leaves it **parked**, as before.
+   - An unknown author, a bad signature, an author who is not a member, a missing key envelope ("no key") or a payload that does not decrypt leaves it **rejected**, with that reason (D11). A missing key envelope is "rejected, no key", not parked.
+   - A control change stops after the membership check: it has no payload to decrypt, and it folds as the next section says.
+3. **Fold, operation by operation** (Amendment step 7, D10). For each operation, in the order of the change:
+   1. Look up the collection and field in the member's `model.lock.json`. If either is unknown, or the operation carries an unknown "must understand" key, park that operation alone and go on with the next.
    2. Load the field's merge state from `fs_<collection>` (empty for a new object).
    3. Call the field type's apply function with the state and the operation; it returns the new state (RFC 0004, "The plugin contract").
    4. Write the new state back, and write the field type's read value into the field's column of `c_<collection>`.
-5. **Derive.** Update computed fields and views that depend on the rows this change touched. This is the plug-in point for the later RFC on computed fields and views; until it exists, the step is empty. It runs inside the same transaction, so a reader never sees a row without its computed fields.
-6. **Mark** the log entry as folded and commit.
-7. **Notify.** After the commit, hand the set of touched `(collection, space id, object id)` to the subscriptions, which re-run the queries that read those rows. Notifications carry ids, never values.
+4. **Derive.** Update computed fields and views that depend on the rows this change touched. This is the plug-in point for the later RFC on computed fields and views; until it exists, the step is empty. It runs inside the same transaction, so a reader never sees a row without its computed fields.
+5. **Mark** the log entry as folded and commit.
+6. **Notify.** After the commit, hand the set of touched `(collection, space id, object id)` to the subscriptions, which re-run the queries that read those rows. Notifications carry ids, never values.
 
-The plaintext from step 3 exists only in memory and in the columns and state written in step 4. It is never written to a log, an error or telemetry (RFC 0003, "Keys never reach logs, errors or telemetry").
+The plaintext from step 2 exists only in memory and in the columns and state written in step 3. It is never written to a log, an error or telemetry (RFC 0003, "Keys never reach logs, errors or telemetry").
 
 Because appending and folding are one transaction, the log and the view agree after a crash: a change is in both or in neither (RFC 0002).
 
@@ -91,7 +93,7 @@ Some changes carry no content: the control changes of RFC 0002 (kind 1), whose b
 
 **The control state.** The view keeps a `control` table set per space: the membership entries, the key chain entries, which key generations this member holds an envelope for, and the shred entries and their acknowledgements. Key material itself is never in the database; the SDK keeps it in the platform keystore (RFC 0003, "How the SDK hides keys"). Like every field's merge state, the control state is a function of the set of control changes the member holds, as RFC 0003 defines membership; it does not depend on their order.
 
-**How each control change folds,** in the same transaction as any change (steps 1, 2, 6 and 7 above; steps 3 to 5 are replaced by this):
+**How each control change folds,** in the same transaction as any change (steps 1, 2, 5 and 6 above; steps 3 and 4 are replaced by this):
 
 | Control change          | What the fold does                                                                                                                                                                              |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -101,21 +103,23 @@ Some changes carry no content: the control changes of RFC 0002 (kind 1), whose b
 | Shred entry             | Records the person key as shredded. The fold erases that person's personal fields from the view in every object of the space, deletes the member's copy of the key, and writes an acknowledgement (RFC 0003, "Shredding a person's key"). |
 | Acknowledgement         | Records which member confirmed which shred, for the audit.                                                                                                                                       |
 
-**Re-checking.** After a control change is folded, every rejected change in the same space that waits for it is checked again, in the same transaction: a change from an author whose membership at the change's generation was not yet known, and a change for a key generation whose envelope had not arrived. A change that now passes is decrypted and folded (steps 3 to 6), and its log state becomes folded. A change that still fails keeps waiting. A change whose failure no control change can cure (a bad signature, bytes that are not canonical) is rejected for good and never checked again.
+**Re-checking.** Whenever the member appends a control change of a space, it checks the rejected changes of that space again from Amendment step 3, in the same transaction, as D11 defines. A change that now passes is decrypted and folded (steps 2 to 5 above) as if it had just arrived. A change that still fails stays rejected. The core may skip changes that can never pass, such as a bad signature or a payload that does not decrypt under a key the member holds.
 
-**Un-folding.** A control change can also show that a change already folded should not have been: for example a membership entry, received late, that ends the author's membership before the change's generation. The fold then marks that change rejected and refolds every field it touched from the operations of the changes that are still folded. A field's state is a function of its set of operations (RFC 0004), so removing one operation and refolding gives the state that copy would have had if the change had never been folded. A bookkeeping table from object and field to the operations that touched them, rebuildable from the log, makes this a lookup instead of a scan. What happens when the relay refuses a change the member has already folded is NOC-22's to define in RFC 0002; the fold handles it the same way.
+**Un-folding.** Whether a later control change can make a check fail that a change has already passed, for example a removal the membership rules date back, is for the membership RFC (RFC 0008, NOC-23) to say. If it can, the change moves from folded to rejected in the transaction that appends the control change, and the fold refolds every field the change touched from the operations of the changes still folded. A field's state is a function of its set of operations (RFC 0004), so the view then equals the view of a member that never folded the change. A bookkeeping table from object and field to the operations that touched them, rebuildable from the log, makes this a lookup instead of a scan.
+
+**A change the relay refuses after the member folded it.** It stays folded, as D12 defines. The member records the relay's refusal on the log entry, and the SDK reports it to the app. The view changes only if the member's own check, run again with the control changes it holds, now rejects the change; then it is un-folded as above.
 
 **Why the end state depends only on the set.** A change is folded exactly when it passes its checks against the control state computed from all control changes the member holds. Re-checking and un-folding keep that true after every control change, whatever the order of arrival. Two members that hold the same set of changes therefore hold the same control state, fold the same set of changes, and, by RFC 0004, reach the same view (principle 2). The convergence harness (NOC-9) checks this with control changes in the generated sets, delivered in any order.
 
 ### Many changes
 
-When the relay or a peer hands over a page of changes, the core folds the page in one transaction, which is much faster in SQLite than one transaction per change. The page is atomic as a whole: after a crash, either all of it or none of it is in the log and the view, and the relay position in `meta` moves with it. A change that cannot be folded (step 2 or 3) does not fail the page; it is kept as rejected or parked, as above.
+When the relay or a peer hands over a page of changes, the core folds the page in one transaction, which is much faster in SQLite than one transaction per change. The page is atomic as a whole: after a crash, either all of it or none of it is in the log and the view, and the relay position in `meta` moves with it. A change that stops at step 2 does not fail the page; it is kept as rejected or parked, as above.
 
 A large first sync is cut into pages of a bounded number of changes, so that readers are never blocked for long ([One writer, many readers](#one-writer-many-readers)).
 
 ### Why the order of arrival does not matter
 
-The fold applies changes in the order they arrive, which differs between members. That is safe because every field type's state is a function of the set of operations it has received (RFC 0004), and step 5 computes derived values from the folded rows, not from the order in which they were folded. The convergence harness (NOC-9) checks this for the fold as a whole: folding a set of changes in any order, with duplicates, gives byte-identical `c_*` and `fs_*` tables, and the same result as a [rebuild](#rebuilding-the-view) from the log.
+The fold applies changes in the order they arrive, which differs between members. That is safe because every field type's state is a function of the set of operations it has received (RFC 0004), and step 4 computes derived values from the folded rows, not from the order in which they were folded. The convergence harness (NOC-9) checks this for the fold as a whole: folding a set of changes in any order, with duplicates, gives byte-identical `c_*` and `fs_*` tables, and the same result as a [rebuild](#rebuilding-the-view) from the log.
 
 ### The member's own writes
 
