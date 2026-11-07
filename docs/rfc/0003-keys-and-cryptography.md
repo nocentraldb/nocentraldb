@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to RFC 0002, and this RFC refers to it without defining it. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
+**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to RFC 0002 (NOC-6, not yet written), and this RFC refers to it without defining it. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
 
@@ -101,7 +101,7 @@ Notes on each choice:
 
 Every ciphertext names exactly one key: the space, the generation, or the person key by id. A member never tries several keys on one ciphertext. ChaCha20-Poly1305 does not commit to its key, so a malicious member could build a ciphertext that decrypts under two different keys; because the key is named and covered by the signature, every member uses the same key and reads the same plaintext.
 
-Each space records a **suite id** that names this set of primitives. RFC 0002 reserves room for it in the change format. A future suite, for example a post-quantum one, is then a new suite id for new spaces or new generations, not a format break.
+Each space records a **suite id** that names this set of primitives. RFC 0002 must reserve room for it in the change format. A future suite, for example a post-quantum one, is then a new suite id for new spaces or new generations, not a format break.
 
 **Rejected options:**
 
@@ -116,7 +116,7 @@ Each space records a **suite id** that names this set of primitives. RFC 0002 re
 
 ## How a member signs and encrypts a change
 
-RFC 0002 defines the bytes. This RFC defines the order and what each step covers:
+RFC 0002 defines the bytes; it must carry the suite id, the space key generation, the author's member id and, for each personal field, the person-key id. This RFC defines the order and what each step covers:
 
 1. **Personal fields first.** For each personal field, the SDK encrypts the value with the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field id and the person-key id, so a ciphertext cannot be moved to another field or another person.
 2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data binds the space id, the generation, the suite id and the author's member id.
