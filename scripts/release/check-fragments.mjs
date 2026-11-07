@@ -42,6 +42,7 @@ export const ALLOWLIST = [
   "AGENTS.md",
   "CONTRIBUTING.md",
   "NEXUS_MEMORY.md",
+  "factory/**",
   "LICENSE-*",
   ".github/**",
   "scripts/**",
