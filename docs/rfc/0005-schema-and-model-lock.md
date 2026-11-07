@@ -4,17 +4,17 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-11
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
-It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on three RFCs written in parallel: RFC 0002 (the change and the log format, NOC-6), RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
+It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). RFC 0006 (the local view, NOC-12) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
 **Status.** A draft for the owner's decision. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees, so nothing here is final until the owner approves this RFC. Every name this RFC introduces is listed in [Public names](#public-names). The open decisions are listed in [Decisions for the owner](#decisions-for-the-owner); the design below describes the recommended option of each.
 
 ## What this RFC does not cover
 
-- **Computed fields, views and indexes.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does.
+- **Computed fields and views.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does. Indexes are declared here (see [Indexes](#indexes)); how a query uses them is RFC 0006's.
 - **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types, and so their entries in `model.lock.json`, belong to later RFCs.
 - **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and loaded belongs to the plugin RFC, under the contract of RFC 0004.
 - **The crypto of personal fields.** This RFC says how the schema marks a field as personal and ties it to a person. RFC 0003 encrypts it.
-- **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). A migration path for such changes is a later RFC, if we ever need one.
+- **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). That includes moving a field to a new rule version of its type, which RFC 0004 allows only with a migration. Migrations are a later RFC (decision D12).
 - **Code.** Nothing in `crates/` or `packages/` changes. `ncdb` and the SDK are implemented later.
 
 ## Terms
@@ -58,6 +58,10 @@ export const model = nc.model({
     {
       computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
       views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
+      indexes: {
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        byPriorityDesc: nc.index([{ field: "priority", direction: "desc" }]),
+      },
     },
   ),
 });
@@ -67,7 +71,7 @@ export type Task = nc.Infer<typeof model.tasks>;
 
 ### Collections
 
-`nc.model({ ... })` takes the collections, keyed by name. `nc.collection(fields, options)` takes the fields, keyed by name, and an optional second argument with the places for computed fields (`computed`) and views (`views`).
+`nc.model({ ... })` takes the collections, keyed by name. `nc.collection(fields, options)` takes the fields, keyed by name, and an optional second argument with the places for computed fields (`computed`), views (`views`) and indexes (`indexes`).
 
 The schema says nothing about spaces. Any object of any collection can live in any space. Which space an object goes into is decided when the app creates it, not in the model, because the same model serves many spaces (one per project, one per shared document).
 
@@ -77,7 +81,7 @@ Collection and field names are the names that changes carry forever: RFC 0002 na
 
 - A name matches `^[a-z][A-Za-z0-9]{0,62}$`: it starts with a lower-case letter and has at most 63 characters, ASCII letters and digits only.
 - Two names in the same scope may not differ only in case (`title` and `Title`), because the local view is SQLite, whose column names ignore case.
-- A collection's fields, computed fields and views share one scope: a computed field cannot have the name of a stored field.
+- A collection's fields, computed fields, views and indexes share one scope: a computed field cannot have the name of a stored field.
 - Names that start with `_` or `$` are reserved for the core, which the pattern above already excludes.
 
 The TypeScript key is the stored name. There is no alias in v1 (see decision D8).
@@ -129,7 +133,20 @@ A field can carry three modifiers, chained after the field function:
 
 ### Computed fields and views: named, not designed
 
-The second argument of `nc.collection` has two places, `computed` and `views`, as in RFC 0001. `nc.reach` and `nc.view` are the names RFC 0001 introduced for one computed function and for a view. This RFC records only the names of computed fields and views in the lock, so that they take a name in the collection's scope. Their arguments, their entries in the lock, and the indexes that principle 6 requires are left to the computed-fields RFC.
+The second argument of `nc.collection` has two places, `computed` and `views`, as in RFC 0001. `nc.reach` and `nc.view` are the names RFC 0001 introduced for one computed function and for a view. This RFC records only the names of computed fields and views in the lock, so that they take a name in the collection's scope. Their arguments and their entries in the lock are left to the computed-fields RFC.
+
+### Indexes
+
+GENESIS.md's principle 6 says queries run only through declared indexes. The schema declares them in the `indexes` place of `nc.collection`, by name:
+
+- `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
+- The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
+- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`) and single links (`nc.link`). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
+- A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
+
+Everything else about an index is RFC 0006's: every index ends with the space id and the object id so its order is total, how values compare (text by its UTF-8 bytes, unset first in ascending order), the one query shape, the check that every query uses its index, and keyset cursors.
+
+An index is local: it is built from the view on each device and never travels in a change. Adding, changing or removing an index therefore affects only the app that ships the lock, never another member (see [Accepted](#accepted)).
 
 ### Types for the app
 
@@ -147,7 +164,7 @@ ncdb model check            # in CI: fails if the lock is out of date or the cha
 
 ### An example
 
-This is the lock of the task board above, at model version 2. Version 1 had only `tasks` with `title`, `body`, `status`, `priority` and `dependsOn`, and the computed field and view. The rich-text body is left out of the example, because its entry belongs to the rich-text RFC.
+This is the lock of the task board above, at model version 2. Version 1 had only `tasks` with `title`, `body`, `status`, `priority` and `dependsOn`, the computed field, the view and the index `byStatusPriority`. The rich-text body is left out of the example, because its entry belongs to the rich-text RFC.
 
 ```json
 {
@@ -214,6 +231,21 @@ This is the lock of the task board above, at model version 2. Version 1 had only
           "type": "ncdb/string"
         }
       },
+      "indexes": {
+        "byPriorityDesc": {
+          "equal": 0,
+          "fields": [{ "direction": "desc", "field": "priority" }],
+          "since": 2
+        },
+        "byStatusPriority": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "priority" }
+          ],
+          "since": 1
+        }
+      },
       "since": 1,
       "views": {
         "ready": { "since": 1 }
@@ -222,7 +254,7 @@ This is the lock of the task board above, at model version 2. Version 1 had only
   },
   "format": 1,
   "model": {
-    "hash": "sha256:d7c28f2d375551a860107a8afe3c01083cd356c65474c1ec07492e16a6892584",
+    "hash": "sha256:48b51998184d9fb4be50498e8c7061ea5d77d6742869d2c81b7cc63c82d7e28e",
     "id": "6f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a",
     "version": 2
   },
@@ -245,7 +277,9 @@ At the top:
 | `plugins` | The plugins whose field types the model uses, by namespace (see [How a field type is referenced](#how-a-field-type-is-referenced)). |
 | `collections` | The collections, by name. |
 
-Per collection: `since` (the model version that added it), `fields`, `computed` and `views` (names only, each with its `since`), and `deprecated` when the collection is deprecated.
+Per collection: `since` (the model version that added it), `fields`, `computed` and `views` (names only, each with its `since`), `indexes`, and `deprecated` when the collection is deprecated.
+
+Per index: `fields`, an array in index order of `{ "field", "direction" }` with `direction` always written out as `"asc"` or `"desc"`; `equal`, the number of leading fields a query fixes, always written out; and `since`.
 
 Per field:
 
@@ -283,7 +317,7 @@ A field type is referenced by its **type id** and its **rule version**:
 
   A field then reads `{ "type": "acme/counter", "rule": 2, "since": 3 }`. The package version is not in the lock: the type id and the rule version are the contract (RFC 0004: a merge rule never changes under the same type id and rule version), and any package version that implements that rule will do.
 
-A client must run the exact rule version the lock names. Because the rule of an existing field never changes (see the next section), an app that loads its own lock always has the rule for every field in it.
+A client must run the exact rule version the lock names. Because the build refuses to move an existing field to another rule version (see the next section, and decision D12), an app that loads its own lock always has the rule for every field in it.
 
 ## The additive-change rule
 
@@ -299,6 +333,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Append an option to a choice, or to a set of choices | Old clients keep the new option as written and read it as an unknown option (RFC 0004). |
 | Add a collection to a link's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004) until they upgrade. |
 | Add a computed field or a view (name only, for now) | Computed values are derived locally; they are not in the changes. |
+| Add, change or remove an index | Indexes are built locally from the view (RFC 0006) and never travel in a change. A page cursor names its index and the model hash (RFC 0006), so a cursor from before the change is refused, not misread. |
 | Add, change or remove a description | Descriptions change no data. The model version stays. |
 | Deprecate a field or a collection | It stays in the lock and in the data. The SDK stops offering it to the app. |
 | Use a new plugin type for a new field | As adding a field. |
@@ -308,12 +343,14 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Change | Why it is refused |
 | --- | --- |
 | Remove or rename a collection or a field | Changes carry names. Data written under the old name would belong to nothing; an old client would keep writing the old name. Deprecate instead. |
-| Change a field's type, or its rule version | Two clients would merge the same changes by different rules and diverge (principle 2). |
+| Change a field's type | Two clients would merge the same changes by different rules and diverge (principle 2). |
+| Move a field to a new rule version of its type | RFC 0004 allows a new rule version only with a migration that every member runs before the schema uses it. Migrations are a later RFC; until it exists, the build refuses (decision D12). A new field can use the new rule version at once. |
 | Remove, rename or reorder an option of a choice | Stored values name options; order may become sort order in views. |
 | Remove a collection from a link's `targets` | Existing links would turn from **ok** to **wrong collection** on upgraded clients only. |
 | Mark an existing field as personal | The field's earlier values are already in the log in plain form, under the space key only. Destroying a person key would not erase them, and a reader would believe it did (principle 4). Add a new personal field instead. |
 | Unmark a personal field, or change its `person` | Old values stay sealed under person keys; new ones would not be. The field would be half erasable. |
 | Undeprecate a field | Old clients that stopped writing it would not write it again. Add a new field instead. (Decision D7.) |
+| An index on a field that cannot be indexed, on an unknown field, or with an `equal` larger than its number of fields | The core could not build it, or no query could use it. |
 | A collection or field name that breaks the naming rules, or collides in case with another name in its scope | The local view could not store it. |
 | A lock with another `model.id` or a lower `model.version` than the previous one | It is not a successor of the previous model. |
 
@@ -330,6 +367,7 @@ model.lock.json: model version 1 -> 2
   + tasks.assigneeNote ncdb/string, personal to tasks.assignee
   + tasks.estimate    ncdb/float
   + tasks.tags        ncdb/set of ncdb/string
+  + index tasks.byPriorityDesc (priority desc)
 additive: clients on model version 1 keep every change written under version 2.
 ```
 
@@ -360,19 +398,20 @@ Two branches that both raise the version conflict in `model.lock.json`, so git m
 Old clients exist: an agent on a laptop that has been closed for three weeks, a phone that has not updated its app. They receive changes written under a newer model. Principle 3 says they keep what they do not understand yet. This RFC adds no new mechanism for it; it relies on the format of RFC 0002 and the rules of RFC 0004, and says how they meet:
 
 1. **Changes write fields, never whole objects.** Every operation names one field of one object (RFC 0002). An old client that edits a task writes only the fields it knows; it cannot overwrite or drop a field it does not know, because it never writes the object as a whole. This is why the schema needs no "unknown fields" bucket.
-2. **An operation on an unknown collection or field is parked.** The old client stores the whole change in its log, forwards it, folds the operations it knows, and keeps the others parked (RFC 0002, "Versioning"). After an upgrade, the core folds the parked operations in stamp order, as if they had just arrived. Each field's state is a function of the set of its operations (RFC 0004), so the upgraded client reaches the same state as a client that had the new model all along.
+2. **An operation on an unknown collection or field is parked.** The old client stores the whole change in its log, forwards it, and parks what it cannot fold (RFC 0002, "Versioning"). Whether it parks only the unknown operations and folds the rest, or parks the whole change, is open in RFC 0002 itself: its "Versioning" section folds the rest of the change, while its "Operations" section says a change is atomic. That is ticket NOC-22, and this RFC does not decide it. Either way, after an upgrade the core folds what it parked in stamp order, as if it had just arrived. Each field's state is a function of the set of its operations (RFC 0004), so the upgraded client reaches the same state as a client that had the new model all along.
 3. **An unknown option is kept as written.** A choice, or a set of choices, holding an option the old lock does not list keeps the raw value; the app reads it as an unknown option (RFC 0004).
 4. **A link into an unknown target collection is kept.** Its status reads **wrong collection** on the old client, and **ok** after the upgrade, with no change to the link.
-5. **Values outside the schema are kept, never repaired.** A value of the wrong kind (a string in an `ncdb/int` field, written by a buggy or hostile member) is kept as written and read as invalid, the same way on every client (RFC 0004, contract C5). The SDK never writes such a value.
+5. **Values outside the schema are kept, never repaired.** A value of the wrong kind (a string in an `ncdb/int` field, written by a buggy or hostile member) is kept as written, and the app reads the raw value, as RFC 0004 does for an option the reader's schema does not list. RFC 0004's contract (C5) requires that such a value causes no panic and that the state still converges; this RFC adds no read status for it. How the SDK exposes a raw value belongs to the SDK's API review, with RFC 0004's other working names. The SDK never writes such a value.
 6. **Parked data is visible.** The SDK reports, per space, how many changes and operations are parked and why (unknown collection, unknown field, unknown type), and the highest model version that wrote any of them (decision D10). An app can show "Some data needs a newer version of this app" instead of hiding it.
 
 The other direction is simpler. A newer client reading data written under an older model finds every field the older model did not have unset, which every field allows (see [No required fields and no defaults](#no-required-fields-and-no-defaults)).
 
 What this does not do, stated plainly:
 
-- An old client cannot read, query or index data in fields it does not know. Computed fields and views on an old client are computed from what it understands, so they can differ from an upgraded client's until it upgrades. This is RFC 0002's reading of principle 2: every client that understands all the changes it holds reaches the same state.
+- An old client cannot read, query or index data in fields it does not know. Computed fields and views on an old client are computed from what it understands, so they can differ from an upgraded client's until it upgrades. This is RFC 0002's reading of principle 2, which the owner confirmed (Carsten, 2026-11-07): every client that understands all the changes it holds reaches the same state.
 - A client that never upgrades never reads the new fields. It still keeps and forwards them.
 - Deprecated fields stay in every copy and in every sync. Deprecation saves the developer from the field, not the disk.
+- Nothing in a change says which model wrote it. If two apps with different `model.id`s write into one space, and both use the same field name with different types, members fold the same operations by different rules and diverge. Decision D13 proposes how to prevent it.
 
 ## Personal fields
 
@@ -383,7 +422,9 @@ A field is personal when the schema chains `.personal({ person })` to it. `perso
 - `"self"`: the object is the person. `people.email` is about the person the `people` object stands for.
 - The name of a link field (`nc.link`) of the same collection: the field is about the person that link points to. `tasks.assigneeNote` is about whoever `tasks.assignee` names.
 
-The person is identified by the object id of the person's object. The SDK asks RFC 0003's person-key store for that person's key in the space and seals the value with it. The person need not be a member of the space; it is usually a customer, a patient or an employee the data is about.
+Within a space, the person is identified by the object id of the person's object. The SDK asks RFC 0003's person-key store for that person's key in the space and seals the value with it.
+
+Across spaces this is not enough. Object ids belong to one space, so the same customer recorded in two spaces is two objects with two ids, while RFC 0003 shreds a person's key "in every space the account can reach". How the core knows that the two objects are one person is decision D14. The marking in the schema is the same under every option of D14. The person need not be a member of the space; it is usually a customer, a patient or an employee the data is about.
 
 Rules the build checks:
 
@@ -406,14 +447,15 @@ The example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-desi
 3. **`priority: nc.int()` is last writer wins.** Two agents that raise a priority at the same time raise it once. RFC 0004 names the same limit; a counter is a different field type, possibly a plugin.
 4. **`nc.view("tasks", ...)` inside `tasks` names its collection twice.** This RFC keeps RFC 0001's form as a placeholder and leaves the question to the computed-fields RFC: a view declared inside a collection may not need the collection's name, and a view across collections may belong at the model level.
 5. **Personal fields: not any field.** RFC 0001 says any field can be marked as personal. This RFC allows it in v1 for basic values only, and only when the field is added, for the reasons in [Personal fields](#personal-fields).
-6. **The schema module.** RFC 0001 does not say where the schema lives. This RFC has `ncdb model build` read `./model.ts` and its export `model` by default, and write `./model.lock.json` next to it.
+6. **Indexes are declared.** RFC 0001 says queries run only through declared indexes, but its example declares none. This RFC adds the `indexes` place and `nc.index`.
+7. **The schema module.** RFC 0001 does not say where the schema lives. This RFC has `ncdb model build` read `./model.ts` and its export `model` by default, and write `./model.lock.json` next to it.
 
 ## Agreement with GENESIS.md
 
 - **"The schema is written once in TypeScript."** It is; the core and both SDKs read only the lock, which `ncdb model build` produces.
 - **"Schema changes are additive; old clients keep data they do not understand yet."** The additive-change rule and [Data from a newer model](#data-from-a-newer-model).
 - **"A check that refuses a model old clients cannot read."** The check runs twice: in `ncdb model build` and `ncdb model check`, and on every device when the app opens its database.
-- **Principle 2, every copy converges.** The rule version of a field never changes, so every client merges every field the same way.
+- **Principle 2, every copy converges.** The rule version of a field never changes without a migration (D12), so every client merges every field the same way. Two models in one space are the gap; D13 closes it.
 - **Principle 4, say plainly what it does not do.** The limits of parked data, of deprecation and of personal fields are stated where they arise.
 - **Principle 5, a developer does not need to care about keys.** The schema marks a field personal and names its person; the developer never sees a key.
 
@@ -446,7 +488,9 @@ Every public name this RFC introduces or keeps, for the owner to approve in one 
 | `.personal(` | Modifier: marks a field personal, with the option `person` (`"self"` or a link field's name) | new |
 | `.describe(` | Modifier: a description, copied into the lock | new |
 | `.deprecated(` | Modifier: keeps a field in the model and the data, hides it from the app | new |
-| `computed`, `views` | The two places in `nc.collection`'s second argument | RFC 0001 |
+| `computed`, `views` | Two places in `nc.collection`'s second argument | RFC 0001 |
+| `indexes` | The place for indexes in `nc.collection`'s second argument | new |
+| `nc.index` | Declares an index: fields in order, with the options `equal` and, per field, `field` and `direction` (`"asc"`, `"desc"`) | new |
 
 **CLI** (`ncdb`):
 
@@ -462,7 +506,8 @@ Every public name this RFC introduces or keeps, for the owner to approve in one 
 | --- | --- |
 | The file name `model.lock.json` | RFC 0001 |
 | Top-level keys `format`, `model` (`id`, `version`, `hash`), `plugins`, `collections` | new |
-| Collection keys `since`, `fields`, `computed`, `views`, `deprecated` | new |
+| Collection keys `since`, `fields`, `computed`, `views`, `indexes`, `deprecated` | new |
+| Index keys `fields` (`field`, `direction`), `equal`, `since` | new |
 | Field keys `type`, `rule`, `since`, `options`, `of`, `targets`, `personal` (`person`), `description`, `deprecated`, `deprecatedReason`, `config` | new |
 | Plugin keys `npm`, `crate` | new |
 | The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links` | new |
@@ -560,7 +605,7 @@ Recommendation: A. B breaks set identity and link resolution (see [Personal fiel
 - A. Add the writer's model version to the payload as a "may ignore" key (RFC 0002 keeps keys from 64 up for that), so an old client can report which model version it needs to read its parked changes. *(recommended)*
 - B. No model version in changes; the SDK reports only that changes are parked and why.
 
-Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is a change to RFC 0002's payload, so it needs the owner's approval of both RFCs. Until then, the SDK falls back to B.
+Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is an addition to the payload of the merged RFC 0002, so it needs the owner's approval here and an amendment there. Until then, the SDK falls back to B. D13 B uses the same key.
 
 **D11. The check on the device.**
 
@@ -568,6 +613,31 @@ Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot 
 - B. Trust the build check alone.
 
 Recommendation: A. The build can be bypassed by deleting the lock or by a bad merge; the device holds the data that would be at risk.
+
+**D12. Moving a field to a new rule version.** RFC 0004 says a new merge rule is a new rule version, "which every member must run before the schema may use it, with a migration". This RFC has no migrations.
+
+- A. The build refuses it until a migrations RFC defines how every member, offline ones included, moves over. A new field can use the new rule version at once, and the old field can be deprecated. *(recommended)*
+- B. Write the migrations RFC before v1, and allow it from the start.
+- C. Allow it once a stated share of members runs the new version, without a migration.
+
+Recommendation: A. A member that is offline for weeks cannot be shown to run the new rule, so B is a large design for a case v1 can avoid, and C diverges for every member it misses. A keeps RFC 0004's rule: no rule change without a migration.
+
+**D13. Two models in one space.** Changes name collections and fields, not the model that wrote them. Two apps with different `model.id`s that write into one space, with the same name for fields of different types, make members merge one field by two rules.
+
+- A. A space records the `model.id` it was created with, in its first control entry (RFC 0002 and RFC 0003 define those entries), and the SDK refuses to write into a space of another model.
+- B. Each change carries its writer's `model.id` with the model version of D10, as a "may ignore" payload key, and a member parks every change of another model, whole.
+- C. Both A and B. *(recommended)*
+- D. Allow it and document the risk.
+
+Recommendation: C. A stops honest apps at the first write; B makes a buggy or hostile client's changes park the same way on every member instead of folding by the wrong rule. Two apps that should share a space then share one model lineage, which is the point. A changes a control entry and B the payload, so both need the owner's approval in RFC 0002 and RFC 0003 as well.
+
+**D14. One person across spaces.** A person is an object id in one space; RFC 0003 shreds a person's key in every space the account can reach.
+
+- A. A person id: 128 random bits, separate from object ids, that the core keeps on every object a personal field names as its person. When the app records the same person in another space, the SDK carries the person id over. The person-key store and shredding work by person id. *(recommended)*
+- B. Per space only: a person is an object id. Erasing someone across spaces means the erasure work order lists each person object, space by space.
+- C. A person id derived from an external identifier, such as a hash of an email address.
+
+Recommendation: A. It lets one erasure reach every space without the app finding each copy, which is the promise of RFC 0001's team lead. B puts that search back on the app. C is guessable from the identifier and is itself personal data. A needs RFC 0003 to key its person-key store by person id; how the app says "the same person" belongs to the SDK's API review.
 
 ## How this RFC is tested
 

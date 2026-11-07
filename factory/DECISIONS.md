@@ -109,3 +109,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-11)
 - Why: those RFCs are open PRs (#26 to #28), not on `main`; a link to them would break the "every relative link resolves" check until they merge. Links can be added once they do.
 - Instead of: stacking RFC 0005 on one of their branches, which would tie its merge to theirs.
+
+### 2026-11-07 · NOC-11 · RFC 0005 links RFC 0002 now that it is merged
+
+- Decided by: coding agent (NOC-11)
+- Why: RFC 0002 reached `main` (#28), so its link resolves; RFC 0003 and RFC 0004 are still open PRs and stay named without a link. Partly reverses "RFC 0005 names RFC 0002 to 0004 without linking to them".
+- Instead of: leaving every sibling RFC unlinked until all of them merge.
