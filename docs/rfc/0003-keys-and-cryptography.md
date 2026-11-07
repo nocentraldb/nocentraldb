@@ -138,7 +138,7 @@ RFC 0002 defines the bytes: its header carries the suite id, the space key gener
 2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted.
 3. **Then the signature.** The author signs the header, which contains the ciphertext, with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
 
-A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept and marked as rejected, not dropped silently (principle 3).
+A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept, not dropped silently (principle 3): it is rejected, as RFC 0002 Amendment 1 (D11) defines it, with a reason, and checked again when a control change arrives that could make it valid.
 
 ## Sharing a space key with a new member
 
