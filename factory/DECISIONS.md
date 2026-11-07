@@ -79,3 +79,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
+
+### 2026-11-07 · no ticket · A PR that waits only for the owner holds no lane
+
+- Decided by: Carsten
+- Why: four reviewed PRs waited for the owner and blocked all four lanes, so no ready ticket could start; the lanes now count only work in progress, and a waiting session stays open to answer review.
+- Instead of: a lane held until merge, which keeps the owner's queue short but stops the factory while the owner reviews.

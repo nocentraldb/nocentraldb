@@ -18,7 +18,7 @@ flowchart TD
     a3 --> pr
     pr --> approve{Owner approves?}
     approve -->|changes asked| pr
-    approve -->|yes| main["main<br/>pm merges and frees the lane"]
+    approve -->|yes| main["main<br/>pm merges"]
     main -.->|"daily note: shipped, waiting, decided"| source
 ```
 
@@ -39,8 +39,8 @@ A ticket moves through these steps. Each step has one owner, and nothing skips a
 4. **Assigned.** pm hands the ticket to a coding agent, if a lane is free and no running agent touches the same files.
 5. **Built.** The agent works on the ticket's own branch, runs the gate until it is green, and opens a draft PR that names the ticket.
 6. **Reviewed.** pm reviews the PR against the ticket and GENESIS.md. The agent fixes what pm, CI or a reviewer finds.
-7. **Waiting for the owner.** pm lists the PR in the daily note. It waits until the owner approves it as the merge rule in CONFIG.md says.
-8. **Merged.** pm merges, closes the ticket, and frees the lane.
+7. **Waiting for the owner.** pm lists the PR in the daily note. It waits until the owner approves it as the merge rule in CONFIG.md says. CONFIG.md says whether the PR still holds its lane while it waits; its coding session stays open either way, to answer review.
+8. **Merged.** pm merges, closes the ticket, and archives the coding session, which frees its lane if it still held one.
 
 A ticket that depends on an unmerged PR does not wait: its agent branches from that PR (a stacked PR), and pm merges the stack in order.
 
