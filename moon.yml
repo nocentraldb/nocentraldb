@@ -104,6 +104,17 @@ tasks:
     command: "rustup toolchain install --no-self-update"
     inputs:
       - "/rust-toolchain.toml"
+  wasm-runner:
+    # Installs wasm-bindgen-test-runner, which runs the wasm32 tests of the
+    # crates (crates/ncdb-core/moon.yml, test-wasm), into target/tools: CI
+    # caches target/, so a warm run reuses it. Its version must equal the
+    # wasm-bindgen that Cargo.lock holds; a mismatch fails the run loudly.
+    # A no-op when that version is already installed there.
+    command: "cargo install wasm-bindgen-cli --version =0.2.130 --locked --root target/tools"
+    deps: ["~:rust-toolchain"]
+    inputs:
+      - "/moon.yml"
+      - "/rust-toolchain.toml"
   gates:
     deps:
       - "~:format-check"

@@ -8,5 +8,12 @@ layer: library
 tasks:
   build-wasm:
     command: "cargo build --locked -p $project --target wasm32-unknown-unknown"
+  test-wasm:
+    # Cargo runs each wasm test binary through wasm-bindgen-test-runner, in
+    # Node, which repo:wasm-runner installs at its pinned version.
+    command: "cargo test --locked -p $project --target wasm32-unknown-unknown"
+    deps: ["repo:wasm-runner"]
+    env:
+      CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
   gates:
-    deps: ["~:build-wasm"]
+    deps: ["~:build-wasm", "~:test-wasm"]
