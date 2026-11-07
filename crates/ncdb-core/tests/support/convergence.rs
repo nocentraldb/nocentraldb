@@ -132,6 +132,44 @@ fn deliver<S: Mergeable>(sent: &[Sent<S::Change>], orders: &[Vec<usize>]) -> Vec
         .collect()
 }
 
+fn diverges<S: Mergeable>(sent: &[Sent<S::Change>], copies: usize) -> bool {
+    let states = deliver::<S>(sent, &orders_of(sent, copies));
+    states.iter().any(|state| *state != states[0])
+}
+
+/// Finishes what proptest's shrinking leaves: removes single changes and
+/// single duplicate deliveries while the copies still diverge, until no one
+/// of them can go. proptest's vector shrinker does not retry removing an
+/// element once it has shrunk the elements, so it can stop short of this.
+fn minimise<S: Mergeable>(mut sent: Vec<Sent<S::Change>>, copies: usize) -> Vec<Sent<S::Change>> {
+    'smaller: loop {
+        for i in 0..sent.len() {
+            let mut fewer = sent.clone();
+            fewer.remove(i);
+            if diverges::<S>(&fewer, copies) {
+                sent = fewer;
+                continue 'smaller;
+            }
+        }
+        for i in 0..sent.len() {
+            for copy in 0..copies {
+                for key in 0..sent[i].arrivals[copy].len() {
+                    if sent[i].arrivals[copy].len() == 1 {
+                        break;
+                    }
+                    let mut fewer = sent.clone();
+                    fewer[i].arrivals[copy].remove(key);
+                    if diverges::<S>(&fewer, copies) {
+                        sent = fewer;
+                        continue 'smaller;
+                    }
+                }
+            }
+        }
+        return sent;
+    }
+}
+
 /// Delivers generated changes to several copies in different orders and
 /// checks that every copy ends in the same state. `change` generates one
 /// change that `member` makes.
@@ -169,16 +207,16 @@ where
     };
     let mut runner = TestRunner::new_with_rng(runner_config, rng);
     let result = runner.run(&cases, |sent| {
-        let states = deliver::<S>(&sent, &orders_of(&sent, copies));
-        if states.iter().all(|state| *state == states[0]) {
-            Ok(())
-        } else {
+        if diverges::<S>(&sent, copies) {
             Err(TestCaseError::fail("copies diverged"))
+        } else {
+            Ok(())
         }
     });
     match result {
         Ok(()) => Ok(()),
         Err(TestError::Fail(_, sent)) => {
+            let sent = minimise::<S>(sent, copies);
             let orders = orders_of(&sent, copies);
             let states = deliver::<S>(&sent, &orders);
             Err(Divergence {
