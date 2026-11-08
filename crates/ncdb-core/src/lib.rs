@@ -7,7 +7,10 @@
 //! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
 //! It also holds the member and space keys ([`keys`]) and signing and
 //! sealing a change as RFC 0003 (`docs/rfc/0003-keys-and-cryptography.md`)
-//! defines it ([`seal`]).
+//! defines it ([`seal`]). A member takes each change it receives through the
+//! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
+//! ([`receive`]); the signature, membership and decryption checks plug in
+//! through [`receive::Checks`].
 //!
 //! It also holds the field types of RFC 0004
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
@@ -21,6 +24,7 @@ pub mod field;
 pub mod ids;
 pub mod keys;
 pub mod log;
+pub mod receive;
 mod redact;
 pub mod seal;
 

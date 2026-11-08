@@ -43,7 +43,9 @@ tasks:
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
-    # scripts/release-workflow.test.mjs, and the CI contract in
+    # scripts/release-workflow.test.mjs, the toolchain contract in
+    # scripts/toolchain-workflow.test.mjs (it also reads .moon/toolchains.yml
+    # and runs scripts/install-toolchain.sh), and the CI contract in
     # scripts/ci-workflow.test.mjs, which also reads the root `gates` script in
     # package.json and .github/dependabot.yml; both parse YAML with the `yaml`
     # devDependency, hence the lockfile input), the contributor kit check in
@@ -75,6 +77,7 @@ tasks:
       - "/scripts/**/*"
       - "/package.json"
       - "/.github/**/*"
+      - "/.moon/toolchains.yml"
       - "/pnpm-workspace.yaml"
       - "/pnpm-lock.yaml"
       - "/changes/**/*"
