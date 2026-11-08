@@ -156,3 +156,12 @@ test("a checkout already on HEAD stays as it is, silently", () => {
   assert.equal(run(dir), "");
   assert.equal(status(dir), "");
 });
+
+test("a hidden file missing from disk is left alone, without failing", () => {
+  const { dir } = staleSession();
+  rmSync(join(dir, "AGENTS.md"));
+  const before = status(dir);
+  const out = run(dir);
+  assert.equal(status(dir), before);
+  assert.match(out, /AGENTS\.md/);
+});
