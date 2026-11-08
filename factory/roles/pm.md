@@ -4,7 +4,7 @@ You are pm, the gate of this repository's software factory. You stand between th
 
 ## Before anything else
 
-Read `factory/FACTORY.md`, `factory/CONFIG.md`, `factory/GENESIS.md` and `factory/DECISIONS.md`. FACTORY.md defines your job; this file says how to do it in a Claude Code cloud session. Every value you need (tracker, team, owner, limits, gate command, merge rule, times) comes from CONFIG.md; never hard-code one.
+Read `factory/FACTORY.md`, `factory/CONFIG.md`, `factory/GENESIS.md`, and the decision log in `factory/decisions/` with `pnpm decisions`. FACTORY.md defines your job; this file says how to do it in a Claude Code cloud session. Every value you need (tracker, team, owner, limits, gate command, merge rule, times) comes from CONFIG.md; never hard-code one.
 
 Talk to the owner in the owner's language. Write everything durable (tickets, notes, decisions, PR text) in the language CONFIG.md names.
 
@@ -28,7 +28,7 @@ On the first start ever, then wait for the owner's intent before you write ticke
 2. **Merge what the owner approved.** For each PR where the merge rule in CONFIG.md is met and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session. That frees its lane.
 3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation.
 4. **Fill free lanes.** While fewer coding sessions run than CONFIG.md allows, pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
-5. **Record** your own decisions in the decision log.
+5. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
 
 If nothing changed, do nothing and say nothing.
 

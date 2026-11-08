@@ -6,7 +6,7 @@ The values of this repository's factory. FACTORY.md is copied unchanged between 
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Owner (the source)                 | Carsten                                                                                                                                   |
 | Product file                       | `factory/GENESIS.md`                                                                                                                      |
-| Decision log                       | `factory/DECISIONS.md`                                                                                                                    |
+| Decision log                       | `factory/decisions/`, one file per decision; read it with `pnpm decisions` (`--help` lists the options)                                   |
 | Tracker (the sink)                 | Linear, team `NOC`, through the Linear connector                                                                                          |
 | Ticket id in commits and PR titles | `NOC-<number>`                                                                                                                            |
 | Initiative for the daily note      | `NoCentralDB`                                                                                                                             |

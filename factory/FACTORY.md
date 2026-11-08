@@ -86,19 +86,23 @@ Each question to the owner becomes its own ticket, assigned to the owner, with t
 
 ## The decision log
 
-The decision log (path in CONFIG.md) records every call that shapes the product or the code and is not obvious from the diff. Agents append; nobody rewrites history. A decision that is reversed gets a new entry that points to the old one.
+The decision log records every call that shapes the product or the code and is not obvious from the diff. It is a folder (path in CONFIG.md) with one file per decision, so two PRs never edit the same file and never conflict over it. Agents add files; nobody edits an old one. A decision that is reversed gets a new file that names the old one in `Supersedes:`; the old one is then superseded, without being touched.
 
-One entry per decision, newest at the end:
+Each file is named `YYYY-MM-DD-<ticket>-<slug>.md`, with `no-ticket` when there is none (for example `2026-11-07-NOC-12-relay-writes-one-table-per-space.md`), and holds one entry:
 
 ```markdown
-### 2026-11-07 · NOC-12 · Relay writes go through one DynamoDB table per space
+# 2026-11-07 · NOC-12 · Relay writes go through one DynamoDB table per space
 
 - Decided by: pm (or the owner's name, when the owner decided)
 - Why: one line
 - Instead of: the option not taken, one line
+- Topics: relay, aws
+- Supersedes: 2026-11-06-NOC-9-an-older-decision.md   (optional)
 ```
 
-A decision the owner made carries the owner's name and the date. Agents read the log before they start, so they do not reopen settled questions.
+`Topics:` is required: lowercase tags, so a reader finds every decision on a subject. The gate checks every file's name, heading and fields. No generated overview is committed, since it would change in every PR; the reading command in CONFIG.md prints the whole log in date order, an index, only the current decisions, or the decisions of one ticket, topic or period.
+
+A decision the owner made carries the owner's name and the date. Agents read the log with the reading command before they start, so they do not reopen settled questions.
 
 ## How the owner hears back
 
@@ -126,7 +130,7 @@ To set up the factory in a new repository:
 
 - [ ] Copy `FACTORY.md` and `roles/` into `factory/`.
 - [ ] Write `factory/CONFIG.md` and `factory/GENESIS.md`.
-- [ ] Create an empty `factory/DECISIONS.md`.
+- [ ] Create an empty decisions folder, with the reading command and its check in the gate, and name both in CONFIG.md.
 - [ ] Point `AGENTS.md` (or `CLAUDE.md`) at the three files, to be read before any work.
 - [ ] Connect the tracker to the cloud sessions.
 - [ ] Set up the cloud environment and test its setup script in a fresh session.
