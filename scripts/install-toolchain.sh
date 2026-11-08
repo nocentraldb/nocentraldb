@@ -6,16 +6,29 @@
 #
 # - Warm cache: proto is in ~/.proto/bin at the pinned version and `proto
 #   install` finds every tool installed, so nothing is downloaded.
-# - Cold cache: proto is downloaded from its GitHub release, then `proto
-#   install` downloads the tools. Each is tried ATTEMPTS times, 10 s and then
-#   20 s apart; a lasting failure fails the job with an error that names the
-#   host it could not reach.
+# - Cold cache: proto is downloaded from its GitHub release and checked
+#   against the SHA-256 pinned below, then `proto install` downloads the
+#   tools. Each download is tried ATTEMPTS times, 10 s and then 20 s apart;
+#   a lasting failure fails the job with an error that names the host it
+#   could not reach.
 #
 # scripts/toolchain-workflow.test.mjs runs this against fake curl, sleep and
 # proto.
 set -euo pipefail
 
 PROTO_VERSION="0.63.2"
+# The release archive for this runner, proto_cli-<target>.tar.xz, and its
+# SHA-256 as the release's own .sha256 file gives it. A downloaded archive
+# that does not match is never unpacked.
+release_for() {
+	case "$1" in
+	"Linux x86_64") target="x86_64-unknown-linux-gnu"; sha256="24df51fc98848abfcc27507a53c2ce005b4da783d4bf662717ae9a9d17432c9a" ;;
+	"Linux aarch64") target="aarch64-unknown-linux-gnu"; sha256="5e56d307ab648cfe243d5e9bf968e7e5a1c736e92dac9c6c5925326c64f5ba50" ;;
+	"Darwin x86_64") target="x86_64-apple-darwin"; sha256="6d071b05657237f4e3c2e60cee3777564a1b9350eaadf69529e5c9bfa5686867" ;;
+	"Darwin arm64") target="aarch64-apple-darwin"; sha256="d2bb0da3afd121baf516b2e8ed7f549b2849243db91bca0a57b398392fba5e41" ;;
+	*) return 1 ;;
+	esac
+}
 ATTEMPTS=3
 # proto deletes and re-downloads a cached plugin older than its cache
 # duration, and a restored cache keeps the files' original times. Ten years
@@ -64,26 +77,34 @@ hosts_in() {
 		sed -E 's#^https?://##' | sort -u | paste -s -d, -
 }
 
+# The SHA-256 of FILE, in hex.
+sha256_of() {
+	if command -v sha256sum >/dev/null; then
+		sha256sum "$1"
+	else
+		shasum -a 256 "$1"
+	fi | awk '{ print $1 }'
+}
+
 installed_version() {
 	{ "$PROTO_HOME/bin/proto" --version 2>/dev/null || true; } | awk '{ print $2 }'
 }
 
 if [[ "$(installed_version)" != "$PROTO_VERSION" ]]; then
-	case "$(uname -sm)" in
-	"Linux x86_64") target="x86_64-unknown-linux-gnu" ;;
-	"Linux aarch64") target="aarch64-unknown-linux-gnu" ;;
-	"Darwin x86_64") target="x86_64-apple-darwin" ;;
-	"Darwin arm64") target="aarch64-apple-darwin" ;;
-	*)
+	if ! release_for "$(uname -sm)"; then
 		echo "::error title=Toolchain install failed::proto has no release for $(uname -sm)"
 		exit 1
-		;;
-	esac
+	fi
 	url="https://github.com/moonrepo/proto/releases/download/v$PROTO_VERSION/proto_cli-$target.tar.xz"
 	archive="$(mktemp -d)"
 	if ! retry "Downloading proto $PROTO_VERSION" \
 		curl --fail --location --silent --show-error --output "$archive/proto.tar.xz" "$url"; then
 		echo "::error title=Toolchain download failed::proto $PROTO_VERSION could not be downloaded from $(host_of "$url") after $ATTEMPTS attempts: $(tail -n 1 "$LOG")"
+		exit 1
+	fi
+	actual="$(sha256_of "$archive/proto.tar.xz")"
+	if [[ "$actual" != "$sha256" ]]; then
+		echo "::error title=Toolchain download failed::proto_cli-$target.tar.xz from $(host_of "$url") has SHA-256 $actual, not the pinned $sha256; it was not unpacked"
 		exit 1
 	fi
 	mkdir -p "$archive/proto" "$PROTO_HOME/bin"
