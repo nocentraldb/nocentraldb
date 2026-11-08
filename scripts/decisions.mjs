@@ -6,7 +6,28 @@
 // (`node scripts/decisions.mjs --check`, the task repo:decisions).
 
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
+
+const DEFAULT_DIR = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "factory",
+  "decisions",
+);
+
+const USAGE = `usage: pnpm decisions [--index] [--current] [--ticket <id>] [--topic <tag>] [--since <YYYY-MM-DD>]
+       node scripts/decisions.mjs --check
+
+Prints the decision log in factory/decisions/, every decision in full, in date order.
+  --index           one line per decision: date, ticket, title, and what superseded it
+  --current         leave out superseded decisions
+  --ticket <id>     only decisions about this ticket, e.g. NOC-22
+  --topic <tag>     only decisions with this topic, e.g. crypto
+  --since <date>    only decisions made on or after this date
+  --check           check every file in the folder (the gate) and print nothing else
+  --dir <path>      read another folder (for tests)`;
 
 /** YYYY-MM-DD-<ticket>-<slug>.md; the ticket is `no-ticket` or an id like NOC-22. */
 const FILE_NAME =
@@ -147,4 +168,44 @@ export function checkDecisions(dir) {
 
 export function render(_entries, _options = {}) {
   throw new Error("not implemented");
+}
+
+function main(argv) {
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: {
+        index: { type: "boolean" },
+        current: { type: "boolean" },
+        ticket: { type: "string" },
+        topic: { type: "string" },
+        since: { type: "string" },
+        check: { type: "boolean" },
+        dir: { type: "string" },
+        help: { type: "boolean", short: "h" },
+      },
+    }));
+  } catch (error) {
+    process.stderr.write(`decisions: ${error.message}\n${USAGE}\n`);
+    return 2;
+  }
+  if (values.help) {
+    process.stdout.write(`${USAGE}\n`);
+    return 0;
+  }
+  const { entries, problems } = readDecisions(values.dir ?? DEFAULT_DIR);
+  if (problems.length > 0) {
+    for (const problem of problems)
+      process.stderr.write(`decisions: ${problem}\n`);
+    return 1;
+  }
+  if (values.check) return 0;
+  const output = render(entries, values);
+  if (output) process.stdout.write(`${output}\n`);
+  return 0;
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  process.exitCode = main(process.argv.slice(2));
 }
