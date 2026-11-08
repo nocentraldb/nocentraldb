@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
-**Status.** A draft for the owner's decision. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. Nothing here is built or deployed. The open decisions are in [Decisions for the owner](#decisions-for-the-owner), each with options, a recommendation and its cost. Until the owner decides, the design below describes the recommended option of each decision.
+**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on every decision in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and the design below describes the decided options. Nothing here is built or deployed. The RFC is final when this pull request is merged.
 
 ## What this RFC does not cover
 
@@ -70,6 +70,8 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
+
+The member key is the only authentication the protocol requires, and the only one our AWS backend uses (decision R2). A relay backend is an adapter, and a developer who builds their own adapter on top of ours can put an authentication step of their own in front of the connection, for example Cognito or their company's single sign-on. That step decides who may open a connection at all; the challenge above still decides which member the connection acts as, and the membership checks still decide what it may do. Such a step adds a party that learns who connects, which the developer then names in their own list of what their server sees.
 
 ### Push: append signed, encrypted changes
 
@@ -217,9 +219,9 @@ Because every check works on public keys, signatures, hashes and control bodies,
 
 ## What the relay sees
 
-The relay holds no keys. Here is everything it learns anyway, stated plainly (principle 4): from the log, as RFC 0002, RFC 0003 and RFC 0008 define it; from the protocol; and, on AWS, what the provider sees on top.
+The relay holds no keys. Here is everything that can be learned anyway, stated plainly (principle 4). The relay itself learns it from the log and from the protocol, the same on every backend. The server the relay runs on, on AWS the provider and the account's operators, sees all of that and more, and what exactly depends on how the account is configured.
 
-**From the log**:
+**What the relay learns from the log** (as RFC 0002, RFC 0003 and RFC 0008 define it):
 
 - Which member ids are in which space, their public keys and member certificates, so which members belong to one account across spaces, and the sub-agent tree.
 - Each member's role and when it changes, the cutoff of every revocation, which control changes each admin had seen when it wrote, and the generation graph. The relay reads them because it applies the membership rules ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules), decision M11).
@@ -228,7 +230,7 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 - For each change: the space, the author's member id and sequence number, the suite, the key generation, the size of the frame and when the relay received it.
 - For each shred entry, which person-key id was destroyed, which accounts signed it off, and which members acknowledged it (RFC 0003).
 
-**From the protocol**:
+**What the relay learns from the protocol**:
 
 - **Who is online, and when.** Each connection is authenticated as one member id, so the relay knows when each member connects, for how long, and from which network address.
 - **Which software each member runs**, from the optional client string in `hello`, such as `ncdb-rs/0.3`, and from the protocol versions it offers. Together with the network address, this can fingerprint a device.
@@ -237,14 +239,19 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 - **Upload and download sizes** of large changes, and when they happen.
 - **The rhythm of work**, per member and per space: bursts of small changes look like typing; a large push after days of silence looks like a member coming back from offline work.
 
-**On AWS, the provider and the account's operators see the same**, through these services:
+**What the server sees: AWS, and the account's operators.** Everything the relay learns, because the relay's code and tables run in the account, and in addition:
 
-- API Gateway sees every connection, its network address and the size and time of every message.
-- DynamoDB and S3 hold everything the relay stores: the log of frames, the membership table, the person-key store, the connection table.
-- CloudWatch Logs hold what the relay logs: member ids, space ids, change ids, sizes, error codes and times, and in access logs network addresses. The relay never logs a frame, a payload, a key envelope, a person-key record or any other key material (GENESIS.md, "Never write content, keys or personal fields into logs"). Retention is decision R11.
-- Backups (DynamoDB point-in-time recovery, S3 versioning if enabled) keep deleted person-key records until they expire. They are wrapped, and RFC 0003 states what follows from that.
+| What | Where | What it depends on |
+| --- | --- | --- |
+| Every connection, its network address, and the size and time of every message. | API Gateway | Seen while the connection lasts. It is written down only if API Gateway access logging is on; the log format decides whether the source address is in it, and decision R11 how long it stays. |
+| The log of frames, the membership table and the person-key store. | DynamoDB and S3 | Held for as long as the relay keeps them. |
+| Which member id was connected when, and to which spaces it subscribed. | DynamoDB, the `connections` table | Decision R9: removed when the connection closes by default; kept for a period the operator chooses (default 30 days) if the operator turns that on. |
+| What the relay logs: member ids, space ids, change ids, sizes, error codes and times. Never a frame, a payload, a key envelope, a person-key record or other key material (GENESIS.md, "Never write content, keys or personal fields into logs"). | CloudWatch Logs | Decision R11: kept 14 days by default, or any longer period the operator sets. |
+| Earlier states of the tables, including person-key records a shred deleted. | DynamoDB point-in-time recovery | Decision R10: on, for 35 days. The records are wrapped; RFC 0003 states what follows from that. |
+| Earlier versions of frames and uploads. | S3 versioning | Off (decision R10). An operator who turns it on keeps deleted objects until their versions expire. |
+| Which role or function called which AWS API. | CloudTrail | Management events are recorded by default. Data events, one per DynamoDB or S3 access, only if the operator turns them on. They name the relay's functions, not members. |
 
-**What the relay cannot see**: any content, the ordering metadata (clock, dependencies), whether a sealed change is content or a work order, the model, and which objects or fields a change touches (RFC 0002). A network address is personal data under the GDPR. The relay keeps it only for as long as a connection is open (decision R9) and in access logs of limited retention (decision R11).
+**What neither can see**: any content, the ordering metadata (clock, dependencies), whether a sealed change is content or a work order, the model, and which objects or fields a change touches (RFC 0002). A network address is personal data under the GDPR. The relay holds it while a connection is open, and the server keeps it only as decisions R9 and R11 set.
 
 ## The backend interface
 
@@ -382,7 +389,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
 | `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008); deleted only when its shred entry is stable (RFC 0008, M20). |
-| `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. |
+| `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. An operator who sets decision R9 to B keeps the records after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
 
@@ -538,7 +545,7 @@ One line each; the decisions below give the options that remain.
 
 ## Decisions for the owner
 
-GENESIS.md reserves the wire format, anything that writes to AWS and anything that raises the bill for the owner. Each decision names the options, a recommendation and, where it differs, the cost.
+GENESIS.md reserves the wire format, anything that writes to AWS and anything that raises the bill for the owner. Each decision below names the options and the owner's ruling (Carsten, 2026-11-08); the design above describes them.
 
 **R1. The transport.**
 
@@ -546,29 +553,29 @@ GENESIS.md reserves the wire format, anything that writes to AWS and anything th
 - B. HTTP requests for push and pull, server-sent events for subscriptions.
 - C. gRPC, with a proxy for browsers.
 
-Recommendation: A. One channel, one authentication, binary frames, every browser and API Gateway. Cost: as in [What it costs](#what-it-costs).
+Decided: A (Carsten, 2026-11-08). One channel, one authentication and binary frames, in every browser and on API Gateway.
 
 **R2. How a connection authenticates.**
 
 - A. A challenge signed with the member key, per connection. *(recommended)*
 - B. Bearer tokens from an identity service such as Cognito.
 
-Recommendation: A. No new party learns who the members are, no token can be stolen and replayed, and the SDK already holds the key. B adds an identity service, roughly 0.015 USD per monthly active user above the free tier, and an operator who can mint access.
+Decided: A (Carsten, 2026-11-08). No new party learns who the members are, no token can be stolen and replayed, and the SDK already holds the key. A developer's own adapter may still put its own authentication step, such as Cognito, in front of the connection (see [Opening a connection](#opening-a-connection)); our AWS backend does not.
 
 **R3. Compute on AWS.**
 
-- A. API Gateway WebSockets and Lambda, live delivery from the appending Lambda. *(recommended for now)*
-- B. As A, with live delivery through DynamoDB Streams and a second Lambda: retried delivery, about 100 to 300 ms more latency, slightly more cost.
+- A. API Gateway WebSockets and Lambda, live delivery from the appending Lambda. *(recommended)*
+- B. As A, with live delivery through DynamoDB Streams and a second Lambda.
 - C. A WebSocket server on ECS Fargate behind a load balancer, the same core and tables.
 
-Recommendation: A. About 10 USD a month for a small team and nothing while idle; about 800 USD a month for 1,000 agents writing once a minute. C costs about 45 USD a month at minimum and about 370 USD in the 1,000-agent case, so we switch to C when API Gateway messages pass about 300 USD a month. A budget alarm at 50 USD a month warns before that.
+Decided: A (Carsten, 2026-11-08). About 10 USD a month for a small team, nothing while idle, about 800 USD a month for 1,000 agents writing once a minute. C costs at least 45 USD a month and about 370 USD in the 1,000-agent case, so the relay moves to C when API Gateway messages pass about 300 USD a month; a budget alarm at 50 USD a month warns well before.
 
 **R4. The protocol limits.**
 
 - A. 128 KiB per message and 32 changes per push, on every backend. *(recommended)*
-- B. Limits per backend: larger on SQLite and Postgres, API Gateway's on AWS.
+- B. Limits per backend.
 
-Recommendation: A. A member never behaves differently depending on which backend its relay runs on, so backends stay interchangeable.
+Decided: A (Carsten, 2026-11-08). A member never behaves differently by backend.
 
 **R5. The largest change.**
 
@@ -576,7 +583,7 @@ Recommendation: A. A member never behaves differently depending on which backend
 - B. 4 MiB.
 - C. No limit, with multipart uploads.
 
-Recommendation: A. Large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. A larger file is not a change; files are a later RFC. Each 16 MiB change costs about 0.0004 USD to store a month and 0.0014 USD in transfer per member that downloads it.
+Decided: A (Carsten, 2026-11-08). Large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC.
 
 **R6. Who may create a space on a relay.**
 
@@ -584,36 +591,36 @@ Recommendation: A. Large enough for rich-text pastes with images inlined, small 
 - B. Anyone who can reach the relay.
 - C. Anyone with an invitation code from the operator.
 
-Recommendation: A. A relay that accepts spaces from anyone is a free storage service for strangers and a bill for the owner. A is a list of account fingerprints in the relay's configuration.
+Decided: A (Carsten, 2026-11-08). A relay must not become free storage for strangers and a bill for its operator.
 
-**R7. Changes of a removed member that arrive late.**
+**R7. Changes of a revoked member that arrive late.**
 
-- A. The relay accepts a revoked author's changes at or below the revocation's cutoff and refuses those above it, as [RFC 0008](0008-membership.md#the-cutoff) defines. *(decided)*
-- B. The relay refuses every change of a removed author from the removal on, by the relay's order.
-- C. The relay accepts changes of a removed author under key generations before the removal.
+- A. Accept the revoked author's changes at or below the revocation's cutoff, refuse those above it. *(recommended)*
+- B. Refuse every change of a removed author from the removal on, by the relay's order.
+- C. Accept changes of a removed author under key generations before the removal.
 
-Decided: A, through RFC 0008's decision M3 (Carsten, 2026-11-08). B depends on the relay's order, which members on an island do not have, so the relay and the members could reach different verdicts. C would let a removed member keep writing under the old generation forever, because the relay cannot see when a change was written. The cost of A, stated in [What the relay checks](#what-the-relay-checks): a change a member wrote before its revocation that the revoking admin had not yet received is refused everywhere, and an equivocation inside the cutoff is accepted and reported.
+Decided: A, through RFC 0008's decision M3 (Carsten, 2026-11-08). B depends on the relay's order, which members on an island do not have; C would let a removed member write under an old generation forever. The limits of A are in [What the relay checks](#what-the-relay-checks).
 
 **R8. The AWS region.**
 
 - A. eu-central-1, Frankfurt. *(recommended)*
 - B. us-east-1, N. Virginia.
 
-Recommendation: A. The first users and the owner are in Europe, so latency is lower, and the metadata the relay keeps (network addresses, member ids) is personal data under the GDPR. It costs about 10 to 20 percent more than B.
+Decided: A (Carsten, 2026-11-08). Closer to the first users, and the metadata the relay keeps is personal data under the GDPR. It costs about 10 to 20 percent more than B.
 
 **R9. What the relay keeps about connections.**
 
-- A. Connection records only while the connection is open, removed by `$disconnect` or by TTL. *(recommended)*
-- B. Connection records kept for 30 days after the connection ends, for abuse investigation.
+- A. A connection record only while the connection is open, removed by `$disconnect` or by TTL. *(recommended)*
+- B. Connection records kept after the connection ends, for abuse investigation.
 
-Recommendation: A. The relay needs a connection only while it is open. How long logs keep network addresses is R11. Cost: none either way.
+Decided: configurable, A by default (Carsten, 2026-11-08). An operator may switch to B and choose the retention period, 30 days by default. Either way, [What the relay sees](#what-the-relay-sees) names the setting.
 
 **R10. Backups of the relay.**
 
-- A. DynamoDB point-in-time recovery (35 days); every restore draws a new relay epoch, re-applies shred effects, and members re-sync. *(recommended)*
-- B. No backups. A lost relay starts empty under a new epoch, and members repopulate it.
+- A. DynamoDB point-in-time recovery for 35 days, S3 versioning off; every restore draws a new relay epoch. *(recommended)*
+- B. No backups; members repopulate a lost relay.
 
-Recommendation: A. In both options members re-sync after a loss, through the same procedure (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). A restore needs fewer re-pushes, and it brings back the membership table and the person-key store before any member reconnects. With B, the person keys for a new member exist only on members until one of them re-uploads them. The price of A is that a shredded person-key record stays in the backups for up to 35 days, wrapped, as RFC 0003 states. Restores also return such a record until a member re-pushes the shred entry. Cost: 0.20 USD per GB-month, about 0.20 USD a month for a small team, about 11 USD a month per 56 GB in the 1,000-agent case.
+Decided: A (Carsten, 2026-11-08). A restore brings back the membership table and the person-key store before any member reconnects. Its price: a shredded person-key record stays in the backups for up to 35 days, wrapped, as RFC 0003 states. Cost: 0.20 USD per GB-month, about 0.20 USD a month for a small team and about 11 USD per 56 GB in the 1,000-agent case.
 
 **R11. How long CloudWatch keeps the relay's logs.**
 
@@ -621,20 +628,18 @@ Recommendation: A. In both options members re-sync after a loss, through the sam
 - B. 90 days.
 - C. 1 day, and no network addresses in any log.
 
-What the logs hold in every option: member ids, space ids, change ids, sizes, error codes, times, and, in access logs, network addresses. They never hold a frame, a payload, a key envelope, a person-key record or any key material.
+Decided: A as the default, and the operator may set any longer period (Carsten, 2026-11-08). In every setting, the logs hold ids, sizes, error codes, times and, in access logs, network addresses, never content or key material. Cost: under 1 USD a month for a small team.
 
-Recommendation: A. 14 days is enough to investigate abuse or an outage, and short enough to state plainly what the relay keeps. Network addresses and member ids are personal data under the GDPR. B keeps them longer than the relay needs. C leaves abuse uninvestigable. Cost: storage of 0.03 USD per GB-month on top of ingestion, so under 1 USD a month for a small team. In the 1,000-agent case, about 0.30 USD a month for A and about 2 USD for B.
-
-The protection of the person-key store and the key that authenticates a connection are decided in [RFC 0003](0003-keys-and-cryptography.md#decisions-for-the-owner) (decisions 14 and 13), not here, because they are key handling.
+The protection of the person-key store and the key that authenticates a connection are decided in [RFC 0003](0003-keys-and-cryptography.md#decisions-for-the-owner) (decisions 14 and 13), because they are key handling.
 
 ## Conflicts with GENESIS.md and RFC 0001
 
-This RFC agrees with GENESIS.md and RFC 0001 except in the points below. Each needs the owner's ruling or a change to the other document.
+This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The owner ruled on each (Carsten, 2026-11-08). The changes they need in other documents are follow-up ticket NOC-47, not part of this RFC.
 
-1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ describe what the relay sees and link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds items that list does not name: when each member is online and for how long, since every connection is authenticated as one member id; which software each member runs, from the client string and protocol versions; how far behind each member is, from its cursors; how many people have person-key records in a space, and who writes them; the sizes of large uploads and downloads; what the membership rules show (RFC 0008's M11: roles, cutoffs, what each admin had seen, accounts across spaces, the sub-agent tree and the generation graph); and what AWS sees on top. We propose that RFC 0002's list, or the documents that link to it, also link to this RFC's list.
-2. **Use case 4, "at no cost".** The reads are free; the writes are not. [What it costs](#what-it-costs) puts 1,000 agents writing once a minute at about 800 USD a month. The use case should say "reads at no cost", so a reader does not infer more than the design delivers (principle 4).
-3. **Use case 5, members on the same network.** The use case says members on one network keep exchanging changes during an outage. This RFC defines the messages they exchange, but not how they find each other; until the peer RFC exists, the SDK cannot do it. The use case should say so, or wait for that RFC.
-4. **RFC 0002, who uploads.** RFC 0002 says the relay need not know who uploads a change. This RFC requires the uploader to be an authenticated current member of the space, to keep strangers from filling a space's log; the author may still be any member. This narrows RFC 0002 without contradicting it.
+1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show (RFC 0008, M11), and what the server sees, with the AWS setting each item depends on. Ruled: this RFC separates what the relay learns from what the server sees, as above; RFC 0002's list links to this RFC's (NOC-47).
+2. **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Accepted: use case 4 says "reads at no cost" (NOC-47).
+3. **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Accepted: use case 5 says what is missing until the peer RFC exists (NOC-47).
+4. **RFC 0002, who uploads.** This RFC requires the uploader to be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it. Accepted: RFC 0002 notes the uploader rule (NOC-47).
 
 ## Summary of the choices
 
@@ -643,7 +648,7 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. Each ne
 | How does a member talk to the relay? | One WebSocket connection, CBOR messages, authenticated by a challenge signed with its member key. |
 | What can it do? | Push changes, pull from a cursor, subscribe to a space, fetch its key envelopes, read and write the person-key store. |
 | What does the relay check? | Canonical frames, signatures, membership of author and uploader, membership rules, duplicates. All with public data. |
-| What does it see? | Membership, who writes when and how much, who is online from where, who follows what, how many persons a space holds keys for. No content. |
+| What does it see? | Membership, who writes when and how much, who is online from where, who follows what, how many persons a space holds keys for. The server on AWS sees more, as its settings allow. No content. |
 | How do backends stay interchangeable? | All checks in one core; backends implement one storage interface and pass one conformance suite. |
 | How does it run on AWS? | API Gateway WebSockets, Lambda, DynamoDB on demand, S3 for frames above 8 KiB, in eu-central-1. |
 | What does it cost? | About 10 USD a month for a small team; about 800 USD for 1,000 agents writing once a minute; nothing for local reads. |
