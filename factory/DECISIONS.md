@@ -277,3 +277,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-19)
 - Why: on wasm32 a panic aborts and cannot be caught, and behaviour must not fork by platform (principle 7); a panic still fails the gate on both targets. The C5 fixture breaks convergence on malformed operations instead of panicking.
 - Instead of: catching panics natively with `catch_unwind`, which would report C5 on one target only.
+
+### 2026-11-08 · NOC-38 · RFC 0002 Amendment 2 numbers the new step 5a, so the step numbers other documents cite stay valid
+
+- Decided by: coding agent (NOC-38)
+- Why: RFC 0006, NOC-28's code and tests, and Amendment 1 itself refer to steps 3 to 7 by number; decoding the payload sits between decryption (5) and understanding the payload (6), so it becomes 5a and no existing reference moves. The amendment follows Amendment 1's form: its own section, a dated changelog line, and each changed sentence marked *(Amendment 2)*.
+- Instead of: renumbering steps 6 and 7, which would silently change what every existing reference means.

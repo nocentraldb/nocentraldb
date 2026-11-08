@@ -6,12 +6,13 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-6
 
 - **2026-11-07** · NOC-6 · The owner accepted D1 to D9 and the readings in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 - **2026-11-07** · NOC-22 · [Amendment 1: the atomic unit and rejected changes](#amendment-1-atomic-unit-and-rejected-changes) settles which unit is atomic, adds the log state `rejected` and says what happens when the relay refuses a change the member already folded. It proposes D10 to D12 for the owner. The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-08** · NOC-38 · [Amendment 2: a payload that decrypts but does not decode](#amendment-2-a-payload-that-decrypts-but-does-not-decode) adds the missing row 5a to the step table, for a payload that decrypts but does not decode. It proposes D13 for the owner. The sentences it changes elsewhere are marked *(Amendment 2)*.
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
-**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) is a proposal for the owner (NOC-22): the sentences it marks describe its recommended options, and the pull request that adds it is the owner's sign-off.
+**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) is a proposal for the owner (NOC-22): the sentences it marks describe its recommended options, and the pull request that adds it is the owner's sign-off. [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) is a proposal for the owner in the same way (NOC-38).
 
 ## What this RFC does not cover
 
@@ -237,7 +238,7 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
 
-A decoder accepts only canonical bytes. After decoding, the core encodes the value again and compares the bytes. A change that is not canonical is rejected, and never "repaired", because a repaired change would have another id and an invalid signature. The core keeps the exact bytes it received and never re-encodes a stored change.
+A decoder accepts only canonical bytes. After decoding, the core encodes the value again and compares the bytes. A change that is not canonical is rejected, and never "repaired", because a repaired change would have another id and an invalid signature. A payload that is not canonical is never repaired either; the member keeps the frame and parks the change (step 5a of [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode)). *(Amendment 2.)* The core keeps the exact bytes it received and never re-encodes a stored change.
 
 The implementation (NOC-14) commits test vectors: changes as bytes, with their ids, checked by the native core and by the WebAssembly build alike.
 
@@ -255,6 +256,7 @@ The format changes only by adding. Each layer carries its own version, and an ol
 - **The frame never changes.** Its version stays 1. Every client can therefore store, forward and identify any change, and verify its signature, as long as it knows the change's suite (RFC 0003).
 - **Header keys 1 to 8 keep their meaning forever.** A new header format may add keys. Keys 1 to 63 are "must understand": a client that meets one it does not know stores the change but does not fold it. Keys from 64 up are "may ignore": a client that does not know them folds the change as if they were absent. The same rule holds for the payload map. In the operation map, an unknown "must understand" key parks only that operation, as an unknown field does. *(Amendment 1, [D10](#the-atomic-unit).)*
 - **A higher header or payload format number** than the client knows means "stored, not folded".
+- **A payload that decrypts but does not decode** is stored, not folded, with the reason "unknown payload format", because a member cannot tell a newer payload format from a malformed one ([D13](#amendment-2-a-payload-that-decrypts-but-does-not-decode)). *(Amendment 2.)*
 - **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived. This is the one exception to the atomic change (see [Operations](#operations-object-field-and-value)).
 
 A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). Parked waits for an upgrade of the client. A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)). *(Amendment 1.)*
@@ -369,7 +371,7 @@ RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are wr
 
 ## Decisions for the owner
 
-These are the decisions this RFC needed from the owner. Each lists the options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07), and the design above describes them. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) adds D10 to D12, which wait for the owner.
+These are the decisions this RFC needed from the owner. Each lists the options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07), and the design above describes them. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) adds D10 to D12, which wait for the owner. [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) adds D13, which waits for the owner too. *(Amendment 2.)*
 
 **D1. Ordering metadata.**
 
@@ -466,10 +468,11 @@ A member takes every change through the same steps, in this order. A change stop
 | 3. Verify the signature | The author's signing key is not known yet, because no membership entry the member holds names the author; or the signature does not verify. | Rejected: unknown author, or bad signature. |
 | 4. Check membership | The control changes the member holds do not make the author a member at the change's key generation (RFC 0003). | Rejected: not a member. |
 | 5. Decrypt | The member holds no key envelope for the change's key generation; or the AEAD fails. | Rejected: no key, or undecryptable. |
+| 5a. Decode the payload | The payload decrypts, but the plaintext is not a payload map this core can read: a value nests deeper than the decoder's limit, the bytes are not canonical, a key that payload format 1 requires is missing or has the wrong type, or it is a newer payload format that format 1's decoder cannot read. | Parked: unknown payload format. *(Amendment 2, [D13](#amendment-2-a-payload-that-decrypts-but-does-not-decode).)* |
 | 6. Understand the payload | The payload format or a "must understand" payload key is unknown. | Parked: unknown format. |
 | 7. Fold, operation by operation | An operation names a collection or field the member's `model.lock.json` does not know, or carries an unknown "must understand" key. | The change is folded; that operation is parked, with its reason. |
 
-Steps 2 to 6 decide for the change as a whole. Step 7 decides per operation. A control change (kind 1) stops after step 4: it has no payload to decrypt, and RFC 0003 and the membership RFC say what it does.
+Steps 2 to 6, step 5a included, decide for the change as a whole. *(Amendment 2.)* Step 7 decides per operation. A control change (kind 1) stops after step 4: it has no payload to decrypt, and RFC 0003 and the membership RFC say what it does.
 
 ### The atomic unit
 
@@ -526,6 +529,60 @@ These RFCs are open pull requests. pm aligns them once the owner has decided; th
 - **RFC 0005 (schema).** Its parking of single operations is D10 A.
 - **RFC 0006 (the local view).** Its fold step 2 ends in rejected. Its step 3 ends in rejected with the reason "no key" when the key envelope is missing, not in parked; an unknown suite or format stays parked. Its step 4 is step 7 above.
 - **RFC 0007 (the relay).** For `bad_signature`, `author_not_member` and `membership_rule`, "keep the change marked as rejected" becomes "record the relay's refusal and check the change again", as D12 says. A change the member's own check rejects is rejected as D11 says.
+
+## Amendment 2: a payload that decrypts but does not decode
+
+Added on 2026-11-08 for NOC-38. [Amendment 1's step table](#what-a-member-does-with-a-change-it-receives) gives a state to every step a change can fail, except one: the payload decrypts, so the signature and the AEAD show that a member of the space wrote it, but the plaintext does not decode as a payload map. Two agents found the gap independently: NOC-28, which builds the member log in ncdb-core, and NOC-37, which says how RFC 0004's field operations travel in a change.
+
+The log is an on-disk format, so the owner decides. This amendment adds row 5a to the step table, and the sentences it changes elsewhere are marked *(Amendment 2)*. They describe the recommended option. Nothing else in the RFC changes.
+
+### What a member cannot tell apart
+
+A plaintext that decrypts can fail to decode for four causes:
+
+- **Too deep.** A value nests deeper than the decoder allows: 32 levels counted from the frame, so the payload map sits at level 3 (decision log, NOC-14; pending the owner in NOC-24).
+- **Not canonical.** The bytes break [the CBOR profile](#the-cbor-profile): an integer or length not in its shortest form, map keys out of order or twice, an indefinite length, a tag, invalid UTF-8, or bytes after the map.
+- **Wrong shape.** The map decodes, but a key that payload format 1 requires is missing or holds the wrong type, for example a clock that is not an unsigned integer.
+- **A newer payload format.** A later format may drop a key that format 1 requires, or use something the profile of today forbids, such as a tag ("Future versions may allow specific tags") or a deeper nesting.
+
+The first three are malformed: a buggy or hostile author wrote them. The fourth is valid data this core does not understand yet. A member cannot always tell them apart. The payload format number is key 1 of the payload map, so a member can read it only when the map decodes. A newer format that relaxes the profile or the depth limit looks to an older core exactly like malformed bytes.
+
+What every member agrees on is the plaintext. The header is canonical, so the change has a stable id and a valid signature. The AEAD gives every member that holds the key the same plaintext, or fails for all of them. Decoding is a function of those bytes and of the core's version. So under each option below, two members on the same core version that hold the same changes give the change the same state. The options differ in what happens between core versions, and on an upgrade.
+
+### The options and how each keeps convergence
+
+- **A. Parked as "unknown payload format", whatever the cause.** The state is a function of the plaintext bytes and the core version, like every parked state. A newer core either reads the payload and folds it, or parks it with the same reason. A member that has not upgraded yet shows a different view from one that has, which is the reading of principle 2 the owner accepted for parked changes ([Conflicts](#conflicts-with-genesismd-and-rfc-0001), point 1). A puts no constraint on future formats: a raised depth limit, an allowed tag or a new payload format is one more thing an upgrade can fold.
+- **B. Rejected, with a new reason "undecodable payload".** On one core version every member agrees. But a rejected change waits for a control change ([D11](#rejected-changes)), and no control change makes bytes decode. If a later core reads what an earlier one could not, a member that receives the change after its upgrade folds it, while a member that rejected it before its upgrade never checks it again. Two upgraded members holding the same changes would then differ, which principle 2 forbids. B converges only with one of two additions: changes rejected for this reason are checked again after every upgrade, which makes them parked in all but name and gives the state rejected two triggers; or the payload profile and the depth limit never change under header format 1, so that a newer core that relaxes them also writes a new header format, which older cores park at step 2.
+- **C. Split by cause: a newer format parked, a malformed payload rejected.** The member parks a payload whose map decodes and whose format number it does not know, as step 6 does today, and rejects every other payload that does not decode, with the reason "malformed payload". The parked half converges as under A. The rejected half converges only under B's second addition: a member cannot read the format number of a payload that does not decode, so a newer format that relaxes the profile would be rejected forever by every older core. C therefore freezes the payload profile and the depth limit for header format 1. Within that rule, "malformed" is final: no core version under header format 1 reads the payload, so every member keeps it rejected.
+
+### What an upgrade does
+
+- **Under A.** After an upgrade, the core takes every parked change through the steps again, as it does for every parked change ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)). The log keeps only the frame, so the core decrypts the payload again. A payload the new core reads is folded, in the total order, as if it had just arrived, and its operations go through step 7. A payload that no version reads stays parked, with the same reason, on every member.
+- **Under B.** Nothing, unless the first addition is chosen; then as under A, with the state rejected instead of parked.
+- **Under C.** A parked newer format is folded as under A. A rejected malformed payload stays rejected. A core that relaxes the profile writes a new header format, which older cores park at step 2 and fold once they upgrade.
+
+### What option A does not do
+
+- **"Unknown payload format" may mean malformed.** The SDK counts the change as parked for an unknown payload format. Neither the SDK nor the app can tell an author on a newer core from a buggy or hostile one, and an upgrade may never fold the change. A space that holds one never reaches zero parked changes. The reason does not claim more than the member knows: it does not know the format.
+- **A member gains no power by writing one.** The change stays in the log, is forwarded and counted, and touches no field. A member that may write in the space can already write any value into any field, so a payload that does not decode gives it nothing new.
+- **The bytes are never repaired.** As with a frame, the core never re-encodes a stored payload, so a non-canonical payload stays as its author wrote it.
+
+**D13. A payload that decrypts but does not decode.**
+
+- A. Parked, with the reason "unknown payload format", whatever the cause. *(recommended)*
+- B. Rejected, with a new reason "undecodable payload".
+- C. Split by cause: a payload whose format number the member reads and does not know is parked as "unknown payload format"; any other payload that does not decode is rejected as "malformed payload".
+
+Decision: open, for the owner. Recommendation: A. It is the only option that keeps convergence without freezing the payload profile and the depth limit, which the owner has not decided yet (NOC-24). It needs no new state and no new reason, and NOC-28 builds it already. B adds a reason that cannot be checked again by a control change, so it either breaks convergence after an upgrade or becomes parked under another name. C names malformed payloads truthfully, but only by making every relaxation of the profile a new header format. pm recommends A as the reading that loses nothing and stays convergent.
+
+### If the owner chooses B or C
+
+NOC-28's code parks such a change as "unknown payload format", as A says. If the owner chooses B or C, pm opens a follow-up ticket that changes ncdb-core's receive step and its tests to the chosen option, and names that ticket in this amendment's pull request. Under C, the same ticket adds the rule that a change to the payload profile or the depth limit comes with a new header format.
+
+### What this means for RFC 0004 and RFC 0006
+
+- **RFC 0004 (merge rules).** NOC-37 says that a payload holding a value nested too deep does not decode, and leaves its log state to this amendment. Under A it is parked.
+- **RFC 0006 (the local view).** Its fold step 3 parks an unknown payload format. Under A, a payload that does not decode is parked with that same reason, so RFC 0006 needs no change. Under B or C, pm aligns it.
 
 ## Summary of the choices
 
