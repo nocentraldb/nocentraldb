@@ -5,7 +5,9 @@
 # repository's code. It runs on pull requests that touch the probe or its
 # pinned dependencies, and by hand. It writes the measured rows into the run's
 # summary and changes nothing in the repository; docs/browser-storage.md keeps
-# the committed run, which the gate holds the table to.
+# the committed run, which the gate holds the table to. It also uploads the
+# probe page as a static folder (artifact browser-storage-probe), for the
+# manual checks on devices (docs/browser-storage-checklist.md).
 name: browser-storage
 
 on:
@@ -52,3 +54,12 @@ jobs:
             echo
             node scripts/browser-storage/run.mjs
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The probe page as a static folder
+        run: node scripts/browser-storage/build.mjs site
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-storage-probe
+          path: site
+          retention-days: 90

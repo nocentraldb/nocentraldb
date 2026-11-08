@@ -89,17 +89,9 @@ Not covered by the automated run: a branded browser, macOS, Windows, a phone, th
 
 ## Manual checks
 
-These need a person with the device. Record each in the [manual check log](#manual-check-log) with the date, the device, the OS and browser versions, and what you saw; then change the row's finding and set its source to `measured: manual check <date>`.
+These need a person with the device. [browser-storage-checklist.md](browser-storage-checklist.md) has the steps per device (Safari on macOS, Safari on iOS in the browser and as a home-screen app, Chrome and Edge on Android, Firefox), what to record, and how long each step takes. Record each check in the log below, then change the row's finding and set its source to `measured: manual check <date>`.
 
-Serve the page first. On a Mac, `node scripts/browser-storage/server.mjs` serves it at `http://localhost:8333/`. A phone needs HTTPS, because OPFS needs a secure context: copy `scripts/browser-storage/page/` and the `dist/` folder of `@sqlite.org/sqlite-wasm` (as `sqlite/` next to it) to any static HTTPS host, served with `application/wasm` for `.wasm`. Each check uses its own origin, so that two checks never share storage.
-
-1. **Safari (macOS and iOS): the seven-day deletion.** Open the page, press Write, then Storage info, and note both. Do not open the site again, but use Safari on other sites every day. After eight days, open the page: the "Read on load" box shows whether SQLite and IndexedDB still hold the token. Fills "Seven-day deletion of script-writable storage" and "… reaches SQLite on OPFS".
-2. **Safari (macOS and iOS): does `persist()` prevent it.** On a second origin, press Request persist() and note the answer; press Write; then as in check 1. Fills "`persist()` prevents the seven-day deletion", if `persist()` was granted.
-3. **Safari (iOS): does Add to Home Screen prevent it.** On a third origin, add the page to the home screen, open it from there, press Request persist() and Write. Do not open it for eight days, then open it from the home screen and read.
-4. **Chrome and Edge (Android): eviction under storage pressure.** On a phone with little free space, open the page and press Write (without persist()). Fill the storage, for example by copying large files, until the system warns of low storage. Open the page and read. Repeat on a second origin with persist() granted, if the browser grants it.
-5. **Firefox: the persistence prompt.** Press Request persist(). Note whether a prompt appears and what it says; answer Allow, then Storage info (persisted should be true). Repeat on a second origin and answer Block.
-6. **Private windows (Safari, Chrome, Edge, Firefox).** In a private window, press Storage info and Write; note the result. Close every private window, open a new one, and press Read.
-7. **Clearing the cache in settings (every browser).** Press Write. Clear only cached files in the browser's settings, keeping cookies and site data. Open the page and read.
+The page for a phone is a static folder: `node scripts/browser-storage/build.mjs <dir>` writes it, and every run of the `browser-storage` workflow uploads it as the artifact `browser-storage-probe`. Any static HTTPS host can serve it.
 
 ## Manual check log
 
