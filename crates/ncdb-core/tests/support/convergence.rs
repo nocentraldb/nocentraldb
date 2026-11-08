@@ -16,6 +16,7 @@ use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
 use proptest::test_runner::{
     Config as RunnerConfig, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner,
 };
+use sha2::{Digest, Sha256};
 
 /// Who made an operation: one of the simulated members.
 pub type Member = u8;
@@ -599,7 +600,26 @@ pub fn digest<S: Mergeable, G: Generator<S>>(
     seeds: &[u64],
     generator: &G,
 ) -> String {
-    // Not implemented yet: a wrong value, so the C3 test fails on it.
-    let _ = (config, seeds, generator);
-    "0".repeat(64)
+    let strategy = cases::<S, G>(config, generator);
+    let mut hasher = Sha256::new();
+    for &seed in seeds {
+        let mut runner = runner(config.cases, seed);
+        for _ in 0..config.cases {
+            let steps = strategy
+                .new_tree(&mut runner)
+                .expect("the harness generates every case")
+                .current();
+            let made = simulate::<S, G>(generator, &steps);
+            for state in deliver::<S>(&made.ops, &orders_of(&steps, config.copies)) {
+                let bytes = state.state_bytes();
+                hasher.update((bytes.len() as u64).to_le_bytes());
+                hasher.update(&bytes);
+            }
+        }
+    }
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
