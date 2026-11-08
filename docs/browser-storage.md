@@ -91,7 +91,7 @@ Not covered by the automated run: a branded browser, macOS, Windows, a phone, th
 
 These need a person with the device. [browser-storage-checklist.md](browser-storage-checklist.md) has the steps per device (Safari on macOS, Safari on iOS in the browser and as a home-screen app, Chrome and Edge on Android, Firefox), what to record, and how long each step takes. Record each check in the log below, then change the row's finding and set its source to `measured: manual check <date>`.
 
-The page for a phone is a static folder: `node scripts/browser-storage/build.mjs <dir>` writes it, and every run of the `browser-storage` workflow uploads it as the artifact `browser-storage-probe`. Any static HTTPS host can serve it.
+The page for a phone is a static folder: `node scripts/browser-storage/build.mjs <dir>` writes it. The workflow `browser-storage-pages` publishes it to GitHub Pages when the owner has enabled Pages and starts it; until then, every run of the `browser-storage` workflow uploads it as the artifact `browser-storage-probe`, which any static HTTPS host can serve.
 
 ## Manual check log
 
