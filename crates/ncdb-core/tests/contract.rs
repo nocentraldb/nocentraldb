@@ -162,8 +162,14 @@ impl<S: Mergeable<Change = Write>> Generator<S> for WellFormedWrites {
 
 #[test]
 fn the_register_meets_the_contract() {
-    let result = convergence::check::<Register, _>(&Config::default(), &Writes);
-    assert!(result.is_ok(), "{}", result.unwrap_err());
+    for seed in SEEDS {
+        let config = Config {
+            seed,
+            ..Config::default()
+        };
+        let result = convergence::check::<Register, _>(&config, &Writes);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
 }
 
 thread_local! {
@@ -238,16 +244,30 @@ fn generators_know_what_each_member_had_seen() {
 
 /// Runs `S` with the register's writes and expects the harness to report
 /// that it breaks `property` (C6: the checks fire).
+/// Every seed in `SEEDS` must find it, so that the check does not depend on
+/// a lucky seed; returns the violation of seed 0.
 fn expect_violation<S: Mergeable<Change = Write>>(property: &str) -> convergence::Violation {
-    let violation = convergence::check::<S, _>(&Config::default(), &Writes)
-        .expect_err("the harness passed a broken fixture");
-    let report = violation.to_string();
-    assert!(
-        report.starts_with(&format!("{property} ")),
-        "expected {property}, got: {report}"
-    );
-    violation
+    let violations: Vec<convergence::Violation> = SEEDS
+        .map(|seed| {
+            let config = Config {
+                seed,
+                ..Config::default()
+            };
+            let violation = convergence::check::<S, _>(&config, &Writes)
+                .expect_err("the harness passed a broken fixture");
+            let report = violation.to_string();
+            assert!(
+                report.starts_with(&format!("{property} ")),
+                "expected {property}, got: {report}"
+            );
+            violation
+        })
+        .collect();
+    violations.into_iter().next().expect("at least one seed")
 }
+
+/// The seeds every fixture runs with.
+const SEEDS: core::ops::Range<u64> = 0..16;
 
 /// Broken on purpose (C7): keeps the order of arrival beside the register,
 /// outside its state bytes, and reads the first live write to arrive.
