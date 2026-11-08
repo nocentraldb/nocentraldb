@@ -5,15 +5,28 @@
 //! CBOR encoding ([`cbor`]), the ids ([`ids`]), the change with its frame,
 //! header, payload and operations ([`change`]), the hybrid logical clock
 //! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
-//! Signatures and encryption are not here yet (RFC 0003, NOC-15): the
-//! signature and the sealed payload are opaque byte strings.
+//! It also holds the member and space keys ([`keys`]) and signing and
+//! sealing a change as RFC 0003 (`docs/rfc/0003-keys-and-cryptography.md`)
+//! defines it ([`seal`]). A member takes each change it receives through the
+//! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
+//! ([`receive`]); the signature, membership and decryption checks plug in
+//! through [`receive::Checks`].
+//!
+//! It also holds the field types of RFC 0004
+//! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
+//! ([`field`]) and basic values ([`basic`]).
 
+pub mod basic;
 pub mod cbor;
 pub mod change;
 pub mod clock;
+pub mod field;
 pub mod ids;
+pub mod keys;
 pub mod log;
+pub mod receive;
 mod redact;
+pub mod seal;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {

@@ -1,0 +1,226 @@
+//! What a member does with a change it receives (RFC 0002 Amendment 1;
+//! RFC 0006, "Folding"): decode, understand the header, verify the
+//! signature, check membership, decrypt, understand the payload, fold. A
+//! change stops at the first step it does not pass, and its [`State`] in
+//! the log says where.
+//!
+//! The checks of steps 3 to 5 come in through [`Checks`] and the fold of
+//! operations through [`Fold`], so the order of the steps and the states
+//! live here, and signatures, decryption (RFC 0003, NOC-15) and the field
+//! types (RFC 0004) plug in.
+
+use std::fmt;
+
+use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
+use crate::ids::OperationId;
+use crate::log::{
+    AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
+    State,
+};
+use crate::redact::Size;
+
+/// The result of verifying a change's signature (step 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verified {
+    /// The signature verifies under the author's signing key.
+    Valid,
+    /// No membership entry the member holds names the author.
+    UnknownAuthor,
+    /// The signature does not verify.
+    BadSignature,
+}
+
+/// The result of decrypting a sealed change's payload (step 5). Its `Debug`
+/// output shows the plaintext only by its length.
+#[derive(Clone, PartialEq, Eq)]
+pub enum Opened {
+    /// The plaintext payload map.
+    Plaintext(Vec<u8>),
+    /// The member holds no key for the change's key generation.
+    NoKey,
+    /// The AEAD fails.
+    Undecryptable,
+}
+
+impl fmt::Debug for Opened {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Opened::Plaintext(bytes) => f
+                .debug_tuple("Plaintext")
+                .field(&Size(bytes.len(), "bytes"))
+                .finish(),
+            Opened::NoKey => f.write_str("NoKey"),
+            Opened::Undecryptable => f.write_str("Undecryptable"),
+        }
+    }
+}
+
+/// The checks of steps 3 to 5, against the control state of the space:
+/// the membership entries, key chain entries and key envelopes the member
+/// holds. Their result must depend only on the change and the set of
+/// control changes added, never on their order or on the time.
+pub trait Checks {
+    /// Whether this member knows the suite (step 2).
+    fn knows_suite(&self, suite: u64) -> bool;
+    /// Verifies the author's signature (step 3).
+    fn verify(&self, change: &Change) -> Verified;
+    /// Whether the author is a member at the change's key generation (step
+    /// 4).
+    fn is_member(&self, change: &Change) -> bool;
+    /// Decrypts a sealed change's payload (step 5).
+    fn open(&self, change: &Change) -> Opened;
+    /// Adds a control change that passed steps 1 to 4 to the control state.
+    fn add_control(&mut self, change: &Change);
+}
+
+/// The fold of operations (step 7): the member's model and its field types.
+pub trait Fold {
+    /// Whether the member's model knows the collection.
+    fn knows_collection(&self, collection: &str) -> bool;
+    /// Whether the member's model knows the field of the collection.
+    fn knows_field(&self, collection: &str, field: &str) -> bool;
+    /// Folds one operation the model knows into the view.
+    fn fold(&mut self, id: OperationId, operation: &Operation);
+}
+
+/// Why a received frame was not appended.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ReceiveError {
+    /// Step 1: the frame is not well-formed or not canonical, so it has no
+    /// stable change id.
+    Decode(ChangeError),
+    /// The change belongs to another space.
+    WrongSpace,
+}
+
+impl fmt::Display for ReceiveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ReceiveError::Decode(error) => write!(f, "the frame does not decode: {error}"),
+            ReceiveError::WrongSpace => AppendError::WrongSpace.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ReceiveError {}
+
+impl Log {
+    /// Receives a frame: appends it, takes it through the steps and
+    /// records its state, all in this call. A duplicate changes nothing.
+    ///
+    /// When the frame is a control change that passes, the rejected changes
+    /// of the space are checked again in the same call (D11), until no
+    /// further control change passes. Since every check depends only on the
+    /// change and the set of control changes added, the states the log ends
+    /// in depend only on the set of changes received, not on their order.
+    pub fn receive(
+        &mut self,
+        bytes: &[u8],
+        checks: &mut impl Checks,
+        fold: &mut impl Fold,
+    ) -> Result<Appended, ReceiveError> {
+        let change = Change::decode(bytes).map_err(ReceiveError::Decode)?;
+        let appended = self.append(change.clone()).map_err(|error| match error {
+            AppendError::WrongSpace => ReceiveError::WrongSpace,
+        })?;
+        if let Appended::New(_) = appended {
+            let state = check(&change, checks, fold);
+            let control_passed = is_folded_control(&change, &state);
+            self.set_state(change.id(), state);
+            if control_passed {
+                self.check_rejected_again(checks, fold);
+            }
+        }
+        Ok(appended)
+    }
+
+    /// Checks every rejected change again, in log order, and again after any
+    /// control change among them passes, since it may let others pass.
+    fn check_rejected_again(&mut self, checks: &mut impl Checks, fold: &mut impl Fold) {
+        loop {
+            let mut control_passed = false;
+            for change in self.rejected() {
+                let state = check(&change, checks, fold);
+                control_passed |= is_folded_control(&change, &state);
+                self.set_state(change.id(), state);
+            }
+            if !control_passed {
+                return;
+            }
+        }
+    }
+}
+
+/// Whether a change is a control change that passed its checks.
+fn is_folded_control(change: &Change, state: &State) -> bool {
+    change.header().kind == Kind::CONTROL && matches!(state, State::Folded { .. })
+}
+
+/// Steps 2 to 7 for one change.
+fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> State {
+    let header = change.header();
+    if !checks.knows_suite(header.suite) {
+        return State::Parked(ParkReason::UnknownSuite);
+    }
+    if !header.kind.is_known() {
+        return State::Parked(ParkReason::UnknownKind);
+    }
+    if header.format != Header::FORMAT {
+        return State::Parked(ParkReason::UnknownHeaderFormat);
+    }
+    if header.extensions().must_understand() {
+        return State::Parked(ParkReason::UnknownHeaderKey);
+    }
+    match checks.verify(change) {
+        Verified::Valid => {}
+        Verified::UnknownAuthor => return State::Rejected(RejectReason::UnknownAuthor),
+        Verified::BadSignature => return State::Rejected(RejectReason::BadSignature),
+    }
+    if !checks.is_member(change) {
+        return State::Rejected(RejectReason::NotMember);
+    }
+    if header.kind == Kind::CONTROL {
+        // A control change stops after step 4: it has no payload to decrypt.
+        checks.add_control(change);
+        return State::Folded { parked: Vec::new() };
+    }
+    let plaintext = match checks.open(change) {
+        Opened::Plaintext(plaintext) => plaintext,
+        Opened::NoKey => return State::Rejected(RejectReason::NoKey),
+        Opened::Undecryptable => return State::Rejected(RejectReason::Undecryptable),
+    };
+    let Ok(payload) = Payload::decode(&plaintext) else {
+        return State::Parked(ParkReason::UnknownPayloadFormat);
+    };
+    if payload.format != Payload::FORMAT {
+        return State::Parked(ParkReason::UnknownPayloadFormat);
+    }
+    if payload.extensions().must_understand() {
+        return State::Parked(ParkReason::UnknownPayloadKey);
+    }
+    let mut parked = Vec::new();
+    for (position, operation) in (0..).zip(&payload.operations) {
+        match understand(operation, fold) {
+            Ok(()) => fold.fold(change.operation_id(position), operation),
+            Err(reason) => parked.push(ParkedOperation { position, reason }),
+        }
+    }
+    State::Folded { parked }
+}
+
+/// Whether the member's model knows an operation; D10 parks it on its own
+/// when it does not.
+fn understand(operation: &Operation, fold: &impl Fold) -> Result<(), OperationParkReason> {
+    if !fold.knows_collection(&operation.collection) {
+        return Err(OperationParkReason::UnknownCollection);
+    }
+    if let Some(field) = &operation.field
+        && !fold.knows_field(&operation.collection, field)
+    {
+        return Err(OperationParkReason::UnknownField);
+    }
+    if operation.extensions().must_understand() {
+        return Err(OperationParkReason::UnknownKey);
+    }
+    Ok(())
+}

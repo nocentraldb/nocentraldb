@@ -1,5 +1,11 @@
 # Versions are not repeated here: proto reads .prototools (moon, node,
 # pnpm) and rustup reads rust-toolchain.toml (Rust).
+# The one exception: the proto moon runs its tasks with. Without this pin,
+# moon downloads its own default proto on the first task of every fresh
+# CI job. It equals PROTO_VERSION in scripts/install-toolchain.sh, which
+# installs it (scripts/toolchain-workflow.test.mjs holds the two equal).
+proto:
+  version: "0.63.2"
 javascript:
   packageManager: pnpm
   inferTasksFromScripts: false

@@ -5,6 +5,12 @@
 //! and keep them. The log never changes or removes an entry, and holds each
 //! change id once. A cursor is a position: the entries after it are handed
 //! out in order. Persistence to SQLite is a later ticket.
+//!
+//! On a member, each entry also carries its [`State`]: folded, parked or
+//! rejected (RFC 0002 Amendment 1), and the relay's refusal when there is
+//! one, beside the frame bytes. [`Log::receive`](crate::receive) sets both.
+//! The relay's log holds no states: an entry appended with [`Log::append`]
+//! has none.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -48,12 +54,105 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
+/// Where a member's check of a change stopped (RFC 0002 Amendment 1, "What
+/// a member does with a change it receives"). New states and reasons may
+/// follow, so the enums are open to extension.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum State {
+    /// Passed every check and folded. Operations the member's model does
+    /// not know yet are parked on their own (D10), listed here in order.
+    Folded {
+        /// The operations of the change that were not folded.
+        parked: Vec<ParkedOperation>,
+    },
+    /// Kept and not folded, because this client does not understand it
+    /// yet; folded after an upgrade.
+    Parked(ParkReason),
+    /// Kept and not folded, because it failed a check; checked again when a
+    /// control change of the space arrives (D11).
+    Rejected(RejectReason),
+}
+
+/// Why a change is parked: steps 2 and 6.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ParkReason {
+    /// The suite id is unknown.
+    UnknownSuite,
+    /// The kind is unknown.
+    UnknownKind,
+    /// The header format is unknown.
+    UnknownHeaderFormat,
+    /// The header carries an unknown "must understand" key.
+    UnknownHeaderKey,
+    /// The payload format is unknown, or the payload is not a map this
+    /// core can read, as a newer format may not be.
+    UnknownPayloadFormat,
+    /// The payload carries an unknown "must understand" key.
+    UnknownPayloadKey,
+}
+
+/// An operation of a folded change that was parked on its own (D10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ParkedOperation {
+    /// The operation's position in the change's operation array.
+    pub position: u64,
+    /// Why it was parked.
+    pub reason: OperationParkReason,
+}
+
+/// Why an operation is parked on its own: step 7.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OperationParkReason {
+    /// The member's model does not know the collection.
+    UnknownCollection,
+    /// The member's model does not know the field.
+    UnknownField,
+    /// The operation carries an unknown "must understand" key.
+    UnknownKey,
+}
+
+/// Why a change is rejected: steps 3 to 5.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RejectReason {
+    /// Step 3: no membership entry the member holds names the author.
+    UnknownAuthor,
+    /// Step 3: the signature does not verify.
+    BadSignature,
+    /// Step 4: the author is not a member at the change's key generation.
+    NotMember,
+    /// Step 5: the member holds no key envelope for the key generation.
+    NoKey,
+    /// Step 5: the AEAD fails.
+    Undecryptable,
+}
+
+/// The relay's refusal of a change the member holds: the relay's error
+/// code (RFC 0007), such as `author_not_member`. It is recorded beside the
+/// change and never changes its [`State`] (D12): no other member sees the
+/// relay's answer, so a state that followed it could differ between
+/// members that hold the same changes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelayRefusal(pub String);
+
+/// One entry: the change, and on a member its state and the relay's
+/// refusal.
+#[derive(Clone)]
+struct Entry {
+    change: Change,
+    state: Option<State>,
+    refusal: Option<RelayRefusal>,
+}
+
 /// The log of one space. Its `Debug` output shows the space and the number
 /// of entries.
 #[derive(Clone)]
 pub struct Log {
     space: SpaceId,
-    entries: Vec<Change>,
+    entries: Vec<Entry>,
     positions: BTreeMap<ChangeId, Position>,
 }
 
@@ -90,7 +189,11 @@ impl Log {
         if let Some(position) = self.position_of(id) {
             return Ok(Appended::Duplicate(position));
         }
-        self.entries.push(change);
+        self.entries.push(Entry {
+            change,
+            state: None,
+            refusal: None,
+        });
         let position = self.head();
         self.positions.insert(id, position);
         Ok(Appended::New(position))
@@ -114,7 +217,59 @@ impl Log {
     /// The entry at a position.
     pub fn get(&self, position: Position) -> Option<&Change> {
         let index = usize::try_from(position.0.checked_sub(1)?).ok()?;
-        self.entries.get(index)
+        self.entries.get(index).map(|entry| &entry.change)
+    }
+
+    /// The member's state of a change, when the log holds it with one.
+    pub fn state(&self, id: ChangeId) -> Option<&State> {
+        self.entry(id)?.state.as_ref()
+    }
+
+    /// The relay's refusal of a change, when one was recorded.
+    pub fn relay_refusal(&self, id: ChangeId) -> Option<&RelayRefusal> {
+        self.entry(id)?.refusal.as_ref()
+    }
+
+    /// Records the relay's refusal of a change the log holds, beside the
+    /// change; its state stays as it is (D12). Returns `false`, and records
+    /// nothing, when the log does not hold the change.
+    pub fn record_relay_refusal(&mut self, id: ChangeId, refusal: RelayRefusal) -> bool {
+        match self.entry_mut(id) {
+            Some(entry) => {
+                entry.refusal = Some(refusal);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Sets the state of a change the log holds.
+    pub(crate) fn set_state(&mut self, id: ChangeId, state: State) {
+        if let Some(entry) = self.entry_mut(id) {
+            entry.state = Some(state);
+        }
+    }
+
+    /// The rejected changes, in log order.
+    pub(crate) fn rejected(&self) -> Vec<Change> {
+        self.entries
+            .iter()
+            .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
+            .map(|entry| entry.change.clone())
+            .collect()
+    }
+
+    fn entry(&self, id: ChangeId) -> Option<&Entry> {
+        self.entries.get(self.index_of(id)?)
+    }
+
+    fn entry_mut(&mut self, id: ChangeId) -> Option<&mut Entry> {
+        let index = self.index_of(id)?;
+        self.entries.get_mut(index)
+    }
+
+    fn index_of(&self, id: ChangeId) -> Option<usize> {
+        usize::try_from(self.position_of(id)?.0.checked_sub(1)?).ok()
     }
 
     /// The position of a change, when the log holds it.
@@ -129,6 +284,6 @@ impl Log {
             .iter()
             .zip(1..)
             .skip(skip)
-            .map(|(change, position)| (Position(position), change))
+            .map(|(entry, position)| (Position(position), &entry.change))
     }
 }
