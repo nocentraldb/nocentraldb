@@ -13,8 +13,9 @@ publish = false
 # The CBOR tokens of the canonical encoding; the profile's restrictions are
 # checked in src/cbor.rs.
 minicbor = { version = "=2.3.1", default-features = false, features = ["alloc"] }
-# Change ids are SHA-256 in every suite (RFC 0002, "Change ids").
-sha2 = { version = "=0.11.1", default-features = false }
+# Change ids are SHA-256 in every suite (RFC 0002, "Change ids"). Its
+# `zeroize` feature wipes the hash state, and with it HKDF's, on drop.
+sha2 = { version = "=0.11.1", default-features = false, features = ["zeroize"] }
 # Object and space ids: 128 bits from the platform's secure generator,
 # crypto.getRandomValues in the browser (RFC 0002, "Object ids").
 getrandom = { version = "=0.4.3", default-features = false }
@@ -26,8 +27,9 @@ ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["all
 # fixes RUSTSEC-2024-0344 (4.1.3; 4.2.0 is yanked) cannot be resolved away. It also
 # computes the X25519 public half of a member key for the member id.
 curve25519-dalek = { version = "=4.1.3", default-features = false, features = ["alloc", "zeroize"] }
-# XChaCha20-Poly1305, the content encryption of suite 1.
-chacha20poly1305 = { version = "=0.11.0", default-features = false, features = ["alloc"] }
+# XChaCha20-Poly1305, the content encryption of suite 1. Its `zeroize`
+# feature wipes the key the cipher holds on drop.
+chacha20poly1305 = { version = "=0.11.0", default-features = false, features = ["alloc", "zeroize"] }
 # HKDF-SHA256, which derives the content key from the space key.
 hkdf = { version = "=0.13.0", default-features = false }
 # Wipes key bytes from memory when they are dropped.

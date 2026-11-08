@@ -163,10 +163,7 @@ fn verification_is_strict() {
     let signature = ed25519_dalek::Signature::from_slice(&signature).unwrap();
     assert!(key.verify(change.header_bytes(), &signature).is_ok());
 
-    assert_eq!(
-        seal::verify(&change, &author),
-        Err(OpenError::Signature)
-    );
+    assert_eq!(seal::verify(&change, &author), Err(OpenError::Signature));
 }
 
 #[test]
@@ -326,7 +323,9 @@ fn a_ciphertext_re_signed_after_a_flipped_bit_does_not_decrypt() {
         );
     }
     let mut truncated = change.header().clone();
-    truncated.payload.truncate(seal::NONCE_LEN + seal::TAG_LEN - 1);
+    truncated
+        .payload
+        .truncate(seal::NONCE_LEN + seal::TAG_LEN - 1);
     assert_eq!(
         seal::open(&seal::sign(&a, truncated), &a.public(), &key),
         Err(OpenError::Decryption)
@@ -346,7 +345,11 @@ fn every_header_field_is_bound_to_the_payload() {
         ("space", |h, _| h.space.0[0] ^= 1, OpenError::Decryption),
         ("author", |h, b| h.author = b.id(), OpenError::Decryption),
         ("sequence", |h, _| h.sequence += 1, OpenError::Decryption),
-        ("key generation", |h, _| h.key_generation += 1, OpenError::Decryption),
+        (
+            "key generation",
+            |h, _| h.key_generation += 1,
+            OpenError::Decryption,
+        ),
         ("kind", |h, _| h.kind = Kind(2), OpenError::NotSealed(2)),
         ("header format", |h, _| h.format = 2, OpenError::Decryption),
         ("suite", |h, _| h.suite = 2, OpenError::UnknownSuite(2)),
@@ -361,11 +364,9 @@ fn every_header_field_is_bound_to_the_payload() {
         edit(&mut header, &b);
         let signer = if header.author == b.id() { &b } else { &a };
         let unsigned = Change::new(header.clone(), change.signature().to_vec());
-        assert!(
-            matches!(
-                seal::open(&unsigned, &signer.public(), &key),
-                Err(OpenError::Signature)
-            ),
+        assert_eq!(
+            seal::verify(&unsigned, &signer.public()),
+            Err(OpenError::Signature),
             "{field}: the old signature must not verify"
         );
         let re_signed = seal::sign(signer, header);
@@ -390,8 +391,8 @@ fn a_control_change_does_not_open() {
 /// The content key and the associated data as the module documents them,
 /// computed here with the crates directly.
 fn seal_raw(author: &MemberKey, space_key: [u8; 32], plaintext: &[u8]) -> Change {
-    use chacha20poly1305::aead::{Aead, KeyInit, Payload as AeadPayload};
     use chacha20poly1305::XChaCha20Poly1305;
+    use chacha20poly1305::aead::{Aead, KeyInit, Payload as AeadPayload};
     let (sequence, generation) = (1u64, 4u64);
     let mut info = b"nocentraldb/content-key".to_vec();
     info.extend_from_slice(&SPACE.0);
@@ -427,7 +428,15 @@ fn seal_raw(author: &MemberKey, space_key: [u8; 32], plaintext: &[u8]) -> Change
         )
         .unwrap();
     let sealed = [nonce.as_slice(), &ciphertext].concat();
-    let header = Header::new(SPACE, author.id(), sequence, generation, Kind::SEALED, sealed, seal::SUITE);
+    let header = Header::new(
+        SPACE,
+        author.id(),
+        sequence,
+        generation,
+        Kind::SEALED,
+        sealed,
+        seal::SUITE,
+    );
     seal::sign(author, header)
 }
 

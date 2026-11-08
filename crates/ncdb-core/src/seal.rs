@@ -17,11 +17,16 @@
 
 use std::fmt;
 
+use chacha20poly1305::XChaCha20Poly1305;
+use chacha20poly1305::aead::{Aead, KeyInit, Payload as Aad};
 use ed25519_dalek::{Signature, Signer, VerifyingKey};
+use hkdf::Hkdf;
+use sha2::Sha256;
+use zeroize::Zeroizing;
 
-use crate::change::{Change, ChangeError, Header, Payload};
+use crate::change::{Change, ChangeError, Header, Kind, Payload};
 use crate::ids::SpaceId;
-use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
+use crate::keys::{self, MemberKey, MemberPublicKey, SpaceKey};
 
 /// Suite 1 of RFC 0003: Ed25519, HPKE with X25519, XChaCha20-Poly1305,
 /// HKDF-SHA256 and SHA-256.
@@ -36,6 +41,9 @@ pub const NONCE_LEN: usize = 24;
 
 /// The length of the authentication tag behind the ciphertext.
 pub const TAG_LEN: usize = 16;
+
+/// The context string in front of the content key's HKDF info.
+pub const CONTENT_KEY_CONTEXT: &[u8] = b"nocentraldb/content-key";
 
 /// Why a change does not verify or does not open. Each variant names the
 /// step that failed; none carries a key, a ciphertext or a plaintext.
@@ -99,8 +107,29 @@ pub fn verify(change: &Change, author: &MemberPublicKey) -> Result<(), OpenError
 /// The payload, padded as sealing pads it: the canonical encoding is a
 /// multiple of [`PADDING_BLOCK`] bytes.
 pub fn pad(payload: &Payload) -> Payload {
-    let _ = payload;
-    todo!()
+    let mut padded = payload.clone();
+    padded.padding = None;
+    let length = padded.encode().len();
+    if length.is_multiple_of(PADDING_BLOCK) {
+        return padded;
+    }
+    padded.padding = Some(Vec::new());
+    // The encoding with empty padding; n zero bytes add n, and from 24 and
+    // 256 bytes on one and two more for the byte string's length.
+    let base = padded.encode().len();
+    let mut target = length.next_multiple_of(PADDING_BLOCK);
+    loop {
+        for growth in [0, 1, 2, 4] {
+            let Some(zeros) = target.checked_sub(base + growth) else {
+                continue;
+            };
+            padded.padding = Some(vec![0; zeros]);
+            if padded.encode().len() == target {
+                return padded;
+            }
+        }
+        target += PADDING_BLOCK;
+    }
 }
 
 /// Seals and signs a payload: a sealed change (kind 0) of suite 1 in this
@@ -114,8 +143,16 @@ pub fn seal(
     key_generation: u64,
     payload: &Payload,
 ) -> Change {
-    let _ = (author, space_key, space, sequence, key_generation, payload);
-    todo!()
+    let nonce = keys::random::<NONCE_LEN>();
+    seal_with_nonce(
+        author,
+        space_key,
+        space,
+        sequence,
+        key_generation,
+        payload,
+        *nonce,
+    )
 }
 
 /// [`seal`] with a given nonce, for test vectors. A nonce must never be
@@ -129,8 +166,27 @@ pub fn seal_with_nonce(
     payload: &Payload,
     nonce: [u8; NONCE_LEN],
 ) -> Change {
-    let _ = (author, space_key, space, sequence, key_generation, payload, nonce);
-    todo!()
+    let mut header = Header::new(
+        space,
+        author.id(),
+        sequence,
+        key_generation,
+        Kind::SEALED,
+        Vec::new(),
+        SUITE,
+    );
+    let plaintext = Zeroizing::new(pad(payload).encode());
+    let ciphertext = cipher(space_key, &header)
+        .encrypt(
+            &nonce.into(),
+            Aad {
+                msg: &plaintext,
+                aad: &header.associated_data(),
+            },
+        )
+        .expect("a payload is far below XChaCha20-Poly1305's length limit");
+    header.payload = [nonce.as_slice(), &ciphertext].concat();
+    sign(author, header)
 }
 
 /// Verifies a sealed change and decrypts its payload with the space key of
@@ -140,6 +196,45 @@ pub fn open(
     author: &MemberPublicKey,
     space_key: &SpaceKey,
 ) -> Result<Payload, OpenError> {
-    let _ = (change, author, space_key);
-    todo!()
+    let header = change.header();
+    if header.kind != Kind::SEALED {
+        return Err(OpenError::NotSealed(header.kind.0));
+    }
+    if header.suite != SUITE {
+        return Err(OpenError::UnknownSuite(header.suite));
+    }
+    verify(change, author)?;
+    let Some((nonce, ciphertext)) = header.payload.split_at_checked(NONCE_LEN) else {
+        return Err(OpenError::Decryption);
+    };
+    let nonce: [u8; NONCE_LEN] = nonce.try_into().expect("split at the nonce length");
+    let plaintext = Zeroizing::new(
+        cipher(space_key, header)
+            .decrypt(
+                &nonce.into(),
+                Aad {
+                    msg: ciphertext,
+                    aad: &header.associated_data(),
+                },
+            )
+            .map_err(|_| OpenError::Decryption)?,
+    );
+    Payload::decode(&plaintext).map_err(OpenError::Payload)
+}
+
+/// The cipher under the content key of the header's space, key generation
+/// and suite: HKDF-SHA256 of the space key, without salt, with the info
+/// `"nocentraldb/content-key" || space id || key generation || suite id`,
+/// both numbers as 8 bytes, big-endian.
+fn cipher(space_key: &SpaceKey, header: &Header) -> XChaCha20Poly1305 {
+    let mut info = Vec::with_capacity(CONTENT_KEY_CONTEXT.len() + 16 + 8 + 8);
+    info.extend_from_slice(CONTENT_KEY_CONTEXT);
+    info.extend_from_slice(&header.space.0);
+    info.extend_from_slice(&header.key_generation.to_be_bytes());
+    info.extend_from_slice(&header.suite.to_be_bytes());
+    let mut content_key = Zeroizing::new([0; 32]);
+    Hkdf::<Sha256>::new(None, space_key.bytes())
+        .expand(&info, content_key.as_mut())
+        .expect("32 bytes are far below HKDF-SHA256's output limit");
+    XChaCha20Poly1305::new(&(*content_key).into())
 }
