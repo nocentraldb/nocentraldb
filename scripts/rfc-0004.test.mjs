@@ -65,3 +65,76 @@ test("RFC 0004 has the sections its ticket asks for", () => {
     );
   }
 });
+
+// Amendment 1 (NOC-37): how the field operations of basic values, sets and
+// links travel in an RFC 0002 change. The test checks the amendment's shape;
+// whether the encoding is right is the owner's review of the pull request.
+const RFC_0002 = "docs/rfc/0002-change-and-log-format.md";
+
+/** The text of the amendment: from its heading to the next level-2 heading. */
+const amendment = () => {
+  const [, rest = ""] = read().split(/^## Amendment 1\b.*$/m);
+  return rest.split(/^## /m)[0];
+};
+
+test("RFC 0004 links RFC 0002", () => {
+  const targets = relativeLinks(read()).map((href) =>
+    normalize(join(dirname(RFC), href)),
+  );
+  assert.ok(
+    targets.includes(normalize(RFC_0002)),
+    `${RFC} has no relative link to ${RFC_0002}`,
+  );
+});
+
+test("RFC 0004 has a dated changelog line for Amendment 1 (NOC-37)", () => {
+  assert.match(
+    read(),
+    /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-37 · .*Amendment 1/m,
+    `${RFC} has no changelog line "- **YYYY-MM-DD** · NOC-37 · ... Amendment 1"`,
+  );
+});
+
+test("RFC 0004 has Amendment 1 with the sections NOC-37 asks for", () => {
+  assert.ok(amendment().trim(), `${RFC} has no "## Amendment 1" section`);
+  const found = headings(`## x\n${amendment()}`);
+  for (const wanted of [
+    "where field operations sit in a change",
+    "operation numbers",
+    "the arguments of each operation",
+    "operations a member does not understand",
+    "how a field type adds operations",
+    "byte-exact examples",
+    "what the relay sees",
+    "rejected options",
+    "decisions for the owner",
+  ]) {
+    assert.ok(
+      found.some((heading) => heading.startsWith(wanted)),
+      `${RFC}: Amendment 1 has no section starting with "${wanted}"`,
+    );
+  }
+});
+
+test("Amendment 1 covers basic values, sets and links, and points NOC-16 and NOC-17 at its examples", () => {
+  const text = amendment();
+  for (const operation of ["set", "add", "remove"]) {
+    assert.match(
+      text,
+      new RegExp(`\\*\\*${operation}\\*\\*`),
+      `${RFC}: Amendment 1 does not define the operation **${operation}**`,
+    );
+  }
+  for (const ticket of ["NOC-16", "NOC-17"]) {
+    assert.ok(
+      text.includes(ticket),
+      `${RFC}: Amendment 1 does not name ${ticket}`,
+    );
+  }
+  const examples = text.split(/^### Byte-exact examples/m)[1] ?? "";
+  assert.match(
+    examples,
+    /```text\n(?:[0-9a-f]{2}\s?)+\n```/,
+    `${RFC}: the byte-exact examples hold no hex block`,
+  );
+});
