@@ -1,4 +1,5 @@
-//! D11 with the convergence harness (NOC-9): copies that receive the same
+//! D11 with the convergence harness (NOC-9, with NOC-19's contract checks
+//! C1, C2, C4 and C7): copies that receive the same
 //! changes, control changes among them, in any order and with duplicates,
 //! end with the same state for every change, the same folded operations and
 //! the same control state (RFC 0006, "Why the end state depends only on the
@@ -19,7 +20,7 @@ use std::collections::BTreeMap;
 use ncdb_core::ids::ChangeId;
 use ncdb_core::log::{Position, State};
 use proptest::prelude::*;
-use support::convergence::{self, Config, Mergeable};
+use support::convergence::{self, Config, Mergeable, Op, OpId, Outcome, independent};
 
 use member::*;
 
@@ -50,22 +51,31 @@ impl Copy {
     }
 }
 
-impl PartialEq for Copy {
-    fn eq(&self, other: &Copy) -> bool {
-        self.states() == other.states()
-            && self.0.fold == other.0.fold
-            && self.0.control == other.0.control
-    }
-}
-
 impl Mergeable for Copy {
     type Change = Vec<u8>;
+    type Read = String;
 
-    fn apply(&mut self, bytes: &Vec<u8>) {
+    fn apply(&mut self, op: &Op<Vec<u8>>) {
         let m = &mut self.0;
         m.log
-            .receive(bytes, &mut m.control, &mut m.fold)
+            .receive(&op.body, &mut m.control, &mut m.fold)
             .expect("every generated frame is appended");
+    }
+
+    /// The state of every change, the folded operations and the control
+    /// state, in a canonical order: equal copies, equal bytes.
+    fn state_bytes(&self) -> Vec<u8> {
+        format!("{:?}", (self.states(), &self.0.fold, &self.0.control)).into_bytes()
+    }
+
+    fn read(&self) -> String {
+        format!("{:?}", self.states())
+    }
+
+    /// The log keeps every change it receives, folded, parked or rejected:
+    /// none is replaced or lost.
+    fn outcome(&self, _: OpId) -> Outcome {
+        Outcome::Visible
     }
 }
 
@@ -102,6 +112,6 @@ fn d11_the_final_states_depend_only_on_the_set_of_changes() {
         max_changes_per_member: 5,
         ..Config::default()
     };
-    let result = convergence::check::<Copy>(&config, change);
+    let result = convergence::check::<Copy, _>(&config, &independent(change));
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
