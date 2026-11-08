@@ -59,6 +59,7 @@ await db.workOrders.erase({ person: customerId });  // needs a second account's 
 - Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Copies made outside the database, such as exports and screenshots, stay readable.
 - The database does not find personal data in unmarked free text.
+- The key is destroyed only once the erasure is stable, when every admin device of the space has written a change after seeing it. Every view shows the fields as erased at once, but an admin device that stays offline keeps the key alive on the members until it comes back or is demoted; after 7 days the SDK of every admin raises an alarm that names it ([RFC 0008, "Effects that wait until a change is stable"](rfc/0008-membership.md#effects-that-wait-until-a-change-is-stable)).
 
 Your data protection officer decides whether destroying a key counts as erasure in your case. This is a design, not legal advice.
 
