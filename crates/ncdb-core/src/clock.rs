@@ -77,7 +77,11 @@ impl std::fmt::Display for ClockAhead {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("a change by member ")?;
         crate::redact::hex(f, &self.author.0)?;
-        write!(f, " has a clock {} ms ahead of the local wall clock", self.ahead_millis)
+        write!(
+            f,
+            " has a clock {} ms ahead of the local wall clock",
+            self.ahead_millis
+        )
     }
 }
 
@@ -111,7 +115,10 @@ impl Clock {
     pub fn receive(&mut self, seen: Hlc, author: MemberId, wall: u64) -> Option<ClockAhead> {
         self.observe(seen);
         let ahead_millis = seen.millis().saturating_sub(wall);
-        (ahead_millis > AHEAD_LIMIT_MILLIS).then_some(ClockAhead { author, ahead_millis })
+        (ahead_millis > AHEAD_LIMIT_MILLIS).then_some(ClockAhead {
+            author,
+            ahead_millis,
+        })
     }
 
     /// The clock for a change this member writes now: the larger of the

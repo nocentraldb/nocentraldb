@@ -157,12 +157,18 @@ fn a_clock_more_than_a_minute_ahead_raises_a_warning_and_a_minute_or_less_none()
     let mut clock = Clock::new();
     assert_eq!(
         clock.receive(hlc(WALL + 60_001, 0), AUTHOR, WALL),
-        Some(ClockAhead { author: AUTHOR, ahead_millis: 60_001 })
+        Some(ClockAhead {
+            author: AUTHOR,
+            ahead_millis: 60_001
+        })
     );
     // Exactly a minute ahead, with any counter: none.
     let mut clock = Clock::new();
     assert_eq!(clock.receive(hlc(WALL + 60_000, 0), AUTHOR, WALL), None);
-    assert_eq!(clock.receive(hlc(WALL + 60_000, u16::MAX), AUTHOR, WALL), None);
+    assert_eq!(
+        clock.receive(hlc(WALL + 60_000, u16::MAX), AUTHOR, WALL),
+        None
+    );
     // Less than a minute ahead, the same millisecond, or behind: none.
     assert_eq!(clock.receive(hlc(WALL + 59_999, 0), AUTHOR, WALL), None);
     assert_eq!(clock.receive(hlc(WALL, 3), AUTHOR, WALL), None);
@@ -171,16 +177,26 @@ fn a_clock_more_than_a_minute_ahead_raises_a_warning_and_a_minute_or_less_none()
     // The warning compares with the local wall clock, not with the highest
     // clock seen: a second change as far ahead warns again.
     let mut clock = Clock::new();
-    assert!(clock.receive(hlc(WALL + 120_000, 0), AUTHOR, WALL).is_some());
+    assert!(
+        clock
+            .receive(hlc(WALL + 120_000, 0), AUTHOR, WALL)
+            .is_some()
+    );
     assert_eq!(
         clock.receive(hlc(WALL + 120_000, 1), AUTHOR, WALL),
-        Some(ClockAhead { author: AUTHOR, ahead_millis: 120_000 })
+        Some(ClockAhead {
+            author: AUTHOR,
+            ahead_millis: 120_000
+        })
     );
     // The largest clock and a wall clock of zero do not overflow.
     let mut clock = Clock::new();
     assert_eq!(
         clock.receive(Hlc(u64::MAX), AUTHOR, 0),
-        Some(ClockAhead { author: AUTHOR, ahead_millis: Hlc::MAX_MILLIS })
+        Some(ClockAhead {
+            author: AUTHOR,
+            ahead_millis: Hlc::MAX_MILLIS
+        })
     );
     // A wall clock beyond 48 bits sees nothing ahead.
     assert_eq!(clock.receive(Hlc(u64::MAX), AUTHOR, u64::MAX), None);
@@ -195,18 +211,22 @@ fn a_clock_from_the_future_is_still_received_and_the_clock_moves_as_without_the_
         (0u64..200_000).prop_map(|behind| hlc(WALL - behind, 0)),
         Just(Hlc(u64::MAX)),
     ];
-    props::check(1024, proptest::collection::vec(received, 1..20), |received| {
-        let mut warned = Clock::new();
-        let mut plain = Clock::new();
-        for seen in received {
-            let warning = warned.receive(seen, AUTHOR, WALL);
-            plain.observe(seen);
-            prop_assert_eq!(warning.is_some(), seen.millis() > WALL + 60_000);
-            prop_assert_eq!(warned.highest(), plain.highest());
-            prop_assert_eq!(warned.clone().now(WALL), plain.clone().now(WALL));
-        }
-        Ok(())
-    });
+    props::check(
+        1024,
+        proptest::collection::vec(received, 1..20),
+        |received| {
+            let mut warned = Clock::new();
+            let mut plain = Clock::new();
+            for seen in received {
+                let warning = warned.receive(seen, AUTHOR, WALL);
+                plain.observe(seen);
+                prop_assert_eq!(warning.is_some(), seen.millis() > WALL + 60_000);
+                prop_assert_eq!(warned.highest(), plain.highest());
+                prop_assert_eq!(warned.clone().now(WALL), plain.clone().now(WALL));
+            }
+            Ok(())
+        },
+    );
 }
 
 #[test]
@@ -215,7 +235,10 @@ fn the_warning_names_only_the_clock_difference_and_the_author() {
     let warning = clock.receive(hlc(WALL + 61_500, 9), AUTHOR, WALL).unwrap();
     // Destructured without `..`: a field added to the warning fails to
     // compile here, so nothing besides these two can slip into it.
-    let ClockAhead { author, ahead_millis } = warning;
+    let ClockAhead {
+        author,
+        ahead_millis,
+    } = warning;
     assert_eq!((author, ahead_millis), (AUTHOR, 61_500));
     let hex = "ab".repeat(32);
     // What the SDK reports and what a log would hold: the author id as hex
