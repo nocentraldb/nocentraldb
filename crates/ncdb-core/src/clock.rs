@@ -7,7 +7,8 @@
 //! clock it has seen. When the counter would overflow, it carries into the
 //! next millisecond. RFC 0002 says it waits for the wall clock instead, which
 //! takes as long as a clock seen from the future is ahead, and forever after
-//! the largest clock was seen. The carry is pending the owner's decision.
+//! the largest clock was seen. The carry is pending the owner's decision
+//! (NOC-25).
 
 /// A hybrid logical clock value, compared as a number.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]

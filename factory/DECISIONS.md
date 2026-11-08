@@ -145,3 +145,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-14)
 - Why: an id from a weaker source could collide, so `ObjectId::random` and `SpaceId::random` panic when `getrandom` fails rather than fall back; on wasm32 getrandom's `wasm_js` feature uses `crypto.getRandomValues`. `Clock::now` takes the wall clock as a closure, so the core reads no time itself, the tests drive the counter overflow, and the waiting loop asks it again; a wall clock beyond 48 bits of milliseconds reads as the largest the clock holds.
 - Instead of: a fallible id API every caller must handle for a failure the platform does not have, or a clock that reads `SystemTime` itself, which does not exist on wasm32-unknown-unknown.
+
+### 2026-11-08 · NOC-14 · CBOR values nest at most 32 deep, counted from the frame
+
+- Decided by: pm, pending the owner (NOC-24)
+- Why: the decoder recursed without a limit, so a frame of nested one-item arrays overflowed the stack of a member or the relay, after a few hundred levels in a debug build and sooner on wasm32. `cbor::MAX_DEPTH` is 32; the frame is at depth 1, the header map at 2 and the payload map at 3, since a byte string that holds encoded CBOR does not reset the count. The depth is checked before a value is read, so 100,000 levels fail with `Reason::TooDeep`. The encoder still writes any depth; a value too deep for the decoder is refused on read.
+- Instead of: no limit (a crash), or a limit per map that a header could multiply by nesting payload inside it.
+
+### 2026-11-08 · NOC-14 · A full clock counter carries into the next millisecond
+
+- Decided by: pm, pending the owner (NOC-25)
+- Why: RFC 0002 has the writer wait for its wall clock when the counter is full. After a clock from the future was seen, that wait lasts as long as the other member's clock is ahead, and forever after `observe(Hlc(u64::MAX))`, which the first implementation did as a busy loop. `Clock::now` now takes one more than the highest clock seen, which carries into the next millisecond, never waits and never runs backwards, and returns `ClockExhausted` at `u64::MAX` rather than wrap. It takes the wall clock as a value, since it no longer asks again. Reverses part of "Random ids panic without a secure generator; the clock takes the wall clock as a function".
+- Instead of: waiting for the wall clock, as RFC 0002 says.
+
+### 2026-11-08 · NOC-14 · Key 0 is "must understand"
+
+- Decided by: pm
+- Why: RFC 0002 names keys 1 to 63 "must understand" and 64 up "may ignore", and leaves key 0 out. A key the RFC does not place cannot be safe to ignore, so a header, payload or operation with key 0 is kept and not folded.
+- Instead of: treating key 0 as "may ignore", as the first implementation did.

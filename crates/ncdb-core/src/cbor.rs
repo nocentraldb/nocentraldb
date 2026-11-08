@@ -24,8 +24,8 @@ use crate::redact::{Hidden, Size};
 /// array or map. A byte string that holds encoded CBOR (the header in the
 /// frame, the payload in the header) does not reset the count.
 ///
-/// Pending the owner's decision ("How deeply may a CBOR value nest in a
-/// change?"); 32 is pm's recommendation.
+/// Pending the owner's decision (NOC-24, "How deeply may a CBOR value nest
+/// in a change?"); 32 is pm's recommendation.
 pub const MAX_DEPTH: usize = 32;
 
 /// A CBOR value of the profile.

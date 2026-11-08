@@ -1,8 +1,8 @@
 //! How deeply values may nest in a change: at most `cbor::MAX_DEPTH`,
 //! counted from the frame. Deeper input is an error, never a stack overflow.
 //!
-//! The limit is pending the owner's decision ("How deeply may a CBOR value
-//! nest in a change?"); these tests follow pm's recommendation of 32.
+//! The limit is pending the owner's decision (NOC-24, "How deeply may a CBOR
+//! value nest in a change?"); these tests follow pm's recommendation of 32.
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).

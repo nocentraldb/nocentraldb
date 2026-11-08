@@ -4,7 +4,7 @@
 //! When the counter is full, the clock carries into the next millisecond
 //! instead of waiting for the wall clock, and at the largest value it
 //! returns an error instead of wrapping. The carry is pending the owner's
-//! decision ("What does the clock do when its counter is full and a clock
+//! decision (NOC-25, "What does the clock do when its counter is full and a clock
 //! from the future was seen?"); pm recommends it.
 
 #[path = "support/props.rs"]
