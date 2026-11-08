@@ -146,6 +146,24 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: the time a change arrives differs per member, so storing it in the shared state would break principle 2; what every member can identify the same way is that a change lost to a change its author had not seen (RFC 0002, RFC 0004). GENESIS.md principle 3 and its no-go now say so.
 - Instead of: "arrives late", which no converged state can record.
 
+### 2026-11-07 · NOC-10 · The wasm32 tests run with wasm-bindgen-test in Node
+
+- Decided by: coding agent (NOC-10)
+- Why: `wasm-bindgen-test` is the standard runner for `wasm32-unknown-unknown`, the browser target, and Node needs nothing the gate does not already have; CI runs it through `pnpm gates` without a workflow change. The runner (`wasm-bindgen-cli =0.2.130`, the `wasm-bindgen` that Cargo.lock holds) is built by `cargo install --locked` into `target/tools`, which the existing Cargo cache keeps; a cold build takes about a minute.
+- Instead of: a headless Chromium run (needs a browser in CI for no extra coverage of the core today), a `wasm32-wasip1` target (it has `std::fs`, so it would hide exactly what the gate must catch), or downloading a prebuilt runner binary (a second pinning and checksum path).
+
+### 2026-11-07 · NOC-10 · Test files route #[test] to wasm_bindgen_test on wasm32
+
+- Decided by: coding agent (NOC-10)
+- Why: wasm-bindgen-test skips plain `#[test]` and the runner still exits 0 ("no tests to run!"), so the gate would pass with no test run. Each test file imports `wasm_bindgen_test as test` under `cfg(target_arch = "wasm32")`, the tests stay unchanged natively, and `scripts/wasm-gate.test.mjs` fails when a file of ncdb-core has a `#[test]` without that import.
+- Instead of: writing `#[wasm_bindgen_test]` next to every `#[test]`, which a new test can forget without any check noticing.
+
+### 2026-11-07 · NOC-10 · The build detector uses std::os::unix, not std::fs
+
+- Decided by: coding agent (NOC-10)
+- Why: `std::fs` compiles for `wasm32-unknown-unknown` and fails only when called, so it cannot prove the build task fails; the fixture uses `std::os::unix`, which does not exist there. A call into `std::fs` at runtime is caught by the test-wasm task instead, as long as a test reaches it.
+- Instead of: the ticket's example `std::fs`, which would have made the detector test pass the build and prove nothing.
+
 ### 2026-11-07 · NOC-12 · The spike ran in Chromium only, and its code is kept in the PR, not on a branch
 
 - Decided by: coding agent (NOC-12)
