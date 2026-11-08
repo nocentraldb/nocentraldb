@@ -138,3 +138,19 @@ test("Amendment 1 covers basic values, sets, links and deletion, and points NOC-
     `${RFC}: the byte-exact examples hold no hex block`,
   );
 });
+
+test("Amendment 1's decisions 8 to 14 are decided by the owner, none left open", () => {
+  const text = amendment();
+  assert.doesNotMatch(
+    text,
+    /Decision: open/,
+    `${RFC}: Amendment 1 still holds an open decision`,
+  );
+  const decided =
+    text.match(/^ *Decided: [A-Z] \(Carsten, \d{4}-\d{2}-\d{2}\)\./gm) ?? [];
+  assert.equal(
+    decided.length,
+    7,
+    `${RFC}: Amendment 1 has ${decided.length} "Decided: <option> (Carsten, <date>)." lines, not 7 (decisions 8 to 14)`,
+  );
+});
