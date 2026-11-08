@@ -166,8 +166,26 @@ export function checkDecisions(dir) {
   return readDecisions(dir).problems;
 }
 
-export function render(_entries, _options = {}) {
-  throw new Error("not implemented");
+/** For each superseded file, the files that name it in `Supersedes:`. */
+function supersededBy(entries) {
+  const by = new Map();
+  for (const { file, supersedes } of entries) {
+    for (const old of supersedes) by.set(old, [...(by.get(old) ?? []), file]);
+  }
+  return by;
+}
+
+/** The decisions printed in full, each with what superseded it. */
+export function render(entries, _options = {}) {
+  const by = supersededBy(entries);
+  return entries
+    .map(({ file, text }) => {
+      const body = text.trim();
+      return by.has(file)
+        ? `${body}\n\n> Superseded by ${by.get(file).join(", ")}`
+        : body;
+    })
+    .join("\n\n");
 }
 
 function main(argv) {
