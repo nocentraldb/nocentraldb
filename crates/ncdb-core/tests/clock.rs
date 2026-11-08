@@ -15,7 +15,8 @@ mod props;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use ncdb_core::clock::{Clock, ClockExhausted, Hlc};
+use ncdb_core::clock::{Clock, ClockAhead, ClockExhausted, Hlc};
+use ncdb_core::ids::MemberId;
 use proptest::prelude::*;
 
 fn hlc(millis: u64, counter: u16) -> Hlc {
@@ -141,4 +142,46 @@ fn the_clock_never_runs_backwards_and_passes_every_clock_seen() {
         }
         Ok(())
     });
+}
+
+// RFC 0002, "What the clock does not do": the core warns when a received
+// clock is more than a minute ahead of the local wall clock, and never
+// rejects the change (NOC-26).
+
+const AUTHOR: MemberId = MemberId([0xab; 32]);
+const WALL: u64 = 1_793_000_000_000;
+
+#[test]
+fn a_clock_more_than_a_minute_ahead_raises_a_warning_and_a_minute_or_less_none() {
+    // Ahead by 60 001 ms: a warning that names the difference and the author.
+    let mut clock = Clock::new();
+    assert_eq!(
+        clock.receive(hlc(WALL + 60_001, 0), AUTHOR, WALL),
+        Some(ClockAhead { author: AUTHOR, ahead_millis: 60_001 })
+    );
+    // Exactly a minute ahead, with any counter: none.
+    let mut clock = Clock::new();
+    assert_eq!(clock.receive(hlc(WALL + 60_000, 0), AUTHOR, WALL), None);
+    assert_eq!(clock.receive(hlc(WALL + 60_000, u16::MAX), AUTHOR, WALL), None);
+    // Less than a minute ahead, the same millisecond, or behind: none.
+    assert_eq!(clock.receive(hlc(WALL + 59_999, 0), AUTHOR, WALL), None);
+    assert_eq!(clock.receive(hlc(WALL, 3), AUTHOR, WALL), None);
+    assert_eq!(clock.receive(hlc(WALL - 1, 0), AUTHOR, WALL), None);
+    assert_eq!(clock.receive(hlc(0, 0), AUTHOR, WALL), None);
+    // The warning compares with the local wall clock, not with the highest
+    // clock seen: a second change as far ahead warns again.
+    let mut clock = Clock::new();
+    assert!(clock.receive(hlc(WALL + 120_000, 0), AUTHOR, WALL).is_some());
+    assert_eq!(
+        clock.receive(hlc(WALL + 120_000, 1), AUTHOR, WALL),
+        Some(ClockAhead { author: AUTHOR, ahead_millis: 120_000 })
+    );
+    // The largest clock and a wall clock of zero do not overflow.
+    let mut clock = Clock::new();
+    assert_eq!(
+        clock.receive(Hlc(u64::MAX), AUTHOR, 0),
+        Some(ClockAhead { author: AUTHOR, ahead_millis: Hlc::MAX_MILLIS })
+    );
+    // A wall clock beyond 48 bits sees nothing ahead.
+    assert_eq!(clock.receive(Hlc(u64::MAX), AUTHOR, u64::MAX), None);
 }
