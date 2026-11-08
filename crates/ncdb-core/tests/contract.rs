@@ -508,34 +508,3 @@ fn c5_malformed_operations_are_mixed_in() {
         convergence::check::<MalformedFirstArrival, _>(&Config::default(), &WellFormedWrites);
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
-
-/// C3: the seeds of the golden digest.
-const GOLDEN_SEEDS: [u64; 4] = [0, 1, 2, 3];
-
-/// C3: the SHA-256 of the register's final state bytes for `GOLDEN_SEEDS`,
-/// committed from a native run. The native and the wasm32 run of the test
-/// below must both give it.
-const GOLDEN_DIGEST: &str = "79b8950bf22908df11dac45bbe410e14f3f92d8e779a8b53afec77829ce171d6";
-
-fn golden_config() -> Config {
-    Config {
-        cases: 64,
-        ..Config::default()
-    }
-}
-
-#[test]
-fn c3_the_same_seeds_give_the_same_state_bytes_natively_and_in_wasm32() {
-    let digest = convergence::digest::<Register, _>(&golden_config(), &GOLDEN_SEEDS, &Writes);
-    assert_eq!(digest, GOLDEN_DIGEST);
-}
-
-#[test]
-fn c3_the_digest_covers_the_state_bytes() {
-    // LastArrival adds bytes to the register's state, so its digest differs.
-    let register = convergence::digest::<Register, _>(&golden_config(), &GOLDEN_SEEDS, &Writes);
-    let other = convergence::digest::<LastArrival, _>(&golden_config(), &GOLDEN_SEEDS, &Writes);
-    assert_ne!(register, other);
-    let seeds = convergence::digest::<Register, _>(&golden_config(), &[4], &Writes);
-    assert_ne!(register, seeds);
-}

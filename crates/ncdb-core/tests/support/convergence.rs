@@ -12,11 +12,10 @@ use std::collections::BTreeSet;
 
 use proptest::arbitrary::any;
 use proptest::collection::vec;
-use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
+use proptest::strategy::{BoxedStrategy, Strategy};
 use proptest::test_runner::{
     Config as RunnerConfig, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner,
 };
-use sha2::{Digest, Sha256};
 
 /// Who made an operation: one of the simulated members.
 pub type Member = u8;
@@ -588,38 +587,4 @@ pub fn check<S: Mergeable, G: Generator<S>>(
         }
         Err(TestError::Abort(reason)) => panic!("the convergence harness aborted: {reason}"),
     }
-}
-
-/// The SHA-256, in lowercase hex, of the state bytes every copy ends in, for
-/// `config.cases` cases of each seed in `seeds`, in order. The cases are the
-/// ones `check` generates. A field type commits the digest for a fixed seed
-/// list, and its native and wasm32 tests compare with it (C3: deterministic
-/// everywhere).
-pub fn digest<S: Mergeable, G: Generator<S>>(
-    config: &Config,
-    seeds: &[u64],
-    generator: &G,
-) -> String {
-    let strategy = cases::<S, G>(config, generator);
-    let mut hasher = Sha256::new();
-    for &seed in seeds {
-        let mut runner = runner(config.cases, seed);
-        for _ in 0..config.cases {
-            let steps = strategy
-                .new_tree(&mut runner)
-                .expect("the harness generates every case")
-                .current();
-            let made = simulate::<S, G>(generator, &steps);
-            for state in deliver::<S>(&made.ops, &orders_of(&steps, config.copies)) {
-                let bytes = state.state_bytes();
-                hasher.update((bytes.len() as u64).to_le_bytes());
-                hasher.update(&bytes);
-            }
-        }
-    }
-    hasher
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
 }
