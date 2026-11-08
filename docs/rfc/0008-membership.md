@@ -4,12 +4,11 @@ REQUEST FOR COMMENTS · DRAFT 0.2 · NOVEMBER 2026 · ticket NOC-23
 
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind) and leaves "membership changes" to a later RFC, on RFC 0002's [Amendment 1](0002-change-and-log-format.md#amendment-1-atomic-unit-and-rejected-changes), with its log state *rejected* (D11) and its rule for changes the relay refuses (D12), both decided by the owner, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind) and leaves "membership changes" to a later RFC, on RFC 0002's [Amendment 1](0002-change-and-log-format.md#amendment-1-atomic-unit-and-rejected-changes), with its log state *rejected* (D11) and its rule for changes the relay refuses (D12), both decided by the owner, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
 
 It uses several drafts that are still open pull requests. It names them without links, because they are not on `main` yet:
 
 - RFC 0005 (schema, NOC-11, PR #35), decisions D13 and D14.
-- RFC 0006 (the local view, NOC-12, PR #36), which keeps a per-space control state that this RFC defines.
 - RFC 0007 (the relay, NOC-13, PR #37), which applies the membership rules with the data it can see.
 
 **Status.** A draft for the owner's decision. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly. The control-change bodies are part of the wire format. The owner decides both. Nothing here is built. Draft 0.2 reworks draft 0.1 after pm's review. The fold now uses only control bodies and headers. Seniority and the order are fully specified. Re-grants cannot bring back writes made without the right. Irreversible effects wait until a change is stable. The open decisions are in [Decisions for the owner](#decisions-for-the-owner), each with options and a recommendation. Until the owner decides, the design below describes the recommended option of each decision.
@@ -359,6 +358,8 @@ The fold does not need to be incremental. A space holds few control changes, hun
 - an equivocated genesis with a lower change id arrives late, and becomes the genesis (see [How the relay and members recognise it](#how-the-relay-and-members-recognise-it));
 - a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (decision M23).
 
+**This answers RFC 0006's open question.** RFC 0006 left it to this RFC whether a later control change can make a check fail that a change has already passed ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). It can, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it as it describes. A control change that loses its verdict is recomputed through `resolve`; its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). Allowing un-folding at all is part of decision M4: without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
+
 Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. A change that the authors of all possible revocations have seen can no longer flip. [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable) uses this. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change (decision M4).
 
 ### The cutoff
@@ -579,7 +580,7 @@ Recommendation: A. It needs only headers, so members and the relay reach one ver
 - B. Both revocations of a cycle take effect.
 - C. Neither takes effect.
 
-Recommendation: A. B lets a compromised admin take an honest one down with it. C lets it cancel its own removal. Verdicts that change while concurrent changes arrive are the price of island mode under every option.
+Recommendation: A. B lets a compromised admin take an honest one down with it. C lets it cancel its own removal. Verdicts that change while concurrent changes arrive are the price of island mode under every option. Under A, a control change that arrives late can un-fold changes a member already folded, which answers the question RFC 0006 left to this RFC. The alternative, that no late control change ever un-folds anything, would leave a stolen device's writes in place on every member that received them before the removal.
 
 **M5. Re-granting a right a member lost.**
 
