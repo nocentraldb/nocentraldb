@@ -307,3 +307,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-16)
 - Why: proptest draws a `usize` differently on 32-bit wasm32 than on 64-bit native targets, so the two runs generated different cases and the C3 digest differed although the type was right. The basic values adapter draws `u8`; NOC-17's adapter must avoid `usize` too.
 - Instead of: committing two digests, one per target, which would hide a real platform difference.
+
+### 2026-11-08 · NOC-17 · How sets answer what RFC 0004 leaves open
+
+- Decided by: coding agent (NOC-17)
+- Why: (1) a set's state keeps every operation it received, as basic values do, so T, the live additions and the lost removals are computed from the set of operations; (2) an addition is `Replaced` by the removal with the lowest operation id that observed it, a removal by the addition with the lowest operation id that names it; a removal no addition names is lost while its element is in the set and visible (applied) when it is not; (3) a re-add names the removals of the element its author's copy holds that no addition has replaced yet; (4) a name of the wrong kind (an addition naming an addition, a removal naming a removal), which only a malformed operation writes, has no effect; (5) a set refuses the empty value as an element; (6) the state bytes are `[[id, author, stamp, element, 0 | 1, [named id…]]…]` in operation id order, the local view's canonical CBOR, not a wire format (NOC-37).
+- Instead of: keeping only T and the live additions, which loses who replaced what; or letting a re-add name every removal it ever saw, which grows the state with ids already replaced.
+
+### 2026-11-08 · NOC-17 · Links reuse basic values and sets; resolution is a read against the copy's objects
+
+- Decided by: coding agent (NOC-17)
+- Why: RFC 0004 gives links no merge rules of their own, so `Link` merges as a basic value and `Links` as a set of the new kind `Kind::Object` (an object id as 16 bytes), each through `FieldType` by delegation, and the harness runs them as themselves. The status is not state, so it is not `FieldType::read`: `resolve` takes the copy's objects (`link::Objects`). The writing side takes the target with its space and refuses another space (`OtherSpace`); a removal takes any object id, so a stray link can be removed.
+- Instead of: link field types with their own state, or a status stored in the state, which RFC 0004 rules out.
+
+### 2026-11-08 · NOC-17 · What links resolve against: an object's creates and deletion, both basic values
+
+- Decided by: coding agent (NOC-17), flagged to pm
+- Why: the ticket asks for a test of two creates of one object id, and RFC 0004 defines what they mean: one object, its collection a basic value won by the create last in stamp order, creates replacing nothing; whether it is deleted is a boolean basic value (owner decision 4). `object::Object` holds exactly that, so the rule lives in the core and converges by the argument for basic values. The statuses are checked in this order: no create arrived (a deletion alone included) or a value that is no object id reads **missing**; then **deleted**, whatever the collection; then **wrong collection**; else **ok**. Object deletion as an operation, and folding creates out of RFC 0002 changes, belong to later tickets.
+- Instead of: a test-only object model, which would prove nothing about the core; or reading a deleted target in another collection as wrong collection, which would hide that it is gone.
