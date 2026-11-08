@@ -64,7 +64,7 @@ An agent is a member like any device. It has its own member key, it appears in t
 
 ### The account key
 
-A person has one account and usually several members: a laptop, a phone, the agents that run for them. The **account key** is an Ed25519 signing key that ties them together. It signs a short **member certificate** for each of the account's member keys: "member id M belongs to account A, as a device" or "as an agent". Other members check these certificates before they accept a new member in a space, so that "Alice's agent" is provably Alice's.
+A person has one account and usually several members: a laptop, a phone, the agents that run for them. The **account key** is an Ed25519 signing key that ties them together. It signs a short **member certificate** for each of the account's member keys: "member id M belongs to account A, as a device" or "as an agent". A sub-agent's certificate is signed by its parent agent instead, which never holds the account key (see [Member certificate](#member-certificate)). Other members check these certificates before they accept a new member in a space, so that "Alice's agent" is provably Alice's.
 
 The account key also signs what must come from a person rather than a device, above all the second account's sign-off of an irreversible work order such as an erasure (GENESIS.md, "Work orders for clean-ups").
 
