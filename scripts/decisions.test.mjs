@@ -216,3 +216,61 @@ test("pnpm decisions runs the reading command", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.equal(pkg.scripts.decisions, "node scripts/decisions.mjs");
 });
+
+/** A folder of four decisions over three days; the last supersedes the first. */
+const LOG = {
+  "2026-11-09-NOC-30-later.md": entry({
+    date: "2026-11-09",
+    ticket: "NOC-30",
+    title: "Later",
+    topics: "crypto, rfc-0003",
+    supersedes: "2026-11-07-no-ticket-first.md",
+  }),
+  "2026-11-08-NOC-22-b-same-day.md": entry({
+    title: "B same day",
+    topics: "log",
+  }),
+  "2026-11-08-NOC-22-a-same-day.md": entry({
+    title: "A same day",
+    topics: "log, crypto",
+  }),
+  "2026-11-07-no-ticket-first.md": entry({
+    date: "2026-11-07",
+    ticket: "no ticket",
+    title: "First",
+    topics: "factory",
+  }),
+};
+const ORDER = [
+  "2026-11-07-no-ticket-first.md",
+  "2026-11-08-NOC-22-a-same-day.md",
+  "2026-11-08-NOC-22-b-same-day.md",
+  "2026-11-09-NOC-30-later.md",
+];
+
+/** The titles of the decisions printed in full, in output order. */
+const titles = (stdout) =>
+  [...stdout.matchAll(/^# \S+ · .+? · (.+)$/gm)].map(([, title]) => title);
+
+test("without arguments it prints every decision in full, in date order", (t) => {
+  const dir = folder(t, LOG);
+  const result = run("--dir", dir);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(titles(result.stdout), [
+    "First",
+    "A same day",
+    "B same day",
+    "Later",
+  ]);
+  for (const name of ORDER) {
+    assert.ok(result.stdout.includes(LOG[name].trim()), `${name} in full`);
+  }
+});
+
+test("the full log says which decision superseded an entry", (t) => {
+  const dir = folder(t, LOG);
+  const { stdout } = run("--dir", dir);
+  const first = stdout.slice(0, stdout.indexOf("# 2026-11-08"));
+  assert.match(first, /Superseded by 2026-11-09-NOC-30-later\.md/);
+  assert.equal(stdout.match(/Superseded by/g).length, 1);
+});
