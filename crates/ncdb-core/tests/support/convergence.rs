@@ -253,8 +253,11 @@ enum Body<R, C> {
     Malformed(C),
 }
 
-/// The steps of a case for the field type `S` and its generator `G`.
-type Steps<S, G> = [Step<Body<<G as Generator<S>>::Raw, <S as Mergeable>::Change>>];
+/// One step of a case for the field type `S` and its generator `G`.
+type StepOf<S, G> = Step<Body<<G as Generator<S>>::Raw, <S as Mergeable>::Change>>;
+
+/// The steps of a case.
+type Steps<S, G> = [StepOf<S, G>];
 
 /// The operations a case's steps make.
 struct Made<C> {
@@ -422,10 +425,10 @@ fn violation<S: Mergeable, G: Generator<S>>(
 /// an element once it has shrunk the elements, so it can stop short of this.
 fn minimise<S: Mergeable, G: Generator<S>>(
     generator: &G,
-    mut steps: Vec<Step<Body<G::Raw, S::Change>>>,
+    mut steps: Vec<StepOf<S, G>>,
     copies: usize,
     property: Property,
-) -> Vec<Step<Body<G::Raw, S::Change>>> {
+) -> Vec<StepOf<S, G>> {
     let breaks = |steps: &Steps<S, G>| {
         violation::<S, G>(generator, steps, copies).is_some_and(|(p, _)| p == property)
     };
@@ -470,7 +473,7 @@ fn minimise<S: Mergeable, G: Generator<S>>(
 fn cases<S: Mergeable, G: Generator<S>>(
     config: &Config,
     generator: &G,
-) -> BoxedStrategy<Vec<Step<Body<G::Raw, S::Change>>>> {
+) -> BoxedStrategy<Vec<StepOf<S, G>>> {
     let members = config.members;
     let copies = config.copies;
     let max_duplicates = config.max_duplicates;
