@@ -181,3 +181,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
+
+### 2026-11-08 · NOC-20 · RFC 0001 states browser eviction without linking RFC 0006
+
+- Decided by: coding agent (NOC-20)
+- Why: RFC 0006 (NOC-12) is still an open PR, so a link to it would break the link check; the sentence states the platform limit and what the member fetches again, and RFC 0006's PR can add the link once both are merged.
+- Instead of: waiting for RFC 0006 to merge, or linking a file that is not on `main`.
+
+### 2026-11-08 · NOC-20 · GENESIS.md changes only where the ticket allows; its relay sentence stays
+
+- Decided by: coding agent (NOC-20)
+- Why: the ticket lets this PR edit GENESIS.md for RFC 0003's readings 1, 2 and 6 only. GENESIS.md's "which key is in which space, and when and how much each key writes" and the same sentence in use case 2 are left as they are and reported to pm, who decides whether they become a ticket.
+- Instead of: rewriting the relay sentence in GENESIS.md and use case 2 as well, outside the ticket's scope.

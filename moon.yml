@@ -36,7 +36,9 @@ tasks:
     # README.md and the docs its links point into), the RFC check in
     # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
-    # its sections), and
+    # its sections), scripts/rfc-0001.test.mjs (RFC 0001, the FAQ, the use cases
+    # and factory/GENESIS.md name what the relay sees and every erasure limit,
+    # and their links resolve; hence the GENESIS.md input), and
     # the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
@@ -61,6 +63,7 @@ tasks:
       - "/CONTRIBUTING.md"
       - "/README.md"
       - "/docs/**/*"
+      - "/factory/GENESIS.md"
       - "/crates/ncdb-core/moon.yml"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
