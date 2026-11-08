@@ -11,6 +11,10 @@ publish = false
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).
 proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
+# C3 of RFC 0004: the harness digests the final state bytes of a fixed seed
+# list with SHA-256, and the native and the wasm32 run compare the digest with
+# the same committed value. The version PR #41 pins for change ids.
+sha2 = { version = "=0.11.1", default-features = false }
 
 # The test-wasm task (crates/ncdb-core/moon.yml) runs the tests on wasm32
 # with wasm-bindgen-test. The runner, wasm-bindgen-cli, must be the version of
