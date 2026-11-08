@@ -5,13 +5,13 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-8
 **Changelog.**
 
 - **2026-11-07** · NOC-8 · The owner accepted decisions 1 to 7.
-- **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add, remove and an object's delete inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. It proposes decisions 8 to 14 for the owner. The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add, remove and an object's delete inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. The owner accepted the recommendation of each of its decisions 8 to 14 (Carsten, 2026-11-08). The sentences it changes elsewhere are marked *(Amendment 1)*.
 
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
-**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) is a proposal for the owner (NOC-37): the pull request that adds it is the owner's sign-off.
+**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) (NOC-37) is decided too: the owner accepted every recommendation in its decisions 8 to 14 (Carsten, 2026-11-08).
 
 **Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6); how this RFC's operations sit inside RFC 0002's operation map is [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) *(Amendment 1)*. Object deletion (see [Links](#links) for what this RFC assumes about it). Of object creation, this RFC defines only what two creates of one object id mean.
 
@@ -250,7 +250,7 @@ What the contract does not check: whether the merge does what users expect, how 
 
 ## Decisions for the owner
 
-GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07). [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) adds decisions 8 to 14, which wait for the owner *(Amendment 1)*.
+GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07). [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) adds decisions 8 to 14, whose recommendations the owner accepted as well (Carsten, 2026-11-08) *(Amendment 1)*.
 
 1. **What basic values keep when writes conflict.**
    - A: Last writer wins on read, losing writes stay as conflicts until someone writes having seen them (this RFC). Recommended: keeps RFC 0001's promise and principle 3.
@@ -296,7 +296,7 @@ It names these conflicts and limits for the owner and pm:
 
 Added on 2026-11-08 for NOC-37, after this RFC was merged. [RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This RFC defined the operations of basic values, sets and links by their meaning only: set with the writes it replaces, add with its tag, remove with the tags it observed. No RFC said how one becomes the other. The implementation of basic values (NOC-16, pull request #51) found the gap and did not guess. Without it, the fold cannot read field values from real changes.
 
-The encoding is a wire format, which GENESIS.md reserves for the owner. This amendment proposes decisions 8 to 14 in [Decisions for the owner (8 to 14)](#decisions-for-the-owner-8-to-14); the pull request that adds it is the owner's sign-off. The sentences it describes are its recommended options. It changes no merge rule: state, apply, read and outcome above stay as they are. It changes nothing in RFC 0002 either: it fills in what RFC 0002 left to the field type. The sentences it changes elsewhere in this RFC are marked *(Amendment 1)*.
+The encoding is a wire format, which GENESIS.md reserves for the owner. The owner decided it in [Decisions for the owner (8 to 14)](#decisions-for-the-owner-8-to-14), accepting every recommendation (Carsten, 2026-11-08); the text below describes the decided options. It changes no merge rule: state, apply, read and outcome above stay as they are. It changes nothing in RFC 0002 either: it fills in what RFC 0002 left to the field type. The sentences it changes elsewhere in this RFC are marked *(Amendment 1)*.
 
 It also says how an object's deletion travels, because the fold of creates and deletions (NOC-39) needs it: [owner decision 4](#decisions-for-the-owner) already made deletion a boolean basic value of the object, so this amendment only gives it an operation and an encoding. Everything else about deletion (who may delete, what a deleted object shows) stays with the later RFC on deletion. Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
 
@@ -633,53 +633,53 @@ One effect is stated plainly (principle 4): `replaces` and `observed` make the p
 
 ### Decisions for the owner (8 to 14)
 
-GENESIS.md reserves the wire format for the owner. Each decision has options and a recommendation; the text above describes the recommended options.
+GENESIS.md reserves the wire format for the owner. Each decision lists its options and the recommendation; the owner accepted every recommendation (Carsten, 2026-11-08), and the text above describes the decided options.
 
 8. **Where the arguments sit.**
    - A: In RFC 0002's key 5, as a map with small integer keys: 1 value or element, 2 `replaces`, 3 `observed`; 4 to 63 "must understand", 64 up "may ignore". Recommended: RFC 0002's map stays as it is, key 5 already belongs to the field type, and the map leaves room for arguments the way RFC 0002's maps do.
    - B: New keys 6 and 7 in RFC 0002's operation map. Changes RFC 0002 for one RFC's concepts.
    - C: A positional array in key 5. One byte smaller per argument, no room to extend.
 
-   Decision: open, for the owner.
+   Decided: A (Carsten, 2026-11-08).
 
 9. **Operation numbers.**
    - A: One table for the built-in types: 0 create (RFC 0002), 1 set, 2 add, 3 remove, 4 delete; 5 to 63 for later built-in types; plugin types from 64 up, within their type id; no number reused. Recommended: an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type.
    - B: Numbers per type, each starting at 1. Fewer reserved numbers; a mismatched operation is misread.
 
-   Decision: open, for the owner.
+   Decided: A (Carsten, 2026-11-08).
 
 10. **Operation ids in `replaces` and `observed`.**
     - A: A two-item array, `[change id, position]`; a list sorted by bytes, without repeats, and written as an empty array when empty; readers accept any order and repeats. Recommended: plain CBOR, one encoding per operation, and the sort order is RFC 0004's tie-break order.
     - B: One byte string, the change id followed by the position. Three bytes smaller per id; a hand-written layout.
     - C: As A, but an empty list is left out. Two bytes smaller per first write; two encodings unless readers enforce one.
 
-    Decision: open, for the owner.
+    Decided: A (Carsten, 2026-11-08).
 
 11. **Several operations on one field in one change.**
     - A: The SDK writes the net effect of a transaction: at most one set per field and one add or remove per element. Readers accept a change with more and apply each by RFC 0004's rules. Recommended: no second form of id, and nothing a reader must special-case.
     - B: A bare position in `replaces` or `observed` names an operation of the same change. Lets the SDK write every step of a transaction, at the cost of two forms of id in every decoder.
 
-    Decision: open, for the owner.
+    Decided: A (Carsten, 2026-11-08).
 
 12. **Malformed arguments.**
     - A: The operation is parked with the reason "malformed arguments" and reported; the rest of the change is folded. Recommended: no new state, deterministic on every member, and nothing is applied that the reader had to guess.
     - B: Read leniently with defaults, for example a missing `replaces` as empty. Converges, but hides the error and turns a write into a conflict.
     - C: The whole change is rejected. One bad operation hides its change's other operations.
 
-    Decision: open, for the owner.
+    Decided: A (Carsten, 2026-11-08).
 
 13. **How a field type adds operations.**
     - A: A new operation is a new rule version, which only new fields can use until the migrations RFC exists (RFC 0005, D12), or a new field type; it takes a number never used before, and old clients park it. Recommended: a merge rule never changes under the same type id and version, as this RFC's contract already says.
     - B: A type may add operations under the same rule version, as long as its existing operations keep their meaning. Faster to extend, but an old and a new client then differ under the same version.
 
-    Decision: open, for the owner.
+    Decided: A (Carsten, 2026-11-08).
 
 14. **How an object's deletion travels.**
     - A: An operation of its own, number 4 **delete**, on the object without a field, with set's arguments: `true` deletes, `false` restores, `replaces` names the deletes it saw. Recommended: it is decision 4's boolean basic value with no new rule, and a client that does not know deletion parks it as an unknown operation instead of misreading it.
     - B: A set (number 1) on a reserved field name such as `$deleted`, which RFC 0005's reserved `$` names allow. No new number, but every member special-cases a field that no lock declares.
     - C: A set (number 1) with key 3 absent. No new number, but set's meaning then depends on a missing key.
 
-    Decision: open, for the owner.
+    Decided: A (Carsten, 2026-11-08).
 
 ## How this RFC is tested
 
