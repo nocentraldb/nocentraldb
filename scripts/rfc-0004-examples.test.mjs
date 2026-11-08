@@ -47,10 +47,10 @@ const examples = () => {
   return found;
 };
 
-test("the RFC has the examples E1 to E11", () => {
+test("the RFC has the examples E1 to E14", () => {
   assert.deepEqual(
     Object.keys(examples()),
-    Array.from({ length: 11 }, (_, i) => `E${i + 1}`),
+    Array.from({ length: 14 }, (_, i) => `E${i + 1}`),
   );
 });
 

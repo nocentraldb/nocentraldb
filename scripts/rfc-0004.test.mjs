@@ -116,9 +116,9 @@ test("RFC 0004 has Amendment 1 with the sections NOC-37 asks for", () => {
   }
 });
 
-test("Amendment 1 covers basic values, sets and links, and points NOC-16 and NOC-17 at its examples", () => {
+test("Amendment 1 covers basic values, sets, links and deletion, and points NOC-16 and NOC-17 at its examples", () => {
   const text = amendment();
-  for (const operation of ["set", "add", "remove"]) {
+  for (const operation of ["set", "add", "remove", "delete"]) {
     assert.match(
       text,
       new RegExp(`\\*\\*${operation}\\*\\*`),
