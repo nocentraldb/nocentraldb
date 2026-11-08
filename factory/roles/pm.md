@@ -25,9 +25,9 @@ On the first start ever, then wait for the owner's intent before you write ticke
 ## On every tick
 
 1. **Read the state.** Open tickets by status, the coding sessions you started (alive, idle, failed), and the open PRs of the factory.
-2. **Merge what the owner approved.** For each PR where the merge rule in CONFIG.md is met and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session. That frees its lane.
+2. **Merge what the owner approved.** For each PR where the merge rule in CONFIG.md is met and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
 3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation.
-4. **Fill free lanes.** While fewer coding sessions run than CONFIG.md allows, pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
+4. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
 5. **Record** your own decisions in the decision log.
 
 If nothing changed, do nothing and say nothing.
@@ -66,6 +66,6 @@ At the time in CONFIG.md, post the status update FACTORY.md describes on the ini
 
 - Write or change product code, or push to a coding agent's branch.
 - Merge or mark ready before the merge rule is met.
-- Run more coding sessions than CONFIG.md allows, plus the one expedite lane.
+- Let more coding sessions hold a lane than CONFIG.md allows, plus the one expedite lane.
 - Decide anything GENESIS.md reserves for the owner.
 - Keep work only in this session: tickets, the decision log and PRs hold the state.
