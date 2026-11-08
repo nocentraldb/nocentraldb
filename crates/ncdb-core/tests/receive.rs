@@ -269,3 +269,53 @@ fn d10_an_unknown_operation_is_parked_on_its_own_and_the_rest_is_folded() {
     let ids = [change.operation_id(0), change.operation_id(4)];
     assert_eq!(m.fold.folded, ids.into_iter().collect());
 }
+
+#[test]
+fn d11_a_change_without_its_key_is_folded_when_the_envelope_arrives() {
+    let mut m = Member::default();
+    let change = m.receive(&sealed(FOUNDER, 1, 0, vec![set_title(1)]));
+    assert_eq!(m.state(&change), State::Rejected(RejectReason::NoKey));
+    m.receive(&envelope(FOUNDER, 2, 0));
+    assert_eq!(m.state(&change), folded());
+    assert_eq!(m.fold.folded, [change.operation_id(0)].into_iter().collect());
+}
+
+#[test]
+fn d11_a_change_of_an_unknown_author_is_folded_when_its_membership_arrives() {
+    let mut m = with_key();
+    let change = m.receive(&sealed(5, 1, 0, vec![set_title(1)]));
+    assert_eq!(m.state(&change), State::Rejected(RejectReason::UnknownAuthor));
+    m.receive(&membership(FOUNDER, 2, 5, 0));
+    assert_eq!(m.state(&change), folded());
+}
+
+#[test]
+fn d11_the_check_again_takes_the_reason_of_the_step_it_now_stops_at() {
+    let mut m = with_key();
+    let change = m.receive(&sealed(5, 1, 0, vec![set_title(1)]));
+    m.receive(&membership(FOUNDER, 2, 5, 1));
+    assert_eq!(m.state(&change), State::Rejected(RejectReason::NotMember));
+}
+
+#[test]
+fn d11_a_control_change_that_now_passes_lets_the_changes_waiting_for_it_pass() {
+    // Member 5 sends the key envelope of generation 0 before the founder's
+    // entry that makes 5 a member arrives.
+    let mut m = Member::default();
+    let content = m.receive(&sealed(5, 2, 0, vec![set_title(1)]));
+    let key = m.receive(&envelope(5, 1, 0));
+    assert_eq!(m.state(&key), State::Rejected(RejectReason::UnknownAuthor));
+    m.receive(&membership(FOUNDER, 1, 5, 0));
+    assert_eq!(m.state(&key), folded());
+    assert_eq!(m.state(&content), folded(), "in the same call");
+}
+
+#[test]
+fn d11_a_parked_change_waits_for_an_upgrade_not_for_a_control_change() {
+    let mut m = Member::default();
+    let mut header = sealed_header(FOUNDER, 1, 0, payload(vec![set_title(1)]));
+    header.suite = 2;
+    let change = m.receive(&frame(header, GOOD));
+    m.receive(&envelope(FOUNDER, 2, 0));
+    assert_eq!(m.state(&change), State::Parked(ParkReason::UnknownSuite));
+}
