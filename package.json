@@ -15,7 +15,8 @@
   },
   "scripts": {
     "gates": "moon exec :gates --force --base HEAD --head HEAD --on-failure continue --summary normal",
-    "gates:dev": "moon run :gates"
+    "gates:dev": "moon run :gates",
+    "decisions": "node scripts/decisions.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.4",
