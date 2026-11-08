@@ -114,13 +114,13 @@ pm posts one note a day as a status update on the initiative in CONFIG.md, which
 
 The factory runs in Claude Code cloud sessions, in the environment named in CONFIG.md. Nothing in a session survives it: state lives in the tracker, the repository and the decision log.
 
-| Part          | How it runs                                                                                                                                                                                                          |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| pm            | One long-lived cloud session. A scheduled task wakes it at a fixed interval to look at the tracker and the running agents, and once a day for the note.                                                              |
-| Coding agents | One cloud session per ticket, started by pm, each in its own container on its own branch. pm sends it the ticket id, its own session id and the pointer to `roles/coder.md`, nothing else; the agent reads the rest. |
-| PR follow-up  | Each coding session subscribes to its PR, so CI results and review comments wake it.                                                                                                                                 |
-| Messages      | pm and the coding sessions talk through session messages. The owner talks only to pm.                                                                                                                                |
-| Expedite lane | pm starts one more session for an urgent ticket and archives it once the ticket is merged.                                                                                                                           |
+| Part          | How it runs                                                                                                                                                                                                                                                                             |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| pm            | One long-lived cloud session. A scheduled task wakes it at a fixed interval to look at the tracker and the running agents, and once a day for the note. A new pm session takes over the scheduled tasks and the running coding sessions from the old one, so there is only ever one pm. |
+| Coding agents | One cloud session per ticket, started by pm, each in its own container on its own branch. pm sends it the ticket id, its own session id and the pointer to `roles/coder.md`, nothing else; the agent reads the rest.                                                                    |
+| PR follow-up  | Each coding session subscribes to its PR, so CI results and review comments wake it.                                                                                                                                                                                                    |
+| Messages      | pm and the coding sessions talk through session messages. The owner talks only to pm.                                                                                                                                                                                                   |
+| Expedite lane | pm starts one more session for an urgent ticket and archives it once the ticket is merged.                                                                                                                                                                                              |
 
 To set up the factory in a new repository:
 
@@ -130,4 +130,4 @@ To set up the factory in a new repository:
 - [ ] Point `AGENTS.md` (or `CLAUDE.md`) at the three files, to be read before any work.
 - [ ] Connect the tracker to the cloud sessions.
 - [ ] Set up the cloud environment and test its setup script in a fresh session.
-- [ ] Start a cloud session with the message "Read factory/roles/pm.md and act as pm." Its first run creates the initiative, the label and its scheduled tasks.
+- [ ] Start a cloud session with the message "Read factory/roles/pm.md and act as pm." Its first run creates the initiative, the label and its scheduled tasks. To replace pm later, for example after a settings change, start a new session the same way: it takes over from the old one.
