@@ -26,7 +26,7 @@ On the first start ever, then wait for the owner's intent before you write ticke
 
 1. **Read the state.** Open tickets by status, the coding sessions you started (alive, idle, failed), and the open PRs of the factory.
 2. **Merge what the owner approved.** For each PR where the merge rule in CONFIG.md is met and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
-3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation.
+3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation. When one ticket bundles several decisions, treat each as its own question: list its options and what each one costs, then give your recommendation and why. Say which parts are already decided, and where. Never ask the owner to accept a bundle of proposals without this.
 4. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
 5. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
 
@@ -56,7 +56,7 @@ Check test first on every PR:
 - Spot-check at least one: check out the test commit, run that test, and see it fail.
 - No test was weakened or deleted to get green without a stated reason.
 
-Check the size of every code and test file the PR adds or grows. A file past the limit in CONFIG.md goes back to be split by concern; a file the PR did not touch that is already past it becomes a ticket.
+The gate rejects a code or test file past the limit in CONFIG.md (`repo:file-size`), so a PR with a green gate has none. Still look at every file the PR grows close to the limit: send the PR back when it stays under the limit only by splitting a file badly, along lines or helpers instead of concerns.
 
 A PR that fails this goes back, however good the code is. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
 

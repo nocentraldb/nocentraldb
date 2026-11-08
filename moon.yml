@@ -30,6 +30,16 @@ tasks:
       - "/pnpm-lock.yaml"
       - "/Cargo.toml"
       - "/**/Cargo.toml"
+  file-size:
+    # No tracked code or test file is longer than the limit in the row
+    # "Largest code or test file" of factory/CONFIG.md (NOC-43). It reads the
+    # file list from git, which leaves out node_modules/ and target/; the
+    # script skips them as well.
+    command: "node scripts/check-file-size.mjs"
+    inputs:
+      - "/factory/CONFIG.md"
+      - "/scripts/check-file-size.mjs"
+      - "/**/*.{rs,ts,tsx,js,mjs,cjs,sh,py}"
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
@@ -52,7 +62,8 @@ tasks:
     # crates/ncdb-core/moon.yml, checks that every #[test] of ncdb-core also
     # runs on wasm32, and builds a platform-only crate for wasm32 to prove the
     # build-wasm task fails on it. scripts/decisions.test.mjs tests the
-    # decision log tooling and reads factory/ and this file.
+    # decision log tooling and reads factory/ and this file;
+    # scripts/check-file-size.test.mjs reads this file too.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -147,6 +158,7 @@ tasks:
     deps:
       - "~:format-check"
       - "~:pins"
+      - "~:file-size"
       - "~:test"
       - "~:fragments"
       - "~:decisions"
