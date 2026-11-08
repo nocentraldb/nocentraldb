@@ -127,3 +127,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-23), for the owner's ruling as decision M20
 - Why: a concurrent revocation can still reject an accepted shred; destroying the key, acknowledging it and deleting the relay's record cannot be undone, so they wait until every admin that could revoke has seen the shred.
 - Instead of: making accepted control changes final, which no member can know without the others.
+
+### 2026-11-08 · NOC-23 · RFC 0008 has the parent agent sign a sub-agent's certificate, as RFC 0003 does
+
+- Decided by: pm
+- Why: the two drafts must not disagree, and an agent never holds the account key.
+- Instead of: the account key signing every sub-agent certificate.

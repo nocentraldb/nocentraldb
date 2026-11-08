@@ -723,6 +723,13 @@ Recommendation: A. Under B, a member that grinds a colliding id can win against 
 
 Recommendation: A. RFC 0002 keeps and folds both changes of every equivocation, which a space cannot do with two first changes. A keeps both, as RFC 0002 wants, and picks one deterministically. Only the creator's own device can cause it, by a backup restore or a clone.
 
+**M25. Who signs a sub-agent's certificate.** This follows RFC 0003 (decision 15) and is key handling, so it is the owner's.
+
+- A. The parent agent's member signing key, under its own context string; key 1 carries the parent's account key, and members check the chain through the parent's certificate. *(recommended, as RFC 0003)*
+- B. The account key, as for every other kind (RFC 0008 draft 0.2).
+
+Recommendation: A. A parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space"), so B cannot work without handing it the account key. The chain check reads only the space's control changes, because the parent's certificate is in the genesis or add entry that made the parent a member.
+
 The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
 
 ## Conflicts with GENESIS.md and the other RFCs
