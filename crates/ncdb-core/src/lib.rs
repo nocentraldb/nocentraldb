@@ -7,10 +7,16 @@
 //! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
 //! Signatures and encryption are not here yet (RFC 0003, NOC-15): the
 //! signature and the sealed payload are opaque byte strings.
+//!
+//! It also holds the field types of RFC 0004
+//! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
+//! ([`field`]) and basic values ([`basic`]).
 
+pub mod basic;
 pub mod cbor;
 pub mod change;
 pub mod clock;
+pub mod field;
 pub mod ids;
 pub mod log;
 mod redact;
