@@ -93,3 +93,21 @@ test("a last line without a newline counts as a line", () => {
   assert.equal(run({ "a.rs": `${lines(10)}x` }).status, 1);
   assert.equal(run({ "a.rs": lines(10).slice(0, -1) }).status, 0);
 });
+
+test("the limit is the number in CONFIG.md", () => {
+  const raised = { "factory/CONFIG.md": config(20), "a.rs": lines(15) };
+  assert.deepEqual(run(raised), { status: 0, stderr: "" });
+  const { status, stderr } = run({ ...raised, "b.rs": lines(21) });
+  assert.equal(status, 1);
+  assert.match(stderr, /b\.rs has 21 lines; the limit is 20/);
+  assert.doesNotMatch(stderr, /a\.rs/);
+});
+
+test("a CONFIG.md without the limit fails instead of passing", () => {
+  const { status, stderr } = run({
+    "factory/CONFIG.md": "# CONFIG.md\n\nNo table.\n",
+    "a.rs": lines(1),
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /Largest code or test file/);
+});
