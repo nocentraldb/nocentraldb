@@ -4,6 +4,8 @@
 // committed run holds it. Runs in `pnpm gates` without a browser.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -286,4 +288,62 @@ test("the doc says how to run each check by hand", () => {
   ]) {
     assert.ok(sections.includes(wanted), `${DOC} has no section "${wanted}"`);
   }
+});
+
+// The static bundle: what the owner puts on any HTTPS host for the manual
+// checks on a phone, without a local setup.
+
+test("the static bundle holds the page and the SQLite build, nothing else", async () => {
+  const out = await mkdtemp(join(tmpdir(), "ncdb-probe-build-"));
+  try {
+    const files = await build(out);
+    assert.deepEqual(files.toSorted(), [
+      "index.html",
+      "probe.js",
+      "sqlite/index.mjs",
+      "sqlite/sqlite3.wasm",
+      "worker.js",
+    ]);
+    for (const file of ["index.html", "probe.js", "worker.js"]) {
+      assert.deepEqual(
+        await readFile(join(out, file)),
+        await readFile(join(root, "scripts/browser-storage/page", file)),
+        file,
+      );
+    }
+    assert.deepEqual(
+      await readFile(join(out, "sqlite/sqlite3.wasm")),
+      await readFile(
+        join(root, "node_modules/@sqlite.org/sqlite-wasm/dist/sqlite3.wasm"),
+      ),
+    );
+  } finally {
+    await rm(out, { recursive: true, force: true });
+  }
+});
+
+test("the checklist covers every device the owner checks", () => {
+  const checklist = readFileSync(
+    join(root, "docs/browser-storage-checklist.md"),
+    "utf8",
+  );
+  const headings = checklist
+    .split("\n")
+    .filter((line) => /^## /.test(line))
+    .map((line) => line.slice(3));
+  for (const wanted of [
+    /^Safari on macOS/,
+    /^Safari on iOS, in the browser/,
+    /^Safari on iOS, as a home-screen app/,
+    /^Chrome on Android/,
+    /^Firefox/,
+  ]) {
+    assert.ok(
+      headings.some((heading) => wanted.test(heading)),
+      `the checklist has no section matching ${wanted}`,
+    );
+  }
+  assert.match(checklist, /Day 0/);
+  assert.match(checklist, /Day 8/);
+  assert.match(checklist, /takes about \d+ min/);
 });
