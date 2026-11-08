@@ -177,12 +177,23 @@ function supersededBy(entries) {
 
 /**
  * The decisions printed in full, each with what superseded it; with `index`,
- * one line per decision instead.
+ * one line per decision instead. `current` leaves out superseded decisions;
+ * `ticket`, `topic` and `since` (YYYY-MM-DD, inclusive) keep only matching
+ * ones. What superseded a decision is looked up in all `entries`, filtered
+ * or not.
  */
 export function render(entries, options = {}) {
   const by = supersededBy(entries);
+  const ticket = options.ticket?.toUpperCase();
+  const shown = entries.filter(
+    (entry) =>
+      !(options.current && by.has(entry.file)) &&
+      (ticket === undefined || entry.tickets.includes(ticket)) &&
+      (options.topic === undefined || entry.topics.includes(options.topic)) &&
+      (options.since === undefined || entry.date >= options.since),
+  );
   if (options.index) {
-    return entries
+    return shown
       .map(({ file, date, ticket, title }) => {
         const line = `${date} · ${ticket} · ${title}`;
         return by.has(file)
@@ -191,7 +202,7 @@ export function render(entries, options = {}) {
       })
       .join("\n");
   }
-  return entries
+  return shown
     .map(({ file, text }) => {
       const body = text.trim();
       return by.has(file)
@@ -219,6 +230,12 @@ function main(argv) {
     }));
   } catch (error) {
     process.stderr.write(`decisions: ${error.message}\n${USAGE}\n`);
+    return 2;
+  }
+  if (values.since !== undefined && !isDate(values.since)) {
+    process.stderr.write(
+      `decisions: --since takes a date as YYYY-MM-DD, not ${values.since}\n${USAGE}\n`,
+    );
     return 2;
   }
   if (values.help) {
