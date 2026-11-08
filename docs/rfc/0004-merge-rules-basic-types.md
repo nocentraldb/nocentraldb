@@ -416,7 +416,7 @@ Each example is one operation map, as it sits in the payload's operation array, 
 - change ids `A`: 32 bytes of `aa`, and `B`: 32 bytes of `bb`;
 - the collection `tasks` with the fields `title` (string), `priority` (integer), `tags` (set of strings), `parent` (link) and `dependsOn` (links).
 
-The bytes were produced with Python's cbor2 5.6.5 in canonical mode, decoded again and re-encoded to the same bytes, and checked with `ncdb_core::cbor::decode`, which accepts only RFC 0002's canonical profile, and `cbor::encode`, which gave back the same bytes. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from these examples and commit them as test vectors.
+The bytes are written by [`vectors/0004/generate.py`](vectors/0004/generate.py) from the descriptions below, with Python's cbor2 6.2.1 in canonical mode, into `vectors/0004/E1.hex` to `E11.hex`. `scripts/rfc-0004-examples.test.mjs` checks, in `pnpm gates`, that each example's hex below decodes under RFC 0002's profile with a strict reader of its own, encodes again to the same bytes, and equals the committed vector. The bytes were also decoded and re-encoded to the same bytes by `ncdb_core::cbor`, outside the gate. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from these examples and commit them as test vectors.
 
 **E1. set, the first write to a string.** `title` becomes "Ship v1"; nothing is replaced.
 
@@ -622,4 +622,4 @@ GENESIS.md reserves the wire format for the owner. Each decision has options and
 
 ## How this RFC is tested
 
-`scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001, has the sections its ticket requires, and that its relative links resolve. For Amendment 1 it also checks the link to RFC 0002, the changelog line, the amendment's sections and that its examples hold hex *(Amendment 1)*. The examples' bytes were checked by two encoders, see [Byte-exact examples](#byte-exact-examples). The rules themselves are tested when they are built: NOC-16 and NOC-17 implement them test first against the convergence harness of NOC-9, with the contract above.
+`scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001, has the sections its ticket requires, and that its relative links resolve. For Amendment 1 it also checks the link to RFC 0002, the changelog line and the amendment's sections, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples) *(Amendment 1)*. The rules themselves are tested when they are built: NOC-16 and NOC-17 implement them test first against the convergence harness of NOC-9, with the contract above.
