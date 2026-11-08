@@ -111,7 +111,7 @@ Each primitive is a published construction, used in widely deployed systems, wit
 Notes on each choice:
 
 - **Ed25519** is deterministic, so a signature never depends on the quality of a random number at signing time. We verify with `verify_strict`, which rejects the malleable and small-order encodings that differ between implementations; every member must accept exactly the same signatures, or the copies diverge. Two advisories touched these crates since the audit: RUSTSEC-2022-0093 (a signing oracle when a caller passes a mismatched public key, fixed in `ed25519-dalek` 2.0 by an API that no longer allows it) and RUSTSEC-2024-0344 (timing variability in scalar subtraction, fixed in `curve25519-dalek` 4.1.3). The pinned versions must include both fixes.
-- **HPKE** is the IETF standard for encrypting to a public key, and it is the building block MLS uses. We use base mode and authenticate the sender with an Ed25519 signature on the whole envelope, instead of HPKE's auth mode, so that one signature scheme authenticates everything a member writes. The `info` input binds the envelope to the space id, the generation and the recipient's member id. The `hpke` crate has no paid audit; we run the RFC 9180 test vectors in CI, and decision 3 asks whether to fund an audit.
+- **HPKE** is the IETF standard for encrypting to a public key, and it is the building block MLS uses. We use base mode and authenticate the sender with an Ed25519 signature on the whole envelope, instead of HPKE's auth mode, so that one signature scheme authenticates everything a member writes. The `info` input binds the envelope to the space id, the generation id and the recipient's member id (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)). The `hpke` crate has no paid audit; we run the RFC 9180 test vectors in CI, and decision 3 asks whether to fund an audit.
 - **XChaCha20-Poly1305** takes a 192-bit nonce, so every member can pick a random nonce for every change without coordinating, and collisions are negligible however many members write under one key. It runs fast in software, which matters in WebAssembly, where there is no hardware AES. XChaCha is specified in an IRTF draft, not an RFC; it is HChaCha20 in front of the RFC 8439 construction and has been deployed in libsodium for years.
 - **SHA-256** is the one hash function H of suite 1, and it stays the hash for change ids and member ids in every later suite. A client that does not know a newer suite must still identify, deduplicate and attribute its changes, so RFC 0002's frame and change ids, and the member ids in the header, always use SHA-256; changing that hash would take a new frame version, not a new suite. Only the other primitives (signatures, key agreement, content encryption, subkey derivation) can change per suite. HKDF-SHA256 derives subkeys, and plain SHA-256 computes member ids here and change ids in RFC 0002. Each use puts its own context string in front of the input, so a hash computed for one purpose can never be mistaken for one computed for another. HKDF-SHA256 already sits inside the HPKE suite, so we add no second hash function.
 
@@ -168,19 +168,19 @@ This is **eager rotation**: the space key rotates as part of the removal. The al
 **What rotation does not do.** A removed member keeps the copy it already holds: every change, every space key generation and every person key it received before the removal. Rotation only keeps it from reading what is written afterwards. If you revoke access to a laptop or an agent that held a copy, assume that copy is still readable by whoever holds the laptop (principle 4). Two more limits follow from island mode:
 
 - A member that has not seen the removal yet, because it is offline or on an island, keeps writing under the old generation. The removed member can read those changes, if it can get them, until that member catches up. Every change names its generation, so the members can see which changes were written under an outdated key.
-- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. Members then write with the generation whose entry has the lower hash, so every copy picks the same one. The exact rule belongs with the membership rules, but it must be deterministic (principle 2).
+- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. Which generation members then write with, and how the space leaves a generation that a removed member may hold, is RFC 0008's: every generation has an id that no member can choose, every copy picks the same current generation, and an admin writes a **merge rotation** that lists every concurrent generation as previous and wraps the new key only to current members. Until that merge rotation lands, members may write under a generation a removed member holds, and the SDK reports it (principle 4).
 
-A lost or stolen device is removed the same way, from every space its member key belongs to; the account key also revokes the device's member certificate. The SDK offers this as one action on the account.
+A lost or stolen device is removed the same way, from every space its member key belongs to; the SDK offers this as one action on the account. In v1 that removal is the revocation: there is no separate signed statement that revokes a member certificate (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
 ## Sub-agents get an ad-hoc space
 
 An agent that hands part of its task to a sub-agent does not share its own member key or its space keys (GENESIS.md, "Never give an agent more than its spaces"). Instead:
 
 1. The parent agent creates an **ad-hoc space** with a fresh space key.
-2. The sub-agent creates its own member key. The parent certifies it on behalf of its account, marked as a sub-agent of the parent, so the chain of responsibility is visible.
+2. The sub-agent creates its own member key. The parent signs a member certificate for it with the parent's own signing key, marked as a sub-agent of the parent, so the chain of responsibility leads from the sub-agent through the parent to the account. The parent never holds the account key, so it cannot sign as the account.
 3. The parent adds the sub-agent to the ad-hoc space and copies into it only the objects the task needs. The copies are new objects, encrypted under the ad-hoc space's key; they keep a reference to their source.
 4. The sub-agent works in the ad-hoc space. The parent, also a member, reads the results and writes what it accepts back into the original space under its own member key.
-5. When the task ends, the parent deletes the ad-hoc space and its key, and the sub-agent's member key is discarded.
+5. When the task ends, the parent deletes the ad-hoc space and its key, and the sub-agent's member key is discarded. For a local ad-hoc space this is a local deletion and needs no format. Deleting a space that reached the relay, for every member and at the relay, is not defined yet (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
 When the parent and the sub-agent run on the same machine, the ad-hoc space can stay local and never reach the relay; when the sub-agent runs elsewhere, the space syncs through the relay like any other.
 
@@ -209,6 +209,63 @@ The person's fields stay in the log, in the archive and in old snapshots as ciph
 - **Backups of the relay** keep the wrapped person-key record until they expire. The relay and anyone who steals a backup cannot open it, because they hold no space key. A member of the space who also obtains such a backup could; that member could equally have kept the key while it was a member.
 
 Whether destroying a key counts as erasure is for each data protection officer to decide. This is a design, not legal advice.
+
+## Formats of what keys sign and derive
+
+[RFC 0002](0002-change-and-log-format.md) defines the bytes of a change, and RFC 0008 (membership, NOC-23) defines the control bodies that carry these structures. This section defines what an account key or a member key signs inside them, and what a space key derives. Every format here is a proposal for the owner (decision 15).
+
+Every hash input below starts with a context string of its own, and every field after it has a fixed length, or is canonical CBOR (RFC 0002), so no two inputs can be read as the same bytes. Ed25519 then signs the 32-byte hash. Ed25519 could sign the input directly; hashing it first keeps every signed message one length and matches RFC 0007's relay challenge.
+
+### Member certificate
+
+```text
+member certificate (CBOR map, canonical)
+├── 1 account key        32 bytes, the account's Ed25519 public key
+├── 2 member id          32 bytes, the certified member
+├── 3 kind               uint: 1 device, 2 agent, 3 sub-agent
+├── 4 parent member id   32 bytes; sub-agents only
+└── 5 signature          64 bytes
+```
+
+- **Device and agent** (kind 1 and 2): the account key signs `H("nocentraldb/member-cert" || canonical map of keys 1 to 4)`.
+- **Sub-agent** (kind 3): the parent member's signing key signs `H("nocentraldb/sub-agent-cert" || canonical map of keys 1 to 4)`. Key 1 carries the parent's account key, so the sub-agent is attributed to that account. A member checks it against the parent's own certificate, which must be of kind 2 or 3 and name the same account key. RFC 0008 draft 0.2 has the account key sign every kind. That cannot work for a sub-agent: the parent agent does not hold the account key, and must not (see [Sub-agents get an ad-hoc space](#sub-agents-get-an-ad-hoc-space)). A separate context string keeps a parent's certificate signature from ever passing as an account's.
+
+The member id covers both public keys, so the certificate binds them too.
+
+### Account sign-off of a shred
+
+```text
+sign-off (CBOR map, canonical)
+├── 1 account key        32 bytes
+└── 2 signature          64 bytes, over
+                         H("nocentraldb/shred-sign-off" || space id (16 bytes) ||
+                           person-key id (16 bytes) || performer member id (32 bytes))
+```
+
+The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
+
+### Key-chain subkey
+
+The key chain entry encrypts each previous generation's key under a subkey of the new generation's key:
+
+```text
+key-chain subkey = HKDF-SHA256(ikm = new generation's key, salt = none,
+                               info = "nocentraldb/key-chain" || space id (16 bytes) ||
+                                      new generation id (8 bytes, big-endian))
+```
+
+Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry.
+
+### Key envelope
+
+The HPKE `info` input is `"nocentraldb/key-envelope" || space id (16 bytes) || generation id (8 bytes, big-endian) || recipient member id (32 bytes)`. The generation id is RFC 0008's 64-bit id: a 16-bit ordinal and a 48-bit tag that the members derive. The HPKE ciphertext is the 32-byte space key of that generation.
+
+A note on the 48-bit tag: a member cannot choose a collision with a single try, but an admin that wants to can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects. RFC 0008 then rejects both entries. That attack only blocks a rotation, which a malicious admin can do more simply by not rotating; it exposes no key. Still, it is cheap enough to name.
+
+### Not defined here
+
+- **Revoking a member certificate.** There is no account-wide log in which a revocation would live and that every space's members read. In v1 a lost or compromised member is removed from every space it belongs to (RFC 0008), which is what keeps it from reading anything new. A signed revocation belongs to a later RFC about accounts, together with where the account key lives (decision 8).
+- **Deleting a space** at the relay and on every member, such as an ad-hoc space that synced. It is a question of the relay's storage and of each member's copy, not of keys: the keys go with the space. It belongs to RFC 0008 or a later RFC. A local ad-hoc space is deleted locally and needs no format.
 
 ## How the SDK hides keys
 
@@ -290,6 +347,7 @@ GENESIS.md reserves crypto, key handling and formats for the owner. Each decisio
 12. **Public API names** for the key-related calls (`members.add`, `members.remove`, `workOrders.erase`, invitations). **Recommendation:** invitations and member ids instead of public keys in `members.add`, and a returned notice on every call that changes who can read what.
 13. **How a member authenticates to the relay.** (a) The member's Ed25519 signing key signs the relay's challenge, separated from change signatures by a context string. (b) A third, separate key per member only for relay authentication, certified by the account key. **Recommendation: (a)**: the context string already keeps the two uses apart, the relay must know the signing key anyway to verify changes, and a third key adds a certificate and a rotation without protecting anything more.
 14. **Integrity of the person-key store.** (a) A person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred entry with a second account's sign-off, as in [The person key](#the-person-key). (b) Unsigned records that any member may overwrite or delete, as an opaque store. (c) Person keys only inside control changes in the log, wrapped per member. **Recommendation: (a)**. (b) lets one member swap a key or erase it without a sign-off. (c) puts the key into the append-only log, where a shred can no longer destroy it.
+15. **Formats of what keys sign and derive**, as [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) proposes them for RFC 0008: the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`. **Recommendation:** accept them, including the change from RFC 0008 draft 0.2 that a parent agent, not the account, signs a sub-agent's certificate.
 
 ## Agreement with GENESIS.md and RFC 0001
 
