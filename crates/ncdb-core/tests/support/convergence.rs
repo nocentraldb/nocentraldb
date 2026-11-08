@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use core::fmt::Debug;
+use std::collections::BTreeSet;
 
 use proptest::arbitrary::any;
 use proptest::collection::vec;
@@ -126,6 +127,8 @@ pub struct Config {
     pub max_changes_per_member: usize,
     /// Most extra times one copy receives the same operation.
     pub max_duplicates: usize,
+    /// Most operations of others a member learns before it makes one.
+    pub max_learned: usize,
     /// Number of generated cases.
     pub cases: u32,
     /// Seeds the generator: the same seed generates the same cases.
@@ -139,6 +142,7 @@ impl Default for Config {
             copies: 3,
             max_changes_per_member: 4,
             max_duplicates: 2,
+            max_learned: 3,
             cases: 256,
             seed: 0,
         }
@@ -202,8 +206,11 @@ impl core::fmt::Display for Violation {
     }
 }
 
-/// One generated step: a member makes one operation, which then arrives at
-/// every copy. Per copy, one arrival key per delivery, so at least one and
+/// One generated step: a member learns some earlier operations, then makes
+/// one operation from its copy, which then arrives at every copy. Each entry
+/// of `learns` picks one earlier operation, by its index modulo the number
+/// of earlier operations; it shrinks away, towards concurrent operations.
+/// Per copy, one arrival key per delivery, so at least one and
 /// more for duplicates. A copy receives the deliveries in the order of their
 /// keys, ties in generated order. Keys travel with their operation, so
 /// shrinking an operation away keeps the relative order of the others; keys
@@ -211,6 +218,7 @@ impl core::fmt::Display for Violation {
 #[derive(Clone, Debug)]
 struct Step<R> {
     member: Member,
+    learns: Vec<u32>,
     raw: R,
     arrivals: Vec<Vec<u32>>,
 }
@@ -218,31 +226,55 @@ struct Step<R> {
 /// The operations a case's steps make.
 struct Made<C> {
     ops: Vec<Op<C>>,
+    /// Per operation, the ids of the operations its author had seen.
+    seen: Vec<BTreeSet<OpId>>,
 }
 
-/// Plays the steps: each member makes its operation from its own copy.
+/// Plays the steps. Every member keeps its own copy, which holds its own
+/// operations and the ones it learned; it makes each operation from that
+/// copy, so an operation can only replace what its author had seen.
 fn simulate<S: Mergeable, G: Generator<S>>(
     generator: &G,
     steps: &[Step<G::Raw>],
 ) -> Made<S::Change> {
     let mut ops: Vec<Op<S::Change>> = Vec::with_capacity(steps.len());
+    let mut seen_by_op = Vec::with_capacity(steps.len());
+    let members = steps
+        .iter()
+        .map(|s| s.member as usize + 1)
+        .max()
+        .unwrap_or(0);
+    let mut copies: Vec<(S, BTreeSet<OpId>)> = vec![(S::default(), BTreeSet::new()); members];
     for (k, step) in steps.iter().enumerate() {
         let id = k as OpId;
-        let copy = S::default();
+        let (copy, seen) = &mut copies[step.member as usize];
+        for &learn in step.learns.iter().filter(|_| k > 0) {
+            let earlier = &ops[learn as usize % k];
+            if seen.insert(earlier.id) {
+                copy.apply(earlier);
+            }
+        }
+        let seen_ops: Vec<Op<S::Change>> = seen.iter().map(|&s| ops[s as usize].clone()).collect();
         let author = Author {
             member: step.member,
             id,
-            copy: &copy,
-            seen: &[],
+            copy,
+            seen: &seen_ops,
         };
-        let body = generator.make(&author, &step.raw);
-        ops.push(Op {
+        let op = Op {
             id,
             author: step.member,
-            body,
-        });
+            body: generator.make(&author, &step.raw),
+        };
+        seen_by_op.push(seen.clone());
+        copy.apply(&op);
+        seen.insert(id);
+        ops.push(op);
     }
-    Made { ops }
+    Made {
+        ops,
+        seen: seen_by_op,
+    }
 }
 
 /// Per copy, the order in which it receives the steps' operations, as
@@ -341,15 +373,20 @@ fn cases<S: Mergeable, G: Generator<S>>(
     let members = config.members;
     let copies = config.copies;
     let max_duplicates = config.max_duplicates;
+    let max_learned = config.max_learned;
     let raws: Vec<BoxedStrategy<G::Raw>> = (0..members).map(|m| generator.raw(m)).collect();
     let step = (0..members)
         .prop_flat_map(move |member| {
+            let learns = vec(any::<u32>(), 0..=max_learned);
             let arrivals = vec(vec(any::<u32>(), 1..=1 + max_duplicates), copies);
-            (raws[member as usize].clone(), arrivals).prop_map(move |(raw, arrivals)| Step {
-                member,
-                raw,
-                arrivals,
-            })
+            (learns, raws[member as usize].clone(), arrivals).prop_map(
+                move |(learns, raw, arrivals)| Step {
+                    member,
+                    learns,
+                    raw,
+                    arrivals,
+                },
+            )
         })
         .boxed();
     vec(
