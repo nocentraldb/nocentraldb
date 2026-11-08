@@ -185,6 +185,7 @@ test("the pull request template has its sections, in order", () => {
     "Human",
     "Agent under close human direction",
     "Agent with human review",
+    "Agent, checked against a decided design",
   ]) {
     assert.ok(text.includes(choice), `authorship choice ${choice}`);
   }
@@ -193,6 +194,13 @@ test("the pull request template has its sections, in order", () => {
 });
 
 /** The text under one `## ` heading of the pull request template. */
+test("the AI policy says when pm may merge without a person's review", () => {
+  const policy = read(".github/AI_POLICY.md");
+  assert.match(policy, /Agent, checked against a decided design/);
+  assert.match(policy, /decided RFC/);
+  assert.match(policy, /daily note/);
+});
+
 const prSection = (heading) => {
   const text = `\n${read(PR_TEMPLATE)}`;
   const start = text.indexOf(`\n## ${heading}\n`);
