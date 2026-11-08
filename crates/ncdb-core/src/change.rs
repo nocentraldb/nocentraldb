@@ -22,6 +22,11 @@ use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use crate::redact::Size;
 
+/// The depth of the header map in a change: inside the frame.
+const HEADER_DEPTH: usize = 2;
+/// The depth of the payload map in a change: inside the header's key 6.
+const PAYLOAD_DEPTH: usize = 3;
+
 /// The highest key of the "must understand" range.
 pub const LAST_MUST_UNDERSTAND_KEY: u64 = 63;
 
@@ -259,8 +264,8 @@ impl From<DecodeError> for ChangeError {
 struct Fields(BTreeMap<u64, Value>);
 
 impl Fields {
-    fn decode(bytes: &[u8]) -> Result<Fields, ChangeError> {
-        Fields::of(cbor::decode(bytes)?)
+    fn decode(bytes: &[u8], depth: usize) -> Result<Fields, ChangeError> {
+        Fields::of(cbor::decode_at(bytes, depth)?)
     }
 
     fn of(value: Value) -> Result<Fields, ChangeError> {
@@ -390,9 +395,10 @@ impl Header {
         cbor::encode(&map(known, &self.extensions))
     }
 
-    /// Decodes canonical bytes of a header map.
+    /// Decodes canonical bytes of a header map. The header sits at depth
+    /// 2, inside the frame, as [`cbor::MAX_DEPTH`] counts.
     pub fn decode(bytes: &[u8]) -> Result<Header, ChangeError> {
-        let mut fields = Fields::decode(bytes)?;
+        let mut fields = Fields::decode(bytes, HEADER_DEPTH)?;
         Ok(Header {
             space: SpaceId(fixed(fields.required(1)?)?),
             author: MemberId(fixed(fields.required(2)?)?),
@@ -474,9 +480,10 @@ impl Payload {
         cbor::encode(&map(known, &self.extensions))
     }
 
-    /// Decodes canonical bytes of a payload map.
+    /// Decodes canonical bytes of a payload map. The payload sits at depth
+    /// 3, inside the header's key 6, as [`cbor::MAX_DEPTH`] counts.
     pub fn decode(bytes: &[u8]) -> Result<Payload, ChangeError> {
-        let mut fields = Fields::decode(bytes)?;
+        let mut fields = Fields::decode(bytes, PAYLOAD_DEPTH)?;
         let format = unsigned(fields.required(1)?)?;
         let clock = Hlc(unsigned(fields.required(2)?)?);
         let dependencies = dependencies(fields.required(3)?)?;

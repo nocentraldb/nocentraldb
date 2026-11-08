@@ -218,9 +218,16 @@ pub fn encode(value: &Value) -> Vec<u8> {
 }
 
 /// Decodes canonical bytes into a value, and rejects every other form.
+/// The value is at depth 1: it may nest [`MAX_DEPTH`] levels.
 pub fn decode(bytes: &[u8]) -> Result<Value, DecodeError> {
+    decode_at(bytes, 1)
+}
+
+/// Decodes canonical bytes of a value that sits at `depth` in its change,
+/// such as the header map (depth 2) inside the frame.
+pub(crate) fn decode_at(bytes: &[u8], depth: usize) -> Result<Value, DecodeError> {
     let mut decoder = Decoder::new(bytes);
-    let value = read(&mut decoder)?;
+    let value = read(&mut decoder, depth)?;
     if decoder.position() != bytes.len() {
         return Err(error(decoder.position(), Reason::TrailingBytes));
     }
@@ -364,8 +371,14 @@ fn from_half(bits: u16) -> f64 {
     }
 }
 
-fn read(decoder: &mut Decoder<'_>) -> Result<Value, DecodeError> {
+/// Reads the value at `depth`. The depth is checked before anything is
+/// read, so input nested deeper than [`MAX_DEPTH`] fails without recursing
+/// further.
+fn read(decoder: &mut Decoder<'_>, depth: usize) -> Result<Value, DecodeError> {
     let at = decoder.position();
+    if depth > MAX_DEPTH {
+        return Err(error(at, Reason::TooDeep));
+    }
     let truncated = |_| error(at, Reason::Truncated);
     let datatype = decoder.datatype().map_err(truncated)?;
     let value = match datatype {
@@ -382,7 +395,7 @@ fn read(decoder: &mut Decoder<'_>) -> Result<Value, DecodeError> {
             let n = decoder.array().map_err(truncated)?.expect("definite");
             let mut items = Vec::new();
             for _ in 0..n {
-                items.push(read(decoder)?);
+                items.push(read(decoder, depth + 1)?);
             }
             Value::Array(items)
         }
@@ -392,7 +405,7 @@ fn read(decoder: &mut Decoder<'_>) -> Result<Value, DecodeError> {
             let mut previous: Option<Key> = None;
             for _ in 0..n {
                 let key_at = decoder.position();
-                let key = match read(decoder)? {
+                let key = match read(decoder, depth + 1)? {
                     Value::Unsigned(n) => Key::Unsigned(n),
                     Value::Text(text) => Key::Text(text),
                     _ => return Err(error(key_at, Reason::KeyType)),
@@ -404,7 +417,7 @@ fn read(decoder: &mut Decoder<'_>) -> Result<Value, DecodeError> {
                         Ordering::Greater => {}
                     }
                 }
-                let item = read(decoder)?;
+                let item = read(decoder, depth + 1)?;
                 previous = Some(key.clone());
                 entries.insert(key, item);
             }
