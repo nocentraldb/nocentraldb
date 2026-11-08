@@ -34,6 +34,19 @@ impl Hlc {
     }
 }
 
+/// The highest clock seen is the largest a clock can hold, so no later
+/// clock exists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClockExhausted;
+
+impl std::fmt::Display for ClockExhausted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the clock has reached its largest value")
+    }
+}
+
+impl std::error::Error for ClockExhausted {}
+
 /// A member's clock in one space: the highest clock it has seen.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
@@ -56,27 +69,10 @@ impl Clock {
         self.highest = self.highest.max(seen);
     }
 
-    /// The clock for a change this member writes now. `wall` returns the
-    /// wall clock in milliseconds since the Unix epoch; it is asked again
-    /// while the counter would overflow, until it reaches the next
-    /// millisecond.
-    ///
-    /// A wall clock beyond 48 bits of milliseconds (the year 10889) reads
-    /// as the largest the clock holds.
-    pub fn now(&mut self, mut wall: impl FnMut() -> u64) -> Hlc {
-        loop {
-            let millis = wall().min(Hlc::MAX_MILLIS);
-            let wall = Hlc::new(millis, 0).expect("at most 48 bits");
-            let next = if wall > self.highest {
-                wall
-            } else if self.highest.counter() < Hlc::MAX_COUNTER {
-                Hlc(self.highest.0 + 1)
-            } else {
-                // The counter is full: wait for the next millisecond.
-                continue;
-            };
-            self.highest = next;
-            return next;
-        }
+    /// The clock for a change this member writes now: the larger of the
+    /// wall clock (`wall`, in milliseconds since the Unix epoch) and one
+    /// more than the highest clock seen.
+    pub fn now(&mut self, _wall: u64) -> Result<Hlc, ClockExhausted> {
+        todo!()
     }
 }

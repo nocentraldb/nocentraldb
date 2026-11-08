@@ -1,6 +1,11 @@
 //! The hybrid logical clock of RFC 0002: 48 bits of milliseconds and a
-//! 16-bit counter, never backwards, higher than every clock seen, and
-//! waiting for the wall clock when the counter would overflow.
+//! 16-bit counter, never backwards and higher than every clock seen.
+//!
+//! When the counter is full, the clock carries into the next millisecond
+//! instead of waiting for the wall clock, and at the largest value it
+//! returns an error instead of wrapping. The carry is pending the owner's
+//! decision ("What does the clock do when its counter is full and a clock
+//! from the future was seen?"); pm recommends it.
 
 #[path = "support/props.rs"]
 mod props;
@@ -10,109 +15,126 @@ mod props;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use std::cell::Cell;
-
-use ncdb_core::clock::{Clock, Hlc};
+use ncdb_core::clock::{Clock, ClockExhausted, Hlc};
 use proptest::prelude::*;
+
+fn hlc(millis: u64, counter: u16) -> Hlc {
+    Hlc::new(millis, counter).unwrap()
+}
 
 #[test]
 fn milliseconds_take_the_upper_48_bits_and_the_counter_the_lower_16() {
-    let hlc = Hlc::new(1_793_000_000_000, 3).unwrap();
-    assert_eq!(hlc.0, (1_793_000_000_000 << 16) | 3);
-    assert_eq!(hlc.millis(), 1_793_000_000_000);
-    assert_eq!(hlc.counter(), 3);
+    let clock = hlc(1_793_000_000_000, 3);
+    assert_eq!(clock.0, (1_793_000_000_000 << 16) | 3);
+    assert_eq!(clock.millis(), 1_793_000_000_000);
+    assert_eq!(clock.counter(), 3);
     assert_eq!(Hlc::new(Hlc::MAX_MILLIS, u16::MAX), Some(Hlc(u64::MAX)));
     assert_eq!(Hlc::new(Hlc::MAX_MILLIS + 1, 0), None);
     // Compared as a number: milliseconds first, then the counter.
-    assert!(Hlc::new(5, u16::MAX).unwrap() < Hlc::new(6, 0).unwrap());
+    assert!(hlc(5, u16::MAX) < hlc(6, 0));
 }
 
 #[test]
 fn a_wall_clock_ahead_of_everything_seen_is_used_as_is() {
     let mut clock = Clock::new();
-    clock.observe(Hlc::new(1000, 7).unwrap());
-    assert_eq!(clock.now(|| 2000), Hlc::new(2000, 0).unwrap());
-    assert_eq!(clock.highest(), Hlc::new(2000, 0).unwrap());
+    clock.observe(hlc(1000, 7));
+    assert_eq!(clock.now(2000), Ok(hlc(2000, 0)));
+    assert_eq!(clock.highest(), hlc(2000, 0));
 }
 
 #[test]
 fn a_wall_clock_behind_counts_on_from_the_highest_seen() {
     let mut clock = Clock::new();
-    clock.observe(Hlc::new(5000, 7).unwrap());
-    assert_eq!(clock.now(|| 1000), Hlc::new(5000, 8).unwrap());
-    assert_eq!(clock.now(|| 5000), Hlc::new(5000, 9).unwrap());
+    clock.observe(hlc(5000, 7));
+    assert_eq!(clock.now(1000), Ok(hlc(5000, 8)));
+    assert_eq!(clock.now(5000), Ok(hlc(5000, 9)));
     // Observing an older clock lowers nothing.
-    clock.observe(Hlc::new(10, 0).unwrap());
-    assert_eq!(clock.highest(), Hlc::new(5000, 9).unwrap());
+    clock.observe(hlc(10, 0));
+    assert_eq!(clock.highest(), hlc(5000, 9));
 }
 
 #[test]
-fn a_full_counter_waits_for_the_next_millisecond() {
+fn a_full_counter_carries_into_the_next_millisecond_without_waiting() {
     let mut clock = Clock::new();
-    clock.observe(Hlc::new(1000, u16::MAX).unwrap());
-    let readings = [999, 1000, 1000, 1001];
-    let calls = Cell::new(0);
-    let hlc = clock.now(|| {
-        let reading = readings[calls.get()];
-        calls.set(calls.get() + 1);
-        reading
-    });
-    assert_eq!(hlc, Hlc::new(1001, 0).unwrap());
-    assert_eq!(calls.get(), 4, "it returned before the wall clock moved on");
+    clock.observe(hlc(1000, u16::MAX));
+    // The wall clock is behind and stays behind; the clock does not wait.
+    assert_eq!(clock.now(999), Ok(hlc(1001, 0)));
+    assert_eq!(clock.now(999), Ok(hlc(1001, 1)));
+    // A clock seen from far in the future with a full counter.
+    let mut clock = Clock::new();
+    clock.observe(hlc(Hlc::MAX_MILLIS - 1, u16::MAX));
+    assert_eq!(clock.now(1000), Ok(hlc(Hlc::MAX_MILLIS, 0)));
+}
+
+#[test]
+fn the_largest_clock_is_an_error_not_a_wrap() {
+    let mut clock = Clock::new();
+    clock.observe(Hlc(u64::MAX - 1));
+    assert_eq!(clock.now(0), Ok(Hlc(u64::MAX)));
+    assert_eq!(clock.now(0), Err(ClockExhausted));
+    assert_eq!(clock.now(u64::MAX), Err(ClockExhausted));
+    assert_eq!(clock.highest(), Hlc(u64::MAX));
+
+    let mut clock = Clock::new();
+    clock.observe(Hlc(u64::MAX));
+    assert_eq!(clock.now(1_793_000_000_000), Err(ClockExhausted));
+    assert_eq!(
+        ClockExhausted.to_string(),
+        "the clock has reached its largest value"
+    );
+}
+
+#[test]
+fn a_wall_clock_beyond_48_bits_reads_as_the_largest_millisecond() {
+    let mut clock = Clock::new();
+    assert_eq!(clock.now(u64::MAX), Ok(hlc(Hlc::MAX_MILLIS, 0)));
+    assert_eq!(clock.now(u64::MAX), Ok(hlc(Hlc::MAX_MILLIS, 1)));
 }
 
 #[derive(Clone, Debug)]
 enum Step {
     /// A change arrives with this clock.
     Observe(u64),
-    /// The member writes; the wall clock reads these values in turn, and
-    /// then moves on past every clock seen.
-    Write(Vec<u64>),
+    /// The member writes while its wall clock reads this.
+    Write(u64),
 }
 
 fn steps() -> impl Strategy<Value = Vec<Step>> {
-    let millis = prop_oneof![0u64..2000, Just(0), Just(Hlc::MAX_MILLIS - 1)];
+    let millis = prop_oneof![0u64..2000, Just(0), Just(Hlc::MAX_MILLIS), Just(u64::MAX)];
     let counter = prop_oneof![any::<u16>(), Just(u16::MAX), Just(u16::MAX - 1)];
-    let observe = (millis.clone(), counter)
-        .prop_map(|(millis, counter)| Step::Observe(Hlc::new(millis, counter).unwrap().0));
-    let write = proptest::collection::vec(millis, 1..4).prop_map(Step::Write);
+    let observe = prop_oneof![
+        (0u64..2000, counter).prop_map(|(millis, counter)| Step::Observe(hlc(millis, counter).0)),
+        (0u64..4).prop_map(|below| Step::Observe(u64::MAX - below)),
+    ];
+    let write = millis.prop_map(Step::Write);
     proptest::collection::vec(prop_oneof![observe, write], 1..40)
 }
 
 #[test]
 fn the_clock_never_runs_backwards_and_passes_every_clock_seen() {
-    props::check(512, steps(), |steps| {
+    props::check(1024, steps(), |steps| {
         let mut clock = Clock::new();
         let mut highest = Hlc(0);
-        let mut last_written: Option<Hlc> = None;
         for step in steps {
             match step {
                 Step::Observe(seen) => {
                     clock.observe(Hlc(seen));
                     highest = highest.max(Hlc(seen));
                 }
-                Step::Write(readings) => {
-                    // After the given readings, the wall clock jumps past
-                    // the highest clock, so a full counter can stop waiting.
-                    let after = highest.millis() + 1;
-                    let mut readings = readings.into_iter();
-                    let mut last_reading = 0;
-                    let hlc = clock.now(|| {
-                        last_reading = readings.next().unwrap_or(after);
-                        last_reading
-                    });
-                    prop_assert!(hlc > highest, "{hlc:?} is not above {highest:?}");
-                    if let Some(last) = last_written {
-                        prop_assert!(hlc > last, "{hlc:?} ran back from {last:?}");
+                Step::Write(wall) => {
+                    let wall_clock = hlc(wall.min(Hlc::MAX_MILLIS), 0);
+                    match clock.now(wall) {
+                        Ok(written) => {
+                            prop_assert!(written > highest, "{written:?} <= {highest:?}");
+                            // Exactly the RFC's rule: the larger of the wall
+                            // clock and one above the highest seen.
+                            prop_assert_eq!(written, wall_clock.max(Hlc(highest.0 + 1)));
+                            highest = written;
+                        }
+                        Err(ClockExhausted) => {
+                            prop_assert_eq!(highest, Hlc(u64::MAX));
+                        }
                     }
-                    prop_assert!(hlc >= Hlc::new(last_reading, 0).unwrap());
-                    // Never more than the larger of the wall clock and one
-                    // above the highest seen: the clock does not run ahead.
-                    let wall = Hlc::new(last_reading, 0).unwrap();
-                    prop_assert!(hlc == wall || hlc.0 == highest.0 + 1);
-                    prop_assert_eq!(clock.highest(), hlc);
-                    highest = hlc;
-                    last_written = Some(hlc);
                 }
             }
             prop_assert_eq!(clock.highest(), highest);
