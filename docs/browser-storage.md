@@ -1,6 +1,6 @@
 # How long a browser keeps a web app's copy
 
-GENESIS.md promises web apps in Chromium-based browsers, Firefox and Safari, with the data stored in the browser. RFC 0006 (pull request #36) stores a member's copy in SQLite on the Origin Private File System (OPFS), through SQLite's `opfs-sahpool` VFS in a dedicated worker. This page records what each browser actually does with that copy, so that the SDK and its documentation promise that and no more (GENESIS.md, principle 4). It answers NOC-33; how to explain it to developers and their users is NOC-34.
+GENESIS.md promises web apps in Chromium-based browsers, Firefox and Safari, with the data stored in the browser. [RFC 0006](rfc/0006-local-view.md) stores a member's copy in SQLite on the Origin Private File System (OPFS), through SQLite's `opfs-sahpool` VFS in a dedicated worker. This page records what each browser actually does with that copy, so that the SDK and its documentation promise that and no more (GENESIS.md, principle 4). It answers NOC-33; how to explain it to developers and their users is NOC-34.
 
 Every row names its source:
 
