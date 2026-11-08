@@ -1,0 +1,6 @@
+# 2026-11-08 · NOC-17 · How sets answer what RFC 0004 leaves open
+
+- Decided by: coding agent (NOC-17)
+- Why: (1) a set's state keeps every operation it received, as basic values do, so T, the live additions and the lost removals are computed from the set of operations; (2) an addition is `Replaced` by the removal with the lowest operation id that observed it, a removal by the addition with the lowest operation id that names it; a removal no addition names is lost while its element is in the set and visible (applied) when it is not; (3) a re-add names the removals of the element its author's copy holds that no addition has replaced yet; (4) a name of the wrong kind (an addition naming an addition, a removal naming a removal), which only a malformed operation writes, has no effect; (5) a set refuses the empty value as an element; (6) the state bytes are `[[id, author, stamp, element, 0 | 1, [named id…]]…]` in operation id order, the local view's canonical CBOR, not a wire format (NOC-37).
+- Instead of: keeping only T and the live additions, which loses who replaced what; or letting a re-add name every removal it ever saw, which grows the state with ids already replaced.
+- Topics: field-types, sets, rfc-0004, convergence

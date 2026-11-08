@@ -120,3 +120,80 @@ test("the member log knows folded, parked and rejected", () => {
   assert.ok(log, "no log table in RFC 0002");
   assert.match(log, /state\s+folded, parked or rejected/);
 });
+
+// NOC-38: Amendment 2 gives a payload that decrypts but does not decode its
+// own row in the step table of Amendment 1, between decryption (step 5) and
+// understanding the payload (step 6), and puts the choice of its state to the
+// owner as D13, with the three options the ticket names.
+const AMENDMENT_2 = "amendment-2-a-payload-that-decrypts-but-does-not-decode";
+
+/** The rows of the step table of Amendment 1, as arrays of trimmed cells. */
+const stepRows = (markdown) =>
+  section(markdown, AMENDMENT)
+    ?.split("\n")
+    .filter((line) => /^\| \d+[a-z]?\. /.test(line))
+    .map((line) =>
+      line
+        .slice(1, -1)
+        .split(" | ")
+        .map((cell) => cell.trim()),
+    ) ?? [];
+
+test("RFC 0002 announces Amendment 2 in a dated changelog line at the top", () => {
+  const top = read(RFC_0002).split(/^## /m)[0];
+  assert.match(
+    top,
+    new RegExp(
+      `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · NOC-38 · .*\\(#${AMENDMENT_2}\\)`,
+      "m",
+    ),
+    "no dated changelog line for NOC-38 linking to Amendment 2 above the first section",
+  );
+});
+
+test("RFC 0002 has the Amendment 2 section", () => {
+  assert.ok(
+    anchors(read(RFC_0002)).has(AMENDMENT_2),
+    `no section #${AMENDMENT_2}`,
+  );
+});
+
+test("the step table has a row for a payload that decrypts but does not decode", () => {
+  const rows = stepRows(read(RFC_0002));
+  const steps = rows.map(([step]) => step.split(".")[0]);
+  assert.deepEqual(steps, ["1", "2", "3", "4", "5", "5a", "6", "7"]);
+  const [step, fails, state] = rows[steps.indexOf("5a")];
+  assert.match(step, /^5a\. Decode the payload/);
+  assert.match(fails, /decrypt/i, "the row does not say the payload decrypted");
+  assert.match(state, /Parked: unknown payload format/);
+  assert.match(state, /Amendment 2/, "the row is not marked as Amendment 2");
+});
+
+test("D13 lists the three options of the ticket and one recommendation", () => {
+  const body = section(read(RFC_0002), AMENDMENT_2);
+  assert.ok(body, `no section #${AMENDMENT_2}`);
+  const block = body.split("**D13.")[1]?.split(/\*\*D\d+\./)[0];
+  assert.ok(block, "Amendment 2 has no decision D13");
+  const options = block.match(/^- [A-Z]\. .*$/gm) ?? [];
+  assert.equal(options.length, 3, "D13 needs exactly three options");
+  assert.match(
+    options[0],
+    /^- A\. Parked.*unknown payload format.*\*\(recommended\)\*/,
+  );
+  assert.match(options[1], /^- B\. Rejected/);
+  assert.match(options[2], /^- C\. Split by cause/);
+  assert.equal(block.match(/\*\(recommended\)\*/g)?.length, 1);
+});
+
+test("Amendment 2 says how each option converges and what an upgrade does", () => {
+  const body = section(read(RFC_0002), AMENDMENT_2) ?? "";
+  const headings = body.match(/^### .*$/gm) ?? [];
+  assert.ok(
+    headings.some((h) => /converge/i.test(h)),
+    "no section on convergence",
+  );
+  assert.ok(
+    headings.some((h) => /upgrade/i.test(h)),
+    "no section on upgrades",
+  );
+});
