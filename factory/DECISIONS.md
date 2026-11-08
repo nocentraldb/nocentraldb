@@ -229,3 +229,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
+
+### 2026-11-08 · NOC-32 · CI installs proto with its own script instead of moonrepo/setup-toolchain
+
+- Decided by: coding agent
+- Why: setup-toolchain v0.6.4 downloads proto's install script and proto itself on every run, before it looks at its cache, and restores with a fallback key; it has no input to change either. `scripts/install-toolchain.sh` downloads proto only when the cache lacks it, retries with backoff, and names the host it could not reach.
+- Instead of: keeping setup-toolchain and only adding retries around it, which still needs proto's download host on every run.
+
+### 2026-11-08 · NOC-32 · proto's own version is pinned in the install script, and the cache key hashes that script too
+
+- Decided by: coding agent
+- Why: setup-toolchain installed whatever proto release was latest (0.63.2 on 2026-11-08), so proto had no pin to keep; the cache now freezes a version, so it needs one. `.prototools` cannot hold it: proto ignores a `proto` pin there until each machine runs `proto trust`. The key is `proto-<os>-<hash of .prototools and scripts/install-toolchain.sh>`, so bumping proto installs cold. `.moon/toolchains.yml` pins the proto moon runs its tasks with to the same version, held equal by the contract test; without it moon 2.6.5 downloaded proto 0.62.2 on the first task of every gates run, unretried. Dependabot does not bump this pin.
+- Instead of: a key on `.prototools` alone, which would keep an old proto after a version bump.
+
+### 2026-11-08 · NOC-32 · The toolchain cache keeps cached proto plugins valid for ten years
+
+- Decided by: coding agent
+- Why: proto deletes and re-downloads a cached plugin once its file is older than proto's cache duration (between 160 and 250 days in a local test), and a restored cache keeps the files' original times; a long-lived cache entry would then go back to ghcr.io on a warm run. The script sets `PROTO_CACHE_DURATION` for the whole job. The plugin versions are fixed by proto's version, so a long duration loosens no pin.
+- Instead of: proto's default, or `cache-duration` in `.prototools`, which proto ignores in an untrusted config.

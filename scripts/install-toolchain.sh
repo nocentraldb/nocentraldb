@@ -96,8 +96,20 @@ if [[ "$(installed_version)" != "$PROTO_VERSION" ]]; then
 	fi
 fi
 
-if ! retry "proto install" proto install; then
-	hosts="$(hosts_in "$LOG")"
-	echo "::error title=Toolchain install failed::proto install could not download from ${hosts:-a host it did not name (see its log above)} after $ATTEMPTS attempts"
-	exit 1
-fi
+# install_or_fail WHAT COMMAND...: retries COMMAND, then fails the job
+# naming the hosts in its output.
+install_or_fail() {
+	local what="$1"
+	if ! retry "$@"; then
+		hosts="$(hosts_in "$LOG")"
+		echo "::error title=Toolchain install failed::$what could not download from ${hosts:-a host it did not name (see its log above)} after $ATTEMPTS attempts"
+		exit 1
+	fi
+}
+
+# The tools .prototools pins.
+install_or_fail "proto install" proto install
+# moon runs its tasks through the proto in ~/.proto/tools/proto at the
+# version .moon/toolchains.yml pins, this one, and would otherwise download
+# it on its first task, without retries.
+install_or_fail "proto install proto" proto install proto "$PROTO_VERSION"

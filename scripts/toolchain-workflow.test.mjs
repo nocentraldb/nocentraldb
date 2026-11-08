@@ -487,7 +487,7 @@ const checks = [
     },
     mutants: {
       "runs proto install once": (ctx) =>
-        editScript(ctx, 'retry "proto install" proto install', "proto install"),
+        editScript(ctx, 'if ! retry "$@"; then', 'if ! "$@"; then'),
       "names no host": (ctx) => editScript(ctx, '$(hosts_in "$LOG")', ""),
     },
   },
