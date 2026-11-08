@@ -154,12 +154,15 @@ impl Default for Config {
 pub enum Property {
     /// Converges in any order.
     C1,
+    /// Tested reads: copies with equal state bytes read the same.
+    C7,
 }
 
 impl core::fmt::Display for Property {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             Property::C1 => "C1 (converges in any order)",
+            Property::C7 => "C7 (tested reads)",
         })
     }
 }
@@ -320,6 +323,16 @@ fn violation<S: Mergeable, G: Generator<S>>(
         return Some((
             Property::C1,
             format!("copy {copy} ended in other state bytes than copy 0"),
+        ));
+    }
+    let reads: Vec<S::Read> = states.iter().map(S::read).collect();
+    if let Some(copy) = (1..copies).find(|&copy| reads[copy] != reads[0]) {
+        return Some((
+            Property::C7,
+            format!(
+                "copy {copy} reads {:?}, copy 0 reads {:?}, with equal state bytes",
+                reads[copy], reads[0]
+            ),
         ));
     }
     None
