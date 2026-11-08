@@ -88,6 +88,13 @@ pub trait Generator<S: Mergeable> {
     fn raw(&self, member: Member) -> BoxedStrategy<Self::Raw>;
     /// Builds the operation from its random input and its author's view.
     fn make(&self, author: &Author<'_, S>, raw: &Self::Raw) -> S::Change;
+
+    /// Generates arbitrary operations, malformed ones included (unknown
+    /// ids, cycles, values outside the schema), which the harness mixes in
+    /// (C5). `None` mixes in nothing.
+    fn malformed(&self) -> Option<BoxedStrategy<S::Change>> {
+        None
+    }
 }
 
 /// A generator whose operations do not depend on what their author had

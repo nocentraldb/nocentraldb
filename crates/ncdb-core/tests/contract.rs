@@ -125,10 +125,38 @@ impl<S: Mergeable<Change = Write>> Generator<S> for Writes {
     fn make(&self, author: &Author<'_, S>, &(step, value): &(u8, u8)) -> Write {
         let highest = author.seen.iter().map(|op| op.body.stamp).max();
         Write {
-            stamp: highest.map_or(0, |stamp| stamp + 1) + u64::from(step),
+            stamp: highest
+                .map_or(0, |stamp| stamp.saturating_add(1))
+                .saturating_add(u64::from(step)),
             value,
             seen: author.seen.iter().map(|op| op.id).collect(),
         }
+    }
+
+    /// Any stamp, and a seen list that may name unknown ids, the write
+    /// itself, later writes, or form a cycle with another write.
+    fn malformed(&self) -> Option<BoxedStrategy<Write>> {
+        let seen = proptest::collection::btree_set(0..8 as OpId, 0..4);
+        Some(
+            (any::<u64>(), any::<u8>(), seen)
+                .prop_map(|(stamp, value, seen)| Write { stamp, value, seen })
+                .boxed(),
+        )
+    }
+}
+
+/// The register's writes, without malformed ones.
+struct WellFormedWrites;
+
+impl<S: Mergeable<Change = Write>> Generator<S> for WellFormedWrites {
+    type Raw = (u8, u8);
+
+    fn raw(&self, member: Member) -> BoxedStrategy<(u8, u8)> {
+        Generator::<S>::raw(&Writes, member)
+    }
+
+    fn make(&self, author: &Author<'_, S>, raw: &(u8, u8)) -> Write {
+        Writes.make(author, raw)
     }
 }
 
@@ -415,4 +443,48 @@ impl Mergeable for CountsDeliveries {
 #[test]
 fn c2_applying_an_operation_twice_changes_nothing() {
     expect_violation::<CountsDeliveries>("C2");
+}
+
+/// Broken on purpose (C5): correct for well-formed writes, but a write that
+/// claims to have seen a write made after it (impossible unless malformed)
+/// forces the value, and the first such write to arrive keeps it.
+#[derive(Clone, Debug, Default)]
+struct MalformedFirstArrival {
+    register: Register,
+    forced: Option<u8>,
+}
+
+impl Mergeable for MalformedFirstArrival {
+    type Change = Write;
+    type Read = (Option<u8>, Vec<u8>);
+
+    fn apply(&mut self, op: &Op<Write>) {
+        if op.body.seen.iter().any(|&seen| seen >= op.id) && self.forced.is_none() {
+            self.forced = Some(op.body.value);
+        }
+        self.register.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.register.state_bytes();
+        bytes.extend(self.forced.map_or(vec![], |value| vec![value]));
+        bytes
+    }
+
+    fn read(&self) -> (Option<u8>, Vec<u8>) {
+        self.register.read()
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        self.register.outcome(id)
+    }
+}
+
+#[test]
+fn c5_malformed_operations_are_mixed_in() {
+    expect_violation::<MalformedFirstArrival>("C5");
+    // Without malformed operations the fixture passes: it violates C5 only.
+    let result =
+        convergence::check::<MalformedFirstArrival, _>(&Config::default(), &WellFormedWrites);
+    assert!(result.is_ok(), "{}", result.unwrap_err());
 }
