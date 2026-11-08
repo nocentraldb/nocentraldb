@@ -601,3 +601,28 @@ fn rejects_payloads_and_operations_with_missing_or_invalid_keys() {
         Err(ChangeError::InvalidValue(5))
     );
 }
+
+#[test]
+fn key_0_is_must_understand() {
+    // RFC 0002 names keys 1 to 63 and 64 up; key 0 is in neither range.
+    // This core treats it as "must understand": a change that uses it is
+    // kept, and not folded.
+    let mut header = sealed_header(1);
+    assert!(header.insert_extension(0, Value::Null));
+    let decoded = Change::decode(Change::new(header, vec![]).bytes()).unwrap();
+    assert!(!decoded.foldable(), "header key 0");
+
+    let mut payload = Payload::new(CLOCK, BTreeSet::new(), vec![]);
+    assert!(payload.insert_extension(0, Value::Null));
+    let decoded = Payload::decode(&payload.encode()).unwrap();
+    assert!(!decoded.foldable(), "payload key 0");
+    assert_eq!(decoded, payload);
+
+    let mut operation = Operation::new(object(1), "c".into(), None, 0, None);
+    assert!(operation.insert_extension(0, Value::Null));
+    let payload = Payload::new(CLOCK, BTreeSet::new(), vec![operation]);
+    assert!(
+        !Payload::decode(&payload.encode()).unwrap().foldable(),
+        "operation key 0"
+    );
+}
