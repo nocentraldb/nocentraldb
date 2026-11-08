@@ -20,10 +20,11 @@ It uses several drafts that are still open pull requests. It names them without 
 ## What this RFC does not cover
 
 - **Work orders**, beyond who may perform an erasure and sign it off. A later RFC defines how a work order is claimed, performed and validated.
-- **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate and the account sign-off are RFC 0003's. This RFC says which of their fields it needs (see [What this RFC needs from RFC 0003](#what-this-rfc-needs-from-rfc-0003)).
+- **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate, the account sign-off and the key-chain subkey are RFC 0003's (its section "Formats of what keys sign and derive", decision 15). This RFC places them in the control bodies (see [What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
+- **Revoking a member certificate.** Deferred to a later RFC about accounts, as RFC 0003 says. In v1, removing the member from every space it belongs to is the revocation.
 - **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. The role names below are working names (decision M12).
 - **Groups as members**, which this RFC names and defers (see [Groups](#groups)).
-- **Deleting a space**, such as an ad-hoc space at the end of a task (RFC 0003). This RFC defines no body for it (see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs)).
+- **Deleting a synced space**, at the relay and on every member, such as an ad-hoc space that synced (RFC 0003). Deferred to a later RFC: it concerns the relay's storage and each member's copy, and needs no control body here. A local ad-hoc space that never synced is deleted locally.
 - **Compaction.** A later RFC. This RFC says what compaction must keep: every control change (decision M16).
 - **Code.** Nothing in `crates/` or `packages/` changes.
 
@@ -223,7 +224,9 @@ generation id (uint, 64 bits)
                     with no previous generations for the genesis
 ```
 
-The members and the relay recompute the tag from the key chain entry, and reject an entry whose generation id does not match. Two honest rotations differ in their author, or in their previous generations, because an author that rotates twice has seen its first rotation. Their ids are therefore different, except by a 48-bit hash collision, which a member cannot steer: the only inputs it controls are its own member id and which existing generations it lists. If two accepted key chain entries still name the same id, both are rejected, and the SDK reports it. Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. This keeps RFC 0002's format and gives its number a structure (decision M6).
+The members and the relay recompute the tag from the key chain entry, and reject an entry whose generation id does not match. Two honest rotations differ in their author, or in their previous generations, because an author that rotates twice has seen its first rotation. Their ids are therefore different, except by a 48-bit hash collision. A member cannot steer one with a single try: the only inputs it controls are its own member id and which existing generations it lists. If two accepted key chain entries still name the same id, both are rejected, and the SDK reports it.
+
+**What the tag does not stop.** As RFC 0003 notes, an admin that wants a collision can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects, and get that key made admin. Both rotations are then rejected. The attack blocks a rotation and exposes no key, and a malicious admin can block rotations more simply by removing the admins who would rotate. A longer tag is not worth its cost: the header's 64 bits would leave fewer for the ordinal, or the header format would have to change (M6, option C). Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. This keeps RFC 0002's format and gives its number a structure (decision M6).
 
 ### Person-key entry
 
@@ -261,13 +264,13 @@ acknowledgement (entry type 6)
 
 A member writes one after it deleted its copy of the key, which it does only once the shred is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). A second acknowledgement of the same shred by the same member changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
 
-### What this RFC needs from RFC 0003
+### What this RFC uses from RFC 0003
 
-RFC 0003 owns the formats of what accounts sign, and their cryptography. This RFC relies on these fields, and pm routes the proposal to NOC-7:
+RFC 0003 defines the formats of what keys sign and derive (its section "Formats of what keys sign and derive", decision 15). This RFC uses them as they are:
 
-- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id. The account key signs it under its own context string.
-- **The account sign-off** names the space id, the person-key id and the performer's member id, with the account key and its signature under its own context string.
-- **The key-chain subkey** is an HKDF-SHA256 subkey of a generation's key, with its own label (for example `"nocentraldb/key-chain"`), the space id and the generation id in the context.
+- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id. The account key signs a device's or an agent's certificate. A sub-agent's certificate is signed by its parent's member signing key, under its own context string (`"nocentraldb/sub-agent-cert"`), because a parent agent does not hold the account key and must not. Its key 1 still carries the parent's account key, for attribution. A member that checks a sub-agent's certificate, in an add entry or a genesis, checks the chain: the parent's own certificate, which must be of kind agent or sub-agent and name the same account key. The parent's certificate must be in this space's control changes, in the genesis or add entry that made the parent a member, so the check reads only the control set. In RFC 0003's ad-hoc space the parent is the creator, so it always is. An add entry whose sub-agent's parent is not a member in the state of the add's causal past is not valid when written. For the sign-off below, a sub-agent counts as its parent's account.
+- **The account sign-off** names the space id, the person-key id and the performer's member id, with the account key and its signature.
+- **The key-chain subkey** is the HKDF-SHA256 subkey of the new generation's key that encrypts the previous keys in a key chain entry.
 
 ## Folding the membership state
 
@@ -515,7 +518,7 @@ Until then, the SDK offers a group as a list it expands. Adding a group to a spa
 | Both of two mutual removals take effect | A stolen admin device takes an honest admin down with it, and can leave the space without an admin. |
 | Neither of two mutual removals takes effect | A compromised admin cancels its own removal by removing the remover at the same moment. |
 | Seniority from each revocation's own causal past (draft 0.1) | Two revocations could rank their authors differently, so the order would not be total. |
-| A random tag in the generation id (draft 0.1) | An admin could pick a tag that collides with another rotation on purpose. |
+| A random tag in the generation id (draft 0.1) | An admin could pick a tag that collides with another rotation on purpose, with one try. |
 | Rejecting every generation id that two rotations share, without deriving it | Changes written on the losing island would become undecryptable, and a malicious admin could cause it. |
 | Fold rules that check wrapped keys or decryption | Only some members can check them, so the control state would split. |
 | Destroying a person key as soon as the shred is accepted | A concurrent revocation can still reject the shred, and the key could not come back. |
@@ -573,7 +576,7 @@ Recommendation: A. A member key is shared by all spaces of a device, so B costs 
 - B. Generation numbers only, and members write with the generation whose key chain entry has the lower hash (RFC 0003's sketch).
 - C. A 32-byte generation id in the header, such as the key chain entry's change id.
 
-Recommendation: A. B leaves two keys under one number, so the changes under it are ambiguous. C changes RFC 0002's header format. A keeps the format, nobody can choose a colliding id, and 65,535 rotations per space are enough for v1.
+Recommendation: A. B leaves two keys under one number, so the changes under it are ambiguous. C changes RFC 0002's header format. A keeps the format, and 65,535 rotations per space are enough for v1. Its limit: an admin that searches about 2⁴⁸ member keys can make one rotation collide and be rejected, which blocks that rotation and exposes no key (see [Generation ids](#generation-ids)).
 
 **M7. Revisit RFC 0002's D3 for space ids.**
 
@@ -683,7 +686,7 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 7. **RFC 0002 Amendment 1, D12.** A member does not push a refused change to that relay again. This RFC asks for one exception (M19).
 8. **RFC 0003, concurrent rotations.** RFC 0003 picks "the generation whose entry has the lower hash". This RFC adds derived generation ids, exposure and the merge rotation (M6, M15).
 9. **RFC 0003, the sign-off.** Narrowed to an account with an admin member (M9).
-10. **RFC 0003, missing formats.** The member certificate, the account sign-off and the key-chain subkey are named but not defined. [What this RFC needs from RFC 0003](#what-this-rfc-needs-from-rfc-0003) proposes their fields, for NOC-7. RFC 0003 also has no body for revoking a member certificate and none for deleting an ad-hoc space. This RFC handles a revoked device by removing it from every space (RFC 0003's "one action on the account"). It leaves certificate revocation as an account matter, and deleting a space to RFC 0003 or a later RFC.
+10. **RFC 0003, formats and deferrals.** RFC 0003 now defines the member certificate, the account sign-off and the key-chain subkey (decision 15), and this RFC uses them, including the sub-agent certificate signed by its parent. Revoking a member certificate is deferred to a later RFC about accounts; in v1, removal from every space is the revocation. Deleting a synced space is deferred to a later RFC (see [What this RFC does not cover](#what-this-rfc-does-not-cover)).
 11. **RFC 0003 and RFC 0007, the person-key entry.** RFC 0003 has it carry a commitment, RFC 0007 a record hash and a generation. This RFC carries both, and RFC 0003 and RFC 0007 should point to it.
 12. **RFC 0007, the membership table and its checks.** Its backend stores, per member, the positions of addition and removal. This RFC needs roles, grants with from generations, revocations with cutoffs and the generation graph. RFC 0007 does not check author sequences; this RFC needs it to, for sealed changes. Its rule that a person-key record replaces one of "the same or a newer generation" becomes "the same or a descendant generation". It deletes a record in the append's transaction; this RFC waits for stability (M20). Its R7 A becomes the cutoff (M3).
 13. **RFC 0006, the control table.** RFC 0006's `control` table lists membership entries, key chain entries, held generations, shreds and acknowledgements. It also needs the genesis, the person-key entries, the cutoffs and grants, and the generation graph, as [The function](#the-function) lists them. RFC 0006 un-folds only sealed changes. Control changes are recomputed through `resolve`, and their irreversible effects wait until they are stable.
