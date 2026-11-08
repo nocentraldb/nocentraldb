@@ -69,7 +69,7 @@ The genesis is a control change whose body (see [Genesis](#genesis)) names:
 - **The creator**: its signing key, its agreement key and its member certificate (RFC 0003). Its member id is the header's author member id (RFC 0002, header key 2), which every reader recomputes from the two keys.
 - **The first key generation**, by its generation id (see [Generation ids](#generation-ids)). The genesis carries no envelope. The creator writes a key envelope for itself as its second change, so that the relay's `keys` request finds it like any member's.
 - **The suite**, in the header (RFC 0002, header key 8). The genesis's suite is the space's suite. v1 has one suite.
-- **The model id, if the owner decides so** (RFC 0005, D13). The genesis reserves a field for it. This RFC recommends leaving the field empty and putting the model id into a sealed change, so that the relay cannot see it (decision M8). D13 stays the owner's decision; this RFC only offers the place.
+- **The model id** (RFC 0005, D13). The owner decided D13 C (Carsten, 2026-11-08): a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model. The genesis carries it in key 13. Whether the relay can read it is decision M26; the design below describes its recommended option, sealed so that only members can read it.
 
 The genesis does **not** name the space's name or its description. Those are content, and the relay must not read them (principle 1).
 
@@ -153,8 +153,23 @@ genesis (entry type 0)
 ├── 10 agreement key      32 bytes, the creator's X25519 public key
 ├── 11 certificate        the creator's member certificate (RFC 0003)
 ├── 12 first generation   uint, the generation id of generation 1
-└── 13 model id           text, optional; absent unless the owner decides otherwise (M8)
+└── 13 model id           bstr, required: the creator's model.id (RFC 0005, D13), sealed (below)
 ```
+
+**The model id field** (key 13), byte by byte, under M26's recommended option:
+
+```text
+model id field = nonce (24 bytes) || ciphertext (16 bytes) || tag (16 bytes)     56 bytes
+  key        = HKDF-SHA256(ikm = generation 1's key, salt = none,
+                           info = "nocentraldb/model-id" || space id (16 bytes))
+  plaintext  = model.id as its 16 raw bytes (RFC 0005 writes it as 32 hex digits)
+  AEAD       = XChaCha20-Poly1305 (RFC 0003), random nonce
+  associated data = "nocentraldb/model-id" || space id (16 bytes) || creator member id (32 bytes)
+```
+
+Every member can open it, because every member holds generation 1's key through the key chain (RFC 0003). The relay cannot. The associated data binds the field to its space and creator, so it cannot be copied into another genesis. Under M26's option A, the field is instead the 16 raw bytes of `model.id`, unencrypted.
+
+Key 13 is "must understand" and required: a genesis without it is malformed. A member checks it when it folds the genesis; a model id that does not decrypt is a local check (see [What the fold may read](#what-the-fold-may-read)): the member reports it and its SDK refuses to write into the space, because it cannot tell which model the space belongs to. The subkey label `"nocentraldb/model-id"` is a new use of a space key, so RFC 0003 must list it next to its other subkeys (decision 15); pm routes that to RFC 0003's follow-up.
 
 ### Membership entry
 
@@ -506,7 +521,7 @@ The relay decides nothing the members cannot check, but it can refuse a change t
 - **Erasure approvers.** Which accounts sign off erasures, and in which spaces.
 - **The generation graph.** When concurrent rotations happened, and which merge rotations followed.
 
-It still learns no content, no space name and, under decision M8, no model id.
+It still learns no content and no space name, and, under decision M26's recommended option, no model id.
 
 ## Groups
 
@@ -542,7 +557,7 @@ Until then, the SDK offers a group as a list it expands. Adding a group to a spa
 | Fold rules that check wrapped keys or decryption | Only some members can check them, so the control state would split. |
 | Destroying a person key as soon as the shred is accepted | A concurrent revocation can still reject the shred, and the key could not come back. |
 | A random space id, and the first genesis wins | Anyone could write a competing genesis with a lower change id and take over the space on members that hold both. |
-| The model id in plain text in the genesis, as the default | The relay would learn which app each space belongs to; RFC 0002 lists the model as something it cannot see. |
+| The model id in plain text in the genesis, as the default | The relay would learn which spaces belong to one app's model lineage, across every customer on that relay; RFC 0002 lists the model as something it cannot see. |
 | Free capability lists per member instead of three roles | More for every member and the relay to check and to get wrong; three roles cover the use cases, and more roles can come later. |
 | Rights per collection or per object | Needs a reader that enforces them on content, which the relay cannot be (RFC 0001). More spaces give the same effect. |
 | Hiding the control bodies and dependencies from the relay | The relay could not apply the rules, so a removed member could keep filling the space's log. |
@@ -604,13 +619,7 @@ Recommendation: A. B leaves two keys under one number, so the changes under it a
 
 Recommendation: A. The owner decided D3 for object and space ids alike. This RFC asks to reopen it for space ids, because under B anyone who learns a space id can write a competing genesis, and with a lower change id take the space over on every member that holds both. A keeps what D3 chose it for: 128 bits nobody can predict, with no time in them.
 
-**M8. The model id (RFC 0005, D13).**
-
-- A. Not in the genesis; RFC 0005 puts it into a sealed change, as part of D13. *(recommended)*
-- B. In plain text in the genesis's reserved field.
-- C. In the genesis as `H(space id || model id)`.
-
-Recommendation: A. RFC 0002 promises the relay cannot see the model. B breaks that. C can be reversed by anyone who can guess model ids, which developers choose as names. D13 stays the owner's decision; the genesis keeps the field for B.
+**M8. The model id (RFC 0005, D13).** Decided by the owner through RFC 0005's D13 C (Carsten, 2026-11-08): the genesis carries the `model.id`, and the SDK refuses to write into a space of another model. Draft 0.2 recommended keeping it out of the genesis; that option is withdrawn. How the genesis carries it is M26.
 
 **M9. Who signs off an erasure.**
 
@@ -728,6 +737,14 @@ Recommendation: A. RFC 0002 keeps and folds both changes of every equivocation, 
 
 Recommendation: A. A parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space"), so B cannot work without handing it the account key. The chain check reads only the space's control changes, because the parent's certificate is in the genesis or add entry that made the parent a member.
 
+**M26. How the genesis carries the model id.** Follows from RFC 0005's D13 C.
+
+- A. The 16 raw bytes of `model.id`, readable by the relay.
+- B. Sealed under a subkey of generation 1's key, as in [Genesis](#genesis): 56 bytes, readable by members only. *(recommended)*
+- C. `H(space id || model.id)`, so members can check a guess but nobody can read it.
+
+Recommendation: B. RFC 0005 draws `model.id` as 128 random bits, so the relay cannot tell which app a space belongs to from the id alone. Under A, though, it learns which spaces share one app's model lineage, across every customer on the relay. And RFC 0002 lists the model as something the relay cannot see. C hides the id, but members cannot read the model a space belongs to, only confirm their own, so the SDK cannot tell a user which app a space needs. B costs 40 bytes per space, a new subkey label in RFC 0003, and a local check on decryption. No rule of the relay needs the model id, so nothing is lost by hiding it.
+
 The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
 
 ## Conflicts with GENESIS.md and the other RFCs
@@ -747,7 +764,7 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 11. **RFC 0003 and RFC 0007, the person-key entry.** RFC 0003 has it carry a commitment, RFC 0007 a record hash and a generation. This RFC carries both, and RFC 0003 and RFC 0007 should point to it.
 12. **RFC 0007, the membership table and its checks.** Its backend stores, per member, the positions of addition and removal. This RFC needs roles, grants with from generations, revocations with cutoffs and the generation graph. RFC 0007 does not check author sequences; this RFC needs it to, for sealed changes. Its rule that a person-key record replaces one of "the same or a newer generation" becomes "the same or a descendant generation". It deletes a record in the append's transaction; this RFC waits for stability (M20). Its R7 A becomes the cutoff (M3).
 13. **RFC 0006, the control table.** RFC 0006's `control` table lists membership entries, key chain entries, held generations, shreds and acknowledgements. It also needs the genesis, the person-key entries, the cutoffs and grants, and the generation graph, as [The function](#the-function) lists them. RFC 0006 un-folds only sealed changes. Control changes are recomputed through `resolve`, and their irreversible effects wait until they are stable. RFC 0006's shred row destroys the key and acknowledges at once; once the owner decides M20, NOC-36 either amends RFC 0006 or aligns this RFC.
-14. **RFC 0005, D13.** RFC 0005 names no reserved collection or sealed place for the model id. This RFC offers a field in the genesis, recommends against using it (M8), and leaves the place to D13.
+14. **RFC 0005, D13.** The owner decided D13 C (Carsten, 2026-11-08). The genesis carries the `model.id` in key 13, required, sealed by default (M26). Part B of D13, a model id in every change's payload, is RFC 0002's and RFC 0005's to carry out, not this RFC's. RFC 0003 must add the subkey label `"nocentraldb/model-id"` under M26 B.
 15. **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Under M20 the key is destroyed only when the shred is stable, which an idle admin device delays. The view erases the fields at once, and M21 sets the alarm and the escalation, but until then the key exists on members. RFC 0001's list of what erasure does not reach should name the wait.
 16. **RFC 0004, add wins.** Membership resolves the other way, so the revocation wins (M2). Membership is not a field type of the schema, so RFC 0004's rule for sets stays as it is.
 
