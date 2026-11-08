@@ -126,6 +126,20 @@ tasks:
     inputs:
       - "/moon.yml"
       - "/rust-toolchain.toml"
+  browser-storage:
+    # NOC-33: the browser storage probe in Chromium, Firefox and WebKit,
+    # through Playwright (scripts/browser-storage/, docs/browser-storage.md).
+    # Not part of `gates`: it needs the browsers, installed with
+    # `pnpm exec playwright install --with-deps chromium firefox webkit`, and
+    # the workflow browser-storage.yml runs it in CI. Never cached: its
+    # result depends on the installed browsers, which are no input.
+    command: "node --test 'scripts/browser-storage/*.test.mjs'"
+    inputs:
+      - "/scripts/browser-storage/**/*"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      cache: false
   gates:
     deps:
       - "~:format-check"

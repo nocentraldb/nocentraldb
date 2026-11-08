@@ -229,3 +229,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
+
+### 2026-11-08 · NOC-33 · The probe uses SQLite's own opfs-sahpool build, not the Rust spike
+
+- Decided by: coding agent (NOC-33)
+- Why: the question is what the browser does with OPFS files, not which binding writes them. `@sqlite.org/sqlite-wasm` (pinned, dev-dependency) ships the `opfs-sahpool` VFS that RFC 0006 picks through its Rust port, needs no Rust build in the probe, and its static files can be copied to any HTTPS host for the manual checks on phones.
+- Instead of: building RFC 0006's spike crate (`rusqlite` with `sqlite-wasm-vfs`) to WebAssembly for the probe.
+
+### 2026-11-08 · NOC-33 · The browser run is a workflow of its own, not part of `pnpm gates`
+
+- Decided by: coding agent (NOC-33)
+- Why: the gate runs without browsers, and installing three of them on every run is slow; their results describe the browsers, not this repository's code. The gate instead holds `docs/browser-storage.md` to the committed run (`docs/browser-storage.results.json`), and `browser-storage.yml` runs the probe on pull requests that touch it and by hand, writing the rows into the run's summary.
+- Instead of: adding the Playwright browsers to `ci.yml` and `pnpm gates`.
+
+### 2026-11-08 · NOC-33 · "Cleared cache" is measured with `Clear-Site-Data: "cache"`; the settings route stays a manual check
+
+- Decided by: coding agent (NOC-33)
+- Why: Playwright cannot press "clear cached files" in a browser's settings in all three engines. The header is the one cache clear that works the same way in every engine and keeps site data; the row names it. Clearing the cache from the settings is a row of its own, "unknown" until a person checks it.
+- Instead of: Chromium's DevTools protocol only, which would leave Firefox and WebKit without the row.

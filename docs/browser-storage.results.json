@@ -1,0 +1,106 @@
+{
+  "date": "2026-11-08",
+  "platform": "linux x64",
+  "playwright": "1.63.0",
+  "engines": {
+    "chromium": {
+      "version": "153.0.8010.12",
+      "persist": {
+        "answered": true,
+        "granted": false
+      },
+      "persisted": false,
+      "estimate": {
+        "usage": 6294485,
+        "quota": 10743712725
+      },
+      "opfs": "ok",
+      "reload": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "clearCache": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "restart": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "private": {
+        "opfs": "ok",
+        "idb": "ok",
+        "afterClose": {
+          "sqlite": "lost",
+          "idb": "lost"
+        }
+      }
+    },
+    "firefox": {
+      "version": "155.0",
+      "persist": {
+        "answered": false,
+        "granted": null
+      },
+      "persisted": false,
+      "estimate": {
+        "usage": 589824,
+        "quota": 10737418240
+      },
+      "opfs": "ok",
+      "reload": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "clearCache": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "restart": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "private": {
+        "opfs": "SecurityError: Security error when calling GetDirectory",
+        "idb": "ok",
+        "afterClose": {
+          "sqlite": "error: SecurityError: Security error when calling GetDirectory",
+          "idb": "lost"
+        }
+      }
+    },
+    "webkit": {
+      "version": "26.6",
+      "persist": {
+        "answered": true,
+        "granted": false
+      },
+      "persisted": false,
+      "estimate": {
+        "usage": 6291527,
+        "quota": 1048576000
+      },
+      "opfs": "ok",
+      "reload": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "clearCache": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "restart": {
+        "sqlite": "kept",
+        "idb": "kept"
+      },
+      "private": {
+        "opfs": "UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).",
+        "idb": "ok",
+        "afterClose": {
+          "sqlite": "error: UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).",
+          "idb": "lost"
+        }
+      }
+    }
+  }
+}
