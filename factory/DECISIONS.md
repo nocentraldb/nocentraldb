@@ -80,6 +80,42 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: initiatives are enabled and the initiative exists; both projects are linked to it, as CONFIG.md says.
 - Instead of: the interim note on the "Core foundation" project (reverses pm's entry "The daily note goes to the "Core foundation" project until initiatives are enabled").
 
+### 2026-11-07 · NOC-6 · RFC 0002 names its conflicts with GENESIS.md and RFC 0001 instead of resolving them
+
+- Decided by: coding agent (NOC-6)
+- Why: parked changes (D9) bend principle 2, and the relay sees more metadata than RFC 0001 lists; both touch what GENESIS.md reserves for the owner, so the RFC proposes a reading and leaves the ruling to the owner.
+- Instead of: editing RFC 0001, the FAQ or GENESIS.md in this PR, which is outside the ticket's scope.
+
+### 2026-11-07 · NOC-6 · The docs-only RFC is held by a test in the repository tooling
+
+- Decided by: coding agent (NOC-6)
+- Why: `scripts/rfc.test.mjs` runs in `repo:test` and checks that RFC 0002 exists and links back to RFC 0001, so the gate fails if either is lost.
+- Instead of: no test, which leaves the gate unchanged for a docs-only PR.
+
+### 2026-11-07 · NOC-6 · RFC 0002: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted all of RFC 0002's proposals. That covers D1 to D9: HLC plus dependencies, SHA-256 change ids, 128 random bits for object ids, deterministic CBOR, field names in operations, the clock inside the payload, the log in the view's SQLite database, padding to 256 bytes, and parked changes. It also covers the reading of principle 2 for parked changes, and the proposal that RFC 0001 and the FAQ link to the RFC's list of what the relay sees.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0002-change-and-log-format.md`.
+
+### 2026-11-07 · NOC-8 · RFC 0004 needs five properties from RFC 0002's clock, not a specific clock
+
+- Decided by: coding agent (NOC-8)
+- Why: RFC 0002 runs in parallel; RFC 0004 lists what it needs (unique change ids, a total stamp order computed from the change alone, causality, wall-clock component wanted, one canonical encoding per value) so the two RFCs can be reconciled before merge.
+- Instead of: assuming a hybrid logical clock and its encoding in RFC 0004.
+
+### 2026-11-07 · NOC-8 · "Late" in principle 3 becomes "lost to a change its author had not seen"
+
+- Decided by: coding agent (NOC-8), flagged to pm and the owner in RFC 0004
+- Why: arrival time differs per member, so recording it in the converged state breaks principle 2, which ranks higher.
+- Instead of: storing an "arrived late" mark in the field state.
+
+### 2026-11-07 · NOC-8 · RFC 0004 names RFC 0002's clock as its stamp
+
+- Decided by: coding agent (NOC-8), after RFC 0002 (PR #28) met O1 to O5
+- Why: RFC 0002 fixed the stamp as a 64-bit hybrid logical clock and carries the author member id in the header; RFC 0004 now names both and keeps O1 to O5 as its reasoning. Updates the entry "RFC 0004 needs five properties from RFC 0002's clock, not a specific clock".
+- Instead of: keeping the stamp abstract after RFC 0002 had fixed it.
+
 ### 2026-11-07 · NOC-9 · The convergence harness generates and shrinks with proptest
 
 - Decided by: coding agent (NOC-9)
