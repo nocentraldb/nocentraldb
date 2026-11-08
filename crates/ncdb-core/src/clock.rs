@@ -4,8 +4,10 @@
 //! the Unix epoch, the lower 16 bits a counter. A member writes with the
 //! larger of its wall clock and one more than the highest clock it has seen
 //! in the space, so its clock never runs backwards and is higher than every
-//! clock it has seen. When the counter would overflow, it waits for its wall
-//! clock to reach the next millisecond.
+//! clock it has seen. When the counter would overflow, it carries into the
+//! next millisecond. RFC 0002 says it waits for the wall clock instead, which
+//! takes as long as a clock seen from the future is ahead, and forever after
+//! the largest clock was seen. The carry is pending the owner's decision.
 
 /// A hybrid logical clock value, compared as a number.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -72,7 +74,19 @@ impl Clock {
     /// The clock for a change this member writes now: the larger of the
     /// wall clock (`wall`, in milliseconds since the Unix epoch) and one
     /// more than the highest clock seen.
-    pub fn now(&mut self, _wall: u64) -> Result<Hlc, ClockExhausted> {
-        todo!()
+    ///
+    /// When the counter is full, one more carries into the next
+    /// millisecond: the clock never waits for the wall clock, which may lag
+    /// a clock seen from the future for as long as that member's clock was
+    /// ahead. A wall clock beyond 48 bits of milliseconds (the year 10889)
+    /// reads as the largest millisecond. When the highest clock seen is
+    /// already the largest a clock holds, there is no later one, and the
+    /// clock returns [`ClockExhausted`] rather than wrap around.
+    pub fn now(&mut self, wall: u64) -> Result<Hlc, ClockExhausted> {
+        let wall = Hlc::new(wall.min(Hlc::MAX_MILLIS), 0).expect("at most 48 bits");
+        let next = self.highest.0.checked_add(1).ok_or(ClockExhausted)?;
+        let next = wall.max(Hlc(next));
+        self.highest = next;
+        Ok(next)
     }
 }
