@@ -32,7 +32,7 @@ So "trust the server" no longer has to be the default security model. Many apps 
 
 - **Spaces.** A space is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. Groups can be members of many spaces, so you can rearrange rights without moving data.
 - **A full copy per member.** Each device and each agent keeps the complete, encrypted log of every space it belongs to, and folds it locally into an SQLite view. Reads never leave the device.
-- **A relay that holds no keys.** The relay appends signed, encrypted changes to a space's log and hands them out from a cursor. It checks signatures and membership. It folds nothing and cannot read content. It can see metadata: which key is in which space, and when and how much each key writes. We design the relay to run on SQLite, Postgres, or DynamoDB with S3.
+- **A relay that holds no keys.** The relay appends signed, encrypted changes to a space's log and hands them out from a cursor. It checks signatures and membership. It folds nothing and cannot read content. It can see metadata: which key is in which space, and when and how much each key writes. That is not all it sees: it also sees the key generations and when they change, the rhythm of work, and who reads which space from where, and it can withhold changes or show members different subsets of a log. RFC 0002 lists all of it in [What the relay can see, and what it cannot](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). We design the relay to run on SQLite, Postgres, or DynamoDB with S3.
 - **Convergence.** The same set of changes produces the same state on every device, in any order of arrival, computed fields included. Each field merges by the rules of its field type.
 - **Island mode.** With no relay at all, you keep working. When you reconnect, every copy converges.
 - **One schema, two SDKs.** You describe the model once in TypeScript. `ncdb model build` turns it into a versioned `model.lock.json`, which the Rust core and both SDKs (Rust and TypeScript) read. Schema changes are additive, and old clients keep data they do not understand yet.
@@ -40,7 +40,7 @@ So "trust the server" no longer has to be the default security model. Many apps 
 - **Ordered pages.** Every index and every view keeps its order, so results arrive sorted, and you load the next page from a cursor only when you need it. "What should I work on next?" returns the first 50 ready tasks in rank order. The next 50 come when you ask for them.
 - **Field types.** Every field has a type, and the type declares how concurrent changes to the field merge. NoCentralDB ships a set of field types (see [Field types we ship](#field-types-we-ship)). You can add your own as a plugin, with its own merge rules, and use it in the schema next to the built-in ones. Each member's core runs the same field types, so every copy merges the same way.
 - **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. The relay sees only an opaque envelope and content-free effects.
-- **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person. Erasing a person destroys that key, and the erasure reaches archives and old snapshots too. Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design shredding to leave the signatures intact while the person's fields become unreadable.
+- **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person. Erasing a person destroys that key, and the erasure reaches archives and old snapshots too. Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design shredding to leave the signatures intact while the person's fields become unreadable. Erasure cannot take back a key someone already held: a device that never comes back online, a modified client that ignores the shred, and a member of the space who obtains a relay backup taken before the shred keep it ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)). [The team lead](#the-team-lead-who-has-to-pass-the-data-protection-review) below lists every limit.
 
 ```ts
 import { nc } from "@nocentraldb/sdk";
@@ -107,6 +107,8 @@ The erasure does not reach these cases:
 - Copies made outside the database, such as exports and screenshots, stay readable.
 - The database does not find personal data in unmarked free text.
 - An agent that runs as a user on that user's device can read what the user can read.
+- A modified client can ignore the erasure and keep the key ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
 
 Your data protection officer decides whether destroying a key counts as erasure in your case. This is a design, not legal advice.
 
@@ -135,6 +137,8 @@ Which example would show you whether NoCentralDB fits your app? Tell us, or prop
 - **Not in v1.** Server-side queries, full-text search in the core, transactions across spaces and row-level permissions. Rights apply per space, and every member of a space holds a full copy of it.
 - **A different choice, on purpose.** Some sync engines keep a trusted server that enforces fine-grained rights and can read the data. We chose a server that cannot read it. The cost is coarser rights. We offset it with many small spaces and groups, keys that the SDK manages out of sight, and compaction instead of replaying long histories.
 - **Not a security boundary on your own device.** Rights bind third parties. A process running as you can read what you can read.
+- **Not post-quantum in v1.** v1 wraps keys with X25519, which a future quantum computer could break. Someone who records ciphertext today, the relay's operators included, could read it once such a computer exists. A hybrid suite is planned for later ([RFC 0003, decision 9](0003-keys-and-cryptography.md#decisions-for-the-owner)).
+- **Not a durable store in every browser.** A browser can evict a site's storage: under storage pressure unless the site has persistent storage, and Safari after seven days without user interaction for script-writable storage, unless the web app was added to the home screen. The member then fetches the log of each of its spaces again from the relay and folds it anew; changes it wrote that the relay had not yet received are lost.
 
 ## Who is behind it
 
