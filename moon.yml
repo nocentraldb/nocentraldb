@@ -25,6 +25,16 @@ tasks:
       - "/pnpm-workspace.yaml"
       - "/apps/*/package.json"
       - "/packages/*/package.json"
+  file-size:
+    # No tracked code or test file is longer than the limit in the row
+    # "Largest code or test file" of factory/CONFIG.md (NOC-43). It reads the
+    # file list from git, which leaves out node_modules/ and target/; the
+    # script skips them as well.
+    command: "node scripts/check-file-size.mjs"
+    inputs:
+      - "/factory/CONFIG.md"
+      - "/scripts/check-file-size.mjs"
+      - "/**/*.{rs,ts,tsx,js,mjs,cjs,sh,py}"
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
@@ -61,6 +71,7 @@ tasks:
       - "/CONTRIBUTING.md"
       - "/README.md"
       - "/docs/**/*"
+      - "/moon.yml"
       - "/crates/ncdb-core/moon.yml"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
@@ -130,6 +141,7 @@ tasks:
     deps:
       - "~:format-check"
       - "~:pins"
+      - "~:file-size"
       - "~:test"
       - "~:fragments"
       - "~:version"
