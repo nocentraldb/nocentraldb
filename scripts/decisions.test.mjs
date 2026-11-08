@@ -402,3 +402,47 @@ test("DECISIONS.md holds no entry, only the pointer to the folder", () => {
   assert.match(text, /Topics:/);
   assert.match(text, /Supersedes:/);
 });
+
+test("CONFIG.md's decision log row names the folder and the reading command", () => {
+  const row = read("factory/CONFIG.md")
+    .split("\n")
+    .find((line) => line.startsWith("| Decision log"));
+  assert.ok(row, "CONFIG.md has a Decision log row");
+  assert.match(row, /`factory\/decisions\/`/);
+  assert.match(row, /`pnpm decisions`/);
+  assert.doesNotMatch(row, /DECISIONS\.md/);
+});
+
+test("FACTORY.md describes the folder generically, through CONFIG.md", () => {
+  const text = read("factory/FACTORY.md");
+  assert.doesNotMatch(text, /DECISIONS\.md|factory\/decisions/);
+  assert.doesNotMatch(text, /newest at the end|Agents append/);
+  const section = text.slice(
+    text.indexOf("## The decision log"),
+    text.indexOf("## How the owner hears back"),
+  );
+  assert.match(section, /folder/);
+  assert.match(section, /CONFIG\.md/);
+  assert.match(section, /Topics:/);
+  assert.match(section, /Supersedes:/);
+  assert.match(section, /reading command/);
+  assert.match(text, /- \[ \] Create an empty decisions folder/);
+});
+
+test("the roles, AGENTS.md and the README point to the folder", () => {
+  for (const path of [
+    "factory/roles/coder.md",
+    "factory/roles/pm.md",
+    "AGENTS.md",
+  ]) {
+    const text = read(path);
+    assert.doesNotMatch(text, /DECISIONS\.md/, path);
+    assert.match(text, /`factory\/decisions\/`/, path);
+    assert.match(text, /`pnpm decisions`/, path);
+  }
+  const tree = read("README.md")
+    .split("\n")
+    .find((line) => line.startsWith("factory/"));
+  assert.match(tree, /decisions\//);
+  assert.doesNotMatch(tree, /DECISIONS\.md/);
+});
