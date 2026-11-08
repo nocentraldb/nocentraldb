@@ -16,7 +16,7 @@ use std::fmt;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
 use sha2::{Digest, Sha256};
-use zeroize::Zeroizing;
+use zeroize::{ZeroizeOnDrop, Zeroizing};
 
 use crate::ids::MemberId;
 use crate::redact::{self, Hidden};
@@ -48,21 +48,27 @@ impl MemberKey {
     /// When the platform has no secure generator; a key from a weaker
     /// source is no key.
     pub fn generate() -> MemberKey {
-        let _ = random::<32>;
-        todo!()
+        MemberKey {
+            signing: SigningKey::from_bytes(&random::<32>()),
+            agreement: random(),
+        }
     }
 
     /// The member key of these secret halves: the Ed25519 seed and the
     /// X25519 secret. The caller's copies of the bytes are not wiped.
     pub fn from_secrets(signing: [u8; 32], agreement: [u8; 32]) -> MemberKey {
-        let _ = (signing, agreement, SigningKey::from_bytes, MontgomeryPoint::mul_base_clamped);
-        todo!()
+        MemberKey {
+            signing: SigningKey::from_bytes(&signing),
+            agreement: Zeroizing::new(agreement),
+        }
     }
 
     /// The public halves.
     pub fn public(&self) -> MemberPublicKey {
-        let _ = (&self.signing, &self.agreement);
-        todo!()
+        MemberPublicKey {
+            signing: self.signing.verifying_key().to_bytes(),
+            agreement: MontgomeryPoint::mul_base_clamped(*self.agreement).to_bytes(),
+        }
     }
 
     /// The member id of this key.
@@ -82,8 +88,11 @@ impl MemberPublicKey {
     /// The member id: SHA-256 of `"nocentraldb/member-id"`, the Ed25519
     /// public key and the X25519 public key (RFC 0003, "The member key").
     pub fn id(&self) -> MemberId {
-        let _ = Sha256::new;
-        todo!()
+        let mut hash = Sha256::new();
+        hash.update(MemberPublicKey::ID_CONTEXT);
+        hash.update(self.signing);
+        hash.update(self.agreement);
+        MemberId(hash.finalize().into())
     }
 }
 
@@ -94,13 +103,12 @@ impl SpaceKey {
     ///
     /// When the platform has no secure generator.
     pub fn generate() -> SpaceKey {
-        todo!()
+        SpaceKey(random())
     }
 
     /// The space key of these bytes. The caller's copy is not wiped.
     pub fn from_bytes(bytes: [u8; 32]) -> SpaceKey {
-        let _ = bytes;
-        todo!()
+        SpaceKey(Zeroizing::new(bytes))
     }
 
     pub(crate) fn bytes(&self) -> &[u8; 32] {
@@ -108,17 +116,20 @@ impl SpaceKey {
     }
 }
 
+// The signing key wipes itself (ed25519-dalek's `zeroize` feature); the
+// other secrets sit in `Zeroizing`.
+impl ZeroizeOnDrop for MemberKey {}
+impl ZeroizeOnDrop for SpaceKey {}
+
 impl fmt::Debug for MemberKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = Hidden;
-        todo!()
+        f.debug_tuple("MemberKey").field(&Hidden).finish()
     }
 }
 
 impl fmt::Debug for SpaceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = f;
-        todo!()
+        f.debug_tuple("SpaceKey").field(&Hidden).finish()
     }
 }
 
