@@ -14,4 +14,4 @@ Before any work, read these three files in `factory/`:
 - `FACTORY.md`: how work moves from ticket to merged code, and what pm and coding agents do.
 - `CONFIG.md`: this repository's values: the tracker, the owner, the gate command, the merge rule.
 
-Record your decisions in `factory/DECISIONS.md`, in the format `FACTORY.md` gives.
+Read the decision log with `pnpm decisions`, and record your decisions as new files in `factory/decisions/`, one file per decision, in the format `FACTORY.md` gives.

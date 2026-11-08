@@ -18,7 +18,7 @@ flowchart TD
     a3 --> pr
     pr --> approve{Owner approves?}
     approve -->|changes asked| pr
-    approve -->|yes| main["main<br/>pm merges and frees the lane"]
+    approve -->|yes| main["main<br/>pm merges"]
     main -.->|"daily note: shipped, waiting, decided"| source
 ```
 
@@ -39,8 +39,8 @@ A ticket moves through these steps. Each step has one owner, and nothing skips a
 4. **Assigned.** pm hands the ticket to a coding agent, if a lane is free and no running agent touches the same files.
 5. **Built.** The agent works on the ticket's own branch, runs the gate until it is green, and opens a draft PR that names the ticket.
 6. **Reviewed.** pm reviews the PR against the ticket and GENESIS.md. The agent fixes what pm, CI or a reviewer finds.
-7. **Waiting for the owner.** pm lists the PR in the daily note. It waits until the owner approves it as the merge rule in CONFIG.md says.
-8. **Merged.** pm merges, closes the ticket, and frees the lane.
+7. **Waiting for the owner.** pm lists the PR in the daily note. It waits until the owner approves it as the merge rule in CONFIG.md says. CONFIG.md says whether the PR still holds its lane while it waits; its coding session stays open either way, to answer review.
+8. **Merged.** pm merges, closes the ticket, and archives the coding session, which frees its lane if it still held one.
 
 A ticket that depends on an unmerged PR does not wait: its agent branches from that PR (a stacked PR), and pm merges the stack in order.
 
@@ -69,6 +69,7 @@ pm never:
 - **One ticket, one branch, one PR.** Work only on the ticket pm gave you, on its own branch. A change outside its scope becomes a new ticket, not part of this PR.
 - **Name the ticket.** Every commit message and PR title carries the ticket id, so the history leads back to the ticket.
 - **Test first.** Work in red-green-refactor cycles: a failing test for each behaviour, committed before the code that makes it pass, so the history shows the red step.
+- **Small files, one concern each.** No code or test file grows past the limit in CONFIG.md. A file that would is a sign that it mixes concerns: split it along them, in its own refactor commit with the tests green, instead of letting it grow.
 - **Green before ready.** Run the gate command from CONFIG.md until it passes. Never weaken a gate to get there.
 - **Promises become tickets.** Anything you would do "later" goes into a ticket or the PR, never only into your session: the session ends, the ticket stays.
 - **Record your calls.** A decision a reviewer could question goes into the decision log with the ticket id.
@@ -86,19 +87,23 @@ Each question to the owner becomes its own ticket, assigned to the owner, with t
 
 ## The decision log
 
-The decision log (path in CONFIG.md) records every call that shapes the product or the code and is not obvious from the diff. Agents append; nobody rewrites history. A decision that is reversed gets a new entry that points to the old one.
+The decision log records every call that shapes the product or the code and is not obvious from the diff. It is a folder (path in CONFIG.md) with one file per decision, so two PRs never edit the same file and never conflict over it. Agents add files; nobody edits an old one. A decision that is reversed gets a new file that names the old one in `Supersedes:`; the old one is then superseded, without being touched.
 
-One entry per decision, newest at the end:
+Each file is named `YYYY-MM-DD-<ticket>-<slug>.md`, with `no-ticket` when there is none (for example `2026-11-07-NOC-12-relay-writes-one-table-per-space.md`), and holds one entry:
 
 ```markdown
-### 2026-11-07 · NOC-12 · Relay writes go through one DynamoDB table per space
+# 2026-11-07 · NOC-12 · Relay writes go through one DynamoDB table per space
 
 - Decided by: pm (or the owner's name, when the owner decided)
 - Why: one line
 - Instead of: the option not taken, one line
+- Topics: relay, aws
+- Supersedes: 2026-11-06-NOC-9-an-older-decision.md   (optional)
 ```
 
-A decision the owner made carries the owner's name and the date. Agents read the log before they start, so they do not reopen settled questions.
+`Topics:` is required: lowercase tags, so a reader finds every decision on a subject. The gate checks every file's name, heading and fields. No generated overview is committed, since it would change in every PR; the reading command in CONFIG.md prints the whole log in date order, an index, only the current decisions, or the decisions of one ticket, topic or period.
+
+A decision the owner made carries the owner's name and the date. Agents read the log with the reading command before they start, so they do not reopen settled questions.
 
 ## How the owner hears back
 
@@ -126,7 +131,7 @@ To set up the factory in a new repository:
 
 - [ ] Copy `FACTORY.md` and `roles/` into `factory/`.
 - [ ] Write `factory/CONFIG.md` and `factory/GENESIS.md`.
-- [ ] Create an empty `factory/DECISIONS.md`.
+- [ ] Create an empty decisions folder, with the reading command and its check in the gate, and name both in CONFIG.md.
 - [ ] Point `AGENTS.md` (or `CLAUDE.md`) at the three files, to be read before any work.
 - [ ] Connect the tracker to the cloud sessions.
 - [ ] Set up the cloud environment and test its setup script in a fresh session.

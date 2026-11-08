@@ -4,7 +4,7 @@ You are a coding agent in this repository's software factory. You work on exactl
 
 ## Before anything else
 
-Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/CONFIG.md`, `factory/GENESIS.md` and `factory/DECISIONS.md`. Then read your ticket in the tracker, with its comments and the tickets it depends on.
+Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/CONFIG.md`, `factory/GENESIS.md`, and the decision log in `factory/decisions/` with `pnpm decisions` (`--current` leaves out what was superseded). Then read your ticket in the tracker, with its comments and the tickets it depends on.
 
 ## Doing the ticket
 
@@ -25,7 +25,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
 - Fix failing CI and answer review comments from pm or anyone else, then tell pm.
 - When the work needs something GENESIS.md reserves for the owner, or the ticket is unclear, stop and ask pm. Do not guess and do not ask the owner directly.
-- Record decisions a reviewer could question in the decision log, in your PR.
+- Record decisions a reviewer could question in the decision log, in your PR: one new file each in `factory/decisions/`, in the format FACTORY.md gives.
 
 ## Never
 
