@@ -134,6 +134,18 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: without proptest's `std` feature, `Config::rng_seed` is ignored, so the harness builds a ChaCha `TestRng` from `Config::seed` (default 0) and every run of the gate is the same. Arrival keys travel with each change so that shrinking a change keeps the others' order, and a final pass removes single changes and duplicate deliveries that proptest's vector shrinker leaves behind; minimality is tested for seeds 0 to 63.
 - Instead of: OS-random seeds per run (not deterministic, not on wasm32), or accepting counterexamples that are not minimal.
 
+### 2026-11-07 · NOC-8 · RFC 0004: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner merged RFC 0004, which accepts its recommendations: last writer wins on read with losing writes kept as conflicts, ties broken by author member id then operation id, add wins for sets, deletion as a converged boolean until its own RFC, links to absent targets kept as missing, no field type relies on causal delivery, and working names until the SDK's API review.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0004-merge-rules-basic-types.md`.
+
+### 2026-11-07 · no ticket · "Late" in principle 3 means lost to a change its author had not seen
+
+- Decided by: Carsten
+- Why: the time a change arrives differs per member, so storing it in the shared state would break principle 2; what every member can identify the same way is that a change lost to a change its author had not seen (RFC 0002, RFC 0004). GENESIS.md principle 3 and its no-go now say so.
+- Instead of: "arrives late", which no converged state can record.
+
 ### 2026-11-07 · NOC-13 · The relay's checks live in one core; backends only store
 
 - Decided by: coding agent (NOC-13)
