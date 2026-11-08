@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::basic::{Kind, OutsideSchema};
+use crate::basic::{Kind, OutsideSchema, Values};
 use crate::cbor::{self, Value};
 use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
@@ -100,23 +100,7 @@ impl Set {
         stamp: Hlc,
         element: Value,
     ) -> Result<Edit, OutsideSchema> {
-        if !self.kind.allows(&element) {
-            return Err(OutsideSchema);
-        }
-        let key = cbor::encode(&element);
-        let readded = state.readded();
-        let replaces = state
-            .removals()
-            .filter(|r| r.key() == key && !readded.contains(&r.id))
-            .map(|r| r.id)
-            .collect();
-        Ok(Edit {
-            id,
-            author,
-            stamp,
-            element,
-            action: Action::Add { replaces },
-        })
+        add(Values::Of(&self.kind), state, id, author, stamp, element)
     }
 
     /// A new removal of `element`, which removes the live additions of it
@@ -129,24 +113,64 @@ impl Set {
         stamp: Hlc,
         element: Value,
     ) -> Result<Edit, OutsideSchema> {
-        if !self.kind.allows(&element) {
-            return Err(OutsideSchema);
-        }
-        let key = cbor::encode(&element);
-        let observed = state
-            .live()
-            .into_iter()
-            .filter(|a| a.key() == key)
-            .map(|a| a.id)
-            .collect();
-        Ok(Edit {
-            id,
-            author,
-            stamp,
-            element,
-            action: Action::Remove { observed },
-        })
+        remove(Values::Of(&self.kind), state, id, author, stamp, element)
     }
+}
+
+/// [`Set::add`] for a set of `values`; links add object ids with it.
+pub(crate) fn add(
+    values: Values<'_>,
+    state: &State,
+    id: OperationId,
+    author: MemberId,
+    stamp: Hlc,
+    element: Value,
+) -> Result<Edit, OutsideSchema> {
+    if !values.allows(&element) {
+        return Err(OutsideSchema);
+    }
+    let key = cbor::encode(&element);
+    let readded = state.readded();
+    let replaces = state
+        .removals()
+        .filter(|r| r.key() == key && !readded.contains(&r.id))
+        .map(|r| r.id)
+        .collect();
+    Ok(Edit {
+        id,
+        author,
+        stamp,
+        element,
+        action: Action::Add { replaces },
+    })
+}
+
+/// [`Set::remove`] for a set of `values`.
+pub(crate) fn remove(
+    values: Values<'_>,
+    state: &State,
+    id: OperationId,
+    author: MemberId,
+    stamp: Hlc,
+    element: Value,
+) -> Result<Edit, OutsideSchema> {
+    if !values.allows(&element) {
+        return Err(OutsideSchema);
+    }
+    let key = cbor::encode(&element);
+    let observed = state
+        .live()
+        .into_iter()
+        .filter(|a| a.key() == key)
+        .map(|a| a.id)
+        .collect();
+    Ok(Edit {
+        id,
+        author,
+        stamp,
+        element,
+        action: Action::Remove { observed },
+    })
 }
 
 impl Edit {
@@ -218,11 +242,31 @@ impl FieldType for Set {
     type Operation = Edit;
     type Read = Read;
 
+    fn apply(&self, state: &mut State, op: &Edit) {
+        state.insert(op);
+    }
+
+    fn state_bytes(&self, state: &State) -> Vec<u8> {
+        state.bytes()
+    }
+
+    fn read(&self, state: &State) -> Read {
+        read(Values::Of(&self.kind), state)
+    }
+
+    fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
+        state.outcome(id)
+    }
+}
+
+/// What every set field does alike, whatever its elements: links merge by
+/// these too.
+impl State {
     /// Keeps every operation it receives; the live additions and the
     /// removed tags are computed from them, so the state is a function of
     /// the set of operations, whatever their order or repeats.
-    fn apply(&self, state: &mut State, op: &Edit) {
-        state.edits.entry(op.id).or_insert_with(|| op.clone());
+    pub(crate) fn insert(&mut self, op: &Edit) {
+        self.edits.entry(op.id).or_insert_with(|| op.clone());
     }
 
     /// The canonical CBOR (RFC 0002's profile) of every operation received,
@@ -231,14 +275,14 @@ impl FieldType for Set {
     /// removals it replaces) and 1 for a removal (naming the tags it
     /// observed), and an id is `[change id, position]`. The bytes of the
     /// local view, not a wire format.
-    fn state_bytes(&self, state: &State) -> Vec<u8> {
+    pub(crate) fn bytes(&self) -> Vec<u8> {
         let id = |id: &OperationId| {
             Value::Array(vec![
                 Value::Bytes(id.change.0.to_vec()),
                 Value::Unsigned(id.position),
             ])
         };
-        let edits = state
+        let edits = self
             .edits
             .values()
             .map(|e| {
@@ -255,53 +299,54 @@ impl FieldType for Set {
         cbor::encode(&Value::Array(edits))
     }
 
-    fn read(&self, state: &State) -> Read {
-        let readded = state.readded();
-        let mut elements: BTreeMap<Vec<u8>, Element> = BTreeMap::new();
-        for addition in state.live() {
-            elements.entry(addition.key()).or_insert_with(|| Element {
-                value: addition.element.clone(),
-                known: self.kind.allows(&addition.element),
-                lost_removals: Vec::new(),
-            });
-        }
-        let mut lost: Vec<&Edit> = state
-            .removals()
-            .filter(|r| !readded.contains(&r.id))
-            .collect();
-        lost.sort_by_key(|r| r.order());
-        for removal in lost {
-            if let Some(element) = elements.get_mut(&removal.key()) {
-                element.lost_removals.push(Removal {
-                    id: removal.id,
-                    author: removal.author,
-                    stamp: removal.stamp,
-                });
-            }
-        }
-        Read {
-            elements: elements.into_values().collect(),
-        }
-    }
-
     /// An addition is replaced by the received removal with the lowest
     /// operation id that observed it, and visible otherwise. A removal is
     /// replaced by the received addition with the lowest operation id that
     /// names it; otherwise lost while its element is in the set, and
     /// visible (applied) when it is not.
-    fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
-        let edit = state.edits.get(&id)?;
-        let by = state
+    pub(crate) fn outcome(&self, id: OperationId) -> Option<Outcome> {
+        let edit = self.edits.get(&id)?;
+        let by = self
             .edits
             .values()
             .find(|e| e.is_add() != edit.is_add() && e.names().contains(&id));
         if let Some(by) = by {
             return Some(Outcome::Replaced(by.id));
         }
-        Some(if !edit.is_add() && state.present().contains(&edit.key()) {
+        Some(if !edit.is_add() && self.present().contains(&edit.key()) {
             Outcome::Lost
         } else {
             Outcome::Visible
         })
+    }
+}
+
+/// The read value of a set of `values`.
+pub(crate) fn read(values: Values<'_>, state: &State) -> Read {
+    let readded = state.readded();
+    let mut elements: BTreeMap<Vec<u8>, Element> = BTreeMap::new();
+    for addition in state.live() {
+        elements.entry(addition.key()).or_insert_with(|| Element {
+            value: addition.element.clone(),
+            known: values.allows(&addition.element),
+            lost_removals: Vec::new(),
+        });
+    }
+    let mut lost: Vec<&Edit> = state
+        .removals()
+        .filter(|r| !readded.contains(&r.id))
+        .collect();
+    lost.sort_by_key(|r| r.order());
+    for removal in lost {
+        if let Some(element) = elements.get_mut(&removal.key()) {
+            element.lost_removals.push(Removal {
+                id: removal.id,
+                author: removal.author,
+                stamp: removal.stamp,
+            });
+        }
+    }
+    Read {
+        elements: elements.into_values().collect(),
     }
 }

@@ -10,7 +10,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ncdb_core::basic::{self, BasicValue, Kind, Write};
+use ncdb_core::basic::{self, Write};
 use ncdb_core::cbor::Value;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::{FieldType, Outcome};
@@ -105,7 +105,7 @@ fn linked(targets: &[ObjectId]) -> set::State {
                 },
             )
             .expect("a target in this space");
-        Links::field().apply(&mut state, &edit);
+        depends_on().apply(&mut state, &edit);
     }
     state
 }
@@ -142,7 +142,7 @@ fn a_link_to_an_object_in_another_collection_is_wrong_collection() {
 #[test]
 fn a_target_not_received_yet_reads_missing_until_its_create_arrives() {
     let state = linked(&[object(7)]);
-    let bytes = Links::field().state_bytes(&state);
+    let bytes = depends_on().state_bytes(&state);
     let mut copy = BTreeMap::new();
     assert_eq!(
         statuses(&depends_on(), &state, &copy),
@@ -154,7 +154,7 @@ fn a_target_not_received_yet_reads_missing_until_its_create_arrives() {
         .or_insert_with(Object::default)
         .create(&create(op(1), 1, 5, "tasks"));
     assert_eq!(statuses(&depends_on(), &state, &copy), vec![Status::Ok]);
-    assert_eq!(Links::field().state_bytes(&state), bytes);
+    assert_eq!(depends_on().state_bytes(&state), bytes);
 }
 
 #[test]
@@ -302,7 +302,7 @@ fn a_link_into_another_space_reads_missing_forever() {
 fn links_merge_as_a_set_add_wins_with_each_target_resolved() {
     // Alice removes the dependency on 7 having seen Bob's addition; Carol
     // adds it again, offline. Add wins; the removal stays readable.
-    let field = Links::field();
+    let field = depends_on();
     let mut state = linked(&[object(7), object(8)]);
     let removal = depends_on().remove(&state, op(2), member(2), Hlc(20), object(7));
     let readd = depends_on()
@@ -351,15 +351,15 @@ fn removing_a_link_into_another_space_is_allowed() {
             replaces: BTreeSet::new(),
         },
     };
-    Links::field().apply(&mut state, &stray);
+    depends_on().apply(&mut state, &stray);
     let removal = depends_on().remove(&state, op(2), member(2), Hlc(2), object(7));
-    Links::field().apply(&mut state, &removal);
+    depends_on().apply(&mut state, &removal);
     assert!(depends_on().read(&state).elements.is_empty());
 }
 
 #[test]
 fn a_link_merges_as_a_basic_value_with_the_winner_and_each_conflict_resolved() {
-    let field = Link::field();
+    let field = parent();
     let mut state = basic::State::default();
     let first = parent()
         .set(&state, op(1), member(1), Hlc(10), HERE, Some(here(7)))
@@ -394,7 +394,7 @@ fn a_link_merges_as_a_basic_value_with_the_winner_and_each_conflict_resolved() {
 
 #[test]
 fn a_cleared_link_resolves_to_no_target() {
-    let field = Link::field();
+    let field = parent();
     let mut state = basic::State::default();
     let set = parent()
         .set(&state, op(1), member(1), Hlc(10), HERE, Some(here(7)))
@@ -420,7 +420,7 @@ fn a_value_that_is_no_object_id_is_kept_unknown_and_reads_missing() {
         replaces: BTreeSet::new(),
     };
     let mut state = basic::State::default();
-    Link::field().apply(&mut state, &not_an_id);
+    parent().apply(&mut state, &not_an_id);
     let copy = copy_with(object(7), &[create(op(2), 1, 5, "tasks")]);
     let winner = parent().resolve(&state, &copy).value.expect("a winner");
     assert!(!winner.entry.known);
@@ -428,12 +428,35 @@ fn a_value_that_is_no_object_id_is_kept_unknown_and_reads_missing() {
 }
 
 #[test]
-fn an_object_id_is_sixteen_bytes() {
-    let field = BasicValue { kind: Kind::Object };
-    let state = basic::State::default();
-    let at = |value| field.set(&state, op(1), member(1), Hlc(1), value);
-    assert!(at(link::value(object(7))).is_ok());
-    assert!(at(Value::Bytes(vec![7; 15])).is_err());
-    assert!(at(Value::Bytes(vec![7; 17])).is_err());
-    assert!(at(Value::Text("tasks/7".to_owned())).is_err());
+fn only_an_object_id_of_sixteen_bytes_reads_as_known() {
+    let mut state = basic::State::default();
+    let values = [
+        link::value(object(7)),
+        Value::Bytes(vec![7; 15]),
+        Value::Bytes(vec![7; 17]),
+        Value::Text("tasks/7".to_owned()),
+    ];
+    for (n, value) in values.into_iter().enumerate() {
+        let w = Write {
+            id: op(n as u8),
+            author: member(n as u8),
+            stamp: Hlc(10),
+            value,
+            replaces: BTreeSet::new(),
+        };
+        parent().apply(&mut state, &w);
+    }
+    let read = parent().read(&state);
+    let mut known: Vec<(Value, bool)> = read
+        .conflicts
+        .into_iter()
+        .chain(read.value)
+        .map(|e| (e.value, e.known))
+        .collect();
+    known.sort_by_key(|(_, k)| *k);
+    assert_eq!(known.iter().filter(|(_, k)| *k).count(), 1);
+    assert_eq!(
+        known.last().map(|(v, _)| v.clone()),
+        Some(link::value(object(7)))
+    );
 }

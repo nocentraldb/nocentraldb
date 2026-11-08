@@ -1,18 +1,19 @@
 //! Links to other objects of the same space, as RFC 0004 ("Links") defines
 //! them. A link (one target) is a basic value whose value is an object id;
-//! links (many targets) are a set of object ids. Neither has merge rules of
+//! links (many targets) are a set of object ids. Both merge by the code of
+//! basic values and sets, over object ids (16 bytes) instead of a `Kind`. Neither has merge rules of
 //! its own. What is new is resolution: whether the copy holds the target,
 //! worked out when the app reads, never kept in the state.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::basic::{self, BasicValue, Entry, Kind, Write};
+use crate::basic::{self, Entry, Values, Write};
 use crate::cbor::Value;
 use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
 use crate::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use crate::object::Object;
-use crate::set::{self, Edit, Element, Set};
+use crate::set::{self, Edit, Element};
 
 /// The object a member links to, with the space it lives in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,11 +123,6 @@ pub struct Resolved {
 }
 
 impl Link {
-    /// The basic value a link merges as.
-    pub fn field() -> BasicValue {
-        BasicValue { kind: Kind::Object }
-    }
-
     /// A new write of the link to `target`, or a clear with `None`, from a
     /// member writing in `space`. Refuses a target in another space.
     pub fn set(
@@ -142,14 +138,14 @@ impl Link {
             Some(target) => value(in_space(space, target)?),
             None => Value::Null,
         };
-        Ok(Self::field()
+        Ok(Values::ObjectIds
             .set(state, id, author, stamp, value)
             .expect("an object id or the empty value is a link's value"))
     }
 
     /// The read value, with each target's status in `objects`.
     pub fn resolve(&self, state: &basic::State, objects: &impl Objects) -> Resolved {
-        let read = Self::field().read(state);
+        let read = Values::ObjectIds.read(state);
         let resolve = |entry: Entry| Resolution {
             status: status(&self.collections, &entry.value, objects),
             entry,
@@ -167,19 +163,19 @@ impl FieldType for Link {
     type Read = basic::Read;
 
     fn apply(&self, state: &mut basic::State, op: &Write) {
-        Self::field().apply(state, op);
+        state.insert(op);
     }
 
     fn state_bytes(&self, state: &basic::State) -> Vec<u8> {
-        Self::field().state_bytes(state)
+        state.bytes()
     }
 
     fn read(&self, state: &basic::State) -> basic::Read {
-        Self::field().read(state)
+        Values::ObjectIds.read(state)
     }
 
     fn outcome(&self, state: &basic::State, id: OperationId) -> Option<Outcome> {
-        Self::field().outcome(state, id)
+        state.outcome(id)
     }
 }
 
@@ -200,11 +196,6 @@ pub struct Linked {
 }
 
 impl Links {
-    /// The set links merge as.
-    pub fn field() -> Set {
-        Set { kind: Kind::Object }
-    }
-
     /// A new addition of `target`, from a member writing in `space`.
     /// Refuses a target in another space.
     pub fn add(
@@ -217,9 +208,10 @@ impl Links {
         target: Target,
     ) -> Result<Edit, OtherSpace> {
         let element = value(in_space(space, target)?);
-        Ok(Self::field()
-            .add(state, id, author, stamp, element)
-            .expect("an object id is an element of links"))
+        Ok(
+            set::add(Values::ObjectIds, state, id, author, stamp, element)
+                .expect("an object id is an element of links"),
+        )
     }
 
     /// A new removal of `target`, wherever it points: removing a link that
@@ -232,15 +224,13 @@ impl Links {
         stamp: Hlc,
         target: ObjectId,
     ) -> Edit {
-        Self::field()
-            .remove(state, id, author, stamp, value(target))
+        set::remove(Values::ObjectIds, state, id, author, stamp, value(target))
             .expect("an object id is an element of links")
     }
 
     /// The targets, each with its status in `objects`.
     pub fn resolve(&self, state: &set::State, objects: &impl Objects) -> Vec<Linked> {
-        Self::field()
-            .read(state)
+        set::read(Values::ObjectIds, state)
             .elements
             .into_iter()
             .map(|element| Linked {
@@ -257,18 +247,18 @@ impl FieldType for Links {
     type Read = set::Read;
 
     fn apply(&self, state: &mut set::State, op: &Edit) {
-        Self::field().apply(state, op);
+        state.insert(op);
     }
 
     fn state_bytes(&self, state: &set::State) -> Vec<u8> {
-        Self::field().state_bytes(state)
+        state.bytes()
     }
 
     fn read(&self, state: &set::State) -> set::Read {
-        Self::field().read(state)
+        set::read(Values::ObjectIds, state)
     }
 
     fn outcome(&self, state: &set::State, id: OperationId) -> Option<Outcome> {
-        Self::field().outcome(state, id)
+        state.outcome(id)
     }
 }

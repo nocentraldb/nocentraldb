@@ -15,12 +15,12 @@ use ncdb_core::basic::Kind;
 use ncdb_core::cbor::Value;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::FieldType;
-use ncdb_core::ids::ObjectId;
+use ncdb_core::ids::{MemberId, ObjectId, OperationId};
 use ncdb_core::link::{self, Links};
 use ncdb_core::set::{Action, Edit, Read, Set, State};
 use proptest::prelude::*;
 
-use super::basic::{member_id, op_id, operation_id, outcome};
+use super::basic::{SPACE, member_id, op_id, operation_id, outcome};
 use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome};
 
 /// The schema a test runs sets with.
@@ -30,10 +30,19 @@ pub trait Schema: core::fmt::Debug + 'static {
     type Field: FieldType<State = State, Operation = Edit, Read = Read>;
     /// The field as the copies' schema declares it.
     fn field() -> Self::Field;
-    /// The set the writers make operations with; a newer schema may allow
-    /// elements the copies' schema does not.
-    fn writer() -> Set;
-    /// The elements members add and remove, all allowed by `writer()`. A
+    /// A member's addition (or removal, with `remove`) of `element`, with
+    /// the writers' schema; a newer schema may allow elements the copies'
+    /// schema does not.
+    fn edit(
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
+        remove: bool,
+    ) -> Edit;
+    /// The elements members add and remove, all allowed by the writers'
+    /// schema. A
     /// few, so that members often add and remove the same element.
     fn values() -> Vec<Value>;
 }
@@ -52,10 +61,18 @@ impl Schema for Tags {
         }
     }
 
-    fn writer() -> Set {
-        Set {
+    fn edit(
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
+        remove: bool,
+    ) -> Edit {
+        let writer = Set {
             kind: Kind::Choice(["urgent", "later", "blocked"].map(String::from).into()),
-        }
+        };
+        edit_with(&writer, state, id, author, stamp, element, remove)
     }
 
     fn values() -> Vec<Value> {
@@ -77,8 +94,15 @@ impl Schema for Floats {
         Set { kind: Kind::Float }
     }
 
-    fn writer() -> Set {
-        Self::field()
+    fn edit(
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
+        remove: bool,
+    ) -> Edit {
+        edit_with(&Self::field(), state, id, author, stamp, element, remove)
     }
 
     fn values() -> Vec<Value> {
@@ -104,13 +128,54 @@ impl Schema for Targets {
         }
     }
 
-    fn writer() -> Set {
-        Links::field()
+    /// Adds with `Links::add`, in the links' own space, and removes with
+    /// `Links::remove`.
+    fn edit(
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
+        remove: bool,
+    ) -> Edit {
+        let Value::Bytes(bytes) = element else {
+            panic!("an object id");
+        };
+        let object = ObjectId(bytes.try_into().expect("an object id"));
+        if remove {
+            Self::field().remove(state, id, author, stamp, object)
+        } else {
+            let target = link::Target {
+                space: SPACE,
+                object,
+            };
+            Self::field()
+                .add(state, id, author, stamp, SPACE, target)
+                .expect("a target in the links' space")
+        }
     }
 
     fn values() -> Vec<Value> {
         (1..=3).map(|n| link::value(ObjectId([n; 16]))).collect()
     }
+}
+
+/// An addition or removal with a set's own `add` or `remove`.
+fn edit_with(
+    set: &Set,
+    state: &State,
+    id: OperationId,
+    author: MemberId,
+    stamp: Hlc,
+    element: Value,
+    remove: bool,
+) -> Edit {
+    let made = if remove {
+        set.remove(state, id, author, stamp, element)
+    } else {
+        set.add(state, id, author, stamp, element)
+    };
+    made.expect("the writer's schema allows its values")
 }
 
 /// The number of the schema's values, as the `u8` the generator draws.
@@ -232,12 +297,7 @@ impl<S: Schema, M: Mergeable<Change = Body> + AsRef<SetOf<S>>> Generator<M> for 
         let (id, member) = (operation_id(author.id), member_id(author.member));
         let element = S::values()[usize::from(value)].clone();
         let remove = remove % 2 == 1;
-        let made = if remove {
-            S::writer().remove(state, id, member, Hlc(stamp), element)
-        } else {
-            S::writer().add(state, id, member, Hlc(stamp), element)
-        };
-        let made = made.expect("the writer's schema allows its values");
+        let made = S::edit(state, id, member, Hlc(stamp), element, remove);
         let names = match made.action {
             Action::Add { replaces } => replaces,
             Action::Remove { observed } => observed,
