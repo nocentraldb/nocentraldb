@@ -113,9 +113,12 @@ impl Clock {
     /// Returns a warning when the clock's milliseconds are more than a
     /// minute ahead of the wall clock; the counter does not count.
     pub fn receive(&mut self, seen: Hlc, author: MemberId, wall: u64) -> Option<ClockAhead> {
-        let _ = (author, wall);
         self.observe(seen);
-        None
+        let ahead_millis = seen.millis().saturating_sub(wall);
+        (ahead_millis > AHEAD_LIMIT_MILLIS).then_some(ClockAhead {
+            author,
+            ahead_millis,
+        })
     }
 
     /// The clock for a change this member writes now: the larger of the
