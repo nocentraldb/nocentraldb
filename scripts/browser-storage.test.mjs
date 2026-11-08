@@ -3,8 +3,13 @@
 // docs/browser-storage.md, which may call a row "measured" only when the
 // committed run holds it. Runs in `pnpm gates` without a browser.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { measuredRows, tableRows } from "./browser-storage/report.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const engine = (overrides = {}) => ({
   version: "1.0",
@@ -158,4 +163,109 @@ test("tableRows reads the first table under a heading", () => {
       source: "unknown",
     },
   ]);
+});
+
+// docs/browser-storage.md: one table, every row sourced, and a row is
+// "measured" by Playwright only when the committed run holds it.
+
+const DOC = "docs/browser-storage.md";
+const RESULTS = "docs/browser-storage.results.json";
+const doc = () => readFileSync(join(root, DOC), "utf8");
+const findings = () => tableRows(doc(), "Findings");
+const results = () => JSON.parse(readFileSync(join(root, RESULTS), "utf8"));
+const key = (row) => `${row.browser} | ${row.behaviour}`;
+
+test("the findings table has a source for every row", () => {
+  const rows = findings();
+  assert.ok(rows.length > 0, `${DOC} has no rows under "Findings"`);
+  for (const row of rows) {
+    assert.deepEqual(
+      Object.keys(row),
+      ["browser", "behaviour", "finding", "source"],
+      key(row),
+    );
+    assert.match(
+      row.source,
+      /^(measured: |documented: |unknown$)/,
+      `${key(row)}: the source is measured, documented or unknown`,
+    );
+    if (row.source.startsWith("documented: ")) {
+      assert.match(
+        row.source,
+        /\]\(https:\/\/[^)]+\)/,
+        `${key(row)}: a documented row links to the vendor's documentation`,
+      );
+    }
+    if (row.source === "unknown") {
+      assert.equal(row.finding, "unknown", `${key(row)}: no guess`);
+    }
+  }
+});
+
+test("every Playwright row in the doc is the committed run, and all of it", () => {
+  const expected = measuredRows(results()).map(
+    (row) => `${key(row)} | ${row.finding} | ${row.source}`,
+  );
+  const actual = findings()
+    .filter((row) => row.source.startsWith("measured: Playwright"))
+    .map((row) => `${key(row)} | ${row.finding} | ${row.source}`);
+  assert.deepEqual(actual.toSorted(), expected.toSorted());
+});
+
+test("a measured row that Playwright did not measure names a manual check", () => {
+  const log = doc();
+  for (const row of findings()) {
+    if (!row.source.startsWith("measured: ")) continue;
+    if (row.source.startsWith("measured: Playwright")) continue;
+    const match = row.source.match(
+      /^measured: manual check (\d{4}-\d{2}-\d{2})/,
+    );
+    assert.ok(match, `${key(row)}: "measured: manual check <date>"`);
+    assert.ok(
+      log.includes(`### ${match[1]}`),
+      `${key(row)}: the manual check log has an entry for ${match[1]}`,
+    );
+  }
+});
+
+test("Playwright's WebKit is never reported as Safari", () => {
+  for (const row of findings()) {
+    if (/safari/i.test(row.browser)) {
+      assert.doesNotMatch(row.source, /Playwright/, key(row));
+    }
+    if (/webkit/i.test(row.browser)) {
+      assert.equal(row.browser, "WebKit (Playwright)", key(row));
+    }
+  }
+});
+
+test("the doc has a row for each check that needs a person", () => {
+  const keys = findings().map(key);
+  for (const wanted of [
+    "Safari (macOS) | Seven-day deletion of script-writable storage",
+    "Safari (macOS) | `persist()` prevents the seven-day deletion",
+    "Safari (iOS) | Seven-day deletion of script-writable storage",
+    "Safari (iOS) | `persist()` prevents the seven-day deletion",
+    "Safari (iOS) | Add to Home Screen prevents the seven-day deletion",
+    "Chrome (Android) | Eviction under storage pressure",
+    "Edge (Android) | Eviction under storage pressure",
+    "Firefox | `persist()`",
+  ]) {
+    assert.ok(keys.includes(wanted), `${DOC} has no row "${wanted}"`);
+  }
+});
+
+test("the doc says how to run each check by hand", () => {
+  const sections = doc()
+    .split("\n")
+    .filter((line) => /^#{2,3} /.test(line))
+    .map((line) => line.replace(/^#+ /, "").toLowerCase());
+  for (const wanted of [
+    "findings",
+    "how it was measured",
+    "manual checks",
+    "manual check log",
+  ]) {
+    assert.ok(sections.includes(wanted), `${DOC} has no section "${wanted}"`);
+  }
 });
