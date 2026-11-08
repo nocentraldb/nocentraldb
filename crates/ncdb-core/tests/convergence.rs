@@ -12,7 +12,9 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
-use support::convergence::{self, Config, Member, Mergeable, Op, OpId, Outcome, independent};
+use support::convergence::{
+    self, Config, Member, Mergeable, Op, OpId, Outcome, Property, independent,
+};
 
 /// A grow-only set: union is commutative, associative and idempotent.
 #[derive(Clone, Debug, Default)]
@@ -246,17 +248,23 @@ fn every_seed_shrinks_to_two_writes_delivered_once() {
 }
 
 #[test]
-fn every_seed_shrinks_to_one_change_delivered_twice_once() {
+fn every_seed_shrinks_to_one_change_applied_twice() {
     for seed in SEEDS {
         let config = Config {
             seed,
             ..Config::default()
         };
-        let divergence =
+        let violation =
             convergence::check::<DeliveryCounter, _>(&config, &independent(|_| Just(()).boxed()))
-                .expect_err("the harness never delivered a change twice");
-        assert_eq!(divergence.changes.len(), 1, "{divergence}");
-        assert_eq!(deliveries(&divergence), config.copies + 1, "{divergence}");
+                .expect_err("the harness never applied a change twice");
+        assert_eq!(violation.property, Property::C2, "{violation}");
+        assert_eq!(violation.changes.len(), 1, "{violation}");
+        // Either one copy received it twice, or the copies converged and
+        // applying the whole set twice to one copy showed it.
+        assert!(
+            [config.copies, config.copies + 1].contains(&deliveries(&violation)),
+            "{violation}"
+        );
     }
 }
 

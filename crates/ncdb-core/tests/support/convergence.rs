@@ -6,6 +6,7 @@
 // but uses only part of it.
 #![allow(dead_code)]
 
+use core::cell::Cell;
 use core::fmt::Debug;
 use std::collections::BTreeSet;
 
@@ -154,6 +155,9 @@ impl Default for Config {
 pub enum Property {
     /// Converges in any order.
     C1,
+    /// Idempotent: applying an operation the state already holds changes
+    /// nothing.
+    C2,
     /// Nothing lost silently: every operation's outcome is the same on every
     /// copy, and replaced only by an operation whose author had seen it.
     C4,
@@ -165,6 +169,7 @@ impl core::fmt::Display for Property {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             Property::C1 => "C1 (converges in any order)",
+            Property::C2 => "C2 (idempotent)",
             Property::C4 => "C4 (nothing lost silently)",
             Property::C7 => "C7 (tested reads)",
         })
@@ -329,6 +334,20 @@ fn violation<S: Mergeable, G: Generator<S>>(
             format!("copy {copy} ended in other state bytes than copy 0"),
         ));
     }
+    let mut twice = S::default();
+    for op in &made.ops {
+        twice.apply(op);
+    }
+    let once = twice.state_bytes();
+    for op in &made.ops {
+        twice.apply(op);
+    }
+    if twice.state_bytes() != once {
+        return Some((
+            Property::C2,
+            "applying every operation a second time changed the state bytes".to_string(),
+        ));
+    }
     let reads: Vec<S::Read> = states.iter().map(S::read).collect();
     if let Some(copy) = (1..copies).find(|&copy| reads[copy] != reads[0]) {
         return Some((
@@ -369,8 +388,8 @@ fn violation<S: Mergeable, G: Generator<S>>(
     None
 }
 
-/// Finishes what proptest's shrinking leaves: removes single steps and
-/// single duplicate deliveries while the case still breaks `property`, until
+/// Finishes what proptest's shrinking leaves: removes single steps, single
+/// duplicate deliveries and duplicates that every copy received while the case still breaks `property`, until
 /// no one of them can go. proptest's vector shrinker does not retry removing
 /// an element once it has shrunk the elements, so it can stop short of this.
 fn minimise<S: Mergeable, G: Generator<S>>(
@@ -403,6 +422,16 @@ fn minimise<S: Mergeable, G: Generator<S>>(
                         continue 'smaller;
                     }
                 }
+            }
+            // A duplicate every copy received can only go from all of them
+            // at once: removed from one copy alone, the copies differ.
+            let mut fewer = steps.clone();
+            for arrivals in fewer[i].arrivals.iter_mut().filter(|a| a.len() > 1) {
+                arrivals.pop();
+            }
+            if fewer[i].arrivals != steps[i].arrivals && breaks(&fewer) {
+                steps = fewer;
+                continue 'smaller;
             }
         }
         return steps;
@@ -467,22 +496,37 @@ pub fn check<S: Mergeable, G: Generator<S>>(
     );
     let copies = config.copies;
     let mut runner = runner(config.cases, config.seed);
+    // Shrinking keeps to the property the first failing case broke, so that
+    // a case that breaks one property does not shrink into another.
+    let broken: Cell<Option<Property>> = Cell::new(None);
     let result = runner.run(&cases::<S, G>(config, generator), |steps| {
         match violation::<S, G>(generator, &steps, copies) {
-            Some((property, _)) => Err(TestCaseError::fail(property.to_string())),
-            None => Ok(()),
+            Some((property, _)) if broken.get().is_none_or(|p| p == property) => {
+                broken.set(Some(property));
+                Err(TestCaseError::fail(property.to_string()))
+            }
+            _ => Ok(()),
         }
     });
     match result {
         Ok(()) => Ok(()),
         Err(TestError::Fail(_, steps)) => {
-            let (property, _) =
-                violation::<S, G>(generator, &steps, copies).expect("a failing case fails again");
+            let property = broken.get().expect("a failing case broke a property");
             let steps = minimise::<S, G>(generator, steps, copies, property);
-            let (property, detail) =
+            let (mut property, mut detail) =
                 violation::<S, G>(generator, &steps, copies).expect("a minimised case still fails");
             let made = simulate::<S, G>(generator, &steps);
             let orders = orders_of(&steps, copies);
+            // Minimising removed every duplicate delivery it could; one that
+            // is left is needed to diverge, so the subject is not idempotent.
+            let duplicated = orders.iter().any(|order| {
+                let mut seen = BTreeSet::new();
+                !order.iter().all(|i| seen.insert(i))
+            });
+            if property == Property::C1 && duplicated {
+                property = Property::C2;
+                detail.push_str(", and only with an operation delivered twice");
+            }
             let states = deliver::<S>(&made.ops, &orders);
             Err(Violation {
                 property,
