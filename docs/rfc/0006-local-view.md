@@ -34,7 +34,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - **Read value.** What a field type says an app reads for a field, given its merge state (RFC 0004: for a basic value, the winning write).
 - **Merge state.** What a field type keeps to compute the read value and stay convergent (RFC 0004: for a basic value, the live writes and the replaced ids).
 - **Control change.** A change of kind 1 in RFC 0002, with a body RFC 0003 defines: a membership entry, a key envelope, a key chain entry, a shred entry or an acknowledgement. It carries no content.
-- **Rejected.** A change kept in the log but not folded because it failed a check: its signature, its author's membership at its key generation, or its decryption. The log state and its reasons are defined in RFC 0002, Amendment 1 (NOC-22, PR #38), decision D11. A rejected change **waits** for a control change of its space that may let it pass.
+- **Rejected.** A change kept in the log but not folded because it failed a check: its signature, its author's membership at its key generation, or its decryption. The log state and its reasons are defined in [RFC 0002, Amendment 1](0002-change-and-log-format.md#rejected-changes), decision D11. A rejected change **waits** for a control change of its space that may let it pass.
 - **Declared index.** An index declared in `model.lock.json`. RFC 0005 defines the declaration. This RFC needs only three things from it: the collection, the ordered list of fields with a direction each, and which leading fields a query must fix with equality.
 - **Cursor.** In this RFC, a **page cursor**: the position after the last row of a page in a declared index. Not to be confused with the relay cursor of RFC 0002, which this RFC calls the **relay position**.
 - **Target.** A platform the core runs on: native desktop (macOS, Linux, Windows), native mobile (iOS, Android), or a browser (Chromium-based, Firefox, Safari).
@@ -67,7 +67,7 @@ The fold turns a frame in the log into rows of the view. A member folds every ch
 
 ### One change
 
-Every change goes through the seven steps of RFC 0002, Amendment 1 (NOC-22, PR #38), "What a member does with a change it receives", in that order and in one SQLite transaction. That section defines the steps and the state each one leaves a change in; this RFC says what the view does at each:
+Every change goes through the seven steps of [RFC 0002, Amendment 1, "What a member does with a change it receives"](0002-change-and-log-format.md#what-a-member-does-with-a-change-it-receives), in that order and in one SQLite transaction. That section defines the steps and the state each one leaves a change in; this RFC says what the view does at each:
 
 1. **Decode and append** (Amendment step 1). A frame that is not well-formed or not canonical is not appended. Otherwise insert the frame into `log` ([RFC 0002](0002-change-and-log-format.md#the-log-on-disk)). If the change id is already there, stop: a duplicate changes nothing.
 2. **Check and decrypt** (Amendment steps 2 to 6). Understand the header, verify the signature, check that the author is a member at the change's key generation, decrypt the payload in memory, understand the payload. The checks use the control state this member holds now ([Control changes and changes that wait for them](#control-changes-and-changes-that-wait-for-them)). A change that stops here changes nothing in the view:
