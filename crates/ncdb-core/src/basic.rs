@@ -25,6 +25,17 @@ pub enum Kind {
     Choice(BTreeSet<String>),
 }
 
+/// What a field lets a member write: the values of a [`Kind`], or object
+/// ids, which links hold (RFC 0004, "Links"). Internal to the core, so the
+/// public `Kind` keeps its variants.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum Values<'a> {
+    /// The values of a kind.
+    Of(&'a Kind),
+    /// Object ids, as 16 bytes.
+    ObjectIds,
+}
+
 /// The basic value field type: a field of one [`Kind`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BasicValue {
@@ -105,7 +116,22 @@ impl BasicValue {
         stamp: Hlc,
         value: Value,
     ) -> Result<Write, OutsideSchema> {
-        if !self.allows(&value) {
+        Values::Of(&self.kind).set(state, id, author, stamp, value)
+    }
+}
+
+impl Values<'_> {
+    /// A new write of `value`, which replaces what `state` holds. Refuses a
+    /// value these values do not include, except the empty value.
+    pub(crate) fn set(
+        self,
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        value: Value,
+    ) -> Result<Write, OutsideSchema> {
+        if !self.allows_or_null(&value) {
             return Err(OutsideSchema);
         }
         Ok(Write {
@@ -117,13 +143,56 @@ impl BasicValue {
         })
     }
 
-    /// Whether the kind allows `value`. `Value::Null`, the empty value,
-    /// clears a field of any kind.
+    /// Whether `value` is one of these values. The empty value is not.
+    pub(crate) fn allows(self, value: &Value) -> bool {
+        match self {
+            Values::Of(kind) => kind.allows(value),
+            Values::ObjectIds => matches!(value, Value::Bytes(id) if id.len() == 16),
+        }
+    }
+
+    /// Whether a basic value allows `value`. `Value::Null`, the empty
+    /// value, clears a field of any kind.
+    fn allows_or_null(self, value: &Value) -> bool {
+        matches!(value, Value::Null) || self.allows(value)
+    }
+
+    fn entry(self, write: &Write) -> Entry {
+        Entry {
+            id: write.id,
+            author: write.author,
+            stamp: write.stamp,
+            value: write.value.clone(),
+            known: self.allows_or_null(&write.value),
+        }
+    }
+
+    /// The read value of a basic value field of these values.
+    pub(crate) fn read(self, state: &State) -> Read {
+        let mut live = state.live();
+        let Some(winner) = live.pop() else {
+            return Read {
+                value: None,
+                conflicts: Vec::new(),
+            };
+        };
+        Read {
+            value: Some(self.entry(winner)),
+            conflicts: live
+                .into_iter()
+                .filter(|w| w.value != winner.value)
+                .map(|w| self.entry(w))
+                .collect(),
+        }
+    }
+}
+
+impl Kind {
+    /// Whether `value` is a value of this kind. The empty value is not.
     fn allows(&self, value: &Value) -> bool {
         const MAX: u64 = i64::MAX as u64;
-        match (&self.kind, value) {
-            (_, Value::Null)
-            | (Kind::Text, Value::Text(_))
+        match (self, value) {
+            (Kind::Text, Value::Text(_))
             | (Kind::Float, Value::Float(_))
             | (Kind::Boolean, Value::Bool(_)) => true,
             (Kind::Integer, Value::Unsigned(n) | Value::Negative(n)) => *n <= MAX,
@@ -164,42 +233,50 @@ impl State {
     }
 }
 
-impl BasicValue {
-    fn entry(&self, write: &Write) -> Entry {
-        Entry {
-            id: write.id,
-            author: write.author,
-            stamp: write.stamp,
-            value: write.value.clone(),
-            known: self.allows(&write.value),
-        }
-    }
-}
-
 impl FieldType for BasicValue {
     type State = State;
     type Operation = Write;
     type Read = Read;
 
+    fn apply(&self, state: &mut State, op: &Write) {
+        state.insert(op);
+    }
+
+    fn state_bytes(&self, state: &State) -> Vec<u8> {
+        state.bytes()
+    }
+
+    fn read(&self, state: &State) -> Read {
+        Values::Of(&self.kind).read(state)
+    }
+
+    fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
+        state.outcome(id)
+    }
+}
+
+/// What every basic value field does alike, whatever its values: a link
+/// merges by these too.
+impl State {
     /// Keeps every write it receives; the live writes and the replaced ids
     /// are computed from them, so the state is a function of the set of
     /// writes, whatever their order or repeats.
-    fn apply(&self, state: &mut State, op: &Write) {
-        state.writes.entry(op.id).or_insert_with(|| op.clone());
+    pub(crate) fn insert(&mut self, op: &Write) {
+        self.writes.entry(op.id).or_insert_with(|| op.clone());
     }
 
     /// The canonical CBOR (RFC 0002's profile) of every write received, in
     /// operation id order: `[[id, author, stamp, value, [replaced id…]]…]`,
     /// with an id as `[change id, position]`. The bytes of the local view,
     /// not a wire format.
-    fn state_bytes(&self, state: &State) -> Vec<u8> {
+    pub(crate) fn bytes(&self) -> Vec<u8> {
         let id = |id: &OperationId| {
             Value::Array(vec![
                 Value::Bytes(id.change.0.to_vec()),
                 Value::Unsigned(id.position),
             ])
         };
-        let writes = state
+        let writes = self
             .writes
             .values()
             .map(|w| {
@@ -215,34 +292,16 @@ impl FieldType for BasicValue {
         cbor::encode(&Value::Array(writes))
     }
 
-    fn read(&self, state: &State) -> Read {
-        let mut live = state.live();
-        let Some(winner) = live.pop() else {
-            return Read {
-                value: None,
-                conflicts: Vec::new(),
-            };
-        };
-        Read {
-            value: Some(self.entry(winner)),
-            conflicts: live
-                .into_iter()
-                .filter(|w| w.value != winner.value)
-                .map(|w| self.entry(w))
-                .collect(),
-        }
-    }
-
     /// Replaced by the received write with the lowest operation id that
     /// names it; otherwise visible when it is the winner or holds the
     /// winner's value, and lost when it is a listed conflict.
-    fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
-        state.writes.get(&id)?;
-        if let Some(by) = state.writes.values().find(|w| w.replaces.contains(&id)) {
+    pub(crate) fn outcome(&self, id: OperationId) -> Option<Outcome> {
+        self.writes.get(&id)?;
+        if let Some(by) = self.writes.values().find(|w| w.replaces.contains(&id)) {
             return Some(Outcome::Replaced(by.id));
         }
-        let winner = state.live().pop().map(|w| &w.value);
-        Some(if winner == Some(&state.writes[&id].value) {
+        let winner = self.live().pop().map(|w| &w.value);
+        Some(if winner == Some(&self.writes[&id].value) {
             Outcome::Visible
         } else {
             Outcome::Lost

@@ -14,7 +14,8 @@
 //!
 //! It also holds the field types of RFC 0004
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
-//! ([`field`]) and basic values ([`basic`]).
+//! ([`field`]), basic values ([`basic`]), sets ([`set`]), links ([`link`])
+//! and what links resolve against, the objects of a copy ([`object`]).
 
 pub mod basic;
 pub mod cbor;
@@ -23,10 +24,13 @@ pub mod clock;
 pub mod field;
 pub mod ids;
 pub mod keys;
+pub mod link;
 pub mod log;
+pub mod object;
 pub mod receive;
 mod redact;
 pub mod seal;
+pub mod set;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {
