@@ -18,7 +18,7 @@ The values of this repository's factory. FACTORY.md is copied unchanged between 
 | Branch per ticket                  | Linear's branch name for the ticket                                                                                                       |
 | Gate command                       | `pnpm gates`, green before a PR is marked ready                                                                                           |
 | Change fragments                   | A product-changing PR adds one under `changes/` (see `changes/README.md`)                                                                 |
-| Largest code or test file          | 700 lines. A file that would grow past it is split by concern (see FACTORY.md)                                                            |
+| Largest code or test file          | 700 lines. `pnpm gates` fails on a longer file (`repo:file-size`); split it by concern (see FACTORY.md)                                   |
 | Merge rule                         | Every PR opens as a draft. The owner ticks its Authorship box (`.github/AI_POLICY.md`); only then pm marks it ready and squash-merges it. |
 | Daily note                         | Every day at 06:00 Europe/Berlin                                                                                                          |
 | Runtime                            | Claude Code cloud environment `nocentraldb`                                                                                               |
