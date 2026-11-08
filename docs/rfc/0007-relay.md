@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-13
 
 This RFC defines the relay: the protocol members use to push and pull a space's changes and to follow them live, the checks the relay runs before it appends a change, the interface every relay backend implements, and the first backend, serverless on AWS with DynamoDB and S3.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002 and RFC 0003](#what-this-rfc-needs-from-rfc-0002-and-rfc-0003).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
 **Status.** A draft for the owner's decision. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. Nothing here is built or deployed. The open decisions are in [Decisions for the owner](#decisions-for-the-owner), each with options, a recommendation and its cost. Until the owner decides, the design below describes the recommended option of each decision.
 
@@ -12,7 +12,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 - **The bytes of a change and of the log.** RFC 0002. This RFC moves frames as opaque bytes, except for the header fields the relay reads.
 - **Cryptography and keys.** [RFC 0003](0003-keys-and-cryptography.md). This RFC uses the member key to authenticate a connection, with its own context string, and invents no primitive.
-- **Membership rules and roles.** Who may add or remove whom is a later RFC. The relay applies those rules; this RFC only says where.
+- **Membership rules and roles.** Who may add or remove whom is [RFC 0008](0008-membership.md). The relay applies those rules, from the same code the members run; this RFC only says where.
 - **Compaction and the archive.** A later RFC. This RFC reserves the error a member gets when its cursor points before a compacted range.
 - **Peer discovery in island mode.** How two members on one network find each other is a later RFC. This RFC says which messages they exchange once connected.
 - **Moving a space from one relay to another.** Use case 5 leaves it open, and so does this RFC; [Island mode](#island-mode) says what already works.
@@ -133,11 +133,11 @@ record = {person-key id, generation, writer member id, wrapped, signature}
 
 The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#decisions-for-the-owner). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
 
-- **The log names every person key.** A member that creates a person key appends a **person-key entry**, a control change. It holds the person-key id and a commitment to the key (RFC 0003).
+- **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
-- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log and destroyed by no shred entry. Its generation is the same as or newer than the record the relay holds. Otherwise the relay answers `bad_record`.
+- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`.
 - **Members check the commitment.** A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A relay that swaps records is caught, and the signature names who wrote each record.
-- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only when it appends a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003). The deletion happens in the same backend transaction as the append, so a shred and the deletion cannot come apart.
+- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only after it appended a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003, narrowed by RFC 0008). The relay deletes the record when the shred entry becomes stable, by the same rule as on a member, not in the transaction that appends it ([RFC 0008, M20](0008-membership.md#effects-that-wait-until-a-change-is-stable)). Until then a shred that a concurrent revocation rejects can still be undone.
 
 **What this does not prevent.** A member of the space can still upload a record whose wrapped key does not match the commitment. Every member then rejects that record and reports its writer, and any member that still holds the key writes a correct one. Until then, new members cannot open that person's fields. A member could equally have leaked the person key itself (RFC 0003).
 
@@ -174,11 +174,11 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `malformed` | The frame is not well-formed or not canonical CBOR (RFC 0002). | Report it as a bug; never retry the same bytes. |
 | `too_large` | The frame exceeds the largest frame the relay accepts. | The SDK reports it; the change stays local. |
 | `unsupported_suite` | The relay does not know the change's suite and so cannot verify its signature. | Keep the change local until the relay is upgraded. |
-| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
-| `author_not_member` | The author is not a member of the space at the change's key generation, or was removed. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
-| `membership_rule` | A control change breaks the membership rules (the later membership RFC). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
+| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#decisions-for-the-owner)). |
+| `author_not_member` | The author holds no grant that writes under the change's generation, or the change's author sequence lies above the cutoff of a revocation (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#decisions-for-the-owner)). |
+| `membership_rule` | A control change breaks the membership rules (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#decisions-for-the-owner)). |
 | `epoch_changed` | The cursor belongs to an earlier relay epoch, for example after a restore. | Treat every stored position of this relay as unconfirmed, pull from 0, push every change the relay lacks (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). |
-| `bad_record` | A person-key record is unsigned or badly signed, names a person-key id no person-key entry names or a shred entry destroyed, or would replace a newer generation. | Report it as a bug; never retry the same record. |
+| `bad_record` | A person-key record is unsigned or badly signed, has no person-key entry with its generation and record hash, names a person-key id a shred entry destroyed, or would replace a record whose generation it does not descend from. | Report it as a bug; never retry the same record. |
 | `compacted` | The cursor points before a range moved into the archive (the compaction RFC). | Fetch the archive, then pull from its end. |
 | `bad_cursor` | The cursor is negative or above the head. | Pull from 0 or from the last confirmed position. |
 | `rate_limited` | The member or the space exceeded its quota. | Retry after the given time. |
@@ -198,8 +198,8 @@ The relay runs every check below in its core, the same on every backend, before 
 | The frame is not too large. | Its length. | |
 | The relay knows the suite. | Header key 8, the suite id. | It is a number in the signed header. |
 | The signature is valid. | The author's public signing key, from the membership table, and the signed header bytes (RFC 0003, Ed25519, strict verification). | Encrypt-then-sign: the signature covers the ciphertext, so it verifies without decrypting (RFC 0003). |
-| The author is a member at the change's key generation and has not been removed. | The membership table: when each member was added and removed, and the space's key generations. | As above: control changes, readable by design. |
-| A control change obeys the membership rules. | The control body, which RFC 0002 makes readable to the relay. | Control bodies carry ids, public keys, wrapped keys and shred ids, never content. A key envelope is HPKE ciphertext to one member; the relay stores it and cannot open it. |
+| A sealed change's author may write it. | The header's author, author sequence and generation, against the membership table: the author's grants with their from generations, the revocations with their cutoffs, and the generation graph ([RFC 0008](0008-membership.md#sealed-changes)). | Numbers in signed headers and control bodies; nothing is decrypted. |
+| A control change obeys the membership rules. | `resolve` of [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) over the relay's log plus the change, the same code the members run; the control body, which RFC 0002 makes readable to the relay. | Control bodies carry ids, public keys, wrapped keys and shred ids, never content. A key envelope is HPKE ciphertext to one member; the relay stores it and cannot open it. |
 | A person-key record is acceptable (RFC 0003, decision 14). | The writer's signature over the record's clear fields and wrapped bytes; the person-key entries and shred entries in the log; the generation of the stored record. | Signature verification and ids only. The relay never unwraps the record; the commitment is checked by members. |
 | A shred entry is signed by a current member and signed off by a second account. | The member's signature, and the account key signature, against the member certificates in the membership table (RFC 0003). | Signature verification uses only public keys. |
 | The change is not already in the log. | The change id, which the relay computes from the frame (RFC 0002). | A hash of the bytes. |
@@ -208,12 +208,12 @@ The relay runs every check below in its core, the same on every backend, before 
 What the relay **does not** check, because it cannot without reading content, and what follows from that:
 
 - **Whether a sealed payload decrypts**, or what it says. A member that writes garbage under a valid signature gets it appended. Every other member detects it on decryption, keeps it marked as rejected, and the signature names the author (RFC 0003).
-- **The author's sequence numbers.** Two changes with the same author and sequence are an equivocation (RFC 0002). The relay appends both, because both are validly signed and refusing one would make the relay pick a winner. Members detect it.
+- **Equivocations.** Two changes with the same author and sequence are an equivocation (RFC 0002). The relay appends both, because both are validly signed and refusing one would make the relay pick a winner. Members detect it. The relay does compare a sealed change's author sequence with the cutoffs of revocations (see [What the relay checks](#what-the-relay-checks)), but that does not detect an equivocation inside a cutoff ([RFC 0008, The cutoff](0008-membership.md#the-cutoff)).
 - **The order of dependencies.** They are encrypted (RFC 0002). The relay appends in arrival order, and members fold in any order.
 
 Because every check works on public keys, signatures, hashes and control bodies, the relay, its operators and its backups never need, and never get, a key that decrypts content (principle 1). Nothing in this protocol carries a space key, a person key or plaintext to the relay: key envelopes and person-key records arrive wrapped, and the relay has no key to unwrap them.
 
-**Removed members.** From the position of a membership entry that removes a member, the relay refuses every change that member authored, also changes it wrote earlier under an older generation and that another member forwards later. The relay cannot tell when such a change was written, because the clock is encrypted, so it cannot accept "old" changes without also accepting new ones a removed member backdates. The cost is plain: a change a member wrote shortly before its removal, which never reached the relay, reaches other members only by direct exchange (decision R7).
+**Removed members.** A revocation names a cutoff: the subject's highest author sequence that the revoking admin held when it wrote the revocation ([RFC 0008, M3](0008-membership.md#the-cutoff)). The relay accepts the subject's changes at or below the cutoff, whenever they arrive and whoever forwards them, and refuses those above it. The cutoff is a number in a control body and the author sequence a number in every header, so the relay and every member reach the same verdict without the encrypted clock. A change the subject wrote before the revocation but that the revoking admin had not yet received lies above the cutoff and is refused; it reaches other members only by direct exchange, and they reject it too. A revoked member can still write a change under a sequence number at or below its cutoff that it already used: an equivocation, which members detect and report (decision R7, decided by RFC 0008's M3).
 
 ## What the relay sees
 
@@ -226,6 +226,7 @@ The relay holds no keys. Here is everything it learns anyway, stated plainly (pr
 - For each person-key record, its person-key id, its generation and the member id that wrote it, so how many people have personal data in the space, and when a record is added, re-wrapped or shredded. Never who the person is (RFC 0003).
 - For each change: the space, the author's member id and sequence number, the suite, the key generation, the size of the frame and when the relay received it.
 - For each shred entry, which person-key id was destroyed, which accounts signed it off, and which members acknowledged it (RFC 0003).
+- From the membership rules it applies: each member's role and when it changes, the cutoff of every revocation, which control changes each admin had seen when it wrote, which members belong to one account across spaces, the sub-agent tree, and the generation graph. [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) lists these (its decision M11).
 
 **From the protocol**:
 
@@ -279,9 +280,11 @@ pub trait RelayStore {
     async fn find(&self, space: SpaceId, change: ChangeId)
         -> Result<Option<Position>, StoreError>;
 
-    /// The membership table: one record per member id that was ever in the
-    /// space, with its public keys, roles, and the positions of its addition
-    /// and removal. Written only through `append` effects.
+    /// The membership table: `resolve` of RFC 0008 over the space's control
+    /// changes. Per member id that was ever in the space: its public keys and
+    /// certificate, its grants with their from generations, the revocations
+    /// with their cutoffs; per space: the generation graph. Written only
+    /// through `append` effects.
     async fn member(&self, space: SpaceId, member: MemberId)
         -> Result<Option<MemberRecord>, StoreError>;
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError>;
@@ -289,7 +292,8 @@ pub trait RelayStore {
     /// The person-key store (RFC 0003): opaque wrapped records.
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError>;
     /// Stores records the core has matched to their person-key entries.
-    /// There is no delete: records go only through a shred entry's effect.
+    /// There is no delete request: a record goes only through the effect of
+    /// a shred entry once that entry is stable (RFC 0008, M20).
     async fn put_person_keys(&self, space: SpaceId, records: Vec<PersonKeyRecord>)
         -> Result<(), StoreError>;
 
@@ -297,6 +301,10 @@ pub trait RelayStore {
     /// before the relay serves any request.
     async fn epoch(&self) -> Result<Epoch, StoreError>;
     async fn new_epoch(&self) -> Result<Epoch, StoreError>;
+
+    /// Delete the person-key records of shred entries that became stable.
+    async fn delete_person_keys(&self, space: SpaceId, ids: Vec<PersonKeyId>)
+        -> Result<(), StoreError>;
 
     /// Large frames: an upload URL, and reading what was uploaded.
     async fn begin_upload(&self, space: SpaceId, size: u64) -> Result<Upload, StoreError>;
@@ -318,7 +326,7 @@ The rules every backend must keep:
 
 - **Dense positions, without a gap and without a position used twice.** The append is conditional on the head, so two relay processes appending to one space at the same time cannot both win. The loser gets `HeadMoved` and the core retries.
 - **One change id, one position.** The check for a duplicate and the append are one atomic step.
-- **An append and its effects are atomic.** A membership entry and the membership table, a shred entry and the deletion of its person-key record, change together or not at all.
+- **An append and its effects are atomic.** A control change and the membership table change together or not at all. The deletion of a person-key record is not such an effect: it waits until its shred entry is stable, and the core requests it then (RFC 0008, M20).
 - **Exact bytes.** A backend returns the frame byte for byte as it was appended.
 - **Read your writes.** A read after a successful append sees the appended entries.
 - **A new epoch after any loss.** A backend restored from a backup, or one that may have lost appends for any other reason, draws a new epoch before it serves a request.
@@ -372,8 +380,8 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `log` | space id | position | change id, accepted at, author member id, kind, frame (inline) or S3 key and size | One item per change. A pull is one `Query` on the space from `position > after`, in order. |
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
-| `members` | space id | member id | signing key, agreement key, certificate, roles, added at (position), removed at (position) | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". |
-| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it (RFC 0003, decision 14); deleted only in the same transaction as a shred entry's append. |
+| `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008); deleted only when its shred entry is stable (RFC 0008, M20). |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -407,7 +415,7 @@ A restore from a backup, such as DynamoDB point-in-time recovery, brings back th
 So a restore always ends with a **new relay epoch**, before the relay serves any request:
 
 1. The operator restores the tables, and the restore procedure draws a new epoch. The relay refuses every request until it has done so.
-2. The relay re-applies the effects of every shred entry in the restored log, so no record survives that a shred in the restored log deleted.
+2. The relay re-applies the effects of every shred entry in the restored log that is stable, so no record survives that a stable shred in the restored log deleted.
 3. Each member sees the new epoch in `welcome`, or gets `epoch_changed` on a `pull` or `subscribe`. It then treats every position it stored for this relay as unconfirmed, pulls each space from 0 and folds nothing new twice, because it recognises changes by their ids. Finally it pushes every change the relay lacks, in its local order: its own, and the ones it received from others. The relay gives each change a position in the new epoch.
 4. Shred entries appended after the restore point come back in step 3, when the first member that holds one re-pushes it. Their effects delete the restored person-key records again.
 
@@ -487,18 +495,19 @@ Pulling first lets the member see a membership entry that removed it before it p
 **What island mode does not do.**
 
 - Changes made on an island reach the members on other islands only when a path exists again, through the relay or a peer.
-- The relay refuses changes from an author who was removed while the change was on its way (see [What the relay checks](#what-the-relay-checks)). Members that received such a change directly keep it; members that did not never see it. Every member still folds the changes it holds to the same state as any other member holding the same set, but the sets differ, and the SDK reports a change the relay rejected (decision R7).
+- The relay refuses a revoked author's changes above the revocation's cutoff, also when they were written on an island before the revocation (see [What the relay checks](#what-the-relay-checks)). Members reject them too, so the verdict is the same everywhere; the change stays in the logs of the members that hold it, and the SDK reports it (decision R7, RFC 0008's M3).
 - Nothing enforces one global truth at write time, on an island or off it (RFC 0001).
 - A relay that comes back after losing data, restored from a backup or empty, draws a new relay epoch, and its members repopulate it by their pushes (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). Members match changes by id (RFC 0002). How a space moves between relays on purpose is a later RFC.
 
-## What this RFC needs from RFC 0002 and RFC 0003
+## What this RFC needs from RFC 0002, RFC 0003 and RFC 0008
 
 | Need | From | Status |
 | --- | --- | --- |
 | The relay can compute a change id, the author, the key generation, the kind and the suite from the frame alone. | RFC 0002 | Met by its header and change ids. |
 | Control bodies (membership entries, key envelopes, key chain entries, shred entries) are readable by the relay and carry the public keys and certificate of an added member. | RFC 0002, RFC 0003 | Met: RFC 0003, "Sharing a space key with a new member", step 1 and 3. |
 | A key envelope names the member id it is for and its generation, readable by the relay, so that `keys` can return a member's own envelopes. | RFC 0003 | Met: RFC 0003 lists both as clear metadata. |
-| The first change of a space is a control change that names the creator as its first member, with its public keys, so the relay can accept a new space. | The membership RFC, still to be written | Open. This RFC assumes it and does not define it. |
+| The first change of a space is a control change that names the creator as its first member, with its public keys, so the relay can accept a new space. | [RFC 0008](0008-membership.md#the-first-change-of-a-space) | Met: the genesis. |
+| The membership rules the relay applies, the person-key entry, the cutoff and when an irreversible effect may happen. | [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) | Met; this RFC follows its Conflicts points 11 and 12. |
 | The member's signing key signs the relay challenge, with its own context string. | RFC 0003 | Met: RFC 0003, decision 13. |
 | Person-key entries with a commitment, signed person-key records, and shred entries with a second account's sign-off that the relay can verify. | RFC 0003 | Met: RFC 0003, decision 14. |
 | Person-key records carry their person-key id, generation and writer member id outside the wrapping. | RFC 0003 | Met: RFC 0003, decision 14. |
@@ -522,10 +531,10 @@ One line each; the decisions below give the options that remain.
 | AppSync (GraphQL subscriptions) | A GraphQL schema around opaque bytes adds a layer with nothing to describe, and pricing per operation is no better. |
 | A long-running server on EC2 | Costs money while idle, and needs patching; Fargate is the long-running option if one is needed (decision R3). |
 | The relay folds membership into its own format, independent of the log | The membership table must be rebuildable from the log; a second source of truth could disagree with the members' fold. |
-| The relay checks the author's sequence numbers | Refusing an equivocating change makes the relay choose a winner between two signed changes; members detect equivocation themselves (RFC 0002). |
+| The relay refuses equivocating changes | Refusing one of two signed changes makes the relay choose a winner; members detect equivocation themselves (RFC 0002). |
 | Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (RFC 0003, decision 14). |
 | Restoring a backup under the same epoch | Positions would be reused for different changes, and members past them would skip changes silently. |
-| The relay accepts changes of removed members written under an old generation | The relay cannot see when a change was written, so a removed member could keep writing under the old generation (decision R7). |
+| The relay judges a removed member's change by when it arrived, or by its generation | The relay's order is not the order members see on an island, and the relay cannot see when a change was written; the cutoff decides instead (decision R7, RFC 0008's M3). |
 
 ## Decisions for the owner
 
@@ -579,10 +588,11 @@ Recommendation: A. A relay that accepts spaces from anyone is a free storage ser
 
 **R7. Changes of a removed member that arrive late.**
 
-- A. The relay refuses every change of a removed author from the removal on. *(recommended, as RFC 0003 says)*
-- B. The relay accepts changes of a removed author under key generations before the removal.
+- A. The relay accepts a revoked author's changes at or below the revocation's cutoff and refuses those above it, as [RFC 0008](0008-membership.md#the-cutoff) defines. *(decided)*
+- B. The relay refuses every change of a removed author from the removal on, by the relay's order.
+- C. The relay accepts changes of a removed author under key generations before the removal.
 
-Recommendation: A. B would let a removed member keep writing under the old generation forever, because the relay cannot see when a change was written. The cost of A, stated in [Island mode](#island-mode): a change written just before a removal may never reach the members that did not receive it directly.
+Decided: A, through RFC 0008's decision M3 (Carsten, 2026-11-08). B depends on the relay's order, which members on an island do not have, so the relay and the members could reach different verdicts. C would let a removed member keep writing under the old generation forever, because the relay cannot see when a change was written. The cost of A, stated in [What the relay checks](#what-the-relay-checks): a change a member wrote before its revocation that the revoking admin had not yet received is refused everywhere, and an equivocation inside the cutoff is accepted and reported.
 
 **R8. The AWS region.**
 
