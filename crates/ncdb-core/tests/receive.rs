@@ -14,7 +14,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use ncdb_core::cbor::Value;
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::SpaceId;
-use ncdb_core::log::{Appended, ParkReason, Position, State};
+use ncdb_core::log::{Appended, ParkReason, Position, RejectReason, State};
 use ncdb_core::receive::ReceiveError;
 
 use member::*;
@@ -123,4 +123,108 @@ fn a_raw_append_carries_no_member_state() {
     let change = Change::decode(&sealed(FOUNDER, 1, 0, vec![])).unwrap();
     m.log.append(change.clone()).unwrap();
     assert_eq!(m.log.state(change.id()), None);
+}
+
+fn rejected(m: &mut Member, bytes: &[u8], reason: RejectReason) {
+    let change = m.receive(bytes);
+    assert_eq!(m.state(&change), State::Rejected(reason));
+    assert!(m.fold.folded.is_empty());
+}
+
+#[test]
+fn step_3_an_author_no_membership_entry_names_is_rejected_as_unknown_author() {
+    rejected(
+        &mut with_key(),
+        &sealed(5, 1, 0, vec![set_title(1)]),
+        RejectReason::UnknownAuthor,
+    );
+}
+
+#[test]
+fn step_3_a_signature_that_does_not_verify_is_rejected_as_bad_signature() {
+    let header = sealed_header(FOUNDER, 2, 0, payload(vec![set_title(1)]));
+    rejected(&mut with_key(), &frame(header, BAD), RejectReason::BadSignature);
+}
+
+#[test]
+fn step_4_an_author_who_is_not_a_member_at_the_generation_is_rejected() {
+    let mut m = with_key();
+    m.receive(&membership(FOUNDER, 2, 5, 1));
+    rejected(
+        &mut m,
+        &sealed(5, 1, 0, vec![set_title(1)]),
+        RejectReason::NotMember,
+    );
+}
+
+#[test]
+fn step_4_a_control_change_of_a_non_member_is_rejected() {
+    let mut m = Member::default();
+    m.receive(&membership(FOUNDER, 1, 5, 1));
+    rejected(&mut m, &envelope(5, 1, 0), RejectReason::NotMember);
+    assert!(m.control.keys.is_empty(), "a rejected control change is not added");
+}
+
+#[test]
+fn step_5_a_change_without_a_key_envelope_is_rejected_as_no_key() {
+    rejected(
+        &mut Member::default(),
+        &sealed(FOUNDER, 1, 0, vec![set_title(1)]),
+        RejectReason::NoKey,
+    );
+}
+
+#[test]
+fn step_5_a_payload_that_does_not_decrypt_is_rejected_as_undecryptable() {
+    let header = sealed_header(FOUNDER, 2, 0, GARBLED.to_vec());
+    rejected(&mut with_key(), &frame(header, GOOD), RejectReason::Undecryptable);
+}
+
+fn parked_at_step_6(plaintext: Vec<u8>, reason: ParkReason) {
+    let mut m = with_key();
+    let change = m.receive(&frame(sealed_header(FOUNDER, 2, 0, plaintext), GOOD));
+    assert_eq!(m.state(&change), State::Parked(reason));
+    assert!(m.fold.folded.is_empty());
+}
+
+#[test]
+fn step_6_an_unknown_payload_format_parks_the_change() {
+    let mut p = ncdb_core::change::Payload::decode(&payload(vec![set_title(1)])).unwrap();
+    p.format = 2;
+    parked_at_step_6(p.encode(), ParkReason::UnknownPayloadFormat);
+}
+
+#[test]
+fn step_6_a_payload_this_core_cannot_read_parks_the_change_as_unknown_format() {
+    // A newer payload format may not have the keys of format 1 at all.
+    parked_at_step_6(vec![0xa0], ParkReason::UnknownPayloadFormat);
+}
+
+#[test]
+fn step_6_an_unknown_must_understand_payload_key_parks_the_change() {
+    let mut p = ncdb_core::change::Payload::decode(&payload(vec![set_title(1)])).unwrap();
+    assert!(p.insert_extension(9, Value::Unsigned(1)));
+    parked_at_step_6(p.encode(), ParkReason::UnknownPayloadKey);
+}
+
+#[test]
+fn the_steps_run_in_order_and_the_first_failing_one_decides() {
+    // Unknown suite (step 2) beats an unknown author (step 3).
+    let mut header = sealed_header(5, 1, 0, GARBLED.to_vec());
+    header.suite = 2;
+    parked_at_step_2(header, ParkReason::UnknownSuite);
+    // An unknown author (step 3) beats a missing key (step 5).
+    rejected(
+        &mut Member::default(),
+        &frame(sealed_header(5, 1, 0, GARBLED.to_vec()), BAD),
+        RejectReason::UnknownAuthor,
+    );
+    // Not a member (step 4) beats a payload that does not decrypt (step 5).
+    let mut m = with_key();
+    m.receive(&membership(FOUNDER, 2, 5, 1));
+    rejected(
+        &mut m,
+        &frame(sealed_header(5, 1, 0, GARBLED.to_vec()), GOOD),
+        RejectReason::NotMember,
+    );
 }
