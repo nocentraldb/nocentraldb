@@ -4,6 +4,15 @@
       {
         "hooks": [
           {
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node scripts/session-start-git.mjs",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
             "command": "nxf prime",
             "type": "command"
           }
