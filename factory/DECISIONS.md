@@ -248,6 +248,36 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: one database per member; the view's layout is not a stable format, only the log is; rusqlite everywhere, with opfs-sahpool in a dedicated worker in the browser; one tab owns the database; UTF-8 byte order in indexes; device disk encryption instead of an encrypted database for v1; synchronous = FULL; persistent storage requested by the SDK; secure_delete on.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0006-local-view.md`.
 
+### 2026-11-08 · NOC-19 · The harness reports which contract property a case breaks, and shrinks within it
+
+- Decided by: coding agent (NOC-19)
+- Why: a broken fixture must be reported as the property it violates (C6), so the harness checks a case in a fixed order (C1 state bytes, C2 double application, C7 reads, C4 outcomes) and shrinks only towards cases that break the same property as the first failure. A divergence whose minimal case still needs a duplicate delivery is reported as C2, one that still needs a malformed operation as C5.
+- Instead of: one pass/fail verdict, which cannot prove that each check fires on its own; or letting proptest shrink across properties, which reported a C1 divergence as a C2 double application on some seeds.
+
+### 2026-11-08 · NOC-19 · Simulated members learn arbitrary earlier operations, not causally closed sets
+
+- Decided by: coding agent (NOC-19)
+- Why: RFC 0004 says no field type may rely on causal delivery, so before each operation a member learns a random subset of earlier operations, without what their authors had seen. C4 checks "replaced" against exactly that set.
+- Instead of: learning an operation together with everything its author had seen, which would hide merge rules that assume causal delivery.
+
+### 2026-11-08 · NOC-19 · C4 does not check what a malformed operation claims its author had seen
+
+- Decided by: coding agent (NOC-19)
+- Why: a malformed operation's body can claim to have seen anything, and the harness cannot tell a lie from a claim; C4 still requires every copy to give it the same outcome, and C1/C5 still require convergence.
+- Instead of: holding malformed replacers to the simulated member's view, which would reject every type that, like RFC 0004's rules, trusts the dependencies a change carries.
+
+### 2026-11-08 · NOC-19 · C3 is a committed SHA-256 over the final state bytes, with sha2
+
+- Decided by: coding agent (NOC-19)
+- Why: the same test runs natively and in wasm32 (NOC-10) and compares with one committed value, so neither run needs the other's output. `sha2 =0.11.1` is the audited crate and version PR #41 pins for change ids; the harness uses that same dependency, so it adds nothing to the shipped crate.
+- Instead of: hashing with a hand-written function (GENESIS.md: never invent cryptography), or comparing the two runs' outputs in a separate script.
+
+### 2026-11-08 · NOC-19 · A panic in apply fails the test instead of becoming a reported C5 violation
+
+- Decided by: coding agent (NOC-19)
+- Why: on wasm32 a panic aborts and cannot be caught, and behaviour must not fork by platform (principle 7); a panic still fails the gate on both targets. The C5 fixture breaks convergence on malformed operations instead of panicking.
+- Instead of: catching panics natively with `catch_unwind`, which would report C5 on one target only.
+
 ### 2026-11-08 · NOC-20 · RFC 0001 states browser eviction without linking RFC 0006
 
 - Decided by: coding agent (NOC-20)
