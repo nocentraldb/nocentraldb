@@ -6,15 +6,26 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+# The change and the log (RFC 0002, NOC-14). Every dependency is pinned to one
+# exact version.
+[dependencies]
+# The CBOR tokens of the canonical encoding; the profile's restrictions are
+# checked in src/cbor.rs.
+minicbor = { version = "=2.3.1", default-features = false, features = ["alloc"] }
+# Change ids are SHA-256 in every suite (RFC 0002, "Change ids").
+sha2 = { version = "=0.11.1", default-features = false }
+# Object and space ids: 128 bits from the platform's secure generator,
+# crypto.getRandomValues in the browser (RFC 0002, "Object ids").
+getrandom = { version = "=0.4.3", default-features = false }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
+
 [dev-dependencies]
 # The convergence harness (tests/support/convergence.rs) generates and shrinks
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).
 proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
-# C3 of RFC 0004: the harness digests the final state bytes of a fixed seed
-# list with SHA-256, and the native and the wasm32 run compare the digest with
-# the same committed value. The version PR #41 pins for change ids.
-sha2 = { version = "=0.11.1", default-features = false }
 
 # The test-wasm task (crates/ncdb-core/moon.yml) runs the tests on wasm32
 # with wasm-bindgen-test. The runner, wasm-bindgen-cli, must be the version of
