@@ -1,11 +1,12 @@
 # CI is the one full, trustworthy run: the uncached project gate `pnpm gates`
 # for every project, never `moon ci` (affected-only) and never moon's task
 # cache. Only self-validating caches are reused: the Cargo registry and
-# target dir, the pnpm store, and the proto tool installs that
-# setup-toolchain caches itself (~/.proto, keyed on .prototools).
+# target dir, the pnpm store, and the proto toolchain (~/.proto, keyed
+# exactly on .prototools and scripts/install-toolchain.sh).
 # The job is bounded in time, superseded pull-request runs are cancelled while
 # every push to main runs to the end, and the Cargo cache is bounded in size.
-# scripts/ci-workflow.test.mjs asserts these rules.
+# scripts/ci-workflow.test.mjs asserts these rules, and
+# scripts/toolchain-workflow.test.mjs the toolchain cache and its install.
 name: ci
 
 on:
@@ -36,10 +37,22 @@ jobs:
       # checkout lacks; `pnpm gates` pins --base HEAD --head HEAD for that.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # Installs proto, then moon, node and pnpm as pinned in .prototools.
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # proto, then moon, Node and pnpm as .prototools pins them, restored
+      # from the Actions cache. One exact key and no restore-keys, as for
+      # Cargo: a warm cache downloads nothing, and a change to .prototools
+      # or to proto's version in the script installs cold. The script
+      # retries a cold download and names the host if it keeps failing.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
 
       - name: Rust toolchain from rust-toolchain.toml
         run: |

@@ -93,10 +93,20 @@ jobs:
           # dependency install below could read it; only the release step
           # gets it, as GH_TOKEN.
           persist-credentials: false
+      # The toolchain from an exact-key cache; see ci.yml.
       - if: steps.guard.outputs.skip != 'true'
-        uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - if: steps.guard.outputs.skip != 'true'
+        name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - if: steps.guard.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile
       - name: Next version
@@ -171,9 +181,18 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - run: rustup toolchain install --no-self-update
       - run: pnpm install --frozen-lockfile
       # verify-tag reads the release branch as origin/release/X.Y, which a
@@ -205,9 +224,18 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - run: rustup toolchain install --no-self-update
       - run: pnpm install --frozen-lockfile
       # The tag is vX.Y.Z or vX.Y.Z-beta.N; the version to embed drops the v.
@@ -252,9 +280,18 @@ jobs:
           # dependency install below could read it; only the release step
           # gets it, as GH_TOKEN.
           persist-credentials: false
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
       - name: Release notes
         env:
@@ -318,9 +355,18 @@ jobs:
           # As in publish: the token is not left in .git/config; the commit
           # step below hands it to git for the push only.
           persist-credentials: false
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
       # The push with the job's token starts no ci run; the next pull
       # request's gate covers release-notes/ and changes/ (index test,
