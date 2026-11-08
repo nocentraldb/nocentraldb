@@ -73,6 +73,9 @@ tasks:
     # build-wasm task fails on it. scripts/decisions.test.mjs tests the
     # decision log tooling and reads factory/ and this file;
     # scripts/check-file-size.test.mjs reads this file too.
+    # scripts/session-start-git.test.mjs runs the session start's git repair
+    # in throwaway repositories, and scripts/session-start-wiring.test.mjs
+    # reads .claude/settings.json and factory/roles/coder.md (NOC-52).
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -93,6 +96,7 @@ tasks:
       - "/crates/*/moon.yml"
       - "/packages/*/moon.yml"
       - "/AGENTS.md"
+      - "/.claude/**/*"
       - "/factory/**/*"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
