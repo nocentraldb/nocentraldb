@@ -17,6 +17,8 @@
 
 use std::fmt;
 
+use ed25519_dalek::{Signature, Signer, VerifyingKey};
+
 use crate::change::{Change, ChangeError, Header, Payload};
 use crate::ids::SpaceId;
 use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
@@ -57,8 +59,19 @@ pub enum OpenError {
 
 impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = f;
-        todo!()
+        match self {
+            OpenError::NotSealed(kind) => write!(f, "the change is not sealed: kind {kind}"),
+            OpenError::UnknownSuite(suite) => write!(f, "unknown suite {suite}"),
+            OpenError::AuthorMismatch => {
+                f.write_str("the header's author is not the member of these public keys")
+            }
+            OpenError::AuthorKey => f.write_str("the author's public key is not an Ed25519 key"),
+            OpenError::Signature => f.write_str("the signature does not verify"),
+            OpenError::Decryption => {
+                f.write_str("the payload does not decrypt under the key the header names")
+            }
+            OpenError::Payload(error) => write!(f, "the decrypted payload is invalid: {error}"),
+        }
     }
 }
 
@@ -67,15 +80,20 @@ impl std::error::Error for OpenError {}
 /// The header signed by the author: the change of these header bytes and
 /// their Ed25519 signature.
 pub fn sign(author: &MemberKey, header: Header) -> Change {
-    let _ = (author, header);
-    todo!()
+    let signature = author.signing().sign(&header.encode());
+    Change::new(header, signature.to_bytes().to_vec())
 }
 
 /// Verifies the change's signature against the author's public keys,
 /// strictly, without any space key. This is what the relay can check.
 pub fn verify(change: &Change, author: &MemberPublicKey) -> Result<(), OpenError> {
-    let _ = (change, author);
-    todo!()
+    if change.header().author != author.id() {
+        return Err(OpenError::AuthorMismatch);
+    }
+    let key = VerifyingKey::from_bytes(&author.signing).map_err(|_| OpenError::AuthorKey)?;
+    let signature = Signature::from_slice(change.signature()).map_err(|_| OpenError::Signature)?;
+    key.verify_strict(change.header_bytes(), &signature)
+        .map_err(|_| OpenError::Signature)
 }
 
 /// The payload, padded as sealing pads it: the canonical encoding is a
