@@ -1,14 +1,19 @@
 // Fails when a tracked code or test file is longer than the limit that
 // factory/CONFIG.md sets in its row "Largest code or test file" (NOC-43).
-// Code is every file git tracks with one of the extensions below. Runs from
-// the repository root (scripts/check-file-size.test.mjs runs it in fixture
-// repositories). Node built-ins and git only.
+// Code is every file git tracks with one of the extensions below, outside
+// node_modules/ and target/. Runs from the repository root
+// (scripts/check-file-size.test.mjs runs it in fixture repositories). Node
+// built-ins and git only.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 const CONFIG = "factory/CONFIG.md";
 const ROW = /^\|\s*Largest code or test file\s*\|\s*(\d+) lines\b/m;
 const CODE = /\.(rs|ts|tsx|js|mjs|cjs|sh|py)$/;
+// Not written by hand: installed packages and build output, at any depth.
+// Lock files and docs carry no code extension, so CODE leaves them out.
+const GENERATED = /(^|\/)(node_modules|target)\//;
+const isChecked = (path) => CODE.test(path) && !GENERATED.test(path);
 
 /** Lines as wc counts them, plus a last line that has no newline. */
 const countLines = (text) => {
@@ -30,11 +35,11 @@ if (!limitRow) {
 }
 const LIMIT = Number(limitRow[1]);
 
-const tracked =execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
+const tracked = execFileSync("git", ["ls-files", "-z"], { encoding: "utf8" })
   .split("\0")
   .filter(Boolean);
 
-for (const file of tracked.filter((path) => CODE.test(path))) {
+for (const file of tracked.filter(isChecked)) {
   const count = countLines(readFileSync(file, "utf8"));
   if (count > LIMIT) {
     fail(
