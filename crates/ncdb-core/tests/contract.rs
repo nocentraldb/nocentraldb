@@ -113,7 +113,7 @@ impl Mergeable for Register {
 /// its author had seen.
 struct Writes;
 
-impl Generator<Register> for Writes {
+impl<S: Mergeable<Change = Write>> Generator<S> for Writes {
     /// How far the stamp moves past the author's highest seen stamp, and the
     /// value.
     type Raw = (u8, u8);
@@ -122,7 +122,7 @@ impl Generator<Register> for Writes {
         (0u8..3, any::<u8>()).boxed()
     }
 
-    fn make(&self, author: &Author<'_, Register>, &(step, value): &(u8, u8)) -> Write {
+    fn make(&self, author: &Author<'_, S>, &(step, value): &(u8, u8)) -> Write {
         let highest = author.seen.iter().map(|op| op.body.stamp).max();
         Write {
             stamp: highest.map_or(0, |stamp| stamp + 1) + u64::from(step),
@@ -152,7 +152,7 @@ impl Generator<Register> for RecordingWrites {
     type Raw = (u8, u8);
 
     fn raw(&self, member: Member) -> BoxedStrategy<(u8, u8)> {
-        Writes.raw(member)
+        Generator::<Register>::raw(&Writes, member)
     }
 
     fn make(&self, author: &Author<'_, Register>, raw: &(u8, u8)) -> Write {
@@ -206,4 +206,57 @@ fn generators_know_what_each_member_had_seen() {
     }
     assert!(learned, "no member ever saw another member's operation");
     assert!(concurrent, "no two operations were ever concurrent");
+}
+
+/// Runs `S` with the register's writes and expects the harness to report
+/// that it breaks `property` (C6: the checks fire).
+fn expect_violation<S: Mergeable<Change = Write>>(property: &str) -> convergence::Violation {
+    let violation = convergence::check::<S, _>(&Config::default(), &Writes)
+        .expect_err("the harness passed a broken fixture");
+    let report = violation.to_string();
+    assert!(
+        report.starts_with(&format!("{property} ")),
+        "expected {property}, got: {report}"
+    );
+    violation
+}
+
+/// Broken on purpose (C7): keeps the order of arrival beside the register,
+/// outside its state bytes, and reads the first live write to arrive.
+/// Copies with equal state bytes read different values.
+#[derive(Clone, Debug, Default)]
+struct ReadsArrival {
+    register: Register,
+    arrived: Vec<OpId>,
+}
+
+impl Mergeable for ReadsArrival {
+    type Change = Write;
+    type Read = Option<u8>;
+
+    fn apply(&mut self, op: &Op<Write>) {
+        if !self.arrived.contains(&op.id) {
+            self.arrived.push(op.id);
+        }
+        self.register.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        self.register.state_bytes()
+    }
+
+    fn read(&self) -> Option<u8> {
+        let live = self.register.live();
+        let first = self.arrived.iter().find(|id| live.contains(id))?;
+        Some(self.register.writes[first].1.value)
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        self.register.outcome(id)
+    }
+}
+
+#[test]
+fn c7_reads_are_compared_alongside_state_bytes() {
+    expect_violation::<ReadsArrival>("C7");
 }
