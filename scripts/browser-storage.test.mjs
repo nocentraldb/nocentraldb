@@ -139,6 +139,24 @@ test("a private window without OPFS shows the browser's error", () => {
   );
 });
 
+test("after closing a private window without OPFS, SQLite reads as no OPFS", () => {
+  const rows = measuredRows(
+    run({
+      webkit: engine({
+        private: {
+          opfs: "UnknownError: failed",
+          idb: "ok",
+          afterClose: { sqlite: "error: UnknownError: failed", idb: "lost" },
+        },
+      }),
+    }),
+  );
+  assert.equal(
+    find(rows, "WebKit (Playwright)", "Private window: after close").finding,
+    "SQLite: no OPFS, IndexedDB lost",
+  );
+});
+
 test("tableRows reads the first table under a heading", () => {
   const markdown = [
     "# Doc",
