@@ -5,7 +5,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-8
 **Changelog.**
 
 - **2026-11-07** · NOC-8 · The owner accepted decisions 1 to 7.
-- **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add and remove inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. It proposes decisions 8 to 13 for the owner. The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add, remove and an object's delete inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. It proposes decisions 8 to 14 for the owner. The sentences it changes elsewhere are marked *(Amendment 1)*.
 
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
@@ -250,7 +250,7 @@ What the contract does not check: whether the merge does what users expect, how 
 
 ## Decisions for the owner
 
-GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07). [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) adds decisions 8 to 13, which wait for the owner *(Amendment 1)*.
+GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07). [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) adds decisions 8 to 14, which wait for the owner *(Amendment 1)*.
 
 1. **What basic values keep when writes conflict.**
    - A: Last writer wins on read, losing writes stay as conflicts until someone writes having seen them (this RFC). Recommended: keeps RFC 0001's promise and principle 3.
@@ -296,9 +296,9 @@ It names these conflicts and limits for the owner and pm:
 
 Added on 2026-11-08 for NOC-37, after this RFC was merged. [RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This RFC defined the operations of basic values, sets and links by their meaning only: set with the writes it replaces, add with its tag, remove with the tags it observed. No RFC said how one becomes the other. The implementation of basic values (NOC-16, pull request #51) found the gap and did not guess. Without it, the fold cannot read field values from real changes.
 
-The encoding is a wire format, which GENESIS.md reserves for the owner. This amendment proposes decisions 8 to 13 in [Decisions for the owner (8 to 13)](#decisions-for-the-owner-8-to-13); the pull request that adds it is the owner's sign-off. The sentences it describes are its recommended options. It changes no merge rule: state, apply, read and outcome above stay as they are. It changes nothing in RFC 0002 either: it fills in what RFC 0002 left to the field type. The sentences it changes elsewhere in this RFC are marked *(Amendment 1)*.
+The encoding is a wire format, which GENESIS.md reserves for the owner. This amendment proposes decisions 8 to 14 in [Decisions for the owner (8 to 14)](#decisions-for-the-owner-8-to-14); the pull request that adds it is the owner's sign-off. The sentences it describes are its recommended options. It changes no merge rule: state, apply, read and outcome above stay as they are. It changes nothing in RFC 0002 either: it fills in what RFC 0002 left to the field type. The sentences it changes elsewhere in this RFC are marked *(Amendment 1)*.
 
-Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
+It also says how an object's deletion travels, because the fold of creates and deletions (NOC-39) needs it: [owner decision 4](#decisions-for-the-owner) already made deletion a boolean basic value of the object, so this amendment only gives it an operation and an encoding. Everything else about deletion (who may delete, what a deleted object shows) stays with the later RFC on deletion. Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
 
 ### Where field operations sit in a change
 
@@ -326,7 +326,7 @@ operation id (CBOR array of two)
 - **Key 4** carries the operation's number.
 - **Key 5** carries the operation's arguments. RFC 0002 calls key 5 the value and lets the field type define its shape. For the types of this RFC it holds the value together with `replaces` or `observed`, because the merge rules need both. Key 5 is present in every operation of this RFC.
 - **The operation's own id is not encoded.** It is the change id plus the operation's position in the array (RFC 0002, Operation ids). The tag of a set addition is that id, so an add carries no tag of its own.
-- **The field's type is not encoded either.** A member finds it in its `model.lock.json`, from the collection and field names (keys 2 and 3), and reads the operation number in the context of that type.
+- **The field's type is not encoded either.** A member finds it in its `model.lock.json`, from the collection and field names (keys 2 and 3), and reads the operation number in the context of that type. An operation without a field (key 3 absent) is a create or a delete of the object.
 
 The frame, the header and the rest of the payload do not change. Every byte of this amendment sits inside the payload, which is encrypted (see [What the relay sees](#what-the-relay-sees)).
 
@@ -338,7 +338,8 @@ The frame, the header and the rest of the payload do not change. Every byte of t
 | 1         | **set**                       | basic value (string, number, boolean, choice), link (one target) | `{1: value, 2: replaces}`             |
 | 2         | **add**                       | set, links (many targets)                                        | `{1: element, 2: replaces}`           |
 | 3         | **remove**                    | set, links (many targets)                                        | `{1: element, 3: observed}`           |
-| 4 to 63   | reserved                      | later built-in types: rich text, streams, personal fields        | defined by their RFCs                 |
+| 4         | **delete**                    | none: it writes whether the object is deleted                    | `{1: true or false, 2: replaces}`; key 3 absent |
+| 5 to 63   | reserved                      | later built-in types: rich text, streams, personal fields        | defined by their RFCs                 |
 | 64 and up | reserved for plugin types     | each plugin type numbers its own operations                      | defined by the plugin                 |
 
 The rules for the numbers:
@@ -346,7 +347,7 @@ The rules for the numbers:
 - **One table for the built-in types.** A number means at most one operation across all built-in types: add is 2 on a set field and on a links field alike, and 2 is never set on another built-in type. A remove sent to a basic value is therefore an operation the type does not define, and is parked (see [Operations a member does not understand](#operations-a-member-does-not-understand)), instead of being misread as one of the type's own operations. A log or an error can name an operation without the field's type.
 - **A number is never reused or redefined.** A retired operation keeps its number reserved.
 - **Plugin types start at 64.** A plugin type numbers its operations from 64 up, within its own type id; two plugin types may use the same number, because the field's type in `model.lock.json` tells them apart. Until a plugin RFC says otherwise, a plugin is Rust compiled into the core ([Rejected options](#rejected-options)).
-- **Number 0 is RFC 0002's create** for every collection. No field type defines it.
+- **Numbers 0 and 4 belong to the object**, for every collection: 0 is RFC 0002's create, 4 is delete (see [Creating and deleting an object](#creating-and-deleting-an-object)). No field type defines them.
 
 ### The arguments of each operation
 
@@ -384,6 +385,20 @@ A reader still accepts a change with several operations on one field and applies
 
 **Depth.** RFC 0002's decoder allows 32 levels counted from the frame: the frame at depth 1, the header map at 2, the payload map at 3 (decision log, NOC-14, pending the owner in NOC-24). Below them sit the operation array (4), the operation map (5), the arguments map (6), the value and the lists of ids (7), an operation id (8), and its change id and position (9). A value therefore nests at most 26 levels, counting itself. A basic value, a set element and a link target are one level. The SDK refuses to write a deeper value. A payload that holds one does not decode after decryption, so nothing of its change is folded; which log state such a change takes is RFC 0002's question (NOC-38, RFC 0002 Amendment 2), not this amendment's.
 
+### Creating and deleting an object
+
+[Owner decision 4](#decisions-for-the-owner) made deletion a basic boolean value of the object, and [Two creates of one object id](#two-creates-of-one-object-id) made the object's collection a basic value fed by its creates. Both travel as operations on the object, with no field (key 3 absent):
+
+- **create** (number 0, RFC 0002) writes `{1: object id, 2: collection, 4: 0}`, without key 5. Its collection (key 2) is the value it writes; it replaces nothing, as RFC 0004 says, so it carries no arguments.
+- **delete** (number 4) writes `{1: object id, 2: collection, 4: 4, 5: {1: deleted, 2: replaces}}`. The arguments are set's: `true` deletes the object, `false` restores it, and `replaces` names the deletes of this object, winner and conflicts, that the author's copy held. It merges as a basic value: the last writer wins, and a delete that lost stays readable as a conflict. Before any delete, an object is not deleted.
+
+Rules for delete:
+
+- **It belongs to the object, not to the collection it names.** Key 2 is required by RFC 0002 and holds the collection the author's copy showed for the object. The deletion state is the object's, whichever collection a delete names. A delete that names a collection the member's model does not know is parked like any operation on an unknown collection (RFC 0002, Versioning).
+- **A value other than `true` reads as not deleted.** A value of the wrong kind is applied, as for every basic value ("The value" above), and reads as not deleted; this is what NOC-17's object model does.
+- **A delete with key 3 present is malformed.** It is parked with the reason "malformed arguments", like a delete without key 5 or without `replaces`.
+- **A create and a delete are independent.** A create neither deletes nor restores, and a delete does not need the create to have arrived: it is kept, and applies to the object once it exists, as a link to a missing target is kept (RFC 0004, Links).
+
 ### Operations a member does not understand
 
 RFC 0002 Amendment 1 (D10) decides parking per operation, in its fold step 7. This amendment adds the cases of an operation on a field the member's model knows:
@@ -393,7 +408,7 @@ RFC 0002 Amendment 1 (D10) decides parking per operation, in its fold step 7. Th
 | has a number the field's type does not define, for example 9 on a basic value, or 3 (remove) on a basic value                       | parks it, with the reason "unknown operation"; the rest of the change is folded  |
 | has an argument key from 4 to 63 that the operation does not define                                                                 | parks it, with the reason "unknown argument"                                     |
 | has an argument key from 64 up that the operation does not define                                                                   | applies it as if the key were absent                                             |
-| has malformed arguments: key 5 missing or not a map, a required key missing, a list that is not an array, or an item of a list that is not `[32-byte byte string, unsigned integer]` | parks it, with the reason "malformed arguments" ([decision 12](#decisions-for-the-owner-8-to-13)) |
+| has malformed arguments: key 5 missing or not a map, a required key missing, a list that is not an array, or an item of a list that is not `[32-byte byte string, unsigned integer]` | parks it, with the reason "malformed arguments" ([decision 12](#decisions-for-the-owner-8-to-14)) |
 | has a value outside the field's kind                                                                                                | applies it (see "The value" above)                                               |
 | names ids it never saw, or forms a cycle with another operation                                                                     | applies it, as [Why it converges](#why-it-converges) says                        |
 
@@ -414,9 +429,10 @@ Each example is one operation map, as it sits in the payload's operation array, 
 
 - object `T1`: 16 bytes of `11`; link target `T2`: 16 bytes of `22`;
 - change ids `A`: 32 bytes of `aa`, and `B`: 32 bytes of `bb`;
+- change id `A` also names the delete in E14;
 - the collection `tasks` with the fields `title` (string), `priority` (integer), `tags` (set of strings), `parent` (link) and `dependsOn` (links).
 
-The bytes are written by [`vectors/0004/generate.py`](vectors/0004/generate.py) from the descriptions below, with Python's cbor2 6.2.1 in canonical mode, into `vectors/0004/E1.hex` to `E11.hex`. `scripts/rfc-0004-examples.test.mjs` checks, in `pnpm gates`, that each example's hex below decodes under RFC 0002's profile with a strict reader of its own, encodes again to the same bytes, and equals the committed vector. The bytes were also decoded and re-encoded to the same bytes by `ncdb_core::cbor`, outside the gate. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from these examples and commit them as test vectors.
+The bytes are written by [`vectors/0004/generate.py`](vectors/0004/generate.py) from the descriptions below, with Python's cbor2 6.2.1 in canonical mode, into `vectors/0004/E1.hex` to `E14.hex`. `scripts/rfc-0004-examples.test.mjs` checks, in `pnpm gates`, that each example's hex below decodes under RFC 0002's profile with a strict reader of its own, encodes again to the same bytes, and equals the committed vector. The bytes were also decoded and re-encoded to the same bytes by `ncdb_core::cbor`, outside the gate. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from these examples and commit them as test vectors.
 
 **E1. set, the first write to a string.** `title` becomes "Ship v1"; nothing is replaced.
 
@@ -547,6 +563,39 @@ a501501111111111111111111111111111111102657461736b7303657469746c
 65040105a3016753686970207631028018406468696e74
 ```
 
+**E12. create, an object.** `T1` is created in `tasks`. No field, no arguments.
+
+```text
+{1: h'1111…11', 2: "tasks", 4: 0}
+```
+
+```text
+a301501111111111111111111111111111111102657461736b730400
+```
+
+**E13. delete, an object.** `T1` is deleted; no delete of it was held before.
+
+```text
+{1: h'1111…11', 2: "tasks", 4: 4, 5: {1: true, 2: []}}
+```
+
+```text
+a401501111111111111111111111111111111102657461736b73040405a201f5
+0280
+```
+
+**E14. delete, a restore.** `T1` is restored with `false`, replacing the delete `[A, 3]`.
+
+```text
+{1: h'1111…11', 2: "tasks", 4: 4, 5: {1: false, 2: [[h'aaaa…aa', 3]]}}
+```
+
+```text
+a401501111111111111111111111111111111102657461736b73040405a201f4
+0281825820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaa03
+```
+
 ### What the relay sees
 
 Nothing changes for the relay. Field operations, their numbers, values, `replaces` and `observed` live only inside the payload, which is AEAD ciphertext (RFC 0002, The payload). The header, the frame and control changes are untouched, and the relay still sees exactly what [RFC 0002 lists](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot).
@@ -555,10 +604,12 @@ One effect is stated plainly (principle 4): `replaces` and `observed` make the p
 
 ### What this means for the RFCs and tickets built on it
 
-- **NOC-16 and NOC-17** encode and decode set, add and remove as above, and take E1 to E11 as test vectors. The encoders and decoders themselves are built after this amendment is merged, in those tickets or in a ticket pm opens for them.
+- **NOC-16 and NOC-17** encode and decode set, add and remove as above, and take E1 to E11 as test vectors.
+- **NOC-39** builds the fold of creates and deletions from [Creating and deleting an object](#creating-and-deleting-an-object), with E12 to E14 as test vectors. The encoders and decoders themselves are built after this amendment is merged, in those tickets or in a ticket pm opens for them.
 - **RFC 0002** needs no change. Its sentence "RFC 0004 defines it for basic values, sets and links" now points here.
 - **The personal fields RFC** decides where the sealed personal value sits. RFC 0002 puts it in key 5; with arguments in key 5, the natural place is argument 1, which leaves `replaces` readable to members, not to the relay. That RFC decides; nothing here depends on it.
 - **The migrations RFC** inherits the rule that a new operation is a new rule version.
+- **The later RFC on deletion** keeps everything but the encoding: who may delete or restore, what an app sees of a deleted object, and how deletion meets compaction and erasure.
 
 ### Rejected options
 
@@ -575,9 +626,12 @@ One effect is stated plainly (principle 4): `replaces` and `observed` make the p
 | Rejecting an unsorted or repeating list                                                    | A new failure mode that buys no convergence: the state depends on the set of ids only.                                                                                                                                       |
 | Reading malformed arguments leniently, for example a missing `replaces` as empty          | Converges, but a write without `replaces` would silently turn into a conflict, and each version of the core could be lenient in other ways.                                                                                  |
 | Rejecting the whole change for one malformed operation                                     | Rejected is for the checks of RFC 0002 Amendment 1 (signature, membership, key), which cover the whole change. One bad operation would hide its change's other operations from every member.                               |
+| Deletion as a set (number 1) on a reserved field name, such as `$deleted`                  | Every collection's names would need a reserved name the schema must refuse, and an old client would read a write to an unknown field, not a deletion.                                                                     |
+| Deletion as a set (number 1) without a field (key 3 absent)                               | The meaning of set would depend on whether key 3 is there; a client that knows set but not deletion would misread it instead of parking it.                                                                                   |
+| Separate delete and restore operations                                                    | Two numbers for one boolean value; a restore would need to name the deletes it undoes anyway, which is what `replaces` already does.                                                                                         |
 | Adding operations to a type under the same rule version                                    | An old client would park what a new client applies under the same version; this RFC fixes a merge rule by its type id and version.                                                                                          |
 
-### Decisions for the owner (8 to 13)
+### Decisions for the owner (8 to 14)
 
 GENESIS.md reserves the wire format for the owner. Each decision has options and a recommendation; the text above describes the recommended options.
 
@@ -589,7 +643,7 @@ GENESIS.md reserves the wire format for the owner. Each decision has options and
    Decision: open, for the owner.
 
 9. **Operation numbers.**
-   - A: One table for the built-in types: 0 create (RFC 0002), 1 set, 2 add, 3 remove; 4 to 63 for later built-in types; plugin types from 64 up, within their type id; no number reused. Recommended: an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type.
+   - A: One table for the built-in types: 0 create (RFC 0002), 1 set, 2 add, 3 remove, 4 delete; 5 to 63 for later built-in types; plugin types from 64 up, within their type id; no number reused. Recommended: an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type.
    - B: Numbers per type, each starting at 1. Fewer reserved numbers; a mismatched operation is misread.
 
    Decision: open, for the owner.
@@ -617,6 +671,13 @@ GENESIS.md reserves the wire format for the owner. Each decision has options and
 13. **How a field type adds operations.**
     - A: A new operation is a new rule version, and until the migrations RFC exists a new field type; it takes a number never used before, and old clients park it. Recommended: a merge rule never changes under the same type id and version, as this RFC's contract already says.
     - B: A type may add operations under the same rule version, as long as its existing operations keep their meaning. Faster to extend, but an old and a new client then differ under the same version.
+
+    Decision: open, for the owner.
+
+14. **How an object's deletion travels.**
+    - A: An operation of its own, number 4 **delete**, on the object without a field, with set's arguments: `true` deletes, `false` restores, `replaces` names the deletes it saw. Recommended: it is decision 4's boolean basic value with no new rule, and a client that does not know deletion parks it as an unknown operation instead of misreading it.
+    - B: A set (number 1) on a reserved field name such as `$deleted`. No new number, but a reserved name in every collection.
+    - C: A set (number 1) with key 3 absent. No new number, but set's meaning then depends on a missing key.
 
     Decision: open, for the owner.
 

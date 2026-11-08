@@ -1,4 +1,4 @@
-"""Writes the byte-exact examples E1 to E11 of RFC 0004 Amendment 1
+"""Writes the byte-exact examples E1 to E14 of RFC 0004 Amendment 1
 (docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples") in this
 directory, from their descriptions in the RFC and independently of the Rust
 core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode).
@@ -25,7 +25,7 @@ A = bytes([0xAA] * 32)  # change id A
 B = bytes([0xBB] * 32)  # change id B
 
 # Operation numbers (Amendment 1, "Operation numbers").
-SET, ADD, REMOVE = 1, 2, 3
+CREATE, SET, ADD, REMOVE, DELETE = 0, 1, 2, 3, 4
 
 
 def enc(value):
@@ -40,6 +40,16 @@ def ids(*operation_ids):
 
 def operation(field, number, arguments):
     return {1: T1, 2: "tasks", 3: field, 4: number, 5: arguments}
+
+
+def create():
+    """An object's create: no field (key 3) and no arguments (key 5)."""
+    return {1: T1, 2: "tasks", 4: CREATE}
+
+
+def delete(deleted, replaces=()):
+    """An object's delete: no field (key 3), set's arguments."""
+    return {1: T1, 2: "tasks", 4: DELETE, 5: {1: deleted, 2: ids(*replaces)}}
 
 
 def set_(field, value, replaces=()):
@@ -77,6 +87,12 @@ EXAMPLES = {
     "E10": operation("title", 9, {1: "Ship v1", 2: []}),
     # E11. E1 with the "may ignore" argument 64.
     "E11": operation("title", SET, {1: "Ship v1", 2: [], 64: "hint"}),
+    # E12. create, an object.
+    "E12": create(),
+    # E13. delete, an object.
+    "E13": delete(True),
+    # E14. delete, a restore that replaces the delete [A, 3].
+    "E14": delete(False, replaces=[(A, 3)]),
 }
 
 
