@@ -26,5 +26,6 @@
 - [ ] Human: a person wrote this change.
 - [ ] Agent under close human direction: an agent wrote it while a person steered it step by step.
 - [ ] Agent with human review: an agent wrote it on its own; a person reviewed all of it before this pull request was opened.
+- [ ] Agent, checked against a decided design: an agent implemented an RFC the owner has decided; the factory's pm checked it against that RFC and the gates, and no person reviewed every line before the merge (see .github/AI_POLICY.md).
 
 Follow-up: <!-- The GitHub handle of the person who understands this change and answers review on it, with its @. Required. -->

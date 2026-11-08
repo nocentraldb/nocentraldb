@@ -36,7 +36,7 @@ Each use case has five parts:
 
 **With a central database.** You search the production database, every backup, the logs, the search index and the copies your agents made, and you write down where you looked. Deleting history conflicts with keeping an audit trail. Because of the backups, you can claim the data is deleted, but you cannot prove it.
 
-**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. An erasure is a work order: one member performs it, a second account signs it off, and the key is destroyed. Without the key, every copy of those fields is unreadable, on every device, in every archive and in every old snapshot. Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
+**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. An erasure is a work order: one member performs it, a second account signs it off, and the key is destroyed. Without the key, those fields are unreadable in every archive, in every old snapshot and on every device that has deleted the key; a device that never comes back online keeps it, and the list below names every limit ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
 
 **In your app.**
 
@@ -55,6 +55,8 @@ await db.workOrders.erase({ person: customerId });  // needs a second account's 
 **What it does not cover.**
 
 - Devices that never come back online keep their keys and their data.
+- A modified client can ignore the erasure and keep the key ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Copies made outside the database, such as exports and screenshots, stay readable.
 - The database does not find personal data in unmarked free text.
 
@@ -72,7 +74,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **In your app.** You write nothing. The SDK encrypts every change before it leaves the device, and keys stay on the members' devices.
 
-**What it does not cover.** The relay sees metadata: which key is in which space, and when and how much each key writes. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
+**What it does not cover.** The relay sees metadata: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
 
 **Tell us.** Would "the relay sees only ciphertext and this metadata" pass your security review? Which piece of metadata would worry you?
 
@@ -82,17 +84,19 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **With a central database.** The agent's access depends on row-level security policies and on trust in whoever runs the server. One wrong policy, and the agent sees every customer. To remove access, you have to get every policy right again.
 
-**With NoCentralDB.** The agent becomes a member of exactly one space, with its own key and role. It cannot decrypt any other space, because it never received those keys. The agent signs every write with its own key, so everyone sees what it changed. When the engagement ends, you remove the agent from the space, and the space's key rotates. The agent receives no new changes after that.
+**With NoCentralDB.** The agent becomes a member of exactly one space, with its own key and role. It cannot decrypt any other space, because it never received those keys. The agent signs every write with its own key, so everyone sees what it changed. When the engagement ends, you remove the agent from the space, and the space's key rotates. The relay sends the agent no new changes after that. A member that has not yet seen the removal, because it is offline, may still write under the old key generation until it catches up, and the agent could read those changes if it got hold of them ([RFC 0003, "Removing a member and rotating the space key"](rfc/0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key)).
 
 **In your app.**
 
 ```ts
 const project = await db.spaces.get(projectId);
-await project.members.add(agentPublicKey, { role: "editor" });
+await project.members.add(invitation, { role: "editor" });  // an invitation the agent accepted
 
 // when the engagement ends
-await project.members.remove(agentPublicKey);  // rotates the space key
+await project.members.remove(memberId);  // rotates the space key
 ```
+
+You add the agent with an invitation it accepted and remove it by its member id, so your app never handles key material ([RFC 0003, "How the SDK hides keys"](rfc/0003-keys-and-cryptography.md#how-the-sdk-hides-keys)).
 
 **What it does not cover.** Removing a member does not delete what it already received. Its copy keeps the data it had before the removal. Rights apply per space, so a part of a project the agent must not see needs its own space.
 
