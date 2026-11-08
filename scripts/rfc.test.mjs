@@ -59,3 +59,64 @@ test("RFC 0002 links back to RFC 0001, and the links resolve", () => {
     );
   }
 });
+
+// NOC-22: the errata to RFC 0002. The amendment is announced by a dated
+// changelog line above the first section, lives in its own section, names
+// options and a recommendation per decision, and the member log knows the
+// "rejected" state next to "folded" and "parked".
+const AMENDMENT = "amendment-1-atomic-unit-and-rejected-changes";
+
+/** The text of the level-2 section whose anchor is `anchor`, without the heading. */
+const section = (markdown, anchor) => {
+  const parts = markdown.split(/^(?=## )/m);
+  const found = parts.find((part) =>
+    part.startsWith("## ")
+      ? slug(part.split("\n")[0].slice(3)) === anchor
+      : false,
+  );
+  return found?.split("\n").slice(1).join("\n");
+};
+
+test("RFC 0002 announces its amendment in a dated changelog line at the top", () => {
+  const top = read(RFC_0002).split(/^## /m)[0];
+  assert.match(
+    top,
+    new RegExp(`^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\*.*\\(#${AMENDMENT}\\)`, "m"),
+    "no dated changelog line linking to the amendment above the first section",
+  );
+});
+
+test("RFC 0002 has the amendment section, and links inside the RFC resolve", () => {
+  const rfc = read(RFC_0002);
+  assert.ok(anchors(rfc).has(AMENDMENT), `no section #${AMENDMENT}`);
+  for (const { target, anchor } of relativeLinks(RFC_0002)) {
+    if (target.startsWith("#")) {
+      assert.ok(
+        anchors(rfc).has(anchor),
+        `${RFC_0002}: ${target} names no heading`,
+      );
+    }
+  }
+});
+
+test("each decision of the amendment has options and one recommendation", () => {
+  const body = section(read(RFC_0002), AMENDMENT);
+  assert.ok(body, `no section #${AMENDMENT}`);
+  for (const id of ["D10", "D11", "D12"]) {
+    const block = body.split(`**${id}.`)[1]?.split(/\*\*D\d+\./)[0];
+    assert.ok(block, `the amendment has no decision ${id}`);
+    assert.match(block, /^- A\. /m, `${id} lists no options`);
+    assert.match(block, /^- B\. /m, `${id} lists fewer than two options`);
+    assert.equal(
+      block.match(/\*\(recommended\)\*/g)?.length,
+      1,
+      `${id} needs exactly one recommended option`,
+    );
+  }
+});
+
+test("the member log knows folded, parked and rejected", () => {
+  const log = read(RFC_0002).match(/```text\nlog\n[\s\S]*?```/)?.[0];
+  assert.ok(log, "no log table in RFC 0002");
+  assert.match(log, /state\s+folded, parked or rejected/);
+});
