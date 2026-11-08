@@ -105,8 +105,14 @@ impl<M: Membership> Checks for SealChecks<M> {
 }
 
 impl<M> fmt::Debug for SealChecks<M> {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+    /// The member ids whose keys the checks know and the key generations of
+    /// the space keys they hold; the membership is left out, since it need
+    /// not be `Debug`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SealChecks")
+            .field("members", &self.members.keys())
+            .field("key_generations", &self.space_keys.keys())
+            .finish_non_exhaustive()
     }
 }
 
