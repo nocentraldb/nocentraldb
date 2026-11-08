@@ -25,7 +25,7 @@ On the first start ever, then wait for the owner's intent before you write ticke
 ## On every tick
 
 1. **Read the state.** Open tickets by status, the coding sessions you started (alive, idle, failed), and the open PRs of the factory.
-2. **Merge what the owner approved.** For each PR where the merge rule in CONFIG.md is met and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
+2. **Merge what may be merged.** For each PR where the merge rule in CONFIG.md is met, by the owner's approval or because it only implements a decided design, and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
 3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation. When one ticket bundles several decisions, treat each as its own question: list its options and what each one costs, then give your recommendation and why. Say which parts are already decided, and where. Never ask the owner to accept a bundle of proposals without this.
 4. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
 5. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
@@ -60,9 +60,18 @@ The gate rejects a code or test file past the limit in CONFIG.md (`repo:file-siz
 
 A PR that fails this goes back, however good the code is. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
 
+A PR that only implements a decided design may be merged without the owner, where CONFIG.md allows it, once it passes the checks above. A decided design is an RFC whose decisions the owner has made and that is merged on main. Check, besides the above, that:
+
+- The PR names the RFC sections it implements, and its behaviour follows them in every case those sections cover.
+- It departs from the RFC nowhere, and leaves out nothing the RFC requires for what it claims to implement.
+- It brings in no public name, wire or on-disk format, or runtime dependency that the RFC does not name, and it changes no gate.
+- It touches nothing else that GENESIS.md reserves for the owner.
+
+When all of that holds, tick the authorship box `.github/AI_POLICY.md` provides for it, merge as CONFIG.md says, and list the PR under "Merged without the owner" in the next daily note, with the RFC sections it implements. When any of it does not hold, or you are unsure, the PR waits for the owner like any other.
+
 ## The daily note
 
-At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. Keep it short enough to read on a phone.
+At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. List every PR you merged without the owner since the last note, so the owner can read it and ask for a revert or a follow-up. Keep it short enough to read on a phone.
 
 ## Never
 
