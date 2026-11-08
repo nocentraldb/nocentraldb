@@ -56,7 +56,7 @@ It uses several drafts that are still open pull requests. It names them without 
 - **Revocations win.** A revocation wins over a concurrent grant. A removed or demoted member regains a right only through a grant that saw the revocation. That grant also starts a new key generation, so writes made in between never count.
 - **One order, computed from the set.** Every member puts its control changes into one order computed from the changes alone, and applies them in that order. The order of arrival never matters. Seniority settles cycles of concurrent revocations.
 - **Concurrent rotations merge.** A generation id is derived from its rotation, so two rotations never share one. When a member that is no longer in the space may hold the current generation, the next admin that notices rotates again.
-- **Irreversible effects wait.** Destroying a person key, its acknowledgement and the relay's deletion of its record wait until the shred entry is stable. The view treats the person's fields as erased at once.
+- **Irreversible effects wait.** Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record wait until the shred entry is stable. The view treats the person's fields as erased at once.
 - **The relay runs the same code** over the control changes it holds. Where it holds fewer changes than a member, the members decide (see [How the relay applies the rules](#how-the-relay-applies-the-rules)).
 
 ## The first change of a space
@@ -178,9 +178,9 @@ membership entry (entry type 1)
 ```
 
 - **Add** gives a role to a member that is not a member in the state of the add's causal past. Its author checks the certificate first (RFC 0003). The from generation is the generation the author writes with. The author then writes a key envelope for the new member, for that generation.
-- **Set role** changes a member's role. When the new role is lower, the entry is a revocation of the rights the member loses, with a cutoff. When it is higher, it is a grant.
+- **Set role** changes a member's role. It is a grant of the new role. It is also a revocation, with a cutoff, of every right above the new role, for every grant of the same member that it did not see. A demotion therefore revokes what the member loses. A raise revokes nothing from the grants it saw, but caps a concurrent higher raise (see [The function](#the-function), step 3).
 - **Remove** is a revocation of every right, with a cutoff. An admin removes others. Any member may remove itself (leave), naming its own highest sequence as the cutoff. A removal is answered by a rotation (see [Key chain entry](#key-chain-entry)). A member that leaves cannot rotate, because it must not know the next key, so the next admin that sees the removal rotates for it.
-- **A re-grant** is an add of a member that was removed, or a set role that gives the right to write to a member that lost it, or to a reader. It must have the revocation in its causal past. Its from generation must be a **fresh generation**: one whose key chain entry the re-grant's author wrote, and for which every key envelope to the subject in the control changes has the re-grant in its causal past. The subject therefore cannot have held that key before the re-grant. Everything it wrote while it lacked the right is sealed under a generation it held before, which never counts under the re-grant (see [Sealed changes](#sealed-changes)). An admin that re-grants rotates first, so a re-grant costs one envelope per member (decision M5).
+- **A re-grant** is an add of a member that was removed, or a set role that gives the right to write to a member that lost it, or to a reader. It must have the revocation in its causal past. Its from generation must be a **fresh generation**: one whose key chain entry the re-grant's author wrote, with no key envelope to the subject for it in the re-grant's causal past. Like every rule of step 1, this reads only the re-grant's causal past. The subject therefore cannot have held that key before the re-grant, unless another admin wrote it an envelope for that generation concurrently, while the subject was not a member in that admin's own view. Step 1 rejects such an envelope, and the exposure rule counts it, but a key once delivered cannot be taken back. Everything it wrote while it lacked the right is sealed under a generation it held before, which never counts under the re-grant (see [Sealed changes](#sealed-changes)). An admin that re-grants rotates first, so a re-grant costs one envelope per member (decision M5).
 
 ### Key envelope
 
@@ -226,7 +226,7 @@ generation id (uint, 64 bits)
 
 The members and the relay recompute the tag from the key chain entry, and reject an entry whose generation id does not match. Two honest rotations differ in their author, or in their previous generations, because an author that rotates twice has seen its first rotation. Their ids are therefore different, except by a 48-bit hash collision. A member cannot steer one with a single try: the only inputs it controls are its own member id and which existing generations it lists. If two accepted key chain entries still name the same id, both are rejected, and the SDK reports it.
 
-**What the tag does not stop.** As RFC 0003 notes, an admin that wants a collision can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects, and get that key made admin. Both rotations are then rejected. The attack blocks a rotation and exposes no key, and a malicious admin can block rotations more simply by removing the admins who would rotate. A longer tag is not worth its cost: the header's 64 bits would leave fewer for the ordinal, or the header format would have to change (M6, option C). Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. This keeps RFC 0002's format and gives its number a structure (decision M6).
+**What the tag does not stop.** As RFC 0003 notes, an admin that wants a collision can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects, and get that key made admin. Both rotations are then rejected. The attack blocks a rotation and exposes no key, and a malicious admin can block rotations more simply by removing the admins who would rotate. A longer tag is not worth its cost: the header's 64 bits would leave fewer for the ordinal, or the header format would have to change (M6, option C). Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. The graph holds every key chain entry that is valid when written (see [The function](#the-function), step 1), accepted or later rejected. A rotation that a later revocation rejects still links its generation, so honest writes under it keep counting (decision M17). An entry that was never valid when written, such as one by a member that never held the admin role in its own causal past, does not count. The exposure rule counts every key chain entry and envelope in the set, whatever its verdict. Rejecting both rotations that share an id is decision M23. This keeps RFC 0002's format and gives its number a structure (decision M6).
 
 ### Person-key entry
 
@@ -259,10 +259,11 @@ The performer is the shred entry's author, a writer. The sign-off is valid when 
 
 ```text
 acknowledgement (entry type 6)
-└── 8  shred              change id of the shred entry
+├── 8  shred              change id of the shred entry
+└── 9  deleted            bool: false for "seen", true for "deleted my copy"
 ```
 
-A member writes one after it deleted its copy of the key, which it does only once the shred is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). A second acknowledgement of the same shred by the same member changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
+A member writes two acknowledgements per shred. It writes the first, with `deleted` false, as soon as it accepts the shred. That one is a control change that has the shred in its causal past, so an admin's first acknowledgement is what lets the shred become stable. It writes the second, with `deleted` true, after it deleted its copy of the key, which it does only once the shred is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). The audit's evidence of erasure is the second kind. A further acknowledgement of the same kind, for the same shred by the same member, changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
 
 ### What this RFC uses from RFC 0003
 
@@ -295,12 +296,18 @@ Let S be the set of control changes of a space that a holder has, each with a va
 **2. Seniority.** A total order on member ids:
 
 - the creator first;
-- then every member that holds a grant of admin in S that is valid when written, by the smallest pair (depth, change id) over those grants. Depth is the length of the longest path of control dependencies from the genesis to the grant. Change ids compare as bytes;
+- then every member that holds a grant of admin in S that is valid when written, by the smallest pair (depth, change id) over those grants. A grant's **depth** is one more than the smallest depth among the admin grants its author holds in the state of the grant's causal past; the creator has depth 0. Depth follows only the chain of admin grants, so a missing dependency elsewhere in the control DAG cannot change it. Change ids compare as bytes;
 - then every other member id, by its bytes.
 
-An admin is always more senior than the admins it made. A grant has its author's admin grant in its causal past, because step 1 requires it, so the grant is deeper.
+A grant is one deeper than the grant its author's right rested on. So an admin ranks before every admin whose only admin grants it wrote itself. A member that another admin made admin at a smaller depth ranks by that grant instead.
 
-**3. Revocation edges.** A revocation *excludes* a change y of its subject when y needs a right the revocation takes away and y's author sequence is above the cutoff. Each revocation that is valid when written wants to come before the changes it excludes. The edges are added one revocation at a time:
+**3. Revocation edges.** A revocation R (a set role or a remove; a remove sets "none") *excludes* a change y of its subject when all of these hold:
+
+- y needs a right above the role R sets;
+- y's author sequence is above R's cutoff;
+- y is not covered by a re-grant: y's causal past holds no grant of that right to its author that saw R. A grant of a right the author held before R does not count, because R caps it.
+
+The third condition lets a re-granted member's later control changes count again. They must have the re-grant in their causal past, so changes written before the re-grant, whatever their sequence numbers, stay excluded. Sealed changes have no control dependencies; their re-grants work through the fresh generation (see [Sealed changes](#sealed-changes)). Each revocation that is valid when written wants to come before the changes it excludes. The edges are added one revocation at a time:
 
 - revocations in the order of their authors' seniority, most senior first; then by author sequence; then by change id;
 - within one revocation, its edges in the order of the excluded changes' ids;
@@ -321,7 +328,7 @@ An accepted change updates the state. A rejected change stays in the log in RFC 
 - A person-key entry that a shred of the same person-key id did not see is rejected when S holds an accepted shred for that id, wherever the entry falls in the order. A shred therefore wins over a concurrent re-wrap.
 - Of two accepted shreds of one person-key id, the first in the order takes effect, and the second changes nothing.
 
-**Roles.** A membership entry that sets role r is a grant of r, and caps at r every grant of the same subject that did not see it. An add or set role sets its role; a remove sets "none". A member's role is the highest role among its accepted grants, each lowered to the lowest cap that an accepted entry not seen by that grant puts on it. A grant therefore loses to a concurrent removal or demotion. It keeps the rights it gives over every entry it saw, so a re-grant that saw the revocation stands.
+**Roles.** A membership entry that sets role r is a grant of r, and caps at r every grant of the same subject that did not see it. An add or set role sets its role; a remove sets "none". A member's role is the highest role among its accepted grants, each lowered to the lowest cap that an accepted entry not seen by that grant puts on it. A grant therefore loses to a concurrent removal or demotion, and a raise to a concurrent lower raise. It keeps the rights it gives over every entry it saw, so a re-grant that saw the revocation stands. Every cap is a revocation in step 3, with the capping entry's cutoff. The changes a member made under the higher role above that cutoff are therefore excluded wherever they land in the order, and the rule for sealed changes applies the same caps.
 
 **The state** holds, per member id: its public keys and certificate, its role, its accepted grants with their from generations, and its accepted revocations with their cutoffs. Per generation: its id, its previous generations, its envelopes, and which member ids may hold it (see [Two removals that rotate the key at once](#two-removals-that-rotate-the-key-at-once)). Per person-key id: its commitment, its newest record's generation and hash, and whether a shred destroyed it, with its acknowledgements. The state has a canonical encoding: equal states encode to equal bytes, which is what the convergence harness compares (RFC 0004, C1).
 
@@ -332,11 +339,13 @@ A sealed change is judged by its header against the final state. The order plays
 - g is G's from generation, or descends from it in the generation graph; and
 - for every accepted revocation R of X's right to write that G did not see, s is at most R's cutoff.
 
-Otherwise the change is rejected with the reason "not a member" (D11). It is checked again whenever a control change of the space arrives (D11). A member that holds the generation's key then decrypts it. The verdict needs nothing but headers and control changes, so it never waits for a sealed change that has not arrived. It also never depends on which sealed changes a member holds.
+Otherwise the change is rejected with the reason "not a member" (D11). It is checked again whenever a control change of the space arrives (D11).
+
+This **membership verdict** needs nothing but headers and control changes. It never waits for a sealed change that has not arrived, it never depends on which sealed changes a member holds, and every holder of the same control changes reaches the same one, the relay included. Decryption comes after it and is not part of it. RFC 0002 Amendment 1, step 5, rejects a change with "no key" or "undecryptable", and that verdict differs from member to member: a member without the generation's key rejects with "no key" what a member with the key folds. Those rejections are local. They are checked again under D11 when an envelope arrives, and the convergence promise for them is RFC 0002's: every member that holds the key reaches the same verdict.
 
 ### Why it converges
 
-Every step depends only on S and on the headers of the changes. The control dependencies, cutoffs and generation ids are inside the signed changes. Seniority, the edges and the order are computed from S with fixed tie-breaks: depth, author sequence and change ids, which every holder computes from the bytes (RFC 0002). No step reads the order of arrival, a clock, a decrypted payload or a check only some holders can make. Two holders of the same S therefore compute the same order and accept the same control changes. They judge every sealed change against the same final state, from the same header fields. Step 1 applies the same function to each causal past, which is a subset of S.
+Every step depends only on S and on the headers of the changes. The control dependencies, cutoffs and generation ids are inside the signed changes. Seniority, the edges and the order are computed from S with fixed tie-breaks: depth, author sequence and change ids, which every holder computes from the bytes (RFC 0002). No step reads the order of arrival, a clock, a decrypted payload or a check only some holders can make. Two holders of the same S therefore compute the same order and accept the same control changes. They reach the same membership verdict for every sealed change, from the same header fields. Whether a member can decrypt it is local, as [Sealed changes](#sealed-changes) says. Step 1 applies the same function to each causal past, which is a subset of S.
 
 The fold does not need to be incremental. A space holds few control changes, hundreds rather than millions, so a holder recomputes `resolve(S)` whenever a control change arrives. RFC 0006 then re-checks every change whose verdict changed, and un-folds it where needed.
 
@@ -345,9 +354,13 @@ The fold does not need to be incremental. A space holds few control changes, hun
 `resolve` is a function of the set, not of a growing prefix. Adding a change to S can change the verdict of a change accepted before. That is the point of a revocation that arrives late. It happens in exactly these ways:
 
 - a revocation arrives that excludes the change, or that excludes a grant its author's right depends on;
-- a grant arrives that makes some member more senior, so a cycle of concurrent revocations is settled the other way;
-- a missing control dependency arrives and changes a depth, and so a seniority;
-- a shred arrives that a person-key entry did not see.
+- a concurrent set role arrives that caps a grant, with a cutoff below changes made under that grant;
+- a grant arrives that gives some member an admin grant of smaller depth, so a cycle is settled the other way;
+- a missing control dependency arrives that a change's validity when written rests on;
+- a shred arrives that a person-key entry did not see;
+- a change arrives that moves which of two shreds of one person-key id comes first in the order;
+- an equivocated genesis with a lower change id arrives late, and becomes the genesis (see [How the relay and members recognise it](#how-the-relay-and-members-recognise-it));
+- a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (decision M23).
 
 Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. A change that the authors of all possible revocations have seen can no longer flip. [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable) uses this. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change (decision M4).
 
@@ -365,18 +378,26 @@ The view can always be recomputed, so un-folding a change costs nothing but work
 
 | Control change | Effect at once, reversible | Effect that waits until it is stable |
 | --- | --- | --- |
-| Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). | The member deletes its copy of the person key and then writes its acknowledgement. The relay deletes the person-key record. |
+| Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). The member writes its "seen" acknowledgement. | The member deletes its copy of the person key and then writes its "deleted" acknowledgement. The relay deletes the person-key record. |
 | Key envelope | The member unwraps the key into its keystore and can decrypt. | Nothing irreversible: if the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it (decision M17). |
 | Membership entry, key chain entry, person-key entry, acknowledgement | They change the control state; the relay changes whom it serves. | Nothing irreversible. |
 
-**When a change is stable.** A holder calls an accepted control change c stable when, for every member id that holds the admin role in its state, or held it and lost it to an accepted revocation, it holds every change of that member from author sequence 1 up to:
+**When a change is stable.** A holder computes its stable changes as the smallest set closed under this rule, starting from none. An accepted control change c is stable when, for every member id that holds the admin role in its state, or held it and lost it to an accepted revocation, the holder holds every change of that member from author sequence 1 up to one of:
 
-- a control change of that member whose causal past contains c, for a current admin;
-- the cutoff of the revocation that took the role, for a former admin, unless an earlier change of that member already saw c.
+- a control change of that member whose causal past contains c;
+- the cutoff of a revocation that took the role from that member and is itself stable.
 
-**Why nothing can reject it then.** Only a revocation can reject an accepted change. It does so by excluding the change, or a grant that the author's right rests on, which is in c's causal past. Only an admin can write such a revocation. Every admin that saw c holds c's author's changes up to c, so its cutoff is at least c's sequence, and c is inside. Every revocation an admin wrote before it saw c, or before it lost the role, is among the changes the holder holds. Admins made later were made by an admin that had already seen c, or by one of those held changes. Their grants are in their own revocations' causal past, so c is too. Step 1 is fixed for a given causal past. The harness checks this argument (see [How the convergence harness checks it](#how-the-convergence-harness-checks-it)).
+A revocation that is not stable yet bounds nothing: until it is, its subject counts as an admin whose run must reach a change that saw c. Applying the rule again until nothing is added gives one answer. The rule only adds, so this ends.
 
-**What this costs.** An admin that is offline keeps every shred from becoming stable until it comes back, or until an admin removes it. The removal ends the run the holder needs at the cutoff. The person's fields are erased in every view at once. Only the destruction of the key, the acknowledgements and the relay's deletion wait, which the audit shows (decision M20).
+**Why nothing can reject it then.** Only a revocation can reject an accepted change. It does so by excluding the change, or a grant that the author's right rests on, which is in c's causal past. Only an admin can write such a revocation. Every admin that saw c holds c's author's changes up to c, so its cutoff is at least c's sequence, and c is inside. Every revocation an admin wrote before it saw c, or before it lost the role, is among the changes the holder holds. Admins made later were made by an admin that had already seen c, or by one of those held changes. Their grants are in their own revocations' causal past, so c is too. A revocation that bounds a former admin's run is stable itself, so it cannot be undone and give that member's later changes the role back. Step 1 is fixed for a given causal past. Seniority can still change, but it only decides between revocations that exclude each other, and none can exclude c. The harness checks this argument (see [How the convergence harness checks it](#how-the-convergence-harness-checks-it)).
+
+**What this costs, and the way forward.** A shred becomes stable only when every admin has written a control change after seeing it. One admin device that is lost or stays offline therefore blocks the destruction of the key, the "deleted" acknowledgements and the relay's deletion indefinitely. The person's fields are erased in every view at once, but the key still exists on the members, which the audit shows. The way forward:
+
+- **An alarm.** When a shred has waited longer than a set period, the SDK of every admin raises an alarm. It names the admin devices whose runs block it, and the shred's age.
+- **Demoting or removing the blocking admins.** An admin lowers each blocking device from admin to writer, or removes it. The demotion's cutoff ends the run the holder needs, and once the demotion is stable, the shred can become stable. A demotion to writer needs no rotation, because the device keeps the right to read and write.
+- **An admin's first acknowledgement counts.** Every admin device that is online writes a "seen" acknowledgement as soon as it accepts the shred (see [Acknowledgement](#acknowledgement)). An admin that is online but otherwise idle therefore never blocks; only one that does not come online does.
+
+How long the period is, and whether the SDK may demote an idle admin device on its own after a longer one, is decision M21. Until the shred is stable, the erasure has not fully happened. That conflicts with what principle 3's team lead expects, and the RFC names it (see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs)).
 
 ### Concurrent add and remove of one member
 
@@ -384,7 +405,7 @@ Alice removes Mallory's laptop, which was stolen. At the same time, on another i
 
 Bob's entry is a grant that did not see the removal, so Alice's removal caps it at "none". On every copy the laptop is removed. Every change it made above Alice's cutoff is rejected, whether it reached a member before or after the removal. Bob's entry stays accepted but without effect, and the SDK shows it as a **lost grant**, the way RFC 0004 shows a lost removal.
 
-This is the opposite of RFC 0004's sets, where an addition wins over a concurrent removal. For data, a lost addition is data that is gone. For membership, a lost removal leaves a stolen device writing. So the removal wins, and Bob can repeat the grant once he has seen the removal and still wants it (decision M2). Concurrent role changes follow the same rule: when two admins set a member's role at the same time, the member ends with the lower role.
+This is the opposite of RFC 0004's sets, where an addition wins over a concurrent removal. For data, a lost addition is data that is gone. For membership, a lost removal leaves a stolen device writing. So the removal wins, and Bob can repeat the grant once he has seen the removal and still wants it (decision M2). Concurrent role changes follow the same rule: when two admins set a member's role at the same time, the member ends with the lower role. Each set role carries a cutoff, so whatever the member did under the higher role above that cutoff is excluded on every copy, wherever it lands in the order.
 
 ### Two removals that rotate the key at once
 
@@ -440,14 +461,14 @@ The control state is treated like a field type under RFC 0004's plugin contract.
 
 | # | Property | How the harness checks it |
 | --- | --- | --- |
-| M-C1 | Converges in any order: equal sets give equal control state bytes and equal verdicts for every change, sealed changes included. | Compares the canonical state bytes and every verdict across copies (RFC 0004, C1 and C4). |
+| M-C1 | Converges in any order: equal sets give equal control state bytes, equal verdicts for every control change, and equal membership verdicts for every sealed change. | Compares the canonical state bytes and those verdicts across copies (RFC 0004, C1 and C4). Rejections for "no key" are compared only between copies that hold the same keys. |
 | M-C2 | Idempotent. | Duplicates in every delivery; the whole set applied twice. |
 | M-C3 | Deterministic natively and in WebAssembly. | The same seed on both targets (NOC-10). |
-| M-C4 | The fold reads only control bodies and headers. | Gives copies the same control changes but different subsets of the sealed changes, and gives the relay simulator no keys. The control state and the verdict of every sealed change both copies hold must be equal. |
+| M-C4 | The fold reads only control bodies and headers. | Gives copies the same control changes but different subsets of the sealed changes, and gives the relay simulator no keys. The control state and the membership verdict of every sealed change both copies hold must be equal. |
 | M-C5 | Local checks never split the state. | Mixes in envelopes and key chain entries that hold wrong keys, and person-key records that miss their commitment. The control state must be equal on every copy. Only the local reports differ, and only on the members that can tell. |
 | M-C6 | Seniority and the order are total. | Generates mutual removals, rings and overlapping cycles of concurrent revocations, ties of depth, and missing dependencies. Checks the outcomes against a reference implementation of steps 2 to 5. For every pair of sets S ⊂ S′, checks that every verdict that differs between them is explained by one of the causes in [What a new change can change](#what-a-new-change-can-change). |
-| M-C7 | Writes without the right never come back. | Revoked members keep writing sealed and control changes under every generation they hold, and pre-write high sequence numbers. They are re-granted and raised again, and admins try to reuse a generation id. No such write may be accepted on any copy. |
-| M-C8 | A stable change stays accepted. | Whenever a holder calls a change stable, the harness adds further generated changes, concurrent revocations by former admins included. The change must stay accepted in every extension. |
+| M-C7 | Writes without the right never come back, and re-granted writes do count. | Revoked members keep writing sealed and control changes under every generation they hold, and pre-write high sequence numbers. They are re-granted and raised again, two admins raise a member to different roles at once, and admins try to reuse a generation id. No write without the right may be accepted on any copy. Every change a re-granted member writes after seeing its re-grant must be accepted. |
+| M-C8 | A stable change stays accepted. | Whenever a holder calls a change stable, the harness adds further generated changes. These include concurrent revocations by former admins, revocations of the revocations that bounded them, and missing dependencies of non-admins. The change must stay accepted in every extension. A broken fixture that bounds a former admin by a revocation that is not stable must fail. |
 | M-C9 | Exposure counts every envelope. | Rejected rotations and envelopes from removed admins, delivered to some copies only. Once a merge rotation is accepted, no one outside the state may hold the current generation in any copy that holds those envelopes. |
 | M-C10 | Shreds are ordered. | Two shreds of one id, and shreds concurrent with re-wraps. Exactly one shred takes effect, and no re-wrap it did not see is accepted. |
 | M-C11 | The relay agrees. | After every delivery, the relay simulator's membership table equals `resolve` of its own log. Every change it refused is one that the members also reject for the same S, or one listed in [How the relay applies the rules](#how-the-relay-applies-the-rules). |
@@ -668,10 +689,41 @@ Recommendation: A. Under B, a change that a concurrent revocation made the relay
 
 **M20. Irreversible effects wait until a change is stable.**
 
-- A. Destroying a person key, its acknowledgement and the relay's deletion of its record wait until the shred is stable; the view erases the fields at once. *(recommended)*
+- A. Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record wait until the shred is stable; the view erases the fields at once. *(recommended)*
 - B. They happen as soon as the shred is accepted.
 
 Recommendation: A. Under B, a shred that a concurrent revocation later rejects has already destroyed keys that cannot come back. The cost of A: one offline admin delays the destruction until it returns or is removed, and RFC 0007 must delete records later than in the append's transaction.
+
+**M21. How long a shred may wait, and the escalation.**
+
+- A. The SDK raises an alarm on every admin device when a shred has waited 7 days. It names the blocking admin devices, and an admin demotes or removes them. *(recommended)*
+- B. As A, and after 21 days an admin's SDK demotes the blocking admin devices to writer on its own.
+- C. Destroy the key and acknowledge at once on acceptance; only the relay's deletion waits.
+
+Recommendation: A. It leaves well inside the one-month deadline of a data-subject request for a person to act, and it never changes a role without a person. B meets the deadline without anyone acting, but it lowers rights automatically, which the owner should allow explicitly. C makes erasure fast, and a shred that a concurrent revocation later rejects has then destroyed keys for good (see M20).
+
+**M22. The wire layout of the control bodies.** The entry types 0 to 6, the common keys (1 entry type, 2 reserved for a clock, 3 control dependencies), and the field numbers from 8 up for each entry type, as in [The control bodies](#the-control-bodies). They are part of the wire format, so they cannot change once shipped.
+
+- A. As specified. *(recommended)*
+- B. One entry type per action (add, set role, remove as separate types).
+
+Recommendation: A. One membership entry with an action keeps the rules about grants and revocations in one place. Field numbers from 8 up leave the keys RFC 0002's payload map uses free for meanings shared with it.
+
+**M23. Two rotations that name the same generation id.**
+
+- A. Both are rejected, and the SDK reports it. *(recommended)*
+- B. The one that comes first in the order keeps the id; the other is rejected.
+
+Recommendation: A. Under B, a member that grinds a colliding id can win against an honest rotation that comes later in the order. Under A, it only blocks both, and with derived ids that needs about 2⁴⁸ tries (see [Generation ids](#generation-ids)). Changes sealed under a rejected generation keep their verdict by M17.
+
+**M24. A creator that writes two geneses.**
+
+- A. Both stay in the log; the one with the lower change id is the genesis, and the other folds nothing. *(recommended)*
+- B. Both are rejected, and the space is unusable.
+
+Recommendation: A. RFC 0002 keeps and folds both changes of every equivocation, which a space cannot do with two first changes. A keeps both, as RFC 0002 wants, and picks one deterministically. Only the creator's own device can cause it, by a backup restore or a clone.
+
+The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
 
 ## Conflicts with GENESIS.md and the other RFCs
 
@@ -691,7 +743,8 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 12. **RFC 0007, the membership table and its checks.** Its backend stores, per member, the positions of addition and removal. This RFC needs roles, grants with from generations, revocations with cutoffs and the generation graph. RFC 0007 does not check author sequences; this RFC needs it to, for sealed changes. Its rule that a person-key record replaces one of "the same or a newer generation" becomes "the same or a descendant generation". It deletes a record in the append's transaction; this RFC waits for stability (M20). Its R7 A becomes the cutoff (M3).
 13. **RFC 0006, the control table.** RFC 0006's `control` table lists membership entries, key chain entries, held generations, shreds and acknowledgements. It also needs the genesis, the person-key entries, the cutoffs and grants, and the generation graph, as [The function](#the-function) lists them. RFC 0006 un-folds only sealed changes. Control changes are recomputed through `resolve`, and their irreversible effects wait until they are stable.
 14. **RFC 0005, D13.** RFC 0005 names no reserved collection or sealed place for the model id. This RFC offers a field in the genesis, recommends against using it (M8), and leaves the place to D13.
-15. **RFC 0004, add wins.** Membership resolves the other way, so the revocation wins (M2). Membership is not a field type of the schema, so RFC 0004's rule for sets stays as it is.
+15. **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Under M20 the key is destroyed only when the shred is stable, which an idle admin device delays. The view erases the fields at once, and M21 sets the alarm and the escalation, but until then the key exists on members. RFC 0001's list of what erasure does not reach should name the wait.
+16. **RFC 0004, add wins.** Membership resolves the other way, so the revocation wins (M2). Membership is not a field type of the schema, so RFC 0004's rule for sets stays as it is.
 
 ## Summary of the choices
 
@@ -708,6 +761,6 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | Two rotations at once? | Two generations with derived, distinct ids; the next admin that sees exposure rotates again. |
 | A removed member that keeps writing? | Its changes above the cutoff are rejected by every member and refused by the relay; equivocations inside the cutoff are reported, not rejected. |
 | A member raised again? | Only its changes under a fresh generation count. |
-| What waits? | Destroying a person key, its acknowledgement and the relay's deletion of its record, until the shred is stable. |
+| What waits? | Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record, until the shred is stable. |
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
 | Groups? | Deferred; the SDK expands a group into one entry per member. |
