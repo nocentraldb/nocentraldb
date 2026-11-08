@@ -36,7 +36,7 @@ Each use case has five parts:
 
 **With a central database.** You search the production database, every backup, the logs, the search index and the copies your agents made, and you write down where you looked. Deleting history conflicts with keeping an audit trail. Because of the backups, you can claim the data is deleted, but you cannot prove it.
 
-**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. An erasure is a work order: one member performs it, a second account signs it off, and the key is destroyed. Without the key, every copy of those fields is unreadable, in every archive, in every old snapshot and on every device that has deleted the key. A device that never comes back online keeps the key, as listed below ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
+**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. An erasure is a work order: one member performs it, a second account signs it off, and the key is destroyed. Without the key, those fields are unreadable in every archive, in every old snapshot and on every device that has deleted the key; a device that never comes back online keeps it, and the list below names every limit ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
 
 **In your app.**
 
@@ -74,7 +74,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **In your app.** You write nothing. The SDK encrypts every change before it leaves the device, and keys stay on the members' devices.
 
-**What it does not cover.** The relay sees metadata: which key is in which space, and when and how much each key writes. That is not all it sees: it also sees the key generations and when they change, the rhythm of work, and who reads which space from where, and it can withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
+**What it does not cover.** The relay sees metadata: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
 
 **Tell us.** Would "the relay sees only ciphertext and this metadata" pass your security review? Which piece of metadata would worry you?
 

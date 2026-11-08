@@ -196,7 +196,7 @@ test("GENESIS.md: one key per person per space, the two erasure limits, and not 
 
 test("use case 1 names the offline-device limit where it claims every copy is unreadable", () => {
   const uc1 = section(read(USE_CASES), "1. Erasure that reaches every copy");
-  const line = uc1.split("\n").find((l) => /is unreadable/.test(l));
+  const line = uc1.split("\n").find((l) => /(is|are) unreadable/.test(l));
   assert.ok(line, "use case 1 no longer says the copies are unreadable");
   assert.match(line, /never comes? back online/i);
   assert.ok(links(line, `rfc/${SHREDDING}`), "no link to RFC 0003's shredding");
@@ -359,7 +359,7 @@ test("erasure is never claimed for every device or everywhere, only where the ke
     "RFC 0001's Personal fields claims everywhere",
   );
   const uc1 = section(read(USE_CASES), "1. Erasure that reaches every copy");
-  const claim = uc1.split("\n").find((l) => /is unreadable/.test(l));
+  const claim = uc1.split("\n").find((l) => /(is|are) unreadable/.test(l));
   assert.ok(claim, "use case 1 no longer says the copies are unreadable");
   assert.ok(
     !/\. A device that never comes back online keeps the key/.test(claim),
