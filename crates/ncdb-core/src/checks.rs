@@ -1,8 +1,8 @@
 //! The checks of steps 3 and 5 of RFC 0002 Amendment 1 ("What a member
 //! does with a change it receives") with the real signature and
 //! decryption of RFC 0003 ("How a member signs and encrypts a change"):
-//! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
-//! [`seal::open`], given the member keys and space keys the member knows.
+//! [`SealChecks`] verifies with [`seal::verify`](crate::seal::verify) and decrypts with
+//! [`seal::open`](crate::seal::open), given the member keys and space keys the member knows.
 //!
 //! Membership (step 4) and what a control change adds to the control state
 //! come in through [`Membership`]; the membership rules of RFC 0008 and key
@@ -14,6 +14,7 @@ use std::fmt;
 use crate::change::{Change, Payload};
 use crate::ids::MemberId;
 use crate::keys::{MemberPublicKey, SpaceKey};
+use crate::log::{ParkReason, RejectReason};
 use crate::receive::{Checks, Stop};
 use crate::seal::OpenError;
 
@@ -87,9 +88,33 @@ impl<M> fmt::Debug for SealChecks<M> {
 }
 
 /// Where a change stops when [`seal::verify`](crate::seal::verify) or
-/// [`seal::open`](crate::seal::open) fails.
+/// [`seal::open`](crate::seal::open) fails:
+/// the step of RFC 0002 Amendment 1 and its reason. An unknown author and a
+/// missing space key do not come from here, since they depend on the keys
+/// the member holds, not on the change: [`SealChecks`] finds them first.
+///
+/// | `OpenError`      | Step | Stop                            |
+/// | ---------------- | ---- | ------------------------------- |
+/// | `NotSealed`      | 2    | parked: unknown kind            |
+/// | `UnknownSuite`   | 2    | parked: unknown suite           |
+/// | `AuthorMismatch` | 3    | rejected: bad signature         |
+/// | `AuthorKey`      | 3    | rejected: bad signature         |
+/// | `Signature`      | 3    | rejected: bad signature         |
+/// | `Decryption`     | 5    | rejected: undecryptable         |
+/// | `Payload`        | 6    | parked: unknown payload format  |
 impl From<OpenError> for Stop {
-    fn from(_error: OpenError) -> Stop {
-        todo!()
+    fn from(error: OpenError) -> Stop {
+        match error {
+            // Only a sealed change has a payload to decrypt; a kind this
+            // member does not decrypt is one it does not understand.
+            OpenError::NotSealed(_) => Stop::Parked(ParkReason::UnknownKind),
+            OpenError::UnknownSuite(_) => Stop::Parked(ParkReason::UnknownSuite),
+            OpenError::AuthorMismatch | OpenError::AuthorKey | OpenError::Signature => {
+                Stop::Rejected(RejectReason::BadSignature)
+            }
+            OpenError::Decryption => Stop::Rejected(RejectReason::Undecryptable),
+            // A newer payload format may not decode as format 1 (NOC-28).
+            OpenError::Payload(_) => Stop::Parked(ParkReason::UnknownPayloadFormat),
+        }
     }
 }
