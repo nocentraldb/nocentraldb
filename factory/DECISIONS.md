@@ -277,3 +277,33 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-19)
 - Why: on wasm32 a panic aborts and cannot be caught, and behaviour must not fork by platform (principle 7); a panic still fails the gate on both targets. The C5 fixture breaks convergence on malformed operations instead of panicking.
 - Instead of: catching panics natively with `catch_unwind`, which would report C5 on one target only.
+
+### 2026-11-08 · NOC-16 · The field-type trait is `FieldType` in `ncdb_core::field`; the field is `&self`, the state apart
+
+- Decided by: coding agent (NOC-16)
+- Why: RFC 0004's "What a field type defines" names apply, state bytes, read and outcome; a value of the trait is the field as the schema declares it (a basic value's kind, a choice's options), so the same state reads differently under a newer schema without changing the state. `outcome` returns `None` for an operation the state never received. The module is `pub` only because the integration tests and the harness adapter in `tests/support/` must reach it; `ncdb-core` is not published and the names are working names, not the SDK's (RFC 0004, decision 7).
+- Instead of: a trait on the state type alone, like the harness's `Mergeable`, which cannot carry the schema; or `pub(crate)` with the tests inside `src/`, which the ticket's adapter in `tests/support/` cannot reach.
+
+### 2026-11-08 · NOC-16 · A basic value's state keeps every write it received
+
+- Decided by: coding agent (NOC-16)
+- Why: RFC 0004's R and L are computed from that set, so the state is a function of the set by construction; `outcome` can name the replacing write, and a duplicate is recognised by its id. The replaced ids R already grow with every overwrite (RFC 0004, limit 5); keeping the replaced writes' values too grows the state further until compaction.
+- Instead of: keeping only L and R, which loses who replaced a write and needs the replacing operation id stored beside R anyway.
+
+### 2026-11-08 · NOC-16 · How basic values answer what RFC 0004 leaves open
+
+- Decided by: coding agent (NOC-16)
+- Why: (1) a live write whose value equals the winner's is left out of `conflicts`, as the RFC says, and its outcome is visible, not lost, since its value is what the app reads; (2) `Replaced` names the replacing write with the lowest operation id, one deterministic choice among several; (3) the empty value is CBOR `null` and every kind allows it; (4) a value of the wrong kind that arrives (only from a malformed or newer writer) is kept and read with `known: false`, like an unknown choice option, so nothing is dropped; (5) a self-replacing malformed write is replaced by itself, as R ∪ L in the RFC computes it.
+- Instead of: counting an equal-valued conflict as lost although the app cannot see it, or dropping values of the wrong kind on arrival.
+
+### 2026-11-08 · NOC-16 · The state bytes are the local view's canonical CBOR, not a wire format; the wire encoding of set is not defined here
+
+- Decided by: coding agent (NOC-16), flagged to pm
+- Why: C1 and C3 need canonical state bytes, which RFC 0002's profile gives (`[[id, author, stamp, value, [replaced id…]]…]`); RFC 0006 makes the view's layout no stable format. The operation number of set and how `replaces` travels in an RFC 0002 operation are a wire format, which GENESIS.md reserves for the owner, and no RFC fixes them yet, so this ticket builds no encoder or decoder for them.
+- Instead of: choosing an operation number and a `replaces` key in this PR.
+
+### 2026-11-08 · NOC-16 · A harness generator for C3 draws no `usize`
+
+- Decided by: coding agent (NOC-16)
+- Why: proptest draws a `usize` differently on 32-bit wasm32 than on 64-bit native targets, so the two runs generated different cases and the C3 digest differed although the type was right. The basic values adapter draws `u8`; NOC-17's adapter must avoid `usize` too.
+- Instead of: committing two digests, one per target, which would hide a real platform difference.
