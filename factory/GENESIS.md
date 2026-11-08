@@ -24,7 +24,7 @@ To fulfil these three ideas, we are building these components:
 - **Runs on any device.** The schema is written once in TypeScript. `ncdb model build` turns it into a versioned `model.lock.json` that the Rust core and both SDKs read. Schema changes are additive; old clients keep data they do not understand yet. The SDKs support native apps on desktop computers (macOS, Linux and Windows) and mobile devices (Android and iOS), and web apps in a browser (Chromium-based, Firefox, and Safari) with data stored in the browser.
 - **The engine brings standard field types and allows custom types.** Each field type says how concurrent changes merge, and you can add your own types as plugins. We ship basic values (last writer wins), sets and links, rich text (backed by Yjs, so agents make focused edits and humans can work in parallel), streams (a value that grows chunk by chunk) and personal fields.
 - **Work orders for clean-ups.** To keep data clean, we create work orders that archive data, delete all of a person's data or change permissions. One member claims the work order and performs the job, and another member validates it. A reversible job is cross-checked by a second device; one that cannot be undone is signed off by a second account. The relay sees only an opaque envelope.
-- **Shred and audit.** Personal fields are encrypted with one key per person. Erasing the person destroys the key, which reaches archives and old snapshots too. Compaction moves history into a signed, encrypted archive instead of dropping it, so who changed what stays provable. Erasure does not reach devices that never come back online, exports and screenshots, personal data in unmarked free text, or an agent running as that user on the user's device.
+- **Shred and audit.** Personal fields are encrypted with one key per person per space ([RFC 0003, "The person key"](../docs/rfc/0003-keys-and-cryptography.md#the-person-key)). Erasing the person destroys every one of those keys, which reaches archives and old snapshots too. Compaction moves history into a signed, encrypted archive instead of dropping it, so who changed what stays provable. Erasure does not reach devices that never come back online, a modified client that ignores the shred, a member who obtains a relay backup taken before the shred, exports and screenshots, personal data in unmarked free text, or an agent running as that user on the user's device ([RFC 0003, "Shredding a person's key"](../docs/rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 
 ## Who it is for
 
@@ -75,7 +75,7 @@ Each no-go says why, so you can judge cases this list does not name. When a tick
 
 **What we promise**
 
-- Never claim more than the design delivers. Erasure does not reach offline devices, exports or unmarked text; revoking a member does not delete the copy it already holds.
+- Never claim more than the design delivers. Erasure does not reach offline devices, a modified client that ignores the shred, a relay backup from before the shred that a member obtains, exports or unmarked text ([RFC 0003, "Shredding a person's key"](../docs/rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)); revoking a member does not delete the copy it already holds; v1 is not post-quantum, so ciphertext recorded today could be read by a future quantum computer ([RFC 0003, decision 9](../docs/rfc/0003-keys-and-cryptography.md#decisions-for-the-owner)).
 - Never make developers handle keys, and never change how permissions or spaces behave without telling them plainly.
 
 **How we work**
