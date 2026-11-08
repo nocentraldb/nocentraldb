@@ -329,3 +329,48 @@ test("RFC 0003 no longer says the use cases pass a public key to members.add", (
     "RFC 0003's SDK section does not link use case 3",
   );
 });
+
+// Owner review of #45: each passage states what holds and its limits once, as
+// one statement; no sentence is taken back by a later one.
+const SELF_CORRECTION =
+  /that is not all|more than that|however, it also|after all/i;
+
+test("no passage in RFC 0001, the FAQ, the use cases, GENESIS.md or RFC 0003 corrects itself", () => {
+  for (const path of [RFC_0001, FAQ, USE_CASES, GENESIS, RFC_0003]) {
+    const line = read(path)
+      .split("\n")
+      .find((l) => SELF_CORRECTION.test(l));
+    assert.ok(!line, `${path} corrects itself: ${line?.slice(0, 120)}`);
+  }
+});
+
+test("erasure is never claimed for every device or everywhere, only where the key is gone", () => {
+  const gdpr = section(
+    read(FAQ),
+    "Does destroying a key satisfy a GDPR erasure request?",
+  );
+  assert.ok(
+    !/on every device(?! that)/i.test(gdpr),
+    "the FAQ claims every device",
+  );
+  const personal = bullet(read(RFC_0001), "Personal fields.");
+  assert.ok(
+    !/everywhere/i.test(personal),
+    "RFC 0001's Personal fields claims everywhere",
+  );
+  const uc1 = section(read(USE_CASES), "1. Erasure that reaches every copy");
+  const claim = uc1.split("\n").find((l) => /is unreadable/.test(l));
+  assert.ok(claim, "use case 1 no longer says the copies are unreadable");
+  assert.ok(
+    !/\. A device that never comes back online keeps the key/.test(claim),
+    "use case 1 takes its claim back in a later sentence",
+  );
+});
+
+test("RFC 0001's Shred and audit names its limits within the erasure statement", () => {
+  const shred = bullet(read(RFC_0001), "Shred and audit.");
+  assert.ok(
+    !/Erasure cannot take back/.test(shred),
+    "the limits follow as a separate correction",
+  );
+});
