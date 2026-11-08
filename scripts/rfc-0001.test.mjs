@@ -144,6 +144,10 @@ test("RFC 0001 says a browser can evict its copy, and what the member fetches ag
     "does not say what is fetched again",
   );
   assert.match(line, /lost/i, "does not say unconfirmed changes are lost");
+  assert.ok(
+    links(line, "0006-local-view.md#the-browser"),
+    "the eviction bullet does not link RFC 0006, The browser",
+  );
 });
 
 test("the FAQ's GDPR answer names the two limits that RFC 0003 adds, with a link", () => {
