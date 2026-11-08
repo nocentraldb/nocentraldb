@@ -17,7 +17,8 @@ use ncdb_core::ids::SpaceId;
 use ncdb_core::change::Operation;
 use ncdb_core::ids::ObjectId;
 use ncdb_core::log::{
-    Appended, OperationParkReason, ParkReason, ParkedOperation, Position, RejectReason, State,
+    Appended, OperationParkReason, ParkReason, ParkedOperation, Position, RejectReason,
+    RelayRefusal, State,
 };
 use ncdb_core::receive::ReceiveError;
 
@@ -318,4 +319,39 @@ fn d11_a_parked_change_waits_for_an_upgrade_not_for_a_control_change() {
     let change = m.receive(&frame(header, GOOD));
     m.receive(&envelope(FOUNDER, 2, 0));
     assert_eq!(m.state(&change), State::Parked(ParkReason::UnknownSuite));
+}
+
+fn refusal() -> RelayRefusal {
+    RelayRefusal("author_not_member".into())
+}
+
+#[test]
+fn d12_a_relay_refusal_is_recorded_beside_a_folded_change_and_keeps_it_folded() {
+    let mut m = with_key();
+    let change = m.receive(&sealed(FOUNDER, 2, 0, vec![set_title(1)]));
+    assert_eq!(m.log.relay_refusal(change.id()), None);
+    assert!(m.log.record_relay_refusal(change.id(), refusal()));
+    assert_eq!(m.log.relay_refusal(change.id()), Some(&refusal()));
+    assert_eq!(m.state(&change), folded());
+    assert_eq!(m.fold.folded, [change.operation_id(0)].into_iter().collect());
+}
+
+#[test]
+fn d12_a_relay_refusal_never_changes_the_state_and_a_check_again_keeps_it() {
+    let mut m = Member::default();
+    let change = m.receive(&sealed(FOUNDER, 1, 0, vec![set_title(1)]));
+    assert!(m.log.record_relay_refusal(change.id(), refusal()));
+    assert_eq!(m.state(&change), State::Rejected(RejectReason::NoKey));
+    // Only the member's own check moves the state, and the refusal stays.
+    m.receive(&envelope(FOUNDER, 2, 0));
+    assert_eq!(m.state(&change), folded());
+    assert_eq!(m.log.relay_refusal(change.id()), Some(&refusal()));
+}
+
+#[test]
+fn d12_a_refusal_of_a_change_the_log_does_not_hold_is_not_recorded() {
+    let mut m = Member::default();
+    let change = ncdb_core::change::Change::decode(&sealed(FOUNDER, 1, 0, vec![])).unwrap();
+    assert!(!m.log.record_relay_refusal(change.id(), refusal()));
+    assert_eq!(m.log.relay_refusal(change.id()), None);
 }
