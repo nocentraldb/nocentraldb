@@ -154,6 +154,9 @@ impl Default for Config {
 pub enum Property {
     /// Converges in any order.
     C1,
+    /// Nothing lost silently: every operation's outcome is the same on every
+    /// copy, and replaced only by an operation whose author had seen it.
+    C4,
     /// Tested reads: copies with equal state bytes read the same.
     C7,
 }
@@ -162,6 +165,7 @@ impl core::fmt::Display for Property {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             Property::C1 => "C1 (converges in any order)",
+            Property::C4 => "C4 (nothing lost silently)",
             Property::C7 => "C7 (tested reads)",
         })
     }
@@ -334,6 +338,33 @@ fn violation<S: Mergeable, G: Generator<S>>(
                 reads[copy], reads[0]
             ),
         ));
+    }
+    for op in &made.ops {
+        let outcomes: Vec<Outcome> = states.iter().map(|s| s.outcome(op.id)).collect();
+        if let Some(copy) = (1..copies).find(|&copy| outcomes[copy] != outcomes[0]) {
+            return Some((
+                Property::C4,
+                format!(
+                    "copy {copy} gives #{} the outcome {:?}, copy 0 gives {:?}",
+                    op.id, outcomes[copy], outcomes[0]
+                ),
+            ));
+        }
+        if let Outcome::Replaced(by) = outcomes[0] {
+            let had_seen = made
+                .seen
+                .get(by as usize)
+                .is_some_and(|seen| seen.contains(&op.id));
+            if !had_seen {
+                return Some((
+                    Property::C4,
+                    format!(
+                        "#{} is replaced by #{by}, whose author had not seen it",
+                        op.id
+                    ),
+                ));
+            }
+        }
     }
     None
 }
