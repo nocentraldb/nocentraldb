@@ -260,3 +260,80 @@ impl Mergeable for ReadsArrival {
 fn c7_reads_are_compared_alongside_state_bytes() {
     expect_violation::<ReadsArrival>("C7");
 }
+
+/// Broken on purpose (C4): reports every conflict as replaced by the winner,
+/// although the winner's author may never have seen it. The losing write
+/// disappears silently.
+#[derive(Clone, Debug, Default)]
+struct ConflictsReplaced(Register);
+
+impl Mergeable for ConflictsReplaced {
+    type Change = Write;
+    type Read = (Option<u8>, Vec<u8>);
+
+    fn apply(&mut self, op: &Op<Write>) {
+        self.0.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        self.0.state_bytes()
+    }
+
+    fn read(&self) -> (Option<u8>, Vec<u8>) {
+        self.0.read()
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        match (self.0.outcome(id), self.0.live().last()) {
+            (Outcome::Lost, Some(&winner)) => Outcome::Replaced(winner),
+            (outcome, _) => outcome,
+        }
+    }
+}
+
+#[test]
+fn c4_replaced_names_only_operations_whose_author_had_seen_the_replaced_one() {
+    let violation = expect_violation::<ConflictsReplaced>("C4");
+    // Two concurrent writes are the smallest case.
+    assert_eq!(violation.changes.len(), 2, "{violation}");
+}
+
+/// Broken on purpose (C4): the outcome depends on which write arrived
+/// first, kept outside the state bytes, so copies disagree on where a write
+/// went.
+#[derive(Clone, Debug, Default)]
+struct FirstArrivalVisible {
+    register: Register,
+    first: Option<OpId>,
+}
+
+impl Mergeable for FirstArrivalVisible {
+    type Change = Write;
+    type Read = (Option<u8>, Vec<u8>);
+
+    fn apply(&mut self, op: &Op<Write>) {
+        self.first.get_or_insert(op.id);
+        self.register.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        self.register.state_bytes()
+    }
+
+    fn read(&self) -> (Option<u8>, Vec<u8>) {
+        self.register.read()
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        if self.first == Some(id) {
+            Outcome::Visible
+        } else {
+            self.register.outcome(id)
+        }
+    }
+}
+
+#[test]
+fn c4_every_copy_gives_the_same_outcome_for_the_same_operation() {
+    expect_violation::<FirstArrivalVisible>("C4");
+}
