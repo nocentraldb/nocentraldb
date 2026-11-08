@@ -222,6 +222,15 @@ impl Log {
         }
     }
 
+    /// The rejected changes, in log order.
+    pub(crate) fn rejected(&self) -> Vec<Change> {
+        self.entries
+            .iter()
+            .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
+            .map(|entry| entry.change.clone())
+            .collect()
+    }
+
     fn entry(&self, id: ChangeId) -> Option<&Entry> {
         let index = usize::try_from(self.position_of(id)?.0 - 1).ok()?;
         self.entries.get(index)

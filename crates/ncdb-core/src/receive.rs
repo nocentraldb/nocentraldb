@@ -107,6 +107,12 @@ impl std::error::Error for ReceiveError {}
 impl Log {
     /// Receives a frame: appends it, takes it through the steps and
     /// records its state, all in this call. A duplicate changes nothing.
+    ///
+    /// When the frame is a control change that passes, the rejected changes
+    /// of the space are checked again in the same call (D11), until no
+    /// further control change passes. Since every check depends only on the
+    /// change and the set of control changes added, the states the log ends
+    /// in depend only on the set of changes received, not on their order.
     pub fn receive(
         &mut self,
         bytes: &[u8],
@@ -119,10 +125,35 @@ impl Log {
         })?;
         if let Appended::New(_) = appended {
             let state = check(&change, checks, fold);
+            let control_passed = is_folded_control(&change, &state);
             self.set_state(change.id(), state);
+            if control_passed {
+                self.check_rejected_again(checks, fold);
+            }
         }
         Ok(appended)
     }
+
+    /// Checks every rejected change again, in log order, and again after any
+    /// control change among them passes, since it may let others pass.
+    fn check_rejected_again(&mut self, checks: &mut impl Checks, fold: &mut impl Fold) {
+        loop {
+            let mut control_passed = false;
+            for change in self.rejected() {
+                let state = check(&change, checks, fold);
+                control_passed |= is_folded_control(&change, &state);
+                self.set_state(change.id(), state);
+            }
+            if !control_passed {
+                return;
+            }
+        }
+    }
+}
+
+/// Whether a change is a control change that passed its checks.
+fn is_folded_control(change: &Change, state: &State) -> bool {
+    change.header().kind == Kind::CONTROL && matches!(state, State::Folded { .. })
 }
 
 /// Steps 2 to 7 for one change.
