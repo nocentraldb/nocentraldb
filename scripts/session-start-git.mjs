@@ -15,7 +15,7 @@
 // sessions (CLAUDE_CODE_REMOTE=true) and always exits 0, so it cannot block a
 // session from starting.
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 const NAME = "session-start-git";
 
@@ -56,8 +56,8 @@ const hidden = git("ls-files", "-v")
 const additions = new Map();
 for (const file of hidden) {
   const indexed = git("show", `:${file}`).raw;
-  const current = readFileSync(file, "utf8");
-  if (!current.startsWith(indexed)) {
+  const current = existsSync(file) ? readFileSync(file, "utf8") : "";
+  if (!existsSync(file) || !current.startsWith(indexed)) {
     leave(`${file} is hidden from git and changed beyond an addition`);
   }
   additions.set(file, current.slice(indexed.length));
