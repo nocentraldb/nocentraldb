@@ -11,7 +11,7 @@ apps/                 applications (empty for now)
 docs/rfc/             design documents
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
-factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, DECISIONS.md
+factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, decisions/ (the decision log, read with pnpm decisions)
 changes/              change fragments, one per product-changing pull request (writer's guide: changes/README.md)
 release-notes/        curated release notes, one X.Y.Z.md per release, and index.json: every published beta and release
 scripts/              repository tooling (check-pins.mjs) and its tests, incl. the workflow contracts ci-workflow.test.mjs, changes-workflow.test.mjs and release-workflow.test.mjs, and contributor-kit.test.mjs
