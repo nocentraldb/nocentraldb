@@ -312,15 +312,16 @@ test("use case 1's list of what it does not cover names the two limits that RFC 
 });
 
 test("RFC 0003 no longer says the use cases pass a public key to members.add", () => {
-  const rfc = read(RFC_0003);
-  assert.ok(!/agentPublicKey/.test(rfc), "RFC 0003 still names agentPublicKey");
+  // The accepted reading 4 in "Agreement with GENESIS.md and RFC 0001" keeps
+  // naming agentPublicKey as the record of what it changed; only the SDK
+  // section's present-tense note must follow the use case.
+  const sdk = section(read(RFC_0003), "How the SDK hides keys");
   assert.ok(
-    links(
-      rfc
-        .split("\n")
-        .find((l) => /use cases/i.test(l) && /members\.add/.test(l)) ?? "",
-      "use-cases.md#3-an-outside-agent-limited-to-one-space",
-    ),
-    "RFC 0003's sentence on the use cases does not link use case 3",
+    !/agentPublicKey/.test(sdk),
+    "RFC 0003's SDK section still names agentPublicKey",
+  );
+  assert.ok(
+    links(sdk, "use-cases.md#3-an-outside-agent-limited-to-one-space"),
+    "RFC 0003's SDK section does not link use case 3",
   );
 });
