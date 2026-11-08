@@ -145,3 +145,77 @@ test("every JSON example in RFC 0005 parses", () => {
     assert.doesNotThrow(() => JSON.parse(block), `invalid JSON:\n${block}`);
   }
 });
+
+// The owner's review (Carsten, 2026-11-08): every decision is recorded where
+// it is asked, the proposed reading of GENESIS.md is accepted, personal data
+// in free text gets its own section, and a CRM example shows a person who is
+// not a member.
+const DECIDED = "Decided (Carsten, 2026-11-08)";
+
+/** The text of each owner decision, from its "**Dn." line to the next one. */
+const decisions = (markdown) => {
+  const body = section(markdown, "Decisions for the owner");
+  return [
+    ...body.matchAll(/^\*\*(D\d+)\.[\s\S]*?(?=^\*\*D\d+\.|(?![\s\S]))/gm),
+  ].map((match) => ({ id: match[1], text: match[0] }));
+};
+
+test("every owner decision in RFC 0005 records the owner's decision", () => {
+  const found = decisions(read());
+  assert.ok(found.length >= 14, `${RFC} lists ${found.length} decisions`);
+  for (const { id, text } of found) {
+    assert.ok(
+      text.includes(DECIDED),
+      `${RFC}: ${id} does not say "${DECIDED}"`,
+    );
+  }
+});
+
+test("the proposed reading of GENESIS.md in RFC 0005 is marked accepted", () => {
+  const agreement = section(read(), "Agreement with GENESIS.md");
+  const reading = agreement
+    .split("\n")
+    .find((line) => line.startsWith("A point for the owner"));
+  assert.ok(reading, `${RFC} has no proposed reading of GENESIS.md`);
+  assert.ok(
+    reading.includes("Accepted (Carsten, 2026-11-08)"),
+    `${RFC}: the proposed reading of GENESIS.md is not marked accepted`,
+  );
+});
+
+test("RFC 0005 has a section on personal data in free text", () => {
+  const found = headingLines(read()).map((heading) => heading.toLowerCase());
+  assert.ok(
+    found.some((heading) => heading.startsWith("personal data in free text")),
+    `${RFC} has no section starting with "Personal data in free text"`,
+  );
+});
+
+test("RFC 0005 shows a customer who is a person but not a member", () => {
+  const examples = codeBlocks(read(), "ts").join("\n");
+  assert.match(
+    examples,
+    /customers: nc\.collection\(\{[\s\S]*?\.personal\(\{ person: "self" \}\)/,
+    `${RFC} has no "customers" collection with personal fields about the customer`,
+  );
+});
+
+test("the task board's schema and its lock example name the same fields", () => {
+  const markdown = read();
+  const schema = codeBlocks(markdown, "ts")[0];
+  const inSchema = new Set(
+    [
+      ...schema.matchAll(
+        /^\s+(\w+): nc\.(?!index|reach|view|collection)\w+\(/gm,
+      ),
+    ].map((match) => match[1]),
+  );
+  inSchema.delete("body"); // rich text: left out of the lock example on purpose
+  const lock = JSON.parse(codeBlocks(markdown, "json")[0]);
+  const inLock = new Set(
+    Object.values(lock.collections).flatMap((collection) =>
+      Object.keys(collection.fields),
+    ),
+  );
+  assert.deepEqual([...inSchema].sort(), [...inLock].sort());
+});
