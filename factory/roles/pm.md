@@ -56,7 +56,7 @@ Check test first on every PR:
 - Spot-check at least one: check out the test commit, run that test, and see it fail.
 - No test was weakened or deleted to get green without a stated reason.
 
-Check the size of every code and test file the PR adds or grows. A file past the limit in CONFIG.md goes back to be split by concern; a file the PR did not touch that is already past it becomes a ticket.
+The gate rejects a code or test file past the limit in CONFIG.md (`repo:file-size`), so a PR with a green gate has none. Still look at every file the PR grows close to the limit: send the PR back when it stays under the limit only by splitting a file badly, along lines or helpers instead of concerns.
 
 A PR that fails this goes back, however good the code is. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
 
