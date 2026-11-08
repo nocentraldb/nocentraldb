@@ -122,10 +122,16 @@ impl BasicValue {
     /// Whether the kind allows `value`. `Value::Null`, the empty value,
     /// clears a field of any kind.
     fn allows(&self, value: &Value) -> bool {
+        matches!(value, Value::Null) || self.kind.allows(value)
+    }
+}
+
+impl Kind {
+    /// Whether `value` is a value of this kind. The empty value is not.
+    pub(crate) fn allows(&self, value: &Value) -> bool {
         const MAX: u64 = i64::MAX as u64;
-        match (&self.kind, value) {
-            (_, Value::Null)
-            | (Kind::Text, Value::Text(_))
+        match (self, value) {
+            (Kind::Text, Value::Text(_))
             | (Kind::Float, Value::Float(_))
             | (Kind::Boolean, Value::Bool(_)) => true,
             (Kind::Integer, Value::Unsigned(n) | Value::Negative(n)) => *n <= MAX,

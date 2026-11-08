@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::basic::{Kind, OutsideSchema};
-use crate::cbor::Value;
+use crate::cbor::{self, Value};
 use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
 use crate::ids::{MemberId, OperationId};
@@ -90,29 +90,126 @@ pub struct Read {
 
 impl Set {
     /// A new addition of `element`, which replaces the removals of it that
-    /// `state` holds. Refuses an element the kind does not allow.
+    /// `state` holds and no addition has replaced yet. Refuses an element
+    /// the kind does not allow.
     pub fn add(
         &self,
-        _state: &State,
-        _id: OperationId,
-        _author: MemberId,
-        _stamp: Hlc,
-        _element: Value,
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
     ) -> Result<Edit, OutsideSchema> {
-        todo!()
+        if !self.kind.allows(&element) {
+            return Err(OutsideSchema);
+        }
+        let key = cbor::encode(&element);
+        let readded = state.readded();
+        let replaces = state
+            .removals()
+            .filter(|r| r.key() == key && !readded.contains(&r.id))
+            .map(|r| r.id)
+            .collect();
+        Ok(Edit {
+            id,
+            author,
+            stamp,
+            element,
+            action: Action::Add { replaces },
+        })
     }
 
     /// A new removal of `element`, which removes the live additions of it
     /// that `state` holds. Refuses an element the kind does not allow.
     pub fn remove(
         &self,
-        _state: &State,
-        _id: OperationId,
-        _author: MemberId,
-        _stamp: Hlc,
-        _element: Value,
+        state: &State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        element: Value,
     ) -> Result<Edit, OutsideSchema> {
-        todo!()
+        if !self.kind.allows(&element) {
+            return Err(OutsideSchema);
+        }
+        let key = cbor::encode(&element);
+        let observed = state
+            .live()
+            .into_iter()
+            .filter(|a| a.key() == key)
+            .map(|a| a.id)
+            .collect();
+        Ok(Edit {
+            id,
+            author,
+            stamp,
+            element,
+            action: Action::Remove { observed },
+        })
+    }
+}
+
+impl Edit {
+    /// The element's canonical bytes, by which elements are compared (O5
+    /// of RFC 0004).
+    fn key(&self) -> Vec<u8> {
+        cbor::encode(&self.element)
+    }
+
+    /// Stamp order, as for basic values: the stamp, then the author member
+    /// id, then the operation id.
+    fn order(&self) -> (Hlc, MemberId, OperationId) {
+        (self.stamp, self.author, self.id)
+    }
+
+    /// The ids it names: an addition's replaced removals, a removal's
+    /// observed tags.
+    fn names(&self) -> &BTreeSet<OperationId> {
+        match &self.action {
+            Action::Add { replaces } => replaces,
+            Action::Remove { observed } => observed,
+        }
+    }
+
+    fn is_add(&self) -> bool {
+        matches!(self.action, Action::Add { .. })
+    }
+}
+
+impl State {
+    fn additions(&self) -> impl Iterator<Item = &Edit> {
+        self.edits.values().filter(|e| e.is_add())
+    }
+
+    fn removals(&self) -> impl Iterator<Item = &Edit> {
+        self.edits.values().filter(|e| !e.is_add())
+    }
+
+    /// T: the tags every received removal observed.
+    fn removed(&self) -> BTreeSet<OperationId> {
+        self.removals()
+            .flat_map(|r| r.names().iter().copied())
+            .collect()
+    }
+
+    /// The removals every received addition replaces.
+    fn readded(&self) -> BTreeSet<OperationId> {
+        self.additions()
+            .flat_map(|a| a.names().iter().copied())
+            .collect()
+    }
+
+    /// A: the additions no received removal observed, in id order.
+    fn live(&self) -> Vec<&Edit> {
+        let removed = self.removed();
+        self.additions()
+            .filter(|a| !removed.contains(&a.id))
+            .collect()
+    }
+
+    /// The canonical bytes of the elements with a live addition.
+    fn present(&self) -> BTreeSet<Vec<u8>> {
+        self.live().into_iter().map(Edit::key).collect()
     }
 }
 
@@ -121,19 +218,90 @@ impl FieldType for Set {
     type Operation = Edit;
     type Read = Read;
 
-    fn apply(&self, _state: &mut State, _op: &Edit) {
-        todo!()
+    /// Keeps every operation it receives; the live additions and the
+    /// removed tags are computed from them, so the state is a function of
+    /// the set of operations, whatever their order or repeats.
+    fn apply(&self, state: &mut State, op: &Edit) {
+        state.edits.entry(op.id).or_insert_with(|| op.clone());
     }
 
-    fn state_bytes(&self, _state: &State) -> Vec<u8> {
-        todo!()
+    /// The canonical CBOR (RFC 0002's profile) of every operation received,
+    /// in operation id order: `[[id, author, stamp, element, action,
+    /// [named id…]]…]`, where the action is 0 for an addition (naming the
+    /// removals it replaces) and 1 for a removal (naming the tags it
+    /// observed), and an id is `[change id, position]`. The bytes of the
+    /// local view, not a wire format.
+    fn state_bytes(&self, state: &State) -> Vec<u8> {
+        let id = |id: &OperationId| {
+            Value::Array(vec![
+                Value::Bytes(id.change.0.to_vec()),
+                Value::Unsigned(id.position),
+            ])
+        };
+        let edits = state
+            .edits
+            .values()
+            .map(|e| {
+                Value::Array(vec![
+                    id(&e.id),
+                    Value::Bytes(e.author.0.to_vec()),
+                    Value::Unsigned(e.stamp.0),
+                    e.element.clone(),
+                    Value::Unsigned(u64::from(!e.is_add())),
+                    Value::Array(e.names().iter().map(id).collect()),
+                ])
+            })
+            .collect();
+        cbor::encode(&Value::Array(edits))
     }
 
-    fn read(&self, _state: &State) -> Read {
-        todo!()
+    fn read(&self, state: &State) -> Read {
+        let readded = state.readded();
+        let mut elements: BTreeMap<Vec<u8>, Element> = BTreeMap::new();
+        for addition in state.live() {
+            elements.entry(addition.key()).or_insert_with(|| Element {
+                value: addition.element.clone(),
+                known: self.kind.allows(&addition.element),
+                lost_removals: Vec::new(),
+            });
+        }
+        let mut lost: Vec<&Edit> = state
+            .removals()
+            .filter(|r| !readded.contains(&r.id))
+            .collect();
+        lost.sort_by_key(|r| r.order());
+        for removal in lost {
+            if let Some(element) = elements.get_mut(&removal.key()) {
+                element.lost_removals.push(Removal {
+                    id: removal.id,
+                    author: removal.author,
+                    stamp: removal.stamp,
+                });
+            }
+        }
+        Read {
+            elements: elements.into_values().collect(),
+        }
     }
 
-    fn outcome(&self, _state: &State, _id: OperationId) -> Option<Outcome> {
-        todo!()
+    /// An addition is replaced by the received removal with the lowest
+    /// operation id that observed it, and visible otherwise. A removal is
+    /// replaced by the received addition with the lowest operation id that
+    /// names it; otherwise lost while its element is in the set, and
+    /// visible (applied) when it is not.
+    fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
+        let edit = state.edits.get(&id)?;
+        let by = state
+            .edits
+            .values()
+            .find(|e| e.is_add() != edit.is_add() && e.names().contains(&id));
+        if let Some(by) = by {
+            return Some(Outcome::Replaced(by.id));
+        }
+        Some(if !edit.is_add() && state.present().contains(&edit.key()) {
+            Outcome::Lost
+        } else {
+            Outcome::Visible
+        })
     }
 }
