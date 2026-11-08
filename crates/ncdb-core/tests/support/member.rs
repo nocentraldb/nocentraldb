@@ -12,8 +12,8 @@ use std::collections::BTreeSet;
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
 use ncdb_core::clock::Hlc;
 use ncdb_core::ids::{MemberId, ObjectId, OperationId, SpaceId};
-use ncdb_core::log::{Log, State};
-use ncdb_core::receive::{Checks, Fold, Opened, Verified};
+use ncdb_core::log::{Log, ParkReason, RejectReason, State};
+use ncdb_core::receive::{Checks, Fold, Stop};
 
 /// The space every test change belongs to.
 pub const SPACE: SpaceId = SpaceId([1; 16]);
@@ -59,13 +59,13 @@ impl Checks for Control {
         suite == SUITE
     }
 
-    fn verify(&self, change: &Change) -> Verified {
+    fn verify(&self, change: &Change) -> Result<(), Stop> {
         if !self.known(change.header().author) {
-            Verified::UnknownAuthor
+            Err(Stop::Rejected(RejectReason::UnknownAuthor))
         } else if change.signature() == GOOD {
-            Verified::Valid
+            Ok(())
         } else {
-            Verified::BadSignature
+            Err(Stop::Rejected(RejectReason::BadSignature))
         }
     }
 
@@ -77,15 +77,16 @@ impl Checks for Control {
                 .contains(&(header.author, header.key_generation))
     }
 
-    fn open(&self, change: &Change) -> Opened {
+    fn open(&self, change: &Change) -> Result<Payload, Stop> {
         let header = change.header();
         if !self.keys.contains(&header.key_generation) {
-            Opened::NoKey
+            Err(Stop::Rejected(RejectReason::NoKey))
         } else if header.payload == GARBLED {
-            Opened::Undecryptable
+            Err(Stop::Rejected(RejectReason::Undecryptable))
         } else {
             // The double's "ciphertext" is the plaintext payload map.
-            Opened::Plaintext(header.payload.clone())
+            Payload::decode(&header.payload)
+                .map_err(|_| Stop::Parked(ParkReason::UnknownPayloadFormat))
         }
     }
 

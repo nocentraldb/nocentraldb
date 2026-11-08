@@ -17,40 +17,40 @@ use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
 };
-use crate::redact::Size;
 
-/// The result of verifying a change's signature (step 3).
+/// Where a change stops when it fails a check: parked or rejected, with
+/// the reason of the step that failed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Verified {
-    /// The signature verifies under the author's signing key.
-    Valid,
-    /// No membership entry the member holds names the author.
-    UnknownAuthor,
-    /// The signature does not verify.
-    BadSignature,
+pub enum Stop {
+    /// Parked, at step 2 or 6.
+    Parked(ParkReason),
+    /// Rejected, at step 3, 4 or 5.
+    Rejected(RejectReason),
 }
 
-/// The result of decrypting a sealed change's payload (step 5). Its `Debug`
-/// output shows the plaintext only by its length.
-#[derive(Clone, PartialEq, Eq)]
-pub enum Opened {
-    /// The plaintext payload map.
-    Plaintext(Vec<u8>),
-    /// The member holds no key for the change's key generation.
-    NoKey,
-    /// The AEAD fails.
-    Undecryptable,
-}
-
-impl fmt::Debug for Opened {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Stop {
+    /// The step of RFC 0002 Amendment 1 whose reason this is.
+    pub fn step(self) -> u8 {
         match self {
-            Opened::Plaintext(bytes) => f
-                .debug_tuple("Plaintext")
-                .field(&Size(bytes.len(), "bytes"))
-                .finish(),
-            Opened::NoKey => f.write_str("NoKey"),
-            Opened::Undecryptable => f.write_str("Undecryptable"),
+            Stop::Parked(
+                ParkReason::UnknownSuite
+                | ParkReason::UnknownKind
+                | ParkReason::UnknownHeaderFormat
+                | ParkReason::UnknownHeaderKey,
+            ) => 2,
+            Stop::Parked(ParkReason::UnknownPayloadFormat | ParkReason::UnknownPayloadKey) => 6,
+            Stop::Rejected(RejectReason::UnknownAuthor | RejectReason::BadSignature) => 3,
+            Stop::Rejected(RejectReason::NotMember) => 4,
+            Stop::Rejected(RejectReason::NoKey | RejectReason::Undecryptable) => 5,
+        }
+    }
+}
+
+impl From<Stop> for State {
+    fn from(stop: Stop) -> State {
+        match stop {
+            Stop::Parked(reason) => State::Parked(reason),
+            Stop::Rejected(reason) => State::Rejected(reason),
         }
     }
 }
@@ -63,12 +63,14 @@ pub trait Checks {
     /// Whether this member knows the suite (step 2).
     fn knows_suite(&self, suite: u64) -> bool;
     /// Verifies the author's signature (step 3).
-    fn verify(&self, change: &Change) -> Verified;
+    fn verify(&self, change: &Change) -> Result<(), Stop>;
     /// Whether the author is a member at the change's key generation (step
     /// 4).
     fn is_member(&self, change: &Change) -> bool;
-    /// Decrypts a sealed change's payload (step 5).
-    fn open(&self, change: &Change) -> Opened;
+    /// Decrypts a sealed change's payload (step 5) and decodes it: a
+    /// payload that decrypts but is no payload map this core can read
+    /// stops at step 6.
+    fn open(&self, change: &Change) -> Result<Payload, Stop>;
     /// Adds a control change that passed steps 1 to 4 to the control state.
     fn add_control(&mut self, change: &Change);
 }
@@ -171,10 +173,8 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     if header.extensions().must_understand() {
         return State::Parked(ParkReason::UnknownHeaderKey);
     }
-    match checks.verify(change) {
-        Verified::Valid => {}
-        Verified::UnknownAuthor => return State::Rejected(RejectReason::UnknownAuthor),
-        Verified::BadSignature => return State::Rejected(RejectReason::BadSignature),
+    if let Err(stop) = checks.verify(change) {
+        return stop.into();
     }
     if !checks.is_member(change) {
         return State::Rejected(RejectReason::NotMember);
@@ -184,13 +184,9 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
         checks.add_control(change);
         return State::Folded { parked: Vec::new() };
     }
-    let plaintext = match checks.open(change) {
-        Opened::Plaintext(plaintext) => plaintext,
-        Opened::NoKey => return State::Rejected(RejectReason::NoKey),
-        Opened::Undecryptable => return State::Rejected(RejectReason::Undecryptable),
-    };
-    let Ok(payload) = Payload::decode(&plaintext) else {
-        return State::Parked(ParkReason::UnknownPayloadFormat);
+    let payload = match checks.open(change) {
+        Ok(payload) => payload,
+        Err(stop) => return stop.into(),
     };
     if payload.format != Payload::FORMAT {
         return State::Parked(ParkReason::UnknownPayloadFormat);
