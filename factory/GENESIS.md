@@ -44,7 +44,7 @@ When a requirement, a ticket or an RFC conflicts with these principles, follow t
 
 1. **The relay never reads content.** No feature, shortcut or debug path may give the relay, its operators or its backups a key or plaintext. A container with an agent that runs in the cloud joins as a visible member of the space.
 2. **Every copy converges.** The same set of changes yields the same state on every member, in any order of arrival, computed fields included. A merge rule that can diverge is a bug, however rare.
-3. **Nothing is lost silently.** Concurrent edits merge; history moves to a signed archive instead of being dropped; a client keeps data it does not understand yet. A change that arrives late, because a machine reconnects after days or weeks, and loses to a newer change stays identifiable as such.
+3. **Nothing is lost silently.** Concurrent edits merge; history moves to a signed archive instead of being dropped; a client keeps data it does not understand yet. A change that loses to a change its author had not seen, for example because its machine reconnects after days or weeks, stays identifiable as such, the same way on every member. When a change arrived differs from member to member, so it is never part of the shared state; a member may show it as local information only.
 4. **Say plainly what it does not do.** Every guarantee names its limits, the way Shred and audit above does. Never let a reader infer more than the design delivers. For example, the relay that can never make sense of the content is a great security feature. However, the local-first approach can lead to problems if you revoke access to a machine or person that had access before and holds a local copy.
 5. **A developer doesn’t need to care about keys.** The SDK manages keys so developers never handle one. Yet a change to how an app handles permissions or groups data into spaces can have a large impact, so the SDK makes it clear to the developer.
 6. **The apps only read from a result that is computed (never from the log).** Queries run only through declared indexes. Counts, blockers and rankings are computed fields and views that the database updates as it folds changes. Every index and view keeps its order, so results come sorted and paginated by default.
@@ -65,7 +65,7 @@ Each no-go says why, so you can judge cases this list does not name. When a tick
 **Correctness**
 
 - Never let two members end in different states from the same changes. Every other promise rests on convergence.
-- Never lose a change silently. A late change that loses to a newer one stays identifiable.
+- Never lose a change silently. A change that loses to a change its author had not seen stays identifiable on every member.
 - Never overwrite more than you change. Rich text takes focused edits, never a whole rewrite.
 - Never break an existing client or stored data. Schema and format changes are additive or come with a migration.
 
