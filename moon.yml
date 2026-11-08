@@ -55,9 +55,12 @@ tasks:
     # RFC check in
     # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
-    # its sections), scripts/rfc-0001.test.mjs (RFC 0001, the FAQ, the use cases
-    # and factory/GENESIS.md name what the relay sees and every erasure limit,
-    # and their links resolve; the /factory/**/* input covers GENESIS.md), and
+    # its sections), scripts/rfc-0004-examples.test.mjs (the byte-exact examples
+    # of RFC 0004 Amendment 1 are canonical CBOR and equal the committed
+    # vectors in docs/rfc/vectors/0004), scripts/rfc-0001.test.mjs (RFC 0001,
+    # the FAQ, the use cases and factory/GENESIS.md name what the relay sees and
+    # every erasure limit, and their links resolve; the /factory/**/* input
+    # covers GENESIS.md), and
     # the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
