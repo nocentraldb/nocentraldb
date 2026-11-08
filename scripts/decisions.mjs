@@ -175,9 +175,22 @@ function supersededBy(entries) {
   return by;
 }
 
-/** The decisions printed in full, each with what superseded it. */
-export function render(entries, _options = {}) {
+/**
+ * The decisions printed in full, each with what superseded it; with `index`,
+ * one line per decision instead.
+ */
+export function render(entries, options = {}) {
   const by = supersededBy(entries);
+  if (options.index) {
+    return entries
+      .map(({ file, date, ticket, title }) => {
+        const line = `${date} · ${ticket} · ${title}`;
+        return by.has(file)
+          ? `${line} · superseded by ${by.get(file).join(", ")}`
+          : line;
+      })
+      .join("\n");
+  }
   return entries
     .map(({ file, text }) => {
       const body = text.trim();
