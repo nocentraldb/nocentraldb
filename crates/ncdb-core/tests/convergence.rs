@@ -199,3 +199,41 @@ fn every_seed_shrinks_to_one_change_delivered_twice_once() {
         assert_eq!(deliveries(&divergence), config.copies + 1, "{divergence}");
     }
 }
+
+/// Broken on purpose: keeps every write in order of arrival, but its
+/// `PartialEq` compares nothing, so copies that hold the writes in different
+/// orders look equal. Its canonical state bytes show the difference.
+#[derive(Clone, Debug, Default)]
+struct ArrivalOrder(Vec<u8>);
+
+impl PartialEq for ArrivalOrder {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl ArrivalOrder {
+    #[allow(dead_code)]
+    fn state_bytes(&self) -> Vec<u8> {
+        self.0.clone()
+    }
+}
+
+impl Mergeable for ArrivalOrder {
+    type Change = u8;
+
+    fn apply(&mut self, change: &u8) {
+        if !self.0.contains(change) {
+            self.0.push(*change);
+        }
+    }
+}
+
+#[test]
+fn copies_are_compared_by_their_canonical_state_bytes_not_by_partial_eq() {
+    let result = convergence::check::<ArrivalOrder>(&Config::default(), |_| any::<u8>().boxed());
+    assert!(
+        result.is_err(),
+        "the harness took a lying PartialEq for convergence"
+    );
+}
