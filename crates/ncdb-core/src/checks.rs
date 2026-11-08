@@ -16,7 +16,7 @@ use crate::ids::MemberId;
 use crate::keys::{MemberPublicKey, SpaceKey};
 use crate::log::{ParkReason, RejectReason};
 use crate::receive::{Checks, Stop};
-use crate::seal::OpenError;
+use crate::seal::{self, OpenError};
 
 /// Step 4 and the control state behind it: whether the author is a member
 /// at the change's key generation, and what a control change that passed
@@ -39,18 +39,30 @@ pub struct SealChecks<M> {
 
 impl<M> SealChecks<M> {
     /// Checks that know no member key and no space key yet.
-    pub fn new(_membership: M) -> SealChecks<M> {
-        todo!()
+    pub fn new(membership: M) -> SealChecks<M> {
+        SealChecks {
+            members: BTreeMap::new(),
+            space_keys: BTreeMap::new(),
+            membership,
+        }
     }
 
     /// Learns a member's public keys, under the member id they hash to.
-    pub fn add_member(&mut self, _key: MemberPublicKey) {
-        todo!()
+    pub fn add_member(&mut self, key: MemberPublicKey) {
+        self.members.insert(key.id(), key);
     }
 
     /// Learns the space key of a key generation.
-    pub fn add_space_key(&mut self, _generation: u64, _key: SpaceKey) {
-        todo!()
+    pub fn add_space_key(&mut self, generation: u64, key: SpaceKey) {
+        self.space_keys.insert(generation, key);
+    }
+
+    /// The author's public keys; without them, the change stops at step 3
+    /// as "unknown author".
+    fn author(&self, change: &Change) -> Result<&MemberPublicKey, Stop> {
+        self.members
+            .get(&change.header().author)
+            .ok_or(Stop::Rejected(RejectReason::UnknownAuthor))
     }
 
     /// The membership behind step 4.
@@ -60,20 +72,25 @@ impl<M> SealChecks<M> {
 }
 
 impl<M: Membership> Checks for SealChecks<M> {
-    fn knows_suite(&self, _suite: u64) -> bool {
-        todo!()
+    fn knows_suite(&self, suite: u64) -> bool {
+        suite == seal::SUITE
     }
 
-    fn verify(&self, _change: &Change) -> Result<(), Stop> {
-        todo!()
+    fn verify(&self, change: &Change) -> Result<(), Stop> {
+        Ok(seal::verify(change, self.author(change)?)?)
     }
 
     fn is_member(&self, change: &Change) -> bool {
         self.membership.is_member(change)
     }
 
-    fn open(&self, _change: &Change) -> Result<Payload, Stop> {
-        todo!()
+    fn open(&self, change: &Change) -> Result<Payload, Stop> {
+        let author = self.author(change)?;
+        let key = self
+            .space_keys
+            .get(&change.header().key_generation)
+            .ok_or(Stop::Rejected(RejectReason::NoKey))?;
+        Ok(seal::open(change, author, key)?)
     }
 
     fn add_control(&mut self, change: &Change) {
