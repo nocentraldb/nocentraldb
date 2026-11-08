@@ -2,11 +2,16 @@
 
 REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-6
 
+**Changelog.**
+
+- **2026-11-07** · NOC-6 · The owner accepted D1 to D9 and the readings in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
+- **2026-11-07** · NOC-22 · [Amendment 1: the atomic unit and rejected changes](#amendment-1-atomic-unit-and-rejected-changes) settles which unit is atomic, adds the log state `rejected` and says what happens when the relay refuses a change the member already folded. It proposes D10 to D12 for the owner. The sentences it changes elsewhere are marked *(Amendment 1)*.
+
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
-**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged.
+**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) is a proposal for the owner (NOC-22): the sentences it marks describe its recommended options, and the pull request that adds it is the owner's sign-off.
 
 ## What this RFC does not cover
 
@@ -30,6 +35,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Log | The append-only sequence of changes of one space, on one member or on the relay. |
 | Fold | Applying the changes of the log to the local SQLite view. |
 | Cursor | A position in the relay's log of a space, from which a member asks for the changes after it. |
+| Parked | Kept in the log but not folded, because the client does not understand it yet; folded after an upgrade. A change or a single operation can be parked. |
+| Rejected | Kept in the log but not folded, because it failed a check: signature, membership or decryption. Checked again when a control change of its space arrives. *(Amendment 1.)* |
 
 ## A change at a glance
 
@@ -107,7 +114,7 @@ Inside the payload, the ordering metadata comes first (see [Ordering metadata](#
 
 ### Operations: object, field and value
 
-A change carries one or more operations, applied in the order of the array. A change is atomic: a member folds all of its operations or none of them. A change never spans two spaces, so a write transaction cannot span two spaces either, as RFC 0001 says in [What it is not](0001-nocentraldb.md#what-it-is-not).
+A change carries one or more operations, applied in the order of the array. A change is atomic in its checks: a member accepts all of its operations or none of them, because the signature, the membership check and the decryption cover the change as a whole. The fold has one exception: an operation the member's `model.lock.json` does not know is parked on its own, and the other operations of the change are folded (see [Versioning](#versioning-old-clients-keep-what-they-do-not-understand)). *(Amendment 1, [D10](#the-atomic-unit).)* A change never spans two spaces, so a write transaction cannot span two spaces either, as RFC 0001 says in [What it is not](0001-nocentraldb.md#what-it-is-not).
 
 Each operation names:
 
@@ -246,11 +253,11 @@ The implementation (NOC-14) commits test vectors: changes as bytes, with their i
 The format changes only by adding. Each layer carries its own version, and an old client knows what to do with every layer it cannot read:
 
 - **The frame never changes.** Its version stays 1. Every client can therefore store, forward and identify any change, and verify its signature, as long as it knows the change's suite (RFC 0003).
-- **Header keys 1 to 8 keep their meaning forever.** A new header format may add keys. Keys 1 to 63 are "must understand": a client that meets one it does not know stores the change but does not fold it. Keys from 64 up are "may ignore": a client that does not know them folds the change as if they were absent. The same rule holds for the payload map and the operation map.
+- **Header keys 1 to 8 keep their meaning forever.** A new header format may add keys. Keys 1 to 63 are "must understand": a client that meets one it does not know stores the change but does not fold it. Keys from 64 up are "may ignore": a client that does not know them folds the change as if they were absent. The same rule holds for the payload map. In the operation map, an unknown "must understand" key parks only that operation, as an unknown field does. *(Amendment 1, [D10](#the-atomic-unit).)*
 - **A higher header or payload format number** than the client knows means "stored, not folded".
-- **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived.
+- **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived. This is the one exception to the atomic change (see [Operations](#operations-object-field-and-value)).
 
-A change that a client keeps without folding is **parked**. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3).
+A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). Parked waits for an upgrade of the client. A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)). *(Amendment 1.)*
 
 ## The log on disk
 
@@ -266,15 +273,17 @@ log
 ├── space id         16 bytes
 ├── change id        32 bytes, unique per space
 ├── relay position   integer, or null while the relay has not confirmed the change
-├── state            folded or parked
+├── relay refusal    the relay's error code, or null              (Amendment 1)
+├── state            folded, parked or rejected                   (Amendment 1)
+├── reason           why parked or rejected, or null              (Amendment 1)
 └── frame            the exact bytes of the change, as received or written
 ```
 
-Appending a change and folding it happen in one SQLite transaction, so after a crash the log and the view always agree: a change is in both or in neither. Every other table, such as an index from author and sequence to change id, or the list of gaps, can be rebuilt from the frames. The frame is the only source of truth.
+Appending a change and folding it happen in one SQLite transaction, so after a crash the log and the view always agree: a change is in both or in neither. A parked or rejected change is appended in the same way, without a fold. Every other table, such as an index from author and sequence to change id, the list of gaps, or the list of parked operations of a folded change, can be rebuilt from the frames. The frame is the only source of truth.
 
-The state of an entry is local and may change: parked becomes folded after an upgrade. The frame never changes.
+The state of an entry is local and may change: parked becomes folded after an upgrade, and rejected becomes folded when the control change it lacked arrives (see [Rejected changes](#rejected-changes)). The state and the reason follow from the frames the member holds and its `model.lock.json`, never from the relay's answer. The frame never changes. *(Amendment 1.)*
 
-A change the member writes itself enters the log at once, folded and without a relay position. It is in the member's view before it leaves the device, and the member keeps working without a relay (island mode). When the relay accepts it, the member records the relay position.
+A change the member writes itself enters the log at once, folded and without a relay position. It is in the member's view before it leaves the device, and the member keeps working without a relay (island mode). When the relay accepts it, the member records the relay position. When the relay refuses it, the member records the refusal and the change stays folded (see [A change the relay refuses after the member folded it](#a-change-the-relay-refuses-after-the-member-folded-it)). *(Amendment 1.)*
 
 | Rejected | Why |
 | --- | --- |
@@ -360,7 +369,7 @@ RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are wr
 
 ## Decisions for the owner
 
-These are the decisions this RFC needed from the owner. Each lists the options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07), and the design above describes them.
+These are the decisions this RFC needed from the owner. Each lists the options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07), and the design above describes them. [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) adds D10 to D12, which wait for the owner.
 
 **D1. Ordering metadata.**
 
@@ -437,11 +446,93 @@ This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the p
 2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We propose that RFC 0001 and the FAQ link to that section. The owner agreed (Carsten, 2026-11-07); pm's follow-up ticket makes that change to RFC 0001 and the FAQ.
 3. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
 
+## Amendment 1: atomic unit and rejected changes
+
+Added on 2026-11-07 for NOC-22, after this RFC was merged. pm's review of RFC 0003 (keys), RFC 0005 (schema), RFC 0006 (the local view) and RFC 0007 (the relay) found two gaps in this RFC:
+
+1. **Two readings of "atomic".** [Operations](#operations-object-field-and-value) said a member folds all operations of a change or none. [Versioning](#versioning-old-clients-keep-what-they-do-not-understand) said an operation on an unknown collection or field is stored, and the rest of the change is folded. RFC 0005 and RFC 0006 build on the second reading.
+2. **No state for a change that fails a check.** The member log knew only `folded` and `parked`. RFC 0003 keeps a change that fails a check "marked as rejected". RFC 0007 does the same for a change the relay refuses after the member already folded it. RFC 0006 could not say what the view does with either.
+
+The log is an on-disk format, so the owner decides. The sentences this amendment changes elsewhere in the RFC are marked *(Amendment 1)* and describe the recommended options. Nothing else in the RFC changes.
+
+### What a member does with a change it receives
+
+A member takes every change through the same steps, in this order. A change stops at the first step it does not pass, and its state says where it stopped.
+
+| Step | Fails when | State, and its reason |
+| --- | --- | --- |
+| 1. Decode | The frame is not well-formed or not canonical ([The CBOR profile](#the-cbor-profile)). | Not appended: without canonical bytes there is no stable change id. The member reports it, with the relay or peer that sent it. |
+| 2. Understand the header | The suite, the kind, the header format or a "must understand" header key is unknown. | Parked: unknown suite, kind or format. |
+| 3. Verify the signature | The author's signing key is not known yet, because no membership entry the member holds names the author; or the signature does not verify. | Rejected: unknown author, or bad signature. |
+| 4. Check membership | The control changes the member holds do not make the author a member at the change's key generation (RFC 0003). | Rejected: not a member. |
+| 5. Decrypt | The member holds no key envelope for the change's key generation; or the AEAD fails. | Rejected: no key, or undecryptable. |
+| 6. Understand the payload | The payload format or a "must understand" payload key is unknown. | Parked: unknown format. |
+| 7. Fold, operation by operation | An operation names a collection or field the member's `model.lock.json` does not know, or carries an unknown "must understand" key. | The change is folded; that operation is parked, with its reason. |
+
+Steps 2 to 6 decide for the change as a whole. Step 7 decides per operation. A control change (kind 1) stops after step 4: it has no payload to decrypt, and RFC 0003 and the membership RFC say what it does.
+
+### The atomic unit
+
+The change is the atomic unit of everything that checks it: the signature, the membership and the decryption cover the change as a whole, so a member accepts all of its operations or none of them. The one exception is the fold of an operation the member's model does not know yet: that operation is parked on its own, the others are folded, and the parked one is folded after an upgrade, in the total order, as if it had just arrived.
+
+**What this does not do.** An old client can show part of one write transaction. When a newer app sets `title` and a new field `dueDate` in one transaction, an old client shows the new title without the due date, because it does not know the field. An invariant of the app that spans a known and an unknown field does not hold on the old client until it upgrades. After the upgrade it reaches the same state as every other client, because each field's state is a function of the set of its operations (RFC 0004). This is the reading of principle 2 the owner already accepted for parked changes ([Conflicts](#conflicts-with-genesismd-and-rfc-0001), point 1).
+
+**D10. The atomic unit.**
+
+- A. The change is atomic for every check; an operation the client's model does not know is parked on its own and the rest of the change is folded. *(recommended)*
+- B. The change is atomic for everything: one unknown operation parks the whole change.
+
+Decision: open, for the owner. Recommendation: A. Under B, every change a newer app writes to a new field together with known ones would hide the known edits from old clients too, so old clients would fall further behind with every schema addition. RFC 0005 relies on A to keep old clients working for weeks. A cannot weaken a check, because no check can pass for part of a change.
+
+### Rejected changes
+
+A change is **rejected** when it failed step 3, 4 or 5: it is kept in the log, with its reason, and not folded. Rejected is distinct from parked. A parked change waits for an upgrade of the client, which teaches it what the change means. A rejected change waits for a control change of its space, which gives it the author's keys, the membership or the key it lacked, or it waits forever.
+
+**When a rejected change is checked again.** Whenever a member appends a control change of a space (a membership entry, a key envelope or a key chain entry, RFC 0003), it checks the rejected changes of that space again, from step 3, in the same transaction. A change that now passes is folded as if it had just arrived. The result of each check depends only on the change and the control changes the member holds, never on the order in which they arrived or on the time. So a change that arrives before its author's membership entry or before its key envelope is folded as soon as that entry arrives, and two members that hold the same changes hold the same rejected changes and the same view (principle 2). A bad signature or an undecryptable payload under a key the member holds never passes later; the core may skip those when it checks again.
+
+**A change that passed and fails later.** Whether a control change that arrives later can make a passed check fail, for example a removal that the membership rules date back, is the membership RFC's question. If it can, the change moves from folded to rejected in the transaction that appends the control change, and the fields it touched are recomputed from their remaining operations. The view then equals the view of a member that never folded the change.
+
+**What a rejected change keeps.** It stays in the log, counts towards its author's sequence and its gaps, and is forwarded like every other change, because a member that holds more control changes may accept it. The SDK reports how many changes are rejected in each space and why. A rejected change is never dropped (principle 3) and never folded "for now".
+
+**D11. A state for changes that fail a check.**
+
+- A. A third log state, rejected, with a reason. A change that lacks a membership entry or a key envelope is rejected too, and every rejected change is checked again when a control change of its space arrives. *(recommended)*
+- B. Rejected only for checks that can never pass (bad signature, undecryptable). A change that lacks a membership entry or a key envelope is parked, with the reason "waiting".
+- C. No new state: a change that fails a check is dropped and reported.
+
+Decision: open, for the owner. Recommendation: A. Each state then has one trigger: an upgrade for parked, a control change for rejected. B needs a member to tell "not yet" from "never", and it cannot: an author whose membership entry has not arrived looks exactly like a stranger. C loses changes that arrive before their key envelope, which in island mode is common, and two members would end in different states depending on the order of arrival (principles 2 and 3).
+
+### A change the relay refuses after the member folded it
+
+A member folds its own change before it sends it (see [On a member](#on-a-member)). The relay may then refuse it (RFC 0007): most often because the author was removed from the space while it worked offline, or because a control change breaks the membership rules.
+
+The relay's refusal does not change the member's log state. The member records the relay's error code in the entry's `relay refusal`, keeps the change folded, and the SDK reports it to the app as refused by the relay. The member does not push that change to that relay again. It then checks the change again from step 3 with the control changes it holds: if its own check fails, for example because it now holds the membership entry that removed its author, the change becomes rejected like any other change; otherwise it stays folded.
+
+**What this does not do.** Members that sync only through the relay never receive a refused change. Its author sees the write in its view, and they do not. A member that receives it directly from a peer, in island mode, folds it if its own checks pass. The SDK tells the author's app, which is the only place that can tell its user. The core never undoes the write on its own; the app can write a new change that reverts it.
+
+**D12. A folded change the relay refuses.**
+
+- A. It stays folded; the member records and reports the refusal, and only the member's own check can make it rejected. *(recommended)*
+- B. It becomes rejected, and the member recomputes its view without it.
+- C. The member keeps pushing it, until the relay accepts it.
+
+Decision: open, for the owner. Recommendation: A. Under B, the state would depend on the relay's answer, which no other member sees: a peer that received the change directly keeps it folded, so two members holding the same changes would differ (principle 2), and the relay could make a member drop any of its own changes by refusing it. C never ends for a removed author.
+
+### What this means for the RFCs built on this one
+
+These RFCs are open pull requests. pm aligns them once the owner has decided; this amendment changes none of them.
+
+- **RFC 0003 (keys).** "Kept and marked as rejected" is the state rejected, as D11 defines it.
+- **RFC 0005 (schema).** Its parking of single operations is D10 A.
+- **RFC 0006 (the local view).** Its fold step 2 ends in rejected. Its step 3 ends in rejected with the reason "no key" when the key envelope is missing, not in parked; an unknown suite or format stays parked. Its step 4 is step 7 above.
+- **RFC 0007 (the relay).** For `bad_signature`, `author_not_member` and `membership_rule`, "keep the change marked as rejected" becomes "record the relay's refusal and check the change again", as D12 says. A change the member's own check rejects is rejected as D11 says.
+
 ## Summary of the choices
 
 | Question | This RFC's answer |
 | --- | --- |
-| What is a change? | A signed frame around a header the relay reads and an AEAD payload it cannot. One change is one atomic write in one space. |
+| What is a change? | A signed frame around a header the relay reads and an AEAD payload it cannot. One change is one write in one space, checked as a whole; only an operation the client's model does not know is parked on its own (Amendment 1). |
+| What happens to a change that fails a check? | It is kept as rejected, with its reason, and checked again when a control change of its space arrives (Amendment 1). |
 | How are objects identified? | 128 random bits, generated by the member that creates the object. |
 | How are changes identified? | The hash of the signed header bytes. |
 | How are changes ordered? | A hybrid logical clock for the total order, and dependencies on the author's heads for the causal order. |

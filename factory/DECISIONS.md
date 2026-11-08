@@ -164,6 +164,12 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: `std::fs` compiles for `wasm32-unknown-unknown` and fails only when called, so it cannot prove the build task fails; the fixture uses `std::os::unix`, which does not exist there. A call into `std::fs` at runtime is caught by the test-wasm task instead, as long as a test reaches it.
 - Instead of: the ticket's example `std::fs`, which would have made the detector test pass the build and prove nothing.
 
+### 2026-11-07 · NOC-22 · RFC 0002's amendment is a new section plus marked sentences, and keeps "refused by the relay" apart from "rejected"
+
+- Decided by: coding agent (NOC-22)
+- Why: the amendment needs one place for the owner's decisions D10 to D12, and the old sentences must not contradict it, so each changed sentence carries an *(Amendment 1)* mark and a dated changelog line sits at the top. "Rejected" is a log state that only the member's own checks set; the relay's refusal is recorded beside it, so the state stays a function of the changes a member holds (principle 2).
+- Instead of: rewriting the sections silently, or letting RFC 0007's "marked as rejected" for a relay refusal set the log state.
+
 ### 2026-11-07 · NOC-18 · check-pins reads Cargo.toml with the pinned smol-toml devDependency
 
 - Decided by: coding agent (NOC-18)
