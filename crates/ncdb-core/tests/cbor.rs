@@ -327,3 +327,40 @@ fn the_error_names_offset_and_reason() {
         "not canonical CBOR at byte 2: a shorter or other canonical form exists"
     );
 }
+
+/// The value of a half-precision pattern, built from its bits through
+/// single precision, with no floating-point arithmetic.
+fn half_reference(half: u16) -> f32 {
+    let sign = u32::from(half >> 15) << 31;
+    let exponent = u32::from((half >> 10) & 0x1f);
+    let mantissa = u32::from(half & 0x3ff);
+    let bits = match (exponent, mantissa) {
+        (0, 0) => sign,
+        (0, _) => {
+            // m * 2^-24, normalised: the highest set bit k gives 2^(k-24).
+            let k = 31 - mantissa.leading_zeros();
+            sign | (k + 127 - 24) << 23 | (mantissa << (23 - k)) & 0x7f_ffff
+        }
+        (0x1f, 0) => sign | 0x7f80_0000,
+        (0x1f, _) => unreachable!("NaN"),
+        _ => sign | (exponent + 127 - 15) << 23 | mantissa << 13,
+    };
+    f32::from_bits(bits)
+}
+
+#[test]
+fn every_half_precision_float_has_its_exact_value() {
+    for half in 0..=u16::MAX {
+        if half & 0x7c00 == 0x7c00 && half & 0x03ff != 0 {
+            continue;
+        }
+        let expected = f64::from(half_reference(half));
+        let mut bytes = vec![0xf9];
+        bytes.extend_from_slice(&half.to_be_bytes());
+        match cbor::decode(&bytes) {
+            Ok(Value::Float(x)) => assert_eq!(x.to_bits(), expected.to_bits(), "{half:04x}"),
+            other => panic!("{half:04x} decoded as {other:?}"),
+        }
+        assert_eq!(cbor::encode(&Value::Float(expected)), bytes, "{half:04x}");
+    }
+}
