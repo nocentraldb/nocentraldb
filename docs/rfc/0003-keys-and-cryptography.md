@@ -291,7 +291,7 @@ The names here are sketches; the public API is the owner's to decide (GENESIS.md
 - **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. The one way a private key leaves a device is the account recovery flow, which a person runs, not an app.
 - **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
-The use cases currently show `members.add(agentPublicKey)`. A public key is not secret, but passing an invitation or a member id keeps developers away from key material altogether; this is part of decision 12.
+[Use case 3](../use-cases.md#3-an-outside-agent-limited-to-one-space) shows `members.add(invitation)` and `members.remove(memberId)`. A public key is not secret, but passing an invitation or a member id keeps developers away from key material altogether; this is part of decision 12.
 
 ## Keys never reach logs, errors or telemetry
 

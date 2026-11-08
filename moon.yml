@@ -16,6 +16,8 @@ tasks:
       - "/.moon/**/*.yml"
       - "/scripts/**/*"
   pins:
+    # Reads every Cargo.toml with the smol-toml devDependency, hence the
+    # Cargo.toml globs and the lockfile input.
     command: "node scripts/check-pins.mjs"
     inputs:
       - "/.prototools"
@@ -25,6 +27,19 @@ tasks:
       - "/pnpm-workspace.yaml"
       - "/apps/*/package.json"
       - "/packages/*/package.json"
+      - "/pnpm-lock.yaml"
+      - "/Cargo.toml"
+      - "/**/Cargo.toml"
+  file-size:
+    # No tracked code or test file is longer than the limit in the row
+    # "Largest code or test file" of factory/CONFIG.md (NOC-43). It reads the
+    # file list from git, which leaves out node_modules/ and target/; the
+    # script skips them as well.
+    command: "node scripts/check-file-size.mjs"
+    inputs:
+      - "/factory/CONFIG.md"
+      - "/scripts/check-file-size.mjs"
+      - "/**/*.{rs,ts,tsx,js,mjs,cjs,sh,py}"
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
@@ -33,12 +48,17 @@ tasks:
     # package.json and .github/dependabot.yml; both parse YAML with the `yaml`
     # devDependency, hence the lockfile input), the contributor kit check in
     # scripts/contributor-kit.test.mjs (it reads .github/, CONTRIBUTING.md,
-    # README.md and the docs its links point into), the RFC check in
+    # README.md and the docs its links point into, and the moon config of
+    # every project, whose gate tasks the README's task table must list), the
+    # RFC check in
     # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
     # its sections), scripts/rfc-0004-examples.test.mjs (the byte-exact examples
     # of RFC 0004 Amendment 1 are canonical CBOR and equal the committed
-    # vectors in docs/rfc/vectors/0004), and
+    # vectors in docs/rfc/vectors/0004), scripts/rfc-0001.test.mjs (RFC 0001,
+    # the FAQ, the use cases and factory/GENESIS.md name what the relay sees and
+    # every erasure limit, and their links resolve; the /factory/**/* input
+    # covers GENESIS.md), and
     # the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
@@ -49,7 +69,8 @@ tasks:
     # crates/ncdb-core/moon.yml, checks that every #[test] of ncdb-core also
     # runs on wasm32, and builds a platform-only crate for wasm32 to prove the
     # build-wasm task fails on it. scripts/decisions.test.mjs tests the
-    # decision log tooling and reads factory/ and this file.
+    # decision log tooling and reads factory/ and this file;
+    # scripts/check-file-size.test.mjs reads this file too.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -65,9 +86,11 @@ tasks:
       - "/README.md"
       - "/docs/**/*"
       - "/moon.yml"
+      - "/.moon/tasks/*.yml"
+      - "/crates/*/moon.yml"
+      - "/packages/*/moon.yml"
       - "/AGENTS.md"
       - "/factory/**/*"
-      - "/crates/ncdb-core/moon.yml"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
   fragments:
@@ -144,6 +167,7 @@ tasks:
     deps:
       - "~:format-check"
       - "~:pins"
+      - "~:file-size"
       - "~:test"
       - "~:fragments"
       - "~:decisions"

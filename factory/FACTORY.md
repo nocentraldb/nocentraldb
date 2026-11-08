@@ -22,12 +22,12 @@ flowchart TD
     main -.->|"daily note: shipped, waiting, decided"| source
 ```
 
-- **Source: the owner.** Says what to build, in GENESIS.md and in conversation with pm. Approves every merge.
+- **Source: the owner.** Says what to build, in GENESIS.md and in conversation with pm. Approves every merge that the merge rule in CONFIG.md reserves for the owner.
 - **Sink: the tracker.** Holds every piece of intended work as a ticket. Tickets outlive every session and every agent.
 - **Gate: pm.** The one agent between the tracker and the coding agents. It decides what runs, reviews what comes back, and is the only agent the owner talks to.
 - **Drain: the coding agents.** As many as CONFIG.md allows, each on one ticket.
 
-The factory runs for days without the owner, up to the point where a PR is ready. Merges wait for the owner, so the owner's review is the bottleneck by design; pm keeps it small by listing the waiting PRs in the daily note and keeping PRs small.
+The factory runs for days without the owner, up to the point where a PR is ready. The merge rule in CONFIG.md says which PRs wait for the owner's review, such as every design decision, and which pm may merge itself, such as a faithful implementation of a decided design. The owner's review is the bottleneck by design; pm keeps it small by listing the waiting PRs in the daily note and keeping PRs small.
 
 ## The life of a ticket
 
@@ -39,7 +39,7 @@ A ticket moves through these steps. Each step has one owner, and nothing skips a
 4. **Assigned.** pm hands the ticket to a coding agent, if a lane is free and no running agent touches the same files.
 5. **Built.** The agent works on the ticket's own branch, runs the gate until it is green, and opens a draft PR that names the ticket.
 6. **Reviewed.** pm reviews the PR against the ticket and GENESIS.md. The agent fixes what pm, CI or a reviewer finds.
-7. **Waiting for the owner.** pm lists the PR in the daily note. It waits until the owner approves it as the merge rule in CONFIG.md says. CONFIG.md says whether the PR still holds its lane while it waits; its coding session stays open either way, to answer review.
+7. **Waiting for the owner.** When the merge rule in CONFIG.md reserves the PR for the owner, pm lists it in the daily note, and it waits until the owner approves it. A PR the merge rule lets pm merge skips this step, and pm lists it in the next daily note after the merge. CONFIG.md says whether the PR still holds its lane while it waits; its coding session stays open either way, to answer review.
 8. **Merged.** pm merges, closes the ticket, and archives the coding session, which frees its lane if it still held one.
 
 A ticket that depends on an unmerged PR does not wait: its agent branches from that PR (a stacked PR), and pm merges the stack in order.
@@ -60,7 +60,7 @@ pm does:
 pm never:
 
 - Writes product code.
-- Merges without the owner's approval.
+- Merges a PR that the merge rule reserves for the owner without the owner's approval.
 - Starts more agents than CONFIG.md allows.
 - Decides what GENESIS.md says needs the owner.
 
@@ -70,6 +70,7 @@ pm never:
 - **Name the ticket.** Every commit message and PR title carries the ticket id, so the history leads back to the ticket.
 - **Test first.** Work in red-green-refactor cycles: a failing test for each behaviour, committed before the code that makes it pass, so the history shows the red step.
 - **Small files, one concern each.** No code or test file grows past the limit in CONFIG.md. A file that would is a sign that it mixes concerns: split it along them, in its own refactor commit with the tests green, instead of letting it grow.
+- **Rewrite, don't append a correction.** When a change makes existing text wrong or incomplete, rewrite the passage so that it reads as one consistent statement, as if it had been written that way from the start. Never leave the old sentence and add one that takes it back ("it sees more than that", "that is not all").
 - **Green before ready.** Run the gate command from CONFIG.md until it passes. Never weaken a gate to get there.
 - **Promises become tickets.** Anything you would do "later" goes into a ticket or the PR, never only into your session: the session ends, the ticket stays.
 - **Record your calls.** A decision a reviewer could question goes into the decision log with the ticket id.
@@ -80,7 +81,7 @@ pm never:
 
 Two kinds of things wait for the owner:
 
-- **Merges.** Every PR, as the merge rule in CONFIG.md says.
+- **Merges.** Every PR that the merge rule in CONFIG.md reserves for the owner.
 - **Decisions GENESIS.md reserves for the owner.** The product decides what these are, so GENESIS.md lists them, not this file.
 
 Each question to the owner becomes its own ticket, assigned to the owner, with the label from CONFIG.md. It is one question that can be answered from a phone, with the options and pm's recommendation. Work that depends on it waits; everything else goes on. The ticket stays open until the owner answers, so a question cannot get lost in a note.
