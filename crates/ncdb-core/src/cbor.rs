@@ -323,8 +323,16 @@ fn float_bytes(x: f64) -> Vec<u8> {
     bytes
 }
 
+/// 2^-14, the smallest normal half-precision value, from its bits.
+const HALF_MIN_NORMAL: f64 = f64::from_bits(0x3f10_0000_0000_0000);
+/// 2^-24, the step between subnormal half-precision values, from its bits.
+const HALF_SUBNORMAL_STEP: f64 = f64::from_bits(0x3e70_0000_0000_0000);
+/// 2^24, written out exactly.
+const HALF_SUBNORMAL_STEPS: f64 = 16_777_216.0;
+
 /// The half-precision bits of `x`, when it has an exact half-precision
-/// form. `x` is not NaN.
+/// form. `x` is not NaN. Only exact constants, multiplication by powers of
+/// two and bit operations are used, so every platform gets the same bits.
 fn to_half(x: f64) -> Option<u16> {
     let sign: u16 = if x.is_sign_negative() { 0x8000 } else { 0 };
     let magnitude = x.abs();
@@ -334,7 +342,7 @@ fn to_half(x: f64) -> Option<u16> {
     if magnitude.is_infinite() {
         return Some(sign | 0x7c00);
     }
-    if magnitude >= 2f64.powi(-14) {
+    if magnitude >= HALF_MIN_NORMAL {
         // A normal half: a biased exponent of 1 to 30 and ten bits of
         // mantissa; the 42 lower bits of the double's mantissa are zero.
         let bits = magnitude.to_bits();
@@ -347,7 +355,7 @@ fn to_half(x: f64) -> Option<u16> {
         return Some(sign | biased << 10 | mantissa);
     }
     // A subnormal half: a multiple of 2^-24 below 2^-14.
-    let steps = magnitude * 2f64.powi(24);
+    let steps = magnitude * HALF_SUBNORMAL_STEPS;
     if steps.fract() != 0.0 {
         return None;
     }
@@ -357,12 +365,15 @@ fn to_half(x: f64) -> Option<u16> {
     Some(sign | steps)
 }
 
+/// The value of half-precision bits: a normal value is built from its
+/// exponent and mantissa bits, a subnormal one is its mantissa times 2^-24.
 fn from_half(bits: u16) -> f64 {
-    let magnitude = match (bits >> 10) & 0x1f {
-        0 => f64::from(bits & 0x3ff) * 2f64.powi(-24),
-        0x1f if bits & 0x3ff == 0 => f64::INFINITY,
+    let mantissa = u64::from(bits & 0x3ff);
+    let magnitude = match u64::from((bits >> 10) & 0x1f) {
+        0 => f64::from(bits & 0x3ff) * HALF_SUBNORMAL_STEP,
+        0x1f if mantissa == 0 => f64::INFINITY,
         0x1f => f64::NAN,
-        exponent => f64::from(0x400 | (bits & 0x3ff)) * 2f64.powi(i32::from(exponent) - 25),
+        exponent => f64::from_bits((exponent + 1023 - 15) << 52 | mantissa << 42),
     };
     if bits & 0x8000 == 0 {
         magnitude
