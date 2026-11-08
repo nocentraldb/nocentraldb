@@ -111,3 +111,31 @@ test("a CONFIG.md without the limit fails instead of passing", () => {
   assert.equal(status, 1);
   assert.match(stderr, /Largest code or test file/);
 });
+
+test("generated files and files that are not code are not checked", () => {
+  assert.deepEqual(
+    run({
+      "node_modules/dep/index.js": lines(50),
+      "packages/sdk/node_modules/dep/index.mjs": lines(50),
+      "target/debug/build/out.rs": lines(50),
+      "crates/x/target/gen.rs": lines(50),
+      "Cargo.lock": lines(50),
+      "pnpm-lock.yaml": lines(50),
+      "package-lock.json": lines(50),
+      "docs/long.md": lines(50),
+      "README.md": lines(50),
+      "data.json": lines(50),
+    }),
+    { status: 0, stderr: "" },
+  );
+});
+
+test("a directory whose name only contains target or node_modules is checked", () => {
+  const { status, stderr } = run({
+    "src/targets/long.rs": lines(11),
+    "my_node_modules/long.js": lines(11),
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /src\/targets\/long\.rs has 11 lines/);
+  assert.match(stderr, /my_node_modules\/long\.js has 11 lines/);
+});
