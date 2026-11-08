@@ -10,9 +10,11 @@
 //! the plaintext map.
 //!
 //! Keys 1 to 63 of the header, payload and operation maps are "must
-//! understand", keys from 64 up "may ignore". A key this core does not know
-//! is kept and encoded again unchanged; one from 1 to 63, a higher header or
-//! payload format, or an unknown kind makes the change not foldable.
+//! understand", keys from 64 up "may ignore". RFC 0002 does not place key 0;
+//! this core treats it as "must understand" too. A key this core does not
+//! know is kept and encoded again unchanged; one from 0 to 63, a higher
+//! header or payload format, or an unknown kind makes the change not
+//! foldable.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -62,9 +64,9 @@ impl Extensions {
         self.0.iter().map(|(key, value)| (*key, value))
     }
 
-    /// Whether any unknown key is "must understand" (1 to 63).
+    /// Whether any unknown key is "must understand" (0 to 63).
     pub fn must_understand(&self) -> bool {
-        self.0.range(1..=LAST_MUST_UNDERSTAND_KEY).next().is_some()
+        self.0.range(..=LAST_MUST_UNDERSTAND_KEY).next().is_some()
     }
 
     /// Adds an unknown key, unless the map defines it (`1..=known`).
