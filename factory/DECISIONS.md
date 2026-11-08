@@ -331,3 +331,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: a code or test file longer than that is a sign that the design mixes concerns and tasks, so it is split along them. The limit lives in CONFIG.md, the rule for coding agents in FACTORY.md, and pm checks it in every review.
 - Instead of: no limit, which lets one file collect several concerns.
+
+### 2026-11-08 · NOC-31 · The release.yml contract tests split into three files without a new red test
+
+- Decided by: coding agent (NOC-31)
+- Why: the split is a pure refactor, as FACTORY.md asks for a file past the limit: the 24 existing checks and their 110 mutants are the tests, and they ran green before and after. The check bodies were cut from the old file by line range, not retyped; the PR compares the test and mutant names before and after. `scripts/release-workflow.test.mjs` keeps the rules for every job, so the references to it in `release.yml` and `moon.yml` stay true and neither file changes; the alpha job and the publish side get their own files, and the helpers move to `scripts/lib/release-workflow.mjs`.
+- Instead of: a new test that holds these files below 700 lines, which would be one file's copy of a repository-wide limit check that belongs in its own ticket.
