@@ -6,7 +6,7 @@ This RFC defines how a developer describes the model of an app once, in TypeScri
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
-**Status.** A draft for the owner's decision. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees, so nothing here is final until the owner approves this RFC. Every name this RFC introduces is listed in [Public names](#public-names). The open decisions are listed in [Decisions for the owner](#decisions-for-the-owner); the design below describes the recommended option of each.
+**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names).
 
 ## What this RFC does not cover
 
@@ -52,7 +52,7 @@ export const model = nc.model({
       archived: nc.boolean(),
       tags: nc.set(nc.string()),
       assignee: nc.link("people"),
-      assigneeNote: nc.string().personal({ person: "assignee" }),
+      notesAboutAssignee: nc.string().personal({ person: "assignee" }),
       dependsOn: nc.links("tasks"),
     },
     {
@@ -198,7 +198,7 @@ This is the lock of the task board above, at model version 2. Version 1 had only
           "targets": ["people"],
           "type": "ncdb/link"
         },
-        "assigneeNote": {
+        "notesAboutAssignee": {
           "personal": { "person": "assignee" },
           "rule": 1,
           "since": 2,
@@ -254,7 +254,7 @@ This is the lock of the task board above, at model version 2. Version 1 had only
   },
   "format": 1,
   "model": {
-    "hash": "sha256:48b51998184d9fb4be50498e8c7061ea5d77d6742869d2c81b7cc63c82d7e28e",
+    "hash": "sha256:a59fed6588bc432d392c671b9ce7816babffc1fd7208187e4f2dd2c952e0531d",
     "id": "6f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a",
     "version": 2
   },
@@ -364,7 +364,7 @@ model.lock.json: model version 1 -> 2
   + collection people (2 personal fields)
   + tasks.archived    ncdb/boolean
   + tasks.assignee    ncdb/link -> people
-  + tasks.assigneeNote ncdb/string, personal to tasks.assignee
+  + tasks.notesAboutAssignee ncdb/string, personal to tasks.assignee
   + tasks.estimate    ncdb/float
   + tasks.tags        ncdb/set of ncdb/string
   + index tasks.byPriorityDesc (priority desc)
@@ -420,23 +420,68 @@ What this does not do, stated plainly:
 A field is personal when the schema chains `.personal({ person })` to it. `person` says which person the field is about:
 
 - `"self"`: the object is the person. `people.email` is about the person the `people` object stands for.
-- The name of a link field (`nc.link`) of the same collection: the field is about the person that link points to. `tasks.assigneeNote` is about whoever `tasks.assignee` names.
+- The name of a link field (`nc.link`) of the same collection: the field is about the person that link points to. `tasks.notesAboutAssignee` holds notes about whoever `tasks.assignee` names.
+
+### About whom, not by whom
+
+A personal field is sealed under the key of the person it is **about**, never under the key of its author. `tasks.notesAboutAssignee` holds what someone wrote about the assignee, for example "prefers calls in the morning"; erasing the assignee erases those notes. The assignee's own writing is something else: a task title or a comment the assignee wrote about other things is not about the assignee, is not sealed under their key, and is not erased with them. What stays of the assignee as author is their member id in the header of each change they wrote (RFC 0002), so the audit trail still shows that a change came from them, without anything they were said to be.
+
+Two things are not erasure, stated plainly:
+
+- **Removing a member is not erasure.** Removing a member blocks their access to the space from then on (RFC 0003, a new space key generation). Their member key, the data they wrote and the personal fields about them all stay. Only a shred destroys a person key.
+- **Being a member is not needed to be a person.** Most persons in an app never log in. They have no account and no member key; the app only holds data about them.
+
+### A person who is not a user
+
+A CRM keeps customers who never use the app:
+
+```ts
+export const model = nc.model({
+  customers: nc.collection({
+    name: nc.string().personal({ person: "self" }),
+    address: nc.string().personal({ person: "self" }),
+    birthDate: nc.string().personal({ person: "self" }).describe("ISO 8601 date, YYYY-MM-DD."),
+    segment: nc.oneOf(["lead", "active", "former"]),
+  }),
+});
+```
+
+The customer has no account and no member key. `name`, `address` and `birthDate` are sealed under the customer's person key; `segment` is not personal and is not erased. When the customer asks, by email for example, to have their data erased, a user of the app starts the erasure as a work order ([GENESIS.md](../../factory/GENESIS.md), "Work orders"): one member performs the shred, and a second account signs it off, as [RFC 0003, "Account sign-off of a shred"](0003-keys-and-cryptography.md#account-sign-off-of-a-shred) requires. The API for starting and signing such a work order belongs to the work-order RFC and the SDK's API review, not to this RFC.
+
+### Identifying the person
 
 Within a space, the person is identified by the object id of the person's object. The SDK asks RFC 0003's person-key store for that person's key in the space and seals the value with it.
 
 Across spaces this is not enough. Object ids belong to one space, so the same customer recorded in two spaces is two objects with two ids, while RFC 0003 shreds a person's key "in every space the account can reach". How the core knows that the two objects are one person is decision D14. The marking in the schema is the same under every option of D14. The person need not be a member of the space; it is usually a customer, a patient or an employee the data is about.
 
-Rules the build checks:
+### What the build checks
+
 
 - `person` is `"self"`, or names a field of the same collection whose type is `ncdb/link`. A link field with several target collections is allowed.
 - The link field named as `person` is not itself personal: it holds an object id, which the relay cannot read anyway, and the SDK needs it to find the key.
 - In v1, only basic values can be personal: `nc.string`, `nc.int`, `nc.float`, `nc.boolean` and `nc.oneOf`. Sets and links cannot. A set compares its elements by their bytes (RFC 0004), and a sealed value has different bytes each time it is written, so a set of sealed values could not tell two equal elements apart. A link must stay readable to resolve its target. Rich text and streams decide for themselves in their RFCs. (Decision D9.)
 - A field is personal from the version that adds it, or never (see [Refused](#refused)).
 
-Two limits, stated plainly:
+### Two limits
 
-- **The person is chosen when the value is written.** If `tasks.assignee` changes from Alice to Bob, an `assigneeNote` written before the change stays sealed under Alice's key, and one written after under Bob's. Concurrent writes may seal under different persons. This converges, because each sealed value names its person-key id (RFC 0002), but erasing Bob does not erase the note Alice's key sealed.
-- **Only marked fields are erasable.** Personal data in a field the schema does not mark, a task's `title` for example, is not encrypted with a person key, and erasure does not reach it. RFC 0001 says the same of unmarked free text.
+Stated plainly:
+
+- **The person is chosen when the value is written.** If `tasks.assignee` changes from Alice to Bob, a `notesAboutAssignee` written before the change stays sealed under Alice's key, and one written after under Bob's. Concurrent writes may seal under different persons. This converges, because each sealed value names its person-key id (RFC 0002), but erasing Bob does not erase the note Alice's key sealed.
+- **Only marked fields are erasable.** Personal data in a field the schema does not mark, a task's `title` for example, is not encrypted with a person key, and erasure does not reach it. RFC 0001 says the same of unmarked free text. The next section says what an app does about it.
+
+### Personal data in free text
+
+NoCentralDB does not and cannot find a person's name inside free text. A title, a comment or a rich-text body that says "call Anna Schmidt about the invoice" holds Anna's name in plain form under the space key, and erasing Anna does not reach it (principle 4). Detecting names in text would need a guess, and a guess that misses a name would let a reader believe an erasure reached what it did not.
+
+Keeping names out of free text is therefore the app's job (decision D15). An app whose free-text fields may name persons:
+
+1. **Knows which fields those are:** comments, descriptions, bodies, anything a person or an agent types freely.
+2. **Stores a reference to the person, not the name:** the person's object id, or their person id (D14), written into the text as a mention token where the user typed the name.
+3. **Resolves the reference when it displays the text,** from the person's personal fields: the mention shows the person's current `name`.
+
+After a shred, the reference no longer resolves to a name: the person's personal fields are erased, so the mention shows a placeholder such as "erased person", and no name was ever stored in the text. This is the recommended pattern, not a feature of the core: the core neither inserts mention tokens nor checks that an app uses them. What a mention token looks like is an idea for the rich-text RFC and the SDK's API review, not a format this RFC defines.
+
+What the pattern does not cover: a name a user types without making it a mention, text pasted from elsewhere, and exports and screenshots. Those stay as written.
 
 ## Where this differs from RFC 0001
 
@@ -459,7 +504,7 @@ The example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-desi
 - **Principle 4, say plainly what it does not do.** The limits of parked data, of deprecation and of personal fields are stated where they arise.
 - **Principle 5, a developer does not need to care about keys.** The schema marks a field personal and names its person; the developer never sees a key.
 
-A point for the owner, because a reader could infer more than the design delivers: GENESIS.md's phrase "a model old clients cannot read" is read here as "a model whose data old clients cannot keep". Old clients do not read added fields, unknown options or new link targets; they keep them, report them as parked, and read them after an upgrade. The accepted changes in [Accepted](#accepted) rely on this reading.
+A point for the owner, because a reader could infer more than the design delivers: GENESIS.md's phrase "a model old clients cannot read" is read here as "a model whose data old clients cannot keep". Old clients do not read added fields, unknown options or new link targets; they keep them, report them as parked, and read them after an upgrade. The accepted changes in [Accepted](#accepted) rely on this reading. Accepted (Carsten, 2026-11-08).
 
 ## Public names
 
@@ -530,7 +575,7 @@ Every public name this RFC introduces or keeps, for the owner to approve in one 
 
 ## Decisions for the owner
 
-These are the decisions this RFC needs from the owner. Each lists the options and a recommendation. The design above describes the recommended option of each. Merging this RFC accepts the recommendations unless the PR records otherwise.
+These are the decisions this RFC asked of the owner. Each lists the options and a recommendation, and ends with the owner's decision. The owner accepted every recommendation (Carsten, 2026-11-08), and the design above describes them.
 
 **D1. The style of the schema.**
 
@@ -540,12 +585,16 @@ These are the decisions this RFC needs from the owner. Each lists the options an
 
 Recommendation: A. It is what RFC 0001 shows, needs no compiler setting, and lets TypeScript infer the app's types from the model.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D2. The names in [Public names](#public-names).**
 
 - A. Approve them as listed. *(recommended)*
 - B. Approve RFC 0001's names only, and decide the new ones in the SDK's API review.
 
 Recommendation: A. They are the first thing a developer types; deciding them here lets the SDK and `ncdb` be built against them. RFC 0004's working names for reads (`conflicts`, `lostRemovals`, the link statuses) stay with the SDK's API review.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 **D3. The format of the lock.**
 
@@ -555,6 +604,8 @@ Recommendation: A. They are the first thing a developer types; deciding them her
 
 Recommendation: A. A reviewer reads the change to the model in the pull request, and every runtime parses it the same way.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D4. Model versions.**
 
 - A. A whole number per change, a content hash, a lineage id, and `since` per collection and field. *(recommended)*
@@ -563,12 +614,16 @@ Recommendation: A. A reviewer reads the change to the model in the pull request,
 
 Recommendation: A. The number is what a person and an error message can use ("needs model version 7"), the hash says whether two locks describe the same model, the lineage id catches a lock that was started over, and `since` lets an old client say which version it is missing.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D5. Which changes count as additive.**
 
 - A. As in [Accepted](#accepted): appending options and adding link targets are accepted; old clients keep the data and read it as unknown option or wrong collection. *(recommended)*
 - B. Only new collections, new fields and descriptions; options and link targets are fixed once added.
 
 Recommendation: A. A task board without a way to add a status is not usable for long, and old clients lose nothing. It relies on the reading of GENESIS.md in [Agreement with GENESIS.md](#agreement-with-genesismd).
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 **D6. Required fields and defaults.**
 
@@ -578,6 +633,8 @@ Recommendation: A. A task board without a way to add a status is not usable for 
 
 Recommendation: A. An object written under an older model lacks newer fields, so "unset" exists anyway, and B or C would pretend otherwise. C cannot be enforced on data from other members either.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D7. Removing a field from the app.**
 
 - A. `.deprecated()` keeps the field in the lock and the data forever and hides it from the app; it cannot be undone. *(recommended)*
@@ -585,12 +642,16 @@ Recommendation: A. An object written under an older model lacks newer fields, so
 
 Recommendation: A. No version guarantees that no old client will write the field again.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D8. Renaming.**
 
 - A. No renames in v1: the TypeScript key is the stored name. *(recommended)*
 - B. An alias, so the TypeScript name can differ from the stored name.
 
 Recommendation: A for v1. B is additive and can come later without a format change, as an optional key; v1 is simpler without it.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 **D9. Personal fields.**
 
@@ -600,12 +661,16 @@ Recommendation: A for v1. B is additive and can come later without a format chan
 
 Recommendation: A. B breaks set identity and link resolution (see [Personal fields](#personal-fields)). C ties the person key to a value that can change and that is itself personal.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D10. The model version in changes.**
 
 - A. Add the writer's model version to the payload as a "may ignore" key (RFC 0002 keeps keys from 64 up for that), so an old client can report which model version it needs to read its parked changes. *(recommended)*
 - B. No model version in changes; the SDK reports only that changes are parked and why.
 
-Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is an addition to the payload of the merged RFC 0002, so it needs the owner's approval here and an amendment there. Until then, the SDK falls back to B. D13 B uses the same key.
+Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is an addition to the payload of the merged RFC 0002, so RFC 0002 needs an amendment that adds the key. Until it has one, the SDK falls back to B. D13 B uses the same key.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 **D11. The check on the device.**
 
@@ -613,6 +678,8 @@ Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot 
 - B. Trust the build check alone.
 
 Recommendation: A. The build can be bypassed by deleting the lock or by a bad merge; the device holds the data that would be at risk.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 **D12. Moving a field to a new rule version.** RFC 0004 says a new merge rule is a new rule version, "which every member must run before the schema may use it, with a migration". This RFC has no migrations.
 
@@ -622,6 +689,8 @@ Recommendation: A. The build can be bypassed by deleting the lock or by a bad me
 
 Recommendation: A. A member that is offline for weeks cannot be shown to run the new rule, so B is a large design for a case v1 can avoid, and C diverges for every member it misses. A keeps RFC 0004's rule: no rule change without a migration.
 
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 **D13. Two models in one space.** Changes name collections and fields, not the model that wrote them. Two apps with different `model.id`s that write into one space, with the same name for fields of different types, make members merge one field by two rules.
 
 - A. A space records the `model.id` it was created with, in its first control entry (RFC 0002 and RFC 0003 define those entries), and the SDK refuses to write into a space of another model.
@@ -629,7 +698,9 @@ Recommendation: A. A member that is offline for weeks cannot be shown to run the
 - C. Both A and B. *(recommended)*
 - D. Allow it and document the risk.
 
-Recommendation: C. A stops honest apps at the first write; B makes a buggy or hostile client's changes park the same way on every member instead of folding by the wrong rule. Two apps that should share a space then share one model lineage, which is the point. A changes a control entry and B the payload, so both need the owner's approval in RFC 0002 and RFC 0003 as well.
+Recommendation: C. A stops honest apps at the first write; B makes a buggy or hostile client's changes park the same way on every member instead of folding by the wrong rule. Two apps that should share a space then share one model lineage, which is the point. A changes a control entry and B the payload, so RFC 0002 and the RFC of a space's first control entry (NOC-23) carry them out.
+
+Decided (Carsten, 2026-11-08): the recommendation, (C).
 
 **D14. One person across spaces.** A person is an object id in one space; RFC 0003 shreds a person's key in every space the account can reach.
 
@@ -638,6 +709,18 @@ Recommendation: C. A stops honest apps at the first write; B makes a buggy or ho
 - C. A person id derived from an external identifier, such as a hash of an email address.
 
 Recommendation: A. It lets one erasure reach every space without the app finding each copy, which is the promise of RFC 0001's team lead. B puts that search back on the app. C is guessable from the identifier and is itself personal data. [RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key) adopts A with this split: the person id lives only on members, inside the encrypted payload, and the relay sees only per-space person-key ids. How the app says "the same person" belongs to the SDK's API review.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
+
+**D15. Personal data in free text.** NoCentralDB cannot find a person's name inside free text, and erasure does not reach unmarked text.
+
+- A. It is the app's job: an app knows which free-text fields may name persons, stores a reference to the person instead of the name, and resolves it at display time from the person's personal fields. NoCentralDB says plainly that it does not detect names (see [Personal data in free text](#personal-data-in-free-text)). *(recommended)*
+- B. The core scans free text for names of known persons and seals them.
+- C. Say nothing beyond "erasure does not reach unmarked text".
+
+Recommendation: A. B would be a guess that misses names and gives readers a false belief that erasure reached them (principle 4). C leaves every app to find the risk on its own.
+
+Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 ## How this RFC is tested
 

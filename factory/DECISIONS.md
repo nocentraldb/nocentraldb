@@ -295,3 +295,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-11)
 - Why: RFC 0002 reached `main` (#28), so its link resolves; RFC 0003 and RFC 0004 are still open PRs and stay named without a link. Partly reverses "RFC 0005 names RFC 0002 to 0004 without linking to them".
 - Instead of: leaving every sibling RFC unlinked until all of them merge.
+
+### 2026-11-08 · NOC-11 · RFC 0005: every recommendation accepted
+
+- Decided by: Carsten
+- Why: one TypeScript schema of `nc.*` functions and a canonical, versioned `model.lock.json` with a lineage id, a model version, a content hash and `since` per element; only additive changes, checked at build and on every device; no required fields or defaults; deprecate instead of remove or rename; personal fields on basic values only, sealed under the key of the person they are about; the writer's model version and `model.id` in changes, and the space's `model.id` in its first control entry; a person id across spaces that the relay never sees; and (D15) keeping names out of free text is the app's job, by storing a reference to the person and resolving it at display time, because NoCentralDB does not and cannot detect names in text.
+- Instead of: decorators or a schema language of its own (D1); deciding the names later (D2); CBOR or YAML for the lock (D3); a hash only or semantic versions (D4); fixed options and link targets (D5); defaults or required fields (D6); removing deprecated fields (D7); aliases (D8); personal sets and links, or a person derived from a field's value (D9); no model version in changes (D10); trusting the build check alone (D11); rule changes without a migration (D12); one of the two guards against two models in one space, or none (D13); per-space persons only, or a person id derived from an identifier (D14); a core that scans text for names, or saying nothing (D15).
