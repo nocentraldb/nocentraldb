@@ -637,7 +637,7 @@ Recommendation: C. A stops honest apps at the first write; B makes a buggy or ho
 - B. Per space only: a person is an object id. Erasing someone across spaces means the erasure work order lists each person object, space by space.
 - C. A person id derived from an external identifier, such as a hash of an email address.
 
-Recommendation: A. It lets one erasure reach every space without the app finding each copy, which is the promise of RFC 0001's team lead. B puts that search back on the app. C is guessable from the identifier and is itself personal data. RFC 0003 (#27) adopts A with this split: the person id lives only on members, inside the encrypted payload, and the relay sees only per-space person-key ids. How the app says "the same person" belongs to the SDK's API review.
+Recommendation: A. It lets one erasure reach every space without the app finding each copy, which is the promise of RFC 0001's team lead. B puts that search back on the app. C is guessable from the identifier and is itself personal data. [RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key) adopts A with this split: the person id lives only on members, inside the encrypted payload, and the relay sees only per-space person-key ids. How the app says "the same person" belongs to the SDK's API review.
 
 ## How this RFC is tested
 
