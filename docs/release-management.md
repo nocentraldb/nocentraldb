@@ -415,7 +415,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | workflow `changes.yml` (check `changes`) | required fragment; `cargo-semver-checks` against a worktree of the base and the API report diff, which add `--require-breaking` |
 | workflow `release.yml`, job `alpha` | publishes an alpha after a green `ci` run of a push to `main`; tagless dispatch dry run |
 | workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; `verify` and `build` read-only, `publish` and `commit-back` with `contents: write`; a dispatch with a `tag` runs `verify` and `build` only |
-| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants |
+| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/release-workflow-alpha.test.mjs`, `scripts/release-workflow-publish.test.mjs`, `scripts/lib/release-workflow.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants |
 | label `skip-changes` | waives the required fragment, never a detected breaking change |
 | `changes/README.md` | the writer's guide for fragments |
 | `release-notes/index.json` and its test | the notes archive index, held to its shape by `scripts/release/index.test.mjs` in `repo:test` |
