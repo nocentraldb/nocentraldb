@@ -19,6 +19,15 @@ use minicbor::{Decoder, Encoder};
 
 use crate::redact::{Hidden, Size};
 
+/// How deeply values may nest in a change, counted from the frame: the
+/// frame is at depth 1, every item of an array or map one deeper than the
+/// array or map. A byte string that holds encoded CBOR (the header in the
+/// frame, the payload in the header) does not reset the count.
+///
+/// Pending the owner's decision ("How deeply may a CBOR value nest in a
+/// change?"); 32 is pm's recommendation.
+pub const MAX_DEPTH: usize = 32;
+
 /// A CBOR value of the profile.
 ///
 /// Its `Debug` output shows the kind and size of a value, never the value:
@@ -166,6 +175,8 @@ pub enum Reason {
     /// length or a float that is not in its shortest form, or a NaN other
     /// than `0xf97e00`.
     NotCanonical,
+    /// A value nested deeper than [`MAX_DEPTH`].
+    TooDeep,
 }
 
 /// Bytes that are not a canonical CBOR value of the profile. Says where and
@@ -191,6 +202,7 @@ impl fmt::Display for DecodeError {
             Reason::DuplicateKey => "a map key twice",
             Reason::InvalidUtf8 => "text that is not valid UTF-8",
             Reason::NotCanonical => "a shorter or other canonical form exists",
+            Reason::TooDeep => "a value nested deeper than the profile allows",
         };
         write!(f, "not canonical CBOR at byte {}: {reason}", self.offset)
     }
