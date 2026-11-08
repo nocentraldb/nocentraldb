@@ -1,7 +1,8 @@
 //! Test doubles for a member that receives changes (NOC-28): the checks of
 //! RFC 0002 Amendment 1, steps 3 to 5, and a fold that records which
-//! operations it folded. Signatures and decryption are NOC-15's; until it
-//! lands, these doubles stand in for them.
+//! operations it folded. The doubles stand in for real keys, so that a test
+//! of the steps can name a change's author and key generation by a small
+//! number; `tests/checks.rs` runs the same steps with real keys.
 //!
 //! Each test file includes this module with `#[path]`; not every file uses
 //! every helper.

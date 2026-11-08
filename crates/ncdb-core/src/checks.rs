@@ -1,8 +1,8 @@
 //! The checks of steps 3 and 5 of RFC 0002 Amendment 1 ("What a member
 //! does with a change it receives") with the real signature and
 //! decryption of RFC 0003 ("How a member signs and encrypts a change"):
-//! [`SealChecks`] verifies with [`seal::verify`](crate::seal::verify) and decrypts with
-//! [`seal::open`](crate::seal::open), given the member keys and space keys the member knows.
+//! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
+//! [`seal::open`], given the member keys and space keys the member knows.
 //!
 //! Membership (step 4) and what a control change adds to the control state
 //! come in through [`Membership`]; the membership rules of RFC 0008 and key
@@ -31,6 +31,12 @@ pub trait Membership {
 /// The checks of one space's log, with suite 1's real signature and
 /// decryption. Its `Debug` output names member ids and key generations,
 /// never a key.
+///
+/// **What this does not do.** Keys learned with [`SealChecks::add_member`]
+/// and [`SealChecks::add_space_key`] do not check the log's rejected changes
+/// again: only a control change that passes does (D11). Until member keys
+/// and space keys arrive through control changes (key distribution, a later
+/// ticket), give the checks every key before the changes that need it.
 pub struct SealChecks<M> {
     members: BTreeMap<MemberId, MemberPublicKey>,
     space_keys: BTreeMap<u64, SpaceKey>,
@@ -104,9 +110,8 @@ impl<M> fmt::Debug for SealChecks<M> {
     }
 }
 
-/// Where a change stops when [`seal::verify`](crate::seal::verify) or
-/// [`seal::open`](crate::seal::open) fails:
-/// the step of RFC 0002 Amendment 1 and its reason. An unknown author and a
+/// Where a change stops when [`seal::verify`] or [`seal::open`] fails: the
+/// step of RFC 0002 Amendment 1 and its reason. An unknown author and a
 /// missing space key do not come from here, since they depend on the keys
 /// the member holds, not on the change: [`SealChecks`] finds them first.
 ///

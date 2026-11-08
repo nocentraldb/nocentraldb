@@ -6,8 +6,9 @@
 //!
 //! The checks of steps 3 to 5 come in through [`Checks`] and the fold of
 //! operations through [`Fold`], so the order of the steps and the states
-//! live here, and signatures, decryption (RFC 0003, NOC-15) and the field
-//! types (RFC 0004) plug in.
+//! live here, and the field types (RFC 0004) plug in. A check that fails
+//! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
+//! [`Checks`] with the signature and decryption of RFC 0003.
 
 use std::fmt;
 

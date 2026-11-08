@@ -79,7 +79,10 @@ fn receive(checks: &mut SealChecks<Members>, bytes: &[u8]) -> Result<State, Rece
     let mut fold = Recorder::default();
     log.receive(bytes, checks, &mut fold)?;
     let change = Change::decode(bytes).expect("an appended change decodes");
-    let state = log.state(change.id()).cloned().expect("a received change has a state");
+    let state = log
+        .state(change.id())
+        .cloned()
+        .expect("a received change has a state");
     if !matches!(state, State::Folded { .. }) {
         assert!(fold.folded.is_empty(), "{state:?} folded operations");
     }
