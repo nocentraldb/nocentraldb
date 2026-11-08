@@ -4,14 +4,15 @@
 // kit file lies on the fragment allowlist, so the kit itself never needs a
 // change fragment; the fragment example in CONTRIBUTING.md passes the
 // fragment schema; and every relative link in the kit's Markdown resolves to a
-// file, and to a heading when it names one.
+// file, and to a heading when it names one; and the README's task table
+// and its block of uncached `moon run` commands list every task the gate runs.
 //
 // GitHub validates issue forms only when it renders them. These checks catch
 // the usual mistakes before that: a missing top-level key, an unknown element
 // type, a duplicate or malformed id, a dropdown without options, a label typo.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { existsSync, globSync, readFileSync } from "node:fs";
+import { basename, dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -185,6 +186,7 @@ test("the pull request template has its sections, in order", () => {
     "Human",
     "Agent under close human direction",
     "Agent with human review",
+    "Agent, checked against a decided design",
   ]) {
     assert.ok(text.includes(choice), `authorship choice ${choice}`);
   }
@@ -193,6 +195,13 @@ test("the pull request template has its sections, in order", () => {
 });
 
 /** The text under one `## ` heading of the pull request template. */
+test("the AI policy says when pm may merge without a person's review", () => {
+  const policy = read(".github/AI_POLICY.md");
+  assert.match(policy, /Agent, checked against a decided design/);
+  assert.match(policy, /decided RFC/);
+  assert.match(policy, /daily note/);
+});
+
 const prSection = (heading) => {
   const text = `\n${read(PR_TEMPLATE)}`;
   const start = text.indexOf(`\n## ${heading}\n`);
@@ -284,5 +293,91 @@ test("the README has a Contributing section that links the kit", () => {
     ".github/CODE_OF_CONDUCT.md",
   ]) {
     assert.ok(section[1].includes(`](${target})`), `README links ${target}`);
+  }
+});
+
+// The README's task table ("What each project's `gates` task runs") and its
+// block of uncached `moon run` commands name every task the gate runs, per
+// project: the deps of each project's `gates` task, inherited from
+// .moon/tasks/<language>.yml or its own moon.yml, and the tasks of another
+// project those deps need (e.g. repo:wasm-runner). A gate task that either
+// leaves out fails these tests.
+const PROJECT_GLOBS = ["moon.yml", "crates/*/moon.yml", "packages/*/moon.yml"];
+
+function gateTasks() {
+  const inherited = {};
+  for (const file of globSync(".moon/tasks/*.yml", { cwd: root })) {
+    const config = yaml(file);
+    inherited[config.inheritedBy.language] = config.tasks;
+  }
+  const projects = {};
+  for (const file of PROJECT_GLOBS.flatMap((p) => globSync(p, { cwd: root }))) {
+    const config = yaml(file);
+    const id = config.id ?? basename(dirname(join(root, file)));
+    const own = config.tasks ?? {};
+    projects[id] = { ...(inherited[config.language] ?? {}), ...own };
+    const gates = [
+      ...(inherited[config.language]?.gates?.deps ?? []),
+      ...(own.gates?.deps ?? []),
+    ];
+    projects[id].gates = { deps: gates };
+  }
+  const listed = Object.fromEntries(
+    Object.keys(projects).map((id) => [id, new Set()]),
+  );
+  for (const [id, tasks] of Object.entries(projects)) {
+    for (const dep of tasks.gates.deps) {
+      const name = dep.replace(/^~:/, "");
+      listed[id].add(name);
+      for (const next of tasks[name]?.deps ?? []) {
+        const [project, task] = next.split(":");
+        if (project !== "~") listed[project].add(task);
+      }
+    }
+  }
+  return listed;
+}
+
+test("the README's task table lists every gate task of every project", () => {
+  const readme = read("README.md");
+  const table =
+    /\n\| Project \| Tasks \|\n\| --- \| --- \|\n((?:\|.*\n)+)/.exec(readme);
+  assert.ok(table, "README.md has no task table");
+  const rows = table[1].trim().split("\n");
+  for (const [id, tasks] of Object.entries(gateTasks())) {
+    const row = rows.find((r) => r.split("|")[1].includes(`\`${id}\``));
+    assert.ok(row, `the task table has no row for ${id}`);
+    const cell = row.split("|").slice(2).join("|");
+    for (const task of tasks) {
+      assert.ok(
+        cell.includes(`\`${task}\``),
+        `the task table does not list ${id}:${task}`,
+      );
+    }
+  }
+});
+
+test("the README says a cold repo:wasm-runner builds wasm-bindgen-cli once", () => {
+  const readme = read("README.md");
+  assert.match(
+    readme,
+    /`wasm-runner`[^|]*cold[^|]*`wasm-bindgen-cli`[^|]*once[^|]*about a minute/,
+  );
+});
+
+test("the README's uncached gate commands cover every gate task of every project", () => {
+  const block =
+    /\nRunning one gate on its own, uncached:\n\n```sh\n([\s\S]*?)```/.exec(
+      read("README.md"),
+    );
+  assert.ok(block, "README.md has no block of uncached gate commands");
+  const lines = new Set(block[1].trim().split("\n"));
+  for (const [id, tasks] of Object.entries(gateTasks())) {
+    for (const task of tasks) {
+      assert.ok(
+        lines.has(`moon run ${id}:${task} --force`),
+        `the uncached gate commands do not run ${id}:${task}`,
+      );
+    }
   }
 });
