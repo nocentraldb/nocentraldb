@@ -140,24 +140,21 @@ function parse(file, text) {
  */
 export function readDecisions(dir) {
   const files = readdirSync(dir).sort();
+  const names = new Set(files);
   const entries = [];
   const problems = [];
   for (const file of files) {
     const parsed = parse(file, readFileSync(join(dir, file), "utf8"));
-    entries.push(parsed.entry);
-    problems.push(...parsed.problems.map((problem) => `${file}: ${problem}`));
-  }
-  const names = new Set(files);
-  for (const { file, supersedes } of entries) {
-    for (const old of supersedes) {
+    for (const old of parsed.entry.supersedes) {
       if (!names.has(old)) {
-        problems.push(
-          `${file}: Supersedes names ${old}, which is not in the folder`,
+        parsed.problems.push(
+          `Supersedes names ${old}, which is not in the folder`,
         );
       }
     }
+    entries.push(parsed.entry);
+    problems.push(...parsed.problems.map((problem) => `${file}: ${problem}`));
   }
-  problems.sort((a, b) => a.split(":")[0].localeCompare(b.split(":")[0]));
   return { entries, problems };
 }
 
