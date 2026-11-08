@@ -337,3 +337,82 @@ impl Mergeable for FirstArrivalVisible {
 fn c4_every_copy_gives_the_same_outcome_for_the_same_operation() {
     expect_violation::<FirstArrivalVisible>("C4");
 }
+
+/// Broken on purpose (C1): records in its state which new write arrived
+/// last. That is idempotent, but copies that receive the writes in
+/// different orders end in different state bytes.
+#[derive(Clone, Debug, Default)]
+struct LastArrival {
+    register: Register,
+    last: Option<OpId>,
+}
+
+impl Mergeable for LastArrival {
+    type Change = Write;
+    type Read = (Option<u8>, Vec<u8>);
+
+    fn apply(&mut self, op: &Op<Write>) {
+        if !self.register.writes.contains_key(&op.id) {
+            self.last = Some(op.id);
+        }
+        self.register.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.register.state_bytes();
+        bytes.extend(self.last.map_or([0xff; 4], OpId::to_le_bytes));
+        bytes
+    }
+
+    fn read(&self) -> (Option<u8>, Vec<u8>) {
+        self.register.read()
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        self.register.outcome(id)
+    }
+}
+
+#[test]
+fn c1_copies_converge_in_any_order() {
+    let violation = expect_violation::<LastArrival>("C1");
+    // Two writes, each delivered once per copy, in two orders.
+    assert_eq!(violation.changes.len(), 2, "{violation}");
+}
+
+/// Broken on purpose (C2): counts every delivery in its state. In any order
+/// the count is the same, but an operation received twice counts twice.
+#[derive(Clone, Debug, Default)]
+struct CountsDeliveries {
+    register: Register,
+    deliveries: u32,
+}
+
+impl Mergeable for CountsDeliveries {
+    type Change = Write;
+    type Read = (Option<u8>, Vec<u8>);
+
+    fn apply(&mut self, op: &Op<Write>) {
+        self.deliveries += 1;
+        self.register.apply(op);
+    }
+
+    fn state_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.register.state_bytes();
+        bytes.extend(self.deliveries.to_le_bytes());
+        bytes
+    }
+
+    fn read(&self) -> (Option<u8>, Vec<u8>) {
+        self.register.read()
+    }
+
+    fn outcome(&self, id: OpId) -> Outcome {
+        self.register.outcome(id)
+    }
+}
+
+#[test]
+fn c2_applying_an_operation_twice_changes_nothing() {
+    expect_violation::<CountsDeliveries>("C2");
+}
