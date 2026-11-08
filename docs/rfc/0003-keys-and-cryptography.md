@@ -5,6 +5,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 **Changelog.**
 
 - **2026-11-08** · NOC-15, NOC-30 · [Amendment 1: the bytes of a sealed change](#amendment-1-the-bytes-of-a-sealed-change) fixes the content-key derivation, the nonce, the associated data, the padding and the crate versions. The owner decided all five (Carsten, 2026-11-08). The sentence it makes precise elsewhere is marked *(Amendment 1)*.
+- **2026-11-08** · NOC-44 · [Amendment 2: following RFC 0008](#amendment-2-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): generation ids, exposure and the merge rotation, the narrower sign-off, the person-key entry, the model-id subkey, and the wait before a shredded key is destroyed. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 2)*.
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
@@ -78,11 +79,11 @@ An organisation that runs agents does so under an account, so every agent traces
 
 ### The space key
 
-A space is the unit of sharing, membership and keys (RFC 0001). Each space has a **space key**: 32 random bytes from the operating system's random number generator. It has numbered **generations**. Generation 1 is created with the space. Every rotation creates the next generation.
+A space is the unit of sharing, membership and keys (RFC 0001). Each space has a **space key**: 32 random bytes from the operating system's random number generator. It has **generations**. Generation 1 is created with the space, and every rotation creates a new one. A generation is named by an id no member can choose: a 16-bit ordinal, one more than the highest of its previous generations, and a 48-bit tag derived from the space, the rotation's author and its previous generations, so two concurrent rotations never name the same generation ([RFC 0008, "Generation ids"](0008-membership.md#generation-ids)). *(Amendment 2.)*
 
 Members never use the space key directly. They derive one subkey per purpose with HKDF-SHA256, with a label for the purpose and the space id, generation and suite in the context. The first purpose is the content key that encrypts changes. Separate subkeys keep one purpose's use from weakening another's.
 
-Each member receives the current generation in a **key envelope**: the generation's key, encrypted with HPKE to that member's X25519 key, and signed by the member who wrote it. Each generation also stores the previous generation's key, encrypted under the new generation (a **key chain**), so a member that holds the current generation can read the space's whole history without an envelope for every old generation.
+Each member receives the current generation in a **key envelope**: the generation's key, encrypted with HPKE to that member's X25519 key, and signed by the member who wrote it. Each generation also stores the keys of its previous generations, encrypted under the new generation (a **key chain**), so a member that holds the current generation can read the space's whole history without an envelope for every old generation. After concurrent rotations, a generation can have more than one previous generation. *(Amendment 2.)*
 
 ### The person key
 
@@ -92,9 +93,9 @@ For each person and each space that holds that person's data, the SDK creates a 
 
 The relay cannot check what a record contains, so the store must not let any one member swap a key or erase one on its own. Three rules hold it together (decision 14):
 
-- **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is) and a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's full body: the commitment, the generation and the record hash.
-- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same or a newer generation than the one it holds. A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
-- **Only a shred entry deletes.** The relay deletes a record only when it appends a valid shred entry for it: signed by a current member, and signed off by the account key of a second account, one that has a certified member in the space and is not the performing member's account. No other request deletes a record.
+- **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is), a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`, and the generation and SHA-256 hash of the record it stores, so that the relay accepts a record only with its entry. Every re-wrap of the record writes a further person-key entry that repeats the commitment. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's body ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)). *(Amendment 2.)*
+- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. *(Amendment 2.)* A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
+- **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record once the shred is stable, not when it appends the entry ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). No other request deletes a record. *(Amendment 2.)*
 
 So a member cannot swap a person key without every other member noticing, and cannot erase one without a second account. A member that overwrites a record with garbage can make the key unavailable to new members until another member repairs it, and the signature on the record names it. It cannot make the other members delete their copies; only a shred entry does that.
 
@@ -162,7 +163,7 @@ By default a new member reads the whole history, because every member holds the 
 
 Removing a member works like this:
 
-1. A member with the right to remove writes a **membership entry**, a control change, that removes the member id. From then on the relay refuses changes signed by the removed member and stops serving it the space.
+1. A member with the right to remove writes a **membership entry**, a control change, that removes the member id. The entry names a cutoff: the highest author sequence of the removed member that the remover held. The relay refuses the removed member's changes above the cutoff and stops serving it the space ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)). *(Amendment 2.)*
 2. The same member creates the next space key generation, writes a key envelope for every remaining member, and adds the **key chain entry** that encrypts the previous generation under the new one; the envelopes and the key chain entry are control changes too. Removing a member costs one envelope per remaining member.
 3. It re-wraps every record in the person-key store under the new generation and deletes the old wraps, so a removed member that kept an old generation and later gets a copy of the relay's data still cannot open the person keys.
 4. Every member that sees the new generation writes with it from then on.
@@ -172,7 +173,7 @@ This is **eager rotation**: the space key rotates as part of the removal. The al
 **What rotation does not do.** A removed member keeps the copy it already holds: every change, every space key generation and every person key it received before the removal. Rotation only keeps it from reading what is written afterwards. If you revoke access to a laptop or an agent that held a copy, assume that copy is still readable by whoever holds the laptop (principle 4). Two more limits follow from island mode:
 
 - A member that has not seen the removal yet, because it is offline or on an island, keeps writing under the old generation. The removed member can read those changes, if it can get them, until that member catches up. Every change names its generation, so the members can see which changes were written under an outdated key.
-- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. Which generation members then write with, and how the space leaves a generation that a removed member may hold, is RFC 0008's: every generation has an id that no member can choose, every copy picks the same current generation, and an admin writes a **merge rotation** that lists every concurrent generation as previous and wraps the new key only to current members. Until that merge rotation lands, members may write under a generation a removed member holds, and the SDK reports it (principle 4).
+- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. RFC 0008 decides which generation members then write with, and how the space leaves a generation that a removed member may hold. Every generation has an id that no member can choose, and every copy picks the same current generation. A generation is **exposed** when anyone who may hold it, through any envelope written for it, is no longer a member. When the current generation is exposed, the SDK of an admin device writes a **merge rotation** that lists every concurrent generation as previous and wraps the new key only to current members ([RFC 0008, "Two removals that rotate the key at once"](0008-membership.md#two-removals-that-rotate-the-key-at-once)). Until that merge rotation lands, members may write under a generation a removed member holds, and the SDK reports it (principle 4). *(Amendment 2.)*
 
 A lost or stolen device is removed the same way, from every space its member key belongs to; the SDK offers this as one action on the account. In v1 that removal is the revocation: there is no separate signed statement that revokes a member certificate (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
@@ -194,11 +195,11 @@ Copying a personal field into an ad-hoc space would put that person's data under
 
 ## Shredding a person's key
 
-An erasure is a work order (RFC 0001, "Work orders"): one member performs it, a second account signs it off with its account key, because an erasure cannot be undone. Then:
+An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space, signs it off with its account key, because an erasure cannot be undone. *(Amendment 2.)* Then:
 
 1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
-2. The relay checks the shred entry's signature and the second account's sign-off, appends it, and deletes the person-key record from its store in the same step (see [The person key](#the-person-key)).
-3. Every member that folds the shred entry deletes its local copy of the key and writes an acknowledgement, another control change. The acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3). This is RFC 0008's acknowledgement with `deleted` true; RFC 0008 adds an earlier "seen" acknowledgement, with `deleted` false, and defines when a shred becomes stable, which is when members delete their copies.
+2. The relay checks the shred entry's signature and the second account's sign-off, and appends it. It deletes the person-key record from its store only once the shred is stable, because until then a concurrent revocation could still reject the shred, and a deleted record cannot come back (see [The person key](#the-person-key) and [RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). *(Amendment 2.)*
+3. Every member that accepts the shred entry writes a "seen" acknowledgement at once, another control change. Once the shred is stable, it deletes its local copy of the key and writes a "deleted" acknowledgement. The "deleted" acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3). RFC 0008 defines both acknowledgements and when a shred is stable ([RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement)). *(Amendment 2.)*
 4. From the shred entry on, the fold treats the person's personal fields as erased on every member, whether or not that member still holds the key. Computed fields and views therefore converge (principle 2): a member that has not deleted its copy yet does not compute a different state from the one that has.
 
 The person's fields stay in the log, in the archive and in old snapshots as ciphertext under a key that no longer exists. The signatures on those changes stay valid, because they cover the ciphertext, so the audit trail survives the erasure.
@@ -210,6 +211,7 @@ The person's fields stay in the log, in the archive and in old snapshots as ciph
 - **Copies made outside the database**, such as exports and screenshots, stay readable.
 - **Personal data in unmarked free text** was never encrypted with the person key, so shredding does not touch it.
 - **An agent running as that user on the user's device** can read what the user could read while the key existed.
+- **The key lives on until the shred is stable.** A shred is stable once every admin device of the space has written a control change after seeing it. Every view treats the person's fields as erased at once, but until then the key still exists on the members and the relay keeps the record. One admin device that stays offline delays it for as long as it is away; after 7 days the SDK of every admin raises an alarm that names the blocking devices, and an admin demotes or removes them ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable), decisions M20 and M21). *(Amendment 2.)*
 - **Backups of the relay** keep the wrapped person-key record until they expire. The relay and anyone who steals a backup cannot open it, because they hold no space key. A member of the space who also obtains such a backup could; that member could equally have kept the key while it was a member.
 
 Whether destroying a key counts as erasure is for each data protection officer to decide. This is a design, not legal advice.
@@ -259,6 +261,23 @@ key-chain subkey = HKDF-SHA256(ikm = new generation's key, salt = none,
 ```
 
 Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry.
+
+### Model-id subkey
+
+The genesis of a space carries the creator's `model.id` (RFC 0005, D13) sealed, so that members can read it and the relay cannot (RFC 0008, decision M26). It is sealed under a subkey of generation 1's key:
+
+```text
+model-id subkey = HKDF-SHA256(ikm = generation 1's space key, salt = none,
+                              info = "nocentraldb/model-id" || space id (16 bytes))
+model id field  = nonce (24 bytes) || ciphertext (16 bytes) || tag (16 bytes)     56 bytes
+  plaintext       = model.id as its 16 raw bytes
+  AEAD            = XChaCha20-Poly1305, random nonce
+  associated data = "nocentraldb/model-id" || space id (16 bytes) || creator member id (32 bytes)
+```
+
+Every member can open it, because every member holds generation 1's key through the key chain; the relay holds no space key. The associated data binds the field to its space and its creator, so it cannot be copied into another genesis. RFC 0008 places the field in the genesis, as its key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)).
+
+**Why the label cannot collide.** The content key of generation 1 derives from the same key. Its `info` starts with `"nocentraldb/content-key"`, the key-chain subkey's with `"nocentraldb/key-chain"`, and the model-id subkey's with `"nocentraldb/model-id"`. No label is a prefix of another, and each is followed by fields of fixed length, so two different labels never give the same `info` bytes, and HKDF gives unrelated subkeys for different `info`. The label is new, used for nothing else, and the subkey seals only this one field per space. *(Amendment 2.)*
 
 ### Key envelope
 
@@ -381,7 +400,7 @@ GENESIS.md reserves crypto, key handling and formats for the owner. Each decisio
    Decided (Carsten, 2026-11-08): the recommendation, (a).
 15. **Formats of what keys sign and derive**, as [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) proposes them for RFC 0008: the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`. **Recommendation:** accept them, including the change from RFC 0008 draft 0.2 that a parent agent, not the account, signs a sub-agent's certificate.
 
-   Decided (Carsten, 2026-11-08): the recommendation.
+   Decided (Carsten, 2026-11-08): the recommendation. RFC 0008's decision M26 B adds the [model-id subkey](#model-id-subkey) to these formats (Carsten, 2026-11-08). *(Amendment 2.)*
 
 ## Agreement with GENESIS.md and RFC 0001
 
@@ -429,6 +448,17 @@ Added on 2026-11-08 for NOC-15, after this RFC was merged. [How a member signs a
    - Rejected: libsodium through bindings, which [Primitives](#primitives) already rejected for `wasm32-unknown-unknown`.
 
 Decided: Carsten, 2026-11-08 (NOC-30), each as recommended. `ncdb-core` implements all five in `src/seal.rs`. `crates/ncdb-core/tests/vectors/generate.py` writes a test vector for a signed, sealed change from this description with independent libraries.
+
+## Amendment 2: following RFC 0008
+
+Added on 2026-11-08 for NOC-44. [RFC 0008](0008-membership.md) defines membership, roles and the control bodies that carry this RFC's formats, and the owner accepted every one of its decisions, M1 to M26 (Carsten, 2026-11-08). Its section [Conflicts with GENESIS.md and the other RFCs](0008-membership.md#conflicts-with-genesismd-and-the-other-rfcs) names where this RFC said something else. This amendment changes those sentences, marked *(Amendment 2)* above. The owner has decided every point, so it adds no decision.
+
+- **Concurrent rotations** (conflict 8, decisions M6 and M15). Generations are named by derived ids, an ordinal and a tag, instead of consecutive numbers, so two islands that rotate at once create two distinct generations. A generation is exposed when anyone who may hold it is no longer a member, and the SDK of an admin device that sees an exposed current generation writes a merge rotation. Picking "the generation whose entry has the lower hash" is gone ([RFC 0008, "Generation ids"](0008-membership.md#generation-ids), and [Two removals that rotate the key at once](0008-membership.md#two-removals-that-rotate-the-key-at-once)).
+- **The sign-off of an erasure** (conflict 9, decision M9). The second account must hold an admin member in the space, in the state of the shred's causal past, and must not be the performer's account. Any account with a certified member no longer suffices, because an erasure cannot be undone and a reader's account should not approve one ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)).
+- **The person-key entry** (conflict 11). It carries both this RFC's commitment and the generation and record hash the relay needs. This RFC points to RFC 0008 for its body, and a record replaces a stored one only for the same or a descendant generation, because generation ids carry a tag and are no longer ordered by size ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)).
+- **The model-id subkey** (conflict 14, decision M26 B). [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) adds the subkey `"nocentraldb/model-id"` of generation 1's key, which seals the model id in the genesis. RFC 0002's list of what the relay cannot see stays true: the relay cannot read the model ([RFC 0008, "Genesis"](0008-membership.md#genesis)).
+- **When a shredded key is destroyed** (decisions M20 and M21). Members delete their copy of a person key, and the relay its record, only once the shred is stable; every view treats the fields as erased at once. The list of what shredding does not reach names the wait and the alarm ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
+- **What a removal refuses** (decision M3). The relay refuses a removed member's changes above the cutoff the removal names, not every change from the moment the removal arrives ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
 
 ## Sources
 
