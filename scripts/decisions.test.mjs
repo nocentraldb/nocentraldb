@@ -274,3 +274,15 @@ test("the full log says which decision superseded an entry", (t) => {
   assert.match(first, /Superseded by 2026-11-09-NOC-30-later\.md/);
   assert.equal(stdout.match(/Superseded by/g).length, 1);
 });
+
+test("--index prints one line per decision, with what superseded it", (t) => {
+  const dir = folder(t, LOG);
+  const result = run("--index", "--dir", dir);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(result.stdout.trimEnd().split("\n"), [
+    "2026-11-07 · no ticket · First · superseded by 2026-11-09-NOC-30-later.md",
+    "2026-11-08 · NOC-22 · A same day",
+    "2026-11-08 · NOC-22 · B same day",
+    "2026-11-09 · NOC-30 · Later",
+  ]);
+});
