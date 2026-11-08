@@ -6,7 +6,7 @@ This RFC defines how the first field types of NoCentralDB merge concurrent chang
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
-**Status.** Draft for the owner's sign-off. Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge), so nothing here is built until this RFC is merged. The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9.
+**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9.
 
 **Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6). Object deletion (see [Links](#links) for what this RFC assumes about it). Of object creation, this RFC defines only what two creates of one object id mean.
 
@@ -245,7 +245,7 @@ What the contract does not check: whether the merge does what users expect, how 
 
 ## Decisions for the owner
 
-GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. Merging this RFC accepts the recommendations unless the PR records otherwise.
+GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07).
 
 1. **What basic values keep when writes conflict.**
    - A: Last writer wins on read, losing writes stay as conflicts until someone writes having seen them (this RFC). Recommended: keeps RFC 0001's promise and principle 3.
@@ -281,7 +281,7 @@ This RFC agrees with `factory/GENESIS.md` and [RFC 0001](0001-nocentraldb.md) on
 
 It names these conflicts and limits for the owner and pm:
 
-1. **"Late" in principle 3.** GENESIS.md says a change that "arrives late … and loses to a newer change stays identifiable as such". Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher. This RFC makes identifiable what converges: that a change lost to a change its author had not seen. If the owner wants arrival time as well, it can only be local, per-member information, and GENESIS.md should say so.
+1. **"Late" in principle 3.** GENESIS.md says a change that "arrives late … and loses to a newer change stays identifiable as such". Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher. This RFC makes identifiable what converges: that a change lost to a change its author had not seen. If the owner wants arrival time as well, it can only be local, per-member information, and GENESIS.md should say so. *Resolved:* GENESIS.md now uses this definition (Carsten, 2026-11-07).
 2. **"Last writer" is the highest stamp, not the last in real time.** With the wall-clock component of O4, a member whose clock runs ahead wins concurrent writes it should lose, until the others' clocks pass it. No member can correct this on its own without diverging. RFC 0002 decides that stamps far in the future are not refused, neither by the writing member, nor by a receiving member, nor by the relay, because refusing them on some members and not on others would break convergence. Members only warn when a received clock is more than a minute ahead of their own. This RFC states the limit (principle 4).
 3. **Concurrent increments do not add up.** RFC 0001's `priority: nc.int()` is last writer wins. Two agents that raise a priority by one at the same time raise it by one, not two, and one write shows as a conflict. RFC 0001 does not promise otherwise, but readers may assume it.
 4. **A missing link target is ambiguous.** A copy cannot tell a target that has not arrived from one that never will.
