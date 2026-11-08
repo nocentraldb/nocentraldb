@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-12
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. RFC 0003 (NOC-7) defines the keys that decrypt a change before it is folded. RFC 0004 (NOC-8) defines how a field merges. RFC 0005 (NOC-11) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded. RFC 0004 (NOC-8) defines how a field merges. RFC 0005 (NOC-11) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
 **Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged.
 
@@ -83,7 +83,7 @@ Every change goes through the seven steps of [RFC 0002, Amendment 1, "What a mem
 5. **Mark** the log entry as folded and commit.
 6. **Notify.** After the commit, hand the set of touched `(collection, space id, object id)` to the subscriptions, which re-run the queries that read those rows. Notifications carry ids, never values.
 
-The plaintext from step 2 exists only in memory and in the columns and state written in step 3. It is never written to a log, an error or telemetry (RFC 0003, "Keys never reach logs, errors or telemetry").
+The plaintext from step 2 exists only in memory and in the columns and state written in step 3. It is never written to a log, an error or telemetry ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
 
 Because appending and folding are one transaction, the log and the view agree after a crash: a change is in both or in neither (RFC 0002).
 
@@ -91,7 +91,7 @@ Because appending and folding are one transaction, the log and the view agree af
 
 Some changes carry no content: the control changes of RFC 0002 (kind 1), whose bodies RFC 0003 defines. They decide whether other changes can be checked and decrypted, so the fold handles them first-class, and the order in which they arrive must not change the result.
 
-**The control state.** The view keeps a `control` table set per space: the membership entries, the key chain entries, which key generations this member holds an envelope for, and the shred entries and their acknowledgements. Key material itself is never in the database; the SDK keeps it in the platform keystore (RFC 0003, "How the SDK hides keys"). Like every field's merge state, the control state is a function of the set of control changes the member holds, as RFC 0003 defines membership; it does not depend on their order.
+**The control state.** The view keeps a `control` table set per space: the membership entries, the key chain entries, which key generations this member holds an envelope for, and the shred entries and their acknowledgements. Key material itself is never in the database; the SDK keeps it in the platform keystore ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). Like every field's merge state, the control state is a function of the set of control changes the member holds, as RFC 0003 defines membership; it does not depend on their order.
 
 **How each control change folds,** in the same transaction as any change (steps 1, 2, 5 and 6 above; steps 3 and 4 are replaced by this):
 
@@ -100,7 +100,7 @@ Some changes carry no content: the control changes of RFC 0002 (kind 1), whose b
 | Membership entry        | Adds it to the control state. Membership per key generation is then recomputed from all entries the member holds.                                                                               |
 | Key envelope            | If it is for this member, the SDK unwraps it into the keystore, and the control state records that this generation's key is held. Envelopes for other members are kept in the log and not opened. |
 | Key chain entry         | Adds it to the control state, so the member can derive or verify the keys of earlier generations as RFC 0003 defines.                                                                           |
-| Shred entry             | Records the person key as shredded. The fold erases that person's personal fields from the view in every object of the space, deletes the member's copy of the key, and writes an acknowledgement (RFC 0003, "Shredding a person's key"). |
+| Shred entry             | Records the person key as shredded. The fold erases that person's personal fields from the view in every object of the space, deletes the member's copy of the key, and writes an acknowledgement ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)). |
 | Acknowledgement         | Records which member confirmed which shred, for the audit.                                                                                                                                       |
 
 **Re-checking.** Whenever the member appends a control change of a space, it checks the rejected changes of that space again from Amendment step 3, in the same transaction, as D11 defines. A change that now passes is decrypted and folded (steps 2 to 5 above) as if it had just arrived. A change that still fails stays rejected. The core may skip changes that can never pass, such as a bad signature or a payload that does not decrypt under a key the member holds.
@@ -154,7 +154,7 @@ A full rebuild folds every frame in `log` into new, empty view tables beside the
 
 The rebuild folds the frames in local-position order. Any other order would give the same result ([Why the order of arrival does not matter](#why-the-order-of-arrival-does-not-matter)); local-position order is chosen only because it reads the table sequentially.
 
-The rebuild decrypts every frame again, so it needs the space keys. A person key that was shredded (RFC 0003, "Shredding a person's key") is gone, and the fold treats that person's personal fields as erased, exactly as it did before the rebuild. A rebuild therefore never brings erased data back.
+The rebuild decrypts every frame again, so it needs the space keys. A person key that was shredded ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)) is gone, and the fold treats that person's personal fields as erased, exactly as it did before the rebuild. A rebuild therefore never brings erased data back.
 
 ### What a rebuild costs
 
@@ -204,7 +204,7 @@ A page is at most N rows, in index order, and a cursor that points after its las
 
 - **A page is cheap at any depth.** Unlike `OFFSET`, a keyset cursor does not read the rows before it.
 - **Concurrent folds do not break paging.** A row that did not change between two pages is never skipped and never repeated. A row that changed its indexed values between two pages may appear twice or not at all, because it moved across the boundary. The SDK says so in the cursor's documentation; a consistent snapshot over many pages is not offered (it would hold a read transaction open and block the WAL from shrinking).
-- **A cursor is local and holds content.** Its key values are plaintext field values. It never leaves the device in the SDK's design, is never logged, and its `Debug` output is redacted (RFC 0003, "Secret types do not print"). An app that puts it in a URL makes a copy the core cannot erase.
+- **A cursor is local and holds content.** Its key values are plaintext field values. It never leaves the device in the SDK's design, is never logged, and its `Debug` output is redacted ([RFC 0003, "Secret types do not print"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)). An app that puts it in a URL makes a copy the core cannot erase.
 - **A cursor from another model is refused.** If the model hash in the cursor differs from the view's, the query fails with a plain error and the app starts from the first page.
 - **The default page size** is 50, and the maximum is a fixed number the implementation ticket sets, so a single read cannot hold the database for long.
 
@@ -272,12 +272,12 @@ The log stores ciphertext (RFC 0002). The view does not: it exists so that reads
 - **Metadata**: space ids, object ids, member ids, relay positions.
 - **Leftovers SQLite keeps**: the WAL file, and free pages that still hold deleted rows. With `secure_delete` on, SQLite overwrites deleted content with zeros, and after a shred the core checkpoints the WAL with `TRUNCATE` ([decision 9](#decisions-for-the-owner)).
 
-The database holds **no keys**. Private keys live in the platform's keystore, and in the browser as a non-extractable WebCrypto key that wraps the core's keys in IndexedDB (RFC 0003, "How the SDK hides keys").
+The database holds **no keys**. Private keys live in the platform's keystore, and in the browser as a non-extractable WebCrypto key that wraps the core's keys in IndexedDB ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)).
 
 **What that means for a lost device** (principle 4: say plainly what it does not do):
 
 - **Anyone who can read the device's storage can read every space the member on it belongs to.** NoCentralDB protects the data from the relay, not from someone holding an unlocked device or its disk. Whether a stolen disk is readable depends on the device's own encryption: FileVault, BitLocker, LUKS, and the file-based encryption of iOS and Android protect a device that is off or locked. A browser's OPFS files lie in the browser profile, protected only by the operating system's disk encryption.
-- **Removing the lost device's member does not delete its copy.** It stops the member from receiving or writing new changes (RFC 0003, "Removing a member and rotating the space key"). What it already holds, it keeps.
+- **Removing the lost device's member does not delete its copy.** It stops the member from receiving or writing new changes ([RFC 0003, "Removing a member and rotating the space key"](0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key)). What it already holds, it keeps.
 - **Shredding does not reach a lost device.** Its acknowledgement never arrives, and the audit shows that (RFC 0003).
 - **Overwriting is not erasing on flash storage.** `secure_delete` overwrites the bytes SQLite can reach. An SSD or a phone's flash memory may keep old copies of a block where SQLite cannot reach them. Only the device's own disk encryption covers those.
 - **A process running as the user can read the database.** As RFC 0001 says in [What it is not](0001-nocentraldb.md#what-it-is-not), the device is not a security boundary against the user's own processes, agents included.
