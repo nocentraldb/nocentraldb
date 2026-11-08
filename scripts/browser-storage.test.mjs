@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { build } from "./browser-storage/build.mjs";
 import { measuredRows, tableRows } from "./browser-storage/report.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
