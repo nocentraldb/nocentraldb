@@ -73,6 +73,14 @@ pub struct ClockAhead {
     pub ahead_millis: u64,
 }
 
+impl std::fmt::Display for ClockAhead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a change by member ")?;
+        crate::redact::hex(f, &self.author.0)?;
+        write!(f, " has a clock {} ms ahead of the local wall clock", self.ahead_millis)
+    }
+}
+
 /// A member's clock in one space: the highest clock it has seen.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
