@@ -106,7 +106,7 @@ We have no published measurements yet. By design, reads never leave the device, 
 
 ### What can the relay see?
 
-The relay sees which key is a member of which space, when each key writes, and how much. It cannot read content, because it holds no keys. It checks signatures and membership, appends the encrypted changes to each space's log, and hands them out. A copy of the relay's database therefore contains no readable content.
+The relay cannot read content, because it holds no keys. It checks signatures and membership, appends the encrypted changes to each space's log, and hands them out, so a copy of the relay's database contains no readable content. It does see metadata: which key is a member of which space, when and how much each key writes, the key generations and when they change, the rhythm of work, which member reads which space from which network address, and the ids of key envelopes and erasures. It can also withhold changes or show different members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it.
 
 ### Who runs the relay?
 
@@ -132,7 +132,7 @@ Some features need a server that reads content, for example rendering a page on 
 
 ### Does destroying a key satisfy a GDPR erasure request?
 
-Your data protection officer decides that for your case; this is a design, not legal advice. In the design, the SDK encrypts each person's marked personal fields with that person's own key, and an erasure destroys that key. Without the key, those fields are unreadable on every device and in every archive and old snapshot. The erasure does not reach devices that never come back online, copies made outside the database such as exports and screenshots, or personal data in unmarked free text. What evidence your officer would need is question 3 in the RFC, "Erasure evidence".
+Your data protection officer decides that for your case; this is a design, not legal advice. In the design, the SDK encrypts each person's marked personal fields with that person's own key, and an erasure destroys that key. Without the key, those fields are unreadable in every archive and old snapshot and on every device that has deleted the key. The erasure does not reach devices that never come back online, a modified client that ignores the erasure and keeps the key, a member of the space who obtains a relay backup taken before the erasure, copies made outside the database such as exports and screenshots, or personal data in unmarked free text ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). What evidence your officer would need is question 3 in the RFC, "Erasure evidence".
 
 ### What happens to the audit trail after an erasure?
 

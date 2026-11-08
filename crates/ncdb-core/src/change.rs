@@ -5,9 +5,9 @@
 //! ciphertext (kind 0) or a control body (kind 1). The payload map, after
 //! decryption, holds the clock, the dependencies and the operations.
 //!
-//! Sealing and signing are RFC 0003's and NOC-15's: here the signature and
-//! the sealed payload are opaque bytes, and [`Payload`] encodes and decodes
-//! the plaintext map.
+//! Sealing and signing are RFC 0003's, in [`crate::seal`]: here the
+//! signature and the sealed payload are bytes, and [`Payload`] encodes and
+//! decodes the plaintext map.
 //!
 //! Keys 1 to 63 of the header, payload and operation maps are "must
 //! understand", keys from 64 up "may ignore". RFC 0002 does not place key 0;
@@ -384,7 +384,21 @@ impl Header {
 
     /// The canonical bytes of the header map.
     pub fn encode(&self) -> Vec<u8> {
-        let known = vec![
+        cbor::encode(&map(self.known(), &self.extensions))
+    }
+
+    /// The canonical bytes of the header map without the payload (key 6):
+    /// every field the payload's encryption binds as associated data
+    /// (RFC 0003, "How a member signs and encrypts a change"), unknown keys
+    /// included.
+    pub fn associated_data(&self) -> Vec<u8> {
+        let mut known = self.known();
+        known.retain(|(key, _)| *key != 6);
+        cbor::encode(&map(known, &self.extensions))
+    }
+
+    fn known(&self) -> Vec<(u64, Value)> {
+        vec![
             (1, Value::Bytes(self.space.0.to_vec())),
             (2, Value::Bytes(self.author.0.to_vec())),
             (3, Value::Unsigned(self.sequence)),
@@ -393,8 +407,7 @@ impl Header {
             (6, Value::Bytes(self.payload.clone())),
             (7, Value::Unsigned(self.format)),
             (8, Value::Unsigned(self.suite)),
-        ];
-        cbor::encode(&map(known, &self.extensions))
+        ]
     }
 
     /// Decodes canonical bytes of a header map. The header sits at depth
