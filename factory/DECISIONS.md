@@ -265,3 +265,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: pm
 - Why: pm added the gaps the agent reported on #45 to NOC-20, since they are the same consistency work in the same files. This reverses "GENESIS.md changes only where the ticket allows; its relay sentence stays" above: GENESIS.md and use case 2 now name more relay metadata and link RFC 0002, RFC 0001 says one person key per space in both places, use case 1 lists the two new erasure limits, and RFC 0003's SDK section matches use case 3. RFC 0003's reading 4 still names `agentPublicKey`, as the record of what the owner accepted.
 - Instead of: separate tickets for each gap.
+
+### 2026-11-08 · NOC-20 · RFC 0001's eviction bullet links RFC 0006
+
+- Decided by: pm
+- Why: RFC 0006 merged (#36) before this PR, so this PR, the second of the two to merge, adds the link. This reverses "RFC 0001 states browser eviction without linking RFC 0006" above. The link points to RFC 0006's section "The browser", because "Limits of storage in the browser" is a bold paragraph inside it and has no anchor of its own.
+- Instead of: leaving the link to a follow-up ticket.
