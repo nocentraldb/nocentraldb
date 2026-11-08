@@ -208,25 +208,25 @@ The relay runs every check below in its core, the same on every backend, before 
 What the relay **does not** check, because it cannot without reading content, and what follows from that:
 
 - **Whether a sealed payload decrypts**, or what it says. A member that writes garbage under a valid signature gets it appended. Every other member detects it on decryption, keeps it marked as rejected, and the signature names the author (RFC 0003).
-- **Equivocations.** Two changes with the same author and sequence are an equivocation (RFC 0002). The relay appends both, because both are validly signed and refusing one would make the relay pick a winner. Members detect it. The relay does compare a sealed change's author sequence with the cutoffs of revocations (see [What the relay checks](#what-the-relay-checks)), but that does not detect an equivocation inside a cutoff ([RFC 0008, The cutoff](0008-membership.md#the-cutoff)).
+- **Equivocations.** Two changes with the same author and sequence are an equivocation (RFC 0002). The relay reads the author sequence only to compare it with the cutoffs of revocations, so it appends both changes of an equivocation: both are validly signed, and refusing one would make the relay pick a winner. Members detect and report it.
 - **The order of dependencies.** They are encrypted (RFC 0002). The relay appends in arrival order, and members fold in any order.
 
 Because every check works on public keys, signatures, hashes and control bodies, the relay, its operators and its backups never need, and never get, a key that decrypts content (principle 1). Nothing in this protocol carries a space key, a person key or plaintext to the relay: key envelopes and person-key records arrive wrapped, and the relay has no key to unwrap them.
 
-**Removed members.** A revocation names a cutoff: the subject's highest author sequence that the revoking admin held when it wrote the revocation ([RFC 0008, M3](0008-membership.md#the-cutoff)). The relay accepts the subject's changes at or below the cutoff, whenever they arrive and whoever forwards them, and refuses those above it. The cutoff is a number in a control body and the author sequence a number in every header, so the relay and every member reach the same verdict without the encrypted clock. A change the subject wrote before the revocation but that the revoking admin had not yet received lies above the cutoff and is refused; it reaches other members only by direct exchange, and they reject it too. A revoked member can still write a change under a sequence number at or below its cutoff that it already used: an equivocation, which members detect and report (decision R7, decided by RFC 0008's M3).
+**Revoked members.** A revocation, which removes a member or lowers its role, names a cutoff: the subject's highest author sequence that the revoking admin held when it wrote the revocation ([RFC 0008](0008-membership.md#the-cutoff)). The relay accepts the subject's changes at or below the cutoff, whenever they arrive and whoever forwards them, and refuses those above it that need the revoked right. Both numbers sit in signed, readable places, the cutoff in a control body and the author sequence in every header, so the relay and every member reach the same verdict without the encrypted clock (decision R7). Two limits follow. A change the subject wrote before the revocation, but that the revoking admin had not yet received, lies above the cutoff: the relay refuses it, and members that receive it directly reject it too. And a revoked member can write a new change under a sequence number at or below its cutoff that it already used. That is an equivocation; it is accepted, and members detect and report it.
 
 ## What the relay sees
 
-The relay holds no keys. Here is everything it learns anyway, stated plainly (principle 4). RFC 0002 lists what the relay sees in the log; this list adds what it sees through the protocol, and what AWS sees on top.
+The relay holds no keys. Here is everything it learns anyway, stated plainly (principle 4): from the log, as RFC 0002, RFC 0003 and RFC 0008 define it; from the protocol; and, on AWS, what the provider sees on top.
 
-**From the log** (as RFC 0002 lists it):
+**From the log**:
 
-- Which member ids are in which space, their public keys and member certificates, and when members are added and removed.
+- Which member ids are in which space, their public keys and member certificates, so which members belong to one account across spaces, and the sub-agent tree.
+- Each member's role and when it changes, the cutoff of every revocation, which control changes each admin had seen when it wrote, and the generation graph. The relay reads them because it applies the membership rules ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules), decision M11).
 - For each key envelope, the member id it is for and the generation it carries, so when the space key rotates and who received each generation (RFC 0003).
 - For each person-key record, its person-key id, its generation and the member id that wrote it, so how many people have personal data in the space, and when a record is added, re-wrapped or shredded. Never who the person is (RFC 0003).
 - For each change: the space, the author's member id and sequence number, the suite, the key generation, the size of the frame and when the relay received it.
 - For each shred entry, which person-key id was destroyed, which accounts signed it off, and which members acknowledged it (RFC 0003).
-- From the membership rules it applies: each member's role and when it changes, the cutoff of every revocation, which control changes each admin had seen when it wrote, which members belong to one account across spaces, the sub-agent tree, and the generation graph. [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) lists these (its decision M11).
 
 **From the protocol**:
 
