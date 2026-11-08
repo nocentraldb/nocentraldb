@@ -334,20 +334,50 @@ The ticket asked to compare existing protocols for distributing a group key and 
 GENESIS.md reserves crypto, key handling and formats for the owner. Each decision below names the options and a recommendation. Nothing here becomes code until the owner has decided.
 
 1. **Group key distribution.** (a) Per-member wrapped space key with generations and a key chain. (b) MLS. (c) Sender keys. **Recommendation: (a)**, see the comparison above.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 2. **Content encryption.** (a) XChaCha20-Poly1305. (b) AES-256-GCM. **Recommendation: (a)**: random nonces are safe for many writers, and it is fast in WebAssembly.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 3. **HPKE implementation and an audit.** (a) The `hpke` crate, with the RFC 9180 test vectors in CI, and a paid audit of our combination before 1.0. (b) The same without the audit. (c) `hpke-rs`. **Recommendation: (a)**. The audit costs money, which GENESIS.md also reserves for the owner.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 4. **Signature algorithm.** (a) Ed25519 in software keystores. (b) ECDSA P-256, held in hardware where the platform offers it. **Recommendation: (a)**: deterministic signatures, and one behaviour on every platform; the platform keystore still protects the key at rest.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 5. **What a new member reads.** (a) The whole history, through the key chain. (b) Only from the generation it joined, optional per space. **Recommendation: (a) as the default, (b) later as an option** for spaces that ask for it.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 6. **When the space key rotates.** (a) Eagerly, as part of every removal. (b) Lazily, on the next write after a removal. **Recommendation: (a)**: a removed member must not read anything written after its removal, even if nobody writes for a while.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 7. **Scope of the person key.** (a) One key per person id (RFC 0005, D14) per space. (b) One key per person across all spaces, distributed into each space. **Recommendation: (a)**: a space's members never need a key that also opens the person's data in other spaces; an erasure work order finds the person's keys by person id and shreds them in every space the performing account can reach.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 8. **Where the account key lives.** (a) On every device of the account, plus a recovery code the person keeps. (b) Only on designated admin devices, plus a recovery code. (c) Derived from a passkey. **Recommendation: (a)** for v1, the simplest for people to use; (b) as an option for organisations.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 9. **Post-quantum key agreement.** X25519 does not resist a future quantum computer, and the relay's operators could keep today's ciphertext until one exists. (a) Ship X25519 in v1 and reserve a suite id for a hybrid suite later. (b) Use a hybrid X25519 + ML-KEM key agreement from v1. **Recommendation: (a)**, because the Rust implementations of ML-KEM are young; we say plainly in the documentation that v1 is not post-quantum.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 10. **Person keys at the relay.** (a) The relay holds each person key wrapped under the space key, in a store it can delete from, so a new member can open personal fields while no other member is online. (b) Person keys never reach the relay; members hand them to each other directly. **Recommendation: (a)**: it adds no reader the design does not already have (see the limits of shredding), and it keeps new members, including cloud agents, working when nobody else is online.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 11. **Personal fields in an ad-hoc space.** (a) The person key is shared into the ad-hoc space, so an erasure reaches the copy. (b) Personal fields are not copied unless the parent asks explicitly, and then as in (a). **Recommendation: (b)**: a sub-agent gets the least it needs.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (b).
 12. **Public API names** for the key-related calls (`members.add`, `members.remove`, `workOrders.erase`, invitations). **Recommendation:** invitations and member ids instead of public keys in `members.add`, and a returned notice on every call that changes who can read what.
+
+   Decided (Carsten, 2026-11-08): the recommendation.
 13. **How a member authenticates to the relay.** (a) The member's Ed25519 signing key signs the relay's challenge, separated from change signatures by a context string. (b) A third, separate key per member only for relay authentication, certified by the account key. **Recommendation: (a)**: the context string already keeps the two uses apart, the relay must know the signing key anyway to verify changes, and a third key adds a certificate and a rotation without protecting anything more.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 14. **Integrity of the person-key store.** (a) A person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred entry with a second account's sign-off, as in [The person key](#the-person-key). (b) Unsigned records that any member may overwrite or delete, as an opaque store. (c) Person keys only inside control changes in the log, wrapped per member. **Recommendation: (a)**. (b) lets one member swap a key or erase it without a sign-off. (c) puts the key into the append-only log, where a shred can no longer destroy it.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (a).
 15. **Formats of what keys sign and derive**, as [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) proposes them for RFC 0008: the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`. **Recommendation:** accept them, including the change from RFC 0008 draft 0.2 that a parent agent, not the account, signs a sub-agent's certificate.
+
+   Decided (Carsten, 2026-11-08): the recommendation.
 
 ## Agreement with GENESIS.md and RFC 0001
 
@@ -356,11 +386,23 @@ This RFC follows GENESIS.md and RFC 0001: the relay holds no keys and checks onl
 It differs from them, or makes them more precise, in these points. pm flags each to the owner:
 
 1. **"One key per person"** (GENESIS.md, "Shred and audit"). This RFC recommends one key per person per space (decision 7). An erasure still destroys every key of that person, but it is more than one key.
+
+   Accepted (Carsten, 2026-11-08).
 2. **The limits of erasure.** GENESIS.md and RFC 0001 name offline devices, exports, unmarked free text and an agent running as the user. This RFC adds two: a modified client that ignores the shred, and a member that obtains a relay backup taken before the shred. Both follow from the fact that a key once held cannot be taken back. RFC 0001 should list them.
+
+   Accepted (Carsten, 2026-11-08).
 3. **Use case 3** says a removed agent "receives no new changes". True for the relay. A member that has not yet seen the removal may still write under the old generation, which the removed agent could read if it got hold of those changes (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
+
+   Accepted (Carsten, 2026-11-08).
 4. **Use case 3** passes `agentPublicKey` to `members.add`. This RFC recommends invitations or member ids, so a developer never handles key material (decision 12).
+
+   Accepted (Carsten, 2026-11-08).
 5. **Use case 1** says that without the key "every copy of those fields is unreadable, on every device". That holds for copies whose device has deleted the key; a device that never comes back keeps it, as the same use case says further down. The sentence should name that limit where it makes the claim.
+
+   Accepted (Carsten, 2026-11-08).
 6. **Post-quantum.** Neither GENESIS.md nor RFC 0001 mentions it. v1 would not resist an attacker who records ciphertext today and has a quantum computer later (decision 9). Principle 4 asks us to say so.
+
+   Accepted (Carsten, 2026-11-08).
 
 ## Sources
 

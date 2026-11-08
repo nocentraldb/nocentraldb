@@ -175,3 +175,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-7)
 - Why: a test can prove the file exists, links to RFC 0001, resolves its links and has a section per acceptance criterion; whether the cryptography is right is the owner's review of the PR.
 - Instead of: no test at all, or a test that pins the RFC's recommendations, which would have to change with every owner decision.
+
+### 2026-11-08 · NOC-7 · RFC 0003: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
