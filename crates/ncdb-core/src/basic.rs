@@ -110,14 +110,59 @@ impl BasicValue {
     }
 }
 
+impl Write {
+    /// Stamp order (RFC 0004, "Tie-break"): the stamp, then the author
+    /// member id, then the operation id. A total order, the same on every
+    /// member.
+    fn order(&self) -> (Hlc, MemberId, OperationId) {
+        (self.stamp, self.author, self.id)
+    }
+}
+
+impl State {
+    /// R: the ids every received write replaces.
+    fn replaced(&self) -> BTreeSet<OperationId> {
+        self.writes
+            .values()
+            .flat_map(|w| w.replaces.iter().copied())
+            .collect()
+    }
+
+    /// L: the writes no received write replaces, in stamp order.
+    fn live(&self) -> Vec<&Write> {
+        let replaced = self.replaced();
+        let mut live: Vec<&Write> = self
+            .writes
+            .values()
+            .filter(|w| !replaced.contains(&w.id))
+            .collect();
+        live.sort_by_key(|w| w.order());
+        live
+    }
+}
+
+impl BasicValue {
+    fn entry(&self, write: &Write) -> Entry {
+        Entry {
+            id: write.id,
+            author: write.author,
+            stamp: write.stamp,
+            value: write.value.clone(),
+            known: true,
+        }
+    }
+}
+
 impl FieldType for BasicValue {
     type State = State;
     type Operation = Write;
     type Read = Read;
 
+    /// Keeps every write it receives; the live writes and the replaced ids
+    /// are computed from them, so the state is a function of the set of
+    /// writes, whatever their order or repeats.
     fn apply(&self, state: &mut State, op: &Write) {
-        let _ = (state, op);
-        todo!()
+        state.writes.entry(op.id).or_insert_with(|| op.clone());
     }
 
     fn state_bytes(&self, state: &State) -> Vec<u8> {
@@ -126,12 +171,36 @@ impl FieldType for BasicValue {
     }
 
     fn read(&self, state: &State) -> Read {
-        let _ = state;
-        todo!()
+        let mut live = state.live();
+        let Some(winner) = live.pop() else {
+            return Read {
+                value: None,
+                conflicts: Vec::new(),
+            };
+        };
+        Read {
+            value: Some(self.entry(winner)),
+            conflicts: live
+                .into_iter()
+                .filter(|w| w.value != winner.value)
+                .map(|w| self.entry(w))
+                .collect(),
+        }
     }
 
+    /// Replaced by the received write with the lowest operation id that
+    /// names it; otherwise visible when it is the winner or holds the
+    /// winner's value, and lost when it is a listed conflict.
     fn outcome(&self, state: &State, id: OperationId) -> Option<Outcome> {
-        let _ = (state, id);
-        todo!()
+        state.writes.get(&id)?;
+        if let Some(by) = state.writes.values().find(|w| w.replaces.contains(&id)) {
+            return Some(Outcome::Replaced(by.id));
+        }
+        let winner = state.live().pop().map(|w| &w.value);
+        Some(if winner == Some(&state.writes[&id].value) {
+            Outcome::Visible
+        } else {
+            Outcome::Lost
+        })
     }
 }

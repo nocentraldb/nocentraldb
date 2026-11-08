@@ -105,7 +105,10 @@ fn the_write_with_the_highest_stamp_wins() {
     let (state, read) = read_in_every_order(&TEXT, &writes);
     let winner = read.value.expect("a winner");
     assert_eq!(winner.value, text("new"));
-    assert_eq!((winner.id, winner.author, winner.stamp), (op(2), member(2), Hlc(20)));
+    assert_eq!(
+        (winner.id, winner.author, winner.stamp),
+        (op(2), member(2), Hlc(20))
+    );
     assert_eq!(values(&read.conflicts), vec![text("old")]);
     assert_eq!(TEXT.outcome(&state, op(2)), Some(Outcome::Visible));
     assert_eq!(TEXT.outcome(&state, op(1)), Some(Outcome::Lost));
@@ -167,7 +170,10 @@ fn a_late_change_that_loses_stays_identifiable() {
     ];
     let (state, read) = read_in_every_order(&TEXT, &writes);
     assert_eq!(read.value.expect("a winner").value, text("online"));
-    let lost = read.conflicts.first().expect("the late write is a conflict");
+    let lost = read
+        .conflicts
+        .first()
+        .expect("the late write is a conflict");
     assert_eq!(read.conflicts.len(), 1);
     assert_eq!(
         (lost.id, lost.author, lost.stamp, lost.value.clone()),
@@ -242,7 +248,9 @@ fn a_conflict_with_the_winners_value_is_not_listed_and_counts_as_visible() {
 
 #[test]
 fn concurrent_integer_writes_do_not_add_up() {
-    let field = BasicValue { kind: Kind::Integer };
+    let field = BasicValue {
+        kind: Kind::Integer,
+    };
     let writes = [
         write(op(1), 1, 10, Value::Unsigned(1), &[]),
         write(op(2), 2, 11, Value::Unsigned(1), &[op(1)]),
