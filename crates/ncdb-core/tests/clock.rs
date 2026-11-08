@@ -185,3 +185,26 @@ fn a_clock_more_than_a_minute_ahead_raises_a_warning_and_a_minute_or_less_none()
     // A wall clock beyond 48 bits sees nothing ahead.
     assert_eq!(clock.receive(Hlc(u64::MAX), AUTHOR, u64::MAX), None);
 }
+
+#[test]
+fn a_clock_from_the_future_is_still_received_and_the_clock_moves_as_without_the_warning() {
+    // Every received clock, warned about or not, moves the clock exactly as
+    // observe does: the change is accepted, never rejected or delayed.
+    let received = prop_oneof![
+        (0u64..200_000, any::<u16>()).prop_map(|(ahead, counter)| hlc(WALL + ahead, counter)),
+        (0u64..200_000).prop_map(|behind| hlc(WALL - behind, 0)),
+        Just(Hlc(u64::MAX)),
+    ];
+    props::check(1024, proptest::collection::vec(received, 1..20), |received| {
+        let mut warned = Clock::new();
+        let mut plain = Clock::new();
+        for seen in received {
+            let warning = warned.receive(seen, AUTHOR, WALL);
+            plain.observe(seen);
+            prop_assert_eq!(warning.is_some(), seen.millis() > WALL + 60_000);
+            prop_assert_eq!(warned.highest(), plain.highest());
+            prop_assert_eq!(warned.clone().now(WALL), plain.clone().now(WALL));
+        }
+        Ok(())
+    });
+}
