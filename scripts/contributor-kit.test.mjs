@@ -4,7 +4,8 @@
 // kit file lies on the fragment allowlist, so the kit itself never needs a
 // change fragment; the fragment example in CONTRIBUTING.md passes the
 // fragment schema; and every relative link in the kit's Markdown resolves to a
-// file, and to a heading when it names one.
+// file, and to a heading when it names one; and the README's task table
+// lists every task the gate runs.
 //
 // GitHub validates issue forms only when it renders them. These checks catch
 // the usual mistakes before that: a missing top-level key, an unknown element
