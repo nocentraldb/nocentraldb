@@ -56,6 +56,8 @@ Check test first on every PR:
 - Spot-check at least one: check out the test commit, run that test, and see it fail.
 - No test was weakened or deleted to get green without a stated reason.
 
+Check the size of every code and test file the PR adds or grows. A file past the limit in CONFIG.md goes back to be split by concern; a file the PR did not touch that is already past it becomes a ticket.
+
 A PR that fails this goes back, however good the code is. Send findings back to the coding session; when it passes, tell the owner in the next daily note that it waits for them. Never mark a PR ready or merge it before the merge rule in CONFIG.md is met.
 
 ## The daily note
