@@ -344,3 +344,32 @@ test("the decision log records NOC-44's routing and the owner's D13", () => {
     "no decision by Carsten on D13",
   );
 });
+
+// The owner decided GENESIS.md follows RFC 0008's M10 (Carsten, 2026-11-08):
+// a member is a person's device, an agent or a sub-agent; a list of members
+// the SDK expands stands in for a group; real groups as members come later.
+test("GENESIS.md's Spaces bullet follows M10: members, lists the SDK expands, groups later", () => {
+  const genesis = read("factory/GENESIS.md");
+  assert.ok(
+    !/groups can be members of many spaces/i.test(genesis),
+    "GENESIS.md still says groups can be members of many spaces",
+  );
+  const spaces = genesis.split("\n").find((l) => l.startsWith("- **Spaces.**"));
+  assert.ok(spaces, "no bullet 'Spaces.'");
+  for (const item of [/device/i, /agent/i, /sub-agent/i, /expand/i, /later/i]) {
+    assert.match(spaces, item, `the Spaces bullet does not name ${item}`);
+  }
+});
+
+test("RFC 0008's conflict 1 is resolved for GENESIS.md too", () => {
+  const conflicts = section(
+    read(RFC_0008),
+    "conflicts-with-genesismd-and-the-other-rfcs",
+  );
+  const point = conflicts.split("\n").find((l) => l.startsWith("1. "));
+  assert.match(point, /Resolved for GENESIS\.md/);
+  assert.ok(
+    !/stands until the owner rewrites it/.test(conflicts),
+    "the intro still says GENESIS.md's sentence stands",
+  );
+});
