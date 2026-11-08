@@ -51,7 +51,8 @@ tasks:
     # so does scripts/wasm-gate.test.mjs, which reads the wasm tasks of
     # crates/ncdb-core/moon.yml, checks that every #[test] of ncdb-core also
     # runs on wasm32, and builds a platform-only crate for wasm32 to prove the
-    # build-wasm task fails on it.
+    # build-wasm task fails on it. scripts/decisions.test.mjs tests the
+    # decision log tooling and reads factory/ and this file.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -66,6 +67,9 @@ tasks:
       - "/CONTRIBUTING.md"
       - "/README.md"
       - "/docs/**/*"
+      - "/moon.yml"
+      - "/AGENTS.md"
+      - "/factory/**/*"
       - "/crates/ncdb-core/moon.yml"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
@@ -84,6 +88,14 @@ tasks:
       - "/scripts/release/lib/git.mjs"
       - "/scripts/release/lib/glob.mjs"
       - "/pnpm-lock.yaml"
+  decisions:
+    # The decision log: one file per decision in factory/decisions/, each with
+    # a well-formed name, heading and fields, and every Supersedes: naming a
+    # file that exists (NOC-27). `pnpm decisions` reads the same folder.
+    command: "node scripts/decisions.mjs --check"
+    inputs:
+      - "/factory/decisions/**/*"
+      - "/scripts/decisions.mjs"
   version:
     # The one version of the project: Cargo.toml [workspace.package] holds a
     # plain X.Y.Z, every crate inherits it, inter-crate dependencies are
@@ -137,5 +149,6 @@ tasks:
       - "~:pins"
       - "~:test"
       - "~:fragments"
+      - "~:decisions"
       - "~:version"
       - "~:api-report"
