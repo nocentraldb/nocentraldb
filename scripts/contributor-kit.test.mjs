@@ -10,8 +10,8 @@
 // the usual mistakes before that: a missing top-level key, an unknown element
 // type, a duplicate or malformed id, a dropdown without options, a label typo.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, join, normalize } from "node:path";
+import { existsSync, globSync, readFileSync } from "node:fs";
+import { basename, dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
@@ -285,4 +285,72 @@ test("the README has a Contributing section that links the kit", () => {
   ]) {
     assert.ok(section[1].includes(`](${target})`), `README links ${target}`);
   }
+});
+
+// The README's task table ("What each project's `gates` task runs") names
+// every task the gate runs, per project: the deps of each project's `gates`
+// task, inherited from .moon/tasks/<language>.yml or its own moon.yml, and
+// the tasks of another project those deps need (e.g. repo:wasm-runner). A
+// gate task the table does not list fails this test.
+const PROJECT_GLOBS = ["moon.yml", "crates/*/moon.yml", "packages/*/moon.yml"];
+
+function gateTasks() {
+  const inherited = {};
+  for (const file of globSync(".moon/tasks/*.yml", { cwd: root })) {
+    const config = yaml(file);
+    inherited[config.inheritedBy.language] = config.tasks;
+  }
+  const projects = {};
+  for (const file of PROJECT_GLOBS.flatMap((p) => globSync(p, { cwd: root }))) {
+    const config = yaml(file);
+    const id = config.id ?? basename(dirname(join(root, file)));
+    const own = config.tasks ?? {};
+    projects[id] = { ...(inherited[config.language] ?? {}), ...own };
+    const gates = [
+      ...(inherited[config.language]?.gates?.deps ?? []),
+      ...(own.gates?.deps ?? []),
+    ];
+    projects[id].gates = { deps: gates };
+  }
+  const listed = Object.fromEntries(
+    Object.keys(projects).map((id) => [id, new Set()]),
+  );
+  for (const [id, tasks] of Object.entries(projects)) {
+    for (const dep of tasks.gates.deps) {
+      const name = dep.replace(/^~:/, "");
+      listed[id].add(name);
+      for (const next of tasks[name]?.deps ?? []) {
+        const [project, task] = next.split(":");
+        if (project !== "~") listed[project].add(task);
+      }
+    }
+  }
+  return listed;
+}
+
+test("the README's task table lists every gate task of every project", () => {
+  const readme = read("README.md");
+  const table =
+    /\n\| Project \| Tasks \|\n\| --- \| --- \|\n((?:\|.*\n)+)/.exec(readme);
+  assert.ok(table, "README.md has no task table");
+  const rows = table[1].trim().split("\n");
+  for (const [id, tasks] of Object.entries(gateTasks())) {
+    const row = rows.find((r) => r.split("|")[1].includes(`\`${id}\``));
+    assert.ok(row, `the task table has no row for ${id}`);
+    const cell = row.split("|").slice(2).join("|");
+    for (const task of tasks) {
+      assert.ok(
+        cell.includes(`\`${task}\``),
+        `the task table does not list ${id}:${task}`,
+      );
+    }
+  }
+});
+
+test("the README says a cold repo:wasm-runner builds wasm-bindgen-cli once", () => {
+  const readme = read("README.md");
+  assert.match(
+    readme,
+    /`wasm-runner`[^|]*cold[^|]*`wasm-bindgen-cli`[^|]*once[^|]*about a minute/,
+  );
 });
