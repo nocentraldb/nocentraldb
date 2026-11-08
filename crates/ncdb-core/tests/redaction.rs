@@ -18,8 +18,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::cbor::{self, Key, Value};
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
-use ncdb_core::clock::Hlc;
 use ncdb_core::checks::{Membership, SealChecks};
+use ncdb_core::clock::Hlc;
 use ncdb_core::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::log::Log;
