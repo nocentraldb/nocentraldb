@@ -169,3 +169,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-22)
 - Why: the amendment needs one place for the owner's decisions D10 to D12, and the old sentences must not contradict it, so each changed sentence carries an *(Amendment 1)* mark and a dated changelog line sits at the top. "Rejected" is a log state that only the member's own checks set; the relay's refusal is recorded beside it, so the state stays a function of the changes a member holds (principle 2).
 - Instead of: rewriting the sections silently, or letting RFC 0007's "marked as rejected" for a relay refusal set the log state.
+
+### 2026-11-08 · NOC-22 · RFC 0002 Amendment 1: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted D10 to D12 as recommended and merged #38. D10: the change is atomic for signature, membership and decryption, and an operation on an unknown collection or field is parked on its own. D11: the member log gets a `rejected` state with a reason, checked again whenever a control change of the space arrives. D12: a change the relay refuses after the member folded it stays folded; the member records the refusal beside it.
+- Instead of: the alternatives listed for each decision in the amendment in `docs/rfc/0002-change-and-log-format.md`.
