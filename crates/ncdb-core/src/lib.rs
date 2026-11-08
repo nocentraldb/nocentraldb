@@ -13,6 +13,7 @@ pub mod change;
 pub mod clock;
 pub mod ids;
 pub mod log;
+pub mod receive;
 mod redact;
 
 /// Returns the crate name; exists so the gates have real code to check.
