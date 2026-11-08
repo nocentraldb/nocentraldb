@@ -4,13 +4,12 @@ REQUEST FOR COMMENTS · DRAFT 0.2 · NOVEMBER 2026 · ticket NOC-23
 
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind) and leaves "membership changes" to a later RFC, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind) and leaves "membership changes" to a later RFC, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
 
 It uses several drafts that are still open pull requests. It names them without links, because they are not on `main` yet:
 
 - RFC 0002's Amendment 1 (NOC-22, PR #38), with its log state *rejected* (D11) and its rule for changes the relay refuses (D12).
 - RFC 0003 (keys, NOC-7, PR #27), which names the control changes and their purpose.
-- RFC 0004 (merge rules, NOC-8, PR #26), whose style this RFC follows.
 - RFC 0005 (schema, NOC-11, PR #35), decisions D13 and D14.
 - RFC 0006 (the local view, NOC-12, PR #36), which keeps a per-space control state that this RFC defines.
 - RFC 0007 (the relay, NOC-13, PR #37), which applies the membership rules with the data it can see.

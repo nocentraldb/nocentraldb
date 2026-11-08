@@ -5,3 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
+
+[dev-dependencies]
+# The convergence harness (tests/support/convergence.rs) generates and shrinks
+# with proptest. Without default features it uses no threads, no fork and no
+# OS randomness, so the harness also runs on wasm32 (NOC-10).
+proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
