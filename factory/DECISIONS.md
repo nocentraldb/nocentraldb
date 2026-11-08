@@ -163,3 +163,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-10)
 - Why: `std::fs` compiles for `wasm32-unknown-unknown` and fails only when called, so it cannot prove the build task fails; the fixture uses `std::os::unix`, which does not exist there. A call into `std::fs` at runtime is caught by the test-wasm task instead, as long as a test reaches it.
 - Instead of: the ticket's example `std::fs`, which would have made the detector test pass the build and prove nothing.
+
+### 2026-11-08 · NOC-21 · The contributor-kit check holds the README's task table to the moon config
+
+- Decided by: coding agent (NOC-21)
+- Why: the ticket asks to extend the check only if it already covered the task table; it did not, so a new task could again go unlisted, as the three wasm32 tasks did. The check now reads every project's `gates` deps from `.moon/tasks/<language>.yml` and its own `moon.yml`, plus the tasks of another project those deps need (`repo:wasm-runner`), and fails when the project's row of the table does not name one. `repo:test` takes the moon config files as inputs for it.
+- Instead of: a test that names only the three wasm32 tasks, which would not catch the next gate task the README forgets.
