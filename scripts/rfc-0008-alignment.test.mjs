@@ -21,6 +21,7 @@ const RFC_0003 = "docs/rfc/0003-keys-and-cryptography.md";
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0008 = "docs/rfc/0008-membership.md";
 const FAQ = "docs/faq.md";
+const USE_CASES = "docs/use-cases.md";
 const DECISIONS = "factory/decisions";
 
 const RFC_0008_FILE = "0008-membership.md";
@@ -189,6 +190,7 @@ for (const [path, heading] of [
   [RFC_0001, "the-team-lead-who-has-to-pass-the-data-protection-review"],
   [FAQ, "does-destroying-a-key-satisfy-a-gdpr-erasure-request"],
   [RFC_0003, "shredding-a-persons-key"],
+  [USE_CASES, "1-erasure-that-reaches-every-copy"],
 ]) {
   test(`${path} names the wait until a shred is stable among the limits of erasure`, () => {
     const text = section(read(path), heading);
