@@ -170,6 +170,18 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: the amendment needs one place for the owner's decisions D10 to D12, and the old sentences must not contradict it, so each changed sentence carries an *(Amendment 1)* mark and a dated changelog line sits at the top. "Rejected" is a log state that only the member's own checks set; the relay's refusal is recorded beside it, so the state stays a function of the changes a member holds (principle 2).
 - Instead of: rewriting the sections silently, or letting RFC 0007's "marked as rejected" for a relay refusal set the log state.
 
+### 2026-11-07 · NOC-7 · RFC 0003's tooling test checks the RFC's shape, not its design
+
+- Decided by: coding agent (NOC-7)
+- Why: a test can prove the file exists, links to RFC 0001, resolves its links and has a section per acceptance criterion; whether the cryptography is right is the owner's review of the PR.
+- Instead of: no test at all, or a test that pins the RFC's recommendations, which would have to change with every owner decision.
+
+### 2026-11-08 · NOC-7 · RFC 0003: every recommendation accepted
+
+- Decided by: Carsten
+- Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
+
 ### 2026-11-07 · NOC-23 · RFC 0008 judges a revoked member's late changes by a cutoff the revoking admin names
 
 - Decided by: coding agent (NOC-23), for the owner's ruling as decision M3
