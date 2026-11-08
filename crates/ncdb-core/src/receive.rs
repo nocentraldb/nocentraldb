@@ -13,7 +13,10 @@ use std::fmt;
 
 use crate::change::{Change, ChangeError, Kind, Operation, Payload};
 use crate::ids::OperationId;
-use crate::log::{AppendError, Appended, Log, ParkReason, RejectReason, State};
+use crate::log::{
+    AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
+    State,
+};
 use crate::redact::Size;
 
 /// The result of verifying a change's signature (step 3).
@@ -164,8 +167,29 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     if payload.extensions().must_understand() {
         return State::Parked(ParkReason::UnknownPayloadKey);
     }
+    let mut parked = Vec::new();
     for (position, operation) in (0..).zip(&payload.operations) {
-        fold.fold(change.operation_id(position), operation);
+        match understand(operation, fold) {
+            Ok(()) => fold.fold(change.operation_id(position), operation),
+            Err(reason) => parked.push(ParkedOperation { position, reason }),
+        }
     }
-    State::Folded { parked: Vec::new() }
+    State::Folded { parked }
+}
+
+/// Whether the member's model knows an operation; D10 parks it on its own
+/// when it does not.
+fn understand(operation: &Operation, fold: &impl Fold) -> Result<(), OperationParkReason> {
+    if !fold.knows_collection(&operation.collection) {
+        return Err(OperationParkReason::UnknownCollection);
+    }
+    if let Some(field) = &operation.field
+        && !fold.knows_field(&operation.collection, field)
+    {
+        return Err(OperationParkReason::UnknownField);
+    }
+    if operation.extensions().must_understand() {
+        return Err(OperationParkReason::UnknownKey);
+    }
+    Ok(())
 }

@@ -98,6 +98,20 @@ pub enum ParkReason {
 pub struct ParkedOperation {
     /// The operation's position in the change's operation array.
     pub position: u64,
+    /// Why it was parked.
+    pub reason: OperationParkReason,
+}
+
+/// Why an operation is parked on its own: step 7.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum OperationParkReason {
+    /// The member's model does not know the collection.
+    UnknownCollection,
+    /// The member's model does not know the field.
+    UnknownField,
+    /// The operation carries an unknown "must understand" key.
+    UnknownKey,
 }
 
 /// Why a change is rejected: steps 3 to 5.
