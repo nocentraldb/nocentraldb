@@ -135,7 +135,7 @@ test("a private window without OPFS shows the browser's error", () => {
   );
   assert.equal(
     find(rows, "Firefox (Playwright)", "Private window: after close").finding,
-    "SQLite lost, IndexedDB lost",
+    "SQLite: no OPFS, IndexedDB lost",
   );
 });
 
