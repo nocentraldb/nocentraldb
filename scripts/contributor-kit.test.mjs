@@ -5,7 +5,7 @@
 // change fragment; the fragment example in CONTRIBUTING.md passes the
 // fragment schema; and every relative link in the kit's Markdown resolves to a
 // file, and to a heading when it names one; and the README's task table
-// lists every task the gate runs.
+// and its block of uncached `moon run` commands list every task the gate runs.
 //
 // GitHub validates issue forms only when it renders them. These checks catch
 // the usual mistakes before that: a missing top-level key, an unknown element
@@ -288,11 +288,12 @@ test("the README has a Contributing section that links the kit", () => {
   }
 });
 
-// The README's task table ("What each project's `gates` task runs") names
-// every task the gate runs, per project: the deps of each project's `gates`
-// task, inherited from .moon/tasks/<language>.yml or its own moon.yml, and
-// the tasks of another project those deps need (e.g. repo:wasm-runner). A
-// gate task the table does not list fails this test.
+// The README's task table ("What each project's `gates` task runs") and its
+// block of uncached `moon run` commands name every task the gate runs, per
+// project: the deps of each project's `gates` task, inherited from
+// .moon/tasks/<language>.yml or its own moon.yml, and the tasks of another
+// project those deps need (e.g. repo:wasm-runner). A gate task that either
+// leaves out fails these tests.
 const PROJECT_GLOBS = ["moon.yml", "crates/*/moon.yml", "packages/*/moon.yml"];
 
 function gateTasks() {
