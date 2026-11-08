@@ -230,9 +230,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
 
-### 2026-11-08 · NOC-15 · Four sealing details RFC 0003 leaves open are built as proposed, pending pm and the owner
+### 2026-11-08 · NOC-15 · Four sealing details RFC 0003 leaves open are built as proposed, pending the owner (NOC-30)
 
-- Decided by: coding agent (NOC-15), asked of pm on 2026-11-08 before the PR; GENESIS.md reserves wire formats for the owner
+- Decided by: coding agent (NOC-15); pm put them to the owner in NOC-30, since GENESIS.md reserves wire formats for the owner
 - Why: RFC 0003 names the primitives and the order, not these bytes. As built: (1) the content key is HKDF-SHA256 of the space key, no salt, info `"nocentraldb/content-key" || space id (16) || key generation (8, big-endian) || suite id (8, big-endian)`, the shape of RFC 0003's key-chain subkey; (2) header key 6 is the 24-byte nonce, then the ciphertext with its 16-byte tag (libsodium's layout); (3) the associated data is the canonical header map without key 6, unknown keys included, so a later header field is bound too; (4) the canonical payload map, padding key 5 included, is a multiple of 256 bytes, and a payload too few bytes short for key 5 (1 or 26 bytes short) pads to the multiple after. All four sit in `src/seal.rs` and `generate.py`; a different answer changes them and the vector.
 - Instead of: guessing silently, or waiting with the whole ticket for the answer.
 
@@ -240,7 +240,8 @@ Every call that shapes the product or the code and is not obvious from the diff,
 
 - Decided by: coding agent (NOC-15)
 - Why: `ed25519-dalek =2.2.0` (2.x, as the ticket says; 3.0.0 exists but is a new major), `curve25519-dalek =4.1.3` pinned directly so that the RUSTSEC-2024-0344 fix cannot be resolved away (4.2.0 is yanked), `chacha20poly1305 =0.11.0`, `hkdf =0.13.0` (both on the same RustCrypto generation as `sha2 =0.11.1`), `zeroize =1.9.1`. ed25519-dalek 2.x still brings `sha2` 0.10 for its own hashing; every hash the core computes uses 0.11.1. No `rand_core`: keys and nonces come from `getrandom`, as ids do. The X25519 public key is computed with curve25519-dalek's clamped base multiplication, so no `x25519-dalek` is needed before HPKE.
-- Instead of: `chacha20poly1305 0.10.1` and `hkdf 0.12` (the audited 2020 line, but on `sha2` 0.10, a second hash for HKDF), or `x25519-dalek` for one public key.
+- Not audited: NCC Group's 2020 review covered the RustCrypto ChaCha20-Poly1305 code of that time; the pinned `chacha20poly1305 =0.11.0` itself has no audit, nor has `hkdf =0.13.0`. pm put this choice to the owner as point 5 of NOC-30.
+- Instead of: `chacha20poly1305 0.10.1` and `hkdf 0.12` (the line closest to the 2020 review, but on `sha2` 0.10, a second hash for HKDF), or `x25519-dalek` for one public key.
 
 ### 2026-11-08 · NOC-15 · Conformance vectors of the pinned crates show their red step as a changed vector
 
