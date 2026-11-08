@@ -286,3 +286,95 @@ test("--index prints one line per decision, with what superseded it", (t) => {
     "2026-11-09 · NOC-30 · Later",
   ]);
 });
+
+/** The titles --index prints for `args`, in output order. */
+const indexTitles = (dir, ...args) => {
+  const result = run("--index", "--dir", dir, ...args);
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.split(" · ")[2]);
+};
+
+test("--current leaves out superseded decisions", (t) => {
+  const dir = folder(t, LOG);
+  assert.deepEqual(indexTitles(dir, "--current"), [
+    "A same day",
+    "B same day",
+    "Later",
+  ]);
+  const { stdout } = run("--current", "--dir", dir);
+  assert.deepEqual(titles(stdout), ["A same day", "B same day", "Later"]);
+});
+
+test("--ticket keeps the decisions whose heading names the ticket", (t) => {
+  const dir = folder(t, {
+    ...LOG,
+    "2026-11-07-NOC-6-a-range.md": entry({
+      date: "2026-11-07",
+      ticket: "NOC-6 to NOC-13",
+      title: "Range",
+    }),
+    "2026-11-07-NOC-9-a-list.md": entry({
+      date: "2026-11-07",
+      ticket: "NOC-9, NOC-22",
+      title: "List",
+    }),
+  });
+  assert.deepEqual(indexTitles(dir, "--ticket", "NOC-22"), [
+    "List",
+    "A same day",
+    "B same day",
+  ]);
+  assert.deepEqual(indexTitles(dir, "--ticket", "noc-10"), ["Range"]);
+  assert.deepEqual(indexTitles(dir, "--ticket", "NOC-2"), []);
+});
+
+test("--topic keeps the decisions with that topic", (t) => {
+  const dir = folder(t, LOG);
+  assert.deepEqual(indexTitles(dir, "--topic", "crypto"), [
+    "A same day",
+    "Later",
+  ]);
+  assert.deepEqual(indexTitles(dir, "--topic", "crypt"), []);
+});
+
+test("--since keeps the decisions made on or after the date", (t) => {
+  const dir = folder(t, LOG);
+  assert.deepEqual(indexTitles(dir, "--since", "2026-11-08"), [
+    "A same day",
+    "B same day",
+    "Later",
+  ]);
+  const result = run("--since", "8 Nov", "--dir", dir);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /--since/);
+});
+
+test("the filters combine with each other and with --current and --index", (t) => {
+  const dir = folder(t, LOG);
+  assert.deepEqual(
+    indexTitles(
+      dir,
+      "--topic",
+      "log",
+      "--since",
+      "2026-11-08",
+      "--ticket",
+      "NOC-22",
+    ),
+    ["A same day", "B same day"],
+  );
+  assert.deepEqual(indexTitles(dir, "--topic", "factory", "--current"), []);
+  assert.deepEqual(indexTitles(dir, "--topic", "factory"), ["First"]);
+  const { stdout } = run(
+    "--dir",
+    dir,
+    "--topic",
+    "crypto",
+    "--since",
+    "2026-11-09",
+  );
+  assert.deepEqual(titles(stdout), ["Later"]);
+});
