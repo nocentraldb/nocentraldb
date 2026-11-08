@@ -96,10 +96,12 @@ impl Clock {
     }
 
     /// Receives the clock of a change by `author`, while the local wall
-    /// clock reads `wall` milliseconds since the Unix epoch. Returns a
-    /// warning when the clock's milliseconds are more than a minute ahead
-    /// of the wall clock; the counter does not count.
+    /// clock reads `wall` milliseconds since the Unix epoch: raises the
+    /// highest clock seen exactly as [`Clock::observe`] does, warned or not.
+    /// Returns a warning when the clock's milliseconds are more than a
+    /// minute ahead of the wall clock; the counter does not count.
     pub fn receive(&mut self, seen: Hlc, author: MemberId, wall: u64) -> Option<ClockAhead> {
+        self.observe(seen);
         let ahead_millis = seen.millis().saturating_sub(wall);
         (ahead_millis > AHEAD_LIMIT_MILLIS).then_some(ClockAhead { author, ahead_millis })
     }
