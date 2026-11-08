@@ -35,6 +35,11 @@ const privateFinding = ({ opfs, idb }) => {
   return `${sqlite}; ${control}`;
 };
 
+const afterCloseFinding = ({ opfs, afterClose }) =>
+  opfs === "ok"
+    ? both(afterClose)
+    : `SQLite: no OPFS, IndexedDB ${afterClose.idb}`;
+
 /** The table rows a run measured, in the order the doc lists them. */
 export const measuredRows = (run) =>
   Object.entries(run.engines).flatMap(([id, result]) => {
@@ -62,7 +67,7 @@ export const measuredRows = (run) =>
       ],
       [
         `Private window: after close (${engine.private})`,
-        both(result.private.afterClose),
+        afterCloseFinding(result.private),
       ],
     ].map(([behaviour, finding]) => ({ browser, behaviour, finding, source }));
   });
