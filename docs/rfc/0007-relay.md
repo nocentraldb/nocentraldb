@@ -174,9 +174,9 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `malformed` | The frame is not well-formed or not canonical CBOR (RFC 0002). | Report it as a bug; never retry the same bytes. |
 | `too_large` | The frame exceeds the largest frame the relay accepts. | The SDK reports it; the change stays local. |
 | `unsupported_suite` | The relay does not know the change's suite and so cannot verify its signature. | Keep the change local until the relay is upgraded. |
-| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again (RFC 0002 Amendment 1, D12); never push it to this relay again. |
-| `author_not_member` | The author is not a member of the space at the change's key generation, or was removed. | Record the relay's refusal and check the change again (RFC 0002 Amendment 1, D12); never push it to this relay again. |
-| `membership_rule` | A control change breaks the membership rules (the later membership RFC). | Record the relay's refusal and check the change again (RFC 0002 Amendment 1, D12); never push it to this relay again. |
+| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
+| `author_not_member` | The author is not a member of the space at the change's key generation, or was removed. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
+| `membership_rule` | A control change breaks the membership rules (the later membership RFC). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)); never push it to this relay again. |
 | `epoch_changed` | The cursor belongs to an earlier relay epoch, for example after a restore. | Treat every stored position of this relay as unconfirmed, pull from 0, push every change the relay lacks (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). |
 | `bad_record` | A person-key record is unsigned or badly signed, names a person-key id no person-key entry names or a shred entry destroyed, or would replace a newer generation. | Report it as a bug; never retry the same record. |
 | `compacted` | The cursor points before a range moved into the archive (the compaction RFC). | Fetch the archive, then pull from its end. |
@@ -184,7 +184,7 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `rate_limited` | The member or the space exceeded its quota. | Retry after the given time. |
 | `unavailable` | The backend failed or timed out. | Retry with backoff. Nothing was appended. |
 
-A change the relay refuses is not dropped by the member. If the member already folded it, it stays folded. The member records the relay's refusal next to the change, does not push it to that relay again, and checks the change again against its own control changes (RFC 0002 Amendment 1, D12). The SDK reports the refusal (principle 3). A `rejected` result for one change says nothing about the others in the same push.
+A change the relay refuses is not dropped by the member. If the member already folded it, it stays folded. The member records the relay's refusal next to the change, does not push it to that relay again, and checks the change again against its own control changes ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). The SDK reports the refusal (principle 3). A `rejected` result for one change says nothing about the others in the same push.
 
 ## What the relay checks
 
