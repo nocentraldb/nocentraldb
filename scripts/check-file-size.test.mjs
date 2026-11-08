@@ -1,0 +1,161 @@
+// Runs check-file-size.mjs in throwaway git repositories and asserts its exit
+// code and message: a tracked code or test file past the limit in
+// factory/CONFIG.md fails the gate, by name and line count.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { after, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
+
+const scripts = dirname(fileURLToPath(import.meta.url));
+const script = join(scripts, "check-file-size.mjs");
+const fixtures = [];
+after(() => {
+  for (const dir of fixtures) rmSync(dir, { recursive: true, force: true });
+});
+
+const config = (limit) =>
+  [
+    "# CONFIG.md",
+    "",
+    "| Setting                   | Value                                   |",
+    "| ------------------------- | --------------------------------------- |",
+    "| Gate command              | `pnpm gates`                            |",
+    `| Largest code or test file | ${limit} lines. A longer file is split. |`,
+    "",
+  ].join("\n");
+
+/** A file of exactly `count` lines, each ending in a newline. */
+const lines = (count) => "x\n".repeat(count);
+
+/**
+ * Writes the files into a new git repository, stages them all so they are
+ * tracked, and runs the check from its root. CONFIG.md sets a limit of 10
+ * unless the files say otherwise; null leaves a file out.
+ */
+function run(files) {
+  const dir = mkdtempSync(join(tmpdir(), "check-file-size-"));
+  fixtures.push(dir);
+  const tree = { "factory/CONFIG.md": config(10), ...files };
+  for (const [file, content] of Object.entries(tree)) {
+    if (content === null) continue;
+    mkdirSync(dirname(join(dir, file)), { recursive: true });
+    writeFileSync(join(dir, file), content);
+  }
+  const git = (...args) =>
+    assert.equal(spawnSync("git", args, { cwd: dir }).status, 0);
+  git("init", "--quiet");
+  git("add", "--force", ".");
+  const result = spawnSync(process.execPath, [script], {
+    cwd: dir,
+    encoding: "utf8",
+  });
+  return { status: result.status, stderr: result.stderr };
+}
+
+test("code and test files at the limit pass", () => {
+  assert.deepEqual(
+    run({ "src/at-limit.rs": lines(10), "scripts/a.test.mjs": lines(3) }),
+    { status: 0, stderr: "" },
+  );
+});
+
+test("a file past the limit fails, named with its line count", () => {
+  const { status, stderr } = run({
+    "src/ok.rs": lines(10),
+    "scripts/big.test.mjs": lines(11),
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /scripts\/big\.test\.mjs has 11 lines/);
+  assert.match(stderr, /limit is 10/);
+  assert.match(stderr, /split it by concern/i);
+  assert.match(stderr, /FACTORY\.md/);
+  assert.doesNotMatch(stderr, /ok\.rs/);
+});
+
+test("every code extension is checked, and every long file is named", () => {
+  const extensions = ["rs", "ts", "tsx", "js", "mjs", "cjs", "sh", "py"];
+  const files = Object.fromEntries(
+    extensions.map((ext) => [`src/long.${ext}`, lines(12)]),
+  );
+  const { status, stderr } = run(files);
+  assert.equal(status, 1);
+  for (const ext of extensions) {
+    assert.match(stderr, new RegExp(`src/long\\.${ext} has 12 lines`));
+  }
+});
+
+test("a last line without a newline counts as a line", () => {
+  assert.equal(run({ "a.rs": `${lines(10)}x` }).status, 1);
+  assert.equal(run({ "a.rs": lines(10).slice(0, -1) }).status, 0);
+});
+
+test("the limit is the number in CONFIG.md", () => {
+  const raised = { "factory/CONFIG.md": config(20), "a.rs": lines(15) };
+  assert.deepEqual(run(raised), { status: 0, stderr: "" });
+  const { status, stderr } = run({ ...raised, "b.rs": lines(21) });
+  assert.equal(status, 1);
+  assert.match(stderr, /b\.rs has 21 lines; the limit is 20/);
+  assert.doesNotMatch(stderr, /a\.rs/);
+});
+
+test("a CONFIG.md without the limit fails instead of passing", () => {
+  const { status, stderr } = run({
+    "factory/CONFIG.md": "# CONFIG.md\n\nNo table.\n",
+    "a.rs": lines(1),
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /Largest code or test file/);
+});
+
+test("generated files and files that are not code are not checked", () => {
+  assert.deepEqual(
+    run({
+      "node_modules/dep/index.js": lines(50),
+      "packages/sdk/node_modules/dep/index.mjs": lines(50),
+      "target/debug/build/out.rs": lines(50),
+      "crates/x/target/gen.rs": lines(50),
+      "Cargo.lock": lines(50),
+      "pnpm-lock.yaml": lines(50),
+      "package-lock.json": lines(50),
+      "docs/long.md": lines(50),
+      "README.md": lines(50),
+      "data.json": lines(50),
+    }),
+    { status: 0, stderr: "" },
+  );
+});
+
+test("a directory whose name only contains target or node_modules is checked", () => {
+  const { status, stderr } = run({
+    "src/targets/long.rs": lines(11),
+    "my_node_modules/long.js": lines(11),
+  });
+  assert.equal(status, 1);
+  assert.match(stderr, /src\/targets\/long\.rs has 11 lines/);
+  assert.match(stderr, /my_node_modules\/long\.js has 11 lines/);
+});
+
+test("pnpm gates runs the check as repo:file-size", () => {
+  const moon = parseYaml(readFileSync(join(scripts, "..", "moon.yml"), "utf8"));
+  const task = moon.tasks["file-size"];
+  assert.ok(task, "moon.yml has no task `file-size`");
+  assert.equal(task.command, "node scripts/check-file-size.mjs");
+  for (const input of [
+    "/factory/CONFIG.md",
+    "/scripts/check-file-size.mjs",
+    "/**/*.{rs,ts,tsx,js,mjs,cjs,sh,py}",
+  ]) {
+    assert.ok(task.inputs.includes(input), `inputs lack ${input}`);
+  }
+  assert.ok(moon.tasks.gates.deps.includes("~:file-size"), "gates deps");
+});

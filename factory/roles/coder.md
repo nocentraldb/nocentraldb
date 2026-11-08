@@ -17,7 +17,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
    Every acceptance criterion gets at least one test that failed before its code existed. A bug fix starts with a test that reproduces the bug. Never change a test to make it pass unless the test itself was wrong, and say so in the commit message.
 4. Run the gate command from CONFIG.md until it passes. Commit with the ticket id in every message. Add a change fragment when CONFIG.md says the change needs one.
-5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. Leave every owner checkbox unticked.
+5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. When the ticket implements a decided RFC, name in the summary the RFC sections the PR implements, and say where it departs from them, if anywhere. Leave every authorship checkbox unticked.
 6. Subscribe to your PR, so CI results and review comments wake you.
 7. Send pm a message: the ticket id, the PR link, and one line on what you built.
 
@@ -29,7 +29,8 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
 ## Never
 
-- Merge, mark your PR ready, or tick an owner checkbox.
+- Merge, mark your PR ready, or tick an authorship checkbox.
+- Clear an authorship tick someone else set. Before you edit your PR description, read it as it is now and keep the Authorship section exactly as you found it.
 - Weaken a gate: no skipped test, no unpinned dependency, no `--no-verify`.
 - Write production code that no failing test asked for.
 - Work on another ticket, or change files outside your ticket's scope.

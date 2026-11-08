@@ -9,6 +9,13 @@
 //! takes as long as a clock seen from the future is ahead, and forever after
 //! the largest clock was seen. The carry is pending the owner's decision
 //! (NOC-25).
+//!
+//! A received clock more than a minute ahead of the local wall clock raises
+//! a warning, [`ClockAhead`] (RFC 0002, "What the clock does not do"). The
+//! change is still accepted: rejecting it on some members and not on others
+//! would break convergence.
+
+use crate::ids::MemberId;
 
 /// A hybrid logical clock value, compared as a number.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -50,6 +57,34 @@ impl std::fmt::Display for ClockExhausted {
 
 impl std::error::Error for ClockExhausted {}
 
+/// How far a received clock may be ahead of the local wall clock before the
+/// core warns: one minute, in milliseconds.
+pub const AHEAD_LIMIT_MILLIS: u64 = 60_000;
+
+/// A received clock is more than [`AHEAD_LIMIT_MILLIS`] ahead of the local
+/// wall clock. It names only the author and the difference, never content,
+/// keys or payload bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ClockAhead {
+    /// The member whose change carried the clock.
+    pub author: MemberId,
+    /// How many milliseconds the received clock is ahead of the local wall
+    /// clock.
+    pub ahead_millis: u64,
+}
+
+impl std::fmt::Display for ClockAhead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a change by member ")?;
+        crate::redact::hex(f, &self.author.0)?;
+        write!(
+            f,
+            " has a clock {} ms ahead of the local wall clock",
+            self.ahead_millis
+        )
+    }
+}
+
 /// A member's clock in one space: the highest clock it has seen.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Clock {
@@ -70,6 +105,20 @@ impl Clock {
     /// Raises the highest clock seen to that of a received change.
     pub fn observe(&mut self, seen: Hlc) {
         self.highest = self.highest.max(seen);
+    }
+
+    /// Receives the clock of a change by `author`, while the local wall
+    /// clock reads `wall` milliseconds since the Unix epoch: raises the
+    /// highest clock seen exactly as [`Clock::observe`] does, warned or not.
+    /// Returns a warning when the clock's milliseconds are more than a
+    /// minute ahead of the wall clock; the counter does not count.
+    pub fn receive(&mut self, seen: Hlc, author: MemberId, wall: u64) -> Option<ClockAhead> {
+        self.observe(seen);
+        let ahead_millis = seen.millis().saturating_sub(wall);
+        (ahead_millis > AHEAD_LIMIT_MILLIS).then_some(ClockAhead {
+            author,
+            ahead_millis,
+        })
     }
 
     /// The clock for a change this member writes now: the larger of the
