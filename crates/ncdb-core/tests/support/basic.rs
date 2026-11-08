@@ -80,6 +80,11 @@ impl Schema for Float {
     }
 }
 
+/// The number of the schema's values, as the `u8` the generator draws.
+fn value_count<S: Schema>() -> u8 {
+    u8::try_from(S::values().len()).expect("a few values")
+}
+
 /// The core's operation id for the harness's: the id, big-endian, at the
 /// start of the change id, so both order alike.
 pub fn operation_id(id: OpId) -> OperationId {
@@ -199,14 +204,16 @@ impl<S> AsRef<Basic<S>> for Basic<S> {
 /// Also generates for broken variants that wrap a [`Basic`].
 impl<S: Schema, M: Mergeable<Change = Body> + AsRef<Basic<S>>> Generator<M> for Writes<S> {
     /// How far the stamp moves past the highest stamp the author had seen,
-    /// and which of the schema's values it writes.
-    type Raw = (u8, usize);
+    /// and which of the schema's values it writes. Both are `u8`: a
+    /// `usize` is drawn differently on 32-bit wasm32 and 64-bit native
+    /// targets, which breaks C3's comparison.
+    type Raw = (u8, u8);
 
-    fn raw(&self, _: Member) -> BoxedStrategy<(u8, usize)> {
-        (0u8..2, 0..S::values().len()).boxed()
+    fn raw(&self, _: Member) -> BoxedStrategy<(u8, u8)> {
+        (0u8..2, 0..value_count::<S>()).boxed()
     }
 
-    fn make(&self, author: &Author<'_, M>, &(step, value): &(u8, usize)) -> Body {
+    fn make(&self, author: &Author<'_, M>, &(step, value): &(u8, u8)) -> Body {
         let highest = author.seen.iter().map(|op| op.body.stamp).max();
         let stamp = highest
             .map_or(0, |stamp| stamp.saturating_add(1))
@@ -217,7 +224,7 @@ impl<S: Schema, M: Mergeable<Change = Body> + AsRef<Basic<S>>> Generator<M> for 
                 operation_id(author.id),
                 member_id(author.member),
                 Hlc(stamp),
-                S::values()[value].clone(),
+                S::values()[usize::from(value)].clone(),
             )
             .expect("the writer's schema allows its values");
         Body {
@@ -229,7 +236,7 @@ impl<S: Schema, M: Mergeable<Change = Body> + AsRef<Basic<S>>> Generator<M> for 
 
     fn malformed(&self) -> Option<BoxedStrategy<Body>> {
         let value = prop_oneof![
-            (0..S::values().len()).prop_map(|i| S::values()[i].clone()),
+            (0..value_count::<S>()).prop_map(|i| S::values()[usize::from(i)].clone()),
             any::<u64>().prop_map(Value::Unsigned),
             proptest::collection::vec(any::<u8>(), 0..3).prop_map(Value::Bytes),
             any::<bool>().prop_map(Value::Bool),
