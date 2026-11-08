@@ -8,7 +8,7 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use ncdb_core::basic::{BasicValue, Entry, Kind, State, Write};
+use ncdb_core::basic::{BasicValue, Entry, Kind, OutsideSchema, State, Write};
 use ncdb_core::cbor::Value;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::{FieldType, Outcome};
@@ -290,4 +290,120 @@ fn null_clears_the_field_and_the_clear_is_a_write_like_any_other() {
     ];
     let (_, read) = read_in_every_order(&TEXT, &writes);
     assert_eq!(read.value.expect("the clearing write").value, Value::Null);
+}
+
+fn choice(options: &[&str]) -> BasicValue {
+    BasicValue {
+        kind: Kind::Choice(options.iter().map(|o| (*o).to_owned()).collect()),
+    }
+}
+
+#[test]
+fn a_value_outside_the_choice_list_is_rejected_on_write() {
+    let field = choice(&["open", "done"]);
+    let state = State::default();
+    assert_eq!(
+        field.set(&state, op(1), member(1), Hlc(10), text("archived")),
+        Err(OutsideSchema)
+    );
+    let ok = field
+        .set(&state, op(1), member(1), Hlc(10), text("done"))
+        .expect("a listed option");
+    assert_eq!(ok, write(op(1), 1, 10, text("done"), &[]));
+}
+
+#[test]
+fn each_kind_rejects_values_of_other_kinds_on_write() {
+    let state = State::default();
+    let cases = [
+        (Kind::Text, text("a"), Value::Unsigned(1)),
+        (
+            Kind::Integer,
+            Value::Unsigned(i64::MAX as u64),
+            Value::Unsigned(i64::MAX as u64 + 1),
+        ),
+        (
+            Kind::Integer,
+            Value::Negative(i64::MAX as u64),
+            Value::Negative(i64::MAX as u64 + 1),
+        ),
+        (Kind::Integer, Value::Negative(0), Value::Float(1.0)),
+        (Kind::Float, Value::Float(f64::NAN), Value::Unsigned(1)),
+        (Kind::Boolean, Value::Bool(true), text("true")),
+        (Kind::Text, text("a"), Value::Bytes(vec![1])),
+    ];
+    for (kind, allowed, refused) in cases {
+        let field = BasicValue { kind };
+        assert!(
+            field.set(&state, op(1), member(1), Hlc(1), allowed).is_ok(),
+            "{field:?}"
+        );
+        assert_eq!(
+            field.set(&state, op(1), member(1), Hlc(1), refused),
+            Err(OutsideSchema),
+            "{field:?}"
+        );
+    }
+}
+
+#[test]
+fn every_kind_can_be_cleared() {
+    for kind in [
+        Kind::Text,
+        Kind::Integer,
+        Kind::Float,
+        Kind::Boolean,
+        choice(&["a"]).kind,
+    ] {
+        let field = BasicValue { kind };
+        assert!(
+            field
+                .set(&State::default(), op(1), member(1), Hlc(1), Value::Null)
+                .is_ok()
+        );
+    }
+}
+
+#[test]
+fn a_new_write_replaces_the_winner_and_every_conflict() {
+    let writes = [
+        write(op(1), 1, 10, text("a"), &[]),
+        write(op(2), 2, 20, text("b"), &[]),
+        write(op(3), 3, 30, text("b"), &[]),
+    ];
+    let state = fold(&TEXT, &writes.iter().collect::<Vec<_>>());
+    let next = TEXT
+        .set(&state, op(4), member(1), Hlc(40), text("c"))
+        .expect("a text");
+    assert_eq!(next.replaces, [op(1), op(2), op(3)].into_iter().collect());
+    let mut state = state;
+    TEXT.apply(&mut state, &next);
+    let read = TEXT.read(&state);
+    assert_eq!(read.value.expect("a winner").value, text("c"));
+    assert!(read.conflicts.is_empty());
+}
+
+#[test]
+fn an_option_from_a_newer_schema_is_kept_and_read_as_unknown() {
+    let field = choice(&["open", "done"]);
+    let writes = [
+        write(op(1), 1, 10, text("open"), &[]),
+        write(op(2), 2, 20, text("archived"), &[]),
+    ];
+    let (state, read) = read_in_every_order(&field, &writes);
+    let winner = read.value.expect("the newer option wins");
+    assert_eq!((winner.value, winner.known), (text("archived"), false));
+    let conflict = read
+        .conflicts
+        .first()
+        .expect("the older write is a conflict");
+    assert_eq!(
+        (conflict.value.clone(), conflict.known),
+        (text("open"), true)
+    );
+    assert_eq!(field.outcome(&state, op(2)), Some(Outcome::Visible));
+
+    // A newer client that knows the option reads it as known.
+    let newer = choice(&["open", "done", "archived"]);
+    assert!(newer.read(&state).value.expect("a winner").known);
 }
