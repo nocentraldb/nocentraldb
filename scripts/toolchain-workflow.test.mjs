@@ -119,11 +119,15 @@ const INSTALLS = (version) => ["install", `install proto ${version}`];
 
 /**
  * Runs `script` in a scratch workspace whose PATH holds fake `curl`,
- * `sleep` and (when `warm`) an installed fake `proto`. `curlFails` and
+ * `sleep` and (when `warm`) an installed fake `proto`; `moonProto` also
+ * installs it as moon's proto in ~/.proto/tools/proto. `curlFails` and
  * `installFails` count the failing calls before the first that succeeds.
  * Returns the exit status, the output, and what each fake recorded.
  */
-const runScript = (script, { warm, curlFails = 0, installFails = 0 }) => {
+const runScript = (
+  script,
+  { warm, moonProto = false, curlFails = 0, installFails = 0 },
+) => {
   const version = protoVersion(script);
   const dir = mkdtempSync(join(tmpdir(), "install-toolchain-"));
   try {
@@ -175,6 +179,11 @@ cp "${tarball}" "$out"
     if (warm) {
       mkdirSync(join(home, ".proto", "bin"), { recursive: true });
       exe(join(home, ".proto", "bin", "proto"), proto);
+    }
+    if (moonProto) {
+      const tools = join(home, ".proto", "tools", "proto", version);
+      mkdirSync(tools, { recursive: true });
+      exe(join(tools, "proto"), proto);
     }
     writeFileSync(join(dir, "repo", SCRIPT), script);
     const githubPath = join(dir, "github-path");
@@ -403,10 +412,12 @@ const checks = [
   {
     name: "a warm cache downloads nothing and keeps the cached plugins valid",
     check: (ctx) => {
-      const run = runScript(ctx.script, { warm: true });
+      // Offline, `proto install proto <v>` fails to resolve the version
+      // even when it is installed, so the script checks for it first.
+      const run = runScript(ctx.script, { warm: true, moonProto: true });
       assert.equal(run.status, 0, run.output);
       assert.deepEqual(run.curl, [], "a warm cache downloaded proto");
-      assert.deepEqual(run.install, INSTALLS(protoVersion(ctx.script)));
+      assert.deepEqual(run.install, ["install"]);
       // proto deletes and re-fetches a plugin older than its cache
       // duration, and the restored files keep their old mtimes.
       assert.match(run.githubEnv, /^PROTO_CACHE_DURATION=\d{9,}$/m);
@@ -416,8 +427,12 @@ const checks = [
     mutants: {
       "downloads proto even when it is installed": (ctx) =>
         editScript(ctx, '"$(installed_version)" != "$PROTO_VERSION"', "true"),
-      "does not install moon's proto": (ctx) =>
-        editScript(ctx, 'proto install proto "$PROTO_VERSION"', "true"),
+      "installs moon's proto even when it is installed": (ctx) =>
+        editScript(
+          ctx,
+          '[[ ! -x "$PROTO_HOME/tools/proto/$PROTO_VERSION/proto" ]]',
+          "true",
+        ),
       "keeps proto's default plugin cache duration": (ctx) =>
         editScript(ctx, 'echo "PROTO_CACHE_DURATION=', 'echo "UNUSED='),
     },
@@ -444,6 +459,8 @@ const checks = [
     },
     mutants: {
       "tries once": (ctx) => editScript(ctx, "ATTEMPTS=3", "ATTEMPTS=1"),
+      "does not install moon's proto": (ctx) =>
+        editScript(ctx, 'proto install proto "$PROTO_VERSION"', "true"),
       "waits a constant time": (ctx) =>
         editScript(ctx, "$((10 * attempt))", "10"),
     },
