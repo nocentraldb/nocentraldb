@@ -742,7 +742,7 @@ Recommendation: A. A parent agent never holds the account key and must not (RFC 
 - B. Sealed under a subkey of generation 1's key, as in [Genesis](#genesis): 56 bytes, readable by members only. *(recommended)*
 - C. `H(space id || model.id)`, so members can check a guess but nobody can read it.
 
-Recommendation: B. RFC 0005 draws `model.id` as 128 random bits, so the relay cannot tell which app a space belongs to from the id alone. Under A, though, it learns which spaces share one app's model lineage, across every customer on the relay. And RFC 0002 lists the model as something the relay cannot see. C hides the id, but members cannot read the model a space belongs to, only confirm their own, so the SDK cannot tell a user which app a space needs. B costs 40 bytes per space, a new subkey label in RFC 0003, and a local check on decryption. No rule of the relay needs the model id, so nothing is lost by hiding it.
+Recommendation: B. RFC 0005 draws `model.id` as 128 random bits, so the relay cannot tell which app a space belongs to from the id alone. Under A, though, it learns which spaces share one app's model lineage, across every customer on the relay. And RFC 0002 lists the model as something the relay cannot see. C hides the id, but members cannot read the model a space belongs to, only confirm their own, so the SDK cannot tell a user which app a space needs. B costs 40 bytes per space, a new subkey label in RFC 0003 (ticket NOC-41), and a local check on decryption. No rule of the relay needs the model id, so nothing is lost by hiding it.
 
 The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
 
