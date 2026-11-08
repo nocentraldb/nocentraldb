@@ -1,0 +1,216 @@
+//! Links to other objects of the same space, as RFC 0004 ("Links") defines
+//! them. A link (one target) is a basic value whose value is an object id;
+//! links (many targets) are a set of object ids. Neither has merge rules of
+//! its own. What is new is resolution: whether the copy holds the target,
+//! worked out when the app reads, never kept in the state.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::basic::{self, BasicValue, Entry, Kind, Write};
+use crate::cbor::Value;
+use crate::clock::Hlc;
+use crate::field::{FieldType, Outcome};
+use crate::ids::{MemberId, ObjectId, OperationId, SpaceId};
+use crate::object::Object;
+use crate::set::{self, Edit, Element, Set};
+
+/// The object a member links to, with the space it lives in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Target {
+    /// The target's space.
+    pub space: SpaceId,
+    /// The target's object id.
+    pub object: ObjectId,
+}
+
+/// A link into another space, which the writing side refuses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OtherSpace;
+
+impl core::fmt::Display for OtherSpace {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("a link cannot point into another space")
+    }
+}
+
+impl std::error::Error for OtherSpace {}
+
+/// Whether the copy can read a link's target (RFC 0004, "Resolution").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Status {
+    /// The copy holds the target, not deleted, in an allowed collection.
+    Ok,
+    /// The copy holds the target and it is deleted.
+    Deleted,
+    /// The copy holds no object with this id.
+    Missing,
+    /// The copy holds the target, in a collection the field does not allow.
+    WrongCollection,
+}
+
+/// The objects of one space's copy that links resolve against.
+pub trait Objects {
+    /// The object with this id, if the copy holds any change of it.
+    fn object(&self, id: &ObjectId) -> Option<&Object>;
+}
+
+impl Objects for BTreeMap<ObjectId, Object> {
+    fn object(&self, id: &ObjectId) -> Option<&Object> {
+        self.get(id)
+    }
+}
+
+/// An object id as the value a link holds.
+pub fn value(object: ObjectId) -> Value {
+    Value::Bytes(object.0.to_vec())
+}
+
+/// The link field type: one target, in one of `collections`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Link {
+    /// The collections the schema allows the target in.
+    pub collections: BTreeSet<String>,
+}
+
+/// One write of a link with its target's status.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Resolution {
+    /// The write, as basic values read it.
+    pub entry: Entry,
+    /// Whether the copy can read its target.
+    pub status: Status,
+}
+
+/// What the app reads of a link: the basic value read, resolved.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Resolved {
+    /// The winning target, or `None` when no write is live.
+    pub value: Option<Resolution>,
+    /// The losing live targets, as basic values list them.
+    pub conflicts: Vec<Resolution>,
+}
+
+impl Link {
+    /// The basic value a link merges as.
+    pub fn field() -> BasicValue {
+        BasicValue { kind: Kind::Object }
+    }
+
+    /// A new write of the link to `target`, or a clear with `None`, from a
+    /// member writing in `space`. Refuses a target in another space.
+    pub fn set(
+        &self,
+        _state: &basic::State,
+        _id: OperationId,
+        _author: MemberId,
+        _stamp: Hlc,
+        _space: SpaceId,
+        _target: Option<Target>,
+    ) -> Result<Write, OtherSpace> {
+        todo!()
+    }
+
+    /// The read value, with each target's status in `objects`.
+    pub fn resolve(&self, _state: &basic::State, _objects: &impl Objects) -> Resolved {
+        todo!()
+    }
+}
+
+impl FieldType for Link {
+    type State = basic::State;
+    type Operation = Write;
+    type Read = basic::Read;
+
+    fn apply(&self, state: &mut basic::State, op: &Write) {
+        Self::field().apply(state, op);
+    }
+
+    fn state_bytes(&self, state: &basic::State) -> Vec<u8> {
+        Self::field().state_bytes(state)
+    }
+
+    fn read(&self, state: &basic::State) -> basic::Read {
+        Self::field().read(state)
+    }
+
+    fn outcome(&self, state: &basic::State, id: OperationId) -> Option<Outcome> {
+        Self::field().outcome(state, id)
+    }
+}
+
+/// The links field type: many targets, each in one of `collections`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Links {
+    /// The collections the schema allows the targets in.
+    pub collections: BTreeSet<String>,
+}
+
+/// One target of a links field with its status.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Linked {
+    /// The target, as sets read an element.
+    pub element: Element,
+    /// Whether the copy can read it.
+    pub status: Status,
+}
+
+impl Links {
+    /// The set links merge as.
+    pub fn field() -> Set {
+        Set { kind: Kind::Object }
+    }
+
+    /// A new addition of `target`, from a member writing in `space`.
+    /// Refuses a target in another space.
+    pub fn add(
+        &self,
+        _state: &set::State,
+        _id: OperationId,
+        _author: MemberId,
+        _stamp: Hlc,
+        _space: SpaceId,
+        _target: Target,
+    ) -> Result<Edit, OtherSpace> {
+        todo!()
+    }
+
+    /// A new removal of `target`, wherever it points: removing a link that
+    /// should never have been written is allowed.
+    pub fn remove(
+        &self,
+        _state: &set::State,
+        _id: OperationId,
+        _author: MemberId,
+        _stamp: Hlc,
+        _target: ObjectId,
+    ) -> Edit {
+        todo!()
+    }
+
+    /// The targets, each with its status in `objects`.
+    pub fn resolve(&self, _state: &set::State, _objects: &impl Objects) -> Vec<Linked> {
+        todo!()
+    }
+}
+
+impl FieldType for Links {
+    type State = set::State;
+    type Operation = Edit;
+    type Read = set::Read;
+
+    fn apply(&self, state: &mut set::State, op: &Edit) {
+        Self::field().apply(state, op);
+    }
+
+    fn state_bytes(&self, state: &set::State) -> Vec<u8> {
+        Self::field().state_bytes(state)
+    }
+
+    fn read(&self, state: &set::State) -> set::Read {
+        Self::field().read(state)
+    }
+
+    fn outcome(&self, state: &set::State, id: OperationId) -> Option<Outcome> {
+        Self::field().outcome(state, id)
+    }
+}

@@ -23,6 +23,8 @@ pub enum Kind {
     Boolean,
     /// One of the options the schema lists.
     Choice(BTreeSet<String>),
+    /// An object id, as 16 bytes: the value of a link (RFC 0004, "Links").
+    Object,
 }
 
 /// The basic value field type: a field of one [`Kind`].
