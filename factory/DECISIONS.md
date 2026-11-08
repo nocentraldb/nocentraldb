@@ -277,3 +277,15 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-19)
 - Why: on wasm32 a panic aborts and cannot be caught, and behaviour must not fork by platform (principle 7); a panic still fails the gate on both targets. The C5 fixture breaks convergence on malformed operations instead of panicking.
 - Instead of: catching panics natively with `catch_unwind`, which would report C5 on one target only.
+
+### 2026-11-08 · NOC-37 · The encoding of field operations is Amendment 1 to RFC 0004, not a new RFC
+
+- Decided by: coding agent (NOC-37)
+- Why: the operations, their arguments and the rules for parking them belong to the field types RFC 0004 defines, and NOC-16 and NOC-17 already read RFC 0004; one amendment section with a changelog line and marked sentences, as RFC 0002 Amendment 1 did, keeps meaning and encoding in one place. RFC 0002 is not changed: it already leaves key 4 and key 5 to the field type.
+- Instead of: a short new RFC, which would split one type's definition across two documents.
+
+### 2026-11-08 · NOC-37 · The tooling test checks the amendment's shape; the example bytes are checked by two encoders outside the gate
+
+- Decided by: coding agent (NOC-37)
+- Why: as for RFC 0003, a test can prove the document's shape (the RFC 0002 link, the changelog line, the sections, hex in the examples). The bytes of E1 to E11 were produced with Python's cbor2 5.6.5 in canonical mode and decoded and re-encoded to the same bytes by `ncdb_core::cbor`; NOC-16 and NOC-17 commit them as test vectors against their encoders, where they belong in the gate. Adding a CBOR decoder to the tooling tests would duplicate the core's.
+- Instead of: a CBOR decoder in `scripts/rfc-0004.test.mjs`, or no check of the bytes at all.
