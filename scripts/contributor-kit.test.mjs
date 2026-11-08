@@ -355,3 +355,20 @@ test("the README says a cold repo:wasm-runner builds wasm-bindgen-cli once", () 
     /`wasm-runner`[^|]*cold[^|]*`wasm-bindgen-cli`[^|]*once[^|]*about a minute/,
   );
 });
+
+test("the README's uncached gate commands cover every gate task of every project", () => {
+  const block =
+    /\nRunning one gate on its own, uncached:\n\n```sh\n([\s\S]*?)```/.exec(
+      read("README.md"),
+    );
+  assert.ok(block, "README.md has no block of uncached gate commands");
+  const lines = new Set(block[1].trim().split("\n"));
+  for (const [id, tasks] of Object.entries(gateTasks())) {
+    for (const task of tasks) {
+      assert.ok(
+        lines.has(`moon run ${id}:${task} --force`),
+        `the uncached gate commands do not run ${id}:${task}`,
+      );
+    }
+  }
+});
