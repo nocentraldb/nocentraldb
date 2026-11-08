@@ -13,7 +13,7 @@ use std::fmt;
 
 use crate::change::{Change, ChangeError, Kind, Operation, Payload};
 use crate::ids::OperationId;
-use crate::log::{AppendError, Appended, Log, ParkReason, State};
+use crate::log::{AppendError, Appended, Log, ParkReason, RejectReason, State};
 use crate::redact::Size;
 
 /// The result of verifying a change's signature (step 3).
@@ -137,14 +137,33 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     if header.extensions().must_understand() {
         return State::Parked(ParkReason::UnknownHeaderKey);
     }
+    match checks.verify(change) {
+        Verified::Valid => {}
+        Verified::UnknownAuthor => return State::Rejected(RejectReason::UnknownAuthor),
+        Verified::BadSignature => return State::Rejected(RejectReason::BadSignature),
+    }
+    if !checks.is_member(change) {
+        return State::Rejected(RejectReason::NotMember);
+    }
     if header.kind == Kind::CONTROL {
+        // A control change stops after step 4: it has no payload to decrypt.
         checks.add_control(change);
         return State::Folded { parked: Vec::new() };
     }
-    let Opened::Plaintext(plaintext) = checks.open(change) else {
-        todo!("steps 3 to 5")
+    let plaintext = match checks.open(change) {
+        Opened::Plaintext(plaintext) => plaintext,
+        Opened::NoKey => return State::Rejected(RejectReason::NoKey),
+        Opened::Undecryptable => return State::Rejected(RejectReason::Undecryptable),
     };
-    let payload = Payload::decode(&plaintext).expect("a payload");
+    let Ok(payload) = Payload::decode(&plaintext) else {
+        return State::Parked(ParkReason::UnknownPayloadFormat);
+    };
+    if payload.format != Payload::FORMAT {
+        return State::Parked(ParkReason::UnknownPayloadFormat);
+    }
+    if payload.extensions().must_understand() {
+        return State::Parked(ParkReason::UnknownPayloadKey);
+    }
     for (position, operation) in (0..).zip(&payload.operations) {
         fold.fold(change.operation_id(position), operation);
     }

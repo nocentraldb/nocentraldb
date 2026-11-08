@@ -86,6 +86,11 @@ pub enum ParkReason {
     UnknownHeaderFormat,
     /// The header carries an unknown "must understand" key.
     UnknownHeaderKey,
+    /// The payload format is unknown, or the payload is not a map this
+    /// core can read, as a newer format may not be.
+    UnknownPayloadFormat,
+    /// The payload carries an unknown "must understand" key.
+    UnknownPayloadKey,
 }
 
 /// An operation of a folded change that was parked on its own (D10).
@@ -98,7 +103,18 @@ pub struct ParkedOperation {
 /// Why a change is rejected: steps 3 to 5.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum RejectReason {}
+pub enum RejectReason {
+    /// Step 3: no membership entry the member holds names the author.
+    UnknownAuthor,
+    /// Step 3: the signature does not verify.
+    BadSignature,
+    /// Step 4: the author is not a member at the change's key generation.
+    NotMember,
+    /// Step 5: the member holds no key envelope for the key generation.
+    NoKey,
+    /// Step 5: the AEAD fails.
+    Undecryptable,
+}
 
 /// One entry: the change, and on a member its state.
 #[derive(Clone)]
