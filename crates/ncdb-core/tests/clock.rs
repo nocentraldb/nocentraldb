@@ -208,3 +208,24 @@ fn a_clock_from_the_future_is_still_received_and_the_clock_moves_as_without_the_
         Ok(())
     });
 }
+
+#[test]
+fn the_warning_names_only_the_clock_difference_and_the_author() {
+    let mut clock = Clock::new();
+    let warning = clock.receive(hlc(WALL + 61_500, 9), AUTHOR, WALL).unwrap();
+    // Destructured without `..`: a field added to the warning fails to
+    // compile here, so nothing besides these two can slip into it.
+    let ClockAhead { author, ahead_millis } = warning;
+    assert_eq!((author, ahead_millis), (AUTHOR, 61_500));
+    let hex = "ab".repeat(32);
+    // What the SDK reports and what a log would hold: the author id as hex
+    // and the difference, nothing else.
+    assert_eq!(
+        warning.to_string(),
+        format!("a change by member {hex} has a clock 61500 ms ahead of the local wall clock")
+    );
+    assert_eq!(
+        format!("{warning:?}"),
+        format!("ClockAhead {{ author: MemberId({hex}), ahead_millis: 61500 }}")
+    );
+}
