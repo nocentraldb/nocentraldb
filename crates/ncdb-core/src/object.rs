@@ -6,8 +6,10 @@
 //! Object deletion belongs to a later RFC; this follows owner decision 4 of
 //! RFC 0004: whether an object is deleted is a boolean basic value.
 
-use crate::basic::{self, Write};
+use crate::basic::{self, BasicValue, Kind, Write};
+use crate::cbor::Value;
 use crate::clock::Hlc;
+use crate::field::FieldType;
 use crate::ids::{MemberId, OperationId};
 
 /// A create of an object id (RFC 0002's operation 0), as far as RFC 0004
@@ -31,32 +33,51 @@ pub struct Object {
     deleted: basic::State,
 }
 
+/// The collection as a basic value: any name.
+const COLLECTION: BasicValue = BasicValue { kind: Kind::Text };
+/// Whether the object is deleted, as a basic value.
+const DELETED: BasicValue = BasicValue {
+    kind: Kind::Boolean,
+};
+
 impl Object {
     /// Merges one create of the object's id. A create replaces nothing, and
     /// neither deletes nor restores.
-    pub fn create(&mut self, _create: &Create) {
-        todo!()
+    pub fn create(&mut self, create: &Create) {
+        let write = Write {
+            id: create.id,
+            author: create.author,
+            stamp: create.stamp,
+            value: Value::Text(create.collection.clone()),
+            replaces: Default::default(),
+        };
+        COLLECTION.apply(&mut self.creates, &write);
     }
 
     /// Merges one write of whether the object is deleted: `true` deletes,
     /// `false` restores.
-    pub fn set_deleted(&mut self, _write: &Write) {
-        todo!()
+    pub fn set_deleted(&mut self, write: &Write) {
+        DELETED.apply(&mut self.deleted, write);
     }
 
     /// Whether any create of the id has arrived.
     pub fn exists(&self) -> bool {
-        todo!()
+        self.creates != basic::State::default()
     }
 
     /// The object's collection, as a basic value: the create last in stamp
     /// order wins; creates that name another collection are conflicts.
     pub fn collection(&self) -> basic::Read {
-        todo!()
+        COLLECTION.read(&self.creates)
     }
 
-    /// Whether the object is deleted.
+    /// Whether the object is deleted: the winning write of its deletion is
+    /// `true`. Anything else, a value of the wrong kind included, reads as
+    /// not deleted.
     pub fn is_deleted(&self) -> bool {
-        todo!()
+        DELETED
+            .read(&self.deleted)
+            .value
+            .is_some_and(|w| w.value == Value::Bool(true))
     }
 }

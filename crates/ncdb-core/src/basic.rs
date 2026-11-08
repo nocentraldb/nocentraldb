@@ -136,6 +136,7 @@ impl Kind {
             | (Kind::Boolean, Value::Bool(_)) => true,
             (Kind::Integer, Value::Unsigned(n) | Value::Negative(n)) => *n <= MAX,
             (Kind::Choice(options), Value::Text(option)) => options.contains(option),
+            (Kind::Object, Value::Bytes(id)) => id.len() == 16,
             _ => false,
         }
     }

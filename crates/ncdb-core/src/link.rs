@@ -65,6 +65,37 @@ pub fn value(object: ObjectId) -> Value {
     Value::Bytes(object.0.to_vec())
 }
 
+/// The target's object id, when it lives in `space`.
+fn in_space(space: SpaceId, target: Target) -> Result<ObjectId, OtherSpace> {
+    if target.space == space {
+        Ok(target.object)
+    } else {
+        Err(OtherSpace)
+    }
+}
+
+/// The status of the target `value` names, in a field that allows
+/// `collections`. A value that is no object id names no object the copy can
+/// hold. A deleted target reads deleted whatever its collection.
+fn status(collections: &BTreeSet<String>, value: &Value, objects: &impl Objects) -> Status {
+    let object = match value {
+        Value::Bytes(bytes) => <[u8; 16]>::try_from(bytes.as_slice())
+            .ok()
+            .and_then(|id| objects.object(&ObjectId(id))),
+        _ => None,
+    };
+    let Some(object) = object.filter(|o| o.exists()) else {
+        return Status::Missing;
+    };
+    if object.is_deleted() {
+        return Status::Deleted;
+    }
+    match object.collection().value.map(|w| w.value) {
+        Some(Value::Text(collection)) if collections.contains(&collection) => Status::Ok,
+        _ => Status::WrongCollection,
+    }
+}
+
 /// The link field type: one target, in one of `collections`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Link {
@@ -100,19 +131,33 @@ impl Link {
     /// member writing in `space`. Refuses a target in another space.
     pub fn set(
         &self,
-        _state: &basic::State,
-        _id: OperationId,
-        _author: MemberId,
-        _stamp: Hlc,
-        _space: SpaceId,
-        _target: Option<Target>,
+        state: &basic::State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        space: SpaceId,
+        target: Option<Target>,
     ) -> Result<Write, OtherSpace> {
-        todo!()
+        let value = match target {
+            Some(target) => value(in_space(space, target)?),
+            None => Value::Null,
+        };
+        Ok(Self::field()
+            .set(state, id, author, stamp, value)
+            .expect("an object id or the empty value is a link's value"))
     }
 
     /// The read value, with each target's status in `objects`.
-    pub fn resolve(&self, _state: &basic::State, _objects: &impl Objects) -> Resolved {
-        todo!()
+    pub fn resolve(&self, state: &basic::State, objects: &impl Objects) -> Resolved {
+        let read = Self::field().read(state);
+        let resolve = |entry: Entry| Resolution {
+            status: status(&self.collections, &entry.value, objects),
+            entry,
+        };
+        Resolved {
+            value: read.value.map(resolve),
+            conflicts: read.conflicts.into_iter().map(resolve).collect(),
+        }
     }
 }
 
@@ -164,32 +209,45 @@ impl Links {
     /// Refuses a target in another space.
     pub fn add(
         &self,
-        _state: &set::State,
-        _id: OperationId,
-        _author: MemberId,
-        _stamp: Hlc,
-        _space: SpaceId,
-        _target: Target,
+        state: &set::State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        space: SpaceId,
+        target: Target,
     ) -> Result<Edit, OtherSpace> {
-        todo!()
+        let element = value(in_space(space, target)?);
+        Ok(Self::field()
+            .add(state, id, author, stamp, element)
+            .expect("an object id is an element of links"))
     }
 
     /// A new removal of `target`, wherever it points: removing a link that
     /// should never have been written is allowed.
     pub fn remove(
         &self,
-        _state: &set::State,
-        _id: OperationId,
-        _author: MemberId,
-        _stamp: Hlc,
-        _target: ObjectId,
+        state: &set::State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        target: ObjectId,
     ) -> Edit {
-        todo!()
+        Self::field()
+            .remove(state, id, author, stamp, value(target))
+            .expect("an object id is an element of links")
     }
 
     /// The targets, each with its status in `objects`.
-    pub fn resolve(&self, _state: &set::State, _objects: &impl Objects) -> Vec<Linked> {
-        todo!()
+    pub fn resolve(&self, state: &set::State, objects: &impl Objects) -> Vec<Linked> {
+        Self::field()
+            .read(state)
+            .elements
+            .into_iter()
+            .map(|element| Linked {
+                status: status(&self.collections, &element.value, objects),
+                element,
+            })
+            .collect()
     }
 }
 
