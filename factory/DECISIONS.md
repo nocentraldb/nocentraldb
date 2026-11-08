@@ -230,6 +230,24 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: the owner accepted all fifteen decisions and the six readings of RFC 0003: Ed25519 and X25519 member keys in the platform keystore, HPKE-wrapped space keys with generations, one person key per person per space, the account key on every device plus a recovery code, eager rotation, and the formats of decision 15.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0003-keys-and-cryptography.md`.
 
+### 2026-11-07 · NOC-12 · The spike ran in Chromium only, and its code is kept in the PR, not on a branch
+
+- Decided by: coding agent (NOC-12)
+- Why: the cloud container has only Chromium; the RFC states Firefox and Safari as an open check for NOC-10 or the implementation ticket instead of claiming them. The code goes into the PR description because the agent may push only to the ticket's branch.
+- Instead of: installing other browsers in the container, or pushing a throwaway spike branch.
+
+### 2026-11-07 · NOC-12 · RFC 0006 recommends one SQLite binding (rusqlite) on every target
+
+- Decided by: coding agent (NOC-12), for the owner to confirm in the RFC's decision 3
+- Why: rusqlite drives sqlite-wasm-rs in the browser, so the fold is one body of Rust code (principle 7); the spike shows it works with OPFS in a worker.
+- Instead of: the official SQLite wasm build or wa-sqlite, both driven through JavaScript, which would fork the binding by platform.
+
+### 2026-11-08 · NOC-12 · RFC 0006: every recommendation accepted
+
+- Decided by: Carsten
+- Why: one database per member; the view's layout is not a stable format, only the log is; rusqlite everywhere, with opfs-sahpool in a dedicated worker in the browser; one tab owns the database; UTF-8 byte order in indexes; device disk encryption instead of an encrypted database for v1; synchronous = FULL; persistent storage requested by the SDK; secure_delete on.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0006-local-view.md`.
+
 ### 2026-11-07 · NOC-11 · RFC 0005's tooling test holds the examples to the list of public names
 
 - Decided by: coding agent (NOC-11)
