@@ -55,6 +55,8 @@ await db.workOrders.erase({ person: customerId });  // needs a second account's 
 **What it does not cover.**
 
 - Devices that never come back online keep their keys and their data.
+- A modified client can ignore the erasure and keep the key ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Copies made outside the database, such as exports and screenshots, stay readable.
 - The database does not find personal data in unmarked free text.
 
@@ -72,7 +74,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **In your app.** You write nothing. The SDK encrypts every change before it leaves the device, and keys stay on the members' devices.
 
-**What it does not cover.** The relay sees metadata: which key is in which space, and when and how much each key writes. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
+**What it does not cover.** The relay sees metadata: which key is in which space, and when and how much each key writes. That is not all it sees: it also sees the key generations and when they change, the rhythm of work, and who reads which space from where, and it can withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
 
 **Tell us.** Would "the relay sees only ciphertext and this metadata" pass your security review? Which piece of metadata would worry you?
 
