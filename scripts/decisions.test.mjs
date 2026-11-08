@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 
-import { checkDecisions } from "./decisions.mjs";
+import { checkDecisions, readDecisions } from "./decisions.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
@@ -377,4 +377,25 @@ test("the filters combine with each other and with --current and --index", (t) =
     "2026-11-09",
   );
   assert.deepEqual(titles(stdout), ["Later"]);
+});
+
+test("the factory's decisions live in factory/decisions/ and pass the check", () => {
+  const dir = join(root, "factory/decisions");
+  const { entries, problems } = readDecisions(dir);
+  assert.deepEqual(problems, []);
+  assert.ok(entries.length >= 50, `only ${entries.length} decisions`);
+  const noc27 = entries.find(({ file }) =>
+    file.startsWith("2026-11-08-NOC-27-"),
+  );
+  assert.ok(noc27, "the decision of NOC-27 is recorded");
+  assert.match(noc27.text, /^- Decided by: Carsten/m);
+});
+
+test("DECISIONS.md holds no entry, only the pointer to the folder", () => {
+  const text = read("factory/DECISIONS.md");
+  assert.doesNotMatch(text, /^#+ \d{4}-\d{2}-\d{2} · /m);
+  assert.match(text, /factory\/decisions\//);
+  assert.match(text, /pnpm decisions/);
+  assert.match(text, /Topics:/);
+  assert.match(text, /Supersedes:/);
 });
