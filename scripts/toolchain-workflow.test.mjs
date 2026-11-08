@@ -25,7 +25,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseDocument } from "yaml";
+import { parse, parseDocument } from "yaml";
 import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -46,7 +46,11 @@ const load = () => {
     assert.deepEqual(docs[name].errors, [], `${name}.yml does not parse`);
   }
   // Empty when the script is missing, so the checks fail as assertions.
-  return { docs, script: existsSync(join(root, SCRIPT)) ? read(SCRIPT) : "" };
+  return {
+    docs,
+    script: existsSync(join(root, SCRIPT)) ? read(SCRIPT) : "",
+    toolchains: parse(read(".moon/toolchains.yml")),
+  };
 };
 
 const clone = (ctx) => ({
@@ -54,6 +58,7 @@ const clone = (ctx) => ({
     Object.entries(ctx.docs).map(([name, doc]) => [name, doc.clone()]),
   ),
   script: ctx.script,
+  toolchains: structuredClone(ctx.toolchains),
 });
 
 /** A GitHub Actions expression, `${{ … }}`, as the workflow spells it. */
@@ -108,6 +113,9 @@ const protoVersion = (script) => {
   assert.ok(match, "the script pins no exact proto version");
   return match[1];
 };
+
+/** The proto commands a successful install runs, in order. */
+const INSTALLS = (version) => ["install", `install proto ${version}`];
 
 /**
  * Runs `script` in a scratch workspace whose PATH holds fake `curl`,
@@ -367,12 +375,38 @@ const checks = [
     },
   },
   {
+    // moon runs its tasks through the proto in ~/.proto/tools/proto/<v>,
+    // for the version .moon/toolchains.yml pins (else its own default), and
+    // downloads it on its first task, without retries. The script installs
+    // that version, so it is in the cache like every other tool.
+    name: "moon runs its tasks with the proto the script pins and installs",
+    check: (ctx) => {
+      assert.equal(
+        ctx.toolchains?.proto?.version,
+        protoVersion(ctx.script),
+        ".moon/toolchains.yml proto.version",
+      );
+      assert.ok(
+        ctx.script.includes('proto install proto "$PROTO_VERSION"'),
+        "the script does not install moon's proto",
+      );
+    },
+    mutants: {
+      "moon falls back to its own proto": (ctx) => {
+        delete ctx.toolchains.proto;
+      },
+      "moon pins another proto": (ctx) => {
+        ctx.toolchains.proto = { version: "0.62.2" };
+      },
+    },
+  },
+  {
     name: "a warm cache downloads nothing and keeps the cached plugins valid",
     check: (ctx) => {
       const run = runScript(ctx.script, { warm: true });
       assert.equal(run.status, 0, run.output);
       assert.deepEqual(run.curl, [], "a warm cache downloaded proto");
-      assert.equal(run.install.length, 1, "proto install did not run once");
+      assert.deepEqual(run.install, INSTALLS(protoVersion(ctx.script)));
       // proto deletes and re-fetches a plugin older than its cache
       // duration, and the restored files keep their old mtimes.
       assert.match(run.githubEnv, /^PROTO_CACHE_DURATION=\d{9,}$/m);
@@ -382,6 +416,8 @@ const checks = [
     mutants: {
       "downloads proto even when it is installed": (ctx) =>
         editScript(ctx, '"$(installed_version)" != "$PROTO_VERSION"', "true"),
+      "does not install moon's proto": (ctx) =>
+        editScript(ctx, 'proto install proto "$PROTO_VERSION"', "true"),
       "keeps proto's default plugin cache duration": (ctx) =>
         editScript(ctx, 'echo "PROTO_CACHE_DURATION=', 'echo "UNUSED='),
     },
@@ -404,7 +440,7 @@ const checks = [
       }
       assert.deepEqual(run.sleep, ["10", "20"], "no growing backoff");
       assert.ok(run.installed, "proto is not in ~/.proto/bin");
-      assert.equal(run.install.length, 1);
+      assert.deepEqual(run.install, INSTALLS(version));
     },
     mutants: {
       "tries once": (ctx) => editScript(ctx, "ATTEMPTS=3", "ATTEMPTS=1"),
@@ -434,12 +470,16 @@ const checks = [
     check: (ctx) => {
       const retried = runScript(ctx.script, { warm: true, installFails: 2 });
       assert.equal(retried.status, 0, retried.output);
-      assert.equal(retried.install.length, 3);
+      assert.deepEqual(retried.install, [
+        "install",
+        "install",
+        ...INSTALLS(protoVersion(ctx.script)),
+      ]);
       assert.deepEqual(retried.sleep, ["10", "20"]);
 
       const failed = runScript(ctx.script, { warm: true, installFails: 99 });
       assert.notEqual(failed.status, 0);
-      assert.equal(failed.install.length, 3);
+      assert.deepEqual(failed.install, ["install", "install", "install"]);
       assert.match(
         failed.output,
         /^::error title=[^:]+::.*\bnodejs\.org\b.*after 3 attempts/m,
