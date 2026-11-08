@@ -8,6 +8,9 @@
 //! author's Ed25519 key: encrypt-then-sign. Opening verifies the signature
 //! with `verify_strict` and then decrypts.
 //!
+//! The bytes below are RFC 0003's Amendment 1, which the owner decided
+//! (Carsten, 2026-11-08, NOC-30).
+//!
 //! The content key is HKDF-SHA256 of the space key, without salt, with the
 //! info `"nocentraldb/content-key" || space id (16 bytes) || key generation
 //! (8 bytes, big-endian) || suite id (8 bytes, big-endian)`. The payload

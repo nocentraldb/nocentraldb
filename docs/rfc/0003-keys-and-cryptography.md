@@ -2,6 +2,10 @@
 
 REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 
+**Changelog.**
+
+- **2026-11-08** · NOC-15, NOC-30 · [Amendment 1: the bytes of a sealed change](#amendment-1-the-bytes-of-a-sealed-change) fixes the content-key derivation, the nonce, the associated data, the padding and the crate versions. The owner decided all five (Carsten, 2026-11-08). The sentence it makes precise elsewhere is marked *(Amendment 1)*.
+
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
 **Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
@@ -135,7 +139,7 @@ Each space records a **suite id** that names this set of primitives. RFC 0002 ca
 RFC 0002 defines the bytes: its header carries the suite id, the space key generation, the author's member id and the author sequence, and each personal field carries its person-key id. This RFC defines the order and what each step covers:
 
 1. **Personal fields first.** For each personal field, the SDK encrypts the value with the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field id and the person-key id, so a ciphertext cannot be moved to another field or another person.
-2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted.
+2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted. The exact bytes of the content key, the nonce, the associated data and the padding are in [Amendment 1](#amendment-1-the-bytes-of-a-sealed-change). *(Amendment 1.)*
 3. **Then the signature.** The author signs the header, which contains the ciphertext, with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
 
 A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept, not dropped silently (principle 3): it is rejected, as [RFC 0002 Amendment 1 (D11)](0002-change-and-log-format.md#rejected-changes) defines it, with a reason, and checked again when a control change arrives that could make it valid.
@@ -403,6 +407,28 @@ It differs from them, or makes them more precise, in these points. pm flags each
 6. **Post-quantum.** Neither GENESIS.md nor RFC 0001 mentions it. v1 would not resist an attacker who records ciphertext today and has a quantum computer later (decision 9). Principle 4 asks us to say so.
 
    Accepted (Carsten, 2026-11-08).
+
+## Amendment 1: the bytes of a sealed change
+
+Added on 2026-11-08 for NOC-15, after this RFC was merged. [How a member signs and encrypts a change](#how-a-member-signs-and-encrypts-a-change) fixes the primitives and their order, and [RFC 0002](0002-change-and-log-format.md) D8 fixes that payloads are padded to 256 bytes. Five details at byte level were still open. They are part of the wire format, so the owner decided them (NOC-30). A wrong choice could only be fixed with a new suite.
+
+1. **The content key.** Content key = HKDF-SHA256(ikm = the space key of the header's generation, salt = none, info = `"nocentraldb/content-key"` ‖ space id (16 bytes) ‖ key generation (8 bytes, big-endian) ‖ suite id (8 bytes, big-endian)), 32 bytes. It has the same shape as the [key-chain subkey](#key-chain-subkey), and with fixed widths two different contexts never give the same bytes.
+   - Rejected: the inputs as a canonical CBOR array in `info`, which needs an encoder for the derivation and a second shape of subkey.
+   - Rejected: the space id as the HKDF salt, which splits the context over two inputs where every other subkey has none.
+2. **The nonce.** Each seal draws a random 24-byte nonce. Header key 6 holds the nonce, then the XChaCha20-Poly1305 ciphertext with its 16-byte tag: nonce ‖ ciphertext ‖ tag, libsodium's layout. A random nonce needs no stored state, which is why XChaCha was chosen.
+   - Rejected: the nonce in a header key of its own, which costs a key and a rule for the associated data and gains nothing.
+   - Rejected: a nonce derived from author and sequence, which repeats when a device is restored from a backup or reuses a sequence number, and then reveals both plaintexts.
+3. **The associated data.** The canonical CBOR encoding (RFC 0002) of the header map without key 6. Unknown header keys are included, so a header field added later is bound without anyone having to remember it.
+   - Rejected: a fixed list of fields, which leaves a later field unbound.
+   - Rejected: no associated data, relying on the signature alone, which loses the binding wherever the signature is checked apart from the decryption.
+4. **The padding.** The canonical encoding of the whole payload map, padding key 5 included, is a multiple of 256 bytes. The sealer picks the length of the zero bytes in key 5 so that it lands on the multiple. A payload already on a multiple gets no key 5. Key 5 costs at least 2 bytes, and one length (26 bytes short) cannot be reached either, so a payload 1 or 26 bytes short of a multiple pads to the multiple after. Readers ignore key 5, so the rule can change without a new format (RFC 0002, D8).
+   - Rejected: padding the payload without key 5 to the multiple, which lets the key's own 1 to 3 bytes show the true size again.
+   - Rejected: padding outside the CBOR, at the encryption layer, which needs its own length field and goes against D8.
+5. **The crates.** `chacha20poly1305 =0.11.0` and `hkdf =0.13.0`, with the same `sha2 =0.11.1` that computes change ids. The ChaCha20-Poly1305 cipher core the 2020 NCC Group review covered has not changed since, and security fixes land only in the current line. The pinned versions themselves have no audit of their own.
+   - Rejected: the older line the review covered, `chacha20poly1305 0.10.1` and `hkdf 0.12`, which is no longer maintained and brings a second `sha2`.
+   - Rejected: libsodium through bindings, which [Primitives](#primitives) already rejected for `wasm32-unknown-unknown`.
+
+Decided: Carsten, 2026-11-08 (NOC-30), each as recommended. `ncdb-core` implements all five in `src/seal.rs`. `crates/ncdb-core/tests/vectors/generate.py` writes a test vector for a signed, sealed change from this description with independent libraries.
 
 ## Sources
 
