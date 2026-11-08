@@ -346,25 +346,35 @@ GENESIS.md reserves the on-disk format and anything a user sees first for the ow
    - B. One database per space.
    Recommendation: A. Indexes span spaces, so cross-space pages are one range lookup; leaving a space deletes its rows.
 
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 2. **Is the view's layout a stable format?**
    - A. No. Only the log (RFC 0002) is a stable on-disk format. The view's tables are internal to the core, versioned in `meta`, and a new core may rebuild them. *(recommended)*
    - B. Yes, versioned and migrated like the log.
    Recommendation: A. The view can always be rebuilt from the log; a stable layout would only slow down the core's development. Apps never see the tables (no raw SQL).
+
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 3. **The SQLite stack.**
    - A. `rusqlite`, pinned, with `bundled` natively and `ffi-sqlite-wasm-rs` (`sqlite-wasm-rs`, `opfs-sahpool` from `sqlite-wasm-vfs`) in the browser, in a dedicated worker. *(recommended)*
    - B. `rusqlite` natively, and the official SQLite WebAssembly build or wa-sqlite in the browser, called through JavaScript.
    Recommendation: A. One SQLite binding and one body of fold code on every target (principle 7), and the spike shows it works. The risk is two young crates; the fallback is to fork them.
 
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 4. **Several tabs of the same app in one browser.**
    - A. One tab owns the database, elected with Web Locks; other tabs reach it through a `BroadcastChannel`. *(recommended)*
    - B. Only one tab may run the app; the others show a notice.
    Recommendation: A. Users open apps in several tabs; B would surprise them. A needs its own test, as the spike did not cover it.
 
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 5. **The order of text in indexes.**
    - A. UTF-8 byte order everywhere; locale-aware order only through a computed sort key. *(recommended)*
    - B. Locale-aware collation in the index.
    Recommendation: A. B makes the order depend on the platform's ICU version, so two members could order the same page differently.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 6. **Encryption at rest on the device.** Out of scope for this RFC to design; named here as the question.
    - A. Rely on the device: the OS's disk encryption, the platform keystore for keys, and on iOS the data-protection class "complete until first user authentication". The SDK documents what that does not cover. *(recommended for v1)*
@@ -372,20 +382,28 @@ GENESIS.md reserves the on-disk format and anything a user sees first for the ow
    - C. Decide later, after v1.
    Recommendation: A for v1, with B as a later RFC if a user's review asks for it. A key held on the same unlocked device protects little more than disk encryption does.
 
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 7. **Durability of a commit.**
    - A. WAL with `synchronous = FULL`: a committed change survives a power loss. *(recommended)*
    - B. WAL with `synchronous = NORMAL`: faster; the last commits before a power loss may be lost, the database stays consistent.
    Recommendation: A. The log holds the member's writes the relay has not confirmed, which exist nowhere else (principle 3: nothing is lost silently).
+
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 8. **Persistent storage in the browser.**
    - A. The SDK asks for persistent storage on open and tells the app whether it was granted and how many unconfirmed changes it holds. *(recommended)*
    - B. Leave it to the app.
    Recommendation: A. Eviction loses the member's unconfirmed writes; the developer must learn that from the SDK, not from a user.
 
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
+
 9. **Deleted content in the database file.**
    - A. `PRAGMA secure_delete = ON`, and a WAL checkpoint with `TRUNCATE` after a shred or after leaving a space. *(recommended)*
    - B. SQLite's defaults; free pages keep old content until reused.
    Recommendation: A. Erasure should remove what the database can reach on a device that comes back online, at a small cost in write speed. The limits on flash storage stay, and the SDK says so.
+
+   Decided (Carsten, 2026-11-08): the recommendation, (A).
 
 ## Agreement with GENESIS.md and RFC 0001
 

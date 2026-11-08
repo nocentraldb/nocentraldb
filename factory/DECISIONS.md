@@ -241,3 +241,9 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: coding agent (NOC-12), for the owner to confirm in the RFC's decision 3
 - Why: rusqlite drives sqlite-wasm-rs in the browser, so the fold is one body of Rust code (principle 7); the spike shows it works with OPFS in a worker.
 - Instead of: the official SQLite wasm build or wa-sqlite, both driven through JavaScript, which would fork the binding by platform.
+
+### 2026-11-08 · NOC-12 · RFC 0006: every recommendation accepted
+
+- Decided by: Carsten
+- Why: one database per member; the view's layout is not a stable format, only the log is; rusqlite everywhere, with opfs-sahpool in a dedicated worker in the browser; one tab owns the database; UTF-8 byte order in indexes; device disk encryption instead of an encrypted database for v1; synchronous = FULL; persistent storage requested by the SDK; secure_delete on.
+- Instead of: the alternatives listed for each decision in `docs/rfc/0006-local-view.md`.
