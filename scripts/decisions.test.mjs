@@ -2,12 +2,23 @@
 // one-file-per-decision folder factory/decisions/, prints it (`pnpm
 // decisions`) and checks it in the gate (`repo:decisions`).
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
 import { checkDecisions } from "./decisions.mjs";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const read = (path) => readFileSync(join(root, path), "utf8");
+const SCRIPT = join(root, "scripts/decisions.mjs");
+
+/** Runs scripts/decisions.mjs with `args`; returns status, stdout, stderr. */
+const run = (...args) =>
+  spawnSync(process.execPath, [SCRIPT, ...args], { encoding: "utf8" });
 
 /** A decision file's text, with the fields a test may override or drop. */
 const entry = ({
@@ -170,4 +181,38 @@ test("check reports every problem of every file, sorted by file name", (t) => {
     problems.map((problem) => problem.split(":")[0]),
     [GOOD, GOOD, "b.md"],
   );
+});
+
+test("--check exits 1 and names each problem on stderr", (t) => {
+  const dir = folder(t, { [GOOD]: entry({ topics: null }) });
+  const result = run("--check", "--dir", dir);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, new RegExp(`${GOOD}: .*Topics`));
+});
+
+test("--check exits 0 on a well-formed folder", (t) => {
+  const dir = folder(t, { [GOOD]: entry() });
+  const result = run("--check", "--dir", dir);
+  assert.equal(result.status, 0, result.stderr);
+});
+
+test("an unknown option exits 2 with the usage", () => {
+  const result = run("--frobnicate");
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /usage/i);
+});
+
+test("pnpm gates runs the check over factory/decisions/", () => {
+  const moon = parseYaml(read("moon.yml"));
+  const task = moon.tasks.decisions;
+  assert.ok(task, "moon.yml has no task `decisions`");
+  assert.equal(task.command, "node scripts/decisions.mjs --check");
+  assert.ok(task.inputs.includes("/factory/decisions/**/*"), "inputs");
+  assert.ok(task.inputs.includes("/scripts/decisions.mjs"), "inputs");
+  assert.ok(moon.tasks.gates.deps.includes("~:decisions"), "gates deps");
+});
+
+test("pnpm decisions runs the reading command", () => {
+  const pkg = JSON.parse(read("package.json"));
+  assert.equal(pkg.scripts.decisions, "node scripts/decisions.mjs");
 });
