@@ -105,8 +105,31 @@ impl BasicValue {
         stamp: Hlc,
         value: Value,
     ) -> Result<Write, OutsideSchema> {
-        let _ = (state, id, author, stamp, value);
-        todo!()
+        if !self.allows(&value) {
+            return Err(OutsideSchema);
+        }
+        Ok(Write {
+            id,
+            author,
+            stamp,
+            value,
+            replaces: state.live().iter().map(|w| w.id).collect(),
+        })
+    }
+
+    /// Whether the kind allows `value`. `Value::Null`, the empty value,
+    /// clears a field of any kind.
+    fn allows(&self, value: &Value) -> bool {
+        const MAX: u64 = i64::MAX as u64;
+        match (&self.kind, value) {
+            (_, Value::Null)
+            | (Kind::Text, Value::Text(_))
+            | (Kind::Float, Value::Float(_))
+            | (Kind::Boolean, Value::Bool(_)) => true,
+            (Kind::Integer, Value::Unsigned(n) | Value::Negative(n)) => *n <= MAX,
+            (Kind::Choice(options), Value::Text(option)) => options.contains(option),
+            _ => false,
+        }
     }
 }
 
@@ -148,7 +171,7 @@ impl BasicValue {
             author: write.author,
             stamp: write.stamp,
             value: write.value.clone(),
-            known: true,
+            known: self.allows(&write.value),
         }
     }
 }
