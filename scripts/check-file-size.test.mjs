@@ -3,16 +3,21 @@
 // factory/CONFIG.md fails the gate, by name and line count.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 
-const script = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "check-file-size.mjs",
-);
+const scripts = dirname(fileURLToPath(import.meta.url));
+const script = join(scripts, "check-file-size.mjs");
 const fixtures = [];
 after(() => {
   for (const dir of fixtures) rmSync(dir, { recursive: true, force: true });
@@ -138,4 +143,19 @@ test("a directory whose name only contains target or node_modules is checked", (
   assert.equal(status, 1);
   assert.match(stderr, /src\/targets\/long\.rs has 11 lines/);
   assert.match(stderr, /my_node_modules\/long\.js has 11 lines/);
+});
+
+test("pnpm gates runs the check as repo:file-size", () => {
+  const moon = parseYaml(readFileSync(join(scripts, "..", "moon.yml"), "utf8"));
+  const task = moon.tasks["file-size"];
+  assert.ok(task, "moon.yml has no task `file-size`");
+  assert.equal(task.command, "node scripts/check-file-size.mjs");
+  for (const input of [
+    "/factory/CONFIG.md",
+    "/scripts/check-file-size.mjs",
+    "/**/*.{rs,ts,tsx,js,mjs,cjs,sh,py}",
+  ]) {
+    assert.ok(task.inputs.includes(input), `inputs lack ${input}`);
+  }
+  assert.ok(moon.tasks.gates.deps.includes("~:file-size"), "gates deps");
 });
