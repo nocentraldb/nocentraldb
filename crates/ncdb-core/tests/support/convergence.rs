@@ -50,7 +50,7 @@ pub enum Outcome {
 /// `Default` is the initial state of a field nobody has written.
 pub trait Mergeable: Default + Clone + Debug {
     /// The body of one operation.
-    type Change: Clone + Debug;
+    type Change: Clone + Debug + 'static;
     /// What the app, views and computed fields see.
     type Read: PartialEq + Debug;
 
@@ -110,7 +110,6 @@ pub fn independent<C, F: Fn(Member) -> BoxedStrategy<C>>(change: F) -> Independe
 impl<S, F> Generator<S> for Independent<F>
 where
     S: Mergeable,
-    S::Change: 'static,
     F: Fn(Member) -> BoxedStrategy<S::Change>,
 {
     type Raw = S::Change;
@@ -165,6 +164,8 @@ pub enum Property {
     /// Idempotent: applying an operation the state already holds changes
     /// nothing.
     C2,
+    /// Robust: malformed operations apply without a panic and converge.
+    C5,
     /// Nothing lost silently: every operation's outcome is the same on every
     /// copy, and replaced only by an operation whose author had seen it.
     C4,
@@ -178,6 +179,7 @@ impl core::fmt::Display for Property {
             Property::C1 => "C1 (converges in any order)",
             Property::C2 => "C2 (idempotent)",
             Property::C4 => "C4 (nothing lost silently)",
+            Property::C5 => "C5 (robust)",
             Property::C7 => "C7 (tested reads)",
         })
     }
@@ -242,22 +244,35 @@ struct Step<R> {
     arrivals: Vec<Vec<u32>>,
 }
 
+/// What a step makes its operation from.
+#[derive(Clone, Debug)]
+enum Body<R, C> {
+    /// The generator's random input, built into an operation by its author.
+    Made(R),
+    /// An arbitrary operation, possibly malformed, taken as it is (C5).
+    Malformed(C),
+}
+
+/// The steps of a case for the field type `S` and its generator `G`.
+type Steps<S, G> = [Step<Body<<G as Generator<S>>::Raw, <S as Mergeable>::Change>>];
+
 /// The operations a case's steps make.
 struct Made<C> {
     ops: Vec<Op<C>>,
     /// Per operation, the ids of the operations its author had seen.
     seen: Vec<BTreeSet<OpId>>,
+    /// Per operation, whether it is an arbitrary one (C5), whose claims
+    /// about what its author had seen the harness cannot check.
+    malformed: Vec<bool>,
 }
 
 /// Plays the steps. Every member keeps its own copy, which holds its own
 /// operations and the ones it learned; it makes each operation from that
 /// copy, so an operation can only replace what its author had seen.
-fn simulate<S: Mergeable, G: Generator<S>>(
-    generator: &G,
-    steps: &[Step<G::Raw>],
-) -> Made<S::Change> {
+fn simulate<S: Mergeable, G: Generator<S>>(generator: &G, steps: &Steps<S, G>) -> Made<S::Change> {
     let mut ops: Vec<Op<S::Change>> = Vec::with_capacity(steps.len());
     let mut seen_by_op = Vec::with_capacity(steps.len());
+    let mut malformed = Vec::with_capacity(steps.len());
     let members = steps
         .iter()
         .map(|s| s.member as usize + 1)
@@ -283,8 +298,12 @@ fn simulate<S: Mergeable, G: Generator<S>>(
         let op = Op {
             id,
             author: step.member,
-            body: generator.make(&author, &step.raw),
+            body: match &step.raw {
+                Body::Made(raw) => generator.make(&author, raw),
+                Body::Malformed(body) => body.clone(),
+            },
         };
+        malformed.push(matches!(step.raw, Body::Malformed(_)));
         seen_by_op.push(seen.clone());
         copy.apply(&op);
         seen.insert(id);
@@ -293,6 +312,7 @@ fn simulate<S: Mergeable, G: Generator<S>>(
     Made {
         ops,
         seen: seen_by_op,
+        malformed,
     }
 }
 
@@ -329,7 +349,7 @@ fn deliver<S: Mergeable>(ops: &[Op<S::Change>], orders: &[Vec<usize>]) -> Vec<S>
 /// The first property the case breaks, and how.
 fn violation<S: Mergeable, G: Generator<S>>(
     generator: &G,
-    steps: &[Step<G::Raw>],
+    steps: &Steps<S, G>,
     copies: usize,
 ) -> Option<(Property, String)> {
     let made = simulate::<S, G>(generator, steps);
@@ -377,11 +397,12 @@ fn violation<S: Mergeable, G: Generator<S>>(
             ));
         }
         if let Outcome::Replaced(by) = outcomes[0] {
+            let by_malformed = made.malformed.get(by as usize) == Some(&true);
             let had_seen = made
                 .seen
                 .get(by as usize)
                 .is_some_and(|seen| seen.contains(&op.id));
-            if !had_seen {
+            if !by_malformed && !had_seen {
                 return Some((
                     Property::C4,
                     format!(
@@ -401,11 +422,11 @@ fn violation<S: Mergeable, G: Generator<S>>(
 /// an element once it has shrunk the elements, so it can stop short of this.
 fn minimise<S: Mergeable, G: Generator<S>>(
     generator: &G,
-    mut steps: Vec<Step<G::Raw>>,
+    mut steps: Vec<Step<Body<G::Raw, S::Change>>>,
     copies: usize,
     property: Property,
-) -> Vec<Step<G::Raw>> {
-    let breaks = |steps: &[Step<G::Raw>]| {
+) -> Vec<Step<Body<G::Raw, S::Change>>> {
+    let breaks = |steps: &Steps<S, G>| {
         violation::<S, G>(generator, steps, copies).is_some_and(|(p, _)| p == property)
     };
     'smaller: loop {
@@ -449,17 +470,30 @@ fn minimise<S: Mergeable, G: Generator<S>>(
 fn cases<S: Mergeable, G: Generator<S>>(
     config: &Config,
     generator: &G,
-) -> BoxedStrategy<Vec<Step<G::Raw>>> {
+) -> BoxedStrategy<Vec<Step<Body<G::Raw, S::Change>>>> {
     let members = config.members;
     let copies = config.copies;
     let max_duplicates = config.max_duplicates;
     let max_learned = config.max_learned;
-    let raws: Vec<BoxedStrategy<G::Raw>> = (0..members).map(|m| generator.raw(m)).collect();
+    let malformed = generator.malformed();
+    let bodies: Vec<BoxedStrategy<Body<G::Raw, S::Change>>> = (0..members)
+        .map(|m| {
+            let made = generator.raw(m).prop_map(Body::Made);
+            match &malformed {
+                Some(malformed) => proptest::prop_oneof![
+                    3 => made,
+                    1 => malformed.clone().prop_map(Body::Malformed),
+                ]
+                .boxed(),
+                None => made.boxed(),
+            }
+        })
+        .collect();
     let step = (0..members)
         .prop_flat_map(move |member| {
             let learns = vec(any::<u32>(), 0..=max_learned);
             let arrivals = vec(vec(any::<u32>(), 1..=1 + max_duplicates), copies);
-            (learns, raws[member as usize].clone(), arrivals).prop_map(
+            (learns, bodies[member as usize].clone(), arrivals).prop_map(
                 move |(learns, raw, arrivals)| Step {
                     member,
                     learns,
@@ -533,6 +567,10 @@ pub fn check<S: Mergeable, G: Generator<S>>(
             if property == Property::C1 && duplicated {
                 property = Property::C2;
                 detail.push_str(", and only with an operation delivered twice");
+            } else if property == Property::C1 && made.malformed.contains(&true) {
+                // Likewise, a malformed operation that is left is needed.
+                property = Property::C5;
+                detail.push_str(", and only with a malformed operation");
             }
             let states = deliver::<S>(&made.ops, &orders);
             Err(Violation {
