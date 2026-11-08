@@ -18,6 +18,7 @@ const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const FAQ = "docs/faq.md";
 const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
+const RFC_0003 = "docs/rfc/0003-keys-and-cryptography.md";
 
 const RELAY_SEES =
   "0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot";
@@ -224,8 +225,8 @@ test("use case 3 adds a member by invitation and removes it by member id, never 
   );
 });
 
-test("every relative link in RFC 0001, the FAQ, the use cases and GENESIS.md resolves, anchors included", () => {
-  for (const path of [RFC_0001, FAQ, USE_CASES, GENESIS]) {
+test("every relative link in RFC 0001, the FAQ, the use cases, GENESIS.md and RFC 0003 resolves, anchors included", () => {
+  for (const path of [RFC_0001, FAQ, USE_CASES, GENESIS, RFC_0003]) {
     const text = read(path).replace(/```[\s\S]*?```/g, "");
     for (const [, target] of text.matchAll(/\]\(([^)\s]+)\)/g)) {
       if (/^[a-z]+:/.test(target)) continue;
@@ -240,4 +241,86 @@ test("every relative link in RFC 0001, the FAQ, the use cases and GENESIS.md res
       }
     }
   }
+});
+
+test("GENESIS.md's relay bullet says the relay sees more, and links to RFC 0002's list", () => {
+  const relay = bullet(read(GENESIS), "A relay that holds no keys.");
+  assert.ok(
+    links(relay, `docs/rfc/${RELAY_SEES}`),
+    "the relay bullet does not link RFC 0002",
+  );
+  assert.match(
+    relay,
+    /withhold/i,
+    "the relay bullet does not say it can withhold changes",
+  );
+});
+
+test("use case 2 says the relay sees more, and links to RFC 0002's list", () => {
+  const uc2 = section(
+    read(USE_CASES),
+    "2. A breach of the relay leaks nothing readable",
+  );
+  const limits = uc2
+    .split("\n")
+    .find((l) => l.startsWith("**What it does not cover.**"));
+  assert.ok(limits, "use case 2 has no 'What it does not cover'");
+  assert.ok(
+    links(limits, `rfc/${RELAY_SEES}`),
+    "use case 2 does not link RFC 0002",
+  );
+  assert.match(
+    limits,
+    /withhold/i,
+    "use case 2 does not say the relay can withhold changes",
+  );
+});
+
+test("RFC 0001 never says one key per person without 'per space'", () => {
+  const rfc = read(RFC_0001);
+  for (const label of ["Shred and audit.", "Personal fields."]) {
+    const text = bullet(rfc, label);
+    assert.match(
+      text,
+      /one key per person per space/i,
+      `${label} lacks 'one key per person per space'`,
+    );
+    assert.ok(
+      links(text, PERSON_KEY),
+      `${label} does not link RFC 0003's person key`,
+    );
+  }
+  assert.ok(
+    !/one key per person(?! per space)/i.test(rfc),
+    "RFC 0001 still says 'one key per person' without 'per space'",
+  );
+});
+
+test("use case 1's list of what it does not cover names the two limits that RFC 0003 adds", () => {
+  const uc1 = section(read(USE_CASES), "1. Erasure that reaches every copy");
+  const list = uc1
+    .split("**What it does not cover.**")[1]
+    ?.split("**Tell us.**")[0];
+  assert.ok(list, "use case 1 has no 'What it does not cover'");
+  assert.match(
+    list,
+    /^- .*modified client/im,
+    "no bullet for a modified client",
+  );
+  assert.match(list, /^- .*backup/im, "no bullet for a relay backup");
+  assert.ok(links(list, `rfc/${SHREDDING}`), "no link to RFC 0003's shredding");
+});
+
+test("RFC 0003 no longer says the use cases pass a public key to members.add", () => {
+  const rfc = read(RFC_0003);
+  assert.ok(!/agentPublicKey/.test(rfc), "RFC 0003 still names agentPublicKey");
+  assert.ok(
+    links(
+      rfc
+        .split("\n")
+        .find((l) => /use cases/i.test(l) && /members\.add/.test(l)) ?? "",
+      "use-cases.md#3-an-outside-agent-limited-to-one-space",
+    ),
+    "RFC 0003's sentence on the use cases does not link use case 3",
+  );
 });
