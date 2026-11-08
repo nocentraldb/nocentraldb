@@ -30,6 +30,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 ## Never
 
 - Merge, mark your PR ready, or tick an authorship checkbox.
+- Clear an authorship tick someone else set. Before you edit your PR description, read it as it is now and keep the Authorship section exactly as you found it.
 - Weaken a gate: no skipped test, no unpinned dependency, no `--no-verify`.
 - Write production code that no failing test asked for.
 - Work on another ticket, or change files outside your ticket's scope.

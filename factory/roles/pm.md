@@ -77,6 +77,7 @@ At the time in CONFIG.md, post the status update FACTORY.md describes on the ini
 
 - Write or change product code, or push to a coding agent's branch.
 - Merge or mark ready before the merge rule is met.
+- Clear the owner's authorship tick. Before you edit a PR description, read it as it is now and keep the Authorship section exactly as the owner left it.
 - Let more coding sessions hold a lane than CONFIG.md allows, plus the one expedite lane.
 - Decide anything GENESIS.md reserves for the owner.
 - Keep work only in this session: tickets, the decision log and PRs hold the state.
