@@ -14,7 +14,8 @@ use ncdb_core::basic::{BasicValue, Kind, Read, State, Write};
 use ncdb_core::cbor::Value;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::{FieldType, Outcome as CoreOutcome};
-use ncdb_core::ids::{ChangeId, MemberId, OperationId};
+use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId};
+use ncdb_core::link::{self, Link};
 use proptest::prelude::*;
 
 use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome};
@@ -22,13 +23,14 @@ use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome
 /// The schema a test runs basic values with: the field the copies read
 /// with, and the values members write.
 pub trait Schema: core::fmt::Debug + 'static {
+    /// The field type the copies apply and read with: a basic value, or a
+    /// type that merges as one (a link).
+    type Field: FieldType<State = State, Operation = Write, Read = Read>;
     /// The field as the copies' schema declares it.
-    fn field() -> BasicValue;
+    fn field() -> Self::Field;
     /// The field as the writers' schema declares it; a newer schema may
     /// allow values the copies' schema does not.
-    fn writer() -> BasicValue {
-        Self::field()
-    }
+    fn writer() -> BasicValue;
     /// The values members write, all allowed by `writer()`.
     fn values() -> Vec<Value>;
 }
@@ -38,6 +40,8 @@ pub trait Schema: core::fmt::Debug + 'static {
 pub struct Choice;
 
 impl Schema for Choice {
+    type Field = BasicValue;
+
     fn field() -> BasicValue {
         BasicValue {
             kind: Kind::Choice(["open", "done"].map(String::from).into()),
@@ -64,8 +68,14 @@ impl Schema for Choice {
 pub struct Float;
 
 impl Schema for Float {
+    type Field = BasicValue;
+
     fn field() -> BasicValue {
         BasicValue { kind: Kind::Float }
+    }
+
+    fn writer() -> BasicValue {
+        Self::field()
     }
 
     fn values() -> Vec<Value> {
@@ -77,6 +87,31 @@ impl Schema for Float {
             Value::Float(1.5),
             Value::Null,
         ]
+    }
+}
+
+/// A link (one target) to one of three objects, or cleared.
+#[derive(Debug)]
+pub struct Target;
+
+impl Schema for Target {
+    type Field = Link;
+
+    fn field() -> Link {
+        Link {
+            collections: ["tasks".to_owned()].into(),
+        }
+    }
+
+    fn writer() -> BasicValue {
+        Link::field()
+    }
+
+    fn values() -> Vec<Value> {
+        (1..=3)
+            .map(|n| link::value(ObjectId([n; 16])))
+            .chain([Value::Null])
+            .collect()
     }
 }
 
