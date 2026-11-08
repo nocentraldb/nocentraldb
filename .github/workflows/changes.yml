@@ -38,9 +38,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          auto-install: true
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
       - name: Base for the Rust API
         id: base-worktree
