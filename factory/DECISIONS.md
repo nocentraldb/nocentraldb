@@ -302,6 +302,24 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Why: one TypeScript schema of `nc.*` functions and a canonical, versioned `model.lock.json` with a lineage id, a model version, a content hash and `since` per element; only additive changes, checked at build and on every device; no required fields or defaults; deprecate instead of remove or rename; personal fields on basic values only, sealed under the key of the person they are about; the writer's model version and `model.id` in changes, and the space's `model.id` in its first control entry; a person id across spaces that the relay never sees; and (D15) keeping names out of free text is the app's job, by storing a reference to the person and resolving it at display time, because NoCentralDB does not and cannot detect names in text.
 - Instead of: decorators or a schema language of its own (D1); deciding the names later (D2); CBOR or YAML for the lock (D3); a hash only or semantic versions (D4); fixed options and link targets (D5); defaults or required fields (D6); removing deprecated fields (D7); aliases (D8); personal sets and links, or a person derived from a field's value (D9); no model version in changes (D10); trusting the build check alone (D11); rule changes without a migration (D12); one of the two guards against two models in one space, or none (D13); per-space persons only, or a person id derived from an identifier (D14); a core that scans text for names, or saying nothing (D15).
 
+### 2026-11-07 · no ticket · A PR that waits only for the owner holds no lane
+
+- Decided by: Carsten
+- Why: four reviewed PRs waited for the owner and blocked all four lanes, so no ready ticket could start; the lanes now count only work in progress, and a waiting session stays open to answer review.
+- Instead of: a lane held until merge, which keeps the owner's queue short but stops the factory while the owner reviews.
+
+### 2026-11-07 · NOC-22 · RFC 0002's two gaps become an errata ticket, not fixes in the later RFCs
+
+- Decided by: pm
+- Why: RFC 0002 (merged) says a change is atomic and also parks single operations, and has no log state for a change that failed a check; RFC 0003, 0005, 0006 and 0007 each lean on one reading. An amendment to RFC 0002 settles it once, and the owner signs it off as a format change.
+- Instead of: letting each later RFC define its own reading, which would leave four RFCs to reconcile later.
+
+### 2026-11-07 · NOC-14 · The change and log implementation stacks on NOC-10 and NOC-9
+
+- Decided by: pm
+- Why: all three change `crates/ncdb-core`, and new test files need NOC-10's wasm32 test routing; stacking avoids merge conflicts in Cargo.toml and Cargo.lock while #29 and #34 wait for the owner.
+- Instead of: branching from main and resolving conflicts after the owner merges #29 and #34.
+
 ### 2026-11-08 · NOC-22 · RFC 0002 Amendment 1: every recommendation accepted
 
 - Decided by: Carsten

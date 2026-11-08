@@ -12,6 +12,7 @@ The values of this repository's factory. FACTORY.md is copied unchanged between 
 | Initiative for the daily note      | `NoCentralDB`                                                                                                                             |
 | Label for questions to the owner   | `needs-owner`                                                                                                                             |
 | Coding agents in parallel          | 4                                                                                                                                         |
+| A lane is free again               | when pm has reviewed the PR and hands it to the owner; a PR that waits only for the owner holds no lane                                   |
 | Expedite lanes                     | 1                                                                                                                                         |
 | Base branch                        | `main`                                                                                                                                    |
 | Branch per ticket                  | Linear's branch name for the ticket                                                                                                       |
