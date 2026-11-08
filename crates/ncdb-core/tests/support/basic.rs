@@ -14,7 +14,8 @@ use ncdb_core::basic::{BasicValue, Kind, Read, State, Write};
 use ncdb_core::cbor::Value;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field::{FieldType, Outcome as CoreOutcome};
-use ncdb_core::ids::{ChangeId, MemberId, OperationId};
+use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
+use ncdb_core::link::{self, Link};
 use proptest::prelude::*;
 
 use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome};
@@ -22,14 +23,15 @@ use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome
 /// The schema a test runs basic values with: the field the copies read
 /// with, and the values members write.
 pub trait Schema: core::fmt::Debug + 'static {
+    /// The field type the copies apply and read with: a basic value, or a
+    /// type that merges as one (a link).
+    type Field: FieldType<State = State, Operation = Write, Read = Read>;
     /// The field as the copies' schema declares it.
-    fn field() -> BasicValue;
-    /// The field as the writers' schema declares it; a newer schema may
-    /// allow values the copies' schema does not.
-    fn writer() -> BasicValue {
-        Self::field()
-    }
-    /// The values members write, all allowed by `writer()`.
+    fn field() -> Self::Field;
+    /// A member's write of `value`, with the writers' schema; a newer
+    /// schema may allow values the copies' schema does not.
+    fn set(state: &State, id: OperationId, author: MemberId, stamp: Hlc, value: Value) -> Write;
+    /// The values members write, all allowed by the writers' schema.
     fn values() -> Vec<Value>;
 }
 
@@ -38,16 +40,21 @@ pub trait Schema: core::fmt::Debug + 'static {
 pub struct Choice;
 
 impl Schema for Choice {
+    type Field = BasicValue;
+
     fn field() -> BasicValue {
         BasicValue {
             kind: Kind::Choice(["open", "done"].map(String::from).into()),
         }
     }
 
-    fn writer() -> BasicValue {
-        BasicValue {
+    fn set(state: &State, id: OperationId, author: MemberId, stamp: Hlc, value: Value) -> Write {
+        let writer = BasicValue {
             kind: Kind::Choice(["open", "done", "archived"].map(String::from).into()),
-        }
+        };
+        writer
+            .set(state, id, author, stamp, value)
+            .expect("the writer's schema allows its values")
     }
 
     fn values() -> Vec<Value> {
@@ -64,8 +71,16 @@ impl Schema for Choice {
 pub struct Float;
 
 impl Schema for Float {
+    type Field = BasicValue;
+
     fn field() -> BasicValue {
         BasicValue { kind: Kind::Float }
+    }
+
+    fn set(state: &State, id: OperationId, author: MemberId, stamp: Hlc, value: Value) -> Write {
+        Self::field()
+            .set(state, id, author, stamp, value)
+            .expect("the writer's schema allows its values")
     }
 
     fn values() -> Vec<Value> {
@@ -77,6 +92,44 @@ impl Schema for Float {
             Value::Float(1.5),
             Value::Null,
         ]
+    }
+}
+
+/// The space the links of the harness are written in.
+pub const SPACE: SpaceId = SpaceId([1; 16]);
+
+/// A link (one target) to one of three objects, or cleared.
+#[derive(Debug)]
+pub struct Target;
+
+impl Schema for Target {
+    type Field = Link;
+
+    fn field() -> Link {
+        Link {
+            collections: ["tasks".to_owned()].into(),
+        }
+    }
+
+    /// Writes with `Link::set`, in the link's own space.
+    fn set(state: &State, id: OperationId, author: MemberId, stamp: Hlc, value: Value) -> Write {
+        let target = match value {
+            Value::Bytes(bytes) => Some(link::Target {
+                space: SPACE,
+                object: ObjectId(bytes.try_into().expect("an object id")),
+            }),
+            _ => None,
+        };
+        Self::field()
+            .set(state, id, author, stamp, SPACE, target)
+            .expect("a target in the link's space")
+    }
+
+    fn values() -> Vec<Value> {
+        (1..=3)
+            .map(|n| link::value(ObjectId([n; 16])))
+            .chain([Value::Null])
+            .collect()
     }
 }
 
@@ -218,15 +271,13 @@ impl<S: Schema, M: Mergeable<Change = Body> + AsRef<Basic<S>>> Generator<M> for 
         let stamp = highest
             .map_or(0, |stamp| stamp.saturating_add(1))
             .saturating_add(u64::from(step));
-        let write = S::writer()
-            .set(
-                &author.copy.as_ref().state,
-                operation_id(author.id),
-                member_id(author.member),
-                Hlc(stamp),
-                S::values()[usize::from(value)].clone(),
-            )
-            .expect("the writer's schema allows its values");
+        let write = S::set(
+            &author.copy.as_ref().state,
+            operation_id(author.id),
+            member_id(author.member),
+            Hlc(stamp),
+            S::values()[usize::from(value)].clone(),
+        );
         Body {
             stamp,
             value: write.value,
