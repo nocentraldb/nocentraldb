@@ -111,5 +111,9 @@ install_or_fail() {
 install_or_fail "proto install" proto install
 # moon runs its tasks through the proto in ~/.proto/tools/proto at the
 # version .moon/toolchains.yml pins, this one, and would otherwise download
-# it on its first task, without retries.
-install_or_fail "proto install proto" proto install proto "$PROTO_VERSION"
+# it on its first task, without retries. Checked first, as moon checks it:
+# offline, `proto install proto <version>` fails to resolve the version
+# even when it is installed.
+if [[ ! -x "$PROTO_HOME/tools/proto/$PROTO_VERSION/proto" ]]; then
+	install_or_fail "proto install proto" proto install proto "$PROTO_VERSION"
+fi
