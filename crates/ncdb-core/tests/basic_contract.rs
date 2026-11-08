@@ -177,7 +177,7 @@ const GOLDEN_SEEDS: [u64; 4] = [0, 1, 2, 3];
 /// C3: the SHA-256 of the final state bytes of basic values for
 /// `GOLDEN_SEEDS`, committed from a native run. The native and the wasm32
 /// run of the test below must both give it.
-const GOLDEN_DIGEST: &str = "";
+const GOLDEN_DIGEST: &str = "2cd6fefaebb61684389c9a23d734bd51a4e874007e852b738cf068f39a9470fc 2e244519ba8009574d05041735f4caf1d39875acc3bd5af0faecb8bdbd36132e";
 
 fn golden_config() -> Config {
     Config {

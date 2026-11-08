@@ -5,7 +5,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::cbor::Value;
+use crate::cbor::{self, Value};
 use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
 use crate::ids::{MemberId, OperationId};
@@ -188,9 +188,31 @@ impl FieldType for BasicValue {
         state.writes.entry(op.id).or_insert_with(|| op.clone());
     }
 
+    /// The canonical CBOR (RFC 0002's profile) of every write received, in
+    /// operation id order: `[[id, author, stamp, value, [replaced id…]]…]`,
+    /// with an id as `[change id, position]`. The bytes of the local view,
+    /// not a wire format.
     fn state_bytes(&self, state: &State) -> Vec<u8> {
-        let _ = state;
-        todo!()
+        let id = |id: &OperationId| {
+            Value::Array(vec![
+                Value::Bytes(id.change.0.to_vec()),
+                Value::Unsigned(id.position),
+            ])
+        };
+        let writes = state
+            .writes
+            .values()
+            .map(|w| {
+                Value::Array(vec![
+                    id(&w.id),
+                    Value::Bytes(w.author.0.to_vec()),
+                    Value::Unsigned(w.stamp.0),
+                    w.value.clone(),
+                    Value::Array(w.replaces.iter().map(id).collect()),
+                ])
+            })
+            .collect();
+        cbor::encode(&Value::Array(writes))
     }
 
     fn read(&self, state: &State) -> Read {
