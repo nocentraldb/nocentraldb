@@ -247,3 +247,21 @@ Every call that shapes the product or the code and is not obvious from the diff,
 - Decided by: Carsten
 - Why: one database per member; the view's layout is not a stable format, only the log is; rusqlite everywhere, with opfs-sahpool in a dedicated worker in the browser; one tab owns the database; UTF-8 byte order in indexes; device disk encryption instead of an encrypted database for v1; synchronous = FULL; persistent storage requested by the SDK; secure_delete on.
 - Instead of: the alternatives listed for each decision in `docs/rfc/0006-local-view.md`.
+
+### 2026-11-08 · NOC-28 · A payload that decrypts but does not decode is parked as "unknown payload format"
+
+- Decided by: coding agent (NOC-28), flagged to pm because the amendment's table has no row for it
+- Why: the format-1 decoder needs keys 1 to 4, and a newer payload format may not have them, so a payload this core cannot read is most likely one it does not understand yet. Parking keeps it and folds it after an upgrade; the signature already showed that a member wrote it.
+- Instead of: rejecting it as "undecryptable", which would claim the AEAD failed, or adding a reason the RFC does not name.
+
+### 2026-11-08 · NOC-28 · The member state is an optional field of each log entry; the relay's log has none
+
+- Decided by: coding agent (NOC-28)
+- Why: pm's criteria put the state in NOC-14's in-memory log, beside the frame bytes. The same `Log` also models the relay's log, which holds no states, so `Log::append` keeps its contract and leaves the state empty, and only `Log::receive` sets one.
+- Instead of: a second log type for members, or a required state on `append` that would give the relay's log a state it must not have.
+
+### 2026-11-08 · NOC-28 · Every rejected change is checked again after a control change passes, until no further control change passes
+
+- Decided by: coding agent (NOC-28)
+- Why: the end state must depend only on the set of changes. Checking all rejected changes again, bad signatures included, and repeating while a re-checked control change passes, is the simplest rule that reaches the same fixpoint in any order; the amendment allows skipping the ones that can never pass, an optimisation for later. Un-folding a change that a later control change makes fail waits for the membership RFC (NOC-23): the doubles' control state only grows.
+- Instead of: skipping bad signatures and undecryptable payloads now, or one pass without repeating, which leaves a change rejected when its control change itself waited for another.

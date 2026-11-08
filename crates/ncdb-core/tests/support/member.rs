@@ -72,7 +72,9 @@ impl Checks for Control {
     fn is_member(&self, change: &Change) -> bool {
         let header = change.header();
         header.author == member(FOUNDER)
-            || self.members.contains(&(header.author, header.key_generation))
+            || self
+                .members
+                .contains(&(header.author, header.key_generation))
     }
 
     fn open(&self, change: &Change) -> Opened {
@@ -178,7 +180,10 @@ pub fn control_header(author: u8, sequence: u64, body: Vec<u8>) -> Header {
 
 /// A membership entry, signed by `author`: `m` is a member at `generation`.
 pub fn membership(author: u8, sequence: u64, m: u8, generation: u8) -> Vec<u8> {
-    frame(control_header(author, sequence, vec![0, m, generation]), GOOD)
+    frame(
+        control_header(author, sequence, vec![0, m, generation]),
+        GOOD,
+    )
 }
 
 /// A key envelope for this member, signed by `author`, for `generation`.

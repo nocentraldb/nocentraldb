@@ -83,7 +83,10 @@ fn change(author: u8) -> BoxedStrategy<Vec<u8>> {
         (sequence, generation, 0..4u8).prop_map(move |(s, g, variant)| {
             let g = u64::from(g);
             match variant {
-                0 => frame(sealed_header(author, s, g, payload(vec![set_title(s as u8)])), BAD),
+                0 => frame(
+                    sealed_header(author, s, g, payload(vec![set_title(s as u8)])),
+                    BAD,
+                ),
                 1 => frame(sealed_header(author, s, g, GARBLED.to_vec()), GOOD),
                 _ => sealed(author, s, g, vec![set_title(s as u8), set_title(author)]),
             }

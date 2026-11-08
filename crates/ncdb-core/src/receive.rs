@@ -11,7 +11,7 @@
 
 use std::fmt;
 
-use crate::change::{Change, ChangeError, Kind, Operation, Payload};
+use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
 use crate::ids::OperationId;
 use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
@@ -165,7 +165,7 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     if !header.kind.is_known() {
         return State::Parked(ParkReason::UnknownKind);
     }
-    if header.format != crate::change::Header::FORMAT {
+    if header.format != Header::FORMAT {
         return State::Parked(ParkReason::UnknownHeaderFormat);
     }
     if header.extensions().must_understand() {

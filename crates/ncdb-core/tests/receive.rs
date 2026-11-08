@@ -12,10 +12,10 @@ mod member;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::cbor::Value;
-use ncdb_core::change::{Change, Kind};
-use ncdb_core::ids::SpaceId;
 use ncdb_core::change::Operation;
+use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::ObjectId;
+use ncdb_core::ids::SpaceId;
 use ncdb_core::log::{
     Appended, OperationParkReason, ParkReason, ParkedOperation, Position, RejectReason,
     RelayRefusal, State,
@@ -148,7 +148,11 @@ fn step_3_an_author_no_membership_entry_names_is_rejected_as_unknown_author() {
 #[test]
 fn step_3_a_signature_that_does_not_verify_is_rejected_as_bad_signature() {
     let header = sealed_header(FOUNDER, 2, 0, payload(vec![set_title(1)]));
-    rejected(&mut with_key(), &frame(header, BAD), RejectReason::BadSignature);
+    rejected(
+        &mut with_key(),
+        &frame(header, BAD),
+        RejectReason::BadSignature,
+    );
 }
 
 #[test]
@@ -167,7 +171,10 @@ fn step_4_a_control_change_of_a_non_member_is_rejected() {
     let mut m = Member::default();
     m.receive(&membership(FOUNDER, 1, 5, 1));
     rejected(&mut m, &envelope(5, 1, 0), RejectReason::NotMember);
-    assert!(m.control.keys.is_empty(), "a rejected control change is not added");
+    assert!(
+        m.control.keys.is_empty(),
+        "a rejected control change is not added"
+    );
 }
 
 #[test]
@@ -182,7 +189,11 @@ fn step_5_a_change_without_a_key_envelope_is_rejected_as_no_key() {
 #[test]
 fn step_5_a_payload_that_does_not_decrypt_is_rejected_as_undecryptable() {
     let header = sealed_header(FOUNDER, 2, 0, GARBLED.to_vec());
-    rejected(&mut with_key(), &frame(header, GOOD), RejectReason::Undecryptable);
+    rejected(
+        &mut with_key(),
+        &frame(header, GOOD),
+        RejectReason::Undecryptable,
+    );
 }
 
 fn parked_at_step_6(plaintext: Vec<u8>, reason: ParkReason) {
@@ -278,14 +289,20 @@ fn d11_a_change_without_its_key_is_folded_when_the_envelope_arrives() {
     assert_eq!(m.state(&change), State::Rejected(RejectReason::NoKey));
     m.receive(&envelope(FOUNDER, 2, 0));
     assert_eq!(m.state(&change), folded());
-    assert_eq!(m.fold.folded, [change.operation_id(0)].into_iter().collect());
+    assert_eq!(
+        m.fold.folded,
+        [change.operation_id(0)].into_iter().collect()
+    );
 }
 
 #[test]
 fn d11_a_change_of_an_unknown_author_is_folded_when_its_membership_arrives() {
     let mut m = with_key();
     let change = m.receive(&sealed(5, 1, 0, vec![set_title(1)]));
-    assert_eq!(m.state(&change), State::Rejected(RejectReason::UnknownAuthor));
+    assert_eq!(
+        m.state(&change),
+        State::Rejected(RejectReason::UnknownAuthor)
+    );
     m.receive(&membership(FOUNDER, 2, 5, 0));
     assert_eq!(m.state(&change), folded());
 }
@@ -333,7 +350,10 @@ fn d12_a_relay_refusal_is_recorded_beside_a_folded_change_and_keeps_it_folded() 
     assert!(m.log.record_relay_refusal(change.id(), refusal()));
     assert_eq!(m.log.relay_refusal(change.id()), Some(&refusal()));
     assert_eq!(m.state(&change), folded());
-    assert_eq!(m.fold.folded, [change.operation_id(0)].into_iter().collect());
+    assert_eq!(
+        m.fold.folded,
+        [change.operation_id(0)].into_iter().collect()
+    );
 }
 
 #[test]

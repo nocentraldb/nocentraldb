@@ -5,8 +5,11 @@
 //! CBOR encoding ([`cbor`]), the ids ([`ids`]), the change with its frame,
 //! header, payload and operations ([`change`]), the hybrid logical clock
 //! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
+//! A member takes each change it receives through the checks of RFC 0002
+//! Amendment 1 and keeps it folded, parked or rejected ([`receive`]).
 //! Signatures and encryption are not here yet (RFC 0003, NOC-15): the
-//! signature and the sealed payload are opaque byte strings.
+//! signature and the sealed payload are opaque byte strings, and the checks
+//! plug in through [`receive::Checks`].
 
 pub mod cbor;
 pub mod change;
