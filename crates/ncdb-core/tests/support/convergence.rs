@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 
 use proptest::arbitrary::any;
 use proptest::collection::vec;
-use proptest::strategy::{BoxedStrategy, Strategy};
+use proptest::strategy::{BoxedStrategy, Strategy, ValueTree};
 use proptest::test_runner::{
     Config as RunnerConfig, RngAlgorithm, TestCaseError, TestError, TestRng, TestRunner,
 };
@@ -587,4 +587,19 @@ pub fn check<S: Mergeable, G: Generator<S>>(
         }
         Err(TestError::Abort(reason)) => panic!("the convergence harness aborted: {reason}"),
     }
+}
+
+/// The SHA-256, in lowercase hex, of the state bytes every copy ends in, for
+/// `config.cases` cases of each seed in `seeds`, in order. The cases are the
+/// ones `check` generates. A field type commits the digest for a fixed seed
+/// list, and its native and wasm32 tests compare with it (C3: deterministic
+/// everywhere).
+pub fn digest<S: Mergeable, G: Generator<S>>(
+    config: &Config,
+    seeds: &[u64],
+    generator: &G,
+) -> String {
+    // Not implemented yet: a wrong value, so the C3 test fails on it.
+    let _ = (config, seeds, generator);
+    "0".repeat(64)
 }
