@@ -20,7 +20,9 @@ use ncdb_core::cbor::{self, Key, Value};
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
 use ncdb_core::clock::Hlc;
 use ncdb_core::ids::{MemberId, ObjectId, SpaceId};
+use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::log::Log;
+use ncdb_core::seal;
 
 const SECRET: &str = "SECRET-MARKER";
 const SECRET_NUMBER: u64 = 31_337_424_242;
@@ -198,5 +200,58 @@ fn errors_do_not_show_the_bytes_they_reject() {
     ] {
         assert_debug_hides("ChangeError", &error);
         assert_no_leak("ChangeError", error.to_string());
+    }
+}
+
+/// 32 bytes made of the secret marker, so that any way of printing a key
+/// that holds them shows the marker in one of the forms `leaks` knows.
+fn secret_key_bytes() -> [u8; 32] {
+    std::array::from_fn(|i| SECRET.as_bytes()[i % SECRET.len()])
+}
+
+#[test]
+fn keys_and_sealing_errors_do_not_show_keys_or_content() {
+    // RFC 0003, "Keys never reach logs, errors or telemetry": canary keys
+    // and content, every error path of opening a change, and every type
+    // formatted.
+    let author = MemberKey::from_secrets(secret_key_bytes(), secret_key_bytes());
+    let other = MemberKey::from_secrets([3; 32], [4; 32]);
+    let key = SpaceKey::from_bytes(secret_key_bytes());
+    assert_debug_hides("MemberKey", &author);
+    assert_debug_hides("SpaceKey", &key);
+
+    let space = SpaceId([1; 16]);
+    let change = seal::seal(&author, &key, space, 1, 1, &secret_payload());
+    assert_debug_hides("sealed Change", &change);
+    let opened = seal::open(&change, &author.public(), &key).unwrap();
+    assert_debug_hides("opened Payload", &opened);
+
+    let mut tampered = change.header().clone();
+    tampered.sequence = 2;
+    let mut unknown_suite = change.header().clone();
+    unknown_suite.suite = 2;
+    let control = Header::new(space, author.id(), 2, 1, Kind::CONTROL, vec![], seal::SUITE);
+    let mut invalid = author.public();
+    invalid.signing = [0xff; 32];
+    let invalid_change = Change::new(
+        Header::new(space, invalid.id(), 1, 1, Kind::SEALED, vec![], seal::SUITE),
+        vec![0; 64],
+    );
+    let errors = [
+        seal::open(&change, &author.public(), &SpaceKey::from_bytes([9; 32])),
+        seal::open(&change, &other.public(), &key),
+        seal::open(
+            &Change::new(tampered, change.signature().to_vec()),
+            &author.public(),
+            &key,
+        ),
+        seal::open(&seal::sign(&author, unknown_suite), &author.public(), &key),
+        seal::open(&seal::sign(&author, control), &author.public(), &key),
+        seal::open(&invalid_change, &invalid, &key),
+    ];
+    for result in errors {
+        let error = result.unwrap_err();
+        assert_debug_hides("OpenError", &error);
+        assert_no_leak("OpenError", error.to_string());
     }
 }
