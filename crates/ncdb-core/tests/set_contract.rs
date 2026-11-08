@@ -219,7 +219,7 @@ const GOLDEN_SEEDS: [u64; 4] = [0, 1, 2, 3];
 /// C3: the SHA-256 of the final state bytes of tags, floats, links and a
 /// link for `GOLDEN_SEEDS`, committed from a native run. The native and the
 /// wasm32 run of the test below must both give it.
-const GOLDEN_DIGEST: &str = "";
+const GOLDEN_DIGEST: &str = "a90fa24d47aa35d5b1b59c967649d2227676a4749f2b3309025ccbd484c10a56 7caa7c596f12f801058c934963f918c7d73e204c9f66f5a3f127dda8efb444a4 deb98a436a7b368b0037ffdbcc28a34a9ea3114c8c8c8891e50949336fa32bae 175d044bda0999d8173bc7c27399b504b1a7999af3a4eb9526ab42802649b06e";
 
 fn golden_config() -> Config {
     Config {
