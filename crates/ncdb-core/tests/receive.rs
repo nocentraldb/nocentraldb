@@ -14,7 +14,11 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use ncdb_core::cbor::Value;
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::SpaceId;
-use ncdb_core::log::{Appended, ParkReason, Position, RejectReason, State};
+use ncdb_core::change::Operation;
+use ncdb_core::ids::ObjectId;
+use ncdb_core::log::{
+    Appended, OperationParkReason, ParkReason, ParkedOperation, Position, RejectReason, State,
+};
 use ncdb_core::receive::ReceiveError;
 
 use member::*;
@@ -227,4 +231,41 @@ fn the_steps_run_in_order_and_the_first_failing_one_decides() {
         &frame(sealed_header(5, 1, 0, GARBLED.to_vec()), GOOD),
         RejectReason::NotMember,
     );
+}
+
+#[test]
+fn d10_an_unknown_operation_is_parked_on_its_own_and_the_rest_is_folded() {
+    let mut m = with_key();
+    let unknown_collection = Operation::new(ObjectId([1; 16]), "later".into(), None, 0, None);
+    let mut unknown_field = set_title(1);
+    unknown_field.field = Some("due".into());
+    let mut unknown_key = set_title(1);
+    assert!(unknown_key.insert_extension(9, Value::Unsigned(1)));
+    let create = Operation::new(ObjectId([2; 16]), COLLECTION.into(), None, 0, None);
+    let change = m.receive(&sealed(
+        FOUNDER,
+        2,
+        0,
+        vec![
+            set_title(1),
+            unknown_collection,
+            unknown_field,
+            unknown_key,
+            create,
+        ],
+    ));
+
+    let parked = |position, reason| ParkedOperation { position, reason };
+    assert_eq!(
+        m.state(&change),
+        State::Folded {
+            parked: vec![
+                parked(1, OperationParkReason::UnknownCollection),
+                parked(2, OperationParkReason::UnknownField),
+                parked(3, OperationParkReason::UnknownKey),
+            ]
+        }
+    );
+    let ids = [change.operation_id(0), change.operation_id(4)];
+    assert_eq!(m.fold.folded, ids.into_iter().collect());
 }
