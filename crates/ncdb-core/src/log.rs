@@ -130,11 +130,21 @@ pub enum RejectReason {
     Undecryptable,
 }
 
-/// One entry: the change, and on a member its state.
+/// The relay's refusal of a change the member holds: the relay's error
+/// code (RFC 0007), such as `author_not_member`. It is recorded beside the
+/// change and never changes its [`State`] (D12): no other member sees the
+/// relay's answer, so a state that followed it could differ between
+/// members that hold the same changes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RelayRefusal(pub String);
+
+/// One entry: the change, and on a member its state and the relay's
+/// refusal.
 #[derive(Clone)]
 struct Entry {
     change: Change,
     state: Option<State>,
+    refusal: Option<RelayRefusal>,
 }
 
 /// The log of one space. Its `Debug` output shows the space and the number
@@ -182,6 +192,7 @@ impl Log {
         self.entries.push(Entry {
             change,
             state: None,
+            refusal: None,
         });
         let position = self.head();
         self.positions.insert(id, position);
@@ -214,11 +225,28 @@ impl Log {
         self.entry(id)?.state.as_ref()
     }
 
+    /// The relay's refusal of a change, when one was recorded.
+    pub fn relay_refusal(&self, id: ChangeId) -> Option<&RelayRefusal> {
+        self.entry(id)?.refusal.as_ref()
+    }
+
+    /// Records the relay's refusal of a change the log holds, beside the
+    /// change; its state stays as it is (D12). Returns `false`, and records
+    /// nothing, when the log does not hold the change.
+    pub fn record_relay_refusal(&mut self, id: ChangeId, refusal: RelayRefusal) -> bool {
+        match self.entry_mut(id) {
+            Some(entry) => {
+                entry.refusal = Some(refusal);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Sets the state of a change the log holds.
     pub(crate) fn set_state(&mut self, id: ChangeId, state: State) {
-        if let Some(position) = self.position_of(id) {
-            let index = usize::try_from(position.0 - 1).expect("a position fits usize");
-            self.entries[index].state = Some(state);
+        if let Some(entry) = self.entry_mut(id) {
+            entry.state = Some(state);
         }
     }
 
@@ -232,8 +260,16 @@ impl Log {
     }
 
     fn entry(&self, id: ChangeId) -> Option<&Entry> {
-        let index = usize::try_from(self.position_of(id)?.0 - 1).ok()?;
-        self.entries.get(index)
+        self.entries.get(self.index_of(id)?)
+    }
+
+    fn entry_mut(&mut self, id: ChangeId) -> Option<&mut Entry> {
+        let index = self.index_of(id)?;
+        self.entries.get_mut(index)
+    }
+
+    fn index_of(&self, id: ChangeId) -> Option<usize> {
+        usize::try_from(self.position_of(id)?.0.checked_sub(1)?).ok()
     }
 
     /// The position of a change, when the log holds it.
