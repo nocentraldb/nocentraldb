@@ -13,6 +13,7 @@
 // or the script with one property removed or changed) and must reject each.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -114,19 +115,35 @@ const protoVersion = (script) => {
   return match[1];
 };
 
+/** The release targets the script downloads proto for. */
+const TARGETS = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+];
+
 /** The proto commands a successful install runs, in order. */
 const INSTALLS = (version) => ["install", `install proto ${version}`];
 
 /**
  * Runs `script` in a scratch workspace whose PATH holds fake `curl`,
  * `sleep` and (when `warm`) an installed fake `proto`; `moonProto` also
- * installs it as moon's proto in ~/.proto/tools/proto. `curlFails` and
+ * installs it as moon's proto in ~/.proto/tools/proto. Unless `published`
+ * is false, the downloaded archive has the SHA-256 the script pins.
+ * `curlFails` and
  * `installFails` count the failing calls before the first that succeeds.
  * Returns the exit status, the output, and what each fake recorded.
  */
 const runScript = (
   script,
-  { warm, moonProto = false, curlFails = 0, installFails = 0 },
+  {
+    warm,
+    moonProto = false,
+    curlFails = 0,
+    installFails = 0,
+    published = true,
+  },
 ) => {
   const version = protoVersion(script);
   const dir = mkdtempSync(join(tmpdir(), "install-toolchain-"));
@@ -185,7 +202,16 @@ cp "${tarball}" "$out"
       mkdirSync(tools, { recursive: true });
       exe(join(tools, "proto"), proto);
     }
-    writeFileSync(join(dir, "repo", SCRIPT), script);
+    // A `published` archive is one whose SHA-256 the script pins: the
+    // fake archive's hash takes the place of every pinned one. Otherwise
+    // the script runs as committed, and the fake archive does not match.
+    const hash = createHash("sha256")
+      .update(readFileSync(tarball))
+      .digest("hex");
+    writeFileSync(
+      join(dir, "repo", SCRIPT),
+      published ? script.replace(/\b[0-9a-f]{64}\b/g, hash) : script,
+    );
     const githubPath = join(dir, "github-path");
     const githubEnv = join(dir, "github-env");
     writeFileSync(githubPath, "");
@@ -463,6 +489,45 @@ const checks = [
         editScript(ctx, 'proto install proto "$PROTO_VERSION"', "true"),
       "waits a constant time": (ctx) =>
         editScript(ctx, "$((10 * attempt))", "10"),
+    },
+  },
+  {
+    // proto_cli-<target>.tar.xz for each runner the script supports, as
+    // proto's release publishes them.
+    name: "the script pins the SHA-256 of each release archive",
+    check: (ctx) => {
+      for (const target of TARGETS) {
+        assert.match(
+          ctx.script,
+          new RegExp(`target="${target}"; sha256="[0-9a-f]{64}"`),
+          target,
+        );
+      }
+    },
+    mutants: {
+      "pins no hash for macOS on arm64": (ctx) =>
+        editScript(
+          ctx,
+          'target="aarch64-apple-darwin"; sha256=',
+          'target="aarch64-apple-darwin"; unused=',
+        ),
+    },
+  },
+  {
+    name: "an archive that does not match its pinned SHA-256 is never unpacked, and the job fails naming it",
+    check: (ctx) => {
+      const run = runScript(ctx.script, { warm: false, published: false });
+      assert.notEqual(run.status, 0);
+      assert.match(
+        run.output,
+        /^::error title=[^:]+::proto_cli-[\w-]+\.tar\.xz\b.*SHA-256/m,
+      );
+      assert.ok(!run.installed, "the unverified proto was installed");
+      assert.deepEqual(run.install, [], "the unverified proto ran");
+    },
+    mutants: {
+      "unpacks without checking": (ctx) =>
+        editScript(ctx, '[[ "$actual" != "$sha256" ]]', "false"),
     },
   },
   {
