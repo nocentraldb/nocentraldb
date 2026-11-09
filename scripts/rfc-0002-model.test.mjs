@@ -6,7 +6,9 @@
 // table keeps its steps and names the new reason, and that the byte-exact
 // examples decode under RFC 0002's profile and equal the committed vectors
 // that docs/rfc/vectors/0002/generate.py writes with Python's cbor2,
-// independently of this reader and of the Rust core.
+// independently of this reader and of the Rust core. The same folder holds
+// Amendment 6's vectors N1 and N2, which scripts/rfc-0002-amendment-6.test.mjs
+// checks; this test counts only the M vectors.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -177,7 +179,9 @@ test("the amendment has the examples M1 and M2, canonical under the profile", ()
 test("every example equals the committed vector of the generator", () => {
   const rfc = examples();
   const files = existsSync(join(root, VECTORS))
-    ? readdirSync(join(root, VECTORS)).filter((file) => file.endsWith(".hex"))
+    ? readdirSync(join(root, VECTORS)).filter((file) =>
+        /^M\d+\.hex$/.test(file),
+      )
     : [];
   assert.deepEqual(
     files.map((file) => file.replace(/\.hex$/, "")).sort(),
