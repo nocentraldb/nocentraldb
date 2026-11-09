@@ -99,6 +99,42 @@ test("RFC 0002's status says Amendment 4 decides nothing and follows RFC 0007", 
   assert.match(status, /NOC-47/);
 });
 
+// RFC 0001's relay bullet no longer calls RFC 0002's list complete, which
+// changes what RFC 0001 claims, so RFC 0001 records it as an amendment of
+// its own, the way NOC-44 did with its Amendment 1.
+const RFC_0001_AMENDMENT = "amendment-2-following-rfc-0007";
+
+test("RFC 0001 announces Amendment 2 in a dated NOC-47 changelog line that links RFC 0007", () => {
+  const top = read(RFC_0001).split(/^## /m)[0];
+  const line = top
+    .split("\n")
+    .find((l) => /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-47 · /.test(l));
+  assert.ok(line, "no dated changelog line for NOC-47 above the first section");
+  assert.ok(
+    links(line, `#${RFC_0001_AMENDMENT}`),
+    `the changelog line does not link #${RFC_0001_AMENDMENT}`,
+  );
+  assert.ok(
+    targets(line).some((t) => t.split("#")[0] === "0007-relay.md"),
+    "the changelog line does not link RFC 0007",
+  );
+});
+
+test("RFC 0001 has the section of Amendment 2: it decides nothing and links RFC 0007's list", () => {
+  const rfc = read(RFC_0001);
+  const body = section(rfc, RFC_0001_AMENDMENT);
+  assert.ok(body, `no section #${RFC_0001_AMENDMENT}`);
+  assert.match(body, /NOC-47/);
+  assert.match(body, /no (new )?decision|decides nothing/i);
+  assert.ok(links(body, RFC_0007_SEES), "no link to RFC 0007's list");
+  const relay = rfc.split("\n").find((l) => l.startsWith("- **A relay"));
+  assert.match(
+    relay,
+    /\*\(Amendment 2\.\)\*/,
+    "the relay bullet's changed sentence is not marked",
+  );
+});
+
 test("RFC 0002 has the section of Amendment 4, and every point links a heading of RFC 0007", () => {
   const body = section(read(RFC_0002), AMENDMENT);
   assert.ok(body, `no section #${AMENDMENT}`);
