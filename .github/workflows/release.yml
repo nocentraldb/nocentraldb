@@ -454,12 +454,17 @@ jobs:
           client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
           permission-contents: write
-      # Read-only: the repositories the token reaches must include this one.
+      # Read-only: the token must be the app nocentraldb-release's, and the
+      # repositories it reaches must include this one.
       - name: The token reaches this repository
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
+          if [ "$APP_SLUG" != nocentraldb-release ]; then
+            echo "::error::the token is app $APP_SLUG's, not nocentraldb-release's: RELEASE_APP_CLIENT_ID and RELEASE_APP_PRIVATE_KEY belong to another app"
+            exit 1
+          fi
           repos="$(gh api installation/repositories --paginate --jq '.repositories[].full_name')"
           if ! grep -qxF "$GITHUB_REPOSITORY" <<< "$repos"; then
             echo "::error::the token of app $APP_SLUG does not reach $GITHUB_REPOSITORY; install the app on it"
