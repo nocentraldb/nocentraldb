@@ -76,7 +76,7 @@ pub struct Grant {
     pub role: Role,
     /// From which generation its sealed changes count; none for a reader.
     pub from_generation: Option<u64>,
-    /// The role it still gives, lowered by the revocations it did not see.
+    /// The role it still gives, lowered by the entries it did not see.
     pub effective: Option<Role>,
 }
 
@@ -125,18 +125,24 @@ impl Members {
         }
     }
 
-    /// Recomputes every role (RFC 0008, "Roles"): each grant lowered to the
-    /// lowest role an accepted revocation it did not see sets, and the
-    /// member's role the highest of them. `saw(a, b)` is whether `b` is in
-    /// `a`'s causal past.
+    /// Recomputes every role (RFC 0008, "Roles"): every accepted entry
+    /// about a member sets a role (a grant its own, a remove none), and
+    /// caps at it each of the member's grants that did not see it. Each
+    /// grant is lowered to its lowest cap, and the member's role is the
+    /// highest of them. `saw(a, b)` is whether `b` is in `a`'s causal past.
     pub(crate) fn settle(&mut self, saw: impl Fn(ChangeId, ChangeId) -> bool) {
         for state in self.0.values_mut() {
-            let revocations = state.revocations.clone();
+            let entries: Vec<(ChangeId, Option<Role>)> = state
+                .grants
+                .iter()
+                .map(|g| (g.change, Some(g.role)))
+                .chain(state.revocations.iter().map(|r| (r.change, r.role)))
+                .collect();
             for grant in &mut state.grants {
-                let cap = revocations
+                let cap = entries
                     .iter()
-                    .filter(|r| r.change != grant.change && !saw(grant.change, r.change))
-                    .map(|r| r.role)
+                    .filter(|(change, _)| *change != grant.change && !saw(grant.change, *change))
+                    .map(|(_, role)| *role)
                     .min();
                 grant.effective = match cap {
                     Some(cap) => cap.min(Some(grant.role)),
