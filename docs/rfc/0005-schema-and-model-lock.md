@@ -6,12 +6,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 
 - **2026-11-09** · NOC-54 · [Amendment 1: following RFC 0002 Amendment 5](#amendment-1-following-rfc-0002-amendment-5) brings this RFC in line with [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload), which puts the writer's `model.id` and model version in payload key 64, as D10 and D13 B decided. It decides nothing new. The sentences it changes are marked *(Amendment 1)*.
 - **2026-11-09** · NOC-35 · [Amendment 2: following RFC 0001 Amendment 4](#amendment-2-following-rfc-0001-amendment-4) quotes RFC 0001's new wording on personal fields, which follows this RFC's D9. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
+- **2026-11-09** · NOC-73 · [Amendment 3: follow-ups from building the lock](#amendment-3-follow-ups-from-building-the-lock) puts [the example lock](#an-example)'s keys in the canonical order this RFC defines, which decides nothing, and asks the owner two new decisions that building `ncdb model build` (NOC-70) found open: how `nc.Infer` types an `nc.int` field (D16), and how a schema deprecates a collection (D17).
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
-**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54).
+**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54). [Amendment 3](#amendment-3-follow-ups-from-building-the-lock) asks two new decisions, D16 and D17, which are open until the owner decides them; nothing they cover is built.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -136,7 +137,7 @@ A field can carry three modifiers, chained after the field function:
 
 - `.personal({ person })` marks the field as personal and ties it to a person (see [Personal fields](#personal-fields)).
 - `.describe(text)` adds a description. It is copied into the lock, where an agent reading the model finds it. It changes nothing else.
-- `.deprecated(reason)` hides the field from the SDK's TypeScript types and from writes, but keeps it in the model and in the data (see [The additive-change rule](#the-additive-change-rule)).
+- `.deprecated(reason)` hides the field from the SDK's TypeScript types and from writes, but keeps it in the model and in the data (see [The additive-change rule](#the-additive-change-rule)). How a schema deprecates a whole collection, which [Accepted](#accepted) allows, is the open decision [D17](#amendment-3-follow-ups-from-building-the-lock). *(Amendment 3.)*
 
 ### Computed fields and views: named, not designed
 
@@ -157,7 +158,7 @@ An index is local: it is built from the view on each device and never travels in
 
 ### Types for the app
 
-`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional, a choice as the union of its options, a link as an object id. How reads expose conflicts and resolution statuses (RFC 0004's working names `conflicts`, `lostRemovals` and the link statuses) belongs to the SDK's API review.
+`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional, a choice as the union of its options, a link as an object id. Whether an `nc.int` field is a `number` or a `bigint` is the open decision [D16](#amendment-3-follow-ups-from-building-the-lock). *(Amendment 3.)* How reads expose conflicts and resolution statuses (RFC 0004's working names `conflicts`, `lostRemovals` and the link statuses) belongs to the SDK's API review.
 
 ## The structure of model.lock.json
 
@@ -744,3 +745,33 @@ Added on 2026-11-09 for NOC-54. [RFC 0002, Amendment 5](0002-change-and-log-form
 ## Amendment 2: following RFC 0001 Amendment 4
 
 Added on 2026-11-09 for NOC-35. [RFC 0001, Amendment 4](0001-nocentraldb.md#amendment-4-following-rfc-0005-on-personal-fields) changed RFC 0001's "Personal fields" to follow this RFC's D9: only basic values can be personal, and only from the version that adds the field. [Personal fields](#personal-fields) quoted RFC 0001's old wording, "any field can be marked as personal"; it now quotes the new one, marked *(Amendment 2)* above. It decides nothing.
+
+## Amendment 3: follow-ups from building the lock
+
+Added on 2026-11-09 for NOC-73. Building `ncdb model build` and `ncdb model check` (NOC-70) found one error in this RFC and two points it leaves open. The error is fixed here and decides nothing. The two points are new decisions for the owner, D16 and D17 below; until the owner decides them, nothing they cover is built. The sentences this amendment changes are marked *(Amendment 3)*.
+
+- **The example's key order.** [Canonical form](#canonical-form) sorts keys by their UTF-16 code units, but [the example](#an-example) listed `notesAboutAssignee` before `dependsOn`. It now lists it after `estimate`, where `ncdb model build` writes it. The hash in the example does not change: it is computed over canonical JSON, which sorts the keys anyway.
+- **`nc.Infer` and `nc.int`.** [Public names](#public-names) lists `nc.Infer`, and [RFC 0009](0009-sdk-api.md#get-by-id) types every read by it. `ncdb model build` does not need it, so NOC-70 did not build it. One point stops the SDK from building it as this RFC describes it: `nc.int` is a signed 64-bit integer ([Field types](#field-types)), and a JavaScript `number` holds an integer exactly only up to 2^53 − 1. RFC 0009's examples write `{ priority: 3 }`, a `number`, but no RFC says what happens beyond that range. The Rust SDK reads an `i64` and has no such gap. D16 asks the owner.
+- **Deprecating a collection.** [Accepted](#accepted) allows deprecating a collection, the lock has a collection key `deprecated`, and RFC 0009 refuses writes into a deprecated collection. But [Public names](#public-names) gives no way to write it in the schema: `.deprecated(` is a field modifier, and a collection has no key for the reason a field keeps in `deprecatedReason`. NOC-70's build therefore reads a collection's `deprecated` and carries it over from the previous lock, and refuses to drop it, but cannot set it. D17 asks the owner.
+
+### Decisions for the owner (D16 and D17)
+
+**D16. How `nc.Infer` types an `nc.int` field in TypeScript.**
+
+- A. `number`. A write must be a safe integer, between −(2^53 − 1) and 2^53 − 1, or the SDK refuses it with `invalidValue`. A stored value outside that range, which another member or the Rust SDK can write, reads `undefined` in TypeScript and is named in `$raw`, as RFC 0009 does for a value that does not fit its field ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)); `space.inspect` returns it exactly, as a `bigint`. A set of ints holding such an element reads the same way, as a whole. *(recommended)*
+- B. `bigint`. Exact over the whole 64-bit range, but every read and write uses `3n` instead of `3`, `JSON.stringify` throws on a `bigint`, and mixing it with a `number` in arithmetic throws a `TypeError`.
+- C. `number` within the safe range and `bigint` beyond it, typed `number | bigint`. Exact, but TypeScript makes every use of every int field handle both types.
+
+Recommendation: A. Ints in apps are priorities, counts, sizes and positions, far below 2^53, and RFC 0009's examples already write them as `number`. Values beyond the range then show up as `$raw`, never silently rounded (principle 4). It widens what RFC 0009's `$raw` names on the TypeScript SDK, which RFC 0009 then records in an amendment of its own. A variant typed `bigint`, for an app that needs the whole range, can come later as a new field function without changing the lock: the field type stays `ncdb/int`.
+
+Open: waits for the owner.
+
+**D17. How a schema deprecates a collection.**
+
+- A. `.deprecated(reason)` chains on `nc.collection(...)` as it does on a field: the same name, and the same rule that it cannot be undone (D7). The lock gives the collection `deprecated`, the model version that deprecated it, and a new collection key `deprecatedReason`, as a field has. The SDK hides the collection from its TypeScript types and refuses writes into it with `deprecated`, as RFC 0009 already says; its fields need no modifier of their own. *(recommended)*
+- B. An option in `nc.collection`'s second argument: `nc.collection(fields, { deprecated: "reason" })`, with the same lock keys as A.
+- C. No deprecated collections in v1: remove the row from [Accepted](#accepted) and the key `deprecated` from the collection keys, and let the developer deprecate each field. The collection stays in the app's types, and creating objects in it stays possible.
+
+Recommendation: A. One name for one idea: a developer who knows `.deprecated()` on a field finds it on a collection, and the lock reads the same in both places. B spells the same thing a second way. C leaves a collection the app has given up in every type, and lets new objects keep appearing in it.
+
+Open: waits for the owner.
