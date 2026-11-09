@@ -68,3 +68,48 @@ test("RFC 0005's lock example is the bytes ncdb model build writes", () => {
   assert.equal(jsonBlocks(read())[0], read(FIXTURE));
 });
 
+test("RFC 0005 announces Amendment 3 in a dated NOC-73 changelog line", () => {
+  const top = read().split(/^## /m)[0];
+  const line = top
+    .split("\n")
+    .find((l) => /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-73 · /.test(l));
+  assert.ok(line, "no dated changelog line for NOC-73 above the first section");
+  assert.ok(line.includes(`(#${AMENDMENT})`), `it does not link #${AMENDMENT}`);
+});
+
+test("Amendment 3 asks the owner about nc.Infer's int and deprecating a collection", () => {
+  const body = sectionByAnchor(read(), AMENDMENT);
+  assert.ok(body, `${RFC} has no section #${AMENDMENT}`);
+  assert.match(body, /NOC-70/);
+  const found = decisions(body);
+  assert.deepEqual(
+    found.map((d) => d.id),
+    ["D16", "D17"],
+    "Amendment 3 does not ask D16 and D17",
+  );
+  const [int, collection] = found;
+  assert.match(int.text, /nc\.Infer/);
+  assert.match(int.text, /`number`/);
+  assert.match(int.text, /`bigint`/);
+  assert.match(collection.text, /collection/);
+  assert.match(collection.text, /\.deprecated\(/);
+  for (const { id, text } of found) {
+    const options = text.match(/^- [A-Z]\. /gm) ?? [];
+    assert.ok(options.length >= 2, `${id} has fewer than two options`);
+    assert.equal(
+      (text.match(/\*\(recommended\)\*/g) ?? []).length,
+      1,
+      `${id} does not mark exactly one option recommended`,
+    );
+    assert.match(text, /^Recommendation: [A-Z]\b/m, `${id} has no recommendation`);
+  }
+});
+
+test("RFC 0005's status names Amendment 3's open decisions", () => {
+  const status = read()
+    .split("\n")
+    .find((l) => l.startsWith("**Status.**"));
+  assert.ok(status.includes(`(#${AMENDMENT})`), "the status does not link Amendment 3");
+  assert.match(status, /D16/);
+  assert.match(status, /D17/);
+});
