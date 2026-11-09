@@ -75,6 +75,10 @@ const linkingSentence = (text, target, pattern, what) => {
   return found;
 };
 
+/** The paragraph that starts with "**Status.**". */
+const status = (markdown) =>
+  markdown.split("\n").find((line) => line.startsWith("**Status.**")) ?? "";
+
 const LOST_DEVICE = "What happens if I lose my device?";
 const STORAGE = "Does every device have to store all the data?";
 const GDPR = "Does destroying a key satisfy a GDPR erasure request?";
@@ -248,4 +252,91 @@ test("every relative link in the changed documents resolves, anchors included", 
       }
     }
   }
+});
+
+// pm's additions to NOC-35 (2026-11-09): use case 1's sample uses RFC 0005's
+// schema, RFC 0005 quotes RFC 0001's new wording (its Amendment 2), and RFC
+// 0004 Amendment 2 parks a create that carries key 5, as the owner decided.
+const RFC_0004 = "docs/rfc/0004-merge-rules-basic-types.md";
+const RFC_0005 = "docs/rfc/0005-schema-and-model-lock.md";
+
+test("use case 1's sample marks each personal field with .personal({ person }), as RFC 0005 writes it", () => {
+  const uc1 = section(read(USE_CASES), "1. Erasure that reaches every copy");
+  const sample = uc1.match(/```ts\n([\s\S]*?)```/)?.[1];
+  assert.ok(sample, "use case 1 has no TypeScript sample");
+  assert.ok(
+    !/personal: true/.test(sample),
+    "the sample still uses { personal: true }",
+  );
+  assert.match(
+    sample,
+    /\.personal\(\{ person: "self" \}\)/,
+    "no .personal({ person })",
+  );
+});
+
+/** The changelog line and section of amendment `n` of `markdown`, with its marked sentences. */
+const amendment = (markdown, n, ticket) => {
+  const top = markdown.split(/^## /m)[0];
+  assert.match(
+    top,
+    new RegExp(
+      `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · ${ticket} · \\[Amendment ${n}: [^\\]]+\\]\\(#amendment-${n}-[^)]+\\)`,
+      "m",
+    ),
+    `no changelog line for Amendment ${n}`,
+  );
+  const heading = markdown
+    .split("\n")
+    .find((l) => l.startsWith(`## Amendment ${n}: `));
+  assert.ok(heading, `no section Amendment ${n}`);
+  const marked = (
+    markdown.match(new RegExp(`\\*\\(Amendment ${n}\\.\\)\\*`, "g")) ?? []
+  ).length;
+  assert.ok(marked >= 1, `no sentence marked *(Amendment ${n}.)*`);
+  return section(markdown, heading.slice(3));
+};
+
+test("RFC 0005 Amendment 2 quotes RFC 0001's new wording on personal fields and decides nothing", () => {
+  const rfc = read(RFC_0005);
+  const body = amendment(rfc, 2, "NOC-35");
+  assert.match(body, /decides nothing/, "Amendment 2 must decide nothing");
+  const personal = section(rfc, "Personal fields");
+  assert.ok(
+    !/says any field can be marked as personal/.test(personal),
+    "RFC 0005 still quotes the old wording",
+  );
+  assert.match(
+    personal.split("\n").find((l) => l.includes("0001-nocentraldb.md")) ?? "",
+    /basic value/,
+  );
+});
+
+test("RFC 0004 Amendment 2 parks a create that carries key 5, decided by the owner", () => {
+  const rfc = read(RFC_0004);
+  const body = amendment(rfc, 2, "NOC-35");
+  assert.match(
+    body,
+    /\(Carsten, \d{4}-\d{2}-\d{2}\)/,
+    "the owner's decision is not recorded",
+  );
+  assert.ok(
+    sentencesLinking(
+      body,
+      "2026-11-09-NOC-39-a-create-with-arguments-is-malformed.md",
+    ).length > 0,
+    "Amendment 2 does not link NOC-39's decision",
+  );
+  const rule = rfc
+    .split("\n")
+    .find((l) =>
+      l.startsWith("- **A create with key 5 present is malformed.**"),
+    );
+  assert.ok(rule, "no rule for a create with key 5");
+  assert.match(rule, /"malformed arguments".*\*\(Amendment 2\.\)\*/);
+  assert.match(
+    status(rfc),
+    /Amendment 2/,
+    "the status does not name Amendment 2",
+  );
 });
