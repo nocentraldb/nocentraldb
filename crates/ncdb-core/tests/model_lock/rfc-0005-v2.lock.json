@@ -1,0 +1,93 @@
+{
+  "collections": {
+    "people": {
+      "fields": {
+        "email": {
+          "personal": { "person": "self" },
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/string"
+        },
+        "name": {
+          "personal": { "person": "self" },
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/string"
+        }
+      },
+      "since": 2
+    },
+    "tasks": {
+      "computed": {
+        "blocked": { "since": 1 }
+      },
+      "fields": {
+        "archived": { "rule": 1, "since": 2, "type": "ncdb/boolean" },
+        "assignee": {
+          "rule": 1,
+          "since": 2,
+          "targets": ["people"],
+          "type": "ncdb/link"
+        },
+        "dependsOn": {
+          "rule": 1,
+          "since": 1,
+          "targets": ["tasks"],
+          "type": "ncdb/links"
+        },
+        "estimate": { "rule": 1, "since": 2, "type": "ncdb/float" },
+        "notesAboutAssignee": {
+          "personal": { "person": "assignee" },
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/string"
+        },
+        "priority": { "rule": 1, "since": 1, "type": "ncdb/int" },
+        "status": {
+          "options": ["open", "in_progress", "done"],
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/choice"
+        },
+        "tags": {
+          "of": { "type": "ncdb/string" },
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/set"
+        },
+        "title": {
+          "description": "One line; what has to be done.",
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/string"
+        }
+      },
+      "indexes": {
+        "byPriorityDesc": {
+          "equal": 0,
+          "fields": [{ "direction": "desc", "field": "priority" }],
+          "since": 2
+        },
+        "byStatusPriority": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "priority" }
+          ],
+          "since": 1
+        }
+      },
+      "since": 1,
+      "views": {
+        "ready": { "since": 1 }
+      }
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:a59fed6588bc432d392c671b9ce7816babffc1fd7208187e4f2dd2c952e0531d",
+    "id": "6f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a",
+    "version": 2
+  },
+  "plugins": {}
+}

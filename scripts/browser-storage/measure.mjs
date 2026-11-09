@@ -10,7 +10,8 @@
 //   off-the-record profile and an ephemeral data store), and Firefox with
 //   `browser.privatebrowsing.autostart`, which is its private browsing mode
 //   (Playwright's Firefox contexts are not private on their own).
-//   "After close" reads in a new private window: a new context of the same
+//   "Reload" reloads the page in the same private window and reads a fresh
+//   token there; "after close" reads in a new private window: a new context of the same
 //   browser, or for Firefox a restart on the same profile directory.
 //
 // Playwright's builds are not the branded browsers: its WebKit is not
@@ -52,6 +53,12 @@ const outcome = (value) =>
 let counter = 0;
 const token = () => `token-${process.pid}-${Date.now()}-${counter++}`;
 
+const reloaded = async (page) => {
+  await page.reload();
+  await page.waitForFunction(() => window.probe !== undefined);
+  return page;
+};
+
 /** Writes a token, runs the event, and reads it back on the page it returns. */
 const across = async (page, event) => {
   const value = token();
@@ -70,11 +77,7 @@ const normalProfile = async (type, url, dir) => {
     );
     const written = await write(page, token());
     const info = await page.evaluate(() => window.probe.info());
-    const reload = await across(page, async (p) => {
-      await p.reload();
-      await p.waitForFunction(() => window.probe !== undefined);
-      return p;
-    });
+    const reload = await across(page, reloaded);
     const clearCache = await across(page, async (p) => {
       await p.goto(`${url}/clear-cache`);
       await p.goto(`${url}/`);
@@ -114,12 +117,14 @@ const privateWindow = async (engine, type, url, dir) => {
       const page = await open(context, url);
       const value = token();
       const written = await write(page, value);
+      const reload = await across(page, reloaded);
       await context.close();
       context = await type.launchPersistentContext(dir, options);
       const after = survival(await read(await open(context, url)), value);
       return {
         opfs: outcome(written.sqlite),
         idb: outcome(written.idb),
+        reload,
         afterClose: after,
       };
     } finally {
@@ -130,7 +135,9 @@ const privateWindow = async (engine, type, url, dir) => {
   try {
     const first = await browser.newContext();
     const value = token();
-    const written = await write(await open(first, url), value);
+    const page = await open(first, url);
+    const written = await write(page, value);
+    const reload = await across(page, reloaded);
     await first.close();
     const second = await browser.newContext();
     const after = survival(await read(await open(second, url)), value);
@@ -138,6 +145,7 @@ const privateWindow = async (engine, type, url, dir) => {
     return {
       opfs: outcome(written.sqlite),
       idb: outcome(written.idb),
+      reload,
       afterClose: after,
     };
   } finally {

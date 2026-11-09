@@ -13,6 +13,16 @@
       {
         "hooks": [
           {
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node scripts/session-start-deps.mjs",
+            "timeout": 300,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      },
+      {
+        "hooks": [
+          {
             "command": "nxf prime",
             "type": "command"
           }

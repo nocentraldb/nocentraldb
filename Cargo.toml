@@ -12,6 +12,7 @@ repository = "https://github.com/nocentraldb/nocentraldb"
 # Dependencies between workspace crates are declared here, with their path and
 # `version = "=<workspace version>"`, and used as `name.workspace = true`;
 # set-version keeps the pin equal to the version (check-version checks it).
+ncdb-core = { path = "crates/ncdb-core", version = "=0.1.0" }
 
 # Debug tests spend most of their time in signature checks, key agreement and
 # hashing. Optimizing only these crates keeps the core's own code unoptimized,

@@ -429,7 +429,7 @@ test("FACTORY.md describes the folder generically, through CONFIG.md", () => {
   assert.match(text, /- \[ \] Create an empty decisions folder/);
 });
 
-test("the roles, AGENTS.md and the README point to the folder", () => {
+test("the roles, AGENTS.md and docs/repository.md point to the folder", () => {
   for (const path of [
     "factory/roles/coder.md",
     "factory/roles/pm.md",
@@ -440,7 +440,7 @@ test("the roles, AGENTS.md and the README point to the folder", () => {
     assert.match(text, /`factory\/decisions\/`/, path);
     assert.match(text, /`pnpm decisions`/, path);
   }
-  const tree = read("README.md")
+  const tree = read("docs/repository.md")
     .split("\n")
     .find((line) => line.startsWith("factory/"));
   assert.match(tree, /decisions\//);

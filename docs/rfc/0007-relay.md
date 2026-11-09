@@ -1,12 +1,12 @@
 # RFC 0007: The relay protocol and its AWS backend
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-13
+REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-13
 
 This RFC defines the relay: the protocol members use to push and pull a space's changes and to follow them live, the checks the relay runs before it appends a change, the interface every relay backend implements, and the first backend, serverless on AWS with DynamoDB and S3.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
-**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on every decision in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and the design below describes the decided options. Nothing here is built or deployed. The RFC is final when this pull request is merged.
+**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on every decision in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and the design below describes the decided options. Nothing here is built or deployed. This RFC was merged with the owner's approval in #37 (Carsten, 2026-11-08).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 

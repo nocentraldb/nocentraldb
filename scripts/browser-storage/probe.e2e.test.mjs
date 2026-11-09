@@ -56,6 +56,7 @@ for (const engine of ["chromium", "firefox", "webkit"]) {
     assertSurvival(result.clearCache, "cleared cache");
     assert.equal(typeof result.private.opfs, "string");
     assert.equal(typeof result.private.idb, "string");
+    assertSurvival(result.private.reload, "private window reloaded");
     assertSurvival(result.private.afterClose, "private window closed");
   });
 }

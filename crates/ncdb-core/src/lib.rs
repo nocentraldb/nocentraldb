@@ -20,6 +20,9 @@
 //! and what links resolve against, the objects of a copy ([`object`]).
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
+//!
+//! Natively, a member keeps its log and the view folded from it in SQLite,
+//! as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it ([`view`]).
 
 pub mod basic;
 pub mod cbor;
@@ -33,11 +36,14 @@ pub mod ids;
 pub mod keys;
 pub mod link;
 pub mod log;
+pub mod model_lock;
 pub mod object;
 pub mod receive;
 mod redact;
 pub mod seal;
 pub mod set;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod view;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {

@@ -35,10 +35,9 @@ const privateFinding = ({ opfs, idb }) => {
   return `${sqlite}; ${control}`;
 };
 
-const afterCloseFinding = ({ opfs, afterClose }) =>
-  opfs === "ok"
-    ? both(afterClose)
-    : `SQLite: no OPFS, IndexedDB ${afterClose.idb}`;
+/** Survival in a private window, where SQLite has no OPFS in some engines. */
+const privateSurvival = (opfs, survival) =>
+  opfs === "ok" ? both(survival) : `SQLite: no OPFS, IndexedDB ${survival.idb}`;
 
 /** The table rows a run measured, in the order the doc lists them. */
 export const measuredRows = (run) =>
@@ -66,8 +65,12 @@ export const measuredRows = (run) =>
         privateFinding(result.private),
       ],
       [
+        `Private window: survives a reload (${engine.private})`,
+        privateSurvival(result.private.opfs, result.private.reload),
+      ],
+      [
         `Private window: after close (${engine.private})`,
-        afterCloseFinding(result.private),
+        privateSurvival(result.private.opfs, result.private.afterClose),
       ],
     ].map(([behaviour, finding]) => ({ browser, behaviour, finding, source }));
   });
