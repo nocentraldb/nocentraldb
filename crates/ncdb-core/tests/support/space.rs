@@ -187,10 +187,22 @@ impl Space {
 
     /// A sealed change by `author` under `generation`, with these
     /// operations, at its next author sequence.
-    pub fn sealed_under(&mut self, author: Who, generation: u64, operations: Vec<Operation>) -> Change {
+    pub fn sealed_under(
+        &mut self,
+        author: Who,
+        generation: u64,
+        operations: Vec<Operation>,
+    ) -> Change {
         let sequence = self.next(author);
         let payload = Payload::new(Hlc(sequence << 16), BTreeSet::new(), operations);
-        seal::seal(&key(author), &space_key(), self.space, sequence, generation, &payload)
+        seal::seal(
+            &key(author),
+            &space_key(),
+            self.space,
+            sequence,
+            generation,
+            &payload,
+        )
     }
 
     /// A sealed change by `author` under the first generation.
@@ -216,12 +228,7 @@ pub fn genesis(creator: Who, nonce: [u8; 16], model_id: [u8; 16]) -> (Change, Sp
     let creator_key = key(creator);
     let space = membership::space_id(creator_key.id(), &nonce);
     let first_generation = membership::generation_id(space, creator_key.id(), &[]);
-    let field = membership::seal_model_id(
-        &space_key(),
-        space,
-        creator_key.id(),
-        model_id,
-    );
+    let field = membership::seal_model_id(&space_key(), space, creator_key.id(), model_id);
     let genesis = Genesis {
         nonce,
         creator: creator_key.public(),
