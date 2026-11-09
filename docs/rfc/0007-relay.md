@@ -634,12 +634,12 @@ The protection of the person-key store and the key that authenticates a connecti
 
 ## Conflicts with GENESIS.md and RFC 0001
 
-This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The owner ruled on each (Carsten, 2026-11-08). The changes they need in other documents are follow-up ticket NOC-47, not part of this RFC.
+This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The owner ruled on each (Carsten, 2026-11-08). NOC-47 made the changes they need in other documents, and RFC 0002 records its part in [Amendment 4](0002-change-and-log-format.md#amendment-4-following-rfc-0007).
 
-1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show (RFC 0008, M11), and what the server sees, with the AWS setting each item depends on. Ruled: this RFC separates what the relay learns from what the server sees, as above; RFC 0002's list links to this RFC's (NOC-47).
-2. **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Accepted: use case 4 says "reads at no cost" (NOC-47).
-3. **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Accepted: use case 5 says what is missing until the peer RFC exists (NOC-47).
-4. **RFC 0002, who uploads.** This RFC requires the uploader to be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it. Accepted: RFC 0002 notes the uploader rule (NOC-47).
+1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show (RFC 0008, M11), and what the server sees, with the AWS setting each item depends on. Ruled: this RFC separates what the relay learns from what the server sees, as above. Resolved (NOC-47): RFC 0002's list links to this RFC's, and RFC 0001, GENESIS.md, use case 2 and the FAQ link both.
+2. **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Accepted. Resolved (NOC-47): use case 4 says "reads at no cost" and what the writes cost, with a link to [What it costs](#what-it-costs).
+3. **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Accepted. Resolved (NOC-47): use case 5 says how peers find each other is missing until the peer RFC exists.
+4. **RFC 0002, who uploads.** This RFC requires the uploader to be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it. Accepted. Resolved (NOC-47): RFC 0002 states the uploader rule in its Amendment 4.
 
 ## Summary of the choices
 
