@@ -28,6 +28,9 @@ pub const E8: &str = include_str!("../../../../docs/rfc/vectors/0004/E8.hex");
 pub const E9: &str = include_str!("../../../../docs/rfc/vectors/0004/E9.hex");
 pub const E10: &str = include_str!("../../../../docs/rfc/vectors/0004/E10.hex");
 pub const E11: &str = include_str!("../../../../docs/rfc/vectors/0004/E11.hex");
+pub const E12: &str = include_str!("../../../../docs/rfc/vectors/0004/E12.hex");
+pub const E13: &str = include_str!("../../../../docs/rfc/vectors/0004/E13.hex");
+pub const E14: &str = include_str!("../../../../docs/rfc/vectors/0004/E14.hex");
 
 pub fn hex(text: &str) -> Vec<u8> {
     let text: String = text.split_whitespace().collect();

@@ -3,8 +3,12 @@
 //! collection, and whether it is deleted. Both are basic values, so two
 //! creates of one id and a deletion converge by the rule of basic values.
 //!
-//! Object deletion belongs to a later RFC; this follows owner decision 4 of
-//! RFC 0004: whether an object is deleted is a boolean basic value.
+//! Whether an object is deleted is a boolean basic value (RFC 0004, owner
+//! decision 4). Creates (operation 0) and deletes (operation 4) reach it as
+//! [`ObjectOperation`]s, which `field_op` decodes and the fold of
+//! `receive` applies (RFC 0004 Amendment 1, "Creating and deleting an
+//! object"). Who may delete, and what a deleted object shows, belong to a
+//! later RFC.
 
 use crate::basic::{self, BasicValue, Kind, Write};
 use crate::cbor::Value;
@@ -24,6 +28,16 @@ pub struct Create {
     pub stamp: Hlc,
     /// The collection the create puts the object into.
     pub collection: String,
+}
+
+/// An operation on an object rather than on one of its fields (RFC 0004
+/// Amendment 1, "Creating and deleting an object").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ObjectOperation {
+    /// Operation 0: a create of the object's id.
+    Create(Create),
+    /// Operation 4: a write of whether the object is deleted.
+    Delete(Write),
 }
 
 /// One object of a copy: its creates and its deletion.
@@ -58,6 +72,14 @@ impl Object {
     /// `false` restores.
     pub fn set_deleted(&mut self, write: &Write) {
         DELETED.apply(&mut self.deleted, write);
+    }
+
+    /// Merges one operation on the object.
+    pub fn apply(&mut self, operation: &ObjectOperation) {
+        match operation {
+            ObjectOperation::Create(create) => self.create(create),
+            ObjectOperation::Delete(write) => self.set_deleted(write),
+        }
     }
 
     /// Whether any create of the id has arrived.

@@ -12,14 +12,20 @@ use crate::field::FieldType;
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId};
 use crate::link::{Link, Links};
 use crate::log::OperationParkReason;
+use crate::object::{Create, ObjectOperation};
 use crate::set::{Action, Edit, Set};
 
+/// Operation number 0: create the object (RFC 0002).
+pub const CREATE: u64 = Operation::CREATE;
 /// Operation number 1: set, on a basic value or a link.
 pub const SET: u64 = 1;
 /// Operation number 2: add, on a set or links.
 pub const ADD: u64 = 2;
 /// Operation number 3: remove, on a set or links.
 pub const REMOVE: u64 = 3;
+
+/// Operation number 4: delete or restore the object.
+pub const DELETE: u64 = 4;
 
 /// Argument 1: the value written, or the element added or removed.
 const VALUE: u64 = 1;
@@ -81,6 +87,43 @@ pub fn encode<T: Encoding>(
     )
 }
 
+/// The operation map that creates `object` in `collection`: no field, no
+/// arguments.
+pub fn create(object: ObjectId, collection: &str) -> Operation {
+    Operation::new(object, collection.to_owned(), None, CREATE, None)
+}
+
+/// The operation map that writes whether `object` is deleted: `true`
+/// deletes, `false` restores. `collection` is the one the author's copy
+/// showed for the object; the deletion belongs to the object whatever it
+/// names.
+pub fn delete(object: ObjectId, collection: &str, write: &Write) -> Operation {
+    let (_, arguments) = write_arguments(write);
+    Operation::new(object, collection.to_owned(), None, DELETE, Some(arguments))
+}
+
+/// Reads `operation`, an operation without a field, as a create or a
+/// delete of its object, or says why it is parked.
+///
+/// A create carries no arguments, so one with key 5 is malformed: each
+/// operation has exactly one encoding. A delete's arguments are set's.
+pub fn decode_object(
+    operation: &Operation,
+    origin: Origin,
+) -> Result<ObjectOperation, OperationParkReason> {
+    match operation.op {
+        CREATE if operation.value.is_some() => Err(OperationParkReason::MalformedArguments),
+        CREATE => Ok(ObjectOperation::Create(Create {
+            id: origin.id,
+            author: origin.author,
+            stamp: origin.stamp,
+            collection: operation.collection.clone(),
+        })),
+        DELETE => read_write(operation, origin).map(ObjectOperation::Delete),
+        _ => Err(OperationParkReason::UnknownOperation),
+    }
+}
+
 impl Operation {
     /// The canonical bytes of this operation map.
     pub fn encode(&self) -> Vec<u8> {
@@ -134,7 +177,7 @@ impl Encoding for Links {
     }
 }
 
-/// set: `{1: value, 2: replaces}`.
+/// set and delete: `{1: value, 2: replaces}`.
 fn write_arguments(op: &Write) -> (u64, Value) {
     (
         SET,
@@ -180,6 +223,11 @@ fn decode_write(operation: &Operation, origin: Origin) -> Result<Write, Operatio
     if operation.op != SET {
         return Err(OperationParkReason::UnknownOperation);
     }
+    read_write(operation, origin)
+}
+
+/// The arguments of a set or a delete: `{1: value, 2: replaces}`.
+fn read_write(operation: &Operation, origin: Origin) -> Result<Write, OperationParkReason> {
     let mut arguments = arguments(operation, &[VALUE, REPLACES])?;
     Ok(Write {
         id: origin.id,
