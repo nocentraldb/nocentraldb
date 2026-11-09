@@ -16,6 +16,7 @@ const read = (path) => readFileSync(join(root, path), "utf8");
 const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const RFC_0003 = "docs/rfc/0003-keys-and-cryptography.md";
 const RFC_0005 = "docs/rfc/0005-schema-and-model-lock.md";
+const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const USE_CASES = "docs/use-cases.md";
@@ -27,6 +28,7 @@ const AMENDMENTS = [
   { path: RFC_0001, number: 6, points: [6] },
   { path: RFC_0003, number: 3, points: [5, 9] },
   { path: RFC_0005, number: 3, points: [1, 3, 4] },
+  { path: RFC_0006, number: 6, points: [1, 2] },
   { path: RFC_0008, number: 2, points: [10] },
 ];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0009`;
@@ -164,6 +166,27 @@ test("RFC 0005 has the index option scope and its key in the lock", () => {
   );
 });
 
+test("RFC 0006 puts the space id first in an index with scope space, and keeps deleted objects out of every index", () => {
+  const text = section(read(RFC_0006), "declared-indexes");
+  assert.match(text, /`scope: "space"`/, "no index with scope space");
+  assert.match(
+    text,
+    /\(space_id, [a-z_, ]*object_id\)/,
+    "no column order with the space id first",
+  );
+  assert.match(text, /deleted object/i, "says nothing about deleted objects");
+});
+
+test("RFC 0009's point 1 is resolved for RFC 0006 too", () => {
+  const body = section(
+    read(RFC_0009),
+    "conflicts-with-genesismd-and-the-other-rfcs",
+  );
+  const line = body.split("\n").find((l) => l.startsWith("1. "));
+  assert.ok(links(line, "0006-local-view.md#amendment-6-following-rfc-0009"));
+  assert.ok(!/RFC 0006 follows/.test(line), "point 1 still waits for RFC 0006");
+});
+
 test("RFC 0001's example queries a declared index, not a view", () => {
   const example = code(section(read(RFC_0001), "the-design-in-one-page"));
   assert.ok(!/views\.ready/.test(example), "the example still queries a view");
@@ -200,7 +223,7 @@ test("RFC 0009 marks each point it carried out resolved", () => {
     read(RFC_0009),
     "conflicts-with-genesismd-and-the-other-rfcs",
   );
-  for (const point of [3, 4, 5, 6, 7, 8, 9, 10]) {
+  for (const point of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
     const line = body.split("\n").find((l) => l.startsWith(`${point}. `));
     assert.ok(line, `no point ${point}`);
     assert.match(line, /\*Resolved\b/, `point ${point} is not marked resolved`);
@@ -212,6 +235,7 @@ test("every relative link in the amended texts resolves, anchors included", () =
     RFC_0001,
     RFC_0003,
     RFC_0005,
+    RFC_0006,
     RFC_0008,
     RFC_0009,
     USE_CASES,
