@@ -56,11 +56,13 @@ jobs:
       # the commit under test executes before it is known to be the head of
       # main. Two merges in quick succession: the older one is skipped here,
       # and the next alpha covers it (alpha notes are computed since the
-      # previous alpha tag, not per merge). The repository may be private, so
-      # git authenticates with the job's token; a failing ls-remote, or no
-      # main at all (--exit-code), fails the job instead of skipping it. A dry
-      # run on any ref but main fails here: its commit is never the head of
-      # main, so it would skip every step and end green, proving nothing. The
+      # previous alpha tag, not per merge). The repository is public, so
+      # ls-remote would work without a token; git authenticates with the
+      # job's token anyway, so the guard does not depend on the repository's
+      # visibility. A failing ls-remote, or no main at all (--exit-code),
+      # fails the job instead of skipping it. A dry run on any ref but main
+      # fails here: its commit is never the head of main, so it would skip
+      # every step and end green, proving nothing. The
       # runner masks GH_TOKEN but not the header derived from it, so the
       # header is masked before git sees it.
       - name: Still the head of main?
@@ -323,8 +325,9 @@ jobs:
           fi
       # Registry publishing is not wired yet: these steps never publish. They
       # report what publishable says, "would publish" or "skip <reason>". The
-      # registry commands and Trusted Publishing come with the repository
-      # going public, and change the permissions check with them.
+      # registry commands come with Trusted Publishing, once the owner has
+      # published each package by hand (docs/release-management.md, "A new
+      # package's first publish"), and change the permissions check with them.
       - name: npm
         run: |
           node scripts/release/publishable.mjs --json \
