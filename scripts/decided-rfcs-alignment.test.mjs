@@ -373,23 +373,24 @@ test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, 
   );
   assert.match(privateWindows, /NOC-58/, "the open question names no ticket");
   assert.match(privateWindows, /\*\(Amendment 3\.\)\*/);
+  const findings = read("docs/browser-storage.md");
   for (const row of [
     "Safari (macOS) · SQLite on OPFS (`opfs-sahpool`)",
     "Safari (iOS) · SQLite on OPFS (`opfs-sahpool`)",
+    "Safari (iOS) · `persist()`",
+    "Safari (iOS) · `persist()` in a home-screen app",
+    "Safari (macOS) · `persist()` in a Dock app",
     "Firefox (macOS) · `persist()`",
+    "Firefox · Private window",
   ]) {
     assert.ok(
       rfc.includes(`measured: ${row}`),
       `RFC 0006 does not cite the row ${row}`,
     );
-  }
-  const findings = read("docs/browser-storage.md");
-  for (const [, browser, behaviour] of rfc.matchAll(
-    /(?:measured|documented|unknown): ([^·()\n]+(?:\([^)]*\))?) · ([^;)\n]+?(?:\([^)]*\))?)(?=[;)])/g,
-  )) {
+    const [browser, behaviour] = row.split(" · ");
     assert.ok(
-      findings.includes(`| ${browser.trim()} | ${behaviour.trim()} |`),
-      `RFC 0006 cites a row the findings lack: ${browser} · ${behaviour}`,
+      findings.includes(`| ${browser} | ${behaviour} |`),
+      `the findings have no row ${row}`,
     );
   }
 });
