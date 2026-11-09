@@ -26,6 +26,16 @@ pub struct Create {
     pub collection: String,
 }
 
+/// An operation on an object rather than on one of its fields (RFC 0004
+/// Amendment 1, "Creating and deleting an object").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ObjectOperation {
+    /// Operation 0: a create of the object's id.
+    Create(Create),
+    /// Operation 4: a write of whether the object is deleted.
+    Delete(Write),
+}
+
 /// One object of a copy: its creates and its deletion.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Object {
@@ -58,6 +68,14 @@ impl Object {
     /// `false` restores.
     pub fn set_deleted(&mut self, write: &Write) {
         DELETED.apply(&mut self.deleted, write);
+    }
+
+    /// Merges one operation on the object.
+    pub fn apply(&mut self, operation: &ObjectOperation) {
+        match operation {
+            ObjectOperation::Create(create) => self.create(create),
+            ObjectOperation::Delete(write) => self.set_deleted(write),
+        }
     }
 
     /// Whether any create of the id has arrived.

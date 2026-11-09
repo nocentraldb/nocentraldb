@@ -120,9 +120,15 @@ fn a_delete_without_its_arguments_is_malformed() {
         parks(DELETE, Some(args(&[(1, Value::Bool(true))]))),
         MalformedArguments
     );
-    assert_eq!(parks(DELETE, Some(args(&[(2, empty())]))), MalformedArguments);
     assert_eq!(
-        parks(DELETE, Some(args(&[(1, Value::Bool(true)), (2, Value::Null)]))),
+        parks(DELETE, Some(args(&[(2, empty())]))),
+        MalformedArguments
+    );
+    assert_eq!(
+        parks(
+            DELETE,
+            Some(args(&[(1, Value::Bool(true)), (2, Value::Null)]))
+        ),
         MalformedArguments
     );
 }
