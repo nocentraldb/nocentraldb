@@ -112,25 +112,24 @@ Storage info (2026-11-09T13:41:09.148Z):
   "opfs": "ok",
   "sqliteVersion": "3.54.1"
 }
-```
-
-```markdown
-### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
 
 Write (2026-11-09T13:42:05.842Z):
 {
   "sqlite": "ok",
   "idb": "ok"
 }
-```
-
-```markdown
-### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
 
 Read (2026-11-09T13:42:22.646Z):
 {
   "sqlite": "written 2026-11-09T13:42:05.816Z",
   "idb": "written 2026-11-09T13:42:05.816Z"
+}
+
+persist() (2026-11-09T14:04:41.432Z):
+{
+  "answered": true,
+  "granted": false,
+  "raw": false
 }
 ```
 
@@ -143,20 +142,12 @@ persist() (2026-11-09T13:44:56.732Z):
   "granted": false,
   "raw": false
 }
-```
-
-```markdown
-### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
 
 Write (2026-11-09T13:45:30.046Z):
 {
   "sqlite": "ok",
   "idb": "ok"
 }
-```
-
-```markdown
-### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
 
 Storage info (2026-11-09T13:45:45.751Z):
 {
@@ -170,14 +161,166 @@ Storage info (2026-11-09T13:45:45.751Z):
   "opfs": "ok",
   "sqliteVersion": "3.54.1"
 }
-```
-
-```markdown
-### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
 
 Read (2026-11-09T13:46:02.180Z):
 {
   "sqlite": "written 2026-11-09T13:45:30.029Z",
   "idb": "written 2026-11-09T13:45:30.029Z"
+}
+```
+
+```markdown
+### 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021)
+
+Storage info (2026-11-09T13:57:49.702Z):
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "secureContext": true,
+  "persisted": false,
+  "estimate": {
+    "usage": 6291473,
+    "quota": 82463372084
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+
+Write (2026-11-09T13:59:57.389Z):
+{
+  "sqlite": "ok",
+  "idb": "ok"
+}
+
+Read (2026-11-09T14:00:14.178Z):
+{
+  "sqlite": "written 2026-11-09T13:59:57.362Z",
+  "idb": "written 2026-11-09T13:59:57.362Z"
+}
+```
+
+```markdown
+### 2026-11-09 · Dock App on macOS 26.7.2, Apple M1 Pro (2021)
+
+Read on load (2026-11-09T14:00:57.870Z):
+{
+  "sqlite": null,
+  "idb": null
+}
+
+persist() (2026-11-09T14:01:56.519Z):
+{
+  "answered": true,
+  "granted": true,
+  "raw": true
+}
+
+Write (2026-11-09T14:02:19.379Z):
+{
+  "sqlite": "ok",
+  "idb": "ok"
+}
+
+Storage info (2026-11-09T14:02:25.865Z):
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "secureContext": true,
+  "persisted": true,
+  "estimate": {
+    "usage": 6291535,
+    "quota": 82463372084
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+
+Read (2026-11-09T14:03:41.107Z):
+{
+  "sqlite": "written 2026-11-09T14:02:19.357Z",
+  "idb": "written 2026-11-09T14:02:19.357Z"
+}
+```
+
+```markdown
+### 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021)
+
+Read on load (2026-11-09T14:08:48.199Z):
+{
+  "sqlite": null,
+  "idb": null
+}
+
+When clicking `Request persist()`, it showed "Allow nocentraldb.github.io to store data in persistent storage?". I set "Remember this decision" and pressed "Allow".
+
+persist() (2026-11-09T14:10:35.224Z):
+{
+  "answered": true,
+  "granted": true,
+  "raw": true
+}
+
+Storage info (2026-11-09T14:12:02.401Z):
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+  "secureContext": true,
+  "persisted": true,
+  "estimate": {
+    "usage": 589824,
+    "quota": 247192397824
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+
+Doing it a 2nd time after I deleted the permission (this time blocking):
+
+persist() (2026-11-09T14:17:08.681Z):
+{
+  "answered": true,
+  "granted": true,
+  "raw": true
+}
+
+Storage info (2026-11-09T14:17:35.023Z):
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+  "secureContext": true,
+  "persisted": true,
+  "estimate": {
+    "usage": 589824,
+    "quota": 247192397824
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+```
+
+```markdown
+### 2026-11-09 · Firefox 156.0.1 (private window) on macOS 26.7.2, Apple M1 Pro (2021)
+
+Storage info (2026-11-09T14:18:55.592Z):
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+  "secureContext": true,
+  "persisted": false,
+  "estimate": {
+    "usage": 90112,
+    "quota": 10737418240
+  },
+  "opfs": "error: SecurityError: Security error when calling GetDirectory",
+  "sqliteVersion": "error: SecurityError: Security error when calling GetDirectory"
+}
+
+Write (2026-11-09T14:19:26.667Z):
+{
+  "sqlite": "error: SecurityError: Security error when calling GetDirectory",
+  "idb": "ok"
+}
+
+Opening new private window:
+
+Read (2026-11-09T14:20:00.037Z):
+{
+  "sqlite": "error: SecurityError: Security error when calling GetDirectory",
+  "idb": null
 }
 ```
