@@ -344,17 +344,32 @@ jobs:
     concurrency:
       group: release-publish-${{ github.ref }}
       cancel-in-progress: false
-    permissions:
-      contents: write
+    # No permissions block: the job's github.token keeps the workflow's
+    # contents: read. The push goes through the release app's token below.
     defaults:
       run:
         shell: bash
     steps:
+      # The ruleset "Require PR" on main lets only the organization's release
+      # GitHub App push without a pull request (docs/release-management.md,
+      # "The bypass for commit-back"). This step mints a token for that app,
+      # for this repository only and with contents: write only; it expires
+      # after an hour and is revoked when the job ends.
+      # scripts/release-ruleset.test.mjs holds this job, and only this job,
+      # to that token.
+      - name: Release app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
           fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
           # As in publish: the token is not left in .git/config; the commit
           # step below hands it to git for the push only.
           persist-credentials: false
@@ -371,20 +386,19 @@ jobs:
       - name: Install proto and the tools in .prototools
         run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
-      # The push passes the ruleset "Require PR" on main only through its
-      # bypass for the GitHub Actions app, an owner setting
-      # (docs/release-management.md, "The bypass for commit-back");
-      # scripts/release-ruleset.test.mjs holds this job to pushing with
-      # github.token and opening no pull request. The push with the job's
-      # token starts no ci run; the next pull request's gate covers
-      # release-notes/ and changes/ (index test, fragment schema), which
-      # commit-back.mjs also checks before it commits.
+      # The push passes the ruleset "Require PR" on main only because the
+      # release app is on its bypass list, an owner setting; it opens no
+      # pull request. Unlike a push with github.token, a push with the app's
+      # token starts ci on main, which runs the gate on the commit (index
+      # test, fragment schema; commit-back.mjs checks both before it commits
+      # too). The commit adds no fragment, so it brings no alpha of its own
+      # (next-version, N3).
       # The index date is the UTC day the GitHub release was published, read
       # from the release, so a re-run on a later day (or a run that crosses
       # midnight) indexes the same day and finds nothing to commit.
       - name: Index, notes archive and shipped fragments to main
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.verify.outputs.tag }}
           STAGE: ${{ needs.verify.outputs.stage }}
