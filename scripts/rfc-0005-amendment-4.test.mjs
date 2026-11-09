@@ -109,14 +109,58 @@ test("Amendment 4 asks the owner about nc.Infer's int and deprecating a collecti
   }
 });
 
-test("RFC 0005's status names Amendment 4's open decisions", () => {
-  const status = read()
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
+// The owner decided D16 and D17 as recommended (Carsten, 2026-11-09), in
+// chat with pm. The decisions record it as D1 to D15 do, and the design
+// above describes the choices instead of naming them open.
+const DECIDED = "Decided (Carsten, 2026-11-09): the recommendation, (A).";
+
+/** The first line of `markdown` that starts with `start`. */
+const paragraph = (markdown, start) =>
+  markdown.split("\n").find((l) => l.startsWith(start)) ?? "";
+
+test("D16 and D17 record the owner's decision", () => {
+  for (const { id, text } of decisions(sectionByAnchor(read(), AMENDMENT))) {
+    assert.ok(text.includes(DECIDED), `${id} does not say "${DECIDED}"`);
+    assert.doesNotMatch(
+      text,
+      /Open: waits for the owner/,
+      `${id} is still open`,
+    );
+  }
+});
+
+test("RFC 0005's status and changelog say the owner decided D16 and D17", () => {
+  const rfc = read();
+  const status = paragraph(rfc, "**Status.**");
   assert.ok(
     status.includes(`(#${AMENDMENT})`),
     "the status does not link Amendment 4",
   );
-  assert.match(status, /D16/);
-  assert.match(status, /D17/);
+  assert.match(status, /D16 and D17[^.]*\(Carsten, 2026-11-09\)/);
+  const line = paragraph(rfc.split(/^## /m)[0], "- **2026-11-09** · NOC-73 · ");
+  assert.match(
+    line,
+    /\(Carsten, 2026-11-09\)/,
+    "the changelog line does not say who decided",
+  );
+  assert.doesNotMatch(
+    rfc,
+    /open decision \[D1[67]\]/,
+    "the design still names D16 or D17 open",
+  );
+});
+
+test("the design describes D16 A: nc.Infer types nc.int as number", () => {
+  const types = paragraph(read(), "`nc.Infer<typeof model.tasks>`");
+  assert.match(types, /`nc\.int` field as a `number`/);
+  assert.match(types, /safe integer/);
+  assert.match(types, /`\$raw`/);
+});
+
+test("the design describes D17 A: .deprecated() on a collection, with deprecatedReason", () => {
+  const rfc = read();
+  assert.match(paragraph(rfc, "- `.deprecated(reason)`"), /nc\.collection\(/);
+  assert.match(paragraph(rfc, "Per collection:"), /`deprecatedReason`/);
+  assert.match(paragraph(rfc, "| `.deprecated(`"), /collection/);
+  assert.match(paragraph(rfc, "| Collection keys "), /`deprecatedReason`/);
 });
