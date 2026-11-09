@@ -294,3 +294,27 @@ test("RFC 0005 no longer says a change does not name its model, and marks what r
     "D10's changed sentence is not marked",
   );
 });
+
+test("point 6 of Data from a newer model counts changes of another model apart, marked", () => {
+  const point = section(read(), "Data from a newer model")
+    .split("\n")
+    .find((l) => l.startsWith("6. "));
+  assert.ok(point, "Data from a newer model has no point 6");
+  assert.match(
+    point,
+    /another model/,
+    'point 6 does not name the reason "another model"',
+  );
+  assert.match(
+    point,
+    /apart/,
+    "point 6 does not count changes of another model apart",
+  );
+  assert.match(
+    point,
+    /\*\(Amendment 1\.\)\*$/,
+    "point 6's change is not marked",
+  );
+  const body = sectionByAnchor(read(), AMENDMENT);
+  assert.match(body, /point 6/, "the amendment does not cover point 6");
+});
