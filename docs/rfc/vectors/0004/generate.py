@@ -1,6 +1,7 @@
 """Writes the byte-exact examples E1 to E14 of RFC 0004 Amendment 1
-(docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples") in this
-directory, from their descriptions in the RFC and independently of the Rust
+(docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples") and E15 to
+E17 of its Amendment 4 (the reference, "Byte-exact examples (E15 to E17)") in
+this directory, from their descriptions in the RFC and independently of the Rust
 core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode).
 The gates do not run this script; scripts/rfc-0004-examples.test.mjs checks
 that the RFC's hex equals the committed files.
@@ -23,6 +24,9 @@ T1 = bytes([0x11] * 16)  # the object every example writes to
 T2 = bytes([0x22] * 16)  # the link target
 A = bytes([0xAA] * 32)  # change id A
 B = bytes([0xBB] * 32)  # change id B
+S = bytes([0x33] * 16)  # the space a reference points into (Amendment 4)
+C1 = bytes([0x44] * 16)  # a customer in space S
+C2 = bytes([0x55] * 16)  # another customer in space S
 
 # Operation numbers (Amendment 1, "Operation numbers").
 CREATE, SET, ADD, REMOVE, DELETE = 0, 1, 2, 3, 4
@@ -38,8 +42,8 @@ def ids(*operation_ids):
     return [unique[key] for key in sorted(unique)]
 
 
-def operation(field, number, arguments):
-    return {1: T1, 2: "tasks", 3: field, 4: number, 5: arguments}
+def operation(field, number, arguments, collection="tasks"):
+    return {1: T1, 2: collection, 3: field, 4: number, 5: arguments}
 
 
 def create():
@@ -54,6 +58,16 @@ def delete(deleted, replaces=()):
 
 def set_(field, value, replaces=()):
     return operation(field, SET, {1: value, 2: ids(*replaces)})
+
+
+def ref(space, target):
+    """A reference's value (Amendment 4): [space id, object id]."""
+    return [space, target]
+
+
+def set_ref(value, replaces=()):
+    """A set of the reference field orders.customer (Amendment 4)."""
+    return operation("customer", SET, {1: value, 2: ids(*replaces)}, "orders")
 
 
 def add(field, element, replaces=()):
@@ -93,6 +107,12 @@ EXAMPLES = {
     "E13": delete(True),
     # E14. delete, a restore that replaces the delete [A, 3].
     "E14": delete(False, replaces=[(A, 3)]),
+    # E15. set, the first write to a reference into space S.
+    "E15": set_ref(ref(S, C1)),
+    # E16. set, a reference that replaces a winner and a conflict.
+    "E16": set_ref(ref(S, C2), replaces=[(B, 1), (A, 0)]),
+    # E17. set, clearing a reference.
+    "E17": set_ref(None, replaces=[(A, 4)]),
 }
 
 
