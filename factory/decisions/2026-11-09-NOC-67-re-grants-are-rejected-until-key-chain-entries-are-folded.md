@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-67 · Re-grants are rejected until key chain entries are folded
+
+- Decided by: pm, on the coding agent's question (option A)
+- Why: RFC 0008 accepts a re-grant (an add of a former member, or a set role that gives the right to write to a member without it) only with a fresh generation: a key chain entry its author wrote, with no envelope to the subject for it in its causal past. That reads key chain entries and envelopes, which NOC-67 does not fold. So `resolve` finds no fresh generation and rejects every re-grant as not valid when written. This fails safe, since a revocation always holds, and stays within the RFC, which rejects a re-grant without a fresh generation. The cost: re-adding a removed member, or raising a reader to writer, does not work until a follow-up ticket folds key chain entries, the generation graph, the fresh-generation rule and the membership verdict for sealed changes, after NOC-68. Until then, control changes of types 2 to 6 are judged on their author's right and on exclusion only, and change no state.
+- Instead of: also decoding key chain entries and envelope fields here (B), which overlaps NOC-68 and doubles the PR; or accepting re-grants without the check (C), which RFC 0008 lists as a rejected option.
+- Topics: membership, rfc-0008, scope
