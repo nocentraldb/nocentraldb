@@ -2,39 +2,53 @@
 export declare function name(): string;
 export * as nc from "./nc.ts";
 // file: nc.d.ts
-interface Field {
+interface Field<T = unknown, D extends boolean = false> {
+    readonly "nc.reads": T;
+    readonly "nc.deprecated": D;
     personal(options: {
         person: string;
-    }): Field;
-    describe(text: string): Field;
-    deprecated(reason: string): Field;
+    }): Field<T, D>;
+    describe(text: string): Field<T, D>;
+    deprecated(reason: string): Field<T, true>;
 }
-interface Collection {
-    readonly "nc.collection": true;
-    deprecated(reason: string): Collection;
+type Fields = Record<string, Field<unknown, boolean>>;
+interface Collection<F extends Fields = Fields, D extends boolean = false> {
+    readonly "nc.collection": F;
+    readonly "nc.deprecated": D;
+    deprecated(reason: string): Collection<F, true>;
 }
+type Visible<C> = {
+    [K in keyof C as C[K] extends Collection<Fields, true> ? never : K]: C[K];
+};
+export type Unknown = {
+    unknown: string;
+};
+export type Infer<C extends Collection<Fields, boolean>> = C extends Collection<infer F, false> ? {
+    [K in keyof F as F[K] extends Field<unknown, true> ? never : K]?: F[K]["nc.reads"];
+} : never;
 interface Named {
     readonly "nc.named": true;
 }
 interface Index {
     readonly "nc.index": true;
 }
-export declare function model<C extends Record<string, Collection>>(collections: C): C;
-export declare function collection(fields: Record<string, Field>, options?: {
+type ObjectId = string;
+export declare function model<C extends Record<string, Collection<Fields, boolean>>>(collections: C): Visible<C>;
+export declare function collection<F extends Fields>(fields: F, options?: {
     computed?: Record<string, Named>;
     views?: Record<string, Named>;
     indexes?: Record<string, Index>;
-}): Collection;
-export declare const string: () => Field;
-export declare const int: () => Field;
-export declare const float: () => Field;
-export declare const boolean: () => Field;
-export declare const oneOf: (options: readonly string[]) => Field;
-export declare const set: (element: Field) => Field;
-export declare const link: (target: string | readonly string[]) => Field;
-export declare const links: (target: string | readonly string[]) => Field;
-export declare const richText: () => Field;
-export declare const stream: () => Field;
+}): Collection<F>;
+export declare const string: () => Field<string>;
+export declare const int: () => Field<number>;
+export declare const float: () => Field<number>;
+export declare const boolean: () => Field<boolean>;
+export declare const oneOf: <const O extends readonly string[]>(options: O) => Field<O[number] | Unknown>;
+export declare const set: <T>(element: Field<T>) => Field<T[]>;
+export declare const link: (target: string | readonly string[]) => Field<ObjectId>;
+export declare const links: (target: string | readonly string[]) => Field<ObjectId[]>;
+export declare const richText: () => Field<never>;
+export declare const stream: () => Field<never>;
 export declare const reach: (..._args: unknown[]) => Named;
 export declare const view: (..._args: unknown[]) => Named;
 export declare const index: (fields: readonly (string | {
