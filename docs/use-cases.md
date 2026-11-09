@@ -2,7 +2,7 @@
 
 These eight situations show what NoCentralDB is for. In the first five, a central database is the weaker choice by design. In the last three, people often assume that real-time collaboration, notifications and streaming need a central server. NoCentralDB handles them without one.
 
-NoCentralDB is not released yet. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page is an API we propose, and it may change. Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
+NoCentralDB is not released yet. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page uses the SDK API of [RFC 0009](rfc/0009-sdk-api.md), which the owner decided and which may still change before it is built. Rich text and streams have no RFC of their own yet, so their calls are sketches, and the code says so ([RFC 0009, "Conflicts", points 5 to 7](rfc/0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs)). Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
 
 Each use case has five parts:
 
@@ -92,7 +92,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 ```ts
 const project = await db.spaces.get(projectId);
-await project.members.add(invitation, { role: "editor" });  // an invitation the agent accepted
+await project.members.add(invitation, { role: "writer" });  // an invitation the agent sent you
 
 // when the engagement ends
 await project.members.remove(memberId);  // rotates the space key
@@ -115,9 +115,12 @@ You add the agent with an invitation it accepted and remove it by its member id,
 **In your app.**
 
 ```ts
-const page = await db.find(model.tasks.views.ready.take(50));                     // first 50, ranked
-const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor));  // next 50
+const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const page = await db.find(query);                       // the first 50 open tasks, by priority
+const more = await db.find(query.after(page.cursor));    // the next 50
 ```
+
+Ranking the ready tasks by their blockers needs a computed field and a view, which a later RFC designs; they are then queried the same way. Until then, a query runs on a declared index, here `byStatusPriority` ([RFC 0009, "Queries and indexes"](rfc/0009-sdk-api.md#queries-and-indexes)).
 
 **What it does not cover.** Reads are free; writes are not. Every change an agent writes goes through the relay, which delivers it to every other member of the space, so the relay's cost grows with the writes times the members each write reaches. For 1,000 agents that each write one change a minute, RFC 0007 estimates about 800 USD a month on AWS ([RFC 0007, "What it costs"](rfc/0007-relay.md#what-it-costs)). Queries run only through declared indexes and views. NoCentralDB has no queries on the server and no analytics across all users' data. For those, use a central database.
 
@@ -157,8 +160,8 @@ export const model = nc.model({
   }),
 });
 
-const doc = await db.get(model.proposals, proposalId);
-const editor = new Editor({ extensions: [StarterKit, nc.tiptap(doc.body)] });
+const doc = await project.get(model.proposals, proposalId);   // read through the proposal's space
+const editor = new Editor({ extensions: [StarterKit, nc.tiptap(doc.body)] });  // a sketch until the rich-text RFC
 ```
 
 Rich text is one of several field types. You can also define your own field types, each with its own merge rules, and use them in your schema next to the built-in types.
@@ -169,13 +172,14 @@ Rich text is one of several field types. You can also define your own field type
 
 **The situation.** A user gets a new chat message, and the app shows a notification at once. Nothing polls.
 
-**How NoCentralDB handles it.** Every member already receives the changes of the spaces it belongs to. A subscription filters that stream. The app declares which changes it cares about, and NoCentralDB calls it when one arrives.
+**How NoCentralDB handles it.** Every member already receives the changes of the spaces it belongs to. A subscription is a query on a declared index. NoCentralDB calls the app with the query's page when a change arrives that may change it.
 
 **In your app.**
 
 ```ts
-db.subscribe(model.messages, { where: { to: me, read: false } }, (message) => {
-  notify(`New message from ${message.from.name}`);
+// in the schema: indexes: { unreadFor: nc.index(["to", "read"], { equal: 2 }) }
+db.subscribe(model.messages.indexes.unreadFor.equal(me, false).take(50), (page) => {
+  showUnread(page.items);   // called with the whole page after every fold that may change it
 });
 ```
 
@@ -199,15 +203,16 @@ export const model = nc.model({
   }),
 });
 
-// the agent
-const reply = await db.insert(model.messages, { role: "agent" });
+// the agent, in the space of this conversation
+const { ids: [replyId] } = await conversation.write((tx) => {
+  tx.create(model.messages, { role: "agent" });
+});
 for await (const chunk of chat({ adapter, messages })) {
-  await reply.content.append(chunk);
+  // append the chunk to the reply's content: the streams RFC names that call
 }
-await reply.content.close();
 
 // the UI
-const { content } = nc.useLive(model.messages, replyId);
+conversation.subscribe(model.messages, replyId, (message) => render(message?.content));
 ```
 
 **Tell us.** Should every chunk stay in the log, or should NoCentralDB compact a finished stream into its final text? What would your app need?

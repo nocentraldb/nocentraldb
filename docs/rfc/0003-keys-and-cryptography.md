@@ -6,6 +6,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 - **2026-11-08** · NOC-15, NOC-30 · [Amendment 1: the bytes of a sealed change](#amendment-1-the-bytes-of-a-sealed-change) fixes the content-key derivation, the nonce, the associated data, the padding and the crate versions. The owner decided all five (Carsten, 2026-11-08). The sentence it makes precise elsewhere is marked *(Amendment 1)*.
 - **2026-11-08** · NOC-44 · [Amendment 2: following RFC 0008](#amendment-2-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): generation ids, exposure and the merge rotation, the narrower sign-off, the person-key entry, the model-id subkey, and the wait before a shredded key is destroyed. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 2)*.
+- **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) brings the sketch in "How the SDK hides keys" in line with the names the owner decided in [RFC 0009](0009-sdk-api.md), and says where the source of a copy in an ad-hoc space is kept. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
@@ -185,7 +186,7 @@ An agent that hands part of its task to a sub-agent does not share its own membe
 
 1. The parent agent creates an **ad-hoc space** with a fresh space key.
 2. The sub-agent creates its own member key. The parent signs a member certificate for it with the parent's own signing key, marked as a sub-agent of the parent, so the chain of responsibility leads from the sub-agent through the parent to the account. The parent never holds the account key, so it cannot sign as the account.
-3. The parent adds the sub-agent to the ad-hoc space and copies into it only the objects the task needs. The copies are new objects, encrypted under the ad-hoc space's key; they keep a reference to their source.
+3. The parent adds the sub-agent to the ad-hoc space and copies into it only the objects the task needs. The copies are new objects, encrypted under the ad-hoc space's key. The parent's SDK keeps, on the parent only, which object each copy came from, which is all the parent needs to write results back; the sub-agent never learns the source's id ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)). *(Amendment 3.)*
 4. The sub-agent works in the ad-hoc space. The parent, also a member, reads the results and writes what it accepts back into the original space under its own member key.
 5. When the task ends, the parent deletes the ad-hoc space and its key, and the sub-agent's member key is discarded. For a local ad-hoc space this is a local deletion and needs no format. Deleting a space that reached the relay, for every member and at the relay, is not defined yet (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
@@ -299,17 +300,17 @@ A developer works with spaces, members and work orders. The SDK does everything 
 ```ts
 import { nc } from "@nocentraldb/sdk";
 
-const db = await nc.open({ model });                 // creates this member's key on first open
-const project = await db.spaces.create({ name: "Project A" });   // creates the space key
+const db = await nc.open({ model, lock });           // creates this member's key on first open
+const project = await db.spaces.create();            // creates the space key
 
-await project.members.add(invitation, { role: "editor" });       // checks the certificate, writes the envelope
+await project.members.add(invitation, { role: "writer" });       // checks the certificate, writes the envelope
 const removal = await project.members.remove(memberId);          // rotates the space key
 removal.notice; // "The removed member keeps its copy of everything it received before now."
 
 await db.workOrders.erase({ person: customerId });   // shreds the person key after a second account signs off
 ```
 
-The names here are sketches; the public API is the owner's to decide (GENESIS.md). What the SDK does underneath:
+The names are [RFC 0009](0009-sdk-api.md)'s, which the owner decided, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). *(Amendment 3.)* What the SDK does underneath:
 
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
 - **Stores** private keys in the platform's keystore and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB, optionally unlocked by a passkey. Details of passkeys and browser storage are out of scope here.
@@ -461,6 +462,13 @@ Added on 2026-11-08 for NOC-44. [RFC 0008](0008-membership.md) defines membershi
 - **The model-id subkey** (conflict 14, decision M26 B). [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) adds the subkey `"nocentraldb/model-id"` of generation 1's key, which seals the model id in the genesis. RFC 0002's list of what the relay cannot see stays true: the relay cannot read the model ([RFC 0008, "Genesis"](0008-membership.md#genesis)).
 - **When a shredded key is destroyed** (decisions M20 and M21). Members delete their copy of a person key, and the relay its record, only once the shred is stable; every view treats the fields as erased at once. The list of what shredding does not reach names the wait and the alarm ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
 - **What a removal refuses** (decision M3). The relay refuses a removed member's changes above the cutoff the removal names, not every change from the moment the removal arrives ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
+
+## Amendment 3: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names two points where this RFC says something else. This amendment changes those sentences, marked *(Amendment 3)* above, and decides nothing.
+
+- **The sketch in "How the SDK hides keys"** (RFC 0009's [point 5](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decisions S1, S11 and S13). The sketch named a space with `db.spaces.create({ name: "Project A" })`, where the name has no place: the genesis holds no name, because a name is content the relay must not read. It now creates the space without a name, adds the member with the role `"writer"`, one of RFC 0008's roles, instead of `"editor"`, and opens the database with its `model.lock.json`. The names are RFC 0009's, except `db.workOrders.erase`, which stays a sketch.
+- **The source of a copy** (RFC 0009's [point 9](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs)). Step 3 of "Sub-agents get an ad-hoc space" said the copies keep a reference to their source, and not where. The parent's SDK keeps it, on the parent only; the sub-agent never learns the source's id.
 
 ## Sources
 

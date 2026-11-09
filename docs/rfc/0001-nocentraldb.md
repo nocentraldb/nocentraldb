@@ -6,10 +6,12 @@ A local-first database for people and agents.
 
 **Changelog.**
 
-- **2026-11-08** · NOC-44 · [Amendment 1: following RFC 0008](#amendment-1-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): groups are lists the SDK expands, the relay sees more of the control changes it checks, and an erasure destroys the key only once it is stable. The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-08** · NOC-44 · [Amendment 1: following RFC 0008](#amendment-1-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): groups are lists the SDK expands (withdrawn by the owner (Carsten, 2026-11-09) in [Amendment 5](#amendment-5-groups-leave-the-design)), the relay sees more of the control changes it checks, and an erasure destroys the key only once it is stable. The sentences it changes elsewhere are marked *(Amendment 1)*.
 - **2026-11-09** · NOC-47 · [Amendment 2: following RFC 0007](#amendment-2-following-rfc-0007) links [RFC 0007](0007-relay.md)'s list of what the relay sees next to RFC 0002's, which no longer reads as complete on its own. It decides nothing new. The sentence it changes is marked *(Amendment 2)*.
 - **2026-11-09** · NOC-34 · [Amendment 3: a browser copy takes its member key with it](#amendment-3-a-browser-copy-takes-its-member-key-with-it) says that a browser which deletes its copy deletes the member key too, and links the page [Browser apps and durability](../browser-durability.md). It decides nothing new. The sentence it changes is marked *(Amendment 3)*.
 - **2026-11-09** · NOC-35 · [Amendment 4: following RFC 0005 on personal fields](#amendment-4-following-rfc-0005-on-personal-fields) says that only basic values can be personal, and only from the version that adds the field, names the app's duty for personal data in free text, and says that removing a member is not erasure, as [RFC 0005](0005-schema-and-model-lock.md) decided. It decides nothing new. The sentences it changes are marked *(Amendment 4)*.
+- **2026-11-09** · NOC-76 · [Amendment 5: groups leave the design](#amendment-5-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now. A member is a person's device, an agent or a sub-agent, and nothing else. The sentences it changes are marked *(Amendment 5)*.
+- **2026-11-09** · NOC-75 · [Amendment 6: following RFC 0009](#amendment-6-following-rfc-0009) makes the example in "The design in one page" query a declared index, as [RFC 0009](0009-sdk-api.md) defines it, because views are not designed yet. It decides nothing. The sentences it changes are marked *(Amendment 6)*.
 
 ## For when a central database is the wrong place
 
@@ -37,7 +39,7 @@ So "trust the server" no longer has to be the default security model. Many apps 
 
 ## The design in one page
 
-- **Spaces.** A space is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. A member is a person's device, an agent or a sub-agent. A group is a list of members that the SDK expands into single members of each space you add it to, so you can rearrange rights without moving data. A group that is itself a member of spaces is left to a later RFC ([RFC 0008, "Groups"](0008-membership.md#groups)). *(Amendment 1.)*
+- **Spaces.** A space is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. A member is a person's device, an agent or a sub-agent. *(Amendment 5.)*
 - **A full copy per member.** Each device and each agent keeps the complete, encrypted log of every space it belongs to, and folds it locally into an SQLite view. Reads never leave the device.
 - **A relay that holds no keys.** The relay appends signed, encrypted changes to a space's log and hands them out from a cursor. It checks signatures and membership. It folds nothing and cannot read content, because it holds no keys. It does see metadata: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log. RFC 0002 lists what it learns from the log in [What the relay can see, and what it cannot](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot), and RFC 0007 adds what it learns from its protocol, and what the server it runs on sees, in [What the relay sees](0007-relay.md#what-the-relay-sees). *(Amendment 2.)* Because the relay applies the membership rules itself, it also reads the control changes that carry them: each member's role, which control changes each one builds on, how many of a removed member's changes the remover had received, and the account behind each device and agent, across every space on that relay ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). *(Amendment 1.)* We design the relay to run on SQLite, Postgres, or DynamoDB with S3.
 - **Convergence.** The same set of changes produces the same state on every device, in any order of arrival, computed fields included. Each field merges by the rules of its field type.
@@ -59,14 +61,16 @@ export const model = nc.model({
     priority: nc.int(),
     dependsOn: nc.links("tasks"),
   }, {
-    computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
-    views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
+    indexes: { byStatusPriority: nc.index(["status", "priority"], { equal: 1 }) },
   }),
 });
 
-const page = await db.find(model.tasks.views.ready.take(50));             // first 50, in rank order
-const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor)); // the next 50, when needed
+const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const page = await db.find(query);                       // the first 50 open tasks, by priority
+const more = await db.find(query.after(page.cursor));    // the next 50, when needed
 ```
+
+Computed fields and views, such as the ready tasks that nothing blocks, in rank order, keep their reserved names `nc.reach` and `nc.view` until a later RFC designs them; they are then queried the same way, with `take` and `after`. Until then, the example queries a declared index ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). *(Amendment 6.)*
 
 ## Architecture
 
@@ -144,7 +148,7 @@ Which example would show you whether NoCentralDB fits your app? Tell us, or prop
 
 - **Not for every app.** Apps that need queries on the server, analytics across all users' data, or one global truth enforced at write time (unique names, transactions across everyone) belong on a central database.
 - **Not in v1.** Server-side queries, full-text search in the core, transactions across spaces and row-level permissions. Rights apply per space, and every member of a space holds a full copy of it.
-- **A different choice, on purpose.** Some sync engines keep a trusted server that enforces fine-grained rights and can read the data. We chose a server that cannot read it. The cost is coarser rights. We offset it with many small spaces, groups the SDK expands into members, keys that the SDK manages out of sight, and compaction instead of replaying long histories.
+- **A different choice, on purpose.** Some sync engines keep a trusted server that enforces fine-grained rights and can read the data. We chose a server that cannot read it. The cost is coarser rights. We offset it with many small spaces, keys that the SDK manages out of sight, and compaction instead of replaying long histories. *(Amendment 5.)*
 - **Not a security boundary on your own device.** Rights bind third parties. A process running as you can read what you can read.
 - **Not post-quantum in v1.** v1 wraps keys with X25519, which a future quantum computer could break. Someone who records ciphertext today, the relay's operators included, could read it once such a computer exists. A hybrid suite is planned for later ([RFC 0003, decision 9](0003-keys-and-cryptography.md#decisions-for-the-owner)).
 - **Not a durable store in every browser.** A browser can evict a site's storage: under storage pressure unless the site has persistent storage, and Safari after seven days without user interaction for script-writable storage, unless the web app was added to the home screen. The browser deletes the member key with the copy, so the person sets the browser up again as a new device, which fetches its spaces again from the relay; changes the old member wrote that the relay had not yet received are lost. *(Amendment 3.)* [Browser apps and durability](../browser-durability.md) says what each browser does, what is lost when, and what to tell your users ([RFC 0006, "The browser"](0006-local-view.md#the-browser), "Limits of storage in the browser").
@@ -157,7 +161,7 @@ nxsflow started NoCentralDB. Our own products (nexus-flow, nexflow.it and manufa
 
 We are deciding the points below. Each answer from your own experience helps us decide.
 
-1. **Rights per space.** Are per-space rights, with many small spaces and groups the SDK expands into members, enough for v1, or are field-level write scopes needed from day one? In your app, would one space per project or per shared document work, and where would it break?
+1. **Rights per space.** Are per-space rights, with many small spaces, enough for v1, or are field-level write scopes needed from day one? In your app, would one space per project or per shared document work, and where would it break? *(Amendment 5.)*
 2. **Server-readable data.** Some features need a server that can read, for example rendering a page on the server or sending an email digest. We plan to make that server a regular member of the spaces it needs, visible in the member list, instead of offering a "server-readable" mode. Would that pass your review, or do you need something else?
 3. **Erasure evidence.** For a data-protection review, would a signed-off work order plus a destroyed key be enough evidence of erasure? What else would your data protection officer ask for?
 4. **Computed fields.** We plan a fixed set of declarative functions (follow, count, any, min, max, reach, cycle), and custom reducers in Rust later. Which derived value in your app would not fit that set?
@@ -177,7 +181,7 @@ We read every reply, answer within a week, and publish a summary of the changes 
 
 Added on 2026-11-08 for NOC-44. [RFC 0008](0008-membership.md) defines membership, roles and the first change of a space, and the owner accepted every one of its decisions, M1 to M26 (Carsten, 2026-11-08). Its section [Conflicts with GENESIS.md and the other RFCs](0008-membership.md#conflicts-with-genesismd-and-the-other-rfcs) names three points where this RFC said something else. This amendment changes those sentences, marked *(Amendment 1)* above, and decides nothing new:
 
-- **Groups** (conflict 1, decision M10). This RFC said groups can be members of many spaces. RFC 0008 leaves a group as a member of its own to a later RFC: a group's membership would live outside the space, and one space's fold would then depend on another space's log. Until then, a group is a list of members that the SDK expands into single members, and removing a member from the list removes it from every space the SDK added it to through the list. Rights still change without moving data. What v1 loses is one entry that changes many spaces at once ([RFC 0008, "Groups"](0008-membership.md#groups)).
+- **Groups** (conflict 1, decision M10). This RFC said groups can be members of many spaces. RFC 0008 leaves a group as a member of its own to a later RFC: a group's membership would live outside the space, and one space's fold would then depend on another space's log. Until then, a group is a list of members that the SDK expands into single members, and removing a member from the list removes it from every space the SDK added it to through the list. Rights still change without moving data. What v1 loses is one entry that changes many spaces at once ([RFC 0008, "Groups"](0008-membership.md#groups)). *Withdrawn by the owner (Carsten, 2026-11-09) in [Amendment 5](#amendment-5-groups-leave-the-design).*
 - **What the relay sees** (conflict 2, decision M11). The relay applies the membership rules, so it reads the bodies of control changes and which control changes each one builds on. It learns each member's role and when it changes, the cutoffs of revocations, which control changes each admin had seen, the account key behind each member across spaces, the sub-agent tree, which accounts sign off erasures, and when concurrent rotations happened. It still learns no content, no space name and no model id ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)).
 - **When an erasure destroys the key** (conflict 15, decisions M20 and M21). Destroying a person key, the "deleted" acknowledgement and the relay's deletion of its record wait until the shred is stable, because a concurrent revocation could still reject it and a destroyed key cannot come back. Every view shows the person's fields as erased at once. An admin device that does not come online blocks the destruction; after 7 days the SDK of every admin raises an alarm naming it, and an admin demotes or removes it. The list of what the erasure does not reach names this wait ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable), and [decisions M20 and M21](0008-membership.md#decisions-for-the-owner)).
 
@@ -200,3 +204,16 @@ Added on 2026-11-09 for NOC-35. [RFC 0005](0005-schema-and-model-lock.md) define
 - **Which fields can be personal** (decision D9). This RFC said any field can be marked as personal. In v1, only basic values can: a set compares its elements by their bytes, and a sealed value has different bytes each time it is written; a link must stay readable to resolve its target. A field is personal from the version that adds it, or never ([RFC 0005, "Personal fields"](0005-schema-and-model-lock.md#personal-fields)).
 - **Personal data in free text** (decision D15). This RFC named unmarked free text as a limit of erasure and stopped there. NoCentralDB does not and cannot find a name inside free text, so keeping names out of it is the app's job, and RFC 0005 gives the pattern: store a reference to the person and resolve it at display time ([RFC 0005, "Personal data in free text"](0005-schema-and-model-lock.md#personal-data-in-free-text)).
 - **Removing a member is not erasure.** The list of what erasure does not reach now says so: removing a member blocks its access from then on, and the data it wrote and the personal fields about it stay ([RFC 0005, "About whom, not by whom"](0005-schema-and-model-lock.md#about-whom-not-by-whom)).
+
+## Amendment 5: groups leave the design
+
+Added on 2026-11-09 for NOC-76. The owner decided to keep groups out of every definition for now (Carsten, 2026-11-09): they caused more problems than they solved. If a later need shows they are useful, they come back through a later RFC. The owner removed the sentence on groups from GENESIS.md too. This amendment changes the sentences that named groups, marked *(Amendment 5)* above, and the point on groups in [Amendment 1](#amendment-1-following-rfc-0008) is withdrawn. It records the owner's decision and decides nothing else.
+
+- **Spaces.** A member is a person's device, an agent or a sub-agent. There is no group, neither a group that is a member of spaces nor a list of members that the SDK expands. An app that gives several members the same spaces adds each of them to each space. [RFC 0008, Amendment 1](0008-membership.md#amendment-1-groups-leave-the-design) withdraws its decision M10, and [RFC 0009, Amendment 1](0009-sdk-api.md#amendment-1-groups-leave-the-design) its decision S14.
+- **What softens coarse rights.** "A different choice, on purpose" and question 1, "Rights per space", no longer offer groups the SDK expands. Many small spaces remain.
+
+## Amendment 6: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names one point where this RFC's example cannot run. This amendment changes the example and adds the sentence after it, marked *(Amendment 6)* above, and decides nothing.
+
+- **`db.find` on a view** (RFC 0009's [point 6](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decision S7). The example declared a computed field with `nc.reach` and a view with `nc.view` and queried the view. RFC 0005 reserves both names but does not design them, so no query can run on a view yet. The example now declares an index and queries it, as RFC 0009 defines it; the name `db.find` and the calls `take` and `after` stay, and a view is queried the same way once it is designed.

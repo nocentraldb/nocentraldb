@@ -9,6 +9,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-12
 - **2026-11-09** · NOC-35 · [Amendment 3: the device checks as findings rows](#amendment-3-the-device-checks-as-findings-rows) follows the owner's answer that the first Firefox private window was closed: what it held is gone after the window closes, and whether it lasts within one open session is unknown (NOC-58). The device checks are now cited by their rows in [NOC-33's findings](../browser-storage.md#findings). It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-58 · [Amendment 4: a reload in a private window](#amendment-4-a-reload-in-a-private-window) follows NOC-58's measurement: IndexedDB, and the member key in it, survives a reload in a private window in Playwright's Chromium, Firefox and WebKit. It updates the facts in the private-window finding and in decision 12's recommendation, and records that the owner keeps decision 12 at A. It decides nothing. The sentences it changes are marked *(Amendment 4)*.
 - **2026-11-09** · NOC-72 · [Amendment 5: the cursor and the plan check](#amendment-5-the-cursor-and-the-plan-check) follows the view that #81 (NOC-69) built: a page after a cursor is written key by key, and the check on open accepts a `SEARCH` or `SCAN` on the declared index. The owner decided it by merging #81 (Carsten, 2026-11-09). The sentences it changes are marked *(Amendment 5)*.
+- **2026-11-09** · NOC-75 · [Amendment 6: following RFC 0009](#amendment-6-following-rfc-0009) follows [RFC 0009](0009-sdk-api.md), which the owner decided: an index declared with `scope: "space"` puts the space id first, and no declared index holds a deleted object. It decides nothing. The sentences it changes are marked *(Amendment 6)*.
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
@@ -183,6 +184,10 @@ CREATE INDEX ix_tasks_by_status_priority
 ```
 
 Every index ends with `(space_id, object_id)`. Together they are unique, so the index order is total: no two rows tie, and a page boundary is always exact.
+
+An index declared with `scope: "space"` ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)) puts the space id first instead, `(space_id, status, priority, object_id)` for the index above, and still ends with the object id, so its order is total too. Its equality prefix starts with the space id, which `space.find` fixes, so a query on it reads one space's rows ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes), decision S8). An index without the option spans every space of the member, as [decision 1](#decisions-for-the-owner) chose. *(Amendment 6.)*
+
+No declared index holds a deleted object, so a query never returns one, while reading the object by its id still finds it, to show or restore it ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id), decision S9). The implementation keeps the rows out, for example through a partial index on the rows whose object is not deleted, and a restore puts them back. *(Amendment 6.)*
 
 A query is always "the rows of this index, with these values for its equality prefix, after this cursor, at most N". The SDK offers no other query and no raw SQL. The core builds the SQL from the model, and it has one shape. For an index on `status` (equality) and `priority` (ascending), the page after a cursor whose last row has priority 3 reads:
 
@@ -545,3 +550,10 @@ Added on 2026-11-09 for NOC-72. #81 (NOC-69) built the view natively and found t
 - **Unchanged.** The order of values, the total order through `(space_id, object_id)`, what a cursor holds, and that the SDK offers no other query. The spike's plan in [The spike](#the-spike) was measured on the row-value shape and stays as it was recorded.
 
 Options not taken: B, keeping the row values with ascending indexes only, which leaves a cursor on an unset value broken; C, row values where they are correct and the key-by-key condition otherwise, which means two code paths.
+
+## Amendment 6: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names two points for this RFC. This amendment adds the sentences they need to [Declared indexes](#declared-indexes), marked *(Amendment 6)* above, and decides nothing.
+
+- **A query in one space** (RFC 0009's [point 1](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decision S8). Every index ended with the space id and the object id, so no query could fix a space. An index declared with `scope: "space"`, the option [RFC 0005, Amendment 3](0005-schema-and-model-lock.md#amendment-3-following-rfc-0009) adds, puts the space id first and keeps the object id last. Its equality prefix starts with the space id. The cursor condition, the bound on the first key and the plan check of [Amendment 5](#amendment-5-the-cursor-and-the-plan-check) apply to it unchanged, since they work on any key order after the equality prefix.
+- **Deleted objects in indexes** (RFC 0009's [point 2](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decision S9). This RFC did not say whether a deleted object's row stays in an index. It does not: queries skip deleted objects, and a read by id still finds them. How the rows are kept out, for example through a partial index, is the implementation's, as the layout of the tables is ([decision 2](#decisions-for-the-owner)).
