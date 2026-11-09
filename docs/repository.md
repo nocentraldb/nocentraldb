@@ -10,6 +10,7 @@ packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/ap
 apps/                 applications (empty for now)
 docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/repository.md          this page: the layout, the tools and the gates
+docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, decisions/ (the decision log, read with pnpm decisions)

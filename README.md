@@ -28,7 +28,7 @@ What it does not do:
 - **Removing a member does not delete its copy.** It keeps what it received before the removal ([RFC 0008, "What this does not do"](docs/rfc/0008-membership.md#what-this-does-not-do)).
 - **Rights apply per space.** There are no row-level or field-level rights, no queries on the server and no full-text search in the core in v1 ([RFC 0001, "What it is not"](docs/rfc/0001-nocentraldb.md#what-it-is-not)).
 - **Not post-quantum in v1.** Ciphertext recorded today could be read by a future quantum computer ([RFC 0003, decision 9](docs/rfc/0003-keys-and-cryptography.md#decisions-for-the-owner)).
-- **A browser can delete its copy.** Under storage pressure, or in Safari after seven days without use, a browser may evict the local copy, with the changes the relay has not yet received ([RFC 0006, "The browser"](docs/rfc/0006-local-view.md#the-browser)).
+- **A browser can delete its copy.** Under storage pressure, or in Safari after seven days without use, a browser may delete a web app's local copy together with its member key. The person then sets the browser up again as a new device, and changes the relay had not yet received are lost. If you plan a web app, read [Browser apps and durability](docs/browser-durability.md) first ([RFC 0001, "What it is not"](docs/rfc/0001-nocentraldb.md#what-it-is-not), [RFC 0006, "The browser"](docs/rfc/0006-local-view.md#the-browser)).
 
 The [use cases](docs/use-cases.md) show the design in practice, and the [FAQ](docs/faq.md) answers the questions readers ask most often.
 
