@@ -41,6 +41,7 @@ pub mod keys;
 pub mod link;
 pub mod log;
 pub mod membership;
+pub mod model_lock;
 pub mod object;
 pub mod receive;
 mod redact;
