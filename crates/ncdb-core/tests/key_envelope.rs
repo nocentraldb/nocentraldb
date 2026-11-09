@@ -53,7 +53,10 @@ fn the_envelope_names_its_recipient_and_generation() {
     let sealed = envelope_for(&alice);
     assert_eq!(sealed.recipient, alice.id());
     assert_eq!(sealed.generation, GENERATION);
-    assert_eq!(sealed.encapsulated_key.len(), envelope::ENCAPSULATED_KEY_LEN);
+    assert_eq!(
+        sealed.encapsulated_key.len(),
+        envelope::ENCAPSULATED_KEY_LEN
+    );
     assert_eq!(sealed.ciphertext.len(), envelope::CIPHERTEXT_LEN);
 }
 

@@ -17,11 +17,16 @@
 //! this module's.
 
 use std::collections::BTreeMap;
+use std::convert::Infallible;
 use std::fmt;
+
+use hpke::rand_core::{TryCryptoRng, TryRng};
+use hpke::{Deserializable, Kem, OpModeR, OpModeS, Serializable};
+use zeroize::Zeroizing;
 
 use crate::cbor::{Key, Value};
 use crate::ids::{MemberId, SpaceId};
-use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
+use crate::keys::{self, MemberKey, MemberPublicKey, SpaceKey};
 
 /// The context string in front of the HPKE info.
 pub const ENVELOPE_CONTEXT: &[u8] = b"nocentraldb/key-envelope";
@@ -89,24 +94,33 @@ impl std::error::Error for EnvelopeError {}
 /// The HPKE info of an envelope for this recipient, of this generation of
 /// this space's key.
 pub fn info(space: SpaceId, generation: u64, recipient: MemberId) -> Vec<u8> {
-    let _ = (space, generation, recipient);
-    todo!()
+    let mut info = Vec::with_capacity(ENVELOPE_CONTEXT.len() + 16 + 8 + 32);
+    info.extend_from_slice(ENVELOPE_CONTEXT);
+    info.extend_from_slice(&space.0);
+    info.extend_from_slice(&generation.to_be_bytes());
+    info.extend_from_slice(&recipient.0);
+    info
 }
 
 /// Wraps a generation of a space key to the recipient's X25519 key. The
 /// ephemeral key comes from the platform's secure generator.
+///
+/// # Panics
+///
+/// When the platform has no secure generator.
 pub fn seal(
     space_key: &SpaceKey,
     space: SpaceId,
     generation: u64,
     recipient: &MemberPublicKey,
 ) -> Result<KeyEnvelope, EnvelopeError> {
-    let _ = (space_key, space, generation, recipient);
-    todo!()
+    let ikm = keys::random::<32>();
+    seal_with_ephemeral(space_key, space, generation, recipient, *ikm)
 }
 
 /// [`seal`] with the ephemeral key derived from `ikm` (RFC 9180's ikmE),
-/// for test vectors. Outside test vectors, use [`seal`].
+/// for test vectors. An ephemeral key must never be used twice; outside
+/// test vectors, use [`seal`].
 pub fn seal_with_ephemeral(
     space_key: &SpaceKey,
     space: SpaceId,
@@ -114,8 +128,24 @@ pub fn seal_with_ephemeral(
     recipient: &MemberPublicKey,
     ikm: [u8; 32],
 ) -> Result<KeyEnvelope, EnvelopeError> {
-    let _ = (space_key, space, generation, recipient, ikm);
-    todo!()
+    let public = <suite::Kem as Kem>::PublicKey::from_bytes(&recipient.agreement)
+        .map_err(|_| EnvelopeError::RecipientKey)?;
+    let (encapsulated_key, ciphertext) =
+        hpke::single_shot_seal_with_rng::<suite::Aead, suite::Kdf, suite::Kem>(
+            &OpModeS::Base,
+            &public,
+            &info(space, generation, recipient.id()),
+            space_key.bytes(),
+            &[],
+            &mut Ephemeral(Some(Zeroizing::new(ikm))),
+        )
+        .map_err(|_| EnvelopeError::RecipientKey)?;
+    Ok(KeyEnvelope {
+        recipient: recipient.id(),
+        generation,
+        encapsulated_key: encapsulated_key.to_bytes().to_vec(),
+        ciphertext,
+    })
 }
 
 /// Unwraps the space key of an envelope in this space for this member.
@@ -124,20 +154,106 @@ pub fn open(
     space: SpaceId,
     recipient: &MemberKey,
 ) -> Result<SpaceKey, EnvelopeError> {
-    let _ = (envelope, space, recipient);
-    todo!()
+    if envelope.recipient != recipient.id() {
+        return Err(EnvelopeError::WrongRecipient);
+    }
+    let private = <suite::Kem as Kem>::PrivateKey::from_bytes(recipient.agreement())
+        .map_err(|_| EnvelopeError::Open)?;
+    let encapsulated_key = <suite::Kem as Kem>::EncappedKey::from_bytes(&envelope.encapsulated_key)
+        .map_err(|_| EnvelopeError::Open)?;
+    let plaintext = Zeroizing::new(
+        hpke::single_shot_open::<suite::Aead, suite::Kdf, suite::Kem>(
+            &OpModeR::Base,
+            &private,
+            &encapsulated_key,
+            &info(space, envelope.generation, envelope.recipient),
+            &envelope.ciphertext,
+            &[],
+        )
+        .map_err(|_| EnvelopeError::Open)?,
+    );
+    let bytes: &[u8; 32] = plaintext
+        .as_slice()
+        .try_into()
+        .map_err(|_| EnvelopeError::Open)?;
+    Ok(SpaceKey::from_bytes(*bytes))
 }
 
 impl KeyEnvelope {
     /// Keys 8 to 11 of the control body.
     pub fn fields(&self) -> BTreeMap<Key, Value> {
-        todo!()
+        BTreeMap::from([
+            (
+                Key::Unsigned(RECIPIENT),
+                Value::Bytes(self.recipient.0.to_vec()),
+            ),
+            (Key::Unsigned(GENERATION), Value::Unsigned(self.generation)),
+            (
+                Key::Unsigned(ENCAPSULATED_KEY),
+                Value::Bytes(self.encapsulated_key.clone()),
+            ),
+            (
+                Key::Unsigned(CIPHERTEXT),
+                Value::Bytes(self.ciphertext.clone()),
+            ),
+        ])
     }
 
     /// The envelope of keys 8 to 11 of a control body; other keys are not
-    /// the envelope's and are left to the control body.
+    /// the envelope's and are left to the control body. Only the recipient
+    /// has a fixed length here: whether the encapsulated key and the
+    /// ciphertext open is [`open`]'s to tell.
     pub fn from_fields(fields: &BTreeMap<Key, Value>) -> Result<KeyEnvelope, EnvelopeError> {
-        let _ = fields;
-        todo!()
+        let bytes = |key| match fields.get(&Key::Unsigned(key)) {
+            Some(Value::Bytes(bytes)) => Ok(bytes),
+            _ => Err(EnvelopeError::Malformed(key)),
+        };
+        let recipient = bytes(RECIPIENT)?
+            .as_slice()
+            .try_into()
+            .map_err(|_| EnvelopeError::Malformed(RECIPIENT))?;
+        let Some(Value::Unsigned(generation)) = fields.get(&Key::Unsigned(GENERATION)) else {
+            return Err(EnvelopeError::Malformed(GENERATION));
+        };
+        Ok(KeyEnvelope {
+            recipient: MemberId(recipient),
+            generation: *generation,
+            encapsulated_key: bytes(ENCAPSULATED_KEY)?.clone(),
+            ciphertext: bytes(CIPHERTEXT)?.clone(),
+        })
     }
 }
+
+// The body keys of entry type 2 (RFC 0008, "Key envelope").
+const RECIPIENT: u64 = 8;
+const GENERATION: u64 = 9;
+const ENCAPSULATED_KEY: u64 = 10;
+const CIPHERTEXT: u64 = 11;
+
+/// Hands HPKE the input of its ephemeral key, once: HPKE derives the
+/// ephemeral key pair from it (RFC 9180, DeriveKeyPair), as its test vectors
+/// do with ikmE. The input is wiped when HPKE has taken it.
+struct Ephemeral(Option<Zeroizing<[u8; 32]>>);
+
+impl TryRng for Ephemeral {
+    type Error = Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, Infallible> {
+        unreachable!("HPKE draws the ephemeral key's input with fill_bytes")
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Infallible> {
+        unreachable!("HPKE draws the ephemeral key's input with fill_bytes")
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Infallible> {
+        let ikm = self
+            .0
+            .take()
+            .expect("HPKE draws one ephemeral key per seal");
+        dst.copy_from_slice(ikm.as_slice());
+        Ok(())
+    }
+}
+
+impl TryCryptoRng for Ephemeral {}
