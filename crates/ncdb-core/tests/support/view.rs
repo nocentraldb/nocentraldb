@@ -34,9 +34,11 @@ pub const BY_RANK: &str = "by_rank";
 /// An index of tasks by title, then by rank, descending; a query fixes the
 /// title.
 pub const BY_TITLE: &str = "by_title";
+/// An index of tasks by title alone, with no equality prefix.
+pub const BY_NAME: &str = "by_name";
 
 /// The model of the tests: tasks with a text title, an integer rank, a set
-/// of text tags and a link to a project; projects without fields; two
+/// of text tags and a link to a project; projects without fields; three
 /// declared indexes.
 pub fn model() -> Model {
     let text = || BasicValue { kind: Kind::Text };
@@ -75,6 +77,12 @@ pub fn model() -> Model {
                     (RANK.to_owned(), Direction::Descending),
                 ],
                 equality: 1,
+            },
+            Index {
+                name: BY_NAME.to_owned(),
+                collection: TASK.to_owned(),
+                keys: vec![(TITLE.to_owned(), Direction::Ascending)],
+                equality: 0,
             },
         ],
     }
