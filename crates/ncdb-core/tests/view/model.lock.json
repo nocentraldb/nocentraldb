@@ -1,0 +1,63 @@
+{
+  "collections": {
+    "project": {
+      "fields": {
+        "name": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byName": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "name" }],
+          "since": 1
+        }
+      },
+      "since": 1
+    },
+    "task": {
+      "fields": {
+        "owner": {
+          "rule": 1,
+          "since": 1,
+          "targets": ["project"],
+          "type": "ncdb/link"
+        },
+        "rank": { "rule": 1, "since": 1, "type": "ncdb/int" },
+        "tags": {
+          "of": { "type": "ncdb/string" },
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/set"
+        },
+        "title": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byName": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "title" }],
+          "since": 1
+        },
+        "byRank": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "rank" }],
+          "since": 1
+        },
+        "byTitle": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "title" },
+            { "direction": "desc", "field": "rank" }
+          ],
+          "since": 1
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:7f0b4620b437bec095b102c5119155ab9ff1241025d3aaca3bdd74efc85b5c3f",
+    "id": "07c2ec8ce13d0c370513dd1dfe53c6c7",
+    "version": 1
+  },
+  "plugins": {}
+}
