@@ -62,9 +62,9 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | Chrome (Android) | Eviction under storage pressure | unknown | unknown |
 | Edge (Android) | Eviction under storage pressure | unknown | unknown |
 | Firefox | `persist()` | the user is asked in a popup | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
-| Firefox (macOS) | `persist()` | a prompt asks "Allow nocentraldb.github.io to store data in persistent storage?"; Allow grants it and `persisted()` turns true. Asked again after the permission was cleared, meant to be blocked, it also answered granted; the log does not say whether the prompt appeared again | measured: manual check 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021) |
+| Firefox (macOS) | `persist()` | a prompt asks "Allow nocentraldb.github.io to store data in persistent storage?"; Allow grants it and `persisted()` turns true. Asked again after the permission was cleared, the prompt came back and the owner pressed Block, yet `persist()` answered granted and `persisted()` returned true: the API reported granted after a blocked prompt, a result to re-check, not proof that blocking works | measured: manual check 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021) |
 | Firefox | Quota | best-effort: the smaller of 10% of the disk and 10 GiB; persistent: up to 50% of the disk, at most 8 TiB | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
-| Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes, but a Read in a new private window a minute later showed `null`; the log does not say whether the first private window was closed first | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
+| Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes; after the private window was closed, a Read in a new private window showed `null`. Whether IndexedDB lasts within one open private session is unknown | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
 | All browsers | Eviction under storage pressure | best-effort data of the least recently used origin is deleted first | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | All browsers | Survives clearing the cache in the browser's settings, keeping site data | unknown | unknown |
 
@@ -175,7 +175,7 @@ Read (2026-11-09T14:03:41.107Z): { "sqlite": "written 2026-11-09T14:02:19.357Z",
 
 - Check: Firefox, steps 1 and 2.
 - Method: on 2026-11-09, opened the probe page; "Read on load" (14:08 UTC). Pressed Request persist(): a prompt asked "Allow nocentraldb.github.io to store data in persistent storage?"; the owner set "Remember this decision" and pressed Allow (14:10). Pressed Storage info (14:12). Then, in the owner's words, "Doing it a 2nd time after I deleted the permission (this time blocking)": Request persist() (14:17) and Storage info (14:17).
-- Saw: after Allow, `persist()` answered granted and `persisted()` was true; `estimate()` usage 576 KiB, quota 230.2 GiB. The second request, meant to be blocked, also answered granted, and `persisted()` was still true. The log does not say whether the prompt appeared again, or whether the page was reloaded after the permission was cleared. No Write or Read in this check.
+- Saw: after Allow, `persist()` answered granted and `persisted()` was true; `estimate()` usage 576 KiB, quota 230.2 GiB. The owner states (2026-11-09) that the prompt came back on the second request and that they blocked it; yet `persist()` answered granted, and `persisted()` was still true. The log does not say whether the page was reloaded after the permission was cleared. No Write or Read in this check.
 
 ```text
 Read on load (2026-11-09T14:08:48.199Z): { "sqlite": null, "idb": null }
@@ -191,7 +191,7 @@ Storage info (2026-11-09T14:17:35.023Z): { "persisted": true, "estimate": { "usa
 
 - Check: Firefox, step 3 (private window).
 - Method: on 2026-11-09, opened the probe page in a private window and pressed Storage info (14:18 UTC) and Write (14:19). Then, in the owner's words, "Opening new private window", and pressed Read there (14:20).
-- Saw: no OPFS: opening it failed with "SecurityError: Security error when calling GetDirectory", so SQLite did not open. IndexedDB wrote the time. Read in the new private window showed `null` for IndexedDB. `persisted()` false; `estimate()` usage 88 KiB, quota 10 GiB. The log does not say whether the first private window was closed before the new one was opened, as the checklist's step asks.
+- Saw: no OPFS: opening it failed with "SecurityError: Security error when calling GetDirectory", so SQLite did not open. IndexedDB wrote the time. The owner states (2026-11-09) that the first private window was already closed when the new one read; Read there showed `null` for IndexedDB, so the data was gone after the private window closed. Whether IndexedDB lasts within one open private session is not shown. `persisted()` false; `estimate()` usage 88 KiB, quota 10 GiB.
 
 ```text
 Storage info (2026-11-09T14:18:55.592Z):
