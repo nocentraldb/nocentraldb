@@ -26,7 +26,7 @@ const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
 const AMENDMENTS = [
   { path: RFC_0001, number: 6, points: [6] },
   { path: RFC_0003, number: 3, points: [5, 9] },
-  { path: RFC_0005, number: 3, points: [3, 4] },
+  { path: RFC_0005, number: 3, points: [1, 3, 4] },
   { path: RFC_0008, number: 2, points: [10] },
 ];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0009`;
@@ -147,6 +147,21 @@ test("RFC 0005 types an unknown option as nc.Unknown and names the refusal noPer
   const rfc = read(RFC_0005);
   assert.match(section(rfc, "types-for-the-app"), /nc\.Unknown/);
   assert.match(section(rfc, "what-the-build-checks"), /`noPerson`/);
+});
+
+test("RFC 0005 has the index option scope and its key in the lock", () => {
+  const rfc = read(RFC_0005);
+  assert.match(section(rfc, "indexes"), /`scope: "space"`/);
+  assert.match(
+    rfc.split("\n").find((l) => l.startsWith("| Index keys")) ?? "",
+    /`scope`/,
+    "the lock's index keys do not list scope",
+  );
+  assert.match(
+    rfc.split("\n").find((l) => l.startsWith("| `nc.index`")) ?? "",
+    /`scope`/,
+    "the public name nc.index does not list the option scope",
+  );
 });
 
 test("RFC 0001's example queries a declared index, not a view", () => {
