@@ -306,3 +306,18 @@ test("the README, RFC 0001 and RFC 0006 link the page", () => {
     );
   }
 });
+
+test("each decision of Amendment 2 records the owner's decision", () => {
+  const amendment = section(read(RFC_0006), AMENDMENT) ?? "";
+  const decisions = amendment
+    .split(/^(?=\d+\. \*\*)/m)
+    .filter((part) => /^\d+\. \*\*/.test(part));
+  for (const decision of decisions) {
+    assert.match(
+      decision,
+      /^\s+Decided \(Carsten, \d{4}-\d{2}-\d{2}\): the recommendation, \([A-C]\)\./m,
+      `${decision.split("\n")[0]}: not decided`,
+    );
+  }
+  assert.doesNotMatch(read(RFC_0006), /wait for the owner/);
+});
