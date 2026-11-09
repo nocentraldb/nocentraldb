@@ -10,7 +10,8 @@
 //! defines it ([`seal`]). A member takes each change it receives through the
 //! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
 //! ([`receive`]); the signature, membership and decryption checks plug in
-//! through [`receive::Checks`].
+//! through [`receive::Checks`], and [`checks`] implements them with the real
+//! signature and decryption.
 //!
 //! It also holds the field types of RFC 0004
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
@@ -20,6 +21,7 @@
 pub mod basic;
 pub mod cbor;
 pub mod change;
+pub mod checks;
 pub mod clock;
 pub mod field;
 pub mod ids;

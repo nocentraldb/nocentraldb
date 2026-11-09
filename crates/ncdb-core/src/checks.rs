@@ -1,0 +1,148 @@
+//! The checks of steps 3 and 5 of RFC 0002 Amendment 1 ("What a member
+//! does with a change it receives") with the real signature and
+//! decryption of RFC 0003 ("How a member signs and encrypts a change"):
+//! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
+//! [`seal::open`], given the member keys and space keys the member knows.
+//!
+//! Membership (step 4) and what a control change adds to the control state
+//! come in through [`Membership`]; the membership rules of RFC 0008 and key
+//! distribution are later tickets.
+
+use std::collections::BTreeMap;
+use std::fmt;
+
+use crate::change::{Change, Payload};
+use crate::ids::MemberId;
+use crate::keys::{MemberPublicKey, SpaceKey};
+use crate::log::{ParkReason, RejectReason};
+use crate::receive::{Checks, Stop};
+use crate::seal::{self, OpenError};
+
+/// Step 4 and the control state behind it: whether the author is a member
+/// at the change's key generation, and what a control change that passed
+/// steps 1 to 4 adds.
+pub trait Membership {
+    /// Whether the author is a member at the change's key generation.
+    fn is_member(&self, change: &Change) -> bool;
+    /// Adds a control change that passed steps 1 to 4.
+    fn add_control(&mut self, change: &Change);
+}
+
+/// The checks of one space's log, with suite 1's real signature and
+/// decryption. Its `Debug` output names member ids and key generations,
+/// never a key.
+///
+/// **What this does not do.** Keys learned with [`SealChecks::add_member`]
+/// and [`SealChecks::add_space_key`] do not check the log's rejected changes
+/// again: only a control change that passes does (D11). Until member keys
+/// and space keys arrive through control changes (key distribution, a later
+/// ticket), give the checks every key before the changes that need it.
+pub struct SealChecks<M> {
+    members: BTreeMap<MemberId, MemberPublicKey>,
+    space_keys: BTreeMap<u64, SpaceKey>,
+    membership: M,
+}
+
+impl<M> SealChecks<M> {
+    /// Checks that know no member key and no space key yet.
+    pub fn new(membership: M) -> SealChecks<M> {
+        SealChecks {
+            members: BTreeMap::new(),
+            space_keys: BTreeMap::new(),
+            membership,
+        }
+    }
+
+    /// Learns a member's public keys, under the member id they hash to.
+    pub fn add_member(&mut self, key: MemberPublicKey) {
+        self.members.insert(key.id(), key);
+    }
+
+    /// Learns the space key of a key generation.
+    pub fn add_space_key(&mut self, generation: u64, key: SpaceKey) {
+        self.space_keys.insert(generation, key);
+    }
+
+    /// The author's public keys; without them, the change stops at step 3
+    /// as "unknown author".
+    fn author(&self, change: &Change) -> Result<&MemberPublicKey, Stop> {
+        self.members
+            .get(&change.header().author)
+            .ok_or(Stop::Rejected(RejectReason::UnknownAuthor))
+    }
+
+    /// The membership behind step 4.
+    pub fn membership(&self) -> &M {
+        &self.membership
+    }
+}
+
+impl<M: Membership> Checks for SealChecks<M> {
+    fn knows_suite(&self, suite: u64) -> bool {
+        suite == seal::SUITE
+    }
+
+    fn verify(&self, change: &Change) -> Result<(), Stop> {
+        Ok(seal::verify(change, self.author(change)?)?)
+    }
+
+    fn is_member(&self, change: &Change) -> bool {
+        self.membership.is_member(change)
+    }
+
+    fn open(&self, change: &Change) -> Result<Payload, Stop> {
+        let author = self.author(change)?;
+        let key = self
+            .space_keys
+            .get(&change.header().key_generation)
+            .ok_or(Stop::Rejected(RejectReason::NoKey))?;
+        Ok(seal::open(change, author, key)?)
+    }
+
+    fn add_control(&mut self, change: &Change) {
+        self.membership.add_control(change);
+    }
+}
+
+impl<M> fmt::Debug for SealChecks<M> {
+    /// The member ids whose keys the checks know and the key generations of
+    /// the space keys they hold; the membership is left out, since it need
+    /// not be `Debug`.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SealChecks")
+            .field("members", &self.members.keys())
+            .field("key_generations", &self.space_keys.keys())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Where a change stops when [`seal::verify`] or [`seal::open`] fails: the
+/// step of RFC 0002 Amendment 1 and its reason. An unknown author and a
+/// missing space key do not come from here, since they depend on the keys
+/// the member holds, not on the change: [`SealChecks`] finds them first.
+///
+/// | `OpenError`      | Step | Stop                            |
+/// | ---------------- | ---- | ------------------------------- |
+/// | `NotSealed`      | 2    | parked: unknown kind            |
+/// | `UnknownSuite`   | 2    | parked: unknown suite           |
+/// | `AuthorMismatch` | 3    | rejected: bad signature         |
+/// | `AuthorKey`      | 3    | rejected: bad signature         |
+/// | `Signature`      | 3    | rejected: bad signature         |
+/// | `Decryption`     | 5    | rejected: undecryptable         |
+/// | `Payload`        | 6    | parked: unknown payload format  |
+impl From<OpenError> for Stop {
+    fn from(error: OpenError) -> Stop {
+        match error {
+            // Only a sealed change has a payload to decrypt; a kind this
+            // member does not decrypt is one it does not understand.
+            OpenError::NotSealed(_) => Stop::Parked(ParkReason::UnknownKind),
+            OpenError::UnknownSuite(_) => Stop::Parked(ParkReason::UnknownSuite),
+            OpenError::AuthorMismatch | OpenError::AuthorKey | OpenError::Signature => {
+                Stop::Rejected(RejectReason::BadSignature)
+            }
+            OpenError::Decryption => Stop::Rejected(RejectReason::Undecryptable),
+            // A newer payload format may not decode as format 1 (NOC-28).
+            OpenError::Payload(_) => Stop::Parked(ParkReason::UnknownPayloadFormat),
+        }
+    }
+}

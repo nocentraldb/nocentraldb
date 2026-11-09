@@ -18,10 +18,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::cbor::{self, Key, Value};
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
+use ncdb_core::checks::{Membership, SealChecks};
 use ncdb_core::clock::Hlc;
-use ncdb_core::ids::{MemberId, ObjectId, SpaceId};
+use ncdb_core::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::log::Log;
+use ncdb_core::receive::{Fold, Stop};
 use ncdb_core::seal;
 
 const SECRET: &str = "SECRET-MARKER";
@@ -254,4 +256,77 @@ fn keys_and_sealing_errors_do_not_show_keys_or_content() {
         assert_debug_hides("OpenError", &error);
         assert_no_leak("OpenError", error.to_string());
     }
+}
+
+/// A membership in which every author is a member.
+struct Everyone;
+
+impl Membership for Everyone {
+    fn is_member(&self, _change: &Change) -> bool {
+        true
+    }
+
+    fn add_control(&mut self, _change: &Change) {}
+}
+
+/// A model that knows no collection, so every operation is parked.
+struct NoModel;
+
+impl Fold for NoModel {
+    fn knows_collection(&self, _collection: &str) -> bool {
+        false
+    }
+
+    fn knows_field(&self, _collection: &str, _field: &str) -> bool {
+        false
+    }
+
+    fn fold(&mut self, _id: OperationId, _operation: &Operation) {}
+}
+
+#[test]
+fn the_seal_checks_do_not_show_keys_or_content() {
+    // NOC-48: the checks hold the space keys, and every way a received
+    // change stops, folded or not, leaves no key and no plaintext in a
+    // reason, an error or `Debug` output.
+    let author = MemberKey::from_secrets(secret_key_bytes(), secret_key_bytes());
+    let space = SpaceId([1; 16]);
+    let mut checks = SealChecks::new(Everyone);
+    checks.add_member(author.public());
+    checks.add_space_key(1, SpaceKey::from_bytes(secret_key_bytes()));
+    checks.add_space_key(2, SpaceKey::from_bytes([9; 32]));
+    assert_debug_hides("SealChecks", &checks);
+
+    let key = SpaceKey::from_bytes(secret_key_bytes());
+    let folded = seal::seal(&author, &key, space, 1, 1, &secret_payload());
+    let undecryptable = seal::seal(&author, &key, space, 2, 2, &secret_payload());
+    let no_key = seal::seal(&author, &key, space, 3, 3, &secret_payload());
+    let mut bad_signature = folded.bytes().to_vec();
+    let last = bad_signature.len() - 1;
+    bad_signature[last] ^= 1;
+
+    let mut log = Log::new(space);
+    for bytes in [
+        folded.bytes(),
+        undecryptable.bytes(),
+        no_key.bytes(),
+        &bad_signature,
+    ] {
+        let appended = log.receive(bytes, &mut checks, &mut NoModel);
+        assert_debug_hides("receive result", &appended);
+        let change = Change::decode(bytes).unwrap();
+        assert_debug_hides("State", &log.state(change.id()));
+    }
+    assert_debug_hides("member Log", &log);
+
+    let mut garbled = folded.bytes().to_vec();
+    garbled.push(0);
+    let error = log
+        .receive(&garbled, &mut checks, &mut NoModel)
+        .unwrap_err();
+    assert_debug_hides("ReceiveError", &error);
+    assert_no_leak("ReceiveError", error.to_string());
+
+    let opened = seal::open(&folded, &author.public(), &key);
+    assert_debug_hides("Stop", &opened.map_err(Stop::from));
 }
