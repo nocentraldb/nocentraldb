@@ -29,14 +29,14 @@ A change to the design or to documented behaviour starts as an issue or as an RF
 
 ## Before a pull request
 
-Set up the tools as described in the [README](README.md#prerequisites), then run the project gate and make sure it is green:
+Set up the tools as described in the [docs/repository.md](docs/repository.md#prerequisites), then run the project gate and make sure it is green:
 
 ```sh
 pnpm install
 pnpm gates
 ```
 
-`pnpm gates` runs every check uncached. `pnpm gates:dev` is faster during development but replays cached results, so it does not replace `pnpm gates`. See [Gates](README.md#gates) for the individual checks and how to re-run a single test.
+`pnpm gates` runs every check uncached. `pnpm gates:dev` is faster during development but replays cached results, so it does not replace `pnpm gates`. See [Gates](docs/repository.md#gates) for the individual checks and how to re-run a single test.
 
 **Tests.** Every fix comes with a test that fails without the fix. Every new behaviour comes with a test that shows it. In the pull request, "How it was tested" lists only what you actually ran and saw.
 

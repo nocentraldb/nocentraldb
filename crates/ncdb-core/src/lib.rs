@@ -7,7 +7,8 @@
 //! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
 //! It also holds the member and space keys ([`keys`]) and signing and
 //! sealing a change as RFC 0003 (`docs/rfc/0003-keys-and-cryptography.md`)
-//! defines it ([`seal`]). A member takes each change it receives through the
+//! defines it ([`seal`]), and the key envelopes that wrap a space key to one
+//! member with HPKE ([`envelope`]). A member takes each change it receives through the
 //! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
 //! ([`receive`]); the signature, membership and decryption checks plug in
 //! through [`receive::Checks`], and [`checks`] implements them with the real
@@ -19,12 +20,16 @@
 //! and what links resolve against, the objects of a copy ([`object`]).
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
+//!
+//! Natively, a member keeps its log and the view folded from it in SQLite,
+//! as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it ([`view`]).
 
 pub mod basic;
 pub mod cbor;
 pub mod change;
 pub mod checks;
 pub mod clock;
+pub mod envelope;
 pub mod field;
 pub mod field_op;
 pub mod ids;
@@ -37,6 +42,8 @@ pub mod receive;
 mod redact;
 pub mod seal;
 pub mod set;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod view;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {

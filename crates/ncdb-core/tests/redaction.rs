@@ -24,7 +24,7 @@ use ncdb_core::field_op::Origin;
 use ncdb_core::ids::{MemberId, ObjectId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::log::{Log, OperationParkReason};
-use ncdb_core::object::Object;
+use ncdb_core::object::ObjectOperation;
 use ncdb_core::receive::{Fold, Stop};
 use ncdb_core::seal;
 
@@ -287,7 +287,7 @@ impl Fold for NoModel {
         Ok(())
     }
 
-    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object> {
+    fn fold_object(&mut self, _object: ObjectId, _operation: &ObjectOperation) {
         unreachable!("a model without collections folds no object")
     }
 }

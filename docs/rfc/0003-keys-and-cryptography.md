@@ -1,6 +1,6 @@
 # RFC 0003: Keys and cryptography
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
+REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 **Changelog.**
 
@@ -9,7 +9,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Draft for the owner's decision. Nothing here is built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) lists what the owner must decide before any of it becomes code.
+**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), and this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08). The design below describes the decided options. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) records the owner's decision on each.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 

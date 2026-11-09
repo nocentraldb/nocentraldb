@@ -4,8 +4,9 @@
 // kit file lies on the fragment allowlist, so the kit itself never needs a
 // change fragment; the fragment example in CONTRIBUTING.md passes the
 // fragment schema; and every relative link in the kit's Markdown resolves to a
-// file, and to a heading when it names one; and the README's task table
-// and its block of uncached `moon run` commands list every task the gate runs.
+// file, and to a heading when it names one; and the task table of
+// docs/repository.md and its block of uncached `moon run` commands list every
+// task the gate runs.
 //
 // GitHub validates issue forms only when it renders them. These checks catch
 // the usual mistakes before that: a missing top-level key, an unknown element
@@ -32,9 +33,11 @@ const DISCUSSION_FORM = ".github/DISCUSSION_TEMPLATE/rfc-feedback.yml";
 const CHOOSER = ".github/ISSUE_TEMPLATE/config.yml";
 const PR_TEMPLATE = ".github/PULL_REQUEST_TEMPLATE.md";
 const RFC_INDEX = "docs/rfc/README.md";
+const REPOSITORY = "docs/repository.md";
 const MARKDOWN = [
   "CONTRIBUTING.md",
   "README.md",
+  REPOSITORY,
   ".github/AI_POLICY.md",
   ".github/SECURITY.md",
   ".github/CODE_OF_CONDUCT.md",
@@ -321,7 +324,8 @@ test("the README has a Contributing section that links the kit", () => {
   }
 });
 
-// The README's task table ("What each project's `gates` task runs") and its
+// The task table of docs/repository.md ("What each project's `gates` task
+// runs") and its
 // block of uncached `moon run` commands name every task the gate runs, per
 // project: the deps of each project's `gates` task, inherited from
 // .moon/tasks/<language>.yml or its own moon.yml, and the tasks of another
@@ -363,11 +367,11 @@ function gateTasks() {
   return listed;
 }
 
-test("the README's task table lists every gate task of every project", () => {
-  const readme = read("README.md");
+test("the task table in docs/repository.md lists every gate task of every project", () => {
+  const page = read(REPOSITORY);
   const table =
-    /\n\| Project \| Tasks \|\n\| --- \| --- \|\n((?:\|.*\n)+)/.exec(readme);
-  assert.ok(table, "README.md has no task table");
+    /\n\| Project \| Tasks \|\n\| --- \| --- \|\n((?:\|.*\n)+)/.exec(page);
+  assert.ok(table, `${REPOSITORY} has no task table`);
   const rows = table[1].trim().split("\n");
   for (const [id, tasks] of Object.entries(gateTasks())) {
     const row = rows.find((r) => r.split("|")[1].includes(`\`${id}\``));
@@ -382,20 +386,19 @@ test("the README's task table lists every gate task of every project", () => {
   }
 });
 
-test("the README says a cold repo:wasm-runner builds wasm-bindgen-cli once", () => {
-  const readme = read("README.md");
+test("docs/repository.md says a cold repo:wasm-runner builds wasm-bindgen-cli once", () => {
   assert.match(
-    readme,
+    read(REPOSITORY),
     /`wasm-runner`[^|]*cold[^|]*`wasm-bindgen-cli`[^|]*once[^|]*about a minute/,
   );
 });
 
-test("the README's uncached gate commands cover every gate task of every project", () => {
+test("the uncached gate commands in docs/repository.md cover every gate task of every project", () => {
   const block =
     /\nRunning one gate on its own, uncached:\n\n```sh\n([\s\S]*?)```/.exec(
-      read("README.md"),
+      read(REPOSITORY),
     );
-  assert.ok(block, "README.md has no block of uncached gate commands");
+  assert.ok(block, `${REPOSITORY} has no block of uncached gate commands`);
   const lines = new Set(block[1].trim().split("\n"));
   for (const [id, tasks] of Object.entries(gateTasks())) {
     for (const task of tasks) {

@@ -1,17 +1,18 @@
 # RFC 0004: Merge rules for basic values, sets and links
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-8
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-8
 
 **Changelog.**
 
 - **2026-11-07** · NOC-8 · The owner accepted decisions 1 to 7.
 - **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add, remove and an object's delete inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. The owner accepted the recommendation of each of its decisions 8 to 14 (Carsten, 2026-11-08). The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-09** · NOC-35 · [Amendment 2: a create that carries arguments is malformed](#amendment-2-a-create-that-carries-arguments-is-malformed) parks a create (operation 0) that carries key 5 with the reason "malformed arguments", as a delete that carries key 3 already is. The owner decided it (Carsten, 2026-11-09). The sentence it adds is marked *(Amendment 2)*.
 
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
-**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) (NOC-37) is decided too: the owner accepted every recommendation in its decisions 8 to 14 (Carsten, 2026-11-08).
+**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) (NOC-37) is decided too: the owner accepted every recommendation in its decisions 8 to 14 (Carsten, 2026-11-08). So is [Amendment 2](#amendment-2-a-create-that-carries-arguments-is-malformed) (NOC-35): a create that carries key 5 is malformed (Carsten, 2026-11-09).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -399,6 +400,7 @@ Rules for delete:
 - **It belongs to the object, not to the collection it names.** Key 2 is required by RFC 0002 and holds the collection the author's copy showed for the object. The deletion state is the object's, whichever collection a delete names. A delete that names a collection the member's model does not know is parked like any operation on an unknown collection (RFC 0002, Versioning).
 - **A value other than `true` reads as not deleted.** A value of the wrong kind is applied, as for every basic value ("The value" above), and reads as not deleted; this is what NOC-17's object model does.
 - **A delete with key 3 present is malformed.** It is parked with the reason "malformed arguments", like a delete without key 5 or without `replaces`.
+- **A create with key 5 present is malformed.** It is parked with the reason "malformed arguments", as a delete with key 3 present is. *(Amendment 2.)*
 - **A create and a delete are independent.** A create neither deletes nor restores, and a delete does not need the create to have arrived: it is kept, and applies to the object once it exists, as a link to a missing target is kept (RFC 0004, Links).
 
 ### Operations a member does not understand
@@ -686,3 +688,11 @@ GENESIS.md reserves the wire format for the owner. Each decision lists its optio
 ## How this RFC is tested
 
 `scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001, has the sections its ticket requires, and that its relative links resolve. For Amendment 1 it also checks the link to RFC 0002, the changelog line and the amendment's sections, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples) *(Amendment 1)*. The rules themselves are tested when they are built: NOC-16 and NOC-17 implement them test first against the convergence harness of NOC-9, with the contract above.
+
+## Amendment 2: a create that carries arguments is malformed
+
+Added on 2026-11-09 for NOC-35. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) says a create (operation 0) is written without key 5, but not what a member does with a create that carries one. The owner decided that it is parked with the reason "malformed arguments", as a delete that carries key 3 already is (Carsten, 2026-11-09). This amendment adds that rule, marked *(Amendment 2)* above, in [Creating and deleting an object](#creating-and-deleting-an-object).
+
+- **Why.** One create has one encoding, as the amendment's lists of ids have, and the rule depends only on the operation's bytes, so every member parks the same creates (principle 2). A later rule that gives creates arguments takes a new operation number, as [decision 13](#decisions-for-the-owner-8-to-14) requires for every new operation.
+- **Instead of** ignoring key 5 on a create, which would give one create two encodings and let a later version change what an old client already folded.
+- **Built.** NOC-39 (#66) already parks such a create in `ncdb-core`, and recorded the call in its [decision file](../../factory/decisions/2026-11-09-NOC-39-a-create-with-arguments-is-malformed.md); this amendment makes it part of the RFC.

@@ -136,6 +136,61 @@ test("a row that rests only on unknown findings says it is unknown", () => {
   }
 });
 
+// "Private windows" is prose: its references stand in parentheses, as
+// "(measured: Browser · Behaviour; …)", and resolve like a Source cell's.
+const proseReferences = (text) =>
+  [
+    ...text.matchAll(
+      /\b(measured|documented|unknown): ([^·;]+?) · (.+?)(?=; (?:measured|documented|unknown): |\)(?:[.,:]|\s|$))/gm,
+    ),
+  ].map((match) => ({
+    kind: match[1],
+    browser: match[2],
+    behaviour: match[3],
+  }));
+
+test("Private windows cites the measured reload in each engine, and each reference resolves", () => {
+  const text = section(read(PAGE), "Private windows") ?? "";
+  const refs = proseReferences(text);
+  const findings = tableRows(read(FINDINGS), "Findings");
+  for (const ref of refs) {
+    const found = findings.find(
+      (finding) =>
+        finding.browser === ref.browser && finding.behaviour === ref.behaviour,
+    );
+    assert.ok(
+      found,
+      `${PAGE}, "Private windows": ${FINDINGS} has no row "${ref.browser} · ${ref.behaviour}"`,
+    );
+    assert.equal(
+      kind(found.source),
+      ref.kind,
+      `${PAGE}, "Private windows": "${ref.browser} · ${ref.behaviour}" is ${kind(found.source)}`,
+    );
+  }
+  for (const [engine, mode] of [
+    ["Chromium", "off-the-record context"],
+    ["Firefox", "private browsing mode"],
+    ["WebKit", "ephemeral context"],
+  ]) {
+    const behaviour = `Private window: survives a reload (${mode})`;
+    assert.ok(
+      refs.some(
+        (ref) =>
+          ref.kind === "measured" &&
+          ref.browser === `${engine} (Playwright)` &&
+          ref.behaviour === behaviour,
+      ),
+      `${PAGE}, "Private windows" does not cite "${engine} (Playwright) · ${behaviour}"`,
+    );
+  }
+  assert.doesNotMatch(
+    text,
+    /lasts within one open private session is unknown/,
+    `${PAGE}, "Private windows": a reload in one private session is measured now`,
+  );
+});
+
 // The text for end users: short, with placeholders the developer fills, and
 // no word that promises more than the findings. "Tested" here means checked by
 // this gate; no user has read the text yet, and the page says so.
@@ -192,7 +247,8 @@ test("every text for users is short, names the app and promises nothing", () => 
 });
 
 // Where the developer meets the proposal: RFC 0006 carries it as Amendment 2,
-// with a decision per layer, and the README and RFC 0001 link the page.
+// with a decision per layer, and RFC 0001 links the page. The README does not:
+// the owner keeps limits out of it (NOC-61).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const AMENDMENT = "Amendment 2: durability of a browser copy";
@@ -298,8 +354,8 @@ test("Amendment 2 decides each layer with options and a recommendation", () => {
   }
 });
 
-test("the README, RFC 0001 and RFC 0006 link the page", () => {
-  for (const path of ["README.md", RFC_0001, RFC_0006]) {
+test("RFC 0001 and RFC 0006 link the page", () => {
+  for (const path of [RFC_0001, RFC_0006]) {
     assert.ok(
       relativeLinks(path).some(({ resolved }) => resolved === PAGE),
       `${path} does not link ${PAGE}`,

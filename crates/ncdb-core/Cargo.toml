@@ -32,12 +32,26 @@ curve25519-dalek = { version = "=4.1.3", default-features = false, features = ["
 chacha20poly1305 = { version = "=0.11.0", default-features = false, features = ["alloc", "zeroize"] }
 # HKDF-SHA256, which derives the content key from the space key.
 hkdf = { version = "=0.13.0", default-features = false }
+# HPKE (RFC 9180) wraps a space key to a member's X25519 key in a key
+# envelope (RFC 0003, "Primitives" and "Key envelope"), base mode with
+# DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20-Poly1305 only. It runs
+# on the same chacha20poly1305, hkdf and sha2 as above, and brings
+# x25519-dalek 3 with curve25519-dalek 5. No `getrandom` feature: the core
+# draws the ephemeral key's input itself (src/envelope.rs).
+hpke = { version = "=0.15.1", default-features = false, features = ["alloc", "x25519", "chacha"] }
 # Wipes key bytes from memory when they are dropped.
 zeroize = { version = "=1.9.1", default-features = false }
 # Reads model.lock.json and the schema description `ncdb model build` gets
 # from the TypeScript module (RFC 0005, NOC-70). The version Cargo.lock
 # already held.
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
+
+# The local view natively (RFC 0006, "Desktop and mobile"): rusqlite with
+# SQLite compiled from source (`bundled`), never the system's SQLite. Its
+# default features pull in the browser's SQLite; the browser view (OPFS) is
+# a later ticket, so the view and this dependency are native only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }

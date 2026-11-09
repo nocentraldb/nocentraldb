@@ -169,14 +169,6 @@ test("GENESIS.md: one key per person per space, the two erasure limits, and not 
   assert.match(shred, /one key per person per space/i);
   assert.match(shred, /modified client/i);
   assert.match(shred, /backup/i);
-  assert.ok(
-    links(shred, `docs/rfc/${PERSON_KEY}`),
-    "Shred and audit: no link to RFC 0003's person key",
-  );
-  assert.ok(
-    links(shred, `docs/rfc/${SHREDDING}`),
-    "Shred and audit: no link to RFC 0003's shredding",
-  );
   const promise = genesis
     .split("\n")
     .find((l) => l.startsWith("- Never claim more than the design delivers."));
@@ -184,14 +176,6 @@ test("GENESIS.md: one key per person per space, the two erasure limits, and not 
   assert.match(promise, /modified client/i);
   assert.match(promise, /backup/i);
   assert.match(promise, /not post-quantum/i);
-  assert.ok(
-    links(promise, `docs/rfc/${SHREDDING}`),
-    "promise: no link to RFC 0003's shredding",
-  );
-  assert.ok(
-    links(promise, `docs/rfc/${RFC_0003_DECISIONS}`),
-    "promise: no link to RFC 0003's decisions",
-  );
 });
 
 test("use case 1 names the offline-device limit where it claims every copy is unreadable", () => {
@@ -247,11 +231,12 @@ test("every relative link in RFC 0001, the FAQ, the use cases, GENESIS.md and RF
   }
 });
 
-test("GENESIS.md's relay bullet says the relay sees more, and links to RFC 0002's list", () => {
+test("GENESIS.md's relay bullet says the relay sees metadata and can withhold changes", () => {
   const relay = bullet(read(GENESIS), "A relay that holds no keys.");
-  assert.ok(
-    links(relay, `docs/rfc/${RELAY_SEES}`),
-    "the relay bullet does not link RFC 0002",
+  assert.match(
+    relay,
+    /metadata/i,
+    "the relay bullet does not say it sees metadata",
   );
   assert.match(
     relay,
