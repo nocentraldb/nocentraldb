@@ -58,7 +58,8 @@ await db.workOrders.erase({ person: customerId });  // needs a second account's 
 - A modified client can ignore the erasure and keep the key ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Copies made outside the database, such as exports and screenshots, stay readable.
-- The database does not find personal data in unmarked free text.
+- The database does not find personal data in unmarked free text. Keeping names out of free text is the app's job: it stores a reference to the person instead of the name and resolves the reference when it displays the text, so that after an erasure the text shows a placeholder; a name typed or pasted as plain text stays ([RFC 0005, "Personal data in free text"](rfc/0005-schema-and-model-lock.md#personal-data-in-free-text)).
+- Removing a member is not erasure: it blocks the member's access from then on, while the data the member wrote and the personal fields about them stay ([RFC 0005, "About whom, not by whom"](rfc/0005-schema-and-model-lock.md#about-whom-not-by-whom)).
 - The key is destroyed only once the erasure is stable, when every admin device of the space has written a change after seeing it. Every view shows the fields as erased at once, but an admin device that stays offline keeps the key alive on the members until it comes back or is demoted; after 7 days the SDK of every admin raises an alarm that names it ([RFC 0008, "Effects that wait until a change is stable"](rfc/0008-membership.md#effects-that-wait-until-a-change-is-stable)).
 
 Your data protection officer decides whether destroying a key counts as erasure in your case. This is a design, not legal advice.
