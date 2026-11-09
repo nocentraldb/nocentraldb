@@ -45,9 +45,7 @@ test("the decision log records the owner's decision on where RFC feedback goes",
 
 test("pm lists the RFC feedback category over REST on every tick", () => {
   const tick = section(read("factory/roles/pm.md"), "On every tick");
-  const rule = tick
-    .split("\n")
-    .find((line) => line.includes("RFC feedback"));
+  const rule = tick.split("\n").find((line) => line.includes("RFC feedback"));
   assert.ok(rule, 'no tick step names the "RFC feedback" category');
   assert.match(rule, /GET \/repos\/\{owner\}\/\{repo\}\/discussions/);
   assert.match(rule, /draft/, "pm drafts the answers");
