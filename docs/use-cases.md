@@ -43,10 +43,10 @@ Each use case has five parts:
 ```ts
 export const model = nc.model({
   customers: nc.collection({
-    name: nc.string({ personal: true }),      // encrypted under the person's key
-    email: nc.string({ personal: true }),
-    plan: nc.oneOf(["free", "team"]),          // not personal, stays readable
-  }, { person: "self" }),
+    name: nc.string().personal({ person: "self" }),   // encrypted under the person's key
+    email: nc.string().personal({ person: "self" }),
+    plan: nc.oneOf(["free", "team"]),                  // not personal, stays readable
+  }),
 });
 
 await db.workOrders.erase({ person: customerId });  // needs a second account's sign-off

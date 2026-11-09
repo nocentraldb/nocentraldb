@@ -5,6 +5,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 **Changelog.**
 
 - **2026-11-09** · NOC-54 · [Amendment 1: following RFC 0002 Amendment 5](#amendment-1-following-rfc-0002-amendment-5) brings this RFC in line with [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload), which puts the writer's `model.id` and model version in payload key 64, as D10 and D13 B decided. It decides nothing new. The sentences it changes are marked *(Amendment 1)*.
+- **2026-11-09** · NOC-35 · [Amendment 2: following RFC 0001 Amendment 4](#amendment-2-following-rfc-0001-amendment-4) quotes RFC 0001's new wording on personal fields, which follows this RFC's D9. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
@@ -421,7 +422,7 @@ What this does not do, stated plainly:
 
 ## Personal fields
 
-[RFC 0001, "Field types we ship"](0001-nocentraldb.md#field-types-we-ship) says any field can be marked as personal and tied to a person. This RFC defines the marking only; RFC 0003 defines the person key and the encryption, and RFC 0002 the sealed value that carries the person-key id.
+[RFC 0001, "Field types we ship"](0001-nocentraldb.md#field-types-we-ship) says a basic value can be marked as personal when the field is added, and tied to a person. *(Amendment 2.)* This RFC defines the marking only; RFC 0003 defines the person key and the encryption, and RFC 0002 the sealed value that carries the person-key id.
 
 A field is personal when the schema chains `.personal({ person })` to it. `person` says which person the field is about:
 
@@ -739,3 +740,7 @@ Added on 2026-11-09 for NOC-54. [RFC 0002, Amendment 5](0002-change-and-log-form
 - **Parked data is visible** ([Data from a newer model](#data-from-a-newer-model), point 6). It listed the reasons a change or operation is parked without RFC 0002's "another model", and reported the highest model version of every parked change. It now names that reason and counts those changes apart, as RFC 0002's Amendment 5 does, so that "needs model version 7" never names a version of another lineage.
 - **What this does not do** ([Data from a newer model](#data-from-a-newer-model)). This RFC said nothing in a change names the model that wrote it. Key 64 now does, so the bullet says what key 64 prevents, and what it leaves to a hostile member, as RFC 0002's Amendment 5 says it.
 - **D10's recommendation** ([Decisions for the owner](#decisions-for-the-owner)). It said that until RFC 0002 has an amendment that adds the key, the SDK falls back to B. RFC 0002 has it, so there is no fallback: the SDK reports the model version of D10 from key 64.
+
+## Amendment 2: following RFC 0001 Amendment 4
+
+Added on 2026-11-09 for NOC-35. [RFC 0001, Amendment 4](0001-nocentraldb.md#amendment-4-following-rfc-0005-on-personal-fields) changed RFC 0001's "Personal fields" to follow this RFC's D9: only basic values can be personal, and only from the version that adds the field. [Personal fields](#personal-fields) quoted RFC 0001's old wording, "any field can be marked as personal"; it now quotes the new one, marked *(Amendment 2)* above. It decides nothing.
