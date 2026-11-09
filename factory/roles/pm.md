@@ -64,8 +64,8 @@ A PR that only implements a decided design may be merged without the owner, wher
 
 - The PR names the RFC sections it implements, and its behaviour follows them in every case those sections cover.
 - It departs from the RFC nowhere, and leaves out nothing the RFC requires for what it claims to implement.
-- It brings in no public name, wire or on-disk format, or runtime dependency that the RFC does not name, and it changes no gate.
-- It touches nothing else that GENESIS.md reserves for the owner.
+- It brings in no public name, wire or on-disk format, or runtime dependency that the RFC does not name, and it changes no gate. A public name here is a name of the SDK that developers call, which the RFC must name. Names of the core crates (`ncdb-core`) are building blocks below the SDK and do not count, even when they are `pub` in Rust or their change is breaking (owner, 2026-11-09, NOC-45).
+- It touches nothing else that GENESIS.md reserves for the owner. A change fragment is not a release note: the owner curates the notes of a stable release, an agent may curate a beta's, and an alpha's are generated (owner, 2026-11-09, NOC-45).
 
 When all of that holds, tick the authorship box `.github/AI_POLICY.md` provides for it, merge as CONFIG.md says, and list the PR under "Merged without the owner" in the next daily note, with the RFC sections it implements. When any of it does not hold, or you are unsure, the PR waits for the owner like any other.
 
