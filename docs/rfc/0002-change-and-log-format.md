@@ -9,12 +9,13 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · ticket NOC-6
 - **2026-11-08** · NOC-38 · [Amendment 2: a payload that decrypts but does not decode](#amendment-2-a-payload-that-decrypts-but-does-not-decode) adds the missing row 5a to the step table, for a payload that decrypts but does not decode. It proposed D13, which the owner decided as recommended (Carsten, 2026-11-08). The sentences it changes elsewhere are marked *(Amendment 2)*.
 - **2026-11-08** · NOC-44 · [Amendment 3: following RFC 0008](#amendment-3-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): derived space ids, the structure of the key generation, the control body, equivocations of the genesis and of revoked members, what the relay sees of control changes, and when a member pushes a refused change again. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-47 · [Amendment 4: following RFC 0007](#amendment-4-following-rfc-0007) brings this RFC in line with the owner's rulings on [RFC 0007](0007-relay.md): the list of what the relay sees links RFC 0007's, and the relay requires the uploader of a change to be an authenticated current member of the space. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 4)*.
+- **2026-11-09** · NOC-40 · [Amendment 5: the writer's model in the payload](#amendment-5-the-writers-model-in-the-payload) records the payload key that [RFC 0005](0005-schema-and-model-lock.md)'s D10 and D13 decided: every sealed change carries its writer's `model.id` and model version in payload key 64, and a member parks a change of another model, whole. It reopens no decision. The sentences it changes elsewhere are marked *(Amendment 5)*.
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
-**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged. The owner decided [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) (D10 to D12, NOC-22) and [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) (D13, NOC-38) as recommended, by merging #38 and #54 (Carsten, 2026-11-08); the sentences they mark describe the decided options. [Amendment 3](#amendment-3-following-rfc-0008) decides nothing: it follows the owner's decisions in RFC 0008 (NOC-44). [Amendment 4](#amendment-4-following-rfc-0007) decides nothing either: it follows the owner's rulings on RFC 0007 (NOC-47).
+**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. The RFC is final when this pull request is merged. The owner decided [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) (D10 to D12, NOC-22) and [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) (D13, NOC-38) as recommended, by merging #38 and #54 (Carsten, 2026-11-08); the sentences they mark describe the decided options. [Amendment 3](#amendment-3-following-rfc-0008) decides nothing: it follows the owner's decisions in RFC 0008 (NOC-44). [Amendment 4](#amendment-4-following-rfc-0007) decides nothing either: it follows the owner's rulings on RFC 0007 (NOC-47). [Amendment 5](#amendment-5-the-writers-model-in-the-payload) records the payload key of RFC 0005's decisions D10 and D13 (NOC-40); the owner signs off its number and its encoding by merging it.
 
 ## What this RFC does not cover
 
@@ -38,7 +39,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Log | The append-only sequence of changes of one space, on one member or on the relay. |
 | Fold | Applying the changes of the log to the local SQLite view. |
 | Cursor | A position in the relay's log of a space, from which a member asks for the changes after it. |
-| Parked | Kept in the log but not folded, because the client does not understand it yet; folded after an upgrade. A change or a single operation can be parked. |
+| Parked | Kept in the log but not folded, because the client does not understand it yet, and folded after an upgrade; or because another model wrote it, and then kept for good *(Amendment 5)*. A change or a single operation can be parked. |
 | Rejected | Kept in the log but not folded, because it failed a check: signature, membership or decryption. Checked again when a control change of its space arrives. *(Amendment 1.)* |
 
 ## A change at a glance
@@ -66,7 +67,8 @@ payload (CBOR map, after decryption; only members can read it)
 ├── 2 clock                    uint: a hybrid logical clock, 64 bits
 ├── 3 dependencies             array of change ids: the author's heads when it wrote
 ├── 4 operations               array of operations, applied in order
-└── 5 padding                  bstr of zero bytes, optional
+├── 5 padding                  bstr of zero bytes, optional
+└── 64 model                   map: the writer's model.id and model version (Amendment 5)
 
 operation (CBOR map)
 ├── 1 object id                16 bytes
@@ -113,7 +115,7 @@ The payload (header key 6) is the AEAD ciphertext of the canonical encoding of t
 - **It binds the payload to its header.** RFC 0003's associated data is every header field except the payload itself: space id, author member id, author sequence, key generation, kind, header format and suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it.
 - **It is signed as ciphertext.** The order is encrypt-then-sign, as RFC 0003 defines it: the signature covers the header, ciphertext included, so the relay can verify a change without any key, and the signature stays valid after a person key is destroyed.
 
-Inside the payload, the ordering metadata comes first (see [Ordering metadata](#ordering-metadata)), then the operations.
+Inside the payload, the ordering metadata comes first (see [Ordering metadata](#ordering-metadata)), then the operations, and last the model that wrote them (key 64, see [Amendment 5](#amendment-5-the-writers-model-in-the-payload)). *(Amendment 5.)*
 
 ### Operations: object, field and value
 
@@ -260,8 +262,9 @@ The format changes only by adding. Each layer carries its own version, and an ol
 - **A higher header or payload format number** than the client knows means "stored, not folded".
 - **A payload that decrypts but does not decode** is stored, not folded, with the reason "unknown payload format", because a member cannot tell a newer payload format from a malformed one ([D13](#amendment-2-a-payload-that-decrypts-but-does-not-decode)). *(Amendment 2.)*
 - **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived. This is the one exception to the atomic change (see [Operations](#operations-object-field-and-value)).
+- **A change of another model** is stored, not folded, with the reason "another model": its payload key 64 names a `model.id` other than the one of the member's `model.lock.json`. A change without key 64 is folded as before, because the key is "may ignore" ([Amendment 5](#amendment-5-the-writers-model-in-the-payload)). *(Amendment 5.)*
 
-A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). Parked waits for an upgrade of the client. A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)). *(Amendment 1.)*
+A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). Parked waits for an upgrade of the client; a change of another model stays parked after every upgrade, because a client's `model.id` never changes. *(Amendment 5.)* A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)). *(Amendment 1.)*
 
 ## The log on disk
 
@@ -335,7 +338,7 @@ The relay **cannot see**:
 - **Any content**: object ids, collection and field names, operations, values, rich text and stream chunks, personal fields.
 - **The ordering metadata of sealed changes**: when a sealed change was written by its author's clock, which changes it depends on, and which sealed changes are concurrent. Control changes carry no clock, and their control dependencies are readable (see above). *(Amendment 3.)*
 - **Whether a sealed change is content or a work order.**
-- **The model**: which collections and fields a space uses, and which schema version a member runs. The genesis carries the space's model id sealed, so the relay cannot read it either ([RFC 0008, "Genesis"](0008-membership.md#genesis)). *(Amendment 3.)*
+- **The model**: which collections and fields a space uses, and which schema version a member runs. The genesis carries the space's model id sealed, so the relay cannot read it either ([RFC 0008, "Genesis"](0008-membership.md#genesis)). *(Amendment 3.)* Each sealed change carries its writer's model id and model version inside the payload (key 64), so the relay cannot read those either. *(Amendment 5.)*
 
 What the relay **can do** despite holding no keys, and what limits it:
 
@@ -474,7 +477,7 @@ A member takes every change through the same steps, in this order. A change stop
 | 4. Check membership | The control changes the member holds do not give the author the right to write the change under its key generation and author sequence ([RFC 0008, "Sealed changes"](0008-membership.md#sealed-changes)). *(Amendment 3.)* | Rejected: not a member. |
 | 5. Decrypt | The member holds no key envelope for the change's key generation; or the AEAD fails. | Rejected: no key, or undecryptable. |
 | 5a. Decode the payload | The payload decrypts, but the plaintext is not a payload map this core can read: a value nests deeper than the decoder's limit, the bytes are not canonical, a key that payload format 1 requires is missing or has the wrong type, or it is a newer payload format that format 1's decoder cannot read. | Parked: unknown payload format. *(Amendment 2, [D13](#amendment-2-a-payload-that-decrypts-but-does-not-decode).)* |
-| 6. Understand the payload | The payload format or a "must understand" payload key is unknown. | Parked: unknown format. |
+| 6. Understand the payload | The payload format or a "must understand" payload key is unknown; or payload key 64 names a `model.id` other than the one of the member's `model.lock.json`, or does not hold a model id and a model version ([Amendment 5](#amendment-5-the-writers-model-in-the-payload)). | Parked: unknown format; or parked: another model. *(Amendment 5.)* |
 | 7. Fold, operation by operation | An operation names a collection or field the member's `model.lock.json` does not know, or carries an unknown "must understand" key. | The change is folded; that operation is parked, with its reason. |
 
 Steps 2 to 6, step 5a included, decide for the change as a whole. *(Amendment 2.)* Step 7 decides per operation. A control change (kind 1) stops after step 4: it has no payload to decrypt, and RFC 0003 and the membership RFC say what it does.
@@ -610,6 +613,75 @@ Added on 2026-11-09 for NOC-47. [RFC 0007](0007-relay.md) defines the relay's pr
 - **What the relay sees** (RFC 0007's conflict 1). The list in [What the relay can see, and what it cannot](#what-the-relay-can-see-and-what-it-cannot) names what the relay learns from the changes and the log. RFC 0007's [What the relay sees](0007-relay.md#what-the-relay-sees) adds what it learns from the protocol: when each member is online and from which network address, which client it runs, which spaces it follows from which cursor, and the sizes of large uploads. It also separates what the relay learns from what the server it runs on sees, on AWS with the setting each item depends on. The list now links RFC 0007's, so that neither is read as complete on its own.
 - **Who uploads** (RFC 0007's conflict 4). This RFC left the uploader of a change unchecked. RFC 0007 requires the uploader to be an authenticated current member of the space ([What the relay checks](0007-relay.md#what-the-relay-checks)). The author may still be any member whose change the membership rules accept, so a current member can forward a change that another member wrote, in island mode or after that member left. This narrows who may upload, not who may author, and does not contradict this RFC.
 
+## Amendment 5: the writer's model in the payload
+
+Added on 2026-11-09 for NOC-40. [RFC 0005](0005-schema-and-model-lock.md) gives every app a `model.lock.json` with a `model.id`, 128 random bits that name the model's lineage, and a `model.version`, one higher for each build that changes the model. The owner decided two of its decisions as recommended (Carsten, 2026-11-08; [RFC 0005, "Decisions for the owner"](0005-schema-and-model-lock.md#decisions-for-the-owner)):
+
+- **RFC 0005's D10 A.** The writer's model version travels in the payload as a "may ignore" key, so that an old client can report which model version it needs to read its parked changes.
+- **RFC 0005's D13 C.** Both of its parts. Part A: a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model; RFC 0008 carries it out in the genesis's key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)). Part B: each change carries its writer's `model.id` with the model version of D10, in the same "may ignore" key, and a member parks every change of another model, whole. This amendment carries out part B.
+
+RFC 0002 defines the payload, so the key needs this amendment. It records the key's number, its canonical CBOR and what a member does with it, and reopens no decision. The key's number and encoding are a wire format, which GENESIS.md reserves for the owner, so the owner signs them off by merging this amendment. The sentences it changes elsewhere are marked *(Amendment 5)*. (RFC 0005's D10 and D13 are not this RFC's [D10](#the-atomic-unit) and [D13](#amendment-2-a-payload-that-decrypts-but-does-not-decode), which Amendments 1 and 2 numbered.)
+
+### The key
+
+Payload key 64 holds the writer's model:
+
+```text
+model (CBOR map, payload key 64)
+├── 1 model id                 16 bytes: the writer's model.id, its 32 hex digits as raw bytes
+└── 2 model version            uint: the writer's model.version, 1 and up
+```
+
+- **Number 64.** It is the first key of the "may ignore" range, as RFC 0005's D10 asks: a core that does not know it folds the change as if it were absent ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)), so no client written before this amendment parks anything because of it.
+- **One map, not two payload keys.** The model id and the model version name one thing, the lock that wrote the change, so they are present or absent together. The map has the shape of every other map of the format, such as the sealed personal value, and a later field of the model can be a new key of it.
+- **Encoding.** The map follows [the CBOR profile](#the-cbor-profile). The model id is the 16 raw bytes of `model.id`, as the plaintext of the genesis's key 13 is. The version is an unsigned integer. Key 64 sorts after keys 1 to 5 of the payload, because its encoding `0x1840` sorts after `0x01` to `0x05`.
+- **Who writes it.** The core writes key 64 into every sealed payload, from the `model.lock.json` it opened the database with. A control body carries none: it holds no content, and the space's model is in the genesis.
+- **Size.** Key 64 adds 23 bytes to the payload before padding, inside the ciphertext. Padding to a multiple of 256 bytes (D8) keeps most changes in the same size class.
+
+### What a member does with it
+
+A member reads key 64 at step 6 of [Amendment 1's step table](#what-a-member-does-with-a-change-it-receives), "Understand the payload", after the payload decoded at step 5a:
+
+- **No key 64.** The change goes on to step 7, as before this amendment. The key is "may ignore", and changes written before it have none.
+- **The member's own model.** Key 64 holds a 16-byte model id equal to the `model.id` of the member's `model.lock.json`, and an unsigned model version. The change goes on to step 7, whatever the version. An operation on a collection or field the member's lock does not know is parked there on its own, as before.
+- **Another model.** Key 64 names another model id, or its value is not a map of a 16-byte model id and an unsigned model version. The change is parked, whole, with the reason "another model". A value of the wrong shape does not show that the member's model wrote the change, so it is parked for the same reason.
+
+The step table keeps its steps. Steps 2 to 6, step 5a included, still decide for the change as a whole, and step 7 still decides per operation. Step 6 gains a cause and the reason "another model". A change that fails an earlier step never reaches key 64: a rejected change stays rejected for the reason it has, and a payload that does not decode stays parked as "unknown payload format", because a member reads key 64 only from a payload map that decoded. A control change stops after step 4 and has no key 64.
+
+**Why the member's own lock.** A member folds every operation by the rules of its own `model.lock.json`. RFC 0005's D13 B parks a change of another model so that no member folds it by the wrong rule, and the wrong rule is the rule of the lock the member folds with. Every member that may write into the space runs a lock whose `model.id` is the one the genesis records, because the SDK refuses to write into a space of another model (D13 A). So every one of them parks the same changes, and the state of a change stays a function of its bytes and the member's lock, as step 7's state already is.
+
+**Why the whole change.** RFC 0005's D13 B parks every change of another model whole, as the owner decided. A field name of another model may name a field of another type. Folding the operations whose names the member knows would fold them by the wrong rule, and parking only the others would split one write transaction by a rule the member cannot know.
+
+### What the model version is for
+
+The model version never parks a change by itself. A change of the member's own model with a higher model version goes on to step 7, where an operation on a field the member's lock does not know yet is parked on its own. The SDK reports, per space, the highest model version among its parked changes and operations of the member's own model, so that an app can say "needs model version 7" ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 6). It counts the changes parked as "another model" under that reason, apart from them: their model version belongs to another lineage, and no upgrade of this app reaches it.
+
+### What this does not do
+
+- **It stops honest apps and buggy ones, not a hostile member.** A client that writes no key 64, or writes the member's own model id, has its change folded by the rules of the member's lock. A member that may write in the space can already write any value into any field (as [What option A does not do](#what-option-a-does-not-do) says), so it gains nothing new. Key 64 makes a change of another lineage park the same way on every member instead of folding by the wrong rule.
+- **A change of another model stays parked for good.** The SDK refuses a lock with another `model.id` (RFC 0005, [Two checks: at build and on the device](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device)), so no upgrade folds it. It stays in the log, is forwarded and is counted, as every parked change is.
+- **No core has folded a change of another model before.** No version of the core that folds changes was released before this amendment, so no member holds such a change folded by a core that did not read key 64. Every released core reads it.
+- **The relay sees nothing new.** Key 64 lives inside the sealed payload. The relay cannot read the model id or the model version, as it cannot read the space's model id in the genesis ([What the relay can see, and what it cannot](#what-the-relay-can-see-and-what-it-cannot)). Only the 23 bytes add to the ciphertext's length, which padding blurs as it blurs every length.
+
+### Byte-exact examples
+
+The examples are written by `docs/rfc/vectors/0002/generate.py` with Python's cbor2 6.2.1, the generator RFC 0004's examples use, independently of the core and of the tooling test's reader. `scripts/rfc-0002-model.test.mjs` checks that each decodes under the profile, re-encodes to the same bytes and equals its committed vector. The model is the one of RFC 0005's example lock: `model.id` `6f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a`, `model.version` 2.
+
+**M1. The value of key 64.** `{1: h'6f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a', 2: 2}`, 21 bytes.
+
+```text
+a201506f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a0202
+```
+
+**M2. A payload that carries it.** Payload format 1; the clock of 2026-11-09T00:00:00Z with counter 0; one dependency, change id A (32 bytes of `0xaa`); one operation, [RFC 0004's example E1](0004-merge-rules-basic-types.md#byte-exact-examples) (a `set` of `tasks.title` on object T1); no padding; and M1 as key 64, the payload's last key.
+
+```text
+a50101021b01a1bd9ac800000003815820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
+11111111111102657461736b7303657469746c65040105a20167536869702076
+3102801840a201506f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a0202
+```
+
 ## Summary of the choices
 
 | Question | This RFC's answer |
@@ -622,6 +694,7 @@ Added on 2026-11-09 for NOC-47. [RFC 0007](0007-relay.md) defines the relay's pr
 | How does a late change stay identifiable? | A loser that its winner never saw is a concurrent loser, the same on every member. |
 | How is a change encoded? | Deterministic CBOR, restricted further, and checked by re-encoding. |
 | How do old clients keep new data? | Fixed frame, "must understand" and "may ignore" keys, and parked changes that fold after an upgrade. |
+| Which model wrote a change? | Payload key 64 names the writer's `model.id` and model version; a member parks a change of another model, whole (Amendment 5). |
 | How does a member store its log? | Append-only, in the SQLite database of the local view, as exact frames. |
 | What does the relay hand out? | Changes after a cursor: a dense position per space. |
 | What does the relay see? | Membership, who writes when and how much, sizes and rhythm, who reads what, and what the control changes say: roles, cutoffs, control dependencies and accounts (Amendment 3). No content, and no ordering metadata of sealed changes. |
