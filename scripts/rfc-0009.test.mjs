@@ -7,7 +7,7 @@
 // shape of the design document, not whether the design is right; that is the
 // owner's review of the pull request.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -209,4 +209,47 @@ test("RFC 0009 shows the Rust SDK", () => {
 
 test("the RFC index lists RFC 0009", () => {
   assert.match(read(INDEX), /^\| \[0009\]\(0009-sdk-api\.md\) \| .+ \|$/m);
+});
+
+// The owner's decision (Carsten, 2026-11-09, in chat with pm, on #78): every
+// recommendation of S1 to S18 is accepted, recorded at each decision, in the
+// Status line and the changelog, and in the decision log.
+const DECIDED = "Decided (Carsten, 2026-11-09): the recommendation";
+
+test("every decision records the owner's decision for its recommended option", () => {
+  for (const { id, text } of decisions(read())) {
+    const recommended = text.match(/^- ([A-Z])\. .*\(recommended\)/m);
+    assert.ok(recommended, `${id} marks no option recommended`);
+    assert.ok(
+      text.includes(`${DECIDED}, (${recommended[1]}).`),
+      `${id} does not record "${DECIDED}, (${recommended[1]})."`,
+    );
+  }
+});
+
+test("the Status line and the changelog say the owner decided", () => {
+  const markdown = read();
+  assert.match(
+    markdown,
+    /^\*\*Status\.\*\* Decided\..*Carsten, 2026-11-09/m,
+    `${RFC}: the Status line does not say the owner decided`,
+  );
+  assert.match(
+    markdown,
+    /^- \*\*2026-11-09\*\* · NOC-64 · .*S1 to S18.*as recommended/m,
+    `${RFC} has no changelog line for the owner's decision`,
+  );
+});
+
+test("the decision log records the owner's decision on RFC 0009", () => {
+  const dir = join(root, "factory/decisions");
+  const files = readdirSync(dir).filter((f) => /^2026-11-09-NOC-64-/.test(f));
+  assert.ok(
+    files.some((f) =>
+      /Decided by: Carsten, 2026-11-09/.test(
+        readFileSync(join(dir, f), "utf8"),
+      ),
+    ),
+    "factory/decisions/ has no NOC-64 file decided by Carsten on 2026-11-09",
+  );
 });
