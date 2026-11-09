@@ -76,7 +76,12 @@ fn e8_a_link_to_one_more_target() {
 
 #[test]
 fn e9_removing_a_link_target() {
-    check(&depends_on(), "dependsOn", &remove(target(T2), &[id(A, 1)]), E9);
+    check(
+        &depends_on(),
+        "dependsOn",
+        &remove(target(T2), &[id(A, 1)]),
+        E9,
+    );
 }
 
 #[test]

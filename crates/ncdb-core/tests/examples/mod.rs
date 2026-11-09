@@ -120,16 +120,22 @@ pub fn write(value: Value, replaces: &[OperationId]) -> Write {
 
 /// An add, from the example's origin.
 pub fn add(element: Value, replaces: &[OperationId]) -> Edit {
-    edit(element, Action::Add {
-        replaces: ids(replaces),
-    })
+    edit(
+        element,
+        Action::Add {
+            replaces: ids(replaces),
+        },
+    )
 }
 
 /// A remove, from the example's origin.
 pub fn remove(element: Value, observed: &[OperationId]) -> Edit {
-    edit(element, Action::Remove {
-        observed: ids(observed),
-    })
+    edit(
+        element,
+        Action::Remove {
+            observed: ids(observed),
+        },
+    )
 }
 
 fn edit(element: Value, action: Action) -> Edit {
