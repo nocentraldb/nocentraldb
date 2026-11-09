@@ -193,3 +193,101 @@ pub fn schema(conn: &rusqlite::Connection) -> BTreeSet<(String, String)> {
         .map(Result::unwrap)
         .collect()
 }
+
+/// A database in memory that a second connection of this process can
+/// open: the view's and the test's.
+pub struct MemDb(pub PathBuf);
+
+impl MemDb {
+    pub fn new() -> MemDb {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        MemDb(PathBuf::from(format!(
+            "file:ncdb-view-{n}?mode=memory&cache=shared"
+        )))
+    }
+
+    pub fn connect(&self) -> rusqlite::Connection {
+        rusqlite::Connection::open(&self.0).unwrap()
+    }
+}
+
+/// The rows of every view table (`objects`, `c_*`, `fs_*`), in primary-key
+/// order, as bytes: equal tables, equal bytes. Not the log, whose order is
+/// the order of arrival.
+pub fn view_bytes(conn: &rusqlite::Connection) -> Vec<u8> {
+    use rusqlite::types::Value as Sql;
+    let mut tables: Vec<String> = conn
+        .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table'
+             AND (name = 'objects' OR name LIKE 'c\\_%' ESCAPE '\\' OR name LIKE 'fs\\_%' ESCAPE '\\')",
+        )
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    tables.sort();
+    let mut bytes = Vec::new();
+    for table in tables {
+        bytes.extend(table.as_bytes());
+        let sql = format!("SELECT * FROM \"{table}\" ORDER BY 1, 2, 3");
+        let sql = if table.starts_with("fs_") {
+            sql
+        } else {
+            format!("SELECT * FROM \"{table}\" ORDER BY 1, 2")
+        };
+        let mut statement = conn.prepare(&sql).unwrap();
+        let columns = statement.column_count();
+        let mut rows = statement.query([]).unwrap();
+        while let Some(row) = rows.next().unwrap() {
+            bytes.push(b'\n');
+            for i in 0..columns {
+                match row.get::<_, Sql>(i).unwrap() {
+                    Sql::Null => bytes.push(0),
+                    Sql::Integer(n) => {
+                        bytes.push(1);
+                        bytes.extend(n.to_le_bytes());
+                    }
+                    Sql::Real(x) => {
+                        bytes.push(2);
+                        bytes.extend(x.to_bits().to_le_bytes());
+                    }
+                    Sql::Text(t) => {
+                        bytes.push(3);
+                        bytes.extend((t.len() as u64).to_le_bytes());
+                        bytes.extend(t.as_bytes());
+                    }
+                    Sql::Blob(b) => {
+                        bytes.push(4);
+                        bytes.extend((b.len() as u64).to_le_bytes());
+                        bytes.extend(b);
+                    }
+                }
+            }
+        }
+    }
+    bytes
+}
+
+impl Reference {
+    /// What the view reads of `object` in `collection`: its object and the
+    /// fields of the collection that were written, or `None` when the copy
+    /// holds no operation on either.
+    pub fn row(&self, collection: &str, object: ObjectId) -> Option<ncdb_core::view::Row> {
+        let fields: BTreeMap<String, FieldState> = self
+            .fields
+            .iter()
+            .filter(|((o, c, _), _)| *o == object && c == collection)
+            .map(|((_, _, f), state)| (f.clone(), state.clone()))
+            .collect();
+        let known = self.objects.get(&object);
+        if known.is_none() && fields.is_empty() {
+            return None;
+        }
+        Some(ncdb_core::view::Row {
+            object: known.cloned().unwrap_or_default(),
+            fields,
+        })
+    }
+}
