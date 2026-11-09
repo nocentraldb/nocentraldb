@@ -1,6 +1,6 @@
 # NoCentralDB
 
-NoCentralDB is a local-first database designed for teams of people and agents: every member, human or agent, works on a full local copy of the spaces they belong to, under their own keys, and a relay that holds no keys carries the encrypted changes between them. The design is in [RFC 0001](docs/rfc/0001-nocentraldb.md). Nothing is released yet; this repository currently holds the monorepo foundation and placeholder projects.
+NoCentralDB is a local-first database designed for teams of people and agents: every member, human or agent, works on a full local copy of the spaces they belong to, under their own keys, and a relay that holds no keys carries the encrypted changes between them. The design is in [RFC 0001](docs/rfc/0001-nocentraldb.md). If you plan a web app, read [Browser apps and durability](docs/browser-durability.md) first: a browser may delete the app's local copy, and with it the changes the relay has not confirmed. Nothing is released yet; this repository currently holds the monorepo foundation and placeholder projects.
 
 ## Layout
 
@@ -9,6 +9,7 @@ crates/ncdb-core/     Rust core (placeholder)
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
 docs/rfc/             design documents; README.md lists them and says where feedback goes
+docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, decisions/ (the decision log, read with pnpm decisions)

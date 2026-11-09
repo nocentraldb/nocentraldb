@@ -1,6 +1,6 @@
 # How long a browser keeps a web app's copy
 
-GENESIS.md promises web apps in Chromium-based browsers, Firefox and Safari, with the data stored in the browser. [RFC 0006](rfc/0006-local-view.md) stores a member's copy in SQLite on the Origin Private File System (OPFS), through SQLite's `opfs-sahpool` VFS in a dedicated worker. This page records what each browser actually does with that copy, so that the SDK and its documentation promise that and no more (GENESIS.md, principle 4). It answers NOC-33; how to explain it to developers and their users is NOC-34.
+GENESIS.md promises web apps in Chromium-based browsers, Firefox and Safari, with the data stored in the browser. [RFC 0006](rfc/0006-local-view.md) stores a member's copy in SQLite on the Origin Private File System (OPFS), through SQLite's `opfs-sahpool` VFS in a dedicated worker. This page records what each browser actually does with that copy, so that the SDK and its documentation promise that and no more (GENESIS.md, principle 4). It answers NOC-33; how to explain it to developers and their users is [Browser apps and durability](browser-durability.md) (NOC-34).
 
 Every row names its source:
 
@@ -66,6 +66,8 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | Firefox | Quota | best-effort: the smaller of 10% of the disk and 10 GiB; persistent: up to 50% of the disk, at most 8 TiB | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes; after the private window was closed, a Read in a new private window showed `null`. Whether IndexedDB lasts within one open private session is unknown | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
 | All browsers | Eviction under storage pressure | best-effort data of the least recently used origin is deleted first | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
+| All browsers | What eviction deletes | all of the origin's data at once, not parts of it; IndexedDB, the Cache API and the File System API (which defines OPFS) are managed per origin by one storage system | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
+| All browsers | Private browsing | browsers may apply different quotas, and stored data is usually deleted when private browsing ends | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | All browsers | Survives clearing the cache in the browser's settings, keeping site data | unknown | unknown |
 
 Where this differs from RFC 0006 or from what the SDK should promise is for pm to turn into tickets; this page only reports.

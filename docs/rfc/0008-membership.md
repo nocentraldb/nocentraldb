@@ -12,6 +12,8 @@ It uses one draft that is still an open pull request, and names it without a lin
 
 **Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26 (Carsten, 2026-11-08); the design below describes those choices. The RFC is final when this pull request is merged. Nothing here is built yet. Draft 0.2 reworked draft 0.1 after pm's review: the fold uses only control bodies and headers, seniority and the order are fully specified, re-grants cannot bring back writes made without the right, and irreversible effects wait until a change is stable.
 
+**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+
 ## What this RFC does not cover
 
 - **Work orders**, beyond who may perform an erasure and sign it off. A later RFC defines how a work order is claimed, performed and validated.

@@ -43,7 +43,10 @@ tasks:
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
-    # scripts/release-workflow.test.mjs, scripts/release-ruleset.test.mjs
+    # scripts/release-workflow.test.mjs (the rules for every job),
+    # scripts/release-workflow-alpha.test.mjs and
+    # scripts/release-workflow-publish.test.mjs (the alpha and publish jobs),
+    # scripts/release-ruleset.test.mjs
     # (commit-back pushes under the ruleset's bypass, and
     # docs/release-management.md gives the owner its settings step), the
     # toolchain contract in
@@ -70,8 +73,10 @@ tasks:
     # 0003, 0006, GENESIS.md and the FAQ follow RFC 0008, and
     # factory/decisions/ records NOC-44), scripts/rfc-0007-alignment.test.mjs
     # (RFC 0002's Amendment 4, use cases 4 and 5 and every text on what the
-    # relay sees follow RFC 0007, and factory/decisions/ records NOC-47), and
-    # the tests of the
+    # relay sees follow RFC 0007, and factory/decisions/ records NOC-47),
+    # scripts/rfc-feedback.test.mjs (factory/decisions/ records NOC-55, pm's
+    # tick reads the "RFC feedback" category, and RFC 0002 to 0005, 0007 and
+    # 0008 say how to give feedback), and the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on
