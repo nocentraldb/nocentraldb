@@ -10,12 +10,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ed25519_dalek::SigningKey;
 use ncdb_core::cbor::Value;
-use ncdb_core::change::Change;
+use ncdb_core::change::{Change, Operation, Payload};
+use ncdb_core::clock::Hlc;
+use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, Genesis, MemberKind, MembershipEntry, Role,
 };
+use ncdb_core::seal;
 
 /// A simulated member.
 pub type Who = u8;
@@ -28,6 +31,11 @@ pub fn key(who: Who) -> MemberKey {
 /// The member id of a simulated member.
 pub fn id(who: Who) -> MemberId {
     key(who).id()
+}
+
+/// The space key of the first generation of every simulated space.
+pub fn space_key() -> SpaceKey {
+    SpaceKey::from_bytes([3; 32])
 }
 
 /// The account every simulated member's certificate names.
@@ -162,6 +170,34 @@ impl Space {
         self.write(author, entry, deps)
     }
 
+    /// `author` wraps the first generation's space key to `recipient`, in a
+    /// key envelope. The ephemeral key derives from the two members, so the
+    /// same call gives the same change.
+    pub fn envelope(&mut self, author: Who, recipient: Who, deps: &[&Change]) -> Change {
+        let sealed = envelope::seal_with_ephemeral(
+            &space_key(),
+            self.space,
+            self.first_generation,
+            &key(recipient).public(),
+            [author ^ (recipient << 4) ^ 0x5e; 32],
+        )
+        .expect("a simulated member's key takes an envelope");
+        self.write(author, Entry::KeyEnvelope(sealed), deps)
+    }
+
+    /// A sealed change by `author` under `generation`, with these
+    /// operations, at its next author sequence.
+    pub fn sealed_under(&mut self, author: Who, generation: u64, operations: Vec<Operation>) -> Change {
+        let sequence = self.next(author);
+        let payload = Payload::new(Hlc(sequence << 16), BTreeSet::new(), operations);
+        seal::seal(&key(author), &space_key(), self.space, sequence, generation, &payload)
+    }
+
+    /// A sealed change by `author` under the first generation.
+    pub fn sealed(&mut self, author: Who, operations: Vec<Operation>) -> Change {
+        self.sealed_under(author, self.first_generation, operations)
+    }
+
     /// A control change of another entry type, with one opaque field.
     pub fn other(&mut self, author: Who, entry_type: u64, deps: &[&Change]) -> Change {
         let fields = BTreeMap::from([(8, Value::Unsigned(u64::from(author)))]);
@@ -181,7 +217,7 @@ pub fn genesis(creator: Who, nonce: [u8; 16], model_id: [u8; 16]) -> (Change, Sp
     let space = membership::space_id(creator_key.id(), &nonce);
     let first_generation = membership::generation_id(space, creator_key.id(), &[]);
     let field = membership::seal_model_id(
-        &SpaceKey::from_bytes([3; 32]),
+        &space_key(),
         space,
         creator_key.id(),
         model_id,
