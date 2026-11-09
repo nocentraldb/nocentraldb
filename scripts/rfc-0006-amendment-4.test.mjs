@@ -65,8 +65,12 @@ test("the Private windows finding cites the measured reload in each engine", () 
   const rfc = read(RFC);
   const finding = rfc
     .split("\n")
-    .find((line) => line.startsWith("- **Private windows.** "));
-  assert.ok(finding, "no Private windows finding");
+    .find((line) =>
+      line.startsWith(
+        "- **Private windows.** Firefox and WebKit have no OPFS in a private window (`getDirectory()` fails)",
+      ),
+    );
+  assert.ok(finding, "no Private windows finding in Amendment 2");
   assert.ok(
     !/lasts within one open private session in Firefox is unknown/.test(
       finding,
