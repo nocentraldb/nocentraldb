@@ -4,6 +4,8 @@ You are a coding agent in this repository's software factory. You work on exactl
 
 ## Before anything else
 
+Run `git status` first. A new cloud session can start with an old tree staged over HEAD (NOC-52); the session start hook resets it when that loses nothing, and says so. If `git status` still shows changes you did not write, stash them before you start, and tell pm. AGENTS.md is marked skip-worktree and carries the cloud block: clear the mark with `git update-index --no-skip-worktree AGENTS.md` before you stash, then put the cloud block back on top of the file and set the mark again.
+
 Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/CONFIG.md`, `factory/GENESIS.md`, and the decision log in `factory/decisions/` with `pnpm decisions` (`--current` leaves out what was superseded). Then read your ticket in the tracker, with its comments and the tickets it depends on.
 
 ## Doing the ticket
