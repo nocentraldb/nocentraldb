@@ -1,7 +1,7 @@
 // Asserts that a merged RFC never calls itself a draft (NOC-35). An RFC counts
 // as merged once the decision log records the owner's decision on it as a
 // whole: a file in factory/decisions/ whose heading reads "RFC <number>: ..."
-// and whose "Decided by:" names the owner from factory/CONFIG.md. The gate
+// or "The owner decides RFC <number>, ..." (NOC-64's form), and whose "Decided by:" names the owner from factory/CONFIG.md. The gate
 // cannot ask git which files are on main (CI checks out one commit), so the
 // decision log, which the gate already holds to its format, is the record.
 // Such an RFC's header line carries no draft number, its status paragraph
@@ -32,7 +32,9 @@ const decidedRfcs = () => {
   for (const file of readdirSync(join(root, "factory/decisions"))) {
     if (!file.endsWith(".md")) continue;
     const text = read(`factory/decisions/${file}`);
-    const rfc = text.match(/^# [^\n]*· RFC (\d{4}): /)?.[1];
+    const rfc = text.match(
+      /^# [^\n]*· (?:The owner decides )?RFC (\d{4})[:,] /,
+    )?.[1];
     if (rfc && new RegExp(`^- Decided by: ${name}\\b`, "m").test(text)) {
       numbers.add(rfc);
     }
@@ -56,7 +58,7 @@ const status = (markdown) =>
   markdown.split("\n").find((line) => line.startsWith("**Status.**"));
 
 test("the decision log names the RFCs the owner decided", () => {
-  assert.deepEqual(decidedRfcs().slice(0, 7), [
+  assert.deepEqual(decidedRfcs().slice(0, 8), [
     "0002",
     "0003",
     "0004",
@@ -64,6 +66,7 @@ test("the decision log names the RFCs the owner decided", () => {
     "0006",
     "0007",
     "0008",
+    "0009",
   ]);
 });
 
