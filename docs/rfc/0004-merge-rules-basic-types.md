@@ -1,6 +1,6 @@
 # RFC 0004: Merge rules for basic values, sets and links
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-8
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-8
 
 **Changelog.**
 

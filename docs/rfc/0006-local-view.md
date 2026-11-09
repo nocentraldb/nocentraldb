@@ -1,6 +1,6 @@
 # RFC 0006: The local view on SQLite, natively and in the browser
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-12
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-12
 
 **Changelog.**
 
@@ -13,7 +13,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback). [Giving feedback](README.md#giving-feedback) says how, and what happens to your feedback.
 
-**Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged. The owner decided Amendment 2, decisions 10 to 15, as recommended (Carsten, 2026-11-09).
+**Status.** Decided. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), and this RFC was merged with the owner's approval in #36 (Carsten, 2026-11-08). The design below describes the decided options. The view on SQLite is not built yet. The owner decided Amendment 2, decisions 10 to 15, as recommended (Carsten, 2026-11-09).
 
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encryption at rest on the device, beyond naming the question for the owner ([decision 6](#decisions-for-the-owner)). Compaction and snapshots (a later RFC). The sync protocol with the relay (RFC 0007, NOC-13).
 

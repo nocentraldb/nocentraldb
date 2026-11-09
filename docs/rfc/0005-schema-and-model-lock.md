@@ -1,6 +1,6 @@
 # RFC 0005: The schema language and model.lock.json
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-11
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 
 **Changelog.**
 
