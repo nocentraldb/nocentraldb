@@ -25,7 +25,7 @@ use crate::ids::{ObjectId, SpaceId};
 /// Why a lookup was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueryError {
-    /// The model declares no index of this name.
+    /// The model declares no index of this name in this collection.
     UnknownIndex,
     /// The lookup does not give one value per key of the index's equality
     /// prefix.
@@ -38,10 +38,11 @@ pub enum QueryError {
 }
 
 /// The position after the last row of a page: the row's index key, with
-/// the index's name and the model's hash. It holds plaintext field values,
+/// the index's collection and name and the model's hash. It holds plaintext field values,
 /// so its `Debug` output shows only the index and the number of values.
 #[derive(Clone, PartialEq)]
 pub struct Cursor {
+    collection: String,
     index: String,
     model: [u8; 32],
     /// The values of every key of the index, then the space id and the
@@ -52,6 +53,7 @@ pub struct Cursor {
 impl fmt::Debug for Cursor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Cursor")
+            .field("collection", &self.collection)
             .field("index", &self.index)
             .field("values", &self.key.len())
             .finish()
@@ -189,7 +191,7 @@ pub(super) fn check(conn: &Connection, indexes: &[Index]) -> Result<(), Error> {
     for index in indexes {
         for plan in plans(conn, index)? {
             if !fits(&plan, &index_name(index)) {
-                return Err(Error::Plan(index.name.clone()));
+                return Err(Error::Plan(format!("{}.{}", index.collection, index.name)));
             }
         }
     }
@@ -221,10 +223,11 @@ impl View {
     /// The largest page, so that one read holds the database briefly.
     pub const MAX_PAGE: usize = 500;
 
-    /// One page of the declared index `index`: the rows whose equality
-    /// prefix holds `equal`, after `after`, at most `limit`.
+    /// One page of the declared index `index` of `collection`: the rows
+    /// whose equality prefix holds `equal`, after `after`, at most `limit`.
     pub fn page(
         &self,
+        collection: &str,
         index: &str,
         equal: &[Value],
         after: Option<&Cursor>,
@@ -232,9 +235,7 @@ impl View {
     ) -> Result<Page, Error> {
         let index = self
             .model
-            .indexes
-            .iter()
-            .find(|i| i.name == index)
+            .index(collection, index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
         if equal.len() != index.equality {
             return Err(Error::Query(QueryError::Equality));
@@ -247,7 +248,8 @@ impl View {
         let after = match after {
             None => None,
             Some(cursor) => {
-                let fits = cursor.index == index.name
+                let fits = cursor.collection == index.collection
+                    && cursor.index == index.name
                     && cursor.model == hash
                     && cursor.key[..index.equality] == equal[..];
                 if !fits {
@@ -276,6 +278,7 @@ impl View {
         }
         let next = match keys.last() {
             Some(key) if keys.len() == limit => Some(Cursor {
+                collection: index.collection.clone(),
                 index: index.name.clone(),
                 model: hash,
                 key: key.clone(),
@@ -285,14 +288,13 @@ impl View {
         Ok(Page { rows, next })
     }
 
-    /// The query plans of the declared index `index`: its first page and a
-    /// page after a cursor, as SQLite's `EXPLAIN QUERY PLAN` gives them.
-    pub fn plans(&self, index: &str) -> Result<Vec<String>, Error> {
+    /// The query plans of the declared index `index` of `collection`: its
+    /// first page and a page after a cursor, as SQLite's `EXPLAIN QUERY
+    /// PLAN` gives them.
+    pub fn plans(&self, collection: &str, index: &str) -> Result<Vec<String>, Error> {
         let index = self
             .model
-            .indexes
-            .iter()
-            .find(|i| i.name == index)
+            .index(collection, index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
         plans(&self.conn, index)
     }

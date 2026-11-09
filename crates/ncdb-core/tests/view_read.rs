@@ -91,13 +91,7 @@ fn all_pages(view: &View, index: &str, equal: &[Value], limit: usize) -> Vec<u8>
 }
 
 /// Every row of the index `index` of `collection`, page by page.
-fn pages_of(
-    view: &View,
-    collection: &str,
-    index: &str,
-    equal: &[Value],
-    limit: usize,
-) -> Vec<u8> {
+fn pages_of(view: &View, collection: &str, index: &str, equal: &[Value], limit: usize) -> Vec<u8> {
     let mut ids = Vec::new();
     let mut cursor = None;
     loop {

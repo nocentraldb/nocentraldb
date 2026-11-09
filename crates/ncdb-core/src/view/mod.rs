@@ -29,6 +29,7 @@ use rusqlite::Connection;
 use crate::change::Change;
 use crate::ids::{ChangeId, SpaceId};
 use crate::log::{Appended, Log, State};
+use crate::model_lock::ModelLock;
 use crate::receive::{Checks, ReceiveError};
 
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model};
@@ -73,7 +74,8 @@ pub enum Error {
     Corrupt(&'static str),
     /// A lookup was refused.
     Query(QueryError),
-    /// The lookup of this declared index would not run through it, or
+    /// The lookup of this declared index, `<collection>.<index>`, would
+    /// not run through it, or
     /// would sort in a temporary B-tree (RFC 0006, "The check").
     Plan(String),
 }
@@ -112,18 +114,19 @@ impl View {
 
     /// Opens the view in the database file at `path`, creating it when it
     /// does not exist: WAL mode, `synchronous = FULL` and `secure_delete`
-    /// on (RFC 0006, decisions 7 and 9).
-    pub fn open(path: &Path, model: Model) -> Result<View, Error> {
-        View::with(Connection::open(path)?, model)
+    /// on (RFC 0006, decisions 7 and 9). The view folds by the model of
+    /// `lock`, the member's `model.lock.json` (RFC 0005).
+    pub fn open(path: &Path, lock: &ModelLock) -> Result<View, Error> {
+        View::with(Connection::open(path)?, lock)
     }
 
     /// Opens a view in a new database in memory, which nothing keeps.
-    pub fn open_in_memory(model: Model) -> Result<View, Error> {
-        View::with(Connection::open_in_memory()?, model)
+    pub fn open_in_memory(lock: &ModelLock) -> Result<View, Error> {
+        View::with(Connection::open_in_memory()?, lock)
     }
 
-    fn with(conn: Connection, model: Model) -> Result<View, Error> {
-        model.validate().map_err(Error::Invalid)?;
+    fn with(conn: Connection, lock: &ModelLock) -> Result<View, Error> {
+        let model = Model::from_lock(lock).map_err(Error::Invalid)?;
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;

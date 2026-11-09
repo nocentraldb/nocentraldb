@@ -1,6 +1,7 @@
 //! Test support for the local view on SQLite (NOC-69, RFC 0006): a
-//! minimal model read from its `model.lock.json` (NOC-77), a fresh database file per test, and the in-memory fold
-//! the SQLite view must agree with.
+//! minimal model read from its `model.lock.json` (NOC-77), a fresh
+//! database file per test, and the in-memory fold the SQLite view must
+//! agree with.
 //!
 //! Each test file includes this module with `#[path]`; not every file uses
 //! every helper.
@@ -10,16 +11,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ncdb_core::basic::{self, BasicValue, Kind};
+use ncdb_core::basic;
 use ncdb_core::change::Operation;
 use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::ObjectId;
-use ncdb_core::link::Link;
 use ncdb_core::log::OperationParkReason;
+use ncdb_core::model_lock::ModelLock;
 use ncdb_core::object::{Object, ObjectOperation};
 use ncdb_core::receive::Fold;
-use ncdb_core::set::{self, Set};
-use ncdb_core::model_lock::ModelLock;
+use ncdb_core::set;
 use ncdb_core::view::{Field, FieldState, Model};
 
 /// The tasks, with fields of each kind, as `member.rs` names them.

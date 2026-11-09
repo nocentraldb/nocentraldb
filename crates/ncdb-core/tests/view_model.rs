@@ -80,7 +80,11 @@ fn every_built_in_field_type_has_its_field_type_in_the_view() {
     let fields = &mut lock.collections.get_mut("task").unwrap().fields;
     let template = fields["rank"].clone();
     let kinds = [
-        ("f", model_lock::Kind::Float, Field::Basic(BasicValue { kind: Kind::Float })),
+        (
+            "f",
+            model_lock::Kind::Float,
+            Field::Basic(BasicValue { kind: Kind::Float }),
+        ),
         (
             "b",
             model_lock::Kind::Boolean,
@@ -156,7 +160,8 @@ fn a_plugin_field_has_no_field_type_in_the_view_so_its_writes_park() {
         type_id: "acme/money".into(),
         config: None,
     };
-    lock.plugins.insert("acme".into(), model_lock::Plugin::default());
+    lock.plugins
+        .insert("acme".into(), model_lock::Plugin::default());
     let task = lock.collections.get_mut("task").unwrap();
     task.fields.insert("price".into(), field);
     let model = Model::from_lock(&lock).unwrap();

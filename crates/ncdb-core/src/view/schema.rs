@@ -61,7 +61,9 @@ pub(super) fn column(field: &str) -> String {
     quote(&format!("f_{field}"))
 }
 
-/// The SQLite index of a declared index.
+/// The SQLite index of a declared index, qualified by its collection,
+/// since index names are scoped per collection. A name of the lock has no
+/// `_` (RFC 0005), so no two declared indexes share an SQLite index.
 pub(super) fn index_name(index: &Index) -> String {
     format!("ix_{}_{}", index.collection, index.name)
 }
