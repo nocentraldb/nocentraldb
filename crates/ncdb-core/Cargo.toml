@@ -35,6 +35,13 @@ hkdf = { version = "=0.13.0", default-features = false }
 # Wipes key bytes from memory when they are dropped.
 zeroize = { version = "=1.9.1", default-features = false }
 
+# The local view natively (RFC 0006, "Desktop and mobile"): rusqlite with
+# SQLite compiled from source (`bundled`), never the system's SQLite. Its
+# default features pull in the browser's SQLite; the browser view (OPFS) is
+# a later ticket, so the view and this dependency are native only.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
 
