@@ -8,6 +8,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-12
 - **2026-11-09** · NOC-34 · [Amendment 2: durability of a browser copy](#amendment-2-durability-of-a-browser-copy) follows what [NOC-33 measured](../browser-storage.md) about how long a browser keeps a web app's copy, and proposes how the SDK, the developer page [Browser apps and durability](../browser-durability.md) and the text for end users tell developers and users how reliable a browser copy is. The owner decided its decisions 10 to 15 as recommended (Carsten, 2026-11-09). The sentences it changes elsewhere are marked *(Amendment 2)*.
 - **2026-11-09** · NOC-35 · [Amendment 3: the device checks as findings rows](#amendment-3-the-device-checks-as-findings-rows) follows the owner's answer that the first Firefox private window was closed: what it held is gone after the window closes, and whether it lasts within one open session is unknown (NOC-58). The device checks are now cited by their rows in [NOC-33's findings](../browser-storage.md#findings). It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-58 · [Amendment 4: a reload in a private window](#amendment-4-a-reload-in-a-private-window) follows NOC-58's measurement: IndexedDB, and the member key in it, survives a reload in a private window in Playwright's Chromium, Firefox and WebKit. It updates the facts in the private-window finding and in decision 12's recommendation, and records that the owner keeps decision 12 at A. It decides nothing. The sentences it changes are marked *(Amendment 4)*.
+- **2026-11-09** · NOC-72 · [Amendment 5: the cursor and the plan check](#amendment-5-the-cursor-and-the-plan-check) follows the view that #81 (NOC-69) built: a page after a cursor is written key by key, and the check on open accepts a `SEARCH` or `SCAN` on the declared index. The owner decided it by merging #81 (Carsten, 2026-11-09). The sentences it changes are marked *(Amendment 5)*.
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
@@ -183,17 +184,29 @@ CREATE INDEX ix_tasks_by_status_priority
 
 Every index ends with `(space_id, object_id)`. Together they are unique, so the index order is total: no two rows tie, and a page boundary is always exact.
 
-A query is always "the rows of this index, with these values for its equality prefix, from this cursor, at most N". The SDK offers no other query and no raw SQL. The core builds the SQL from the model, and it has one shape:
+A query is always "the rows of this index, with these values for its equality prefix, after this cursor, at most N". The SDK offers no other query and no raw SQL. The core builds the SQL from the model, and it has one shape. For an index on `status` (equality) and `priority` (ascending), the page after a cursor whose last row has priority 3 reads:
 
 ```sql
-SELECT ... FROM c_tasks
-WHERE status = ?1
-  AND (priority, space_id, object_id) > (?2, ?3, ?4)   -- the cursor, absent on the first page
-ORDER BY priority, space_id, object_id
-LIMIT ?5;
+SELECT status, priority, space_id, object_id FROM c_tasks
+WHERE status IS ?
+  AND priority >= 3                             -- the bound on the first key: SQLite seeks to the cursor
+  AND (priority > 3 OR (priority = 3 AND        -- the cursor, key by key
+       (space_id > ? OR (space_id = ? AND
+        (object_id > ? OR (object_id = ? AND 0))))))
+ORDER BY status ASC, priority ASC, space_id ASC, object_id ASC
+LIMIT ?;
 ```
 
-**The check.** When the core opens a view, it runs `EXPLAIN QUERY PLAN` for every query shape the model allows and refuses to open if any of them is not a `SEARCH ... USING [COVERING] INDEX` on its declared index, or needs a temporary sort. A test in the implementation ticket does the same for a model that uses every field type. The spike shows the plan SQLite chooses for this shape: `SEARCH tasks USING COVERING INDEX tasks_by_priority ((priority,id)>(?,?))`.
+The first page has neither the bound nor the cursor condition. *(Amendment 5.)* The cursor condition goes key by key through the keys after the equality prefix, then `space_id` and `object_id`, which are ascending. For a key `k` with the cursor's value at `?`, it is one of four conditions, where `rest` is the condition for the next key and `0` (false) follows the last one:
+
+| Key `k` | The cursor's value is set | The cursor's value is unset (`NULL`) |
+| --- | --- | --- |
+| Ascending | `(k > ? OR (k = ? AND rest))` | `(k IS NOT NULL OR (k IS NULL AND rest))` |
+| Descending | `(k < ? OR k IS NULL OR (k = ? AND rest))` | `(k IS NULL AND rest)` |
+
+This follows the order of [The order of values](#the-order-of-values): an unset value sorts first ascending and last descending. On the first key after the equality prefix, the query adds a bound so that SQLite seeks instead of walking the prefix from its start: `k >= ?` when the key is ascending and the cursor's value is set, `k IS NULL` when it is descending and unset, and none otherwise, so a descending first key scans within the equality prefix. *(Amendment 5.)* The equality prefix is written `k IS ?`, so a lookup can fix a key to unset.
+
+**The check.** When the core opens a view, it runs `EXPLAIN QUERY PLAN` for the two query shapes of every declared index, its first page and a page after a cursor. It accepts a plan when every step that reads the table, a `SEARCH` or a `SCAN`, goes `USING INDEX` or `USING COVERING INDEX` through the declared index. It refuses to open when a step reads the table without it or through another index, or when the plan sorts in a temporary B-tree (`USE TEMP B-TREE`). An index without an equality prefix plans its first page as `SCAN ... USING COVERING INDEX`, which walks the index in order and stops after the page, so a `SCAN` on the declared index is accepted. *(Amendment 5.)* A test in the implementation ticket does the same for a model that uses every field type. The spike shows the plan SQLite chooses for this shape: `SEARCH tasks USING COVERING INDEX tasks_by_priority ((priority,id)>(?,?))`.
 
 Filters on a field that is not in the index are not offered. An app that needs one declares an index, or a computed field and a view (the later RFC). This is the price of "reads cost only their result" (RFC 0001), and RFC 0001's [What it is not](0001-nocentraldb.md#what-it-is-not) names it.
 
@@ -208,7 +221,7 @@ The order of an index must be the same on every member and every target, or two 
 
 ### Ordered pages
 
-A page is at most N rows, in index order, and a cursor that points after its last row. The cursor holds the last row's index key: the values of the indexed fields, the space id and the object id, plus the index's name and the model hash. The next page is the rows whose key is greater than the cursor's, which is one range lookup in the index, whatever page it is.
+A page is at most N rows, in index order, and a cursor that points after its last row. The cursor holds the last row's index key: the values of the indexed fields, the space id and the object id, plus the index's name and the model hash. The next page is the rows whose key comes after the cursor's in the index's order, written key by key as [Declared indexes](#declared-indexes) shows, which is one walk of the index from the cursor, whatever page it is. *(Amendment 5.)*
 
 - **A page is cheap at any depth.** Unlike `OFFSET`, a keyset cursor does not read the rows before it.
 - **Concurrent folds do not break paging.** A row that did not change between two pages is never skipped and never repeated. A row that changed its indexed values between two pages may appear twice or not at all, because it moved across the boundary. The SDK says so in the cursor's documentation; a consistent snapshot over many pages is not offered (it would hold a read transaction open and block the WAL from shrinking).
@@ -518,3 +531,17 @@ Added on 2026-11-09 for NOC-58. Amendment 2 and decision 12 left open whether In
 - **The private-window finding** now says that IndexedDB, and the member key in it, survives a reload in all three engines, and that the branded browsers have not been checked by hand.
 - **Decision 12's recommendation** now rests on the measured facts. A reload in a private window is not a new device. Under A, the copy itself is still in memory and is lost with a reload. The sentence on Firefox's device check, which the owner answered in Amendment 3, is gone. The recommendation's conclusion is unchanged.
 - **The owner's confirmation.** Confirmed (Carsten, 2026-11-09) after NOC-58's measurement: A stays. The decision log records it in [`2026-11-09-NOC-58-decision-12-stays-a-after-the-private-window-reload-was-measured.md`](../../factory/decisions/2026-11-09-NOC-58-decision-12-stays-a-after-the-private-window-reload-was-measured.md).
+
+## Amendment 5: the cursor and the plan check
+
+Added on 2026-11-09 for NOC-72. #81 (NOC-69) built the view natively and found that two sentences of [Declared indexes](#declared-indexes) do not hold. pm chose option A on the coding agent's question, and the owner decided it by approving and merging #81 (Carsten, 2026-11-09). The decision log records why, in [`2026-11-09-NOC-69-a-page-after-a-cursor-is-written-key-by-key.md`](../../factory/decisions/2026-11-09-NOC-69-a-page-after-a-cursor-is-written-key-by-key.md). The sentences marked *(Amendment 5)* above follow the code in `crates/ncdb-core/src/view/query.rs`.
+
+- **The cursor.** This RFC wrote the page after a cursor as one row-value comparison, `(priority, space_id, object_id) > (?, ?, ?)`. That gives a wrong page in two cases:
+  - **An unset value in the last row.** When the cursor's last row has a `NULL` in an indexed field, a row-value comparison with `NULL` is `NULL`, not true, so the next page is empty although rows follow.
+  - **A descending key.** A row value compares every key in one direction, and every index ends with ascending `(space_id, object_id)`, so an index with a descending key cannot be paged with it.
+
+  The cursor condition is now written key by key, `NULL`-aware and per direction, nested so that SQLite walks one index, with a bound on the first key so that an ascending page seeks to the cursor.
+- **The plan check.** This RFC accepted only a `SEARCH ... USING [COVERING] INDEX`. An index without an equality prefix plans its first page as `SCAN ... USING COVERING INDEX`, which reads only the page. The check now accepts a `SEARCH` or a `SCAN` on the declared index, and refuses any other index and any temporary B-tree.
+- **Unchanged.** The order of values, the total order through `(space_id, object_id)`, what a cursor holds, and that the SDK offers no other query. The spike's plan in [The spike](#the-spike) was measured on the row-value shape and stays as it was recorded.
+
+Options not taken: B, keeping the row values with ascending indexes only, which leaves a cursor on an unset value broken; C, row values where they are correct and the key-by-key condition otherwise, which means two code paths.
