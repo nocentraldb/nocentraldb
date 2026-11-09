@@ -143,7 +143,11 @@ const proseReferences = (text) =>
     ...text.matchAll(
       /\b(measured|documented|unknown): ([^·;]+?) · (.+?)(?=; (?:measured|documented|unknown): |\)(?:[.,:]|\s|$))/gm,
     ),
-  ].map((match) => ({ kind: match[1], browser: match[2], behaviour: match[3] }));
+  ].map((match) => ({
+    kind: match[1],
+    browser: match[2],
+    behaviour: match[3],
+  }));
 
 test("Private windows cites the measured reload in each engine, and each reference resolves", () => {
   const text = section(read(PAGE), "Private windows") ?? "";
