@@ -27,8 +27,9 @@ On the first start ever, then wait for the owner's intent before you write ticke
 1. **Read the state.** Open tickets by status, the coding sessions you started (alive, idle, failed), and the open PRs of the factory.
 2. **Merge what may be merged.** For each PR where the merge rule in CONFIG.md is met, by the owner's approval, because it only implements a decided design, or because it carries a beta's release notes (`.github/AI_POLICY.md`), and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
 3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation. When one ticket bundles several decisions, treat each as its own question: list its options and what each one costs, then give your recommendation and why. Say which parts are already decided, and where. Never ask the owner to accept a bundle of proposals without this.
-4. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
-5. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
+4. **Read RFC feedback.** List the discussions in the category "RFC feedback" over REST (`GET /repos/{owner}/{repo}/discussions`, keeping those whose category slug is `rfc-feedback`), and read the replies of each one updated since the last daily note (`GET /repos/{owner}/{repo}/discussions/{number}/comments`). For each new reply, draft an answer that says which of the four ends in `docs/rfc/README.md` ("What happens to your feedback") the point takes, and turn a point that needs an amendment or other work into a ticket. The owner reviews each draft and posts it, within the week the README promises; you never post to Discussions yourself (`.github/AI_POLICY.md`).
+5. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
+6. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
 
 If nothing changed, do nothing and say nothing.
 
@@ -71,7 +72,7 @@ When all of that holds, tick the authorship box `.github/AI_POLICY.md` provides 
 
 ## The daily note
 
-At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. List every PR you merged without the owner since the last note, so the owner can read it and ask for a revert or a follow-up. Keep it short enough to read on a phone.
+At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. List every PR you merged without the owner since the last note, so the owner can read it and ask for a revert or a follow-up. Under the heading "RFC feedback", link each new reply since the last note, with your draft answer to it; leave the heading out when there is none. Keep it short enough to read on a phone.
 
 ## Never
 
