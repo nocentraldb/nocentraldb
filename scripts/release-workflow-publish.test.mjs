@@ -435,7 +435,7 @@ const checks = [
     },
   },
   {
-    name: "publish and commit-back keep their write token out of the checkout; only the commit-back step gets it",
+    name: "publish and commit-back keep their write token out of the checkout; only the commit-back step gets the release app's token",
     check: (ctx) => {
       for (const id of ["publish", "commit-back"]) {
         const checkout = stepsOf(ctx, id)[
@@ -446,7 +446,7 @@ const checks = [
       const step = stepsOf(ctx, "commit-back")[
         stepAt(ctx, "commit-back", runs("commit-back.mjs"))
       ];
-      assert.equal(step.env?.GH_TOKEN, gh("github.token"));
+      assert.equal(step.env?.GH_TOKEN, gh("steps.app-token.outputs.token"));
       assert.match(step.run, /GIT_CONFIG_KEY_0=http\.extraHeader/);
     },
     mutants: {
