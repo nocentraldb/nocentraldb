@@ -192,7 +192,8 @@ test("every text for users is short, names the app and promises nothing", () => 
 });
 
 // Where the developer meets the proposal: RFC 0006 carries it as Amendment 2,
-// with a decision per layer, and the README and RFC 0001 link the page.
+// with a decision per layer, and RFC 0001 links the page. The README does not:
+// the owner keeps limits out of it (NOC-61).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const AMENDMENT = "Amendment 2: durability of a browser copy";
@@ -298,8 +299,8 @@ test("Amendment 2 decides each layer with options and a recommendation", () => {
   }
 });
 
-test("the README, RFC 0001 and RFC 0006 link the page", () => {
-  for (const path of ["README.md", RFC_0001, RFC_0006]) {
+test("RFC 0001 and RFC 0006 link the page", () => {
+  for (const path of [RFC_0001, RFC_0006]) {
     assert.ok(
       relativeLinks(path).some(({ resolved }) => resolved === PAGE),
       `${path} does not link ${PAGE}`,
