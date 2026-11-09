@@ -43,6 +43,8 @@ const HEADING = "### The bypass for commit-back";
 const APP_STEP = "app-token";
 const APP_TOKEN = gh(`steps.${APP_STEP}.outputs.token`);
 const CHECK = "app-token-check";
+/** The release app's slug, as the owner named the app. */
+const APP_SLUG = "nocentraldb-release";
 /** The step of job `id` that mints the release app's token. */
 const mintOf = (ctx, id) =>
   stepsOf(ctx, id)[stepAt(ctx, id, (step) => step.id === APP_STEP)];
@@ -231,6 +233,7 @@ const checks = [
         "only this app",
         "workflow_dispatch",
         "only the first real push",
+        `**${APP_SLUG}**`,
       ])
         assert.ok(text.includes(needle), `the section does not name ${needle}`);
       assert.ok(
@@ -331,6 +334,13 @@ const checks = [
         /\$GITHUB_REPOSITORY/,
         "the token is not checked against this repository",
       );
+      assert.match(
+        steps[read].run,
+        new RegExp(
+          `"\\$APP_SLUG" != "?${APP_SLUG}"?[^\\n]*\\n[^\\n]*::error::`,
+        ),
+        `the token is not checked to be ${APP_SLUG}'s`,
+      );
       for (const step of steps) {
         assert.ok(
           !String(step.uses ?? "").startsWith("actions/checkout@"),
@@ -417,6 +427,14 @@ const checks = [
           "installation/repositories",
           /$/,
           '\ngh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/heads/x -f sha=0',
+        ),
+      "accepts any app": (ctx) =>
+        editRun(
+          ctx,
+          CHECK,
+          "installation/repositories",
+          new RegExp(APP_SLUG, "g"),
+          "some-other-app",
         ),
       "prints the token": (ctx) =>
         editRun(
