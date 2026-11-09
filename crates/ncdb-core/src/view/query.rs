@@ -275,3 +275,37 @@ impl View {
         plans(&self.conn, index)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test]
+    // functions; this routes #[test] there (NOC-10). The view is native
+    // only, so this module is too.
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::fits;
+
+    const IX: &str = "ix_task_by_rank";
+
+    #[test]
+    fn a_plan_fits_when_it_walks_only_the_declared_index_without_a_sort() {
+        assert!(fits("SCAN c_task USING COVERING INDEX ix_task_by_rank", IX));
+        assert!(fits(
+            "SEARCH c_task USING INDEX ix_task_by_rank (f_rank>?)",
+            IX
+        ));
+        assert!(!fits(
+            "SCAN c_task USING COVERING INDEX ix_task_by_rank; USE TEMP B-TREE FOR ORDER BY",
+            IX
+        ));
+        assert!(!fits("SCAN c_task", IX));
+        assert!(!fits(
+            "MULTI-INDEX OR; INDEX 1; SEARCH c_task USING INDEX ix_task_by_rank (f_rank>?); \
+             INDEX 2; SEARCH c_task USING INDEX ix_task_by_title (f_title=?)",
+            IX
+        ));
+        // A name that only starts like the declared index is another index.
+        assert!(!fits("SCAN c_task USING INDEX ix_task_by_rank_2", IX));
+    }
+}
