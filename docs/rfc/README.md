@@ -12,6 +12,7 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 | [0006](0006-local-view.md) | The local view on SQLite, natively and in the browser |
 | [0007](0007-relay.md) | The relay protocol and its AWS backend |
 | [0008](0008-membership.md) | Membership, roles and the first change of a space |
+| [0009](0009-sdk-api.md) | The SDK API for apps |
 
 ## Giving feedback
 
