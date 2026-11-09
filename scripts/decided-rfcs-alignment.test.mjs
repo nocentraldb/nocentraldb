@@ -191,13 +191,25 @@ test("every list of erasure limits says removing a member is not erasure, with R
   }
 });
 
-test("GENESIS.md's Shred and audit points to RFC 0005's pattern for free text", () => {
+// The owner kept the proposed sentence on free text and removed every RFC
+// link from GENESIS.md (Carsten, 2026-11-09): GENESIS.md states the rule,
+// the RFCs hold the details.
+test("GENESIS.md's Shred and audit names the app's duty for free text", () => {
   const line = read(GENESIS)
     .split("\n")
     .find((l) => l.startsWith("- **Shred and audit.**"));
   assert.ok(line, "GENESIS.md has no bullet Shred and audit");
   assert.match(line, /unmarked free text/, "the limit is no longer named");
-  linkingSentence(line, FREE_TEXT, /free text/i, "GENESIS.md");
+  assert.match(
+    line,
+    /free text is the app's job.*reference to the person/,
+    "the app's duty is not named",
+  );
+});
+
+test("GENESIS.md links no RFC", () => {
+  const link = read(GENESIS).match(/\]\([^)]*docs\/rfc\/[^)]*\)/);
+  assert.ok(!link, `GENESIS.md links an RFC: ${link?.[0]}`);
 });
 
 test("RFC 0001 announces Amendment 4 in a dated NOC-35 changelog line, and its section decides nothing", () => {
