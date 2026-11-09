@@ -14,13 +14,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  editRun,
+  gh,
+  job,
   load,
   runs,
   stepAt,
   stepsOf,
-  editRun,
-  gh,
-  job,
 } from "./lib/release-workflow.mjs";
 import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 
