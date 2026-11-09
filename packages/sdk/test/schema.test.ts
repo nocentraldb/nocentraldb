@@ -186,9 +186,8 @@ describe("a deprecated collection", () => {
     people: people.deprecated("Use members."),
     members: people,
   });
-  const collections = (
-    draft(model) as { collections: Record<string, unknown> }
-  ).collections;
+  const collections = (draft(model) as { collections: Record<string, unknown> })
+    .collections;
 
   test("keeps the collection with its reason for model build", () => {
     expect(collections.people).toEqual({
