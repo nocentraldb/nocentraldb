@@ -59,6 +59,9 @@ pub struct KeyEnvelope {
 /// key or a ciphertext.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EnvelopeError {
+    /// The recipient's X25519 public key is not one HPKE can encapsulate
+    /// to, such as a point of small order.
+    RecipientKey,
     /// The envelope is for another member.
     WrongRecipient,
     /// The body key is missing or does not hold what the envelope needs.
@@ -71,6 +74,9 @@ pub enum EnvelopeError {
 impl fmt::Display for EnvelopeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            EnvelopeError::RecipientKey => {
+                f.write_str("the recipient's agreement key does not take a key envelope")
+            }
             EnvelopeError::WrongRecipient => f.write_str("the key envelope is for another member"),
             EnvelopeError::Malformed(key) => write!(f, "key envelope field {key} is malformed"),
             EnvelopeError::Open => f.write_str("the key envelope does not open"),
@@ -94,7 +100,7 @@ pub fn seal(
     space: SpaceId,
     generation: u64,
     recipient: &MemberPublicKey,
-) -> KeyEnvelope {
+) -> Result<KeyEnvelope, EnvelopeError> {
     let _ = (space_key, space, generation, recipient);
     todo!()
 }
@@ -107,7 +113,7 @@ pub fn seal_with_ephemeral(
     generation: u64,
     recipient: &MemberPublicKey,
     ikm: [u8; 32],
-) -> KeyEnvelope {
+) -> Result<KeyEnvelope, EnvelopeError> {
     let _ = (space_key, space, generation, recipient, ikm);
     todo!()
 }
