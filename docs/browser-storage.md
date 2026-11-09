@@ -95,12 +95,89 @@ The page for a phone is a static folder: `node scripts/browser-storage/build.mjs
 
 ## Manual check log
 
-No manual check has been run yet. Add one entry per check, newest last:
+Add one entry per check, newest last:
 
 ```markdown
-### YYYY-MM-DD · Safari 26.x on iOS 26.x, iPhone model
+### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
 
-- Check: 1, the seven-day deletion
-- Method: what you did, with the dates
-- Saw: what the page showed
+Storage info (2026-11-09T13:41:09.148Z):
+{
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
+  "secureContext": true,
+  "persisted": false,
+  "estimate": {
+    "usage": 159748,
+    "quota": 41231686042
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+```
+
+```markdown
+### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
+
+Write (2026-11-09T13:42:05.842Z):
+{
+  "sqlite": "ok",
+  "idb": "ok"
+}
+```
+
+```markdown
+### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
+
+Read (2026-11-09T13:42:22.646Z):
+{
+  "sqlite": "written 2026-11-09T13:42:05.816Z",
+  "idb": "written 2026-11-09T13:42:05.816Z"
+}
+```
+
+```markdown
+### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
+
+persist() (2026-11-09T13:44:56.732Z):
+{
+  "answered": true,
+  "granted": false,
+  "raw": false
+}
+```
+
+```markdown
+### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
+
+Write (2026-11-09T13:45:30.046Z):
+{
+  "sqlite": "ok",
+  "idb": "ok"
+}
+```
+
+```markdown
+### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
+
+Storage info (2026-11-09T13:45:45.751Z):
+{
+  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
+  "secureContext": true,
+  "persisted": false,
+  "estimate": {
+    "usage": 6291535,
+    "quota": 41231686042
+  },
+  "opfs": "ok",
+  "sqliteVersion": "3.54.1"
+}
+```
+
+```markdown
+### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
+
+Read (2026-11-09T13:46:02.180Z):
+{
+  "sqlite": "written 2026-11-09T13:45:30.029Z",
+  "idb": "written 2026-11-09T13:45:30.029Z"
+}
 ```
