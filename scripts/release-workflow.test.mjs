@@ -97,7 +97,9 @@ const checks = [
       // Exactly contents: write; id-token and attestations come with the
       // registry publishing, which changes this check.
       assert.deepEqual(wf.jobs.publish.permissions, WRITE);
-      assert.deepEqual(wf.jobs["commit-back"].permissions, WRITE);
+      // commit-back pushes with the release app's token, not github.token,
+      // so it inherits contents: read (scripts/release-ruleset.test.mjs).
+      assert.equal(wf.jobs["commit-back"].permissions, undefined);
     },
     mutants: {
       "grants write at the top": (ctx) =>
@@ -112,8 +114,8 @@ const checks = [
         ctx.doc.setIn(["jobs", "build", "permissions"], WRITE),
       "grants publish id-token: write": (ctx) =>
         ctx.doc.setIn(["jobs", "publish", "permissions", "id-token"], "write"),
-      "drops the commit-back permissions": (ctx) =>
-        ctx.doc.deleteIn(["jobs", "commit-back", "permissions"]),
+      "grants commit-back contents: write": (ctx) =>
+        ctx.doc.setIn(["jobs", "commit-back", "permissions"], WRITE),
       "drops the publish permissions": (ctx) =>
         ctx.doc.deleteIn(["jobs", "publish", "permissions"]),
       "adds a job": (ctx) =>
