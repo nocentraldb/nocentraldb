@@ -48,6 +48,17 @@ fn set(field: &str, kind: Kind, object: ObjectId, value: Value) -> Operation {
     field_op::encode(&BasicValue { kind }, &write(value), object, TASK, field)
 }
 
+/// A project `n` with a name.
+fn project(n: u8, name: &str) -> Vec<Operation> {
+    let object = ObjectId([n; 16]);
+    let text = BasicValue { kind: Kind::Text };
+    let name = Value::Text(name.to_owned());
+    vec![
+        field_op::create(object, PROJECT),
+        field_op::encode(&text, &write(name), object, PROJECT, NAME),
+    ]
+}
+
 /// A task `n` with an optional title and rank.
 fn task(n: u8, title: Option<&str>, rank: Option<u64>) -> Vec<Operation> {
     let object = ObjectId([n; 16]);
@@ -64,7 +75,7 @@ fn task(n: u8, title: Option<&str>, rank: Option<u64>) -> Vec<Operation> {
 
 /// A view that received one change with these operations.
 fn view_with(operations: Vec<Operation>) -> View {
-    let mut view = View::open_in_memory(model()).unwrap();
+    let mut view = View::open_in_memory(&lock()).unwrap();
     let mut control = Control::default();
     view.receive(&envelope(FOUNDER, 1, 0), &mut control)
         .unwrap();
@@ -76,10 +87,23 @@ fn view_with(operations: Vec<Operation>) -> View {
 
 /// Every row of an index for `equal`, page by page, `limit` at a time.
 fn all_pages(view: &View, index: &str, equal: &[Value], limit: usize) -> Vec<u8> {
+    pages_of(view, TASK, index, equal, limit)
+}
+
+/// Every row of the index `index` of `collection`, page by page.
+fn pages_of(
+    view: &View,
+    collection: &str,
+    index: &str,
+    equal: &[Value],
+    limit: usize,
+) -> Vec<u8> {
     let mut ids = Vec::new();
     let mut cursor = None;
     loop {
-        let page = view.page(index, equal, cursor.as_ref(), limit).unwrap();
+        let page = view
+            .page(collection, index, equal, cursor.as_ref(), limit)
+            .unwrap();
         assert!(page.rows.len() <= limit);
         ids.extend(page.rows.iter().map(|(space, object)| {
             assert_eq!(*space, SPACE);
@@ -169,34 +193,37 @@ fn a_lookup_that_does_not_fit_its_index_is_refused() {
         other => panic!("{other:?}"),
     };
     assert_eq!(
-        error(view.page("nope", &[], None, 10)),
+        error(view.page(TASK, "nope", &[], None, 10)),
+        QueryError::UnknownIndex
+    );
+    // An index of another collection is not one of this collection's.
+    assert_eq!(
+        error(view.page(PROJECT, BY_RANK, &[], None, 10)),
         QueryError::UnknownIndex
     );
     assert_eq!(
-        error(view.page(BY_TITLE, &[], None, 10)),
+        error(view.page(TASK, BY_TITLE, &[], None, 10)),
         QueryError::Equality
     );
     assert_eq!(
-        error(view.page(BY_RANK, &[], None, 0)),
+        error(view.page(TASK, BY_RANK, &[], None, 0)),
         QueryError::PageSize
     );
     assert_eq!(
-        error(view.page(BY_RANK, &[], None, View::MAX_PAGE + 1)),
+        error(view.page(TASK, BY_RANK, &[], None, View::MAX_PAGE + 1)),
         QueryError::PageSize
     );
     let two = view_with([task(1, None, Some(1)), task(2, None, Some(2))].concat());
-    let cursor = two.page(BY_RANK, &[], None, 1).unwrap().next.unwrap();
+    let cursor = two.page(TASK, BY_RANK, &[], None, 1).unwrap().next.unwrap();
     let a = [Value::Text("a".into())];
     assert_eq!(
-        error(view.page(BY_TITLE, &a, Some(&cursor), 10)),
+        error(view.page(TASK, BY_TITLE, &a, Some(&cursor), 10)),
         QueryError::Cursor
     );
     // A cursor from a view of another model is refused too.
-    let mut other = model();
-    other.indexes.pop();
-    let other = View::open_in_memory(other).unwrap();
+    let other = View::open_in_memory(&lock_without(TASK, BY_NAME)).unwrap();
     assert_eq!(
-        error(other.page(BY_RANK, &[], Some(&cursor), 10)),
+        error(other.page(TASK, BY_RANK, &[], Some(&cursor), 10)),
         QueryError::Cursor
     );
 }
@@ -211,7 +238,7 @@ fn a_cursor_does_not_show_the_values_it_holds() {
         .concat(),
     );
     let page = view
-        .page(BY_TITLE, &[Value::Text("secret".into())], None, 1)
+        .page(TASK, BY_TITLE, &[Value::Text("secret".into())], None, 1)
         .unwrap();
     let shown = format!("{:?}", page.next.unwrap());
     assert!(!shown.contains("secret"), "{shown}");
@@ -219,16 +246,43 @@ fn a_cursor_does_not_show_the_values_it_holds() {
 
 #[test]
 fn the_lookup_of_every_declared_index_runs_through_it_without_a_temporary_sort() {
-    let view = View::open_in_memory(model()).unwrap();
-    for index in [BY_RANK, BY_TITLE, BY_NAME] {
-        let plans = view.plans(index).unwrap();
+    let view = View::open_in_memory(&lock()).unwrap();
+    let indexes = [
+        (TASK, BY_RANK),
+        (TASK, BY_TITLE),
+        (TASK, BY_NAME),
+        (PROJECT, BY_NAME),
+    ];
+    for (collection, index) in indexes {
+        let plans = view.plans(collection, index).unwrap();
         assert_eq!(plans.len(), 2, "the first page and a page after a cursor");
         for plan in plans {
             assert!(
-                plan.contains(&format!("INDEX ix_task_{index}")),
+                plan.contains(&format!("INDEX ix_{collection}_{index}")),
                 "{index}: {plan}"
             );
             assert!(!plan.contains("TEMP B-TREE"), "{index}: {plan}");
         }
     }
+}
+
+#[test]
+fn two_collections_each_read_through_their_own_index_of_the_same_name() {
+    let operations = [
+        task(1, Some("b"), None),
+        task(2, Some("a"), None),
+        project(3, "z"),
+        project(4, "y"),
+        project(5, "x"),
+    ]
+    .concat();
+    let view = view_with(operations);
+    assert_eq!(pages_of(&view, TASK, BY_NAME, &[], 1), [2, 1]);
+    assert_eq!(pages_of(&view, PROJECT, BY_NAME, &[], 2), [5, 4, 3]);
+    // A cursor of one collection's index does not go on in the other's.
+    let cursor = view.page(TASK, BY_NAME, &[], None, 1).unwrap().next;
+    assert!(matches!(
+        view.page(PROJECT, BY_NAME, &[], cursor.as_ref(), 1),
+        Err(Error::Query(QueryError::Cursor))
+    ));
 }
