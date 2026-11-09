@@ -340,3 +340,56 @@ test("RFC 0004 Amendment 2 parks a create that carries key 5, decided by the own
     "the status does not name Amendment 2",
   );
 });
+
+// pm, after #74 merged: the owner closed the first private window, so RFC 0006
+// says Firefox's private data is gone after the window closes and cites the
+// rows of docs/browser-storage.md, not #74's log headings (Amendment 3).
+const RFC_0006 = "docs/rfc/0006-local-view.md";
+
+test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, citing the findings rows", () => {
+  const rfc = read(RFC_0006);
+  const body = amendment(rfc, 3, "NOC-35");
+  assert.match(body, /decides nothing/, "Amendment 3 must decide nothing");
+  assert.ok(
+    !/whether the first window was closed/.test(rfc),
+    "RFC 0006 still doubts the window was closed",
+  );
+  assert.ok(
+    !/#74[:)]|#74, NOC-60\)|by #74/.test(rfc),
+    "RFC 0006 still cites #74 by its log headings",
+  );
+  const privateWindows = rfc
+    .split("\n")
+    .find((l) =>
+      l.startsWith(
+        "- **Private windows.** Firefox and WebKit have no OPFS in a private window (`getDirectory()` fails)",
+      ),
+    );
+  assert.ok(privateWindows, "no Private windows finding in Amendment 2");
+  assert.match(
+    privateWindows,
+    /measured: Firefox · Private window/,
+    "the finding cites no row",
+  );
+  assert.match(privateWindows, /NOC-58/, "the open question names no ticket");
+  assert.match(privateWindows, /\*\(Amendment 3\.\)\*/);
+  for (const row of [
+    "Safari (macOS) · SQLite on OPFS (`opfs-sahpool`)",
+    "Safari (iOS) · SQLite on OPFS (`opfs-sahpool`)",
+    "Firefox (macOS) · `persist()`",
+  ]) {
+    assert.ok(
+      rfc.includes(`measured: ${row}`),
+      `RFC 0006 does not cite the row ${row}`,
+    );
+  }
+  const findings = read("docs/browser-storage.md");
+  for (const [, browser, behaviour] of rfc.matchAll(
+    /(?:measured|documented|unknown): ([^·()\n]+(?:\([^)]*\))?) · ([^;)\n]+?(?:\([^)]*\))?)(?=[;)])/g,
+  )) {
+    assert.ok(
+      findings.includes(`| ${browser.trim()} | ${behaviour.trim()} |`),
+      `RFC 0006 cites a row the findings lack: ${browser} · ${behaviour}`,
+    );
+  }
+});
