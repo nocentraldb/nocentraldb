@@ -177,7 +177,7 @@ fn refuses_the_rfc_example_with_its_messages() {
 
 #[test]
 fn refuses_removing_a_collection_or_a_field() {
-    let next = v2(|t| t.replace(r#", "teams": { "since": 1, "fields": {} }"#, ""));
+    let next = v2(|t| t.replace(",\n  \"teams\": { \"since\": 1, \"fields\": {} }", ""));
     assert_eq!(
         refusals(&next),
         vec![Refusal::CollectionRemoved {
