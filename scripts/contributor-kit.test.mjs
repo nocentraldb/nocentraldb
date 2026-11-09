@@ -31,6 +31,7 @@ const ISSUE_FORMS = [
 const DISCUSSION_FORM = ".github/DISCUSSION_TEMPLATE/rfc-feedback.yml";
 const CHOOSER = ".github/ISSUE_TEMPLATE/config.yml";
 const PR_TEMPLATE = ".github/PULL_REQUEST_TEMPLATE.md";
+const RFC_INDEX = "docs/rfc/README.md";
 const MARKDOWN = [
   "CONTRIBUTING.md",
   "README.md",
@@ -38,6 +39,7 @@ const MARKDOWN = [
   ".github/SECURITY.md",
   ".github/CODE_OF_CONDUCT.md",
   PR_TEMPLATE,
+  RFC_INDEX,
 ];
 const KIT = [...MARKDOWN, ...ISSUE_FORMS, DISCUSSION_FORM, CHOOSER];
 
@@ -147,6 +149,21 @@ test("the RFC feedback discussion form follows the discussion form schema", () =
     assert.ok(f[id], `rfc-feedback: no field ${id}`);
   }
   assert.ok(required(f.rfc) && required(f.feedback));
+  assert.ok(!/0001/.test(form.title), "the form's title fits every RFC");
+});
+
+test("the RFC index lists every RFC and says where feedback goes", () => {
+  const index = read(RFC_INDEX);
+  const rfcs = globSync("docs/rfc/[0-9][0-9][0-9][0-9]-*.md", { cwd: root });
+  assert.ok(rfcs.length > 0, "no RFCs found");
+  for (const rfc of rfcs) {
+    assert.ok(index.includes(`](${basename(rfc)})`), `index omits ${rfc}`);
+  }
+  assert.ok(anchors(index).has("giving-feedback"), "no Giving feedback");
+  assert.ok(
+    index.includes("/discussions/categories/rfc-feedback"),
+    "the index links the RFC feedback category",
+  );
 });
 
 test("the issue chooser disables blank issues and links security, discussions and the RFC", () => {
@@ -163,9 +180,7 @@ test("the issue chooser disables blank issues and links security, discussions an
   assert.ok(urls.includes(`${repo}/security/advisories/new`));
   assert.ok(urls.includes(`${repo}/discussions`));
   assert.ok(
-    urls.includes(
-      `${repo}/blob/main/docs/rfc/0001-nocentraldb.md#how-to-give-advice`,
-    ),
+    urls.includes(`${repo}/blob/main/docs/rfc/README.md#giving-feedback`),
   );
 });
 
