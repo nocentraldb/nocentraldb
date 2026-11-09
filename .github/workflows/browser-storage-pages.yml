@@ -1,0 +1,56 @@
+# NOC-33: publishes the browser storage probe page (scripts/browser-storage/)
+# to GitHub Pages, so the owner can open it on a phone for the device checks
+# in docs/browser-storage-checklist.md. Publishing is the owner's decision:
+# the workflow runs only when a person starts it, and it does nothing until
+# Pages is enabled with "GitHub Actions" as its source. The github-pages
+# environment deploys from main by default, so start it on main.
+#
+# The site is one origin, https://nocentraldb.github.io: a path cannot give
+# a check an origin of its own, so the checklist keeps checks apart through
+# Safari, a Dock app and a home-screen app instead.
+# scripts/browser-storage-pages-workflow.test.mjs asserts this file.
+name: browser-storage-pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: browser-storage-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Installs proto, then moon, node and pnpm as pinned in .prototools.
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+
+      # The pinned @sqlite.org/sqlite-wasm, whose dist/ the page imports.
+      - run: pnpm install --frozen-lockfile
+
+      - run: node scripts/browser-storage/build.mjs site
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

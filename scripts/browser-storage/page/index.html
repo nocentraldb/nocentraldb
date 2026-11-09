@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NoCentralDB browser storage probe</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 16px; max-width: 40rem; }
+      button { font-size: 1rem; margin: 0 8px 8px 0; padding: 8px 12px; }
+      pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; word-break: break-word; }
+    </style>
+  </head>
+  <body>
+    <h1>Browser storage probe</h1>
+    <p>
+      Writes a SQLite database to the Origin Private File System
+      (<code>opfs-sahpool</code>, in a worker) and an IndexedDB entry as a
+      control. NOC-33, see <code>docs/browser-storage.md</code>.
+    </p>
+    <button id="write" type="button">Write</button>
+    <button id="read" type="button">Read</button>
+    <button id="persist" type="button">Request persist()</button>
+    <button id="info" type="button">Storage info</button>
+    <pre id="out">Loading…</pre>
+    <script type="module" src="probe.js"></script>
+  </body>
+</html>

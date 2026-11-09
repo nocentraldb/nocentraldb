@@ -1,0 +1,65 @@
+# NOC-33: runs the browser storage probe (scripts/browser-storage/) in
+# Chromium, Firefox and WebKit through Playwright on GitHub's Ubuntu runner.
+# It is not part of `pnpm gates`, which runs without browsers: the browsers
+# are a large download, and their results describe the browsers, not this
+# repository's code. It runs on pull requests that touch the probe or its
+# pinned dependencies, and by hand. It writes the measured rows into the run's
+# summary and changes nothing in the repository; docs/browser-storage.md keeps
+# the committed run, which the gate holds the table to. It also uploads the
+# probe page as a static folder (artifact browser-storage-probe), for the
+# manual checks on devices (docs/browser-storage-checklist.md).
+name: browser-storage
+
+on:
+  pull_request:
+    paths:
+      - "scripts/browser-storage/**"
+      - ".github/workflows/browser-storage.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-storage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Installs proto, then moon, node and pnpm as pinned in .prototools.
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+
+      - run: pnpm install --frozen-lockfile
+
+      # The browser builds that the pinned playwright version expects, and
+      # the system libraries they need.
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: The probe reports every behaviour in every engine
+        run: node --test 'scripts/browser-storage/*.test.mjs'
+
+      - name: Measured rows
+        run: |
+          {
+            echo "## Browser storage probe"
+            echo
+            node scripts/browser-storage/run.mjs
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The probe page as a static folder
+        run: node scripts/browser-storage/build.mjs site
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: browser-storage-probe
+          path: site
+          retention-days: 90
