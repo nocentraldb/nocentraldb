@@ -232,7 +232,9 @@ impl View {
     ) -> Result<Page, Error> {
         let index = self
             .model
-            .index(index)
+            .indexes
+            .iter()
+            .find(|i| i.name == index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
         if equal.len() != index.equality {
             return Err(Error::Query(QueryError::Equality));
@@ -288,7 +290,9 @@ impl View {
     pub fn plans(&self, index: &str) -> Result<Vec<String>, Error> {
         let index = self
             .model
-            .index(index)
+            .indexes
+            .iter()
+            .find(|i| i.name == index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
         plans(&self.conn, index)
     }

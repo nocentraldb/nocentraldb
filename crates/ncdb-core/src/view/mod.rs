@@ -12,6 +12,7 @@
 //! Native only for now: the browser's SQLite on OPFS is a later ticket.
 
 mod fold;
+mod from_lock;
 mod log_table;
 pub mod model;
 mod query;
