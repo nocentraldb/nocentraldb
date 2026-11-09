@@ -5,19 +5,25 @@
 //! the log says where.
 //!
 //! The checks of steps 3 to 5 come in through [`Checks`] and the fold of
-//! operations through [`Fold`], so the order of the steps and the states
-//! live here, and the field types (RFC 0004) plug in. A check that fails
+//! field operations through [`Fold`], so the order of the steps and the
+//! states live here, and the field types (RFC 0004) plug in. Operations
+//! without a field, creates and deletes, belong to the object for every
+//! collection (RFC 0004 Amendment 1), so step 7 decodes them here and
+//! folds them into the [`Fold::objects`] of the copy. A check that fails
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
 
+use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
-use crate::ids::OperationId;
+use crate::field_op::{self, Origin};
+use crate::ids::ObjectId;
 use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
 };
+use crate::object::Object;
 
 /// Where a change stops when it fails a check: parked or rejected, with
 /// the reason of the step that failed.
@@ -76,14 +82,19 @@ pub trait Checks {
     fn add_control(&mut self, change: &Change);
 }
 
-/// The fold of operations (step 7): the member's model and its field types.
+/// The fold of operations (step 7): the member's model, its field types
+/// and the objects of the copy.
 pub trait Fold {
     /// Whether the member's model knows the collection.
     fn knows_collection(&self, collection: &str) -> bool;
     /// Whether the member's model knows the field of the collection.
     fn knows_field(&self, collection: &str, field: &str) -> bool;
-    /// Folds one operation the model knows into the view.
-    fn fold(&mut self, id: OperationId, operation: &Operation);
+    /// Folds one operation on a field the model knows into the view, after
+    /// decoding it with the field type's [`field_op::Encoding`], or says
+    /// why it is parked.
+    fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason>;
+    /// The objects of the copy, which creates and deletes fold into.
+    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object>;
 }
 
 /// Why a received frame was not appended.
@@ -197,12 +208,36 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     }
     let mut parked = Vec::new();
     for (position, operation) in (0..).zip(&payload.operations) {
-        match understand(operation, fold) {
-            Ok(()) => fold.fold(change.operation_id(position), operation),
-            Err(reason) => parked.push(ParkedOperation { position, reason }),
+        let origin = Origin {
+            id: change.operation_id(position),
+            author: header.author,
+            stamp: payload.clock,
+        };
+        let folded = understand(operation, fold).and_then(|()| fold_one(operation, origin, fold));
+        if let Err(reason) = folded {
+            parked.push(ParkedOperation { position, reason });
         }
     }
     State::Folded { parked }
+}
+
+/// Folds one operation the model knows: a create or a delete into its
+/// object, which exists in the copy from its first operation on, and a
+/// field operation through the fold.
+fn fold_one(
+    operation: &Operation,
+    origin: Origin,
+    fold: &mut impl Fold,
+) -> Result<(), OperationParkReason> {
+    if operation.field.is_some() {
+        return fold.fold(origin, operation);
+    }
+    let object = field_op::decode_object(operation, origin)?;
+    fold.objects()
+        .entry(operation.object)
+        .or_default()
+        .apply(&object);
+    Ok(())
 }
 
 /// Whether the member's model knows an operation; D10 parks it on its own
