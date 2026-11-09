@@ -571,7 +571,7 @@ impl Operation {
         self.extensions.insert(5, key, value)
     }
 
-    fn to_value(&self) -> Value {
+    pub(crate) fn to_value(&self) -> Value {
         let mut known = vec![
             (1, Value::Bytes(self.object.0.to_vec())),
             (2, Value::Text(self.collection.clone())),
@@ -586,7 +586,7 @@ impl Operation {
         map(known, &self.extensions)
     }
 
-    fn from_value(value: Value) -> Result<Operation, ChangeError> {
+    pub(crate) fn from_value(value: Value) -> Result<Operation, ChangeError> {
         let mut fields = Fields::of(value).map_err(|_| ChangeError::InvalidValue(4))?;
         Ok(Operation {
             object: ObjectId(fixed(fields.required(1)?)?),

@@ -112,6 +112,15 @@ pub enum OperationParkReason {
     UnknownField,
     /// The operation carries an unknown "must understand" key.
     UnknownKey,
+    /// The field's type does not define the operation's number (RFC 0004,
+    /// Amendment 1).
+    UnknownOperation,
+    /// The operation's arguments carry a "must understand" key, 4 to 63,
+    /// that the operation does not define (RFC 0004, Amendment 1).
+    UnknownArgument,
+    /// The operation's arguments are malformed (RFC 0004, Amendment 1,
+    /// decision 12).
+    MalformedArguments,
 }
 
 /// Why a change is rejected: steps 3 to 5.
