@@ -2,11 +2,11 @@
 
 A local-first database for apps where people and agents work on the same data. Everyone works on their own copy, under their own keys, and the server in the middle cannot read any of it.
 
-> **NoCentralDB is not yet a product.** We are currently working on the design and highly encourage you to share your feedback on this as long as changes are cheap (see [RFCs](docs/rfc/README.md)). The install commands and the code on this page give you an impression of how the product would look like if the current design is fully implemented.
+> **NoCentralDB is not yet a product.** We are currently working on the design and strongly encourage you to share your feedback while changes are still cheap (see the [RFCs](docs/rfc/README.md)). The install commands and the code on this page give you an impression of what the product will look like once the current design is fully implemented.
 
 ## What it is for
 
-You are building an app where people and agents work on the same records: tickets, notes, customer records, shared documents. With **NoCentralDB** this data sits right next to where the work happens; at the users computer or where the agent works. This makes processing super fast and independent of a server being available. The collaboration is guaranteed via a relay server that transport the encrypted changes applied to the data and it has no chance to see its content. This allows you to work even on the most sensitive data you can imagine.
+You are building an app where people and agents work on the same records: tickets, notes, customer records, shared documents. With **NoCentralDB**, this data sits right next to where the work happens: on the user's computer or wherever the agent runs. This makes processing super fast and independent of whether a server is available. Collaboration runs through a relay server that transports the encrypted changes to the data; the relay has no way to see their content. This allows you to work even on the most sensitive data you can imagine.
 
 What it does:
 
