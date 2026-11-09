@@ -28,6 +28,10 @@ const REPLACES: u64 = 2;
 /// Argument 3: the additions a remove observed.
 const OBSERVED: u64 = 3;
 
+/// The last argument key a member must understand; keys above it may be
+/// ignored.
+const LAST_MUST_UNDERSTAND_ARGUMENT: u64 = 63;
+
 /// How deeply an operation map sits in a change, as [`cbor::MAX_DEPTH`]
 /// counts: frame 1, header 2, payload 3, operation array 4.
 const OPERATION_DEPTH: usize = 5;
@@ -174,7 +178,7 @@ fn list(ids: &BTreeSet<OperationId>) -> Value {
 
 fn decode_write(operation: &Operation, origin: Origin) -> Result<Write, OperationParkReason> {
     if operation.op != SET {
-        return Err(OperationParkReason::MalformedArguments);
+        return Err(OperationParkReason::UnknownOperation);
     }
     let mut arguments = arguments(operation, &[VALUE, REPLACES])?;
     Ok(Write {
@@ -190,7 +194,7 @@ fn decode_edit(operation: &Operation, origin: Origin) -> Result<Edit, OperationP
     let (names, action): (u64, fn(BTreeSet<OperationId>) -> Action) = match operation.op {
         ADD => (REPLACES, |replaces| Action::Add { replaces }),
         REMOVE => (OBSERVED, |observed| Action::Remove { observed }),
-        _ => return Err(OperationParkReason::MalformedArguments),
+        _ => return Err(OperationParkReason::UnknownOperation),
     };
     let mut arguments = arguments(operation, &[VALUE, names])?;
     Ok(Edit {
@@ -202,7 +206,8 @@ fn decode_edit(operation: &Operation, origin: Origin) -> Result<Edit, OperationP
     })
 }
 
-/// The arguments of an operation: exactly the keys `defined`.
+/// The arguments of an operation: exactly the keys `defined`, once keys
+/// from 64 up are dropped.
 struct Arguments(BTreeMap<u64, Value>);
 
 impl Arguments {
@@ -212,17 +217,31 @@ impl Arguments {
     }
 }
 
+/// Reads the arguments of `operation`, whose keys `defined` are required.
+///
+/// An unknown "must understand" key parks the operation as an unknown
+/// argument before its shape is checked: a later rule version may define
+/// the key and the shape that goes with it, while a malformed operation
+/// stays parked on every version.
 fn arguments(operation: &Operation, defined: &[u64]) -> Result<Arguments, OperationParkReason> {
     let malformed = OperationParkReason::MalformedArguments;
     let Some(Value::Map(entries)) = &operation.value else {
         return Err(malformed);
     };
+    // Keys 1 to 3 are this RFC's: one an operation does not define is
+    // malformed, not unknown.
+    let must_understand = OBSERVED + 1..=LAST_MUST_UNDERSTAND_ARGUMENT;
+    let unknown = |key: &Key| matches!(key, Key::Unsigned(key) if must_understand.contains(key));
+    if entries.keys().any(unknown) {
+        return Err(OperationParkReason::UnknownArgument);
+    }
     let mut arguments = BTreeMap::new();
     for (key, value) in entries {
         match key {
             Key::Unsigned(key) if defined.contains(key) => {
                 arguments.insert(*key, value.clone());
             }
+            Key::Unsigned(key) if *key > LAST_MUST_UNDERSTAND_ARGUMENT => {}
             _ => return Err(malformed),
         }
     }
