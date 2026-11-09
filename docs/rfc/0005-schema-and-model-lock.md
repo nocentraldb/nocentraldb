@@ -2,11 +2,15 @@
 
 REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-11
 
+**Changelog.**
+
+- **2026-11-09** · NOC-54 · [Amendment 1: following RFC 0002 Amendment 5](#amendment-1-following-rfc-0002-amendment-5) brings this RFC in line with [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload), which puts the writer's `model.id` and model version in payload key 64, as D10 and D13 B decided. It decides nothing new. The sentences it changes are marked *(Amendment 1)*.
+
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
-**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names).
+**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54).
 
 ## What this RFC does not cover
 
@@ -402,7 +406,7 @@ Old clients exist: an agent on a laptop that has been closed for three weeks, a 
 3. **An unknown option is kept as written.** A choice, or a set of choices, holding an option the old lock does not list keeps the raw value; the app reads it as an unknown option (RFC 0004).
 4. **A link into an unknown target collection is kept.** Its status reads **wrong collection** on the old client, and **ok** after the upgrade, with no change to the link.
 5. **Values outside the schema are kept, never repaired.** A value of the wrong kind (a string in an `ncdb/int` field, written by a buggy or hostile member) is kept as written, and the app reads the raw value, as RFC 0004 does for an option the reader's schema does not list. RFC 0004's contract (C5) requires that such a value causes no panic and that the state still converges; this RFC adds no read status for it. How the SDK exposes a raw value belongs to the SDK's API review, with RFC 0004's other working names. The SDK never writes such a value.
-6. **Parked data is visible.** The SDK reports, per space, how many changes and operations are parked and why (unknown collection, unknown field, unknown type), and the highest model version that wrote any of them (decision D10). An app can show "Some data needs a newer version of this app" instead of hiding it.
+6. **Parked data is visible.** The SDK reports, per space, how many changes and operations are parked and why (unknown collection, unknown field, unknown type, another model), and the highest model version among the parked changes and operations of the app's own model (decision D10). An app can show "Some data needs a newer version of this app" instead of hiding it. Changes parked as "another model" are counted apart, under their reason: their model version belongs to another lineage, and no upgrade of this app reaches it ([RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload)). *(Amendment 1.)*
 
 The other direction is simpler. A newer client reading data written under an older model finds every field the older model did not have unset, which every field allows (see [No required fields and no defaults](#no-required-fields-and-no-defaults)).
 
@@ -411,7 +415,7 @@ What this does not do, stated plainly:
 - An old client cannot read, query or index data in fields it does not know. Computed fields and views on an old client are computed from what it understands, so they can differ from an upgraded client's until it upgrades. This is RFC 0002's reading of principle 2, which the owner confirmed (Carsten, 2026-11-07): every client that understands all the changes it holds reaches the same state.
 - A client that never upgrades never reads the new fields. It still keeps and forwards them.
 - Deprecated fields stay in every copy and in every sync. Deprecation saves the developer from the field, not the disk.
-- Nothing in a change says which model wrote it. If two apps with different `model.id`s write into one space, and both use the same field name with different types, members fold the same operations by different rules and diverge. Decision D13 proposes how to prevent it.
+- A change names the model that wrote it, but that stops honest and buggy apps, not a hostile member. Every sealed change carries its writer's `model.id` and model version in payload key 64 ([RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload)), and a member parks, whole, every change whose key 64 names a `model.id` other than the one of its own `model.lock.json` (decision D13). So two apps with different `model.id`s that write into one space, with the same field name for fields of different types, cannot make members fold one field by two rules. A member that writes no key 64, or writes the space's own `model.id`, has its change folded by the rules of each member's lock; it gains nothing new, since a member can already write any value into any field. *(Amendment 1.)*
 
 ## Personal fields
 
@@ -668,7 +672,7 @@ Decided (Carsten, 2026-11-08): the recommendation, (A).
 - A. Add the writer's model version to the payload as a "may ignore" key (RFC 0002 keeps keys from 64 up for that), so an old client can report which model version it needs to read its parked changes. *(recommended)*
 - B. No model version in changes; the SDK reports only that changes are parked and why.
 
-Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is an addition to the payload of the merged RFC 0002, so RFC 0002 needs an amendment that adds the key. Until it has one, the SDK falls back to B. D13 B uses the same key.
+Recommendation: A. It costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it. It is an addition to the payload of the merged RFC 0002, so RFC 0002 needed an amendment that adds the key: [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) puts it in payload key 64, together with the writer's `model.id`. *(Amendment 1.)* D13 B uses the same key.
 
 Decided (Carsten, 2026-11-08): the recommendation, (A).
 
@@ -725,3 +729,11 @@ Decided (Carsten, 2026-11-08): the recommendation, (A).
 ## How this RFC is tested
 
 `scripts/rfc-0005.test.mjs`, run by `repo:test` in `pnpm gates`, checks that this file exists, links to RFC 0001's "The design in one page", that every relative link and its anchor resolve, that the sections the ticket requires are present, that every `nc.*` function, modifier and `ncdb model` command used in an example is listed under [Public names](#public-names), and that every JSON example parses. The design itself is tested when it is built: `ncdb model build` with fixtures for each accepted and each refused change, and the SDK's handling of parked data against the convergence harness.
+
+## Amendment 1: following RFC 0002 Amendment 5
+
+Added on 2026-11-09 for NOC-54. [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) carries out this RFC's decisions D10 A and D13 B, which the owner decided as recommended (Carsten, 2026-11-08): every sealed change carries its writer's `model.id` and model version in payload key 64, a "may ignore" key, and a member compares that `model.id` with the one of its own `model.lock.json` and parks a change of another model, whole, with the reason "another model". This amendment changes the three passages that said less than that design, marked *(Amendment 1)* above. It decides nothing: the owner decided D10 and D13 here, and the key's number and encoding in RFC 0002.
+
+- **Parked data is visible** ([Data from a newer model](#data-from-a-newer-model), point 6). It listed the reasons a change or operation is parked without RFC 0002's "another model", and reported the highest model version of every parked change. It now names that reason and counts those changes apart, as RFC 0002's Amendment 5 does, so that "needs model version 7" never names a version of another lineage.
+- **What this does not do** ([Data from a newer model](#data-from-a-newer-model)). This RFC said nothing in a change names the model that wrote it. Key 64 now does, so the bullet says what key 64 prevents, and what it leaves to a hostile member, as RFC 0002's Amendment 5 says it.
+- **D10's recommendation** ([Decisions for the owner](#decisions-for-the-owner)). It said that until RFC 0002 has an amendment that adds the key, the SDK falls back to B. RFC 0002 has it, so there is no fallback: the SDK reports the model version of D10 from key 64.
