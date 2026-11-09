@@ -346,9 +346,10 @@ test("the decision log records NOC-44's routing and the owner's D13", () => {
 });
 
 // The owner decided GENESIS.md follows RFC 0008's M10 (Carsten, 2026-11-08):
-// a member is a person's device, an agent or a sub-agent; a list of members
-// the SDK expands stands in for a group; real groups as members come later.
-test("GENESIS.md's Spaces bullet follows M10: members, lists the SDK expands, groups later", () => {
+// a member is a person's device, an agent or a sub-agent, and GENESIS.md no
+// longer offers groups as members. The owner then dropped the sentence on
+// groups from GENESIS.md (Carsten, 2026-11-09); RFC 0008 keeps the details.
+test("GENESIS.md's Spaces bullet follows M10: members are devices, agents and sub-agents", () => {
   const genesis = read("factory/GENESIS.md");
   assert.ok(
     !/groups can be members of many spaces/i.test(genesis),
@@ -356,7 +357,7 @@ test("GENESIS.md's Spaces bullet follows M10: members, lists the SDK expands, gr
   );
   const spaces = genesis.split("\n").find((l) => l.startsWith("- **Spaces.**"));
   assert.ok(spaces, "no bullet 'Spaces.'");
-  for (const item of [/device/i, /agent/i, /sub-agent/i, /expand/i, /later/i]) {
+  for (const item of [/device/i, /agent/i, /sub-agent/i]) {
     assert.match(spaces, item, `the Spaces bullet does not name ${item}`);
   }
 });

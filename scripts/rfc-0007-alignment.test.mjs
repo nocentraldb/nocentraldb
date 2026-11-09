@@ -187,11 +187,11 @@ test("RFC 0002 says the uploader must be an authenticated current member, the au
   );
 });
 
-// Where RFC 0001, GENESIS.md, use case 2 or the FAQ link RFC 0002's list,
+// Where RFC 0001, use case 2 or the FAQ link RFC 0002's list (GENESIS.md
+// links no RFC, as the owner decided on 2026-11-09),
 // they link RFC 0007's too, and no longer say RFC 0002 lists all of it.
 for (const [path, find] of [
   [RFC_0001, (t) => t.split("\n").find((l) => l.startsWith("- **A relay"))],
-  [GENESIS, (t) => t.split("\n").find((l) => l.startsWith("- **A relay"))],
   [
     USE_CASES,
     (t) => section(t, "2-a-breach-of-the-relay-leaks-nothing-readable"),
