@@ -2,6 +2,10 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-23
 
+**Changelog.**
+
+- **2026-11-09** · NOC-76 · [Amendment 1: groups leave the design](#amendment-1-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now, and marks decision M10 withdrawn. The sentences it changes are marked *(Amendment 1)*.
+
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind) and leaves "membership changes" to a later RFC, on RFC 0002's [Amendment 1](0002-change-and-log-format.md#amendment-1-atomic-unit-and-rejected-changes), with its log state *rejected* (D11) and its rule for changes the relay refuses (D12), both decided by the owner, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
@@ -10,7 +14,7 @@ It also uses [RFC 0005](0005-schema-and-model-lock.md), above all its [decisions
 
 It uses one draft that is still an open pull request, and names it without a link, because it is not on `main` yet: RFC 0007 (the relay, NOC-13, PR #37), which applies the membership rules with the data it can see.
 
-**Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26 (Carsten, 2026-11-08); the design below describes those choices. This RFC was merged with the owner's approval in #40 (Carsten, 2026-11-08). Nothing here is built yet. Draft 0.2 reworked draft 0.1 after pm's review: the fold uses only control bodies and headers, seniority and the order are fully specified, re-grants cannot bring back writes made without the right, and irreversible effects wait until a change is stable.
+**Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26 (Carsten, 2026-11-08); the design below describes those choices, except M10, which the owner later withdrew (Carsten, 2026-11-09, [Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)* This RFC was merged with the owner's approval in #40 (Carsten, 2026-11-08). Nothing here is built yet. Draft 0.2 reworked draft 0.1 after pm's review: the fold uses only control bodies and headers, seniority and the order are fully specified, re-grants cannot bring back writes made without the right, and irreversible effects wait until a change is stable.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -20,7 +24,7 @@ It uses one draft that is still an open pull request, and names it without a lin
 - **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate, the account sign-off and the key-chain subkey are RFC 0003's (its section "Formats of what keys sign and derive", decision 15). This RFC places them in the control bodies (see [What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
 - **Revoking a member certificate.** Deferred to a later RFC about accounts, as RFC 0003 says. In v1, removing the member from every space it belongs to is the revocation.
 - **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. The role names below are working names (decision M12).
-- **Groups as members**, which this RFC names and defers (see [Groups](#groups)).
+- **Groups.** They are not part of the design: withdrawn by the owner (Carsten, 2026-11-09). A later RFC may bring them back (see [Groups](#groups)). *(Amendment 1.)*
 - **Deleting a synced space**, at the relay and on every member, such as an ad-hoc space that synced (RFC 0003). Deferred to a later RFC: it concerns the relay's storage and each member's copy, and needs no control body here. A local ad-hoc space that never synced is deleted locally.
 - **Compaction.** A later RFC. This RFC says what compaction must keep: every control change (decision M16).
 - **Code.** Nothing in `crates/` or `packages/` changes.
@@ -526,15 +530,13 @@ It still learns no content, no space name and, by decision M26, no model id.
 
 ## Groups
 
-GENESIS.md says that "groups can be members of many spaces, so rights change without moving data". A group would be one principal, such as "the design team", that is a member of many spaces. Adding a person to the group would give them every one of those spaces at once.
+Groups are not part of this design. The owner decided to keep them out of every definition for now (Carsten, 2026-11-09, [Amendment 1](#amendment-1-groups-leave-the-design)): they caused more problems than they solved. A member is a person's device, an agent or a sub-agent, and nothing else. An admin who gives several members the same spaces adds each of them to each space, and removes each of them from each space. If a later need shows that groups are useful, they come back through a later RFC. *(Amendment 1.)*
 
-This RFC **defers groups** to a later RFC, for three reasons:
+Such an RFC has to answer what makes a group that is a member of many spaces hard to design:
 
 - **A group's membership lives outside the space.** If a space's control state depended on a group's membership, which changes in another log, then folding one space would depend on another space's changes. RFC 0002 keeps every change, and every fold, inside one space. Crossing spaces needs its own convergence argument.
 - **Removing someone from a group rotates every space of the group.** With per-member envelopes (RFC 0003, decision 1), that is one rotation per space and one envelope per remaining member in each. A group key would reduce the envelopes, but it adds a second layer of keys and rotations to design.
 - **The relay would have to check membership through the group**, which needs the group's control state on every relay that holds any of its spaces.
-
-Until then, the SDK offers a group as a list it expands. Adding a group to a space writes one add entry per member of the group. Removing a person from a group writes one removal in each space the SDK added them to through it. Rights still change without moving data. What v1 loses is a single entry that changes many spaces at once, and a group that exists in the control state (decision M10). This partly conflicts with GENESIS.md (see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs)).
 
 ## Rejected options
 
@@ -635,6 +637,8 @@ Decided: A (Carsten, 2026-11-08). Recommendation: A. An erasure cannot be undone
 - B. Designed now, as a principal with its own control state.
 
 Decided: A (Carsten, 2026-11-08). Recommendation: A, for the reasons in [Groups](#groups). The owner rules on it because GENESIS.md names groups.
+
+Withdrawn by the owner (Carsten, 2026-11-09): groups leave the design, so neither option holds, and the SDK expands no list of members either ([Amendment 1](#amendment-1-groups-leave-the-design)).
 
 **M11. What the relay sees.**
 
@@ -750,9 +754,9 @@ The formats of the member certificate, the account sign-off and the key-chain su
 
 ## Conflicts with GENESIS.md and the other RFCs
 
-This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership without reading content; every member, an agent included, is visible in the member list with its own key and role; rights are per space; a removed member keeps its copy; and the rules converge in any order. It differs from them, or from the other RFCs, in these points. The owner decided each through the decisions it names (Carsten, 2026-11-08). NOC-44 made the changes this RFC asks of RFC 0001, RFC 0002, RFC 0003, RFC 0006 and the FAQ, as one amendment to each RFC; every point below that it resolved says where. RFC 0007's points (11 and 12) are for its own pull request, #37, to align once this RFC is on `main`. The owner decided that GENESIS.md follows M10 too (Carsten, 2026-11-08), and NOC-44 rewrote its sentence on groups (point 1).
+This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership without reading content; every member, an agent included, is visible in the member list with its own key and role; rights are per space; a removed member keeps its copy; and the rules converge in any order. It differs from them, or from the other RFCs, in these points. The owner decided each through the decisions it names (Carsten, 2026-11-08). NOC-44 made the changes this RFC asks of RFC 0001, RFC 0002, RFC 0003, RFC 0006 and the FAQ, as one amendment to each RFC; every point below that it resolved says where. RFC 0007's points (11 and 12) are for its own pull request, #37, to align once this RFC is on `main`. The owner decided that GENESIS.md follows M10 too (Carsten, 2026-11-08), and NOC-44 rewrote its sentence on groups (point 1); the owner removed that sentence when groups were withdrawn by the owner (Carsten, 2026-11-09) ([Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)*
 
-1. **Groups** (GENESIS.md, "Spaces"; RFC 0001, "The design in one page"). Both say groups can be members of many spaces. This RFC defers them and offers lists the SDK expands instead (M10). *Resolved for GENESIS.md, whose "Spaces" bullet now follows M10 (Carsten, 2026-11-08), and for RFC 0001 and the FAQ in [RFC 0001, Amendment 1](0001-nocentraldb.md#amendment-1-following-rfc-0008).*
+1. **Groups** (GENESIS.md, "Spaces"; RFC 0001, "The design in one page"). Both say groups can be members of many spaces. This RFC defers them and offers lists the SDK expands instead (M10). *Resolved for GENESIS.md, whose "Spaces" bullet now follows M10 (Carsten, 2026-11-08), and for RFC 0001 and the FAQ in [RFC 0001, Amendment 1](0001-nocentraldb.md#amendment-1-following-rfc-0008).* *Withdrawn by the owner (Carsten, 2026-11-09) with M10: groups left the design, and GENESIS.md, RFC 0001 and the FAQ no longer name them ([Amendment 1](#amendment-1-groups-leave-the-design)).*
 2. **RFC 0002, what the relay sees.** RFC 0002 says the relay cannot see which changes a change builds on. That stays true for sealed changes. For control changes, the relay sees it under M11. RFC 0002's list of what the relay sees, and the FAQ, should add the items in [How the relay applies the rules](#how-the-relay-applies-the-rules). *Resolved in [RFC 0002, Amendment 3](0002-change-and-log-format.md#amendment-3-following-rfc-0008) and [RFC 0001, Amendment 1](0001-nocentraldb.md#amendment-1-following-rfc-0008); the FAQ lists the items too.*
 3. **RFC 0002, D3.** The owner decided M7: space ids are derived from the creator's member id and a nonce, not drawn at random. This revises D3 for space ids; object ids keep D3. *Resolved in [RFC 0002, Amendment 3](0002-change-and-log-format.md#amendment-3-following-rfc-0008).*
 4. **RFC 0002, header key 4.** The key generation gets a structure: ordinal and tag (M6). The format does not change. *Resolved in [RFC 0002, Amendment 3](0002-change-and-log-format.md#amendment-3-following-rfc-0008).*
@@ -786,4 +790,13 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | A member raised again? | Only its changes under a fresh generation count. |
 | What waits? | Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record, until the shred is stable. |
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
-| Groups? | Deferred; the SDK expands a group into one entry per member. |
+| Groups? | None: withdrawn by the owner (Carsten, 2026-11-09); a later RFC may bring them back ([Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)* |
+
+## Amendment 1: groups leave the design
+
+Added on 2026-11-09 for NOC-76. The owner decided to keep groups out of every definition for now (Carsten, 2026-11-09): they caused more problems than they solved. If a later need shows they are useful, they come back through a later RFC. This amendment changes the sentences that named groups, marked *(Amendment 1)* above. It records the owner's decision and decides nothing else.
+
+- **Decision M10** is withdrawn by the owner (Carsten, 2026-11-09), not deleted. Neither of its options holds: there is no group in the control state, and the SDK expands no list of members into a space. A member is a person's device, an agent or a sub-agent.
+- **[Groups](#groups)** now says that groups are not part of the design, and keeps the three reasons that a later RFC on groups has to answer.
+- **What remains.** Nothing in the control state, the control bodies or the fold changes, since M10 A had put nothing there. An admin adds and removes each member in each space; [RFC 0009, Amendment 1](0009-sdk-api.md#amendment-1-groups-leave-the-design) keeps adding several members in one call as plain batching.
+- **Conflict point 1** and the summary row "Groups?" are marked withdrawn. GENESIS.md no longer names groups, and [RFC 0001, Amendment 5](0001-nocentraldb.md#amendment-5-groups-leave-the-design) removes them from RFC 0001.
