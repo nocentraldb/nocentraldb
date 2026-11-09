@@ -4,7 +4,12 @@
 # is in scripts/release/*.mjs with tests; this file only wires them. A
 # workflow_dispatch is ALWAYS a dry run: nothing is tagged or published.
 # Without a tag it runs the alpha job; with a tag, verify and build against
-# the dispatched ref. scripts/release-workflow.test.mjs asserts these rules.
+# the dispatched ref. These tests assert these rules:
+# scripts/release-workflow.test.mjs (the triggers and the rules for every
+# job), scripts/release-workflow-alpha.test.mjs (the alpha job),
+# scripts/release-workflow-publish.test.mjs (verify, build, publish and
+# commit-back) and scripts/release-ruleset.test.mjs (the release app's token
+# in commit-back and app-token-check).
 name: release
 
 on:

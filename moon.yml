@@ -43,7 +43,10 @@ tasks:
   test:
     # Tests of the repository tooling (scripts/*.test.mjs, incl. the workflow
     # contracts: scripts/changes-workflow.test.mjs and
-    # scripts/release-workflow.test.mjs, scripts/release-ruleset.test.mjs
+    # scripts/release-workflow.test.mjs (the rules for every job),
+    # scripts/release-workflow-alpha.test.mjs and
+    # scripts/release-workflow-publish.test.mjs (the alpha and publish jobs),
+    # scripts/release-ruleset.test.mjs
     # (commit-back pushes under the ruleset's bypass, and
     # docs/release-management.md gives the owner its settings step), the
     # toolchain contract in
