@@ -16,7 +16,7 @@ use ncdb_core::clock::Hlc;
 use ncdb_core::field_op::Origin;
 use ncdb_core::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use ncdb_core::log::{Log, OperationParkReason, ParkReason, RejectReason, State};
-use ncdb_core::object::Object;
+use ncdb_core::object::{Object, ObjectOperation};
 use ncdb_core::receive::{Checks, Fold, Stop};
 
 /// The space every test change belongs to.
@@ -130,8 +130,8 @@ impl Fold for Recorder {
         Ok(())
     }
 
-    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object> {
-        &mut self.objects
+    fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
+        self.objects.entry(object).or_default().apply(operation);
     }
 }
 

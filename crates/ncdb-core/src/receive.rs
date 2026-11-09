@@ -9,11 +9,10 @@
 //! states live here, and the field types (RFC 0004) plug in. Operations
 //! without a field, creates and deletes, belong to the object for every
 //! collection (RFC 0004 Amendment 1), so step 7 decodes them here and
-//! folds them into the [`Fold::objects`] of the copy. A check that fails
+//! hands them to [`Fold::fold_object`]. A check that fails
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
 
-use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
@@ -23,7 +22,7 @@ use crate::log::{
     AppendError, Appended, Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason,
     State,
 };
-use crate::object::Object;
+use crate::object::ObjectOperation;
 
 /// Where a change stops when it fails a check: parked or rejected, with
 /// the reason of the step that failed.
@@ -83,7 +82,7 @@ pub trait Checks {
 }
 
 /// The fold of operations (step 7): the member's model, its field types
-/// and the objects of the copy.
+/// and the objects of the copy, in memory or in the local view.
 pub trait Fold {
     /// Whether the member's model knows the collection.
     fn knows_collection(&self, collection: &str) -> bool;
@@ -93,8 +92,9 @@ pub trait Fold {
     /// decoding it with the field type's [`field_op::Encoding`], or says
     /// why it is parked.
     fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason>;
-    /// The objects of the copy, which creates and deletes fold into.
-    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object>;
+    /// Folds a create or a delete into the object of the copy, which
+    /// exists from its first operation on.
+    fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation);
 }
 
 /// Why a received frame was not appended.
@@ -221,9 +221,8 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
     State::Folded { parked }
 }
 
-/// Folds one operation the model knows: a create or a delete into its
-/// object, which exists in the copy from its first operation on, and a
-/// field operation through the fold.
+/// Folds one operation the model knows, a create or a delete of its object
+/// or a field operation, through the fold.
 fn fold_one(
     operation: &Operation,
     origin: Origin,
@@ -233,10 +232,7 @@ fn fold_one(
         return fold.fold(origin, operation);
     }
     let object = field_op::decode_object(operation, origin)?;
-    fold.objects()
-        .entry(operation.object)
-        .or_default()
-        .apply(&object);
+    fold.fold_object(operation.object, &object);
     Ok(())
 }
 

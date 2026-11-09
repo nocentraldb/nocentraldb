@@ -28,7 +28,7 @@ use ncdb_core::field_op::{self, Encoding, Origin};
 use ncdb_core::ids::{ObjectId, OperationId};
 use ncdb_core::link::{Link, Status, Target};
 use ncdb_core::log::{OperationParkReason, ParkedOperation, State};
-use ncdb_core::object::Object;
+use ncdb_core::object::{Object, ObjectOperation};
 use ncdb_core::receive::Fold;
 
 use member::*;
@@ -219,8 +219,8 @@ impl Fold for Tasks {
         Ok(())
     }
 
-    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object> {
-        &mut self.objects
+    fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
+        self.objects.entry(object).or_default().apply(operation);
     }
 }
 
