@@ -129,6 +129,7 @@ test("a private window without OPFS shows the browser's error", () => {
         private: {
           opfs: "SecurityError: The operation is insecure.",
           idb: "ok",
+          reload: { sqlite: "error: SecurityError", idb: "kept" },
           afterClose: { sqlite: "lost", idb: "lost" },
         },
       }),
@@ -185,6 +186,7 @@ test("after closing a private window without OPFS, SQLite reads as no OPFS", () 
         private: {
           opfs: "UnknownError: failed",
           idb: "ok",
+          reload: { sqlite: "error: UnknownError: failed", idb: "kept" },
           afterClose: { sqlite: "error: UnknownError: failed", idb: "lost" },
         },
       }),
