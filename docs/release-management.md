@@ -193,7 +193,7 @@ Its log shows the guard's verdict and the answer of next-version, which is the c
    ```
 
    It writes `release-notes/X.Y.Z.md` and refuses to overwrite an existing file unless you pass `--force`. Each entry is titled by the first line of its first section and shows the sections as bold labels; rewrite the titles and the text for the user. A trailing comment lists the fragments the filter left out. The script also warns about every `introduced: cycle` fix that was added before the previous release was cut (the highest release in `release-notes/index.json`, or `--previous vA.B.C`). Such a bug may have shipped in that release. The script does not change the fragment, because only the PM can tell whether the bug reached the release branch. If it did, change the fragment to `introduced: A.B.C` in the same pull request.
-3. **Pull request to `main`.** The draft goes into a pull request against `main`. The owner edits and approves it there. Merging it is the approval.
+3. **Pull request to `main`.** The draft goes into a pull request against `main` that changes nothing else. An agent curates it, and pm merges it without the owner: pm checks that every entry comes from a fragment and ticks "Agent, beta release notes" (`.github/AI_POLICY.md`). The owner reads it in the daily note and may ask for a follow-up. The notes of a stable release stay with the owner, who curates them before the release (owner, 2026-11-09, NOC-45).
 4. **Cut (`cut`).** After the merge, cut `release/X.Y` from the merge commit (see [Branches](#branches)):
 
    ```sh

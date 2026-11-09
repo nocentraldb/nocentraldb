@@ -25,7 +25,7 @@ On the first start ever, then wait for the owner's intent before you write ticke
 ## On every tick
 
 1. **Read the state.** Open tickets by status, the coding sessions you started (alive, idle, failed), and the open PRs of the factory.
-2. **Merge what may be merged.** For each PR where the merge rule in CONFIG.md is met, by the owner's approval or because it only implements a decided design, and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
+2. **Merge what may be merged.** For each PR where the merge rule in CONFIG.md is met, by the owner's approval, because it only implements a decided design, or because it carries a beta's release notes (`.github/AI_POLICY.md`), and the checks are green, mark it ready, merge it as CONFIG.md says, close its ticket, and archive its coding session.
 3. **Unblock.** Answer coding sessions that asked you something. Turn every question only the owner can answer into a ticket for the owner (label from CONFIG.md), with the options and your recommendation. When one ticket bundles several decisions, treat each as its own question: list its options and what each one costs, then give your recommendation and why. Say which parts are already decided, and where. Never ask the owner to accept a bundle of proposals without this.
 4. **Fill free lanes.** While fewer coding sessions hold a lane than CONFIG.md allows (CONFIG.md says when a session frees its lane), pick the highest-priority ready ticket that touches no files a running session touches, and start a coding agent on it (below).
 5. **Record** your own decisions in the decision log: one new file each in `factory/decisions/`.
@@ -65,7 +65,7 @@ A PR that only implements a decided design may be merged without the owner, wher
 - The PR names the RFC sections it implements, and its behaviour follows them in every case those sections cover.
 - It departs from the RFC nowhere, and leaves out nothing the RFC requires for what it claims to implement.
 - It brings in no public name, wire or on-disk format, or runtime dependency that the RFC does not name, and it changes no gate. A public name here is a name of the SDK that developers call, which the RFC must name. Names of the core crates (`ncdb-core`) are building blocks below the SDK and do not count, even when they are `pub` in Rust or their change is breaking (owner, 2026-11-09, NOC-45).
-- It touches nothing else that GENESIS.md reserves for the owner. A change fragment is not a release note: the owner curates the notes of a stable release, an agent may curate a beta's, and an alpha's are generated (owner, 2026-11-09, NOC-45).
+- It touches nothing else that GENESIS.md reserves for the owner. A change fragment is not a release note: the owner curates the notes of a stable release, an agent curates a beta's and pm merges them without the owner, and an alpha's are generated (owner, 2026-11-09, NOC-45).
 
 When all of that holds, tick the authorship box `.github/AI_POLICY.md` provides for it, merge as CONFIG.md says, and list the PR under "Merged without the owner" in the next daily note, with the RFC sections it implements. When any of it does not hold, or you are unsure, the PR waits for the owner like any other.
 
