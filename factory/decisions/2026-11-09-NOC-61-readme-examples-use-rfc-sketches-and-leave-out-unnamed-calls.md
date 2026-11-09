@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-61 · The README's examples use the RFCs' sketched calls, marked as sketches, and leave out the write call no RFC names
+
+- Decided by: coding agent, for the owner to confirm in review (GENESIS.md reserves the README and public API names for the owner)
+- Why: the ticket asks for examples that open a database, write, read and share a space, using only names the RFCs define. Only the schema functions and `ncdb model build`/`check` are decided names (RFC 0005, "Public names"). Opening, sharing and reading exist only as sketches in RFC 0003 ("How the SDK hides keys") and RFC 0001 ("The design in one page"); the README shows them and says they are sketches whose final names come with the SDK's API review. No RFC names a write call (only `docs/use-cases.md` does, and it is not an RFC), so the README leaves that step out and says so. Role names follow RFC 0008's working names (`writer`), not RFC 0003's sketch (`editor`). `scripts/readme.test.mjs` fails when an example uses an identifier or a dotted call that no RFC's code contains.
+- Instead of: showing only the decided schema and CLI, which leaves a developer without a picture of using the SDK; or taking `db.insert` from the use cases, a name no RFC defines.
+- Topics: readme, sdk, api-names

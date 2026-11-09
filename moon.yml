@@ -57,7 +57,9 @@ tasks:
     # devDependency, hence the lockfile input), the contributor kit check in
     # scripts/contributor-kit.test.mjs (it reads .github/, CONTRIBUTING.md,
     # README.md and the docs its links point into, and the moon config of
-    # every project, whose gate tasks the README's task table must list), the
+    # every project, whose gate tasks the task table of docs/repository.md
+    # must list), scripts/readme.test.mjs (the README's sections, its RFC
+    # links, and that its examples use only names the RFCs define), the
     # RFC check in
     # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
