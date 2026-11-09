@@ -18,7 +18,7 @@ For each check, add an entry to the [manual check log](browser-storage.md#manual
 - what Request persist() answered, and whether a prompt appeared;
 - what "Read on load" or Read showed: for SQLite and for IndexedDB, the stored time, `null` (lost), or an error.
 
-Then set the row's finding to what you saw, and its source to `measured: manual check <date>` (the date of the log entry's heading). A photo or screenshot of the page is enough as a note; the log needs only the values.
+Then set the row's finding to what you saw, and its source to `measured: manual check <entry heading>`: the log entry's heading without `### `, for example `measured: manual check 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021)`. If a vendor documents the behaviour, keep that row and add the measurement as a row of its own below it. A photo or screenshot of the page is enough as a note; the log needs only the values.
 
 ## Safari on macOS
 

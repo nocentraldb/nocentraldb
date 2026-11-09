@@ -233,18 +233,52 @@ test("every Playwright row in the doc is the committed run, and all of it", () =
   assert.deepEqual(actual.toSorted(), expected.toSorted());
 });
 
-test("a measured row that Playwright did not measure names a manual check", () => {
-  const log = doc();
+// The level-3 headings of the manual check log, split into the entries
+// (outside a code fence) and those inside one, such as the template.
+const logHeadings = () => {
+  const lines = doc().split("\n");
+  const start = lines.indexOf("## Manual check log");
+  assert.ok(start >= 0, `${DOC} has no "## Manual check log"`);
+  const entries = [];
+  const fenced = [];
+  let inFence = false;
+  for (const line of lines.slice(start + 1)) {
+    if (/^## /.test(line) && !inFence) break;
+    if (/^```/.test(line)) inFence = !inFence;
+    else if (/^### /.test(line))
+      (inFence ? fenced : entries).push(line.slice(4));
+  }
+  return { entries, fenced };
+};
+
+test("the manual check log records each check as an entry, not as code", () => {
+  const { entries, fenced } = logHeadings();
+  for (const heading of fenced) {
+    assert.match(
+      heading,
+      /^YYYY-MM-DD /,
+      `"### ${heading}" is inside a code fence; only the template belongs there`,
+    );
+  }
+  for (const heading of entries) {
+    assert.match(
+      heading,
+      /^\d{4}-\d{2}-\d{2} · \S/,
+      `"### ${heading}": an entry's heading is "<date> · <device>"`,
+    );
+  }
+});
+
+test("a measured row that Playwright did not measure names its manual check", () => {
+  const { entries } = logHeadings();
   for (const row of findings()) {
     if (!row.source.startsWith("measured: ")) continue;
     if (row.source.startsWith("measured: Playwright")) continue;
-    const match = row.source.match(
-      /^measured: manual check (\d{4}-\d{2}-\d{2})/,
-    );
-    assert.ok(match, `${key(row)}: "measured: manual check <date>"`);
+    const match = row.source.match(/^measured: manual check (.+)$/);
+    assert.ok(match, `${key(row)}: "measured: manual check <entry heading>"`);
     assert.ok(
-      log.includes(`### ${match[1]}`),
-      `${key(row)}: the manual check log has an entry for ${match[1]}`,
+      entries.includes(match[1]),
+      `${key(row)}: the manual check log has no entry "### ${match[1]}"`,
     );
   }
 });
