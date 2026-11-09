@@ -60,7 +60,10 @@ tasks:
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
     # its sections), scripts/rfc-0004-examples.test.mjs (the byte-exact examples
     # of RFC 0004 Amendment 1 are canonical CBOR and equal the committed
-    # vectors in docs/rfc/vectors/0004), scripts/rfc-0001.test.mjs (RFC 0001,
+    # vectors in docs/rfc/vectors/0004), scripts/rfc-0002-model.test.mjs (RFC
+    # 0002 Amendment 5 carries the writer's model in payload key 64, and its
+    # examples equal the committed vectors in docs/rfc/vectors/0002),
+    # scripts/rfc-0001.test.mjs (RFC 0001,
     # the FAQ, the use cases and factory/GENESIS.md name what the relay sees and
     # every erasure limit, and their links resolve; the /factory/**/* input
     # covers GENESIS.md), scripts/rfc-0008-alignment.test.mjs (RFC 0001, 0002,
