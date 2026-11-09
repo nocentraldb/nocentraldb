@@ -6,6 +6,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 
 - **2026-11-09** · NOC-54 · [Amendment 1: following RFC 0002 Amendment 5](#amendment-1-following-rfc-0002-amendment-5) brings this RFC in line with [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload), which puts the writer's `model.id` and model version in payload key 64, as D10 and D13 B decided. It decides nothing new. The sentences it changes are marked *(Amendment 1)*.
 - **2026-11-09** · NOC-35 · [Amendment 2: following RFC 0001 Amendment 4](#amendment-2-following-rfc-0001-amendment-4) quotes RFC 0001's new wording on personal fields, which follows this RFC's D9. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
+- **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) follows [RFC 0009](0009-sdk-api.md), which the owner decided: `nc.Infer` types an unknown option of a choice as `nc.Unknown`, and the SDK refuses a write to a personal field whose person link is unset with `noPerson`. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
@@ -157,7 +158,7 @@ An index is local: it is built from the view on each device and never travels in
 
 ### Types for the app
 
-`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional, a choice as the union of its options, a link as an object id. How reads expose conflicts and resolution statuses (RFC 0004's working names `conflicts`, `lostRemovals` and the link statuses) belongs to the SDK's API review.
+`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional, a choice as the union of its options and `nc.Unknown`, `{ unknown: rawValue }`, for an option the lock does not list yet, a link as an object id ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id), decision S5). *(Amendment 3.)* How reads expose conflicts and resolution statuses (RFC 0004's working names `conflicts`, `lostRemovals` and the link statuses) is the SDK's API review, [RFC 0009](0009-sdk-api.md#conflicts-lost-removals-and-link-states). *(Amendment 3.)*
 
 ## The structure of model.lock.json
 
@@ -469,6 +470,8 @@ Across spaces this is not enough. Object ids belong to one space, so the same cu
 - In v1, only basic values can be personal: `nc.string`, `nc.int`, `nc.float`, `nc.boolean` and `nc.oneOf`. Sets and links cannot. A set compares its elements by their bytes (RFC 0004), and a sealed value has different bytes each time it is written, so a set of sealed values could not tell two equal elements apart. A link must stay readable to resolve its target. Rich text and streams decide for themselves in their RFCs. (Decision D9.)
 - A field is personal from the version that adds it, or never (see [Refused](#refused)).
 
+The build cannot check that the person link is set when a personal field is written. The SDK refuses such a write with `noPerson`: sealing the value under no person would make it unerasable, and choosing a person would guess ([RFC 0009, "Personal fields"](0009-sdk-api.md#personal-fields)). *(Amendment 3.)*
+
 ### Two limits
 
 Stated plainly:
@@ -744,3 +747,10 @@ Added on 2026-11-09 for NOC-54. [RFC 0002, Amendment 5](0002-change-and-log-form
 ## Amendment 2: following RFC 0001 Amendment 4
 
 Added on 2026-11-09 for NOC-35. [RFC 0001, Amendment 4](0001-nocentraldb.md#amendment-4-following-rfc-0005-on-personal-fields) changed RFC 0001's "Personal fields" to follow this RFC's D9: only basic values can be personal, and only from the version that adds the field. [Personal fields](#personal-fields) quoted RFC 0001's old wording, "any field can be marked as personal"; it now quotes the new one, marked *(Amendment 2)* above. It decides nothing.
+
+## Amendment 3: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names points where this RFC is silent or says less. This amendment changes those sentences, marked *(Amendment 3)* above, and decides nothing.
+
+- **`nc.Infer` for choices** (RFC 0009's [point 3](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decision S5). [Types for the app](#types-for-the-app) typed a choice as the union of its options. A choice can hold an option the lock does not list yet, which it keeps as written ([Data from a newer model](#data-from-a-newer-model), point 3), so the type adds `nc.Unknown`. The paragraph also links RFC 0009 as the API review it left the reading of conflicts to.
+- **A personal field without a person** (RFC 0009's [point 4](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs)). This RFC was silent on a write to a personal field whose `person` link is unset. [What the build checks](#what-the-build-checks) now says that the SDK refuses it with `noPerson`, as RFC 0009 defines it.

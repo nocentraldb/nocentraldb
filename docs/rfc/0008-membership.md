@@ -5,6 +5,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-23
 **Changelog.**
 
 - **2026-11-09** · NOC-76 · [Amendment 1: groups leave the design](#amendment-1-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now, and marks decision M10 withdrawn. The sentences it changes are marked *(Amendment 1)*.
+- **2026-11-09** · NOC-75 · [Amendment 2: following RFC 0009](#amendment-2-following-rfc-0009) links [RFC 0009](0009-sdk-api.md), which the owner decided, for how a new member's identity reaches an admin and for the public names. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
 
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
@@ -23,7 +24,7 @@ It uses one draft that is still an open pull request, and names it without a lin
 - **Work orders**, beyond who may perform an erasure and sign it off. A later RFC defines how a work order is claimed, performed and validated.
 - **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate, the account sign-off and the key-chain subkey are RFC 0003's (its section "Formats of what keys sign and derive", decision 15). This RFC places them in the control bodies (see [What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
 - **Revoking a member certificate.** Deferred to a later RFC about accounts, as RFC 0003 says. In v1, removing the member from every space it belongs to is the revocation.
-- **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. The role names below are working names (decision M12).
+- **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. [RFC 0009](0009-sdk-api.md) covers both: an invitation is the joining member's public identity, which the app carries to an admin ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members), decision S12), and the role names below, working names under decision M12, are the public names (decision S13). *(Amendment 2.)*
 - **Groups.** They are not part of the design: withdrawn by the owner (Carsten, 2026-11-09). A later RFC may bring them back (see [Groups](#groups)). *(Amendment 1.)*
 - **Deleting a synced space**, at the relay and on every member, such as an ad-hoc space that synced (RFC 0003). Deferred to a later RFC: it concerns the relay's storage and each member's copy, and needs no control body here. A local ad-hoc space that never synced is deleted locally.
 - **Compaction.** A later RFC. This RFC says what compaction must keep: every control change (decision M16).
@@ -800,3 +801,9 @@ Added on 2026-11-09 for NOC-76. The owner decided to keep groups out of every de
 - **[Groups](#groups)** now says that groups are not part of the design, and keeps the three reasons that a later RFC on groups has to answer.
 - **What remains.** Nothing in the control state, the control bodies or the fold changes, since M10 A had put nothing there. An admin adds and removes each member in each space; [RFC 0009, Amendment 1](0009-sdk-api.md#amendment-1-groups-leave-the-design) keeps adding several members in one call as plain batching.
 - **Conflict point 1** and the summary row "Groups?" are marked withdrawn. GENESIS.md no longer names groups, and [RFC 0001, Amendment 5](0001-nocentraldb.md#amendment-5-groups-leave-the-design) removes them from RFC 0001.
+
+## Amendment 2: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names one point for this RFC. This amendment changes the sentence it names, marked *(Amendment 2)* above, and decides nothing.
+
+- **Invitations** (RFC 0009's [point 10](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decisions S12 and S13). [What this RFC does not cover](#what-this-rfc-does-not-cover) left out how a new member's identity reaches an admin, and the public names. It now links RFC 0009, which covers both, and says that the role names `reader`, `writer` and `admin` are the public names.

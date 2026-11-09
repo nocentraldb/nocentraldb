@@ -11,6 +11,7 @@ A local-first database for people and agents.
 - **2026-11-09** · NOC-34 · [Amendment 3: a browser copy takes its member key with it](#amendment-3-a-browser-copy-takes-its-member-key-with-it) says that a browser which deletes its copy deletes the member key too, and links the page [Browser apps and durability](../browser-durability.md). It decides nothing new. The sentence it changes is marked *(Amendment 3)*.
 - **2026-11-09** · NOC-35 · [Amendment 4: following RFC 0005 on personal fields](#amendment-4-following-rfc-0005-on-personal-fields) says that only basic values can be personal, and only from the version that adds the field, names the app's duty for personal data in free text, and says that removing a member is not erasure, as [RFC 0005](0005-schema-and-model-lock.md) decided. It decides nothing new. The sentences it changes are marked *(Amendment 4)*.
 - **2026-11-09** · NOC-76 · [Amendment 5: groups leave the design](#amendment-5-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now. A member is a person's device, an agent or a sub-agent, and nothing else. The sentences it changes are marked *(Amendment 5)*.
+- **2026-11-09** · NOC-75 · [Amendment 6: following RFC 0009](#amendment-6-following-rfc-0009) makes the example in "The design in one page" query a declared index, as [RFC 0009](0009-sdk-api.md) defines it, because views are not designed yet. It decides nothing. The sentences it changes are marked *(Amendment 6)*.
 
 ## For when a central database is the wrong place
 
@@ -60,14 +61,16 @@ export const model = nc.model({
     priority: nc.int(),
     dependsOn: nc.links("tasks"),
   }, {
-    computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
-    views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
+    indexes: { byStatusPriority: nc.index(["status", "priority"], { equal: 1 }) },
   }),
 });
 
-const page = await db.find(model.tasks.views.ready.take(50));             // first 50, in rank order
-const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor)); // the next 50, when needed
+const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const page = await db.find(query);                       // the first 50 open tasks, by priority
+const more = await db.find(query.after(page.cursor));    // the next 50, when needed
 ```
+
+Computed fields and views, such as the ready tasks that nothing blocks, in rank order, keep their reserved names `nc.reach` and `nc.view` until a later RFC designs them; they are then queried the same way, with `take` and `after`. Until then, the example queries a declared index ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). *(Amendment 6.)*
 
 ## Architecture
 
@@ -208,3 +211,9 @@ Added on 2026-11-09 for NOC-76. The owner decided to keep groups out of every de
 
 - **Spaces.** A member is a person's device, an agent or a sub-agent. There is no group, neither a group that is a member of spaces nor a list of members that the SDK expands. An app that gives several members the same spaces adds each of them to each space. [RFC 0008, Amendment 1](0008-membership.md#amendment-1-groups-leave-the-design) withdraws its decision M10, and [RFC 0009, Amendment 1](0009-sdk-api.md#amendment-1-groups-leave-the-design) its decision S14.
 - **What softens coarse rights.** "A different choice, on purpose" and question 1, "Rights per space", no longer offer groups the SDK expands. Many small spaces remain.
+
+## Amendment 6: following RFC 0009
+
+Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names one point where this RFC's example cannot run. This amendment changes the example and adds the sentence after it, marked *(Amendment 6)* above, and decides nothing.
+
+- **`db.find` on a view** (RFC 0009's [point 6](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decision S7). The example declared a computed field with `nc.reach` and a view with `nc.view` and queried the view. RFC 0005 reserves both names but does not design them, so no query can run on a view yet. The example now declares an index and queries it, as RFC 0009 defines it; the name `db.find` and the calls `take` and `after` stay, and a view is queried the same way once it is designed.
