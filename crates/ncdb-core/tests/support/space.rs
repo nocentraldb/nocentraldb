@@ -85,7 +85,13 @@ impl Space {
     pub fn write(&mut self, author: Who, entry: Entry, deps: &[&Change]) -> Change {
         let body = ControlBody::new(dependencies(deps), entry);
         let sequence = self.next(author);
-        membership::write(&key(author), self.space, sequence, self.first_generation, &body)
+        membership::write(
+            &key(author),
+            self.space,
+            sequence,
+            self.first_generation,
+            &body,
+        )
     }
 
     /// `author` adds `subject` with `role`. The subject is a device unless
@@ -129,7 +135,11 @@ impl Space {
         deps: &[&Change],
     ) -> Change {
         let from_generation = (role >= Role::Writer).then_some(self.first_generation);
-        let action = Action::SetRole { role, from_generation, cutoff };
+        let action = Action::SetRole {
+            role,
+            from_generation,
+            cutoff,
+        };
         self.membership(author, subject, action, deps)
     }
 
@@ -138,8 +148,17 @@ impl Space {
         self.membership(author, subject, Action::Remove { cutoff }, deps)
     }
 
-    fn membership(&mut self, author: Who, subject: Who, action: Action, deps: &[&Change]) -> Change {
-        let entry = Entry::Membership(MembershipEntry { subject: id(subject), action });
+    fn membership(
+        &mut self,
+        author: Who,
+        subject: Who,
+        action: Action,
+        deps: &[&Change],
+    ) -> Change {
+        let entry = Entry::Membership(MembershipEntry {
+            subject: id(subject),
+            action,
+        });
         self.write(author, entry, deps)
     }
 

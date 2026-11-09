@@ -31,7 +31,10 @@ fn the_genesis_makes_its_creator_the_only_admin() {
     assert_eq!(state.genesis(), Some(s.genesis.id()));
     assert_eq!(state.verdict(s.genesis.id()), Some(&Verdict::Accepted));
     assert_eq!(state.first_generation(), Some(s.first_generation));
-    assert_eq!(state.members().collect::<Vec<_>>(), [(id(ALICE), Role::Admin)]);
+    assert_eq!(
+        state.members().collect::<Vec<_>>(),
+        [(id(ALICE), Role::Admin)]
+    );
     assert_eq!(state.seniority(), [id(ALICE)]);
 }
 
@@ -50,7 +53,10 @@ fn an_admin_adds_members_with_their_roles() {
     assert_eq!(bob_state.key, key(BOB).public());
     assert_eq!(bob_state.grants.len(), 1);
     assert_eq!(bob_state.grants[0].change, bob.id());
-    assert_eq!(bob_state.grants[0].from_generation, Some(s.first_generation));
+    assert_eq!(
+        bob_state.grants[0].from_generation,
+        Some(s.first_generation)
+    );
 }
 
 #[test]
@@ -111,9 +117,14 @@ fn without_a_genesis_nothing_folds() {
     let mut s = Space::new(ALICE);
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Writer, &[&g]);
-    let state = resolve(s.space, [&bob]);
+    let ack = s.other(BOB, membership::ACKNOWLEDGEMENT, &[&bob]);
+    let state = resolve(s.space, [&bob, &ack]);
     assert_eq!(state.genesis(), None);
-    assert_eq!(state.verdict(bob.id()), Some(&Verdict::Rejected(Rejection::NoGenesis)));
+    // Only the genesis names Alice's keys; Bob's come with his add.
+    let unknown = Some(&Verdict::Rejected(Rejection::UnknownAuthor));
+    assert_eq!(state.verdict(bob.id()), unknown);
+    let no_genesis = Some(&Verdict::Rejected(Rejection::NoGenesis));
+    assert_eq!(state.verdict(ack.id()), no_genesis);
     assert_eq!(state.members().count(), 0);
     assert!(state.gaps().contains(&g.id()));
 }
@@ -160,7 +171,9 @@ fn a_genesis_needs_sequence_one_and_its_derived_generation() {
     let s = Space::new(ALICE);
     let body = ControlBody::decode(&s.genesis.header().payload).unwrap();
     let late = membership::write(&key(ALICE), s.space, 2, s.first_generation, &body);
-    let Entry::Genesis(mut genesis) = body.entry.clone() else { unreachable!() };
+    let Entry::Genesis(mut genesis) = body.entry.clone() else {
+        unreachable!()
+    };
     genesis.first_generation ^= 1;
     let chosen = ControlBody::new(Default::default(), Entry::Genesis(genesis));
     let chosen = membership::write(&key(ALICE), s.space, 1, s.first_generation, &chosen);
@@ -204,8 +217,14 @@ fn malformed_unsigned_and_unknown_authors_are_rejected() {
     let forged = Change::new(forged_header, bob.signature().to_vec());
     let stranger = s.other(DAN, membership::ACKNOWLEDGEMENT, &[&g]);
     let state = resolve(s.space, [&g, &bob, &malformed, &forged, &stranger]);
-    assert_eq!(state.verdict(malformed.id()), Some(&Verdict::Rejected(Rejection::Malformed)));
-    assert_eq!(state.verdict(forged.id()), Some(&Verdict::Rejected(Rejection::BadSignature)));
+    assert_eq!(
+        state.verdict(malformed.id()),
+        Some(&Verdict::Rejected(Rejection::Malformed))
+    );
+    assert_eq!(
+        state.verdict(forged.id()),
+        Some(&Verdict::Rejected(Rejection::BadSignature))
+    );
     assert_eq!(
         state.verdict(stranger.id()),
         Some(&Verdict::Rejected(Rejection::UnknownAuthor))
@@ -265,8 +284,13 @@ fn a_missing_dependency_is_a_gap_and_the_rest_still_counts() {
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Writer, &[&g]);
     let carol = s.add(ALICE, CAROL, Role::Reader, &[&bob]);
-    let state = resolve(s.space, [&g, &carol]);
+    let dan = s.add(ALICE, DAN, Role::Reader, &[&g, &bob]);
+    let state = resolve(s.space, [&g, &carol, &dan]);
     assert!(state.gaps().contains(&bob.id()));
-    assert_eq!(state.verdict(carol.id()), Some(&Verdict::Accepted));
+    // Carol's add reaches the genesis only through Bob's, so its held
+    // causal past is empty. Dan's names the genesis too.
+    let not_valid = Some(&Verdict::Rejected(Rejection::NotValidWhenWritten));
+    assert_eq!(state.verdict(carol.id()), not_valid);
+    assert_eq!(state.verdict(dan.id()), Some(&Verdict::Accepted));
     assert_eq!(state.role(id(BOB)), None);
 }

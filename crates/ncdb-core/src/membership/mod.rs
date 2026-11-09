@@ -5,7 +5,7 @@
 //! first admin, and its membership comes from membership entries
 //! ([`MembershipEntry`]) in control changes ([`ControlBody`]). Members and
 //! the relay fold the control changes of a space they hold into one control
-//! state with `resolve`, the same on every copy, in any order of arrival.
+//! state with [`resolve`], the same on every copy, in any order of arrival.
 //! The fold reads only control bodies and headers, so the relay runs the
 //! same function (RFC 0007, "What the relay checks").
 //!
@@ -16,6 +16,10 @@ mod body;
 mod certificate;
 mod fields;
 mod genesis;
+mod input;
+mod resolve;
+mod rights;
+mod state;
 
 pub use body::{
     ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
@@ -26,3 +30,5 @@ pub use genesis::{
     GENERATION_CONTEXT, Genesis, MODEL_ID_CONTEXT, MODEL_ID_FIELD_LEN, SPACE_ID_CONTEXT,
     generation_id, open_model_id, seal_model_id, seal_model_id_with_nonce, space_id,
 };
+pub use resolve::{Resolved, resolve};
+pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
