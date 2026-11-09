@@ -95,232 +95,102 @@ The page for a phone is a static folder: `node scripts/browser-storage/build.mjs
 
 ## Manual check log
 
-Add one entry per check, newest last:
+Add one entry per check, newest last, with the page's output shortened to the fields that matter:
 
 ```markdown
-### 2026-11-09 · Safari on iOS 27.0.1, iPhone 15
+### YYYY-MM-DD · Safari 26.x on iOS 26.x, iPhone model
 
+- Check: the checklist's section and step, e.g. Safari on iOS, in the browser, step 1 (day 0)
+- Method: what you did, with the dates
+- Saw: what the page showed
+```
+
+### 2026-11-09 · Safari 27.0.1 on iOS 27.0.1, iPhone 15
+
+- Check: Safari on iOS, in the browser, step 1 (day 0).
+- Method: on 2026-11-09, opened the probe page in Safari and pressed Storage info (13:41 UTC), Write (13:42) and Read (13:42); after the home-screen check below, Request persist() (14:04).
+- Saw: SQLite on OPFS and IndexedDB both wrote the time and read it back. `persisted()` false; `estimate()` usage 156 KiB, quota 38.4 GiB. `persist()` answered: denied. The log does not record whether a prompt appeared. The user agent reports "iPhone OS 18_7"; the iOS version is the one the owner noted.
+
+```text
 Storage info (2026-11-09T13:41:09.148Z):
-{
-  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
-  "secureContext": true,
-  "persisted": false,
-  "estimate": {
-    "usage": 159748,
-    "quota": 41231686042
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
-
-Write (2026-11-09T13:42:05.842Z):
-{
-  "sqlite": "ok",
-  "idb": "ok"
-}
-
-Read (2026-11-09T13:42:22.646Z):
-{
-  "sqlite": "written 2026-11-09T13:42:05.816Z",
-  "idb": "written 2026-11-09T13:42:05.816Z"
-}
-
-persist() (2026-11-09T14:04:41.432Z):
-{
-  "answered": true,
-  "granted": false,
-  "raw": false
-}
+{ "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
+  "persisted": false, "estimate": { "usage": 159748, "quota": 41231686042 }, "opfs": "ok" }
+Write (2026-11-09T13:42:05.842Z): { "sqlite": "ok", "idb": "ok" }
+Read (2026-11-09T13:42:22.646Z): { "sqlite": "written 2026-11-09T13:42:05.816Z", "idb": "written 2026-11-09T13:42:05.816Z" }
+persist() (2026-11-09T14:04:41.432Z): { "answered": true, "granted": false }
 ```
 
-```markdown
-### 2026-11-09 · Web App (Home Screen) on iOS 27.0.1, iPhone 15
+### 2026-11-09 · Home-screen app (Safari 27.0.1) on iOS 27.0.1, iPhone 15
 
-persist() (2026-11-09T13:44:56.732Z):
-{
-  "answered": true,
-  "granted": false,
-  "raw": false
-}
+- Check: Safari on iOS, as a home-screen app, step 1 (day 0).
+- Method: on 2026-11-09, added the probe page to the home screen, opened the app from there and pressed Request persist() (13:44 UTC), Write (13:45), Storage info (13:45) and Read (13:46).
+- Saw: `persist()` answered: denied, and `persisted()` stayed false. The log does not record whether a prompt appeared. SQLite on OPFS and IndexedDB both wrote the time and read it back. `estimate()` usage 6 MiB, quota 38.4 GiB.
 
-Write (2026-11-09T13:45:30.046Z):
-{
-  "sqlite": "ok",
-  "idb": "ok"
-}
-
+```text
+persist() (2026-11-09T13:44:56.732Z): { "answered": true, "granted": false }
+Write (2026-11-09T13:45:30.046Z): { "sqlite": "ok", "idb": "ok" }
 Storage info (2026-11-09T13:45:45.751Z):
-{
-  "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
-  "secureContext": true,
-  "persisted": false,
-  "estimate": {
-    "usage": 6291535,
-    "quota": 41231686042
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
-
-Read (2026-11-09T13:46:02.180Z):
-{
-  "sqlite": "written 2026-11-09T13:45:30.029Z",
-  "idb": "written 2026-11-09T13:45:30.029Z"
-}
+{ "userAgent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.0.1 Mobile/15E148 Safari/604.1",
+  "persisted": false, "estimate": { "usage": 6291535, "quota": 41231686042 }, "opfs": "ok" }
+Read (2026-11-09T13:46:02.180Z): { "sqlite": "written 2026-11-09T13:45:30.029Z", "idb": "written 2026-11-09T13:45:30.029Z" }
 ```
 
-```markdown
 ### 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021)
 
+- Check: Safari on macOS, step 1 (day 0).
+- Method: on 2026-11-09, opened the probe page in Safari and pressed Storage info (13:57 UTC), Write (13:59) and Read (14:00). Request persist() was not pressed, as the checklist asks.
+- Saw: SQLite on OPFS and IndexedDB both wrote the time and read it back. `persisted()` false; `estimate()` usage 6 MiB, quota 76.8 GiB.
+
+```text
 Storage info (2026-11-09T13:57:49.702Z):
-{
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
-  "secureContext": true,
-  "persisted": false,
-  "estimate": {
-    "usage": 6291473,
-    "quota": 82463372084
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
-
-Write (2026-11-09T13:59:57.389Z):
-{
-  "sqlite": "ok",
-  "idb": "ok"
-}
-
-Read (2026-11-09T14:00:14.178Z):
-{
-  "sqlite": "written 2026-11-09T13:59:57.362Z",
-  "idb": "written 2026-11-09T13:59:57.362Z"
-}
+{ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "persisted": false, "estimate": { "usage": 6291473, "quota": 82463372084 }, "opfs": "ok" }
+Write (2026-11-09T13:59:57.389Z): { "sqlite": "ok", "idb": "ok" }
+Read (2026-11-09T14:00:14.178Z): { "sqlite": "written 2026-11-09T13:59:57.362Z", "idb": "written 2026-11-09T13:59:57.362Z" }
 ```
 
-```markdown
-### 2026-11-09 · Dock App on macOS 26.7.2, Apple M1 Pro (2021)
+### 2026-11-09 · Dock app (Safari 27.2) on macOS 26.7.2, Apple M1 Pro (2021)
 
-Read on load (2026-11-09T14:00:57.870Z):
-{
-  "sqlite": null,
-  "idb": null
-}
+- Check: Safari on macOS, step 2 (day 0).
+- Method: on 2026-11-09, added the probe page to the Dock, opened the app from there and read "Read on load" (14:00 UTC); then pressed Request persist() (14:01), Write (14:02), Storage info (14:02) and Read (14:03).
+- Saw: "Read on load" showed `null` for both: the Dock app does not see what Safari wrote a minute earlier. `persist()` answered: granted, and `persisted()` turned true. The log does not record whether a prompt appeared. SQLite on OPFS and IndexedDB both wrote the time and read it back. `estimate()` usage 6 MiB, quota 76.8 GiB.
 
-persist() (2026-11-09T14:01:56.519Z):
-{
-  "answered": true,
-  "granted": true,
-  "raw": true
-}
-
-Write (2026-11-09T14:02:19.379Z):
-{
-  "sqlite": "ok",
-  "idb": "ok"
-}
-
+```text
+Read on load (2026-11-09T14:00:57.870Z): { "sqlite": null, "idb": null }
+persist() (2026-11-09T14:01:56.519Z): { "answered": true, "granted": true }
+Write (2026-11-09T14:02:19.379Z): { "sqlite": "ok", "idb": "ok" }
 Storage info (2026-11-09T14:02:25.865Z):
-{
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
-  "secureContext": true,
-  "persisted": true,
-  "estimate": {
-    "usage": 6291535,
-    "quota": 82463372084
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
-
-Read (2026-11-09T14:03:41.107Z):
-{
-  "sqlite": "written 2026-11-09T14:02:19.357Z",
-  "idb": "written 2026-11-09T14:02:19.357Z"
-}
+{ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
+  "persisted": true, "estimate": { "usage": 6291535, "quota": 82463372084 }, "opfs": "ok" }
+Read (2026-11-09T14:03:41.107Z): { "sqlite": "written 2026-11-09T14:02:19.357Z", "idb": "written 2026-11-09T14:02:19.357Z" }
 ```
 
-```markdown
 ### 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021)
 
-Read on load (2026-11-09T14:08:48.199Z):
-{
-  "sqlite": null,
-  "idb": null
-}
+- Check: Firefox, steps 1 and 2.
+- Method: on 2026-11-09, opened the probe page; "Read on load" (14:08 UTC). Pressed Request persist(): a prompt asked "Allow nocentraldb.github.io to store data in persistent storage?"; the owner set "Remember this decision" and pressed Allow (14:10). Pressed Storage info (14:12). Then, in the owner's words, "Doing it a 2nd time after I deleted the permission (this time blocking)": Request persist() (14:17) and Storage info (14:17).
+- Saw: after Allow, `persist()` answered granted and `persisted()` was true; `estimate()` usage 576 KiB, quota 230.2 GiB. The second request, meant to be blocked, also answered granted, and `persisted()` was still true. The log does not say whether the prompt appeared again, or whether the page was reloaded after the permission was cleared. No Write or Read in this check.
 
-When clicking `Request persist()`, it showed "Allow nocentraldb.github.io to store data in persistent storage?". I set "Remember this decision" and pressed "Allow".
-
-persist() (2026-11-09T14:10:35.224Z):
-{
-  "answered": true,
-  "granted": true,
-  "raw": true
-}
-
+```text
+Read on load (2026-11-09T14:08:48.199Z): { "sqlite": null, "idb": null }
+persist() (2026-11-09T14:10:35.224Z): { "answered": true, "granted": true }
 Storage info (2026-11-09T14:12:02.401Z):
-{
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
-  "secureContext": true,
-  "persisted": true,
-  "estimate": {
-    "usage": 589824,
-    "quota": 247192397824
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
-
-Doing it a 2nd time after I deleted the permission (this time blocking):
-
-persist() (2026-11-09T14:17:08.681Z):
-{
-  "answered": true,
-  "granted": true,
-  "raw": true
-}
-
-Storage info (2026-11-09T14:17:35.023Z):
-{
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
-  "secureContext": true,
-  "persisted": true,
-  "estimate": {
-    "usage": 589824,
-    "quota": 247192397824
-  },
-  "opfs": "ok",
-  "sqliteVersion": "3.54.1"
-}
+{ "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
+  "persisted": true, "estimate": { "usage": 589824, "quota": 247192397824 }, "opfs": "ok" }
+persist() (2026-11-09T14:17:08.681Z): { "answered": true, "granted": true }
+Storage info (2026-11-09T14:17:35.023Z): { "persisted": true, "estimate": { "usage": 589824, "quota": 247192397824 }, "opfs": "ok" }
 ```
 
-```markdown
-### 2026-11-09 · Firefox 156.0.1 (private window) on macOS 26.7.2, Apple M1 Pro (2021)
+### 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021)
 
+- Check: Firefox, step 3 (private window).
+- Method: on 2026-11-09, opened the probe page in a private window and pressed Storage info (14:18 UTC) and Write (14:19). Then, in the owner's words, "Opening new private window", and pressed Read there (14:20).
+- Saw: no OPFS: opening it failed with "SecurityError: Security error when calling GetDirectory", so SQLite did not open. IndexedDB wrote the time. Read in the new private window showed `null` for IndexedDB. `persisted()` false; `estimate()` usage 88 KiB, quota 10 GiB. The log does not say whether the first private window was closed before the new one was opened, as the checklist's step asks.
+
+```text
 Storage info (2026-11-09T14:18:55.592Z):
-{
-  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:156.0) Gecko/20100101 Firefox/156.0",
-  "secureContext": true,
-  "persisted": false,
-  "estimate": {
-    "usage": 90112,
-    "quota": 10737418240
-  },
-  "opfs": "error: SecurityError: Security error when calling GetDirectory",
-  "sqliteVersion": "error: SecurityError: Security error when calling GetDirectory"
-}
-
-Write (2026-11-09T14:19:26.667Z):
-{
-  "sqlite": "error: SecurityError: Security error when calling GetDirectory",
-  "idb": "ok"
-}
-
-Opening new private window:
-
-Read (2026-11-09T14:20:00.037Z):
-{
-  "sqlite": "error: SecurityError: Security error when calling GetDirectory",
-  "idb": null
-}
+{ "persisted": false, "estimate": { "usage": 90112, "quota": 10737418240 },
+  "opfs": "error: SecurityError: Security error when calling GetDirectory" }
+Write (2026-11-09T14:19:26.667Z): { "sqlite": "error: SecurityError: Security error when calling GetDirectory", "idb": "ok" }
+Read (2026-11-09T14:20:00.037Z): { "sqlite": "error: SecurityError: Security error when calling GetDirectory", "idb": null }
 ```
