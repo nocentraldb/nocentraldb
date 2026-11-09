@@ -371,9 +371,14 @@ jobs:
       - name: Install proto and the tools in .prototools
         run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
-      # The push with the job's token starts no ci run; the next pull
-      # request's gate covers release-notes/ and changes/ (index test,
-      # fragment schema), which commit-back.mjs also checks before it commits.
+      # The push passes the ruleset "Require PR" on main only through its
+      # bypass for the GitHub Actions app, an owner setting
+      # (docs/release-management.md, "The bypass for commit-back");
+      # scripts/release-ruleset.test.mjs holds this job to pushing with
+      # github.token and opening no pull request. The push with the job's
+      # token starts no ci run; the next pull request's gate covers
+      # release-notes/ and changes/ (index test, fragment schema), which
+      # commit-back.mjs also checks before it commits.
       # The index date is the UTC day the GitHub release was published, read
       # from the release, so a re-run on a later day (or a run that crosses
       # midnight) indexes the same day and finds nothing to commit.
