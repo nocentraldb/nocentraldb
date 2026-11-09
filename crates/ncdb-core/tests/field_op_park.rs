@@ -50,14 +50,23 @@ fn item(change: Value, position: Value) -> Value {
     Value::Array(vec![change, position])
 }
 
+fn vec_of(item: Value) -> Value {
+    Value::Array(vec![item])
+}
+
 fn a0() -> Value {
     item(Value::Bytes(A.0.to_vec()), Value::Unsigned(0))
 }
 
 /// Why `title` parks a set with `arguments`.
 fn set_parks(arguments: Value) -> OperationParkReason {
+    set_parks_with(1, arguments)
+}
+
+/// Why `title` parks an operation `number` with `arguments`.
+fn set_parks_with(number: u64, arguments: Value) -> OperationParkReason {
     title()
-        .decode(&op("title", 1, Some(arguments)), origin())
+        .decode(&op("title", number, Some(arguments)), origin())
         .unwrap_err()
 }
 
@@ -94,12 +103,6 @@ fn a_number_of_another_built_in_type_is_an_unknown_operation_not_misread() {
     }
 }
 
-fn set_parks_with(number: u64, arguments: Value) -> OperationParkReason {
-    title()
-        .decode(&op("title", number, Some(arguments)), origin())
-        .unwrap_err()
-}
-
 #[test]
 fn an_unknown_operation_parks_even_when_its_arguments_are_malformed() {
     assert_eq!(
@@ -130,10 +133,6 @@ fn every_argument_from_64_up_may_be_ignored_by_every_operation() {
             .decode(&op("tags", 3, Some(remove)), origin())
             .is_ok()
     );
-}
-
-fn vec_of(item: Value) -> Value {
-    Value::Array(vec![item])
 }
 
 #[test]
@@ -204,7 +203,7 @@ fn a_list_that_is_not_an_array_is_malformed() {
         MalformedArguments
     );
     assert_eq!(
-        set_parks(args(&[(1, text("x")), (2, a0().clone())])),
+        set_parks(args(&[(1, text("x")), (2, a0())])),
         MalformedArguments
     );
     let remove = args(&[(1, text("x")), (3, Value::Map(Default::default()))]);
