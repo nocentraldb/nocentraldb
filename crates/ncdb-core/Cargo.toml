@@ -41,6 +41,10 @@ hkdf = { version = "=0.13.0", default-features = false }
 hpke = { version = "=0.15.1", default-features = false, features = ["alloc", "x25519", "chacha"] }
 # Wipes key bytes from memory when they are dropped.
 zeroize = { version = "=1.9.1", default-features = false }
+# Reads model.lock.json and the schema description `ncdb model build` gets
+# from the TypeScript module (RFC 0005, NOC-70). The version Cargo.lock
+# already held.
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 
 # The local view natively (RFC 0006, "Desktop and mobile"): rusqlite with
 # SQLite compiled from source (`bundled`), never the system's SQLite. Its
