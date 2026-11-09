@@ -217,10 +217,17 @@ fn apply<T: Encoding>(
 /// live, the field is cleared, or the value is outside the reader's
 /// schema (it stays readable in the merge state).
 fn column_value(winner: Option<Entry>) -> Sql {
-    let Some(entry) = winner.filter(|entry| entry.known) else {
-        return Sql::Null;
-    };
-    match entry.value {
+    match winner.filter(|entry| entry.known) {
+        Some(entry) => sql_value(entry.value),
+        None => Sql::Null,
+    }
+}
+
+/// A basic value as the SQLite value its column holds: text as `TEXT`,
+/// an integer and a boolean as `INTEGER`, a float as `REAL`, bytes (an
+/// object id) as `BLOB`, anything else as NULL.
+pub(super) fn sql_value(value: Value) -> Sql {
+    match value {
         Value::Text(text) => Sql::Text(text),
         Value::Unsigned(n) => i64::try_from(n).map_or(Sql::Null, Sql::Integer),
         Value::Negative(n) => i64::try_from(n).map_or(Sql::Null, |n| Sql::Integer(-1 - n)),

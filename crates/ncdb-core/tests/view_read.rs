@@ -66,7 +66,8 @@ fn task(n: u8, title: Option<&str>, rank: Option<u64>) -> Vec<Operation> {
 fn view_with(operations: Vec<Operation>) -> View {
     let mut view = View::open_in_memory(model()).unwrap();
     let mut control = Control::default();
-    view.receive(&envelope(FOUNDER, 1, 0), &mut control).unwrap();
+    view.receive(&envelope(FOUNDER, 1, 0), &mut control)
+        .unwrap();
     let payload = Payload::new(Hlc(1), BTreeSet::new(), operations).encode();
     let change = frame(sealed_header(FOUNDER, 2, 0, payload), GOOD);
     view.receive(&change, &mut control).unwrap();
@@ -202,7 +203,13 @@ fn a_lookup_that_does_not_fit_its_index_is_refused() {
 
 #[test]
 fn a_cursor_does_not_show_the_values_it_holds() {
-    let view = view_with([task(1, Some("secret"), Some(1)), task(2, Some("secret"), None)].concat());
+    let view = view_with(
+        [
+            task(1, Some("secret"), Some(1)),
+            task(2, Some("secret"), None),
+        ]
+        .concat(),
+    );
     let page = view
         .page(BY_TITLE, &[Value::Text("secret".into())], None, 1)
         .unwrap();

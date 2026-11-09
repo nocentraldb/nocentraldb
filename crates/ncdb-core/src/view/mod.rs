@@ -14,6 +14,7 @@
 mod fold;
 mod log_table;
 pub mod model;
+mod query;
 mod read;
 mod schema;
 mod state;
@@ -30,6 +31,7 @@ use crate::log::{Appended, Log, State};
 use crate::receive::{Checks, ReceiveError};
 
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model};
+pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 
 /// A member's local view: its database, its model and the log of each of
@@ -68,6 +70,11 @@ pub enum Error {
     Invalid(Invalid),
     /// The database holds something this core did not write.
     Corrupt(&'static str),
+    /// A lookup was refused.
+    Query(QueryError),
+    /// The lookup of this declared index would not run through it, or
+    /// would sort in a temporary B-tree (RFC 0006, "The check").
+    Plan(String),
 }
 
 impl fmt::Display for Error {
@@ -83,6 +90,8 @@ impl fmt::Display for Error {
             Error::Model => f.write_str("the view was folded by another model"),
             Error::Invalid(invalid) => write!(f, "the model cannot be folded: {invalid:?}"),
             Error::Corrupt(what) => write!(f, "the database holds an unreadable {what}"),
+            Error::Query(error) => write!(f, "the lookup was refused: {error:?}"),
+            Error::Plan(index) => write!(f, "the lookup of index {index} does not run through it"),
         }
     }
 }
@@ -119,6 +128,7 @@ impl View {
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
         schema::open(&tx, &model)?;
+        query::check(&tx, &model.indexes)?;
         let logs = log_table::load(&tx)?;
         tx.commit()?;
         Ok(View { conn, model, logs })
