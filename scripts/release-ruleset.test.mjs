@@ -3,7 +3,8 @@
 // straight to main as the organization's release GitHub App, which is the
 // only actor on the ruleset's bypass list. So commit-back mints a
 // short-lived token for that app with actions/create-github-app-token,
-// pinned by commit SHA, from the repository variable RELEASE_APP_ID and the
+// pinned by commit SHA, from the repository variable RELEASE_APP_CLIENT_ID
+// (the app's Client ID; the action's deprecated app-id is not used) and the
 // repository secret RELEASE_APP_PRIVATE_KEY, narrowed to contents: write;
 // it checks out and pushes with that token and never with github.token,
 // whose job permission stays read-only; no other job mints or reads the
@@ -70,7 +71,7 @@ const checks = [
         "the app token does not come from create-github-app-token pinned by SHA",
       );
       assert.deepEqual(token.with, {
-        "app-id": gh("vars.RELEASE_APP_ID"),
+        "client-id": gh("vars.RELEASE_APP_CLIENT_ID"),
         "private-key": gh("secrets.RELEASE_APP_PRIVATE_KEY"),
         "permission-contents": "write",
       });
@@ -146,11 +147,18 @@ const checks = [
           [...APP_PATH(ctx), "uses"],
           "actions/create-github-app-token@v3",
         ),
-      "reads the app id from a secret": (ctx) =>
+      "reads the client id from a secret": (ctx) =>
+        ctx.doc.setIn(
+          [...APP_PATH(ctx), "with", "client-id"],
+          gh("secrets.RELEASE_APP_CLIENT_ID"),
+        ),
+      "uses the deprecated app-id": (ctx) => {
+        ctx.doc.deleteIn([...APP_PATH(ctx), "with", "client-id"]);
         ctx.doc.setIn(
           [...APP_PATH(ctx), "with", "app-id"],
-          gh("secrets.RELEASE_APP_ID"),
-        ),
+          gh("vars.RELEASE_APP_ID"),
+        );
+      },
       "mints a token with every permission of the app": (ctx) =>
         ctx.doc.deleteIn([...APP_PATH(ctx), "with", "permission-contents"]),
       "mints the token after the checkout": (ctx) => {
@@ -204,7 +212,8 @@ const checks = [
         "Add bypass",
         "Always allow",
         "Settings → Secrets and variables → Actions",
-        "`RELEASE_APP_ID`",
+        "`RELEASE_APP_CLIENT_ID`",
+        "Client ID",
         "`RELEASE_APP_PRIVATE_KEY`",
         "Generate a private key",
         "only this app",
