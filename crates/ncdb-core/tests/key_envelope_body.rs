@@ -25,8 +25,7 @@ fn recipient() -> MemberKey {
 
 fn sealed() -> KeyEnvelope {
     let key = SpaceKey::from_bytes([0x5a; 32]);
-    envelope::seal_with_ephemeral(&key, SPACE, GENERATION, &recipient().public(), [9; 32])
-        .unwrap()
+    envelope::seal_with_ephemeral(&key, SPACE, GENERATION, &recipient().public(), [9; 32]).unwrap()
 }
 
 fn body() -> ControlBody {
@@ -52,7 +51,10 @@ fn an_envelope_is_entry_type_2_with_its_fields_under_keys_8_to_11() {
     let keys: Vec<&Key> = map.keys().collect();
     let expected = [1, 3, 8, 9, 10, 11].map(Key::Unsigned);
     assert_eq!(keys, expected.iter().collect::<Vec<_>>());
-    assert_eq!(map[&Key::Unsigned(1)], Value::Unsigned(membership::KEY_ENVELOPE));
+    assert_eq!(
+        map[&Key::Unsigned(1)],
+        Value::Unsigned(membership::KEY_ENVELOPE)
+    );
     for (key, value) in sealed().fields() {
         assert_eq!(map[&key], value);
     }

@@ -7,9 +7,10 @@
 //!
 //! Key 2 (a clock) and keys 4 to 7 are reserved; keys 8 to 63 are "must
 //! understand", keys from 64 up "may ignore", and kept to be encoded again.
-//! This module reads the genesis (entry type 0) and the membership entry
-//! (entry type 1). The bodies of entry types 2 to 6 are other tickets'; it
-//! keeps their fields as they are. A higher entry type, or a key this core
+//! This module reads the genesis (entry type 0), the membership entry
+//! (entry type 1) and the key envelope (entry type 2, [`KeyEnvelope`]). The
+//! bodies of entry types 3 to 6 are other tickets'; it keeps their fields as
+//! they are. A higher entry type, or a key this core
 //! does not understand, makes the body [`BodyError::NotUnderstood`]: the
 //! change is kept, parked.
 
@@ -18,6 +19,7 @@ use std::fmt;
 
 use crate::cbor::{self, Value};
 use crate::change::{Change, ChangeError, Header, Kind, LAST_MUST_UNDERSTAND_KEY};
+use crate::envelope::{EnvelopeError, KeyEnvelope};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::keys::{MemberKey, MemberPublicKey};
 use crate::seal;
@@ -95,10 +97,12 @@ pub enum Entry {
     Genesis(Genesis),
     /// Entry type 1.
     Membership(MembershipEntry),
-    /// Entry types 2 to 6, which this module does not read: their fields
+    /// Entry type 2: one generation's space key, wrapped to one member.
+    KeyEnvelope(KeyEnvelope),
+    /// Entry types 3 to 6, which this module does not read: their fields
     /// from key 8 up, as they are.
     Other {
-        /// The entry type, 2 to 6.
+        /// The entry type, 3 to 6.
         entry_type: u64,
         /// The fields of the entry type.
         fields: BTreeMap<u64, Value>,
@@ -193,6 +197,7 @@ impl ControlBody {
         match &self.entry {
             Entry::Genesis(_) => GENESIS,
             Entry::Membership(_) => MEMBERSHIP,
+            Entry::KeyEnvelope(_) => KEY_ENVELOPE,
             Entry::Other { entry_type, .. } => *entry_type,
         }
     }
@@ -222,6 +227,15 @@ impl ControlBody {
         match &self.entry {
             Entry::Genesis(genesis) => entries.extend(genesis.fields()),
             Entry::Membership(entry) => entries.extend(entry.fields()),
+            Entry::KeyEnvelope(envelope) => entries.extend(
+                envelope
+                    .fields()
+                    .into_iter()
+                    .filter_map(|(key, value)| match key {
+                        cbor::Key::Unsigned(key) => Some((key, value)),
+                        cbor::Key::Text(_) => None,
+                    }),
+            ),
             Entry::Other { fields, .. } => entries.extend(fields.clone()),
         }
         entries.extend(self.extensions.clone());
@@ -238,7 +252,8 @@ impl ControlBody {
         let entry = match entry_type {
             GENESIS => Entry::Genesis(Genesis::take(&mut map)?),
             MEMBERSHIP => Entry::Membership(MembershipEntry::take(&mut map)?),
-            KEY_ENVELOPE..=ACKNOWLEDGEMENT => Entry::Other {
+            KEY_ENVELOPE => Entry::KeyEnvelope(take_envelope(&mut map)?),
+            KEY_CHAIN..=ACKNOWLEDGEMENT => Entry::Other {
                 entry_type,
                 fields: map.0.split_off(&8),
             },
@@ -377,6 +392,21 @@ impl MembershipEntry {
         };
         Ok(MembershipEntry { subject, action })
     }
+}
+
+/// Takes keys 8 to 11 of an envelope out of the map; a missing or
+/// mistyped one is malformed.
+fn take_envelope(map: &mut Fields) -> Result<KeyEnvelope, ChangeError> {
+    let fields = (8..=11)
+        .filter_map(|key| map.optional(key))
+        .map(|(key, value)| (cbor::Key::Unsigned(key), value))
+        .collect();
+    KeyEnvelope::from_fields(&fields).map_err(|error| match error {
+        EnvelopeError::Malformed(key) => ChangeError::InvalidValue(key),
+        // Reading the fields fails only as malformed; the recipient stands
+        // for the others.
+        _ => ChangeError::InvalidValue(8),
+    })
 }
 
 /// Writes a control change: the body as the payload of a kind 1 header of

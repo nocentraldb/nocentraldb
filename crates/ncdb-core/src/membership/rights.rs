@@ -8,8 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::ids::{ChangeId, MemberId};
 
 use super::body::{
-    ACKNOWLEDGEMENT, Action, Entry, KEY_CHAIN, KEY_ENVELOPE, MembershipEntry, PERSON_KEY, Role,
-    SHRED,
+    ACKNOWLEDGEMENT, Action, Entry, KEY_CHAIN, MembershipEntry, PERSON_KEY, Role, SHRED,
 };
 use super::certificate::MemberKind;
 use super::input::Node;
@@ -29,11 +28,11 @@ pub(crate) fn needed(node: &Node) -> Role {
                 Action::Add { .. } => Role::Admin,
             }
         }
-        Entry::Membership(_) => Role::Admin,
+        Entry::Membership(_) | Entry::KeyEnvelope(_) => Role::Admin,
         Entry::Other { entry_type, .. } => match *entry_type {
             ACKNOWLEDGEMENT => Role::Reader,
             PERSON_KEY | SHRED => Role::Writer,
-            KEY_ENVELOPE | KEY_CHAIN => Role::Admin,
+            KEY_CHAIN => Role::Admin,
             _ => Role::Admin,
         },
     }
