@@ -201,3 +201,18 @@ fn seniority_follows_the_depth_of_admin_grants() {
         [id(ALICE), id(first), id(second), id(CAROL), id(MALLORY)]
     );
 }
+
+#[test]
+fn two_concurrent_adds_of_one_member_leave_the_lower_role() {
+    // An add sets its role too, so it caps a concurrent grant it did not
+    // see (RFC 0008, "Roles").
+    let mut s = Space::new(ALICE);
+    let g = s.genesis.clone();
+    let bob = s.add(ALICE, BOB, Role::Admin, &[&g]);
+    let as_admin = s.add(ALICE, CAROL, Role::Admin, &[&bob]);
+    let as_reader = s.add(BOB, CAROL, Role::Reader, &[&bob]);
+    let state = resolve(s.space, [&g, &bob, &as_admin, &as_reader]);
+    assert_eq!(state.role(id(CAROL)), Some(Role::Reader));
+    assert_eq!(state.verdict(as_admin.id()), Some(&Verdict::Lost));
+    assert_eq!(state.verdict(as_reader.id()), Some(&Verdict::Accepted));
+}
