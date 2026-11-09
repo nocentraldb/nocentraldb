@@ -3,9 +3,9 @@
 //!
 //! When the counter is full, the clock carries into the next millisecond
 //! instead of waiting for the wall clock, and at the largest value it
-//! returns an error instead of wrapping. The carry is pending the owner's
-//! decision (NOC-25, "What does the clock do when its counter is full and a clock
-//! from the future was seen?"); pm recommends it.
+//! returns an error instead of wrapping. The carry is RFC 0002 Amendment 6's,
+//! decided by the owner in NOC-25 ("What does the clock do when its counter is
+//! full and a clock from the future was seen?").
 
 #[path = "support/props.rs"]
 mod props;

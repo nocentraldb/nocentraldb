@@ -22,10 +22,11 @@ use crate::redact::{Hidden, Size};
 /// How deeply values may nest in a change, counted from the frame: the
 /// frame is at depth 1, every item of an array or map one deeper than the
 /// array or map. A byte string that holds encoded CBOR (the header in the
-/// frame, the payload in the header) does not reset the count.
+/// frame, the payload in the header) does not reset the count; any other
+/// byte string is one item, whatever it holds.
 ///
-/// Pending the owner's decision (NOC-24, "How deeply may a CBOR value nest
-/// in a change?"); 32 is pm's recommendation.
+/// RFC 0002 Amendment 6 ("The CBOR profile"), decided by the owner in
+/// NOC-24.
 pub const MAX_DEPTH: usize = 32;
 
 /// A CBOR value of the profile.

@@ -702,7 +702,7 @@ A member applies the limit where it decodes, so the step table of [Amendment 1](
 
 ### Byte-exact examples
 
-The examples are written by `docs/rfc/vectors/0002/generate.py` with Python's cbor2 6.2.1, the generator of [Amendment 5's examples](#byte-exact-examples), independently of the core and of the tooling test's reader. `scripts/rfc-0002-amendment-6.test.mjs` checks that N1 decodes at level 3 under the profile and re-encodes to the same bytes, that N2 is refused as too deep, and that each equals its committed vector; the core's `tests/depth.rs` decodes both as payloads. Both are [M2](#byte-exact-examples) with another value in its one operation: arrays of one item around a 0.
+The examples are written by `docs/rfc/vectors/0002/generate.py` with Python's cbor2 6.2.1, the generator of [Amendment 5's examples](#byte-exact-examples), independently of the core and of the tooling test's reader. `scripts/rfc-0002-amendment-6.test.mjs` checks that N1 decodes at level 3 under the profile and re-encodes to the same bytes, that N2 is refused as too deep, and that each equals its committed vector; the core's `tests/depth.rs` decodes both as payloads. Both are [M2](#byte-exact-examples) with another value in its one operation: arrays of one item around a 0. No field type defines such a value, which does not matter here: the decoder checks the depth before any field type reads the operation.
 
 **N1. A payload that reaches level 32: accepted.** The operation's value nests 27 levels, so the 0 at its centre sits at level 32: payload map 3, operations 4, operation 5, value 6 to 32.
 
