@@ -14,7 +14,9 @@
 mod fold;
 mod log_table;
 pub mod model;
+mod read;
 mod schema;
+mod state;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -28,6 +30,7 @@ use crate::log::{Appended, Log, State};
 use crate::receive::{Checks, ReceiveError};
 
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model};
+pub use read::Row;
 
 /// A member's local view: its database, its model and the log of each of
 /// its spaces.

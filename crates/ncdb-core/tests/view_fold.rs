@@ -202,7 +202,12 @@ fn a_create_and_field_writes_land_in_the_objects_and_the_tables_of_the_collectio
 #[test]
 fn a_later_write_replaces_the_read_value_in_the_column_and_a_clear_empties_it() {
     let mut both = Both::new();
-    both.receive(&change(1, 1, 5, vec![title(T, "draft"), rank(T, Value::Negative(2))]));
+    both.receive(&change(
+        1,
+        1,
+        5,
+        vec![title(T, "draft"), rank(T, Value::Negative(2))],
+    ));
     assert_eq!(both.column("f_rank", T), Sql::Integer(-3));
     both.receive(&change(2, 1, 6, vec![title(T, "final")]));
     assert_eq!(both.column("f_title", T), Sql::Text("final".into()));
@@ -221,8 +226,18 @@ fn deletes_operations_that_park_and_writes_before_the_create_fold_as_in_memory()
     let malformed = Operation::new(T, TASK.into(), None, 0, Some(Value::Null));
     let unknown_field = Operation::new(T, TASK.into(), Some("nope".into()), 1, None);
     both.receive(&change(1, 1, 5, vec![title(U, "before"), delete(T, true)]));
-    both.receive(&change(2, 1, 6, vec![malformed, unknown_field, field_op::create(T, PROJECT)]));
-    both.receive(&change(3, 1, 7, vec![field_op::create(U, TASK), delete(T, false)]));
+    both.receive(&change(
+        2,
+        1,
+        6,
+        vec![malformed, unknown_field, field_op::create(T, PROJECT)],
+    ));
+    both.receive(&change(
+        3,
+        1,
+        7,
+        vec![field_op::create(U, TASK), delete(T, false)],
+    ));
     both.assert_same();
 }
 
