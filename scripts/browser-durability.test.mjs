@@ -135,3 +135,58 @@ test("a row that rests only on unknown findings says it is unknown", () => {
     }
   }
 });
+
+// The text for end users: short, with placeholders the developer fills, and
+// no word that promises more than the findings. "Tested" here means checked by
+// this gate; no user has read the text yet, and the page says so.
+const PROMISES =
+  /\b(never|always|guarantee[sd]?|safe(ly)?|secure(ly)?|forever|permanent(ly)?|cannot be lost)\b/i;
+const MAX_WORDS = 60;
+
+/** The ```text blocks of a level-3 section under "Text for your users". */
+const userTexts = (title) => {
+  const part = (section(read(PAGE), "Text for your users") ?? "")
+    .split(/^(?=### )/m)
+    .find((chunk) => chunk.split("\n")[0].trim() === `### ${title}`);
+  return [...(part ?? "").matchAll(/```text\n([\s\S]*?)```/g)].map((match) =>
+    match[1].trim(),
+  );
+};
+
+const TEXTS = ["Onboarding", "Changes not yet saved", "Private window"];
+
+test("the page offers each text for users", () => {
+  for (const title of TEXTS) {
+    assert.ok(userTexts(title).length > 0, `${PAGE}: no text "${title}"`);
+  }
+});
+
+test("the text for unsaved changes has a form for one change and for more", () => {
+  const texts = userTexts("Changes not yet saved");
+  assert.ok(
+    texts.some((text) => /^1 change\b/.test(text) && !text.includes("{count}")),
+    `${PAGE}: no text that starts "1 change"`,
+  );
+  assert.ok(
+    texts.some((text) => /^\{count\} changes\b/.test(text)),
+    `${PAGE}: no text that starts "{count} changes"`,
+  );
+});
+
+test("every text for users is short, names the app and promises nothing", () => {
+  for (const title of TEXTS) {
+    for (const text of userTexts(title)) {
+      const label = `${PAGE}, "${title}": ${text.slice(0, 40)}…`;
+      assert.ok(text.includes("{appName}"), `${label}: no {appName}`);
+      const words = text.split(/\s+/).length;
+      assert.ok(words <= MAX_WORDS, `${label}: ${words} words`);
+      assert.doesNotMatch(text, PROMISES, `${label}: promises too much`);
+      for (const [placeholder] of text.matchAll(/\{[^}]*\}/g)) {
+        assert.ok(
+          ["{appName}", "{count}"].includes(placeholder),
+          `${label}: unknown placeholder ${placeholder}`,
+        );
+      }
+    }
+  }
+});
