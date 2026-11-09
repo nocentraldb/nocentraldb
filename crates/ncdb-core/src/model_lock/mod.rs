@@ -24,7 +24,7 @@ pub mod read;
 mod refusal;
 pub mod write;
 
-pub use build::{Built, Draft, build};
+pub use build::{Built, Draft, DraftCollection, build};
 pub use read::LockError;
 pub use refusal::{NameKind, Refusal};
 
