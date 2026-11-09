@@ -26,7 +26,7 @@ pub mod write;
 
 pub use build::{Built, Draft, build};
 pub use read::LockError;
-pub use refusal::Refusal;
+pub use refusal::{NameKind, Refusal};
 
 /// The version of the lock's own format that this core reads and writes.
 pub const FORMAT: u64 = 1;
