@@ -1,0 +1,17 @@
+[package]
+name = "ncdb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The NoCentralDB command line: ncdb model build and ncdb model check (RFC 0005)."
+
+[[bin]]
+name = "ncdb"
+path = "src/main.rs"
+
+# The lock, its canonical form and the additive-change rule live in the core
+# (ncdb-core::model_lock), so the device check runs the same rule.
+[dependencies]
+ncdb-core.workspace = true

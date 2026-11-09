@@ -408,6 +408,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncdb"
+version = "0.1.0"
+dependencies = [
+ "ncdb-core",
+]
+
+[[package]]
 name = "ncdb-core"
 version = "0.1.0"
 dependencies = [
