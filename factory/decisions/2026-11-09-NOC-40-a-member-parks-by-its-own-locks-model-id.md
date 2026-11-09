@@ -1,6 +1,6 @@
-# 2026-11-09 · NOC-40 · A member compares payload key 64 with the model.id of its own lock, pending the owner
+# 2026-11-09 · NOC-40 · A member compares payload key 64 with the model.id of its own lock
 
-- Decided by: coding agent (NOC-40), pending the owner: pm put it to the owner as a question in #67, with option B, which pm leans to; the text stays at A until the owner answers
-- Why: a member folds by its own `model.lock.json`, and RFC 0005's D13 B parks a change so that no member folds it by the wrong rule, which is relative to that lock; every member that may write runs the genesis's model (D13 A), so all of them park the same changes, and the state stays a function of the change's bytes and the member's lock, as step 7's already is. The check sits in step 6 of the step table, so the table keeps its steps. A change without key 64 folds as before, because the key is "may ignore".
-- Instead of: B, comparing with the model.id the space's genesis records (key 13), which is the same on every copy, so a misconfigured or outdated member parks the same changes as every other; a member whose lock differs from the genesis is then a separate problem.
+- Decided by: Carsten, 2026-11-09, on the question pm put in #67 (option A)
+- Why: in a correct setup comparing with the member's own lock and comparing with the genesis's model id (key 13) give the same result; they differ only for a member whose lock does not match the genesis, which needs RFC 0005's open-time check on the device either way. If that check is ever missing, A stays safe, because such a member parks every change of the space, while B would fold them by the wrong rules. Under A, a member folds by its own `model.lock.json` and parks every change whose key 64 names another `model.id`, at step 6 of the step table, so the table keeps its steps; a change without key 64 folds as before, because the key is "may ignore".
+- Instead of: B, comparing with the model.id the space's genesis records, which pm had leaned to because it is the same on every copy.
 - Topics: rfc-0002, rfc-0005, log, model, convergence
