@@ -2,9 +2,9 @@
 //! "An example of each").
 //!
 //! A built lock is listed change by change: `+` for what was added, `~` for
-//! what changed in place (a deprecation, a description, an index), `-` for
-//! a removed index, each under the lock's name. A refused change is listed
-//! with `x` and its message from the core.
+//! what changed in place (a deprecated collection or field, a description,
+//! an index), `-` for a removed index, each under the lock's name. A refused
+//! change is listed with `x` and its message from the core.
 
 use std::fmt::Write;
 
@@ -92,10 +92,18 @@ fn summary(collection: &Collection) -> String {
     }
 }
 
-/// The lines of an existing collection, in order: added fields, options and
-/// targets; fields changed in place; computed fields; views; indexes.
+/// The lines of an existing collection, in order: its deprecation; added
+/// fields, options and targets; fields changed in place; computed fields;
+/// views; indexes.
 fn collection_lines(name: &str, old: &Collection, new: &Collection) -> Vec<String> {
     let mut lines: Vec<(u8, String, String)> = Vec::new();
+    if let (None, Some(deprecation)) = (&old.deprecated, &new.deprecated) {
+        lines.push((
+            0,
+            String::new(),
+            format!("~ collection {name} deprecated: {}", deprecation.reason),
+        ));
+    }
     let column = |field: &str| format!("{:<NAME$}", format!("{name}.{field}"));
     for (field_name, field) in &new.fields {
         let at = column(field_name);

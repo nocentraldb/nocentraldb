@@ -11,6 +11,7 @@ interface Field {
 }
 interface Collection {
     readonly "nc.collection": true;
+    deprecated(reason: string): Collection;
 }
 interface Named {
     readonly "nc.named": true;

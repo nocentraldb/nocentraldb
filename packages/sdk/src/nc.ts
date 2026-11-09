@@ -24,6 +24,8 @@ interface Field {
 /** A collection of the model: its fields, and the places for computed fields, views and indexes. */
 interface Collection {
   readonly "nc.collection": true;
+  /** Hides the collection from the app, and keeps it in the model and the data. */
+  deprecated(reason: string): Collection;
 }
 
 /** A computed field or a view: named now, designed by a later RFC. */
@@ -55,6 +57,7 @@ type FieldState = {
 };
 
 type CollectionState = {
+  deprecated?: string;
   fields: Record<string, Field>;
   computed: Record<string, Named>;
   views: Record<string, Named>;
@@ -112,15 +115,23 @@ export function collection(
     indexes?: Record<string, Index>;
   } = {},
 ): Collection {
-  const made = {} as Collection;
-  collectionStates.set(made, {
+  return makeCollection({
     fields: { ...fields },
     computed: { ...options.computed },
     views: { ...options.views },
     indexes: { ...options.indexes },
   });
-  return made;
 }
+
+/** The collection with this state; `deprecated` returns a new collection. */
+const makeCollection = (state: CollectionState): Collection => {
+  const made = {
+    deprecated: (reason: string) =>
+      makeCollection({ ...state, deprecated: reason }),
+  } as Collection;
+  collectionStates.set(made, state);
+  return made;
+};
 
 /** A string, basic value. */
 export const string = (): Field => basic("ncdb/string");
@@ -219,6 +230,7 @@ const describeCollection = (name: string, state: CollectionState) => {
     indexes[key] = declared;
   }
   return {
+    ...(state.deprecated === undefined ? {} : { deprecated: state.deprecated }),
     fields,
     computed: named(
       state.computed,
