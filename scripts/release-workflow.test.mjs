@@ -36,6 +36,7 @@ const TIMEOUTS = {
   build: 45,
   publish: 20,
   "commit-back": 15,
+  "app-token-check": 5,
 };
 /** The one way a step derives the basic-auth header from GH_TOKEN. */
 const AUTH = `auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`;
@@ -100,6 +101,9 @@ const checks = [
       // commit-back pushes with the release app's token, not github.token,
       // so it inherits contents: read (scripts/release-ruleset.test.mjs).
       assert.equal(wf.jobs["commit-back"].permissions, undefined);
+      // The dispatch-only check of the release app needs no github.token
+      // permission of its own either.
+      assert.equal(wf.jobs["app-token-check"].permissions, undefined);
     },
     mutants: {
       "grants write at the top": (ctx) =>

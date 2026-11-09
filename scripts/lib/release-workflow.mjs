@@ -27,7 +27,14 @@ export const ALPHA = ["jobs", "alpha"];
 export const STEPS = [...ALPHA, "steps"];
 export const alpha = (ctx) => workflow(ctx).jobs?.alpha ?? {};
 export const steps = (ctx) => alpha(ctx).steps ?? [];
-export const JOBS = ["alpha", "verify", "build", "publish", "commit-back"];
+export const JOBS = [
+  "alpha",
+  "verify",
+  "build",
+  "publish",
+  "commit-back",
+  "app-token-check",
+];
 export const job = (ctx, id) => workflow(ctx).jobs?.[id] ?? {};
 export const stepsOf = (ctx, id) => job(ctx, id).steps ?? [];
 /** The index of the first step of job `id` that satisfies `pred`. */

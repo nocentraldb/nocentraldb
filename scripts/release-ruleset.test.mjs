@@ -10,7 +10,12 @@
 // whose job permission stays read-only; no other job mints or reads the
 // app's token; no step opens a pull request. docs/release-management.md has
 // the section that gives the owner the exact settings steps, which only the
-// owner can make.
+// owner can make, and says that the dry run proves the app's setup but only
+// the first real push proves the bypass. A workflow_dispatch, the dry run,
+// runs the job app-token-check: it fails naming a missing variable or
+// secret, mints the token exactly as commit-back does, and uses it only to
+// read the installation's repositories, printing the app's slug; it checks
+// out nothing and writes nothing.
 //
 // Every check also runs against mutants of the workflow and the runbook and
 // must reject each one (scripts/lib/workflow-checks.mjs).
@@ -24,6 +29,7 @@ import {
   JOBS,
   job,
   load,
+  normalise,
   runs,
   stepAt,
   stepsOf,
@@ -36,6 +42,10 @@ const RUNBOOK_PATH = "docs/release-management.md";
 const HEADING = "### The bypass for commit-back";
 const APP_STEP = "app-token";
 const APP_TOKEN = gh(`steps.${APP_STEP}.outputs.token`);
+const CHECK = "app-token-check";
+/** The step of job `id` that mints the release app's token. */
+const mintOf = (ctx, id) =>
+  stepsOf(ctx, id)[stepAt(ctx, id, (step) => step.id === APP_STEP)];
 const APP_PATH = (ctx) => [
   "jobs",
   "commit-back",
@@ -110,7 +120,9 @@ const checks = [
         undefined,
         "commit-back's github.token is more than read-only",
       );
-      for (const id of JOBS.filter((id) => id !== "commit-back"))
+      for (const id of JOBS.filter(
+        (id) => id !== "commit-back" && id !== CHECK,
+      ))
         assert.doesNotMatch(
           JSON.stringify(job(ctx, id)),
           /create-github-app-token|RELEASE_APP_|outputs\.token/,
@@ -217,6 +229,8 @@ const checks = [
         "`RELEASE_APP_PRIVATE_KEY`",
         "Generate a private key",
         "only this app",
+        "workflow_dispatch",
+        "only the first real push",
       ])
         assert.ok(text.includes(needle), `the section does not name ${needle}`);
       assert.ok(
@@ -246,12 +260,178 @@ const checks = [
           section(ctx.runbook).replaceAll("owner", "maintainer"),
         );
       },
+      "claims the dry run proves the bypass": (ctx) => {
+        ctx.runbook = ctx.runbook.replace(
+          section(ctx.runbook),
+          section(ctx.runbook).replaceAll(
+            "only the first real push",
+            "the dry run",
+          ),
+        );
+      },
       "no link to it": (ctx) => {
         ctx.runbook = ctx.runbook.replaceAll(
           "(#the-bypass-for-commit-back)",
           "",
         );
       },
+    },
+  },
+  {
+    name: "a dispatch, the dry run, mints the release app's token as commit-back does and only reads with it",
+    check: (ctx) => {
+      const check = job(ctx, CHECK);
+      assert.equal(
+        normalise(check.if),
+        "github.event_name == 'workflow_dispatch'",
+        "the check does not run on every dispatch, or runs on more",
+      );
+      assert.equal(check.permissions, undefined);
+      const steps = stepsOf(ctx, CHECK);
+      const mint = stepAt(ctx, CHECK, (step) => step.id === APP_STEP);
+      assert.deepEqual(
+        { uses: steps[mint].uses, with: steps[mint].with },
+        {
+          uses: mintOf(ctx, "commit-back").uses,
+          with: mintOf(ctx, "commit-back").with,
+        },
+        "the dry run does not mint the token as commit-back does",
+      );
+      const setup = stepAt(ctx, CHECK, runs("RELEASE_APP_PRIVATE_KEY"));
+      assert.ok(setup < mint, "the setup is not checked before the mint");
+      assert.equal(
+        steps[setup].env?.RELEASE_APP_CLIENT_ID,
+        gh("vars.RELEASE_APP_CLIENT_ID"),
+      );
+      assert.equal(
+        steps[setup].env?.HAS_PRIVATE_KEY,
+        gh("secrets.RELEASE_APP_PRIVATE_KEY != ''"),
+        "the setup check sees the private key itself, not whether it is set",
+      );
+      for (const name of ["RELEASE_APP_CLIENT_ID", "RELEASE_APP_PRIVATE_KEY"])
+        assert.match(
+          steps[setup].run,
+          new RegExp(`::error::[^\\n]*${name}`),
+          `a missing ${name} does not fail with its name`,
+        );
+      const read = stepAt(ctx, CHECK, runs("installation/repositories"));
+      assert.ok(mint < read);
+      assert.equal(steps[read].env?.GH_TOKEN, APP_TOKEN);
+      assert.equal(
+        steps[read].env?.APP_SLUG,
+        gh(`steps.${APP_STEP}.outputs.app-slug`),
+      );
+      assert.match(
+        steps[read].run,
+        /\$APP_SLUG/,
+        "the app slug is not printed",
+      );
+      assert.match(
+        steps[read].run,
+        /\$GITHUB_REPOSITORY/,
+        "the token is not checked against this repository",
+      );
+      for (const step of steps) {
+        assert.ok(
+          !String(step.uses ?? "").startsWith("actions/checkout@"),
+          "the dry run checks out code",
+        );
+        const run = String(step.run ?? "");
+        assert.doesNotMatch(
+          run,
+          /git (?:push|tag|commit)\b|commit-back\.mjs|gh release|--method|-X\s|\bgh pr\b/,
+          "the dry run writes with the token",
+        );
+        assert.doesNotMatch(
+          run,
+          /outputs\.token/,
+          "a run step can print the token",
+        );
+      }
+    },
+    mutants: {
+      "runs on every event": (ctx) => ctx.doc.deleteIn(["jobs", CHECK, "if"]),
+      "mints with other settings": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            CHECK,
+            "steps",
+            stepAt(ctx, CHECK, (step) => step.id === APP_STEP),
+            "with",
+            "permission-contents",
+          ],
+          "read",
+        ),
+      "mints nothing": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          CHECK,
+          "steps",
+          stepAt(ctx, CHECK, (step) => step.id === APP_STEP),
+        ]),
+      "leaks the key's presence check": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            CHECK,
+            "steps",
+            stepAt(ctx, CHECK, runs("RELEASE_APP_PRIVATE_KEY")),
+            "env",
+            "HAS_PRIVATE_KEY",
+          ],
+          gh("secrets.RELEASE_APP_PRIVATE_KEY"),
+        ),
+      "names no missing variable": (ctx) =>
+        editRun(
+          ctx,
+          CHECK,
+          "RELEASE_APP_PRIVATE_KEY",
+          /RELEASE_APP_CLIENT_ID/g,
+          "the client id",
+        ),
+      "reads with github.token": (ctx) =>
+        ctx.doc.setIn(
+          [
+            "jobs",
+            CHECK,
+            "steps",
+            stepAt(ctx, CHECK, runs("installation/repositories")),
+            "env",
+            "GH_TOKEN",
+          ],
+          gh("github.token"),
+        ),
+      "pushes with the token": (ctx) =>
+        editRun(
+          ctx,
+          CHECK,
+          "installation/repositories",
+          /$/,
+          '\ngit push "https://github.com/$GITHUB_REPOSITORY.git" HEAD:main',
+        ),
+      "writes through the API": (ctx) =>
+        editRun(
+          ctx,
+          CHECK,
+          "installation/repositories",
+          /$/,
+          '\ngh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/heads/x -f sha=0',
+        ),
+      "prints the token": (ctx) =>
+        editRun(
+          ctx,
+          CHECK,
+          "installation/repositories",
+          /$/,
+          `\necho ${APP_TOKEN}`,
+        ),
+      "checks out code": (ctx) =>
+        ctx.doc.getIn(["jobs", CHECK, "steps"], true).items.unshift(
+          ctx.doc.createNode({
+            uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          }),
+        ),
     },
   },
 ];
