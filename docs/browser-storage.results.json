@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-08",
+  "date": "2026-11-09",
   "platform": "linux x64",
   "playwright": "1.63.0",
   "engines": {
@@ -11,8 +11,8 @@
       },
       "persisted": false,
       "estimate": {
-        "usage": 6294485,
-        "quota": 10743712725
+        "usage": 6294486,
+        "quota": 10743712726
       },
       "opfs": "ok",
       "reload": {
@@ -30,6 +30,10 @@
       "private": {
         "opfs": "ok",
         "idb": "ok",
+        "reload": {
+          "sqlite": "kept",
+          "idb": "kept"
+        },
         "afterClose": {
           "sqlite": "lost",
           "idb": "lost"
@@ -63,6 +67,10 @@
       "private": {
         "opfs": "SecurityError: Security error when calling GetDirectory",
         "idb": "ok",
+        "reload": {
+          "sqlite": "error: SecurityError: Security error when calling GetDirectory",
+          "idb": "kept"
+        },
         "afterClose": {
           "sqlite": "error: SecurityError: Security error when calling GetDirectory",
           "idb": "lost"
@@ -77,7 +85,7 @@
       },
       "persisted": false,
       "estimate": {
-        "usage": 6291527,
+        "usage": 6291526,
         "quota": 1048576000
       },
       "opfs": "ok",
@@ -96,6 +104,10 @@
       "private": {
         "opfs": "UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).",
         "idb": "ok",
+        "reload": {
+          "sqlite": "error: UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).",
+          "idb": "kept"
+        },
         "afterClose": {
           "sqlite": "error: UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).",
           "idb": "lost"

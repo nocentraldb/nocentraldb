@@ -127,7 +127,7 @@ const CONCURRENCY = {
 const CARGO_KEY = `cargo-${gh("runner.os")}-${gh("hashFiles('rust-toolchain.toml', 'Cargo.lock')")}`;
 // Dependabot proposes updates for the SHA-pinned actions only, resolving each
 // pin together with its version comment. npm and cargo are left out on
-// purpose (see the README): adding one changes this declared list.
+// purpose (see docs/repository.md): adding one changes this declared list.
 const DEPENDABOT_UPDATES = [
   {
     "package-ecosystem": "github-actions",

@@ -24,6 +24,9 @@
 //! The genesis of a space, its membership entries and the membership state
 //! that members and the relay fold from them, RFC 0008
 //! (`docs/rfc/0008-membership.md`), are [`membership`].
+//!
+//! Natively, a member keeps its log and the view folded from it in SQLite,
+//! as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it ([`view`]).
 
 pub mod basic;
 pub mod cbor;
@@ -43,6 +46,8 @@ pub mod receive;
 mod redact;
 pub mod seal;
 pub mod set;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod view;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {
