@@ -187,14 +187,32 @@ pub(super) fn plans(conn: &Connection, index: &Index) -> Result<Vec<String>, Err
 /// index, or would sort in a temporary B-tree (RFC 0006, "The check").
 pub(super) fn check(conn: &Connection, indexes: &[Index]) -> Result<(), Error> {
     for index in indexes {
-        let uses = format!("INDEX {}", index_name(index));
         for plan in plans(conn, index)? {
-            if !plan.contains(&uses) || plan.contains("TEMP B-TREE") {
+            if !fits(&plan, &index_name(index)) {
                 return Err(Error::Plan(index.name.clone()));
             }
         }
     }
     Ok(())
+}
+
+/// Whether a plan walks the SQLite index `index` and nothing else: every
+/// step that reads the table (a SCAN or a SEARCH) goes through it, and no
+/// step sorts in a temporary B-tree.
+fn fits(plan: &str, index: &str) -> bool {
+    let uses = |step: &str| {
+        let after = |marker: &str| step.split_once(marker).map(|(_, rest)| rest);
+        let name = after(" USING COVERING INDEX ").or_else(|| after(" USING INDEX "));
+        name.and_then(|rest| rest.split(' ').next()) == Some(index)
+    };
+    let steps: Vec<&str> = plan.split("; ").collect();
+    let reads: Vec<&&str> = steps
+        .iter()
+        .filter(|step| step.starts_with("SCAN ") || step.starts_with("SEARCH "))
+        .collect();
+    !reads.is_empty()
+        && reads.iter().all(|step| uses(step))
+        && !steps.iter().any(|step| step.contains("TEMP B-TREE"))
 }
 
 impl View {
