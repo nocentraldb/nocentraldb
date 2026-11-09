@@ -432,6 +432,29 @@ fn without_node_it_says_what_it_needs() {
     assert!(run.stderr.contains("Node.js 24 or later"), "{}", run.stderr);
 }
 
+#[cfg(unix)]
+#[test]
+fn a_node_older_than_24_is_refused_with_its_version() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = project();
+    write_schema(&dir.join("model.ts"), SCHEMA_V1);
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let node = bin.join("node");
+    fs::write(&node, "#!/bin/sh\necho v22.12.0\n").unwrap();
+    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let run = ncdb_with(&dir, &["model", "build"], |c| {
+        c.env("PATH", &bin);
+    });
+    assert_eq!(run.code, 1);
+    assert!(
+        run.stderr.contains("Node.js 24 or later") && run.stderr.contains("v22.12.0"),
+        "{}",
+        run.stderr
+    );
+    assert!(!dir.join("model.lock.json").exists());
+}
+
 #[test]
 fn usage_errors_exit_2() {
     let dir = project();
