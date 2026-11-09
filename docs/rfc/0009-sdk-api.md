@@ -6,6 +6,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 
 - **2026-11-09** · NOC-64 · The owner decided S1 to S18 as recommended (Carsten, 2026-11-09), in chat with pm, on #78.
 - **2026-11-09** · NOC-76 · [Amendment 1: groups leave the design](#amendment-1-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now, and marks decision S14 withdrawn. `members.add` keeps taking a list of invitations, as plain batching. The sentences it changes are marked *(Amendment 1)*.
+- **2026-11-09** · NOC-80 · [Amendment 2: following RFC 0005 Amendment 4](#amendment-2-following-rfc-0005-amendment-4) follows RFC 0005's D16, which the owner decided: the TypeScript SDK reads and writes an `nc.int` as a `number`, so a write must be a safe integer, and a stored int beyond that range reads `undefined` and is named in `$raw`. It decides nothing. The sentences it changes are marked *(Amendment 2)*.
 
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
@@ -152,7 +153,7 @@ The calls on `tx`, and the operations they become ([RFC 0004, "Operation numbers
 
 **What the SDK refuses,** before anything is written, with an error and no change:
 
-- a value that does not fit the field's kind, such as a text in an `nc.int` field, an option the lock does not list, or a value nested deeper than RFC 0004 allows: `invalidValue` ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 5);
+- a value that does not fit the field's kind, such as a text in an `nc.int` field, an option the lock does not list, or a value nested deeper than RFC 0004 allows: `invalidValue` ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 5). In TypeScript an `nc.int` is a `number`, so a value for it, or for an element of a set of ints, must be a safe integer, between −(2^53 − 1) and 2^53 − 1; any other number is refused with `invalidValue` ([RFC 0005, D16](0005-schema-and-model-lock.md#amendment-4-follow-ups-from-building-the-lock)). *(Amendment 2.)*
 - a deprecated field or collection: `deprecated` ([RFC 0005, "Modifiers"](0005-schema-and-model-lock.md#modifiers));
 - an update, delete or restore of an object the copy does not hold: `notFound`. The format allows such a write ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)), but an app that writes to an id it cannot read has most likely a wrong id. This is a rule of the SDK, not of the format;
 - a write into a space where this member may not write sealed changes, because it is a reader or no longer a member: `notAllowed` or `notMember` ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights));
@@ -203,7 +204,7 @@ An object id is unique in its space, not across spaces: a hostile member can cre
 | `$id`, `$space` | The object id and the space id. |
 | `$deleted` | `true` when the object is deleted. `space.get` returns deleted objects; queries do not (decision [S9](#decisions-for-the-owner)). |
 | `$conflicts` | The names of the fields that have conflicts, lost removals, or a link that is not **ok**. Empty when there are none. |
-| `$raw` | The names of the fields whose value does not fit the field's kind, such as a text in an `nc.int` field written by a buggy member. Such a field reads `undefined`; `space.inspect` gives the raw value ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 5). |
+| `$raw` | The names of the fields whose value does not fit the field's kind, such as a text in an `nc.int` field written by a buggy member. Such a field reads `undefined`; `space.inspect` gives the raw value ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 5). In TypeScript this includes an `nc.int` beyond −(2^53 − 1) to 2^53 − 1, which another member or the Rust SDK can write, and a set of ints holding such an element, as a whole; `space.inspect` gives such an int exactly, as a `bigint` ([RFC 0005, D16](0005-schema-and-model-lock.md#amendment-4-follow-ups-from-building-the-lock)). *(Amendment 2.)* |
 
 ### Conflicts, lost removals and link states
 
@@ -763,3 +764,11 @@ Added on 2026-11-09 for NOC-76. The owner decided to keep groups out of every de
 - **Decision S14** is withdrawn by the owner (Carsten, 2026-11-09), not deleted. The SDK has no group object, keeps no list of members, and nothing in it stands in for a group. [RFC 0008, Amendment 1](0008-membership.md#amendment-1-groups-leave-the-design) withdraws M10, which S14 followed, and [RFC 0001, Amendment 5](0001-nocentraldb.md#amendment-5-groups-leave-the-design) removes groups from RFC 0001.
 - **What remains.** `members.add` still takes a list of invitations and writes one membership entry and one key envelope per member: plain batching, so that an app adds several members to a space in one call. It is no longer described as the expansion of a group. No public name changes.
 - **Conflict point 8** is resolved: GENESIS.md's "Spaces" bullet no longer names groups.
+
+## Amendment 2: following RFC 0005 Amendment 4
+
+Added on 2026-11-09 for NOC-80. [RFC 0005, Amendment 4](0005-schema-and-model-lock.md#amendment-4-follow-ups-from-building-the-lock) asked how `nc.Infer` types an `nc.int`, a signed 64-bit integer, when a JavaScript `number` holds an integer exactly only up to 2^53 − 1. The owner decided its D16 as recommended (Carsten, 2026-11-09): a `number`. This amendment records what that means for this RFC's reads and writes on the TypeScript SDK, in the sentences marked *(Amendment 2)* above. It decides nothing.
+
+- **Writes.** A value for an `nc.int`, or for an element of a set of ints, must be a safe integer, between −(2^53 − 1) and 2^53 − 1. Any other number, such as `2 ** 53` or `1.5`, is refused with `invalidValue` before anything is written, so the SDK never rounds a value it writes.
+- **Reads.** `$raw` names a field whose stored int lies beyond that range, as it does for a value that does not fit the field's kind. Such an int reads `undefined`, never rounded, and a set of ints holding one reads `undefined` as a whole. `space.inspect` gives the stored int exactly, as a `bigint`.
+- **The Rust SDK** reads and writes an `nc.int` as an `i64` and has no such range.
