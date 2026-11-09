@@ -190,3 +190,119 @@ test("every text for users is short, names the app and promises nothing", () => 
     }
   }
 });
+
+// Where the developer meets the proposal: RFC 0006 carries it as Amendment 2,
+// with a decision per layer, and the README and RFC 0001 link the page.
+const RFC_0006 = "docs/rfc/0006-local-view.md";
+const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
+const AMENDMENT = "Amendment 2: durability of a browser copy";
+const ANCHOR = "amendment-2-durability-of-a-browser-copy";
+
+/** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
+const slug = (heading) =>
+  heading
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
+    .replace(/\s/g, "-");
+
+/** The relative links of a Markdown file outside code blocks, resolved. */
+const relativeLinks = (path) =>
+  [
+    ...read(path)
+      .replace(/```[\s\S]*?```/g, "")
+      .matchAll(/\]\(([^)\s]+)\)/g),
+  ]
+    .map(([, target]) => target)
+    .filter((target) => !/^[a-z]+:/.test(target))
+    .map((target) => {
+      const [file, anchor] = target.split("#");
+      const resolved = file ? join(dirname(path), file) : path;
+      return { target, resolved, anchor };
+    });
+
+const headingsOf = (path) =>
+  new Set(
+    read(path)
+      .replace(/```[\s\S]*?```/g, "")
+      .split("\n")
+      .filter((line) => /^#{1,6} /.test(line))
+      .map((line) => slug(line.replace(/^#+ /, ""))),
+  );
+
+test("every relative link on the page resolves, to its heading too", () => {
+  for (const { target, resolved, anchor } of relativeLinks(PAGE)) {
+    assert.ok(
+      existsSync(join(root, resolved)),
+      `${PAGE}: ${target} is missing`,
+    );
+    if (anchor && resolved.endsWith(".md")) {
+      assert.ok(
+        headingsOf(resolved).has(anchor),
+        `${PAGE}: ${target} names no heading`,
+      );
+    }
+  }
+});
+
+test("RFC 0006 announces Amendment 2 in a dated changelog line at the top", () => {
+  const top = read(RFC_0006).split(/^## /m)[0];
+  assert.match(
+    top,
+    new RegExp(
+      `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · NOC-34 · \\[Amendment 2[^\\]]*\\]\\(#${ANCHOR}\\)`,
+      "m",
+    ),
+  );
+});
+
+test("RFC 0006 says how to give feedback, above its first section", () => {
+  const top = read(RFC_0006).split(/^## /m)[0];
+  const line = top
+    .split("\n")
+    .find((l) => l.startsWith("**How to give feedback.**"));
+  assert.ok(line, `${RFC_0006}: no "**How to give feedback.**" line`);
+  assert.match(line, /\]\(README\.md#giving-feedback\)/);
+  assert.match(line, /discussions\/categories\/rfc-feedback/);
+});
+
+test("Amendment 2 decides each layer with options and a recommendation", () => {
+  const amendment = section(read(RFC_0006), AMENDMENT);
+  assert.ok(amendment, `${RFC_0006}: no "## ${AMENDMENT}"`);
+  const decisions = amendment
+    .split(/^(?=\d+\. \*\*)/m)
+    .filter((part) => /^\d+\. \*\*/.test(part));
+  assert.ok(
+    decisions.length >= 5,
+    `${RFC_0006}: ${decisions.length} decisions`,
+  );
+  for (const decision of decisions) {
+    const name = decision.split("\n")[0];
+    assert.match(decision, /^\s+- A\. /m, `${name}: no option A`);
+    assert.match(decision, /^\s+- B\. /m, `${name}: no option B`);
+    assert.match(decision, /\*\(recommended\)\*/, `${name}: none recommended`);
+    assert.match(
+      decision,
+      /^\s+Recommendation: /m,
+      `${name}: no recommendation`,
+    );
+  }
+  for (const layer of [
+    /db\.durability/,
+    /browser-durability\.md/,
+    /\{appName\}/,
+    /warning/i,
+    /IndexedDB/,
+  ]) {
+    assert.match(amendment, layer, `${RFC_0006}: Amendment 2 lacks ${layer}`);
+  }
+});
+
+test("the README, RFC 0001 and RFC 0006 link the page", () => {
+  for (const path of ["README.md", RFC_0001, RFC_0006]) {
+    assert.ok(
+      relativeLinks(path).some(({ resolved }) => resolved === PAGE),
+      `${path} does not link ${PAGE}`,
+    );
+  }
+});
