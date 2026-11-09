@@ -2,11 +2,15 @@
 
 REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-64
 
+**Changelog.**
+
+- **2026-11-09** · NOC-64 · The owner decided S1 to S18 as recommended (Carsten, 2026-11-09), in chat with pm, on #78.
+
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([Amendment 2](0006-local-view.md#amendment-2-durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Draft for the owner's decisions. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. Nothing here is built. The names are proposed in [Decisions for the owner](#decisions-for-the-owner) and collected in [Public names](#public-names).
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), S1 to S18 (Carsten, 2026-11-09), and the design above describes those choices. Every name is collected in [Public names](#public-names). The points in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) change other RFCs and documents, which their own amendments carry out. Nothing here is built.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -560,7 +564,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 
 ## Decisions for the owner
 
-GENESIS.md reserves public API names for the owner. Each decision names the options and a recommendation.
+GENESIS.md reserves public API names for the owner. Each decision names the options and a recommendation, and ends with the owner's decision. The owner accepted every recommendation (Carsten, 2026-11-09), and the design above describes them.
 
 **S1. Where the SDK gets the model.**
 
@@ -570,12 +574,16 @@ GENESIS.md reserves public API names for the owner. Each decision names the opti
 
 Recommendation: A. RFC 0005 says the core reads only the lock, and RFC 0006 already decided `nc.open({ model, ... })`, so A keeps both and only adds `lock`. The check catches the most common mistake, a schema edited without a build. B loses the handles that make queries typed. C adds a generated file to every app's repository.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S2. Where single objects are read and written.**
 
 - A. Through a space handle: `project.get`, `project.write`; queries through `db`, across spaces. *(recommended)*
 - B. Everything on `db`, with an object reference `{ space, id }`.
 
 Recommendation: A. An object id is unique only in its space, every write is one change in one space, and every right is per space, so the space is the natural receiver. Queries span spaces because RFC 0006 decided one database per member for exactly that.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S3. What a write is.**
 
@@ -585,12 +593,16 @@ Recommendation: A. An object id is unique only in its space, every write is one 
 
 Recommendation: A. It maps one call to one change, so the app sees exactly what is atomic. B suggests an isolation that does not exist: a fold may run between the reads, and `replaces` is computed when the change is sealed. C makes "create a task and link it" two changes that another member may receive apart.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S4. Field operations.**
 
 - A. Plain values for basic values and links, `null` to clear, `nc.add` and `nc.remove` for sets and many links. *(recommended)*
 - B. As A, and also a whole array for a set, which the SDK turns into additions and removals.
 
 Recommendation: A. B removes concurrent additions its author never saw, which breaks RFC 0004's add wins for the developer who expects "exactly these".
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S5. The shape of a read.**
 
@@ -600,6 +612,8 @@ Recommendation: A. B removes concurrent additions its author never saw, which br
 
 Recommendation: A. Unknown options are common after an additive change (RFC 0005, D5), so the type makes the app handle them. Values outside the kind come only from buggy or hostile members; typing every field as possibly anything would burden every read for a rare case, and `$raw` still makes it visible (principle 3). It amends what RFC 0005 says of `nc.Infer` for choices; see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs).
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S6. The public names of RFC 0004's reads.**
 
 - A. Keep RFC 0004's working names: `value`, `conflicts`, `lostRemovals`, `outcome` with `won`, `lost`, `replaced`, `applied`, and the statuses `ok`, `deleted`, `missing`, with `wrong collection` as `wrongCollection`. *(recommended)*
@@ -607,12 +621,16 @@ Recommendation: A. Unknown options are common after an additive change (RFC 0005
 
 Recommendation: A. They are plain words, and the RFCs and the FAQ already use them.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S7. How a query is written.**
 
 - A. Handles from the model: `model.tasks.indexes.byStatusPriority.equal("open").take(50)`, passed to `db.find`. *(recommended)*
 - B. An options object: `db.find(model.tasks, { index: "byStatusPriority", equal: ["open"], limit: 50 })`.
 
 Recommendation: A. It is the chain RFC 0001 shows for views, TypeScript checks the equality values against the index, and a view will be queried the same way.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S8. A query in one space.**
 
@@ -622,12 +640,16 @@ Recommendation: A. It is the chain RFC 0001 shows for views, TypeScript checks t
 
 Recommendation: A. "The open tasks of this project" is the first screen of most apps. B reads rows it throws away, which principle 6 rules out. C loses what RFC 0006's decision 1 chose one database for, a page across spaces in one range lookup.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S9. Deleted objects in queries.**
 
 - A. Queries skip deleted objects; `space.get` returns them with `$deleted: true`; RFC 0006 is amended so the index does not hold them. *(recommended)*
 - B. Queries return them, flagged; the app filters.
 
 Recommendation: A. An app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#decisions-for-the-owner)), so `get` still finds the object to restore it.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S10. Subscriptions.**
 
@@ -636,12 +658,16 @@ Recommendation: A. An app almost never lists deleted objects, and filtering in t
 
 Recommendation: A. Re-running the page is what RFC 0006's notification is for, and an app that gets the whole page cannot apply a diff wrongly. B makes every app write the same loop.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S11. Space names.**
 
 - A. The SDK has none; the app keeps names in its own model. *(recommended)*
 - B. A reserved core collection in each space, such as `$space` with `name` and `description`.
 
 Recommendation: A for v1. B needs a collection that is not in the app's lock, which RFC 0002's fold step 7 parks as unknown, so it needs amendments to RFC 0002 and RFC 0005. An app already models what a project is; its name belongs there. B can come later as an addition.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S12. Invitations.**
 
@@ -651,12 +677,16 @@ Recommendation: A for v1. B needs a collection that is not in the app's lock, wh
 
 Recommendation: A. It is what RFC 0003 and use case 3 show, `members.add(invitation, { role })`, and one channel is enough, since nothing in it is secret. B needs two trips through the app's channel. C adds relay messages (an amendment to RFC 0007) and lets the relay see who is about to join which space.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S13. Role names.**
 
 - A. `"reader"`, `"writer"`, `"admin"`. *(recommended)*
 - B. `"viewer"`, `"editor"`, `"owner"`.
 
 Recommendation: A. They say what the role may do; RFC 0008 and the FAQ use them. "Owner" suggests one person, while a space has many admins.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S14. Groups.**
 
@@ -666,12 +696,16 @@ Recommendation: A. They say what the role may do; RFC 0008 and the FAQ use them.
 
 Recommendation: A. RFC 0008 defers groups, and a list that lives only on one device (B) is lost with it, and other admins cannot see it. A delivers what v1 promises, rights changed without moving data, with the app's own list; it partly differs from GENESIS.md, see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs).
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S15. Accounts.**
 
 - A. Name the entry points now, `db.account.pair`, `nc.open({ pairing })` and `db.account.removeMember`, and design them in the accounts RFC. *(recommended)*
 - B. Leave accounts out of this RFC.
 
 Recommendation: A. An agent needs a certificate from its account before it can join a space, so the rest of the API refers to pairing; naming it now keeps the names consistent.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S16. Relays.**
 
@@ -680,12 +714,16 @@ Recommendation: A. An agent needs a certificate from its account before it can j
 
 Recommendation: A for v1. Moving a space between relays is not designed ([RFC 0007, "What this RFC does not cover"](0007-relay.md#what-this-rfc-does-not-cover)). B can be added as an option of `db.spaces.create` later.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 **S17. Errors.**
 
 - A. One class, `nc.Error`, with a string `code` and ids. *(recommended)*
 - B. A class per error.
 
 Recommendation: A. Codes are easy to match on in both SDKs, map one to one to Rust's `ErrorCode`, and keep the API surface small.
+
+Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **S18. The Rust SDK in v1.**
 
@@ -694,9 +732,11 @@ Recommendation: A. Codes are easy to match on in both SDKs, map one to one to Ru
 
 Recommendation: A. RFC 0005 leaves code generation for later; A works for every lock today, and B can be added without changing A.
 
+Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 ## Conflicts with GENESIS.md and the other RFCs
 
-This RFC follows GENESIS.md's principles: reads never touch the network, queries run only through declared indexes, developers never handle a key, every permission change returns a notice, and the API is the same on every target. It changes no other RFC. These points need a change elsewhere, which this RFC does not make; NOC-35 and #75 edit those files, and pm routes each point once the owner has decided.
+This RFC follows GENESIS.md's principles: reads never touch the network, queries run only through declared indexes, developers never handle a key, every permission change returns a notice, and the API is the same on every target. It changes no other RFC. These points need a change elsewhere, which this RFC does not make; pm routes each one to the ticket that edits that file.
 
 1. **RFC 0005 and RFC 0006, queries in one space** (S8). An index ends with the space id, so no query can fix a space. `scope: "space"` needs an option in `nc.index` and a key in the lock (RFC 0005, "Indexes" and "Public names") and a column order in RFC 0006, "Declared indexes".
 2. **RFC 0006, deleted objects in indexes** (S9). RFC 0006 does not say whether a deleted object's row stays in an index. Under S9 A it does not, for example through a partial index.
