@@ -82,3 +82,33 @@ await db.durability.requestPersistent(); // asks the browser; Firefox asks the u
 ## Text for your users
 
 Proposed wording you can show your users, in English. Replace `{appName}` with your app's name and `{count}` with `unconfirmed`. None of it promises more than the findings above.
+
+"Tested" means that the gate checks each text: it names the app, has at most 60 words, uses no word that promises more (never, always, guaranteed, safe, secure, forever, permanent), and has a form for one change and for more. No user has read these texts yet; a test with users is still to come.
+
+### Onboarding
+
+Show it once, when a user first opens your web app and `storage` is `best-effort`.
+
+```text
+{appName} keeps your data in this browser, so it works offline. Your browser may delete it: when storage runs low, or in Safari after seven days without using {appName}. Changes that reached the server stay there. Changes not yet sent are lost, and you then set up {appName} in this browser again. Installing {appName} lowers the risk.
+```
+
+### Changes not yet saved
+
+Show it while `atRisk` is true and the oldest unconfirmed change is a few minutes old, or when the app goes offline with unconfirmed changes. Use the first form when `unconfirmed` is 1.
+
+```text
+1 change in {appName} is saved only in this browser so far. It is sent to the server when you are online. Until then, it is lost if the browser deletes its data.
+```
+
+```text
+{count} changes in {appName} are saved only in this browser so far. They are sent to the server when you are online. Until then, they are lost if the browser deletes its data.
+```
+
+### Private window
+
+Show it when `storage` is `temporary`.
+
+```text
+You are using {appName} in a private window. What {appName} stores here is deleted when you close the window, or sooner, together with changes not yet sent to the server. Next time, you set up {appName} again. Use a normal window to keep your data in this browser.
+```
