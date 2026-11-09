@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-39 · `receive` folds creates and deletes into the copy's objects; field operations park through `Fold::fold`
+
+- Decided by: coding agent (NOC-39)
+- Why: RFC 0004 Amendment 1 says operations 0 and 4 belong to the object for every collection and no field type defines them. So step 7 in `receive.rs` decodes an operation without a field with `field_op::decode_object` itself and applies it to `Fold::objects()`, a `BTreeMap<ObjectId, Object>` that `link::Objects` already resolves against; an object gets its entry from its first create or delete, so a delete that arrives first is kept. A field operation goes to `Fold::fold`, which now takes the operation's `Origin` (change and position, author, payload clock) and returns `Result<(), OperationParkReason>`, so a fold that decodes with the field type's `field_op::Encoding` parks what does not decode. The core has no model of fields yet (`model.lock.json` is RFC 0005's), so which field type reads a field stays with the `Fold` implementation.
+- Instead of: leaving creates and deletes to every `Fold` implementation, which would let two models treat them differently; or a field-type registry in the core before RFC 0005's model exists.
+- Topics: rfc-0004, fold, receive, objects

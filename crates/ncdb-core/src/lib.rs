@@ -17,8 +17,8 @@
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
 //! ([`field`]), basic values ([`basic`]), sets ([`set`]), links ([`link`])
 //! and what links resolve against, the objects of a copy ([`object`]).
-//! How their operations travel in a change, RFC 0004 Amendment 1, is
-//! [`field_op`].
+//! How their operations, and the creates and deletes of objects, travel in
+//! a change, RFC 0004 Amendment 1, is [`field_op`].
 
 pub mod basic;
 pub mod cbor;
