@@ -205,12 +205,6 @@ This is the lock of the task board above, at model version 2. Version 1 had only
           "targets": ["people"],
           "type": "ncdb/link"
         },
-        "notesAboutAssignee": {
-          "personal": { "person": "assignee" },
-          "rule": 1,
-          "since": 2,
-          "type": "ncdb/string"
-        },
         "dependsOn": {
           "rule": 1,
           "since": 1,
@@ -218,6 +212,12 @@ This is the lock of the task board above, at model version 2. Version 1 had only
           "type": "ncdb/links"
         },
         "estimate": { "rule": 1, "since": 2, "type": "ncdb/float" },
+        "notesAboutAssignee": {
+          "personal": { "person": "assignee" },
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/string"
+        },
         "priority": { "rule": 1, "since": 1, "type": "ncdb/int" },
         "status": {
           "options": ["open", "in_progress", "done"],
