@@ -2,6 +2,9 @@
 //! core and both SDKs read only the lock"): each collection with its
 //! fields and their field types, and each collection's declared indexes,
 //! whose names are scoped per collection as the lock scopes them.
+//!
+//! Native only: the view is not built on wasm32 yet.
+#![cfg(not(target_arch = "wasm32"))]
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).
