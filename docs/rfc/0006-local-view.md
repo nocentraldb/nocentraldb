@@ -5,7 +5,7 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-12
 **Changelog.**
 
 - **2026-11-08** · NOC-44 · [Amendment 1: following RFC 0008](#amendment-1-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): the control table holds RFC 0008's control state, control changes are recomputed through `resolve`, and a shred destroys the key only once it is stable. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 1)*.
-- **2026-11-09** · NOC-34 · [Amendment 2: durability of a browser copy](#amendment-2-durability-of-a-browser-copy) follows what [NOC-33 measured](../browser-storage.md) about how long a browser keeps a web app's copy, and proposes how the SDK, the developer page [Browser apps and durability](../browser-durability.md) and the text for end users tell developers and users how reliable a browser copy is. Its decisions 10 to 15 wait for the owner. The sentences it changes elsewhere are marked *(Amendment 2)*.
+- **2026-11-09** · NOC-34 · [Amendment 2: durability of a browser copy](#amendment-2-durability-of-a-browser-copy) follows what [NOC-33 measured](../browser-storage.md) about how long a browser keeps a web app's copy, and proposes how the SDK, the developer page [Browser apps and durability](../browser-durability.md) and the text for end users tell developers and users how reliable a browser copy is. The owner decided its decisions 10 to 15 as recommended (Carsten, 2026-11-09). The sentences it changes elsewhere are marked *(Amendment 2)*.
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
@@ -13,7 +13,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback). [Giving feedback](README.md#giving-feedback) says how, and what happens to your feedback.
 
-**Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged.
+**Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged. The owner decided Amendment 2, decisions 10 to 15, as recommended (Carsten, 2026-11-09).
 
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encryption at rest on the device, beyond naming the question for the owner ([decision 6](#decisions-for-the-owner)). Compaction and snapshots (a later RFC). The sync protocol with the relay (RFC 0007, NOC-13).
 
@@ -437,7 +437,7 @@ Added on 2026-11-08 for NOC-44. This RFC left two things to the membership RFC: 
 
 ## Amendment 2: durability of a browser copy
 
-Added on 2026-11-09 for NOC-34. This RFC says that a browser may evict a member's copy and that the SDK reports it ([decision 8](#decisions-for-the-owner)). NOC-33 measured what each browser does with the copy, in Playwright's builds of Chromium, Firefox and WebKit, and collected what the vendors document; [How long a browser keeps a web app's copy](../browser-storage.md#findings) holds every finding with its source: measured, documented or unknown. This amendment states what that changes in this RFC and proposes how developers and their users learn it. The owner asked for a clean way to communicate it (Carsten, 2026-11-08). Decisions 10 to 15 below wait for the owner; the public API names and the text for users in them are the owner's to decide (GENESIS.md).
+Added on 2026-11-09 for NOC-34. This RFC says that a browser may evict a member's copy and that the SDK reports it ([decision 8](#decisions-for-the-owner)). NOC-33 measured what each browser does with the copy, in Playwright's builds of Chromium, Firefox and WebKit, and collected what the vendors document; [How long a browser keeps a web app's copy](../browser-storage.md#findings) holds every finding with its source: measured, documented or unknown. This amendment states what that changes in this RFC and proposes how developers and their users learn it. The owner asked for a clean way to communicate it (Carsten, 2026-11-08). Decisions 10 to 15 below name public API and text for users, which GENESIS.md reserves for the owner; the owner decided each as recommended (Carsten, 2026-11-09).
 
 **What the findings change in this RFC.** The sentences are marked *(Amendment 2)* above.
 
@@ -460,31 +460,43 @@ Added on 2026-11-09 for NOC-34. This RFC says that a browser may evict a member'
     - `atRisk`: true while `unconfirmed` is above zero and `storage` is not `persistent`.
     The SDK reads `persisted()` on open, after `requestPersistent()`, and whenever the page becomes visible again, because a user can grant or revoke it in the browser's settings.
 
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 11. **When the SDK asks for persistent storage.**
     - A. On open, as decision 8 says, without waiting: `nc.open` resolves before the browser answers, and `subscribe` reports the answer. An app that wants to explain first opens with `nc.open({ model, persistentStorage: "on-request" })` and calls `requestPersistent()` after its own onboarding text. *(recommended)*
     - B. On open, and `nc.open` waits for the answer.
     - C. Only when the app calls `requestPersistent()`, never on open.
     Recommendation: A. It keeps decision 8 for an app that does nothing, and refines it rather than reversing it. B would leave `nc.open` hanging in Firefox until the user answers the popup. C reverses decision 8 and leaves every app that forgets the call with a best-effort copy.
 
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 12. **The fallback in a private window, where OPFS is missing.**
     - A. SQLite's in-memory VFS, as [The browser](#the-browser) says, with `storage: "temporary"`. A reload of the page loses the copy and its unconfirmed changes, and the SDK fetches the spaces again from the relay. *(recommended)*
     - B. A VFS on IndexedDB for the length of the private session.
     Recommendation: A for v1. B helps only between a reload and the end of the private session, and whether IndexedDB survives a reload in a private window is unknown: NOC-33 measured that it works and that it is gone after the window closes, not a reload in between. B would add a second storage path to build and test in three engines, with writes through an asynchronous store, which [Rejected options](#rejected-options) found much slower, and a durability no spike has checked against [decision 7](#decisions-for-the-owner). Either way the copy is temporary and the user is told the same. The member key in IndexedDB has the same unknown: if IndexedDB does not survive a reload in a private window, each reload is a new device. Firefox's device check of 2026-11-09 found IndexedDB empty in a new private window without recording whether the first was closed, so for Firefox this stays unknown too; the owner will check again. NOC-33's probe can measure a reload in a private window; if apps then report lost changes, B can be revisited with that row.
 
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 13. **The developer documentation.**
     - A. One page, [Browser apps and durability](../browser-durability.md), as drafted: NOC-33's findings in plain words per browser, what is lost when, how to reduce the risk (keep syncing, ask for persistent storage, install the app, offer a native app), private windows, the SDK's report and the text for users. Every row names its finding, and the gate checks it. *(recommended)*
     - B. The same facts in the SDK's API reference only.
-    Recommendation: A. A developer has to know this before choosing a browser app for their users (principle 4), which is before reading an API reference. The page marks the SDK interface as proposed until decisions 10 to 12 are decided and built.
+    Recommendation: A. A developer has to know this before choosing a browser app for their users (principle 4), which is before reading an API reference. The page marks the SDK interface as decided and not yet built until it ships.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 14. **Text for end users.**
     - A. The page carries short English texts that the developer copies into the app, with the placeholders `{appName}` and `{count}`: one for the onboarding of a browser app, one for unsaved changes (for one change and for more), and one for a private window. The SDK ships no text for users. *(recommended)*
     - B. The SDK exports the texts, for example `nc.text.durability.unsaved({ appName, count })`, so they change with the SDK.
     Recommendation: A for v1. The app owns its interface and its languages; exported texts would be more public API to keep stable and translate. The gate checks that each text names the app, stays under 60 words, and uses no word that promises more than the findings; no user has read them yet, which the page says.
 
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
 15. **Where the developer meets it, and the warning in development.**
     - A. The README and RFC 0001 link the page. In development, the SDK logs one `console.warn` per page load when `storage` is not `persistent`. "Development" is `process.env.NODE_ENV !== "production"`, which bundlers replace at build time; where nothing replaces it, the warning stays on. `nc.open({ model, warnings: false })` turns it off. The warning names the status, the number of unconfirmed changes and the page, and nothing else: no content and no ids ("Never write content, keys or personal fields into logs", GENESIS.md). *(recommended)*
     - B. The same warning in every build, production included.
     - C. No warning; the page and `db.durability` only.
     Recommendation: A. A developer trying a browser app sees the limit on the first day, without reading anything, and the end user's console stays quiet. The proposed text: `NoCentralDB: this browser copy is best-effort. The browser may delete it, together with 3 changes the relay has not confirmed and this browser's member key. See https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md`
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 **Conflicts.** None with GENESIS.md. One with RFC 0001, which said a browser member fetches its log again after an eviction; RFC 0001's Amendment 3 corrects it in this pull request. This amendment adds no format, so nothing on disk or on the wire changes.

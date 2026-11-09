@@ -2,7 +2,7 @@
 
 A NoCentralDB app keeps a full copy of its spaces on the device. In a native app on a desktop or a phone, that copy is the app's own files. In a web app, it lives in the browser's storage for your site, and the browser may delete it. This page says when that happens, what is lost with it, how you reduce the risk, and what you can tell your users.
 
-**Status.** This page is part of a proposal: the SDK interface it describes is proposed in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy) and not built yet, and the owner decides its names and the text for your users. The facts about browsers are not a proposal: they come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
+**Status.** The SDK interface this page describes and the text for your users are decided in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy) (Carsten, 2026-11-09), and the interface is not built yet. The facts about browsers come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
 
 **Where each statement comes from.** Every row below names, in its Source column, the rows of [the findings table](browser-storage.md#findings) it rests on, as `kind: Browser · Behaviour`:
 
@@ -70,7 +70,7 @@ Each private session is a new device: its member key is created in the session a
 
 ## What the SDK tells you
 
-The SDK reports how durable this copy is and how many changes would be lost with it. The names below are proposed in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy); the owner decides them.
+The SDK reports how durable this copy is and how many changes would be lost with it. The names below are decided in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy), decision 10; the SDK does not have them yet.
 
 ```ts
 const db = await nc.open({ model });
@@ -92,7 +92,7 @@ await db.durability.requestPersistent(); // asks the browser; Firefox asks the u
 
 ## Text for your users
 
-Proposed wording you can show your users, in English. Replace `{appName}` with your app's name and `{count}` with `unconfirmed`. None of it promises more than the findings above.
+Wording you can show your users, in English. Replace `{appName}` with your app's name and `{count}` with `unconfirmed`. None of it promises more than the findings above.
 
 "Tested" means that the gate checks each text: it names the app, has at most 60 words, uses no word that promises more (never, always, guaranteed, safe, secure, forever, permanent), and has a form for one change and for more. No user has read these texts yet; a test with users is still to come.
 
