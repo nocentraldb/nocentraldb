@@ -4,8 +4,8 @@ contact_links:
     url: https://github.com/nocentraldb/nocentraldb/security/advisories/new
     about: Privately, through GitHub private vulnerability reporting. Never in a public issue, discussion or pull request.
   - name: Give feedback on an RFC
-    url: https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0001-nocentraldb.md#how-to-give-advice
-    about: Feedback on the design is wanted. The RFC says where it goes, the repository's RFC discussions; a change to the RFC text itself is a pull request against the file.
+    url: https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md#giving-feedback
+    about: Feedback on the design is wanted, in the repository's discussions, category RFC feedback. The RFC index says how, and what happens to your point; a change to the RFC text itself is a pull request against the file.
   - name: Questions and ideas
     url: https://github.com/nocentraldb/nocentraldb/discussions
     about: Ask a question or float an idea in GitHub Discussions before it becomes an issue.
