@@ -219,3 +219,78 @@ test("the task board's schema and its lock example name the same fields", () => 
   );
   assert.deepEqual([...inSchema].sort(), [...inLock].sort());
 });
+
+// NOC-54: RFC 0002 Amendment 5 put the writer's model.id and model version
+// in payload key 64, so two sentences of RFC 0005 said less than the design.
+// RFC 0005 records the change as an amendment of its own, in the style of
+// RFC 0001's amendments: a dated changelog line at the top, a section that
+// decides nothing and links RFC 0002 Amendment 5, and the changed sentences
+// marked.
+const AMENDMENT = "amendment-1-following-rfc-0002-amendment-5";
+const RFC_0002_AMENDMENT =
+  "0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload";
+
+/** The link targets of one line of Markdown. */
+const targets = (text) =>
+  [...text.matchAll(/\]\(([^)\s]+)\)/g)].map((match) => match[1]);
+
+/** The body of the level-2 section whose GitHub anchor is `anchor`. */
+const sectionByAnchor = (markdown, anchor) =>
+  markdown
+    .split(/^(?=## )/m)
+    .find((part) => slug(part.split("\n")[0].replace(/^## /, "")) === anchor);
+
+test("RFC 0005 announces Amendment 1 in a dated NOC-54 changelog line that links RFC 0002 Amendment 5", () => {
+  const top = read().split(/^## /m)[0];
+  assert.match(top, /^\*\*Changelog\.\*\*$/m, "RFC 0005 has no changelog");
+  const line = top
+    .split("\n")
+    .find((l) => /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-54 · /.test(l));
+  assert.ok(line, "no dated changelog line for NOC-54 above the first section");
+  assert.ok(
+    targets(line).includes(`#${AMENDMENT}`),
+    `the changelog line does not link #${AMENDMENT}`,
+  );
+  assert.ok(
+    targets(line).includes(RFC_0002_AMENDMENT),
+    "the changelog line does not link RFC 0002 Amendment 5",
+  );
+});
+
+test("RFC 0005 has the section of Amendment 1: it decides nothing and links RFC 0002 Amendment 5", () => {
+  const body = sectionByAnchor(read(), AMENDMENT);
+  assert.ok(body, `no section #${AMENDMENT}`);
+  assert.match(body, /NOC-54/);
+  assert.match(body, /decides nothing|adds no decision/i);
+  assert.ok(
+    targets(body).includes(RFC_0002_AMENDMENT),
+    "the amendment does not link RFC 0002 Amendment 5",
+  );
+});
+
+test("RFC 0005 no longer says a change does not name its model, and marks what replaced it", () => {
+  const rfc = read();
+  assert.doesNotMatch(rfc, /Nothing in a change says which model wrote it/);
+  assert.doesNotMatch(rfc, /Until it has one, the SDK falls back to B/);
+  const newer = section(rfc, "Data from a newer model");
+  const model = newer
+    .split("\n")
+    .find((l) => l.startsWith("- ") && /model\.id/.test(l));
+  assert.match(
+    model ?? "",
+    /\*\(Amendment 1\.\)\*$/,
+    "the bullet on model.id is not marked",
+  );
+  const d10 = section(rfc, "Decisions for the owner")
+    .split(/^(?=\*\*D\d+\.)/m)
+    .find((d) => d.startsWith("**D10."));
+  const recommendation = d10
+    .split("\n")
+    .find((l) => l.startsWith("Recommendation:"));
+  assert.match(recommendation, /payload key 64/);
+  assert.match(
+    recommendation,
+    /\*\(Amendment 1\.\)\*/,
+    "D10's changed sentence is not marked",
+  );
+});
