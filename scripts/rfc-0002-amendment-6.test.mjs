@@ -193,3 +193,21 @@ test("N1 and N2 equal the committed vectors of the generator", () => {
     assert.equal(hex, vector, `${name} differs from ${VECTORS}/${name}.hex`);
   }
 });
+
+test("the core cites Amendment 6 for both rules, and calls neither pending", () => {
+  const files = {
+    "crates/ncdb-core/src/cbor.rs": /Amendment 6/,
+    "crates/ncdb-core/src/clock.rs": /Amendment 6/,
+    "crates/ncdb-core/tests/depth.rs": /Amendment 6/,
+    "crates/ncdb-core/tests/clock.rs": /Amendment 6/,
+  };
+  for (const [path, cites] of Object.entries(files)) {
+    const text = read(path);
+    assert.match(text, cites, `${path} does not cite Amendment 6`);
+    assert.doesNotMatch(
+      text.replace(/\s*\/\/[!/]?\s*/g, " "),
+      /pending the owner/,
+      `${path} still calls a rule pending the owner`,
+    );
+  }
+});

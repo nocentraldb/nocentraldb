@@ -131,3 +131,24 @@ fn a_frame_100000_deep_is_an_error_not_a_crash() {
     assert!(too_deep(Change::decode(&frame).unwrap_err()));
     assert!(too_deep(Header::decode(&header_bytes).unwrap_err()));
 }
+
+// RFC 0002 Amendment 6's examples N1 and N2, written by
+// docs/rfc/vectors/0002/generate.py with cbor2, independently of this crate.
+const N1: &str = include_str!("../../../docs/rfc/vectors/0002/N1.hex");
+const N2: &str = include_str!("../../../docs/rfc/vectors/0002/N2.hex");
+
+fn hex(text: &str) -> Vec<u8> {
+    let text: String = text.split_whitespace().collect();
+    (0..text.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+        .collect()
+}
+
+#[test]
+fn rfc_0002_n1_reaches_level_32_and_decodes_n2_reaches_33_and_is_refused() {
+    let n1 = hex(N1);
+    let payload = Payload::decode(&n1).expect("N1 decodes");
+    assert_eq!(payload.encode(), n1, "N1 re-encodes to its bytes");
+    assert!(too_deep(Payload::decode(&hex(N2)).unwrap_err()));
+}
