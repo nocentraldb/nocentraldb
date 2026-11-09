@@ -111,23 +111,96 @@ pub(crate) fn seniority(
 }
 
 /// Step 3: the edges from each valid revocation to the changes it
-/// excludes, as `from -> to`.
+/// excludes, as `from -> to`. Revocations in the order of their authors'
+/// seniority, then author sequence, then change id; within one, its edges
+/// by the excluded change's id; an edge that would close a cycle with the
+/// dependencies and the edges before it is skipped.
 pub(crate) fn edges(
-    _nodes: &BTreeMap<ChangeId, &Node>,
-    _judged: &Judged,
-    _rank: &BTreeMap<MemberId, usize>,
+    nodes: &BTreeMap<ChangeId, &Node>,
+    all: &BTreeMap<ChangeId, Node>,
+    judged: &Judged,
+    rank: &BTreeMap<MemberId, usize>,
 ) -> BTreeMap<ChangeId, BTreeSet<ChangeId>> {
-    BTreeMap::new()
+    let mut revocations: Vec<&Node> = nodes
+        .values()
+        .copied()
+        .filter(|n| judged.valid(n.id) && n.membership().is_some_and(|m| m.cutoff().is_some()))
+        .collect();
+    revocations.sort_by_key(|r| (rank.get(&r.author).copied(), r.sequence, r.id));
+    let mut after = successors(nodes);
+    let mut edges: BTreeMap<ChangeId, BTreeSet<ChangeId>> = BTreeMap::new();
+    for r in revocations {
+        for y in nodes.values().filter(|y| excludes(r, y, all, judged)) {
+            if reaches(&after, y.id, r.id) {
+                continue;
+            }
+            after.entry(r.id).or_default().insert(y.id);
+            edges.entry(r.id).or_default().insert(y.id);
+        }
+    }
+    edges
 }
 
-/// Whether the revocation `r` excludes the change `y` (step 3).
-pub(crate) fn excludes(
-    _r: &Node,
-    _y: &Node,
-    _nodes: &BTreeMap<ChangeId, Node>,
-    _judged: &Judged,
-) -> bool {
+/// Each node's dependants among `nodes`.
+fn successors(nodes: &BTreeMap<ChangeId, &Node>) -> BTreeMap<ChangeId, BTreeSet<ChangeId>> {
+    let mut after: BTreeMap<ChangeId, BTreeSet<ChangeId>> = BTreeMap::new();
+    for node in nodes.values() {
+        for dep in node.deps.iter().filter(|d| nodes.contains_key(d)) {
+            after.entry(*dep).or_default().insert(node.id);
+        }
+    }
+    after
+}
+
+/// Whether `to` comes after `from` through `after`.
+fn reaches(after: &BTreeMap<ChangeId, BTreeSet<ChangeId>>, from: ChangeId, to: ChangeId) -> bool {
+    let mut seen = BTreeSet::from([from]);
+    let mut stack = vec![from];
+    while let Some(id) = stack.pop() {
+        if id == to {
+            return true;
+        }
+        for next in after.get(&id).into_iter().flatten() {
+            if seen.insert(*next) {
+                stack.push(*next);
+            }
+        }
+    }
     false
+}
+
+/// Whether the revocation `r` excludes the change `y` (step 3): `y` is its
+/// subject's, needs a right above the role `r` sets, has an author
+/// sequence above `r`'s cutoff, and no valid grant of that right to its
+/// author that saw `r` is in `y`'s causal past.
+pub(crate) fn excludes(
+    r: &Node,
+    y: &Node,
+    all: &BTreeMap<ChangeId, Node>,
+    judged: &Judged,
+) -> bool {
+    let Some(revocation) = r.membership() else {
+        return false;
+    };
+    let Some(cutoff) = revocation.cutoff() else {
+        return false;
+    };
+    let right = needed(y);
+    if y.is_genesis()
+        || y.id == r.id
+        || y.author != revocation.subject
+        || Some(right) <= revocation.role()
+        || y.sequence <= cutoff
+    {
+        return false;
+    }
+    let covered = y.past.iter().filter_map(|id| all.get(id)).any(|g| {
+        g.past.contains(&r.id)
+            && judged.valid(g.id)
+            && g.membership()
+                .is_some_and(|grant| grant.subject == y.author && grant.role() >= Some(right))
+    });
+    !covered
 }
 
 /// Step 4: every node after its dependencies and the revocations whose
@@ -138,11 +211,9 @@ pub(crate) fn order(
     edges: &BTreeMap<ChangeId, BTreeSet<ChangeId>>,
     rank: &BTreeMap<MemberId, usize>,
 ) -> Vec<ChangeId> {
-    let mut after: BTreeMap<ChangeId, BTreeSet<ChangeId>> = edges.clone();
-    for node in nodes.values() {
-        for dep in node.deps.iter().filter(|d| nodes.contains_key(d)) {
-            after.entry(*dep).or_default().insert(node.id);
-        }
+    let mut after = successors(nodes);
+    for (from, targets) in edges {
+        after.entry(*from).or_default().extend(targets);
     }
     let mut waiting: BTreeMap<ChangeId, usize> = nodes.keys().map(|id| (*id, 0)).collect();
     for targets in after.values() {

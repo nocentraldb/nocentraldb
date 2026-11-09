@@ -139,7 +139,7 @@ pub(crate) struct Judgement {
 pub(crate) struct Judged(pub(crate) BTreeMap<ChangeId, Judgement>);
 
 impl Judged {
-    fn valid(&self, id: ChangeId) -> bool {
+    pub(crate) fn valid(&self, id: ChangeId) -> bool {
         self.0.get(&id).is_some_and(|j| j.valid)
     }
 }
@@ -187,7 +187,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         .enumerate()
         .map(|(i, m)| (*m, i))
         .collect();
-    let edges = rights::edges(&folded, judged, &rank);
+    let edges = rights::edges(&folded, &input.nodes, judged, &rank);
     resolved.order = rights::order(&folded, &edges, &rank);
 
     let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
@@ -210,13 +210,14 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         let node = folded[id];
         let verdict = if !judged.valid(node.id) {
             Verdict::Rejected(Rejection::NotValidWhenWritten)
-        } else if members.role(node.author) < Some(rights::needed(node)) {
-            Verdict::Rejected(Rejection::NoRight)
         } else if let Some(by) = accepted_revocations
             .iter()
             .find(|r| rights::excludes(folded[r], node, &input.nodes, judged))
         {
+            // Reported before a missing right, which the exclusion explains.
             Verdict::Rejected(Rejection::Excluded(*by))
+        } else if members.role(node.author) < Some(rights::needed(node)) {
+            Verdict::Rejected(Rejection::NoRight)
         } else {
             apply(members, node);
             members.settle(saw);

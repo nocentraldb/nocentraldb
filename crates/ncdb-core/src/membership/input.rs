@@ -111,7 +111,12 @@ impl Input {
         }
         let held: BTreeSet<ChangeId> = nodes.keys().copied().collect();
         for node in nodes.values_mut() {
-            node.deps = node.body.dependencies.intersection(&held).copied().collect();
+            node.deps = node
+                .body
+                .dependencies
+                .intersection(&held)
+                .copied()
+                .collect();
         }
         let pasts = pasts(&nodes);
         for (id, past) in pasts {
