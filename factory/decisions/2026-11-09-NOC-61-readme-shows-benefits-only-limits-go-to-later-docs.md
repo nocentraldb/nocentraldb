@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-61 · The README shows benefits only; its feature list carries no RFC links and no limits
+
+- Decided by: Carsten (owner), 2026-11-09, by revising the README in PR #75 (caa51db)
+- Why: the README is for a developer deciding whether to care, so it stays focused on what NoCentralDB does for them. What it does not do (what the relay sees, the limits of erasure, a removed member keeping its copy, per-space rights, no post-quantum in v1, browser eviction) goes into later documentation, not the README. The disclaimer says NoCentralDB is not yet a product and links the RFCs. `scripts/readme.test.mjs` no longer asks for an RFC link on every feature, and accepts "not yet a product" in the disclaimer; the check that every code identifier in the examples appears in an RFC stays.
+- Instead of: the ticket's original rule that every feature claim in the README links an RFC section and that the README names the relay's metadata and the limits of erasure, which this PR's first draft followed.
+- Topics: readme, docs

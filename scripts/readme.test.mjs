@@ -1,8 +1,10 @@
 // Asserts the shape of the README (NOC-61): it opens with a disclaimer that
-// links the RFCs, then has the sections "What it is for", "Install", "Code
-// examples" and "Contributing", in that order; every feature it names links
-// an RFC; and every code identifier in its examples appears in the code of an
-// RFC, so the README shows no API name the RFCs do not define.
+// says NoCentralDB is not yet a product and links the RFCs, then has the
+// sections "What it is for", "Install", "Code examples" and "Contributing", in
+// that order; and every code identifier in its examples appears in the code of
+// an RFC, so the README shows no API name the RFCs do not define. The owner
+// chose to keep RFC links and limits out of the README's feature list (see
+// factory/decisions/), so no test asks for them there.
 import assert from "node:assert/strict";
 import { globSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -77,8 +79,7 @@ test("the README opens with a disclaimer that links the RFCs", () => {
     disclaimer,
     "the README has no disclaimer block before its first section",
   );
-  assert.match(disclaimer, /not released/i);
-  assert.match(disclaimer, /planned/i);
+  assert.match(disclaimer, /not (yet )?(released|a product)/i);
   assert.match(disclaimer, /\]\(docs\/rfc\/README\.md\)/);
 });
 
@@ -95,20 +96,6 @@ test("the README has its sections in order", () => {
     found,
     `the sections are not in the order ${SECTIONS.join(", ")}`,
   );
-});
-
-test("every feature in What it is for links an RFC", () => {
-  const body = section(read("README.md"), "What it is for");
-  assert.ok(body, "the README has no section What it is for");
-  const features = body.split("\n").filter((line) => line.startsWith("- **"));
-  assert.ok(features.length >= 5, "What it is for lists fewer than 5 features");
-  for (const feature of features) {
-    assert.match(
-      feature,
-      /\]\(docs\/rfc\/\d{4}-[^)]+\.md(#[^)]*)?\)/,
-      `no RFC link: ${feature.slice(0, 60)}`,
-    );
-  }
 });
 
 test("the examples are marked as planned API", () => {
