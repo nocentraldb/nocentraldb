@@ -1,6 +1,7 @@
 //! Test doubles for a member that receives changes (NOC-28): the checks of
-//! RFC 0002 Amendment 1, steps 3 to 5, and a fold that records which
-//! operations it folded. The doubles stand in for real keys, so that a test
+//! RFC 0002 Amendment 1, steps 3 to 5, and a fold that records which field
+//! operations it folded and keeps the objects that creates and deletes fold
+//! into (NOC-39). The doubles stand in for real keys, so that a test
 //! of the steps can name a change's author and key generation by a small
 //! number; `tests/checks.rs` runs the same steps with real keys.
 //!
@@ -8,12 +9,14 @@
 //! every helper.
 #![allow(dead_code)]
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
 use ncdb_core::clock::Hlc;
+use ncdb_core::field_op::Origin;
 use ncdb_core::ids::{MemberId, ObjectId, OperationId, SpaceId};
-use ncdb_core::log::{Log, ParkReason, RejectReason, State};
+use ncdb_core::log::{Log, OperationParkReason, ParkReason, RejectReason, State};
+use ncdb_core::object::Object;
 use ncdb_core::receive::{Checks, Fold, Stop};
 
 /// The space every test change belongs to.
@@ -29,8 +32,9 @@ pub const GOOD: &[u8] = &[1];
 pub const BAD: &[u8] = &[0];
 /// A sealed payload the double cannot decrypt, as if the AEAD failed.
 pub const GARBLED: &[u8] = b"garbled";
-/// The collection and field the recorder's model knows.
+/// The collections and the field the recorder's model knows.
 pub const COLLECTION: &str = "task";
+pub const OTHER: &str = "project";
 pub const FIELD: &str = "title";
 
 /// The member id of a simulated member.
@@ -104,24 +108,30 @@ impl Checks for Control {
     }
 }
 
-/// A fold stub: knows one collection with one field, and records the
-/// operations it folded.
+/// A fold stub: knows two collections, the first with one field, records
+/// the field operations it folded, and keeps the objects of the copy.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Recorder {
     pub folded: BTreeSet<OperationId>,
+    pub objects: BTreeMap<ObjectId, Object>,
 }
 
 impl Fold for Recorder {
     fn knows_collection(&self, collection: &str) -> bool {
-        collection == COLLECTION
+        collection == COLLECTION || collection == OTHER
     }
 
     fn knows_field(&self, collection: &str, field: &str) -> bool {
         collection == COLLECTION && field == FIELD
     }
 
-    fn fold(&mut self, id: OperationId, _operation: &Operation) {
-        self.folded.insert(id);
+    fn fold(&mut self, origin: Origin, _operation: &Operation) -> Result<(), OperationParkReason> {
+        self.folded.insert(origin.id);
+        Ok(())
+    }
+
+    fn objects(&mut self) -> &mut BTreeMap<ObjectId, Object> {
+        &mut self.objects
     }
 }
 

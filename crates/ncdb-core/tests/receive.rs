@@ -278,8 +278,13 @@ fn d10_an_unknown_operation_is_parked_on_its_own_and_the_rest_is_folded() {
             ]
         }
     );
-    let ids = [change.operation_id(0), change.operation_id(4)];
-    assert_eq!(m.fold.folded, ids.into_iter().collect());
+    // The field operation is folded by the fold, the create into the
+    // objects (NOC-39).
+    assert_eq!(
+        m.fold.folded,
+        [change.operation_id(0)].into_iter().collect()
+    );
+    assert!(m.fold.objects[&ObjectId([2; 16])].exists());
 }
 
 #[test]
