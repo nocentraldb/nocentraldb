@@ -62,7 +62,9 @@ tasks:
     # every erasure limit, and their links resolve; the /factory/**/* input
     # covers GENESIS.md), scripts/rfc-0008-alignment.test.mjs (RFC 0001, 0002,
     # 0003, 0006, GENESIS.md and the FAQ follow RFC 0008, and
-    # factory/decisions/ records NOC-44), and
+    # factory/decisions/ records NOC-44), scripts/rfc-0007-alignment.test.mjs
+    # (RFC 0002's Amendment 4, use cases 4 and 5 and every text on what the
+    # relay sees follow RFC 0007, and factory/decisions/ records NOC-47), and
     # the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are

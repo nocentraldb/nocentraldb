@@ -17,7 +17,7 @@ Each use case has five parts:
 1. [Erasure that reaches every copy](#1-erasure-that-reaches-every-copy)
 2. [A breach of the relay leaks nothing readable](#2-a-breach-of-the-relay-leaks-nothing-readable)
 3. [An outside agent limited to one space](#3-an-outside-agent-limited-to-one-space)
-4. [A thousand agent queries a minute, at no cost](#4-a-thousand-agent-queries-a-minute-at-no-cost)
+4. [A thousand agent queries a minute, reads at no cost](#4-a-thousand-agent-queries-a-minute-reads-at-no-cost)
 5. [The relay goes down, and everyone keeps working](#5-the-relay-goes-down-and-everyone-keeps-working)
 
 **Part 2. What you keep**
@@ -75,7 +75,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 **In your app.** You write nothing. The SDK encrypts every change before it leaves the device, and keys stay on the members' devices.
 
-**What it does not cover.** The relay sees metadata: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists all of it. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
+**What it does not cover.** The relay sees metadata: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log. [RFC 0002, "What the relay can see, and what it cannot"](rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) lists what it learns from the log, and [RFC 0007, "What the relay sees"](rfc/0007-relay.md#what-the-relay-sees) adds what it learns from its protocol, and what the server it runs on sees. Encryption also does not protect a device from its owner. A process that runs as you can read what you can read.
 
 **Tell us.** Would "the relay sees only ciphertext and this metadata" pass your security review? Which piece of metadata would worry you?
 
@@ -103,7 +103,7 @@ You add the agent with an invitation it accepted and remove it by its member id,
 
 **Tell us.** In your app, would one space per project or per shared document work? Where would it break?
 
-### 4. A thousand agent queries a minute, at no cost
+### 4. A thousand agent queries a minute, reads at no cost
 
 **The situation.** An agent plans its work in a loop. It reads the ready tasks with their blockers, ranks them, takes the next page and asks again.
 
@@ -118,7 +118,7 @@ const page = await db.find(model.tasks.views.ready.take(50));                   
 const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor));  // next 50
 ```
 
-**What it does not cover.** Queries run only through declared indexes and views. NoCentralDB has no queries on the server and no analytics across all users' data. For those, use a central database.
+**What it does not cover.** Reads are free; writes are not. Every change an agent writes goes through the relay, which delivers it to every other member of the space, so the relay's cost grows with the writes times the members each write reaches. For 1,000 agents that each write one change a minute, RFC 0007 estimates about 800 USD a month on AWS ([RFC 0007, "What it costs"](rfc/0007-relay.md#what-it-costs)). Queries run only through declared indexes and views. NoCentralDB has no queries on the server and no analytics across all users' data. For those, use a central database.
 
 **Tell us.** Which derived value in your app would not fit our planned computed-field functions (follow, count, any, min, max, reach, cycle)?
 
@@ -128,11 +128,11 @@ const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor));
 
 **With a central database.** An outage stops the app. Nobody can read or write. A move needs a migration and a maintenance window.
 
-**With NoCentralDB.** Every member keeps reading and writing its full local copy during the outage. Members on the same network can keep exchanging changes directly. We call this island mode. When the relay is back, every copy converges to the same state, in whatever order the changes arrive. The relay stores only an append-only log of encrypted changes, which makes it the easiest part of the system to replace.
+**With NoCentralDB.** Every member keeps reading and writing its full local copy during the outage. Members that can reach each other directly can keep exchanging changes, with the same messages they use with the relay. We call this island mode. When the relay is back, every copy converges to the same state, in whatever order the changes arrive. The relay stores only an append-only log of encrypted changes, which makes it the easiest part of the system to replace.
 
 **In your app.** You write nothing. Reads stay on the device, and the SDK queues writes until the relay answers.
 
-**What it does not cover.** Changes made during the outage reach the other members only when a connection exists again. NoCentralDB cannot enforce one global truth at write time, such as unique names or a transaction across all members. We have not yet designed how a move between relay backends works. Your answer below decides it.
+**What it does not cover.** Changes made during the outage reach the other members only when a connection exists again. How members on the same network find each other is not designed yet: RFC 0007 defines the messages two members exchange once they are connected, but not how they find each other, which needs the peer RFC ([RFC 0007, "Island mode"](rfc/0007-relay.md#island-mode)). Until it exists, two members on one network have no designed way to connect to each other. NoCentralDB cannot enforce one global truth at write time, such as unique names or a transaction across all members. We have not yet designed how a move between relay backends works. Your answer below decides it.
 
 **Tell us.** Would you rather run the relay yourself on Postgres, run it serverless in your own cloud account, or use a hosted relay that can only ever see ciphertext?
 
