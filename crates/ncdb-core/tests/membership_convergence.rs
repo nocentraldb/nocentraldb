@@ -100,8 +100,8 @@ impl Mergeable for Copy {
     type Read = Vec<(MemberId, Role)>;
 
     fn apply(&mut self, op: &Op<Change>) {
-        if !self.changes.contains_key(&op.id) {
-            self.changes.insert(op.id, op.body.clone());
+        if let std::collections::btree_map::Entry::Vacant(entry) = self.changes.entry(op.id) {
+            entry.insert(op.body.clone());
             self.resolved = OnceCell::new();
         }
     }
