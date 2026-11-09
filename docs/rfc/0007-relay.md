@@ -8,6 +8,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on every decision in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and the design below describes the decided options. Nothing here is built or deployed. The RFC is final when this pull request is merged.
 
+**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+
 ## What this RFC does not cover
 
 - **The bytes of a change and of the log.** RFC 0002. This RFC moves frames as opaque bytes, except for the header fields the relay reads.

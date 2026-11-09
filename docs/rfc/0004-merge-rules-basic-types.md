@@ -13,6 +13,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 
 **Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) (NOC-37) is decided too: the owner accepted every recommendation in its decisions 8 to 14 (Carsten, 2026-11-08).
 
+**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+
 **Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6); how this RFC's operations sit inside RFC 0002's operation map is [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) *(Amendment 1)*. Object deletion (see [Links](#links) for what this RFC assumes about it). Of object creation, this RFC defines only what two creates of one object id mean.
 
 ## Summary
