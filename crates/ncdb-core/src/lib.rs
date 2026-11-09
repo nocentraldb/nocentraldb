@@ -19,6 +19,10 @@
 //! and what links resolve against, the objects of a copy ([`object`]).
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
+//!
+//! The genesis of a space, its membership entries and the membership state
+//! that members and the relay fold from them, RFC 0008
+//! (`docs/rfc/0008-membership.md`), are [`membership`].
 
 pub mod basic;
 pub mod cbor;
@@ -31,6 +35,7 @@ pub mod ids;
 pub mod keys;
 pub mod link;
 pub mod log;
+pub mod membership;
 pub mod object;
 pub mod receive;
 mod redact;
