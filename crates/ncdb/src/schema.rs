@@ -36,6 +36,40 @@ try {
 }
 "#;
 
+/// The oldest Node.js major version that strips TypeScript types natively,
+/// as RFC 0005's schema module needs.
+const NODE_MAJOR: u32 = 24;
+
+/// Refuses a missing `node`, or one older than [`NODE_MAJOR`].
+fn check_node() -> Result<(), String> {
+    let output = Command::new("node")
+        .arg("--version")
+        .output()
+        .map_err(|error| match error.kind() {
+            ErrorKind::NotFound => {
+                "ncdb runs the schema with Node.js 24 or later, and found no `node` on PATH."
+                    .to_owned()
+            }
+            _ => format!("cannot start Node.js: {error}"),
+        })?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let major = version
+        .strip_prefix('v')
+        .and_then(|v| v.split('.').next())
+        .and_then(|m| m.parse::<u32>().ok());
+    match major {
+        Some(major) if major >= NODE_MAJOR => Ok(()),
+        _ => Err(format!(
+            "ncdb runs the schema with Node.js {NODE_MAJOR} or later, and the `node` on PATH is {}.",
+            if version.is_empty() {
+                "of an unknown version"
+            } else {
+                &version
+            }
+        )),
+    }
+}
+
 /// The description of the schema module at `path`, or the message to show
 /// after the module's name.
 pub fn describe(path: &Path) -> Result<Draft, String> {
@@ -47,6 +81,7 @@ pub fn describe(path: &Path) -> Result<Draft, String> {
     let absolute = path
         .canonicalize()
         .map_err(|error| format!("cannot be opened: {error}"))?;
+    check_node()?;
     let output = Command::new("node")
         .arg("--input-type=module")
         .arg("--eval")
