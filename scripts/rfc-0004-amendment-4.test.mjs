@@ -126,7 +126,7 @@ test("the resolution table defines the three states by the member's copy", () =>
 
 test("the summary and the operation table name the reference", () => {
   const rfc = read();
-  assert.match(line(rfc, "| Reference "), /Basic value/);
+  assert.match(line(rfc, "| Reference "), /basic value/i);
   assert.match(line(rfc, "| Reference "), /\(Amendment 4\)/);
   const set = line(rfc, "| 1         | **set**");
   assert.match(set, /reference/, "set (1) does not list the reference");
