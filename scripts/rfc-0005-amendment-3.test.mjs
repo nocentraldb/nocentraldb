@@ -37,9 +37,9 @@ const sectionByAnchor = (markdown, anchor) =>
 
 /** Each "**Dn." decision of a text, up to the next one or a heading. */
 const decisions = (text) =>
-  [...text.matchAll(/^\*\*(D\d+)\.[\s\S]*?(?=^\*\*D\d+\.|^#|(?![\s\S]))/gm)].map(
-    (m) => ({ id: m[1], text: m[0] }),
-  );
+  [
+    ...text.matchAll(/^\*\*(D\d+)\.[\s\S]*?(?=^\*\*D\d+\.|^#|(?![\s\S]))/gm),
+  ].map((m) => ({ id: m[1], text: m[0] }));
 
 /** Every object's keys, at any depth, in the order the text writes them. */
 const keyOrders = (value, path = "$") => {
@@ -101,7 +101,11 @@ test("Amendment 3 asks the owner about nc.Infer's int and deprecating a collecti
       1,
       `${id} does not mark exactly one option recommended`,
     );
-    assert.match(text, /^Recommendation: [A-Z]\b/m, `${id} has no recommendation`);
+    assert.match(
+      text,
+      /^Recommendation: [A-Z]\b/m,
+      `${id} has no recommendation`,
+    );
   }
 });
 
@@ -109,7 +113,10 @@ test("RFC 0005's status names Amendment 3's open decisions", () => {
   const status = read()
     .split("\n")
     .find((l) => l.startsWith("**Status.**"));
-  assert.ok(status.includes(`(#${AMENDMENT})`), "the status does not link Amendment 3");
+  assert.ok(
+    status.includes(`(#${AMENDMENT})`),
+    "the status does not link Amendment 3",
+  );
   assert.match(status, /D16/);
   assert.match(status, /D17/);
 });
