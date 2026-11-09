@@ -55,7 +55,13 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
     let conn = Connection::open(&db.0).unwrap();
     let schema = schema(&conn);
     for table in [
-        "log", "meta", "objects", "c_task", "fs_task", "c_project", "fs_project",
+        "log",
+        "meta",
+        "objects",
+        "c_task",
+        "fs_task",
+        "c_project",
+        "fs_project",
     ] {
         assert!(
             schema.contains(&("table".to_owned(), table.to_owned())),
@@ -101,6 +107,9 @@ fn the_sqlite_in_the_binary_is_the_bundled_release_rfc_0006_names() {
     assert_eq!(rusqlite::version(), "3.54.1");
 }
 
+/// A row of the log table: space id, change id, state, reason, frame.
+type LogRow = (Vec<u8>, Vec<u8>, String, Option<String>, Vec<u8>);
+
 #[test]
 fn a_received_change_is_in_the_log_with_its_frame_and_state() {
     let db = TempDb::new("log");
@@ -115,10 +124,14 @@ fn a_received_change_is_in_the_log_with_its_frame_and_state() {
     }
 
     let conn = Connection::open(&db.0).unwrap();
-    let rows: Vec<(Vec<u8>, Vec<u8>, String, Option<String>, Vec<u8>)> = conn
-        .prepare("SELECT space_id, change_id, state, reason, frame FROM log ORDER BY local_position")
+    let rows: Vec<LogRow> = conn
+        .prepare(
+            "SELECT space_id, change_id, state, reason, frame FROM log ORDER BY local_position",
+        )
         .unwrap()
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)))
+        .query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        })
         .unwrap()
         .map(Result::unwrap)
         .collect();
@@ -177,7 +190,8 @@ fn reopening_the_view_keeps_the_log_and_the_states_of_its_changes() {
     ));
     // The envelope that arrives after the reopen lets the rejected change
     // pass (D11), so its state was reloaded with it.
-    view.receive(&envelope(FOUNDER, 2, 0), &mut control).unwrap();
+    view.receive(&envelope(FOUNDER, 2, 0), &mut control)
+        .unwrap();
     assert_eq!(
         view.state(SPACE, id(&early)),
         Some(State::Folded { parked: Vec::new() })
@@ -249,7 +263,12 @@ impl Checks for CrashOnOpen {
 fn a_change_and_everything_its_fold_wrote_are_committed_together_or_not_at_all() {
     let db = TempDb::new("transaction");
     let a = create(1, 0);
-    let b = sealed(FOUNDER, 2, 0, vec![field_op::create(ObjectId([2; 16]), TASK)]);
+    let b = sealed(
+        FOUNDER,
+        2,
+        0,
+        vec![field_op::create(ObjectId([2; 16]), TASK)],
+    );
     let key = envelope(FOUNDER, 3, 0);
     let mut view = View::open(&db.0, model()).unwrap();
     let mut checks = CrashOnOpen {

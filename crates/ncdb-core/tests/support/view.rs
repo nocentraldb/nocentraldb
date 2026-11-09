@@ -12,7 +12,6 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use ncdb_core::basic::{self, BasicValue, Kind};
 use ncdb_core::change::Operation;
-use ncdb_core::field::FieldType;
 use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::ObjectId;
 use ncdb_core::link::Link;
