@@ -26,6 +26,7 @@ const engine = (overrides = {}) => ({
   private: {
     opfs: "ok",
     idb: "ok",
+    reload: { sqlite: "kept", idb: "kept" },
     afterClose: { sqlite: "lost", idb: "lost" },
   },
   ...overrides,
@@ -61,6 +62,7 @@ test("each engine gets a row per behaviour, labelled as Playwright's build", () 
       "Survives a browser restart",
       'Survives `Clear-Site-Data: "cache"`',
       "Private window: storage",
+      "Private window: survives a reload",
       "Private window: after close",
     ]) {
       assert.ok(find(rows, browser, behaviour), `${browser}: ${behaviour}`);
@@ -127,6 +129,7 @@ test("a private window without OPFS shows the browser's error", () => {
         private: {
           opfs: "SecurityError: The operation is insecure.",
           idb: "ok",
+          reload: { sqlite: "error: SecurityError", idb: "kept" },
           afterClose: { sqlite: "lost", idb: "lost" },
         },
       }),
@@ -142,6 +145,40 @@ test("a private window without OPFS shows the browser's error", () => {
   );
 });
 
+test("a reload in the private window reports IndexedDB, and SQLite only with OPFS", () => {
+  const rows = measuredRows(
+    run({
+      chromium: engine(),
+      firefox: engine({
+        private: {
+          opfs: "SecurityError: The operation is insecure.",
+          idb: "ok",
+          reload: {
+            sqlite: "error: SecurityError: The operation is insecure.",
+            idb: "kept",
+          },
+          afterClose: { sqlite: "lost", idb: "lost" },
+        },
+      }),
+    }),
+  );
+  assert.equal(
+    find(rows, "Chromium (Playwright)", "Private window: survives a reload")
+      .behaviour,
+    "Private window: survives a reload (off-the-record context)",
+  );
+  assert.equal(
+    find(rows, "Chromium (Playwright)", "Private window: survives a reload")
+      .finding,
+    "SQLite kept, IndexedDB kept",
+  );
+  assert.equal(
+    find(rows, "Firefox (Playwright)", "Private window: survives a reload")
+      .finding,
+    "SQLite: no OPFS, IndexedDB kept",
+  );
+});
+
 test("after closing a private window without OPFS, SQLite reads as no OPFS", () => {
   const rows = measuredRows(
     run({
@@ -149,6 +186,7 @@ test("after closing a private window without OPFS, SQLite reads as no OPFS", () 
         private: {
           opfs: "UnknownError: failed",
           idb: "ok",
+          reload: { sqlite: "error: UnknownError: failed", idb: "kept" },
           afterClose: { sqlite: "error: UnknownError: failed", idb: "lost" },
         },
       }),

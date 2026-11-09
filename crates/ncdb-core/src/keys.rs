@@ -79,6 +79,10 @@ impl MemberKey {
     pub(crate) fn signing(&self) -> &SigningKey {
         &self.signing
     }
+
+    pub(crate) fn agreement(&self) -> &[u8; 32] {
+        &self.agreement
+    }
 }
 
 impl MemberPublicKey {

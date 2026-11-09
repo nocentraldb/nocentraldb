@@ -14,33 +14,36 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 
 | Browser | Behaviour | Finding | Source |
 | --- | --- | --- | --- |
-| Chromium (Playwright) | `persist()` | denied, without asking the user | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | `estimate()` | usage 6 MiB, quota 10 GiB | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | Private window: storage (off-the-record context) | SQLite on OPFS works; IndexedDB works | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Chromium (Playwright) | Private window: after close (off-the-record context) | SQLite lost, IndexedDB lost | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-08 |
-| Firefox (Playwright) | `persist()` | no answer within 5 s: the browser waits for the user | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | `estimate()` | usage 576 KiB, quota 10 GiB | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | Private window: storage (private browsing mode) | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB works | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| Firefox (Playwright) | Private window: after close (private browsing mode) | SQLite: no OPFS, IndexedDB lost | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-08 |
-| WebKit (Playwright) | `persist()` | denied, without asking the user | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | `estimate()` | usage 6 MiB, quota 1000 MiB | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | Private window: storage (ephemeral context) | no SQLite on OPFS (UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).); IndexedDB works | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
-| WebKit (Playwright) | Private window: after close (ephemeral context) | SQLite: no OPFS, IndexedDB lost | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
+| Chromium (Playwright) | `persist()` | denied, without asking the user | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | `estimate()` | usage 6 MiB, quota 10 GiB | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Private window: storage (off-the-record context) | SQLite on OPFS works; IndexedDB works | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Private window: survives a reload (off-the-record context) | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Chromium (Playwright) | Private window: after close (off-the-record context) | SQLite lost, IndexedDB lost | measured: Playwright 1.63.0, Chromium 153.0.8010.12, linux x64, 2026-11-09 |
+| Firefox (Playwright) | `persist()` | no answer within 5 s: the browser waits for the user | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | `estimate()` | usage 576 KiB, quota 10 GiB | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Private window: storage (private browsing mode) | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB works | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Private window: survives a reload (private browsing mode) | SQLite: no OPFS, IndexedDB kept | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| Firefox (Playwright) | Private window: after close (private browsing mode) | SQLite: no OPFS, IndexedDB lost | measured: Playwright 1.63.0, Firefox 155.0, linux x64, 2026-11-09 |
+| WebKit (Playwright) | `persist()` | denied, without asking the user | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | `persisted()` after `persist()` | false | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | `estimate()` | usage 6 MiB, quota 1000 MiB | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | SQLite on OPFS (`opfs-sahpool`) | works | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Survives a reload | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Survives a browser restart | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Survives `Clear-Site-Data: "cache"` | SQLite kept, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Private window: storage (ephemeral context) | no SQLite on OPFS (UnknownError: The operation failed for an unknown transient reason (e.g. out of memory).); IndexedDB works | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Private window: survives a reload (ephemeral context) | SQLite: no OPFS, IndexedDB kept | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
+| WebKit (Playwright) | Private window: after close (ephemeral context) | SQLite: no OPFS, IndexedDB lost | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-09 |
 | Safari (macOS) | Seven-day deletion of script-writable storage | after seven days of Safari use without user interaction on the site, all of its script-writable storage is deleted; named: IndexedDB, LocalStorage, SessionStorage, media keys, service worker registrations and cache; OPFS is not named | documented: [WebKit blog, 2020-03-24](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/) |
 | Safari (macOS) | Seven-day deletion reaches SQLite on OPFS | unknown | unknown |
 | Safari (macOS) | SQLite on OPFS (`opfs-sahpool`) | works: the time written was read back from SQLite and from IndexedDB | measured: manual check 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021) |
@@ -64,7 +67,7 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | Firefox | `persist()` | the user is asked in a popup | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | Firefox (macOS) | `persist()` | a prompt asks "Allow nocentraldb.github.io to store data in persistent storage?"; Allow grants it and `persisted()` turns true. Asked again after the permission was cleared, the prompt came back and the owner pressed Block, yet `persist()` answered granted and `persisted()` returned true: the API reported granted after a blocked prompt, a result to re-check, not proof that blocking works | measured: manual check 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021) |
 | Firefox | Quota | best-effort: the smaller of 10% of the disk and 10 GiB; persistent: up to 50% of the disk, at most 8 TiB | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
-| Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes; after the private window was closed, a Read in a new private window showed `null`. Whether IndexedDB lasts within one open private session is unknown | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
+| Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes; after the private window was closed, a Read in a new private window showed `null`. A reload within one open private session was not checked by hand; Playwright's Firefox keeps IndexedDB across it | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
 | All browsers | Eviction under storage pressure | best-effort data of the least recently used origin is deleted first | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | All browsers | What eviction deletes | all of the origin's data at once, not parts of it; IndexedDB, the Cache API and the File System API (which defines OPFS) are managed per origin by one storage system | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | All browsers | Private browsing | browsers may apply different quotas, and stored data is usually deleted when private browsing ends | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
@@ -81,7 +84,7 @@ Where this differs from RFC 0006 or from what the SDK should promise is for pm t
 - `measure.mjs` drives the page with Playwright, headless, one engine at a time, with a fresh profile directory:
   - `persist()` is called first; when it has not answered after 5 s, the row says the browser waits for the user (a headless browser shows no prompt anybody could answer). `persisted()` and `estimate()` are read after it.
   - Each survival row writes a fresh token, runs the event, and reads the token back from SQLite and from IndexedDB: a reload of the page; a visit to `/clear-cache` and back; closing the browser and launching it again on the same profile directory.
-  - Private window: Chromium's and WebKit's non-persistent browser contexts (an off-the-record profile and an ephemeral data store), and Firefox with `browser.privatebrowsing.autostart`, its private browsing mode. Playwright's own Firefox contexts are not private (OPFS works in them), and the pref takes effect only from a profile's second launch, so the probe launches the profile once before it measures. "After close" reads in a new private window: a new context of the same browser, or for Firefox a restart on the same profile.
+  - Private window: Chromium's and WebKit's non-persistent browser contexts (an off-the-record profile and an ephemeral data store), and Firefox with `browser.privatebrowsing.autostart`, its private browsing mode. Playwright's own Firefox contexts are not private (OPFS works in them), and the pref takes effect only from a profile's second launch, so the probe launches the profile once before it measures. "Survives a reload" writes a token in the private window, reloads the page in the same window and reads it back there. "After close" reads in a new private window: a new context of the same browser, or for Firefox a restart on the same profile.
 - `run.mjs` runs all three engines, writes the results file and prints the Playwright rows of the table above.
 
 To run it again:
