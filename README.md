@@ -8,7 +8,7 @@ NoCentralDB is a local-first database designed for teams of people and agents: e
 crates/ncdb-core/     Rust core (placeholder)
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
-docs/rfc/             design documents
+docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, decisions/ (the decision log, read with pnpm decisions)

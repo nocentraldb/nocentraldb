@@ -165,9 +165,9 @@ With your answers we will decide the v1 scope of rights, the server-member model
 
 ## How to give advice
 
-Join the discussion of this RFC in the repository's RFC discussions on GitHub. Tell us about your app, your situation and where the design would break for you. Reports of problems help us more than feature requests. Check the [FAQ](../faq.md) first; your question may already have an answer. To propose a change to the text itself, open a pull request against this file.
+Reply in [this RFC's discussion](https://github.com/nocentraldb/nocentraldb/discussions/21) on GitHub, one topic per reply, or start a new discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback) when your point needs room of its own. Tell us about your app, your situation and where the design would break for you. Reports of problems help us more than feature requests. Check the [FAQ](../faq.md) first; your question may already have an answer. To propose a change to the text itself, open a pull request against this file.
 
-We read every reply, answer within a week, and publish a summary of the changes in the next draft. Watch the repository's releases to hear when that draft is out.
+We read every reply, answer within a week, and publish a summary of the changes in the next draft. [What happens to your feedback](README.md#what-happens-to-your-feedback) says how a point becomes an amendment, a ticket or an answer. Watch the repository's releases to hear when that draft is out.
 
 ## Amendment 1: following RFC 0008
 

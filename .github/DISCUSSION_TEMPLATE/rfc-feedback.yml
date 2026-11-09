@@ -1,11 +1,13 @@
-title: "[RFC 0001] "
+title: "[RFC 000N] "
 body:
   - type: markdown
     attributes:
       value: |
         Feedback on the design is wanted while it is still cheap to change. Tell us about your app, your situation and where the design would break for you: answers about problems help us more than feature requests.
 
-        We read every reply, answer within a week, and publish a summary of what changed in the next draft. To change the text of an RFC itself, open a pull request against its file under docs/rfc/.
+        If the RFC already has its own discussion in this category, a reply there reaches the same readers; start a new discussion when your point needs room of its own. Put the RFC's number in the title, for example "[RFC 0003] Key rotation on a phone that is offline for a month".
+
+        We read every reply, answer within a week, and publish a summary of what changed in the next draft. What happens to a point is described in docs/rfc/README.md, under "What happens to your feedback". To change the text of an RFC itself, open a pull request against its file under docs/rfc/.
   - type: input
     id: rfc
     attributes:
