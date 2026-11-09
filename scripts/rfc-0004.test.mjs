@@ -154,3 +154,28 @@ test("Amendment 1's decisions 8 to 14 are decided by the owner, none left open",
     `${RFC}: Amendment 1 has ${decided.length} "Decided: <option> (Carsten, <date>)." lines, not 7 (decisions 8 to 14)`,
   );
 });
+
+// NOC-75, at pm's request: the owner decided the nesting limit in NOC-24,
+// which RFC 0002 Amendment 6 records (#86), so RFC 0004's depth paragraph no
+// longer says it is pending and links that amendment instead, through an
+// amendment of its own that decides nothing.
+test("RFC 0004 links RFC 0002 Amendment 6 for the nesting limit, not a pending decision", () => {
+  const text = read();
+  assert.ok(
+    !/pending the owner in NOC-24/.test(text),
+    "still pending in NOC-24",
+  );
+  const depth = text.split("\n").find((l) => l.startsWith("**Depth.**"));
+  assert.ok(depth, "no paragraph Depth");
+  assert.ok(
+    depth.includes(
+      "](0002-change-and-log-format.md#amendment-6-a-nesting-limit-and-a-clock-that-never-waits)",
+    ),
+    "the depth paragraph does not link RFC 0002 Amendment 6",
+  );
+  assert.match(depth, /\*\(Amendment 3\.\)\*/);
+  assert.match(
+    text.split(/^## /m)[0],
+    /^- \*\*2026-11-09\*\* · NOC-75 · \[Amendment 3: [^\]]*\]\(#amendment-3-/m,
+  );
+});

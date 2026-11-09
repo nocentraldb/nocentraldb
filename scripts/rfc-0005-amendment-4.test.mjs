@@ -1,4 +1,4 @@
-// Asserts RFC 0005's Amendment 3 (NOC-73), the follow-ups from building
+// Asserts RFC 0005's Amendment 4 (NOC-73), the follow-ups from building
 // `ncdb model build` (NOC-70): the lock example is in the canonical form the
 // RFC defines, byte for byte what the builder writes (the Rust tests hold the
 // fixture to the builder's output); and the two points the build found
@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0005-schema-and-model-lock.md";
 const FIXTURE = "crates/ncdb-core/tests/model_lock/rfc-0005-v2.lock.json";
-const AMENDMENT = "amendment-3-follow-ups-from-building-the-lock";
+const AMENDMENT = "amendment-4-follow-ups-from-building-the-lock";
 
 const read = (path = RFC) => readFileSync(join(root, path), "utf8");
 
@@ -68,7 +68,7 @@ test("RFC 0005's lock example is the bytes ncdb model build writes", () => {
   assert.equal(jsonBlocks(read())[0], read(FIXTURE));
 });
 
-test("RFC 0005 announces Amendment 3 in a dated NOC-73 changelog line", () => {
+test("RFC 0005 announces Amendment 4 in a dated NOC-73 changelog line", () => {
   const top = read().split(/^## /m)[0];
   const line = top
     .split("\n")
@@ -77,7 +77,7 @@ test("RFC 0005 announces Amendment 3 in a dated NOC-73 changelog line", () => {
   assert.ok(line.includes(`(#${AMENDMENT})`), `it does not link #${AMENDMENT}`);
 });
 
-test("Amendment 3 asks the owner about nc.Infer's int and deprecating a collection", () => {
+test("Amendment 4 asks the owner about nc.Infer's int and deprecating a collection", () => {
   const body = sectionByAnchor(read(), AMENDMENT);
   assert.ok(body, `${RFC} has no section #${AMENDMENT}`);
   assert.match(body, /NOC-70/);
@@ -85,7 +85,7 @@ test("Amendment 3 asks the owner about nc.Infer's int and deprecating a collecti
   assert.deepEqual(
     found.map((d) => d.id),
     ["D16", "D17"],
-    "Amendment 3 does not ask D16 and D17",
+    "Amendment 4 does not ask D16 and D17",
   );
   const [int, collection] = found;
   assert.match(int.text, /nc\.Infer/);
@@ -109,13 +109,13 @@ test("Amendment 3 asks the owner about nc.Infer's int and deprecating a collecti
   }
 });
 
-test("RFC 0005's status names Amendment 3's open decisions", () => {
+test("RFC 0005's status names Amendment 4's open decisions", () => {
   const status = read()
     .split("\n")
     .find((l) => l.startsWith("**Status.**"));
   assert.ok(
     status.includes(`(#${AMENDMENT})`),
-    "the status does not link Amendment 3",
+    "the status does not link Amendment 4",
   );
   assert.match(status, /D16/);
   assert.match(status, /D17/);

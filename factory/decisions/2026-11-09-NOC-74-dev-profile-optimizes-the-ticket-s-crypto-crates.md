@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-74 · The dev profile optimizes the seven crypto crates the ticket names, at opt-level 3
+
+- Decided by: coding agent (NOC-74)
+- Why: measured on a 4-core cloud container, each native test run alone. With `opt-level = 3` for ed25519-dalek, curve25519-dalek (both versions), x25519-dalek, chacha20poly1305, sha2 (both versions), hkdf and hpke, PR #83's `m_c1_the_same_control_changes_resolve_to_the_same_state_in_any_order` drops from 22.5 s to 0.4 s, and the seal and frame-check bit-flip tests from 3.2 s to 0.1 s. Adding chacha20 and poly1305, where ChaCha20-Poly1305 does its work, saved about 1 s more over all tests, within the noise of a run, so the list stays as the ticket names it. The core's own code stays unoptimized, so its debugging is unchanged, and `[profile.release]` does not read `[profile.dev]`, so release builds do not change.
+- Instead of: the ticket's list plus chacha20 and poly1305 (no measurable gain); `[profile.dev.package."*"]`, which also optimizes minicbor and every other dependency for a compile cost no measured test asks for; or raising the whole dev profile, which would optimize the core and make stepping through it in a debugger worse.
+- Topics: build, testing, crypto, performance

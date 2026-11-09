@@ -4,11 +4,9 @@
 //! the Unix epoch, the lower 16 bits a counter. A member writes with the
 //! larger of its wall clock and one more than the highest clock it has seen
 //! in the space, so its clock never runs backwards and is higher than every
-//! clock it has seen. When the counter would overflow, it carries into the
-//! next millisecond. RFC 0002 says it waits for the wall clock instead, which
-//! takes as long as a clock seen from the future is ahead, and forever after
-//! the largest clock was seen. The carry is pending the owner's decision
-//! (NOC-25).
+//! clock it has seen. When the counter is full, it carries into the next
+//! millisecond with counter 0, whatever the wall clock says, so a member
+//! never waits (RFC 0002 Amendment 6, decided by the owner in NOC-25).
 //!
 //! A received clock more than a minute ahead of the local wall clock raises
 //! a warning, [`ClockAhead`] (RFC 0002, "What the clock does not do"). The

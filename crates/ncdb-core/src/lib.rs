@@ -21,6 +21,10 @@
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
 //!
+//! The genesis of a space, its membership entries and the membership state
+//! that members and the relay fold from them, RFC 0008
+//! (`docs/rfc/0008-membership.md`), are [`membership`].
+//!
 //! Natively, a member keeps its log and the view folded from it in SQLite,
 //! as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it ([`view`]).
 
@@ -36,6 +40,7 @@ pub mod ids;
 pub mod keys;
 pub mod link;
 pub mod log;
+pub mod membership;
 pub mod model_lock;
 pub mod object;
 pub mod receive;

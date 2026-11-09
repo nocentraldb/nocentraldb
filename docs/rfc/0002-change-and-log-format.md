@@ -10,12 +10,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-6
 - **2026-11-08** · NOC-44 · [Amendment 3: following RFC 0008](#amendment-3-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): derived space ids, the structure of the key generation, the control body, equivocations of the genesis and of revoked members, what the relay sees of control changes, and when a member pushes a refused change again. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-47 · [Amendment 4: following RFC 0007](#amendment-4-following-rfc-0007) brings this RFC in line with the owner's rulings on [RFC 0007](0007-relay.md): the list of what the relay sees links RFC 0007's, and the relay requires the uploader of a change to be an authenticated current member of the space. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 4)*.
 - **2026-11-09** · NOC-40 · [Amendment 5: the writer's model in the payload](#amendment-5-the-writers-model-in-the-payload) records the payload key that [RFC 0005](0005-schema-and-model-lock.md)'s D10 and D13 decided: every sealed change carries its writer's `model.id` and model version in payload key 64, and a member parks a change of another model, whole. It reopens no decision. The sentences it changes elsewhere are marked *(Amendment 5)*.
+- **2026-11-09** · NOC-62 · [Amendment 6: a nesting limit and a clock that never waits](#amendment-6-a-nesting-limit-and-a-clock-that-never-waits) records two rules the owner decided as recommended (Carsten, 2026-11-09): a change nests at most 32 levels, which every member and the relay check before they recurse (NOC-24), and a clock whose counter is full carries into the next millisecond with counter 0 (NOC-25). The sentences it changes elsewhere are marked *(Amendment 6)*.
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
 
-**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. This RFC was merged with the owner's approval in #28 (Carsten, 2026-11-08). The owner decided [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) (D10 to D12, NOC-22) and [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) (D13, NOC-38) as recommended, by merging #38 and #54 (Carsten, 2026-11-08); the sentences they mark describe the decided options. [Amendment 3](#amendment-3-following-rfc-0008) decides nothing: it follows the owner's decisions in RFC 0008 (NOC-44). [Amendment 4](#amendment-4-following-rfc-0007) decides nothing either: it follows the owner's rulings on RFC 0007 (NOC-47). [Amendment 5](#amendment-5-the-writers-model-in-the-payload) records the payload key of RFC 0005's decisions D10 and D13 (NOC-40); the owner signs off its number and its encoding by merging it.
+**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) and the readings proposed in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07). The design below describes the decided options. This RFC was merged with the owner's approval in #28 (Carsten, 2026-11-08). The owner decided [Amendment 1](#amendment-1-atomic-unit-and-rejected-changes) (D10 to D12, NOC-22) and [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode) (D13, NOC-38) as recommended, by merging #38 and #54 (Carsten, 2026-11-08); the sentences they mark describe the decided options. [Amendment 3](#amendment-3-following-rfc-0008) decides nothing: it follows the owner's decisions in RFC 0008 (NOC-44). [Amendment 4](#amendment-4-following-rfc-0007) decides nothing either: it follows the owner's rulings on RFC 0007 (NOC-47). [Amendment 5](#amendment-5-the-writers-model-in-the-payload) records the payload key of RFC 0005's decisions D10 and D13 (NOC-40); the owner signs off its number and its encoding by merging it. The owner decided both rules of [Amendment 6](#amendment-6-a-nesting-limit-and-a-clock-that-never-waits) as recommended, the nesting limit in NOC-24 and the clock's carry in NOC-25 (Carsten, 2026-11-09).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -194,7 +195,7 @@ The merge rules of RFC 0004 need two things from every change: a total order tha
 
 Every sealed payload carries a **hybrid logical clock** (key 2): one unsigned 64-bit integer. The upper 48 bits hold milliseconds since the Unix epoch, which lasts until the year 10889. The lower 16 bits hold a counter. A control body carries no clock (see [Key generation, suite and kind](#key-generation-suite-and-kind)). *(Amendment 3.)*
 
-When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter would overflow, the member waits for its wall clock to reach the next millisecond.
+When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter is full, the clock carries into the next millisecond with counter 0, whatever the wall clock says, so a member never waits: a change from a member whose clock runs far ahead, with its counter full, cannot stop anyone from writing. Decided by the owner (Carsten, 2026-11-09, NOC-25). Only the largest value a clock holds, in the year 10889, has no next one, and there the core refuses to write rather than wrap around. *(Amendment 6.)*
 
 The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author member id and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author member id and operation id from the same change, and a change's clock is higher than the clock of every change its author had seen.
 
@@ -243,6 +244,7 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **Text strings** are valid UTF-8, stored as given. The format does not normalise Unicode. A field type or the SDK may normalise before writing (RFC 0004 has the SDK normalise strings to NFC), but the encoding never changes the bytes it is given.
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
+- **Nesting** stops at 32 levels, counted from the frame: the frame is level 1, and every item of an array or map is one level deeper than the array or map. The header, which the frame carries as a byte string, is level 2, and the payload, which the header carries as a byte string, is level 3, so an operation's value starts at level 6. Every other byte string is one item, whatever it holds: the contents of a Yrs update of rich text or of a stream chunk do not count. Every decoder, on a member and on the relay, refuses a deeper value before it recurses into it, so a deep value cannot overflow its stack. Decided by the owner (Carsten, 2026-11-09, NOC-24). *(Amendment 6.)*
 
 A decoder accepts only canonical bytes. After decoding, the core encodes the value again and compares the bytes. A change that is not canonical is rejected, and never "repaired", because a repaired change would have another id and an invalid signature. A payload that is not canonical is never repaired either; the member keeps the frame and parks the change (step 5a of [Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode)). *(Amendment 2.)* The core keeps the exact bytes it received and never re-encodes a stored change.
 
@@ -308,7 +310,7 @@ The relay keeps one log per space. Each entry holds:
 - **The time of acceptance**, from the relay's clock.
 - **The frame**, as the relay received it.
 
-The relay accepts a change when the frame is well-formed and canonical, the signature is valid for the author member's signing key, and RFC 0008's membership rules accept it over the control changes the relay holds. A removed or demoted member's changes above the cutoff its revocation names are refused, and those at or below it are accepted, whenever they arrive ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). *(Amendment 3.)* The author may be any member, and the uploader must be an authenticated current member of the space ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)), so any current member may forward another member's changes, which island mode needs. *(Amendment 4.)* The relay never decrypts, folds or reorders anything.
+The relay accepts a change when the frame is well-formed and canonical, the signature is valid for the author member's signing key, and RFC 0008's membership rules accept it over the control changes the relay holds. A removed or demoted member's changes above the cutoff its revocation names are refused, and those at or below it are accepted, whenever they arrive ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). *(Amendment 3.)* Canonical includes the nesting limit: the relay refuses a change that nests deeper than 32 levels in the parts it reads, the frame, the header and a control body, before it recurses into them. A sealed payload it cannot read, so only members check the limit there ([The CBOR profile](#the-cbor-profile)). *(Amendment 6.)* The author may be any member, and the uploader must be an authenticated current member of the space ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)), so any current member may forward another member's changes, which island mode needs. *(Amendment 4.)* The relay never decrypts, folds or reorders anything.
 
 **The cursor** is a relay position. A member asks the relay for "the changes of this space after position p", and the relay answers in position order, a page at a time. Positions are dense, so a member sees at once whether a page is complete. A cursor belongs to one relay: if a space moves to another relay, members start from position 0 there, and recognise the changes they already hold by their ids.
 
@@ -550,7 +552,7 @@ The log is an on-disk format, so the owner decided: D13 A, parked as "unknown pa
 
 A plaintext that decrypts can fail to decode for four causes:
 
-- **Too deep.** A value nests deeper than the decoder allows: 32 levels counted from the frame, so the payload map sits at level 3 (decision log, NOC-14; pending the owner in NOC-24).
+- **Too deep.** A value nests deeper than the decoder allows: 32 levels counted from the frame, so the payload map sits at level 3 ([the CBOR profile](#the-cbor-profile), [Amendment 6](#amendment-6-a-nesting-limit-and-a-clock-that-never-waits)).
 - **Not canonical.** The bytes break [the CBOR profile](#the-cbor-profile): an integer or length not in its shortest form, map keys out of order or twice, an indefinite length, a tag, invalid UTF-8, or bytes after the map.
 - **Wrong shape.** The map decodes, but a key that payload format 1 requires is missing or holds the wrong type, for example a clock that is not an unsigned integer.
 - **A newer payload format.** A later format may drop a key that format 1 requires, or use something the profile of today forbids, such as a tag ("Future versions may allow specific tags") or a deeper nesting.
@@ -583,7 +585,7 @@ What every member agrees on is the plaintext. The header is canonical, so the ch
 - B. Rejected, with a new reason "undecodable payload".
 - C. Split by cause: a payload whose format number the member reads and does not know is parked as "unknown payload format"; any other payload that does not decode is rejected as "malformed payload".
 
-Decided: A (Carsten, 2026-11-08). Recommendation: A. It is the only option that keeps convergence without freezing the payload profile and the depth limit, which the owner has not decided yet (NOC-24). It needs no new state and no new reason, and NOC-28 builds it already. B adds a reason that cannot be checked again by a control change, so it either breaks convergence after an upgrade or becomes parked under another name. C names malformed payloads truthfully, but only by making every relaxation of the profile a new header format. pm recommends A as the reading that loses nothing and stays convergent.
+Decided: A (Carsten, 2026-11-08). Recommendation: A. It is the only option that keeps convergence without freezing the payload profile and the depth limit, which the owner had not decided then (NOC-24, since decided in [Amendment 6](#amendment-6-a-nesting-limit-and-a-clock-that-never-waits)). It needs no new state and no new reason, and NOC-28 builds it already. B adds a reason that cannot be checked again by a control change, so it either breaks convergence after an upgrade or becomes parked under another name. C names malformed payloads truthfully, but only by making every relaxation of the profile a new header format. pm recommends A as the reading that loses nothing and stays convergent.
 
 ### If the owner chooses B or C
 
@@ -684,6 +686,44 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
 3102801840a201506f1c0e2a9b7d4c3e8a5f0b1d2c3e4f5a0202
 ```
 
+## Amendment 6: a nesting limit and a clock that never waits
+
+Added on 2026-11-09 for NOC-62. pm's review of the core's first implementation (NOC-14, #41) found two gaps in the decided format, and the owner decided both as pm recommended (Carsten, 2026-11-09). This amendment writes the two rules into the RFC, at the places marked *(Amendment 6)* above. Both are part of the wire format, which GENESIS.md reserves for the owner. The bytes of a change that meets them do not change.
+
+- **A change nests at most 32 levels** (NOC-24, option 1). The format set no limit, so a value nested in about 1 to 10 KB of bytes overflowed the stack of every member and relay that decoded it. [The CBOR profile](#the-cbor-profile) now counts levels from the frame and stops at 32. Every decoder refuses a deeper value before it recurses into it, and [the relay](#on-the-relay) checks the limit too, in the parts it can read. The frame, the header, the payload, the operations array and the operation map take five levels, so an operation's value may hold 27. Byte strings count as one item, so the contents of rich text (Yrs updates) and stream chunks do not count. The owner preferred this to a limit of 128 levels, which needs more stack in the browser, and to no limit with iterative decoders in every language.
+- **A full counter carries into the next millisecond** (NOC-25, option 1). The RFC had a member wait for its wall clock when the counter overflowed. With clocks far in the future never refused, one change with a far-future clock and a full counter could stop every member that saw it from writing, possibly for years. [The clock](#the-clock) now carries into the next millisecond with counter 0, whatever the wall clock says. It still never runs backwards and stays higher than every clock seen; a member that has seen a far-future clock writes far-future clocks too, as [What the clock does not do](#a-late-change-stays-identifiable) already accepts. The owner preferred this to refusing to write until the wall clock catches up, and to a capped wait.
+
+### What a member does with a change that nests too deep
+
+A member applies the limit where it decodes, so the step table of [Amendment 1](#what-a-member-does-with-a-change-it-receives) keeps its steps:
+
+- **The frame or the header nests too deep.** Step 1, decode, fails: the change is not appended, because without canonical bytes it has no stable change id. The relay refuses it the same way.
+- **The sealed payload nests too deep.** It decrypts but does not decode, so step 5a parks the change as "unknown payload format" ([Amendment 2](#amendment-2-a-payload-that-decrypts-but-does-not-decode)). The relay cannot see this case. Under Amendment 2's option A, a later payload format may raise the limit, and a core that reads it folds the parked change after an upgrade.
+
+### Byte-exact examples
+
+The examples are written by `docs/rfc/vectors/0002/generate.py` with Python's cbor2 6.2.1, the generator of [Amendment 5's examples](#byte-exact-examples), independently of the core and of the tooling test's reader. `scripts/rfc-0002-amendment-6.test.mjs` checks that N1 decodes at level 3 under the profile and re-encodes to the same bytes, that N2 is refused as too deep, and that each equals its committed vector; the core's `tests/depth.rs` decodes both as payloads. Both are [M2](#byte-exact-examples) with another value in its one operation: arrays of one item around a 0. No field type defines such a value, which does not matter here: the decoder checks the depth before any field type reads the operation.
+
+**N1. A payload that reaches level 32: accepted.** The operation's value nests 27 levels, so the 0 at its centre sits at level 32: payload map 3, operations 4, operation 5, value 6 to 32.
+
+```text
+a50101021b01a1bd9ac800000003815820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
+11111111111102657461736b7303657469746c65040105818181818181818181
+8181818181818181818181818181818181001840a201506f1c0e2a9b7d4c3e8a
+5f0b1d2c3e4f5a0202
+```
+
+**N2. A payload that reaches level 33: refused.** The same with one more array, so the 0 sits at level 33. A decoder refuses it at the 33rd level, before it reads the 0.
+
+```text
+a50101021b01a1bd9ac800000003815820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
+11111111111102657461736b7303657469746c65040105818181818181818181
+818181818181818181818181818181818181001840a201506f1c0e2a9b7d4c3e
+8a5f0b1d2c3e4f5a0202
+```
+
 ## Summary of the choices
 
 | Question | This RFC's answer |
@@ -692,9 +732,9 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
 | What happens to a change that fails a check? | It is kept as rejected, with its reason, and checked again when a control change of its space arrives (Amendment 1). |
 | How are objects identified? | 128 random bits, generated by the member that creates the object. |
 | How are changes identified? | The hash of the signed header bytes. |
-| How are changes ordered? | A hybrid logical clock for the total order, and dependencies on the author's heads for the causal order. |
+| How are changes ordered? | A hybrid logical clock for the total order, which carries into the next millisecond when its counter is full (Amendment 6), and dependencies on the author's heads for the causal order. |
 | How does a late change stay identifiable? | A loser that its winner never saw is a concurrent loser, the same on every member. |
-| How is a change encoded? | Deterministic CBOR, restricted further, and checked by re-encoding. |
+| How is a change encoded? | Deterministic CBOR, restricted further, at most 32 levels deep (Amendment 6), and checked by re-encoding. |
 | How do old clients keep new data? | Fixed frame, "must understand" and "may ignore" keys, and parked changes that fold after an upgrade. |
 | Which model wrote a change? | Payload key 64 names the writer's `model.id` and model version; a member parks a change of another model, whole (Amendment 5). |
 | How does a member store its log? | Append-only, in the SQLite database of the local view, as exact frames. |

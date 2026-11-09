@@ -1,10 +1,12 @@
-"""Writes the byte-exact examples M1 and M2 of RFC 0002 Amendment 5
-(docs/rfc/0002-change-and-log-format.md, "Byte-exact examples") in this
-directory, from their descriptions in the RFC and independently of the Rust
-core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode), as
-docs/rfc/vectors/0004/generate.py does for RFC 0004 Amendment 1.
-The gates do not run this script; scripts/rfc-0002-model.test.mjs checks
-that the RFC's hex equals the committed files.
+"""Writes the byte-exact examples of RFC 0002
+(docs/rfc/0002-change-and-log-format.md) in this directory: M1 and M2 of
+Amendment 5 and N1 and N2 of Amendment 6, each from its description in the
+RFC and independently of the Rust core and of the tooling tests' reader:
+with cbor2 (6.2.1, canonical mode), as docs/rfc/vectors/0004/generate.py
+does for RFC 0004 Amendment 1. The gates do not run this script;
+scripts/rfc-0002-model.test.mjs and scripts/rfc-0002-amendment-6.test.mjs
+check that the RFC's hex equals the committed files, and
+crates/ncdb-core/tests/depth.rs decodes N1 and N2.
 
 Run: python3 -I generate.py  (needs cbor2==6.2.1)
 
@@ -50,7 +52,34 @@ PAYLOAD = {
     64: MODEL,
 }
 
-EXAMPLES = {"M1": MODEL, "M2": PAYLOAD}
+
+def nested(levels):
+    """A value `levels` deep: arrays of one item around a 0."""
+    value = 0
+    for _ in range(levels - 1):
+        value = [value]
+    return value
+
+
+def deep_payload(levels):
+    """M2's payload with an operation whose value nests `levels` deep.
+
+    The frame is level 1, the header map 2, the payload map 3, the
+    operations array 4, the operation map 5 and its value 6, so a value
+    27 levels deep reaches level 32, the limit, and 28 levels reach 33.
+    """
+    operation = {1: T1, 2: "tasks", 3: "title", 4: 1, 5: nested(levels)}
+    return {1: 1, 2: CLOCK, 3: [A], 4: [operation], 64: MODEL}
+
+
+EXAMPLES = {
+    "M1": MODEL,
+    "M2": PAYLOAD,
+    # N1. A payload whose deepest item sits at level 32: accepted.
+    "N1": deep_payload(27),
+    # N2. The same, one level deeper, at level 33: refused.
+    "N2": deep_payload(28),
+}
 
 
 def write(name, data):
