@@ -202,6 +202,7 @@ test("the pull request template has its sections, in order", () => {
     "Agent under close human direction",
     "Agent with human review",
     "Agent, checked against a decided design",
+    "Agent, beta release notes",
   ]) {
     assert.ok(text.includes(choice), `authorship choice ${choice}`);
   }
@@ -215,6 +216,15 @@ test("the AI policy says when pm may merge without a person's review", () => {
   assert.match(policy, /Agent, checked against a decided design/);
   assert.match(policy, /decided RFC/);
   assert.match(policy, /daily note/);
+  assert.match(policy, /Agent, beta release notes/);
+  assert.match(policy, /notes of a stable release/);
+});
+
+test("CONFIG.md and the release runbook let pm merge a beta's notes without the owner", () => {
+  assert.match(read("factory/CONFIG.md"), /beta's release notes/);
+  const runbook = read("docs/release-management.md");
+  assert.match(runbook, /pm merges it without the owner/);
+  assert.match(runbook, /Agent, beta release notes/);
 });
 
 const prSection = (heading) => {
