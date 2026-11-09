@@ -136,6 +136,57 @@ test("a row that rests only on unknown findings says it is unknown", () => {
   }
 });
 
+// "Private windows" is prose: its references stand in parentheses, as
+// "(measured: Browser · Behaviour; …)", and resolve like a Source cell's.
+const proseReferences = (text) =>
+  [
+    ...text.matchAll(
+      /\b(measured|documented|unknown): ([^·;]+?) · (.+?)(?=; (?:measured|documented|unknown): |\)(?:[.,:]|\s|$))/gm,
+    ),
+  ].map((match) => ({ kind: match[1], browser: match[2], behaviour: match[3] }));
+
+test("Private windows cites the measured reload in each engine, and each reference resolves", () => {
+  const text = section(read(PAGE), "Private windows") ?? "";
+  const refs = proseReferences(text);
+  const findings = tableRows(read(FINDINGS), "Findings");
+  for (const ref of refs) {
+    const found = findings.find(
+      (finding) =>
+        finding.browser === ref.browser && finding.behaviour === ref.behaviour,
+    );
+    assert.ok(
+      found,
+      `${PAGE}, "Private windows": ${FINDINGS} has no row "${ref.browser} · ${ref.behaviour}"`,
+    );
+    assert.equal(
+      kind(found.source),
+      ref.kind,
+      `${PAGE}, "Private windows": "${ref.browser} · ${ref.behaviour}" is ${kind(found.source)}`,
+    );
+  }
+  for (const [engine, mode] of [
+    ["Chromium", "off-the-record context"],
+    ["Firefox", "private browsing mode"],
+    ["WebKit", "ephemeral context"],
+  ]) {
+    const behaviour = `Private window: survives a reload (${mode})`;
+    assert.ok(
+      refs.some(
+        (ref) =>
+          ref.kind === "measured" &&
+          ref.browser === `${engine} (Playwright)` &&
+          ref.behaviour === behaviour,
+      ),
+      `${PAGE}, "Private windows" does not cite "${engine} (Playwright) · ${behaviour}"`,
+    );
+  }
+  assert.doesNotMatch(
+    text,
+    /lasts within one open private session is unknown/,
+    `${PAGE}, "Private windows": a reload in one private session is measured now`,
+  );
+});
+
 // The text for end users: short, with placeholders the developer fills, and
 // no word that promises more than the findings. "Tested" here means checked by
 // this gate; no user has read the text yet, and the page says so.
