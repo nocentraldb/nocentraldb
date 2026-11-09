@@ -7,8 +7,8 @@
 // (the app's Client ID; the action's deprecated app-id is not used) and the
 // repository secret RELEASE_APP_PRIVATE_KEY, narrowed to contents: write;
 // it checks out and pushes with that token and never with github.token,
-// whose job permission stays read-only; no other job mints or reads the
-// app's token; no step opens a pull request. docs/release-management.md has
+// whose job permission stays read-only; no other job but app-token-check
+// below mints or reads the app's token; no step opens a pull request. docs/release-management.md has
 // the section that gives the owner the exact settings steps, which only the
 // owner can make, and says that the dry run proves the app's setup but only
 // the first real push proves the bypass. A workflow_dispatch, the dry run,
@@ -70,7 +70,7 @@ const section = (runbook) => {
 
 const checks = [
   {
-    name: "commit-back pushes to main with the release app's token, which the ruleset's bypass lets through, and no other job holds that token",
+    name: "commit-back pushes to main with the release app's token, which the ruleset's bypass lets through, and no other job but the dry run's check holds that token",
     check: (ctx) => {
       const steps = stepsOf(ctx, "commit-back");
       const mint = stepAt(ctx, "commit-back", (step) => step.id === APP_STEP);

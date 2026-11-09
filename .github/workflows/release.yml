@@ -355,8 +355,9 @@ jobs:
       # "The bypass for commit-back"). This step mints a token for that app,
       # for this repository only and with contents: write only; it expires
       # after an hour and is revoked when the job ends.
-      # scripts/release-ruleset.test.mjs holds this job, and only this job,
-      # to that token.
+      # scripts/release-ruleset.test.mjs holds this job to that token; the
+      # only other job that mints it is the read-only app-token-check of a
+      # dispatch.
       - name: Release app token
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
@@ -412,3 +413,56 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PUBLISHED="$(gh release view "$TAG" --json publishedAt --jq '.publishedAt[:10]')"
           node scripts/release/commit-back.mjs --tag "$TAG" --stage "$STAGE" --version "$VERSION" --date "$PUBLISHED"
+
+  app-token-check:
+    # Every workflow_dispatch, the dry run of either side, also proves the
+    # release app's setup before the first beta needs it: the Client ID
+    # variable and the private key secret exist, and the token commit-back
+    # pushes with can be minted for this repository. It mints that token
+    # exactly as commit-back does and only reads with it; it checks out no
+    # code and writes nothing. Whether the ruleset lets the app's push
+    # through is proven only by the first real commit-back
+    # (docs/release-management.md, "The bypass for commit-back").
+    # scripts/release-ruleset.test.mjs asserts these rules.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Sees only whether the secret is set, never its value.
+      - name: Release app settings exist
+        env:
+          RELEASE_APP_CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          HAS_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: |
+          missing=0
+          if [ -z "$RELEASE_APP_CLIENT_ID" ]; then
+            echo "::error::the repository variable RELEASE_APP_CLIENT_ID is not set: add the release app's Client ID (docs/release-management.md, \"The bypass for commit-back\")"
+            missing=1
+          fi
+          if [ "$HAS_PRIVATE_KEY" != true ]; then
+            echo "::error::the repository secret RELEASE_APP_PRIVATE_KEY is not set: add the release app's private key (docs/release-management.md, \"The bypass for commit-back\")"
+            missing=1
+          fi
+          exit "$missing"
+      - name: Release app token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      # Read-only: the repositories the token reaches must include this one.
+      - name: The token reaches this repository
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          repos="$(gh api installation/repositories --paginate --jq '.repositories[].full_name')"
+          if ! grep -qxF "$GITHUB_REPOSITORY" <<< "$repos"; then
+            echo "::error::the token of app $APP_SLUG does not reach $GITHUB_REPOSITORY; install the app on it"
+            exit 1
+          fi
+          echo "app $APP_SLUG: token minted with contents: write, reaches $GITHUB_REPOSITORY; the ruleset bypass is proven only by the first real commit-back push"
