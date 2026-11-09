@@ -4,7 +4,7 @@ GENESIS.md promises web apps in Chromium-based browsers, Firefox and Safari, wit
 
 Every row names its source:
 
-- **measured**: we ran it. "measured: Playwright …" rows come from the run committed in [`browser-storage.results.json`](browser-storage.results.json), and a gate test (`scripts/browser-storage.test.mjs`) fails when the table and that run disagree. "measured: manual check <date>" rows come from the [manual check log](#manual-check-log).
+- **measured**: we ran it. "measured: Playwright …" rows come from the run committed in [`browser-storage.results.json`](browser-storage.results.json), and a gate test (`scripts/browser-storage.test.mjs`) fails when the table and that run disagree. "measured: manual check <entry>" rows come from the entry of that heading in the [manual check log](#manual-check-log), and the gate test fails when the log has no such entry.
 - **documented**: the browser vendor's documentation says so, with a link. We have not seen it happen.
 - **unknown**: nobody has measured it and no vendor documentation we found says it. The finding then reads "unknown". No row is filled in by guess.
 
@@ -43,12 +43,17 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | WebKit (Playwright) | Private window: after close (ephemeral context) | SQLite: no OPFS, IndexedDB lost | measured: Playwright 1.63.0, WebKit 26.6, linux x64, 2026-11-08 |
 | Safari (macOS) | Seven-day deletion of script-writable storage | after seven days of Safari use without user interaction on the site, all of its script-writable storage is deleted; named: IndexedDB, LocalStorage, SessionStorage, media keys, service worker registrations and cache; OPFS is not named | documented: [WebKit blog, 2020-03-24](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/) |
 | Safari (macOS) | Seven-day deletion reaches SQLite on OPFS | unknown | unknown |
+| Safari (macOS) | SQLite on OPFS (`opfs-sahpool`) | works: the time written was read back from SQLite and from IndexedDB | measured: manual check 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021) |
 | Safari (macOS) | `persist()` | granted "based on heuristics like whether the website is opened as a Home Screen Web App"; no prompt is described | documented: [WebKit blog, 2023-08-10](https://webkit.org/blog/14403/updates-to-storage-policy/) |
+| Safari (macOS) | `persist()` in a Dock app | granted; `persisted()` true afterwards; the log records no prompt | measured: manual check 2026-11-09 · Dock app (Safari 27.2) on macOS 26.7.2, Apple M1 Pro (2021) |
 | Safari (macOS) | `persist()` prevents the seven-day deletion | unknown | unknown |
 | Safari (macOS) | Eviction under storage pressure | best-effort by default; an origin "might be excluded from eviction" if it has an active page or its storage is in persistent mode; the policy covers File System storage | documented: [WebKit blog, 2023-08-10](https://webkit.org/blog/14403/updates-to-storage-policy/) |
 | Safari (macOS) | Private window | unknown | unknown |
 | Safari (iOS) | Seven-day deletion of script-writable storage | as Safari (macOS): the cap applies to "iOS and iPadOS 13.4 and Safari 13.1 on macOS" and later | documented: [WebKit blog, 2020-03-24](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/) |
 | Safari (iOS) | Seven-day deletion reaches SQLite on OPFS | unknown | unknown |
+| Safari (iOS) | SQLite on OPFS (`opfs-sahpool`) | works: the time written was read back from SQLite and from IndexedDB | measured: manual check 2026-11-09 · Safari 27.0.1 on iOS 27.0.1, iPhone 15 |
+| Safari (iOS) | `persist()` | denied; the log records no prompt | measured: manual check 2026-11-09 · Safari 27.0.1 on iOS 27.0.1, iPhone 15 |
+| Safari (iOS) | `persist()` in a home-screen app | denied; `persisted()` false afterwards; the log records no prompt | measured: manual check 2026-11-09 · Home-screen app (Safari 27.0.1) on iOS 27.0.1, iPhone 15 |
 | Safari (iOS) | `persist()` prevents the seven-day deletion | unknown | unknown |
 | Safari (iOS) | Add to Home Screen prevents the seven-day deletion | web apps on the home screen are not part of Safari and have their own counter of days of use, which their use resets; WebKit does "not expect" their data to be deleted | documented: [WebKit blog, 2020-03-24](https://webkit.org/blog/10218/full-third-party-cookie-blocking-and-more/) |
 | Safari (iOS) | Private window | unknown | unknown |
@@ -57,8 +62,9 @@ Playwright's builds are not the branded browsers. Its WebKit is not Safari: it h
 | Chrome (Android) | Eviction under storage pressure | unknown | unknown |
 | Edge (Android) | Eviction under storage pressure | unknown | unknown |
 | Firefox | `persist()` | the user is asked in a popup | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
+| Firefox (macOS) | `persist()` | a prompt asks "Allow nocentraldb.github.io to store data in persistent storage?"; Allow grants it and `persisted()` turns true. Asked again after the permission was cleared, meant to be blocked, it also answered granted; the log does not say whether the prompt appeared again | measured: manual check 2026-11-09 · Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021) |
 | Firefox | Quota | best-effort: the smaller of 10% of the disk and 10 GiB; persistent: up to 50% of the disk, at most 8 TiB | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
-| Firefox | Private window | unknown | unknown |
+| Firefox | Private window | no SQLite on OPFS (SecurityError: Security error when calling GetDirectory); IndexedDB writes, but a Read in a new private window a minute later showed `null`; the log does not say whether the first private window was closed first | measured: manual check 2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021) |
 | All browsers | Eviction under storage pressure | best-effort data of the least recently used origin is deleted first | documented: [MDN, storage quotas and eviction criteria](https://developer.mozilla.org/en-US/docs/Web/API/Storage_API/Storage_quotas_and_eviction_criteria) |
 | All browsers | Survives clearing the cache in the browser's settings, keeping site data | unknown | unknown |
 
@@ -89,7 +95,7 @@ Not covered by the automated run: a branded browser, macOS, Windows, a phone, th
 
 ## Manual checks
 
-These need a person with the device. [browser-storage-checklist.md](browser-storage-checklist.md) has the steps per device (Safari on macOS, Safari on iOS in the browser and as a home-screen app, Chrome and Edge on Android, Firefox), what to record, and how long each step takes. Record each check in the log below, then change the row's finding and set its source to `measured: manual check <date>`.
+These need a person with the device. [browser-storage-checklist.md](browser-storage-checklist.md) has the steps per device (Safari on macOS, Safari on iOS in the browser and as a home-screen app, Chrome and Edge on Android, Firefox), what to record, and how long each step takes. Record each check in the log below, then change the row's finding and set its source to `measured: manual check <entry heading>`, for example `measured: manual check 2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021)`. A behaviour a vendor documents keeps its documented row; the measurement gets a row of its own below it.
 
 The page for a phone is a static folder: `node scripts/browser-storage/build.mjs <dir>` writes it. The workflow `browser-storage-pages` publishes it to GitHub Pages when the owner has enabled Pages and starts it; until then, every run of the `browser-storage` workflow uploads it as the artifact `browser-storage-probe`, which any static HTTPS host can serve.
 
