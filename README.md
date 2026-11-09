@@ -21,8 +21,6 @@ What it does:
 - **Erasure that destroys a key.** The schema marks personal fields, and each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives.
 - **One core on every platform.** The same Rust core runs natively on desktop and mobile and as WebAssembly in the browser.
 
-`We should add one use case here`
-
 Check out more [use cases](docs/use-cases.md) for **NoCentralDB** and read the [FAQ](docs/faq.md) for answers to the questions readers ask most often.
 
 ## Install
