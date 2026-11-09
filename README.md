@@ -2,39 +2,32 @@
 
 A local-first database for apps where people and agents work on the same data. Everyone works on their own copy, under their own keys, and the server in the middle cannot read any of it.
 
-> **NoCentralDB is a design today, not a product.** It is not released, and no package below is published yet. The install commands and the code on this page show the planned API; names and behaviour may still change. The design lives in the [RFCs](docs/rfc/README.md), and we want your feedback on it while changes are still cheap.
+> **NoCentralDB is not yet a product.** We are currently working on the design and highly encourage you to share your feedback on this as long as changes are cheap (see [RFCs](docs/rfc/README.md)). The install commands and the code on this page give you an impression of how the product would look like if the current design is fully implemented.
 
 ## What it is for
 
-You are building an app where people and agents work on the same records: tickets, notes, customer records, shared documents. Usually every read goes through a server. The agent waits for the network on each step and hits rate limits, the server can read everything it stores, and erasing a person's data means searching the database, the backups, the logs and every copy an agent made. If you need queries on the server, analytics across all users' data, or one global truth enforced at write time, keep your central database. NoCentralDB is for the apps where a central database is the wrong place ([RFC 0001](docs/rfc/0001-nocentraldb.md)).
+You are building an app where people and agents work on the same records: tickets, notes, customer records, shared documents. With **NoCentralDB** this data sits right next to where the work happens; at the users computer or where the agent works. This makes processing super fast and independent of a server being available. The collaboration is guaranteed via a relay server that transport the encrypted changes applied to the data and it has no chance to see its content. This allows you to work even on the most sensitive data you can imagine.
 
 What it does:
 
-- **Spaces for sharing.** A space is the unit of sharing, membership and keys, and every object belongs to exactly one space. A member is a person's device, an agent or a sub-agent, each with its own key. An agent can give a sub-agent a small space with only what its task needs ([RFC 0008](docs/rfc/0008-membership.md)).
-- **A full copy on every member.** Each device and each agent keeps the encrypted log of every space it belongs to and folds it into a local SQLite view. Reads never wait for the network ([RFC 0006, "Reads never touch the network"](docs/rfc/0006-local-view.md#reads-never-touch-the-network)).
-- **A relay that cannot read.** The relay checks signatures and membership, stores the encrypted changes and hands them out. It holds no keys, so it cannot read content ([RFC 0007](docs/rfc/0007-relay.md)).
-- **Every copy converges.** The same changes give the same state on every member, in any order of arrival. Each field type says how concurrent edits merge, and an edit that loses to one its author had not seen stays visible as such ([RFC 0004](docs/rfc/0004-merge-rules-basic-types.md)).
-- **Works offline.** With no relay, members keep working; when they reconnect, every copy converges ([RFC 0007, "Island mode"](docs/rfc/0007-relay.md#island-mode)).
-- **One schema, written in TypeScript.** You describe the model once. `ncdb model build` turns it into a versioned `model.lock.json` that the Rust core and both SDKs read. Schema changes are additive, so a client that stays offline for weeks keeps working ([RFC 0005](docs/rfc/0005-schema-and-model-lock.md)).
-- **Queries that cost only their result.** Queries run through declared indexes and return sorted pages with a cursor ([RFC 0006, "Declared indexes and ordered pages"](docs/rfc/0006-local-view.md#declared-indexes-and-ordered-pages)).
-- **No keys in your code.** The SDK creates, stores and rotates every key. You work with spaces, members and invitations ([RFC 0003, "How the SDK hides keys"](docs/rfc/0003-keys-and-cryptography.md#how-the-sdk-hides-keys)).
-- **Erasure that destroys a key.** The schema marks personal fields, and each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives ([RFC 0003, "Shredding a person's key"](docs/rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)).
-- **One core on every platform.** The same Rust core runs natively on desktop and mobile and as WebAssembly in the browser ([RFC 0006, "SQLite on each target"](docs/rfc/0006-local-view.md#sqlite-on-each-target)).
+- **Spaces for sharing.** A space is the unit of sharing, membership and keys, and every object belongs to exactly one space. A member is a person's device, an agent or a sub-agent, each with its own key. An agent can give a sub-agent a small space with only what its task needs.
+- **A full copy on every member.** Each device and each agent keeps the encrypted log of every space it belongs to and folds it into a local SQLite view. Reads never wait for the network.
+- **A relay that cannot read.** The relay checks signatures and membership, stores the encrypted changes and hands them out. It holds no keys, so it cannot read content.
+- **Every copy converges.** The same changes give the same state on every member, in any order of arrival. Each field type says how concurrent edits merge, and an edit that loses to one its author had not seen stays visible as such.
+- **Works offline.** With no relay, members keep working; when they reconnect, every copy converges ("Island mode").
+- **One schema, written in TypeScript.** You describe the model once. `ncdb model build` turns it into a versioned `model.lock.json` that the Rust core and both SDKs read. Schema changes are additive, so a client that stays offline for weeks keeps working.
+- **Queries that cost only their result.** Queries run through declared indexes and return sorted pages with a cursor.
+- **No keys in your code.** The SDK creates, stores and rotates every key. You work with spaces, members and invitations.
+- **Erasure that destroys a key.** The schema marks personal fields, and each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives.
+- **One core on every platform.** The same Rust core runs natively on desktop and mobile and as WebAssembly in the browser.
 
-What it does not do:
+`We should add one use case here`
 
-- **The relay sees metadata.** It cannot read content, but it sees which key is in which space, when and how much each key writes, and who reads which space from where. It can also withhold changes ([RFC 0002](docs/rfc/0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot), [RFC 0007, "What the relay sees"](docs/rfc/0007-relay.md#what-the-relay-sees)).
-- **Erasure has limits.** It does not reach a device that never comes back online, a modified client that ignores it, a relay backup from before the erasure that a member obtains, exports and screenshots, or personal data in unmarked free text ([RFC 0001, "The team lead"](docs/rfc/0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review)).
-- **Removing a member does not delete its copy.** It keeps what it received before the removal ([RFC 0008, "What this does not do"](docs/rfc/0008-membership.md#what-this-does-not-do)).
-- **Rights apply per space.** There are no row-level or field-level rights, no queries on the server and no full-text search in the core in v1 ([RFC 0001, "What it is not"](docs/rfc/0001-nocentraldb.md#what-it-is-not)).
-- **Not post-quantum in v1.** Ciphertext recorded today could be read by a future quantum computer ([RFC 0003, decision 9](docs/rfc/0003-keys-and-cryptography.md#decisions-for-the-owner)).
-- **A browser can delete its copy.** Under storage pressure, or in Safari after seven days without use, a browser may delete a web app's local copy together with its member key. The person then sets the browser up again as a new device, and changes the relay had not yet received are lost. If you plan a web app, read [Browser apps and durability](docs/browser-durability.md) first ([RFC 0001, "What it is not"](docs/rfc/0001-nocentraldb.md#what-it-is-not), [RFC 0006, "The browser"](docs/rfc/0006-local-view.md#the-browser)).
-
-The [use cases](docs/use-cases.md) show the design in practice, and the [FAQ](docs/faq.md) answers the questions readers ask most often.
+Check out more [use cases](docs/use-cases.md) for **NoCentralDB** and read the [FAQ](docs/faq.md) for answers to the questions readers ask most often.
 
 ## Install
 
-Nothing is published yet. Once the first release is out, you will install:
+Once the first release is out, you will install:
 
 - the TypeScript SDK, `@nocentraldb/sdk`, from npm, for web apps, Node and agents written in TypeScript:
 
@@ -50,15 +43,13 @@ Nothing is published yet. Once the first release is out, you will install:
 
 - the command-line tool `ncdb`, which builds `model.lock.json` from your schema. How it is distributed is not decided yet.
 
-Watch the repository's releases to hear when the first one is out.
-
 ## Code examples
 
-These examples show the planned API. The schema functions and the `ncdb` commands are decided in [RFC 0005, "Public names"](docs/rfc/0005-schema-and-model-lock.md#public-names). The calls that open a database, share a space and read a page are sketches from [RFC 0003](docs/rfc/0003-keys-and-cryptography.md#how-the-sdk-hides-keys) and [RFC 0001](docs/rfc/0001-nocentraldb.md#the-design-in-one-page); their final names come with the SDK's API review. No RFC names the call that writes an object yet, so it is left out.
+These examples show the planned API.
 
 ### Describe the model
 
-You describe the model once, as a TypeScript module ([RFC 0005, "The schema in TypeScript"](docs/rfc/0005-schema-and-model-lock.md#the-schema-in-typescript)):
+You describe the model once, as a TypeScript module:
 
 ```ts
 import { nc } from "@nocentraldb/sdk";
@@ -89,11 +80,11 @@ export const model = nc.model({
 export type Task = nc.Infer<typeof model.tasks>;
 ```
 
-`.personal({ person: "self" })` marks a field as personal: erasing that person makes it unreadable ([RFC 0005, "Personal fields"](docs/rfc/0005-schema-and-model-lock.md#personal-fields)). `blocked` is a computed field and `ready` a view of the ready tasks in priority order; RFC 0005 reserves their places, and a later RFC designs them ([RFC 0005, "Computed fields and views"](docs/rfc/0005-schema-and-model-lock.md#computed-fields-and-views-named-not-designed)).
+`.personal({ person: "self" })` marks a field as personal: erasing that person makes it unreadable. `blocked` is a computed field and `ready` a view of the ready tasks in priority order.
 
 ### Build model.lock.json
 
-`ncdb model build` reads the schema and the previous lock, refuses a change that old clients could not read, and writes `model.lock.json`. `ncdb model check` runs the same check in CI and writes nothing ([RFC 0005, "The additive-change rule"](docs/rfc/0005-schema-and-model-lock.md#the-additive-change-rule)):
+`ncdb model build` reads the schema and the previous lock, refuses a change that old clients could not read, and writes `model.lock.json`. `ncdb model check` runs the same check in CI and writes nothing:
 
 ```sh
 ncdb model build
@@ -102,7 +93,7 @@ ncdb model check
 
 ### Open a database and share a space
 
-Opening the database creates this member's key; creating a space creates the space's key. Adding a member takes an invitation, never a key, and removing one returns a notice that says what removal does not do ([RFC 0003, "How the SDK hides keys"](docs/rfc/0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). The roles reader, writer and admin are working names ([RFC 0008, "Roles and rights"](docs/rfc/0008-membership.md#roles-and-rights)):
+Opening the database creates this member's key; creating a space creates the space's key. Adding a member takes an invitation, never a key, and removing one returns a notice that says what removal does not do:
 
 ```ts
 const db = await nc.open({ model });
@@ -115,7 +106,7 @@ removal.notice; // "The removed member keeps its copy of everything it received 
 
 ### Read a page
 
-A read comes from the local view, in index order, 50 rows at a time, and the next page continues from a cursor ([RFC 0001, "The design in one page"](docs/rfc/0001-nocentraldb.md#the-design-in-one-page), [RFC 0006, "Ordered pages"](docs/rfc/0006-local-view.md#ordered-pages)):
+A read comes from the local view, in index order, 50 rows at a time, and the next page continues from a cursor:
 
 ```ts
 const page = await db.find(model.tasks.views.ready.take(50));
