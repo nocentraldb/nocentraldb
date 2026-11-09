@@ -45,7 +45,7 @@ Once the first release is out, you will install:
 
 ## Code examples
 
-These examples show the planned API.
+These examples show the planned API, as [RFC 0009](docs/rfc/0009-sdk-api.md) defines it.
 
 ### Describe the model
 
@@ -68,8 +68,6 @@ export const model = nc.model({
       dependsOn: nc.links("tasks"),
     },
     {
-      computed: { blocked: nc.reach("dependsOn", { status: ["open", "in_progress"] }) },
-      views: { ready: nc.view("tasks", { where: { blocked: false }, sort: ["priority"] }) },
       indexes: {
         byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
       },
@@ -80,7 +78,7 @@ export const model = nc.model({
 export type Task = nc.Infer<typeof model.tasks>;
 ```
 
-`.personal({ person: "self" })` marks a field as personal: erasing that person makes it unreadable. `blocked` is a computed field and `ready` a view of the ready tasks in priority order.
+`.personal({ person: "self" })` marks a field as personal: erasing that person makes it unreadable. `byStatusPriority` is an index: every query runs through an index the model declares.
 
 ### Build model.lock.json
 
@@ -91,26 +89,64 @@ ncdb model build
 ncdb model check
 ```
 
-### Open a database and share a space
+### Open a database
 
-Opening the database creates this member's key; creating a space creates the space's key. Adding a member takes an invitation, never a key, and removing one returns a notice that says what removal does not do:
+Opening the database checks the model against the lock and creates this member's key on first open. The relay is optional; without it, the database stays local:
 
 ```ts
-const db = await nc.open({ model });
-const project = await db.spaces.create({ name: "Project A" });
+import { nc } from "@nocentraldb/sdk";
+import { model } from "./model";
+import lock from "./model.lock.json";
 
-await project.members.add(invitation, { role: "writer" });
-const removal = await project.members.remove(memberId);
-removal.notice; // "The removed member keeps its copy of everything it received before now."
+const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 ```
 
-### Read a page
+### Write
 
-A read comes from the local view, in index order, 50 rows at a time, and the next page continues from a cursor:
+Objects live in a space, which the device creates on its own, offline if need be. One `write` is one signed, encrypted change: it resolves when the change is in the local log and the view, before the relay has it:
 
 ```ts
-const page = await db.find(model.tasks.views.ready.take(50));
-const more = await db.find(model.tasks.views.ready.take(50).after(page.cursor));
+const project = await db.spaces.create();
+
+await project.write((tx) => {
+  const task = tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
+  tx.update(model.tasks, task, { status: "in_progress" });
+});
+```
+
+### Read and subscribe
+
+A query names a declared index, fixes its leading fields and returns a page in index order, with a cursor for the next one. A subscription calls the listener with the page at once and again after every change that may alter it. Neither waits for the network:
+
+```ts
+const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+const page = await db.find(query);
+const more = await db.find(query.after(page.cursor));
+
+const stop = db.subscribe(query, (fresh) => render(fresh));
+```
+
+### Share a space
+
+The joining member, a device or an agent, creates an invitation: its public identity, never a key. An admin of the space adds it with a role. Every call that changes who can read returns a notice, `{ code, text }`, that says what the change does not do:
+
+```ts
+// On the joining member:
+const invitation = await db.invitation();
+send(invitation.toString());
+
+// On an admin of the space:
+await project.members.add(nc.invitation(text), { role: "writer" });
+const removal = await project.members.remove(memberId);
+removal.notice; // text: "The removed member keeps its copy of everything it received before now."
+```
+
+### Sync status
+
+The SDK syncs in the background. The app reads the connection and how many of its changes the relay has not confirmed yet:
+
+```ts
+db.sync.current(); // { connection: "connected", unconfirmed: 0, ... }
 ```
 
 ## Contributing
