@@ -5,12 +5,15 @@ REQUEST FOR COMMENTS · DRAFT 0.1 · NOVEMBER 2026 · Ticket NOC-12
 **Changelog.**
 
 - **2026-11-08** · NOC-44 · [Amendment 1: following RFC 0008](#amendment-1-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): the control table holds RFC 0008's control state, control changes are recomputed through `resolve`, and a shred destroys the key only once it is stable. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 1)*.
+- **2026-11-09** · NOC-34 · [Amendment 2: durability of a browser copy](#amendment-2-durability-of-a-browser-copy) follows what [NOC-33 measured](../browser-storage.md) about how long a browser keeps a web app's copy, and proposes how the SDK, the developer page [Browser apps and durability](../browser-durability.md) and the text for end users tell developers and users how reliable a browser copy is. The owner decided its decisions 10 to 15 as recommended (Carsten, 2026-11-09). The sentences it changes elsewhere are marked *(Amendment 2)*.
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded. RFC 0004 (NOC-8) defines how a field merges. RFC 0005 (NOC-11) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
-**Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged.
+**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback). [Giving feedback](README.md#giving-feedback) says how, and what happens to your feedback.
+
+**Status.** Draft for the owner's sign-off. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner, so nothing here is built until this RFC is merged. The owner decided Amendment 2, decisions 10 to 15, as recommended (Carsten, 2026-11-09).
 
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encryption at rest on the device, beyond naming the question for the owner ([decision 6](#decisions-for-the-owner)). Compaction and snapshots (a later RFC). The sync protocol with the relay (RFC 0007, NOC-13).
 
@@ -25,7 +28,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 | How does an app page?                      | Keyset pagination: the cursor is the index key of the last row, and the next page is "the rows after this key", in index order.                                             |
 | Which SQLite natively?                     | `rusqlite` with SQLite compiled from source (`bundled`), pinned, on desktop and mobile.                                                                                    |
 | Which SQLite in the browser?               | The same `rusqlite`, backed by `sqlite-wasm-rs` (SQLite compiled to `wasm32-unknown-unknown`) and the `opfs-sahpool` VFS of `sqlite-wasm-vfs`, in a dedicated Web Worker.   |
-| Does it work in a browser?                 | Yes in Chromium, shown by [the spike](#the-spike). Firefox and Safari are not yet tested.                                                                                   |
+| Does it work in a browser?                 | Yes in Chromium, shown by [the spike](#the-spike). The official build's `opfs-sahpool`, which `sqlite-wasm-vfs` ports to Rust, also works in Firefox and in Safari on iOS and macOS ([Amendment 2](#amendment-2-durability-of-a-browser-copy)); the Rust port has run only in Chromium. *(Amendment 2.)* |
 | What is in plaintext on the device?        | Every decrypted field value of every space the member belongs to, its merge state and its indexes. Keys are not in the database. See [what that means for a lost device](#what-the-view-stores-in-plaintext). |
 | Can a read wait for the network?           | No. The read path has no network code in it.                                                                                                                                |
 
@@ -232,15 +235,15 @@ Principle 7: "The same core runs natively and in a web browser. Behaviour never 
 
 - **Library.** The same `rusqlite`, with the `ffi-sqlite-wasm-rs` feature. `sqlite-wasm-rs` compiles SQLite's C source to `wasm32-unknown-unknown` with clang and links it into the core's own WebAssembly module, so the core calls SQLite directly, without a round-trip through JavaScript. `sqlite-wasm-vfs` provides the `opfs-sahpool` VFS, a port of the official SQLite build's VFS of the same name.
 - **Where it runs.** In a dedicated Web Worker. `opfs-sahpool` uses OPFS synchronous access handles, which browsers offer only in dedicated workers. On the main thread it fails (the spike: `NotSupported`). The SDK starts the worker; the app talks to it through the SDK's asynchronous API, which is the same API it uses natively.
-- **Browser support.** OPFS synchronous access handles exist in Chromium 108+, Firefox 111+ and Safari 16.4+. The spike ran only in Chromium; Firefox and Safari must be tested before the implementation ships (see [The spike](#the-spike)).
+- **Browser support.** OPFS synchronous access handles exist in Chromium 108+, Firefox 111+ and Safari 16.4+. The spike ran only in Chromium. The official build's `opfs-sahpool` works in Playwright's Firefox and WebKit ([NOC-33](../browser-storage.md#findings)) and in branded Safari on iOS 27.0.1 and macOS 27.2 (manual checks of 2026-11-09, #74); the Rust port must still run in Firefox and Safari before the implementation ships (see [The spike](#the-spike)). *(Amendment 2.)*
 - **No special headers.** `opfs-sahpool` needs no `SharedArrayBuffer`, so the app's site does not need the COOP and COEP headers.
 - **One tab owns the database.** A pool of access handles is exclusive: while one tab's worker holds it, another tab of the same origin cannot open it. The SDK elects one tab as the owner with the Web Locks API; the other tabs send their reads and writes to it with a `BroadcastChannel`. When the owner closes, the next tab takes the lock and opens the database. This is [decision 4](#decisions-for-the-owner).
 - **Size.** The spike's module, SQLite included, is 1.8 MB, or 0.69 MB compressed with gzip.
 
 **Limits of storage in the browser.** These are limits of the platform, and the SDK states them to the developer:
 
-- **The browser can evict the data.** Under storage pressure, a browser may delete an origin's storage unless the site has persistent storage (`navigator.storage.persist()`). Safari deletes all script-writable storage of a site the user has not interacted with for seven days, unless it is a web app added to the home screen. Eviction deletes the view and the log together, so the database stays consistent, but changes the member wrote and the relay has not confirmed are lost. The SDK asks for persistent storage on open, reports whether it was granted, and reports how many unconfirmed changes the member holds ([decision 8](#decisions-for-the-owner)).
-- **Private windows** may have no OPFS, or erase it when the window closes. The SDK reports that the copy is not persistent; it then runs on SQLite's in-memory VFS and syncs from the relay on every open.
+- **The browser can evict the data.** Under storage pressure, a browser may delete an origin's storage unless the site has persistent storage (`navigator.storage.persist()`). Safari deletes all script-writable storage of a site the user has not interacted with for seven days, unless it is a web app added to the home screen. A browser evicts all of an origin's data at once, so the view, the log and the member key in IndexedDB ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)) go together. The browser is then no longer that member: the person sets it up again as a new device, and the changes the member wrote that the relay has not confirmed are lost. *(Amendment 2.)* The SDK asks for persistent storage on open, reports whether it was granted, and reports how many unconfirmed changes the member holds ([decision 8](#decisions-for-the-owner)). [Browser apps and durability](../browser-durability.md) says, per browser, what is measured, documented and unknown.
+- **Private windows.** Firefox and WebKit have no OPFS in a private window, while IndexedDB works; Chromium has OPFS there and deletes it when the window closes. *(Amendment 2.)* Where OPFS is missing, the SDK reports that the copy is not persistent, runs on SQLite's in-memory VFS and syncs from the relay on every open.
 - **Quota.** The origin's storage quota limits the size of the copy. The SDK reports the quota error instead of failing silently.
 
 ### The same fold code on every target
@@ -318,7 +321,7 @@ What it did: one Rust function, `fold_and_page`, creates a table and a declared 
 
 What it did not show, and must be shown before the implementation ships:
 
-- **Firefox and Safari.** Only Chromium was available to the spike. Both browsers support the API `opfs-sahpool` needs, but the spike has not run in them. The wasm32 gate (NOC-10) or the implementation ticket must run the same check in Firefox and WebKit.
+- **Firefox and Safari.** Only Chromium was available to the spike. Both browsers support the API `opfs-sahpool` needs, and the official build's `opfs-sahpool` works in both ([Amendment 2](#amendment-2-durability-of-a-browser-copy)), but the Rust spike has not run in them. *(Amendment 2.)* The wasm32 gate (NOC-10) or the implementation ticket must run the same check in Firefox and WebKit.
 - **More than one tab** ([decision 4](#decisions-for-the-owner)).
 - **Speed** at the size of a real space. The spike measured nothing.
 - **The library's maturity.** `sqlite-wasm-rs` and `sqlite-wasm-vfs` are young crates with one main maintainer. They are small and wrap the official SQLite source and a port of its official VFS, so forking them is feasible if they stop being maintained.
@@ -420,9 +423,9 @@ GENESIS.md reserves the on-disk format and anything a user sees first for the ow
 | Principle 6: queries run only through declared indexes; results sorted and paginated.        | No raw SQL; a plan check on open; keyset cursors with a total order.                                                                           |
 | Principle 7: the same core natively and in the browser; behaviour never forks.              | One `rusqlite` binding and one fold; only the VFS and the file location differ; the SQLite version must match.                                 |
 | "Never write content, keys or personal fields into logs [...]."                             | Plaintext exists only in memory and in the view; notifications carry ids; cursors are redacted.                                                |
-| "Runs on any device [...] web apps in a browser (Chromium-based, Firefox, and Safari)."      | The design uses only APIs those browsers offer. The spike ran in Chromium only; Firefox and Safari are an open check, not a claim.            |
+| "Runs on any device [...] web apps in a browser (Chromium-based, Firefox, and Safari)."      | The design uses only APIs those browsers offer. The Rust spike ran in Chromium only; the official build's `opfs-sahpool` works in Firefox and Safari (Amendment 2). The Rust port in Firefox and Safari is an open check, not a claim. *(Amendment 2.)* |
 
-**Conflicts.** None with GENESIS.md. One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit; NOC-20 adds it to RFC 0001.
+**Conflicts.** None with GENESIS.md. One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit; NOC-20 adds it to RFC 0001, and NOC-34 adds that the member key goes with the copy *(Amendment 2)*.
 
 ## Amendment 1: following RFC 0008
 
@@ -431,3 +434,69 @@ Added on 2026-11-08 for NOC-44. This RFC left two things to the membership RFC: 
 - **The control table** (conflict 13). It holds RFC 0008's control state: the genesis, the members with their roles, the grants with their from generations and the revocations with their cutoffs, the generation graph, the person-key entries, the shreds and their acknowledgements, and which generations this member holds ([RFC 0008, "The function"](0008-membership.md#the-function)).
 - **Control changes are recomputed, sealed changes un-folded** (conflict 13, decision M4). A late control change can change the verdict of a change accepted before. A sealed change whose verdict flips is un-folded as [Un-folding](#control-changes-and-changes-that-wait-for-them) describes. A control change is never un-folded: the core recomputes `resolve` over every control change it holds ([RFC 0008, "What a new change can change"](0008-membership.md#what-a-new-change-can-change)).
 - **The shred row waits until stable** (decision M20). The fold erases the person's fields at once and writes a "seen" acknowledgement. Deleting the member's copy of the key and the "deleted" acknowledgement wait until the shred is stable, as RFC 0008 defines it, because a destroyed key cannot come back if a concurrent revocation rejects the shred later ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
+
+## Amendment 2: durability of a browser copy
+
+Added on 2026-11-09 for NOC-34. This RFC says that a browser may evict a member's copy and that the SDK reports it ([decision 8](#decisions-for-the-owner)). NOC-33 measured what each browser does with the copy, in Playwright's builds of Chromium, Firefox and WebKit, and collected what the vendors document; [How long a browser keeps a web app's copy](../browser-storage.md#findings) holds every finding with its source: measured, documented or unknown. This amendment states what that changes in this RFC and proposes how developers and their users learn it. The owner asked for a clean way to communicate it (Carsten, 2026-11-08). Decisions 10 to 15 below name public API and text for users, which GENESIS.md reserves for the owner; the owner decided each as recommended (Carsten, 2026-11-09).
+
+**What the findings change in this RFC.** The sentences are marked *(Amendment 2)* above.
+
+- **Eviction takes the member key too.** A browser evicts all of an origin's data at once (documented, MDN), and the member key lives in IndexedDB of the same origin ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). Safari's seven-day deletion names IndexedDB (documented, WebKit); whether it reaches OPFS is unknown. So after an eviction, the browser cannot fetch its spaces again as the same member: the person pairs it again as a new device ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). [RFC 0001](0001-nocentraldb.md#what-it-is-not) said the member fetches its log again; its [Amendment 3](0001-nocentraldb.md#amendment-3-a-browser-copy-takes-its-member-key-with-it) corrects that.
+- **Safari runs `opfs-sahpool`.** The official build's `opfs-sahpool`, which `sqlite-wasm-vfs` ports to Rust, wrote and read back in branded Safari on iOS 27.0.1 and macOS 27.2, as it did in Playwright's Firefox and WebKit. The device checks of 2026-11-09 are recorded in [the manual check log](../browser-storage.md#manual-check-log) by #74 (NOC-60), under the headings "2026-11-09 · Safari 27.0.1 on iOS 27.0.1, iPhone 15" and "2026-11-09 · Safari 27.2 on macOS 26.7.2, Apple M1 Pro (2021)". The Rust port itself has run only in Chromium.
+- **Private windows.** Firefox and WebKit have no OPFS in a private window (`getDirectory()` fails), while IndexedDB works; Chromium has OPFS there and deletes it, and IndexedDB, when the window closes (measured). Branded Firefox on macOS has no OPFS there either; IndexedDB wrote, but a new private window read nothing, and the log does not say whether the first window was closed ("2026-11-09 · Firefox 156.0.1, private window, on macOS 26.7.2, Apple M1 Pro (2021)", #74). So whether IndexedDB, and the member key in it, lasts the whole private session in Firefox is unknown. What branded Safari, Chrome and Edge do in a private window is unknown.
+- **`persist()` asks the user in Firefox.** Firefox shows a popup and the answer waits for the user (measured: no answer within 5 s; documented, MDN). Chrome and Edge decide silently by heuristics such as installation (documented); Playwright's Chromium and WebKit denied it (measured). Branded Safari denied it on iOS, in the browser and in a Home Screen app, and granted it to a Dock app on macOS; Firefox on macOS showed its prompt (device checks of 2026-11-09, #74: "Safari 27.0.1 on iOS 27.0.1, iPhone 15", "Home-screen app (Safari 27.0.1) on iOS 27.0.1, iPhone 15", "Dock app (Safari 27.2) on macOS 26.7.2, Apple M1 Pro (2021)", "Firefox 156.0.1 on macOS 26.7.2, Apple M1 Pro (2021)"). So installing an app to the iOS Home Screen does not make its copy persistent. Most browser copies therefore start as best effort, and asking on open, as decision 8 says, shows Firefox users a popup at first open.
+
+**The four layers.** A developer learns how reliable a browser copy is from the SDK (decisions 10 to 12), from one page of documentation (decision 13), and passes it on with text for end users (decision 14). Decision 15 says where the developer meets it first. The page [Browser apps and durability](../browser-durability.md) is drafted in this amendment's pull request, so the owner decides on real text; every row in it names the finding it rests on, and the gate (`scripts/browser-durability.test.mjs`) fails when a row claims more than its finding.
+
+10. **How the SDK reports durability.**
+    - A. One namespace, `db.durability`, the same on every target. `current()` returns `{ storage, unconfirmed, oldestUnconfirmedAt, atRisk }`. `subscribe(listener)` calls the listener whenever one of them changes, at most once per fold or push, and returns a function that stops it. `requestPersistent()` asks the browser for persistent storage and resolves when the browser answers. *(recommended)*
+    - B. Two places: `db.storage.persistent` (a boolean) and `db.sync.pending` (a count), each with its own event.
+    - C. A boolean `db.isPersistent` only; apps count unsent changes themselves.
+    Recommendation: A. One object answers the question a developer has: what would this user lose if the browser deleted the copy now. Only the core knows which changes the relay has confirmed, so C would leave apps guessing; B splits one answer in two. The values:
+    - `storage: "persistent"`: a native app, or a browser whose `navigator.storage.persisted()` is true. It does not promise that the copy survives the user clearing site data, a lost device, or Safari's seven-day deletion, which persistent storage may or may not stop (unknown).
+    - `storage: "best-effort"`: the copy is on OPFS and the browser has not granted persistent storage. The browser may delete it when storage runs low, and Safari after seven days without interaction. A Chromium private window reports `best-effort`, because the SDK cannot tell it from a normal window; its copy is deleted when the window closes (measured).
+    - `storage: "temporary"`: OPFS could not be opened, as in a private window of Firefox or WebKit, and the copy is in memory (decision 12). It lives at most until the private session ends.
+    - `unconfirmed`: the number of changes this member wrote that have no relay position yet ([RFC 0007, "Island mode"](0007-relay.md#island-mode)). They exist only on this device. Changes received from a peer are not counted: their author holds them. `oldestUnconfirmedAt` is the local time of the oldest of them, or `null`.
+    - `atRisk`: true while `unconfirmed` is above zero and `storage` is not `persistent`.
+    The SDK reads `persisted()` on open, after `requestPersistent()`, and whenever the page becomes visible again, because a user can grant or revoke it in the browser's settings.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+11. **When the SDK asks for persistent storage.**
+    - A. On open, as decision 8 says, without waiting: `nc.open` resolves before the browser answers, and `subscribe` reports the answer. An app that wants to explain first opens with `nc.open({ model, persistentStorage: "on-request" })` and calls `requestPersistent()` after its own onboarding text. *(recommended)*
+    - B. On open, and `nc.open` waits for the answer.
+    - C. Only when the app calls `requestPersistent()`, never on open.
+    Recommendation: A. It keeps decision 8 for an app that does nothing, and refines it rather than reversing it. B would leave `nc.open` hanging in Firefox until the user answers the popup. C reverses decision 8 and leaves every app that forgets the call with a best-effort copy.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+12. **The fallback in a private window, where OPFS is missing.**
+    - A. SQLite's in-memory VFS, as [The browser](#the-browser) says, with `storage: "temporary"`. A reload of the page loses the copy and its unconfirmed changes, and the SDK fetches the spaces again from the relay. *(recommended)*
+    - B. A VFS on IndexedDB for the length of the private session.
+    Recommendation: A for v1. B helps only between a reload and the end of the private session, and whether IndexedDB survives a reload in a private window is unknown: NOC-33 measured that it works and that it is gone after the window closes, not a reload in between. B would add a second storage path to build and test in three engines, with writes through an asynchronous store, which [Rejected options](#rejected-options) found much slower, and a durability no spike has checked against [decision 7](#decisions-for-the-owner). Either way the copy is temporary and the user is told the same. The member key in IndexedDB has the same unknown: if IndexedDB does not survive a reload in a private window, each reload is a new device. Firefox's device check of 2026-11-09 found IndexedDB empty in a new private window without recording whether the first was closed, so for Firefox this stays unknown too; the owner will check again. NOC-33's probe can measure a reload in a private window; if apps then report lost changes, B can be revisited with that row.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+13. **The developer documentation.**
+    - A. One page, [Browser apps and durability](../browser-durability.md), as drafted: NOC-33's findings in plain words per browser, what is lost when, how to reduce the risk (keep syncing, ask for persistent storage, install the app, offer a native app), private windows, the SDK's report and the text for users. Every row names its finding, and the gate checks it. *(recommended)*
+    - B. The same facts in the SDK's API reference only.
+    Recommendation: A. A developer has to know this before choosing a browser app for their users (principle 4), which is before reading an API reference. The page marks the SDK interface as decided and not yet built until it ships.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+14. **Text for end users.**
+    - A. The page carries short English texts that the developer copies into the app, with the placeholders `{appName}` and `{count}`: one for the onboarding of a browser app, one for unsaved changes (for one change and for more), and one for a private window. The SDK ships no text for users. *(recommended)*
+    - B. The SDK exports the texts, for example `nc.text.durability.unsaved({ appName, count })`, so they change with the SDK.
+    Recommendation: A for v1. The app owns its interface and its languages; exported texts would be more public API to keep stable and translate. The gate checks that each text names the app, stays under 60 words, and uses no word that promises more than the findings; no user has read them yet, which the page says.
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+15. **Where the developer meets it, and the warning in development.**
+    - A. The README and RFC 0001 link the page. In development, the SDK logs one `console.warn` per page load when `storage` is not `persistent`. "Development" is `process.env.NODE_ENV !== "production"`, which bundlers replace at build time; where nothing replaces it, the warning stays on. `nc.open({ model, warnings: false })` turns it off. The warning names the status, the number of unconfirmed changes and the page, and nothing else: no content and no ids ("Never write content, keys or personal fields into logs", GENESIS.md). *(recommended)*
+    - B. The same warning in every build, production included.
+    - C. No warning; the page and `db.durability` only.
+    Recommendation: A. A developer trying a browser app sees the limit on the first day, without reading anything, and the end user's console stays quiet. The proposed text: `NoCentralDB: this browser copy is best-effort. The browser may delete it, together with 3 changes the relay has not confirmed and this browser's member key. See https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md`
+
+    Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+**Conflicts.** None with GENESIS.md. One with RFC 0001, which said a browser member fetches its log again after an eviction; RFC 0001's Amendment 3 corrects it in this pull request. This amendment adds no format, so nothing on disk or on the wire changes.
