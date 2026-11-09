@@ -83,7 +83,7 @@ fn sealing_with_the_vectors_ephemeral_gives_its_bytes() {
         &recipient().public(),
         ikm(),
     );
-    assert_eq!(sealed, vector());
+    assert_eq!(sealed, Ok(vector()));
 }
 
 #[test]
@@ -93,7 +93,7 @@ fn the_vector_opens_to_the_space_key() {
     // the same ephemeral gives the vector again only if it is the same key.
     let again =
         envelope::seal_with_ephemeral(&opened, SPACE, GENERATION, &recipient().public(), ikm());
-    assert_eq!(again, vector());
+    assert_eq!(again, Ok(vector()));
 }
 
 #[test]

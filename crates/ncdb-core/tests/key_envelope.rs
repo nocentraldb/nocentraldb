@@ -13,7 +13,7 @@ use ncdb_core::change::Payload;
 use ncdb_core::clock::Hlc;
 use ncdb_core::envelope::{self, EnvelopeError, KeyEnvelope};
 use ncdb_core::ids::SpaceId;
-use ncdb_core::keys::{MemberKey, SpaceKey};
+use ncdb_core::keys::{MemberKey, MemberPublicKey, SpaceKey};
 use ncdb_core::seal;
 
 const SPACE: SpaceId = SpaceId([7; 16]);
@@ -28,7 +28,7 @@ fn space_key() -> SpaceKey {
 }
 
 fn envelope_for(recipient: &MemberKey) -> KeyEnvelope {
-    envelope::seal(&space_key(), SPACE, GENERATION, &recipient.public())
+    envelope::seal(&space_key(), SPACE, GENERATION, &recipient.public()).unwrap()
 }
 
 /// Two space keys are the same key when a change one seals opens with the
@@ -64,6 +64,20 @@ fn each_seal_draws_a_new_ephemeral_key() {
     let second = envelope_for(&alice);
     assert_ne!(first.encapsulated_key, second.encapsulated_key);
     assert_ne!(first.ciphertext, second.ciphertext);
+}
+
+#[test]
+fn a_recipient_key_of_small_order_takes_no_envelope() {
+    // The X25519 point 0 has small order: the Diffie-Hellman output with
+    // it is zero, which RFC 9180 rejects.
+    let recipient = MemberPublicKey {
+        agreement: [0; 32],
+        ..member(1).public()
+    };
+    assert_eq!(
+        envelope::seal(&space_key(), SPACE, GENERATION, &recipient).err(),
+        Some(EnvelopeError::RecipientKey)
+    );
 }
 
 #[test]
@@ -225,6 +239,7 @@ fn errors_and_envelopes_show_no_key() {
     let opened = envelope::open(&sealed, SPACE, &alice).unwrap();
     assert_eq!(format!("{opened:?}"), "SpaceKey(<redacted>)");
     for error in [
+        EnvelopeError::RecipientKey,
         EnvelopeError::WrongRecipient,
         EnvelopeError::Malformed(8),
         EnvelopeError::Open,
