@@ -45,10 +45,10 @@ const section = (markdown, anchor, level = 2) => {
   return markdown
     .split(new RegExp(`^(?=${hashes} )`, "m"))
     .find((part) => slug(part.split("\n")[0].slice(level + 1)) === anchor)
-    ?.split(new RegExp(`^#{1,${level}} `, "m"))[0]
-    .split("\n")
+    ?.split("\n")
     .slice(1)
-    .join("\n");
+    .join("\n")
+    .split(new RegExp(`^#{1,${level}} `, "m"))[0];
 };
 
 test("RFC 0002 announces Amendment 6 in a dated changelog line and its status", () => {
