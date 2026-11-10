@@ -28,6 +28,8 @@ pub fn stranger() -> Space {
 pub enum Trouble {
     /// Every frame of a push: `unavailable`.
     Unavailable,
+    /// Every frame of a push: rejected with this code.
+    RejectPush(&'static str),
     /// Every push: the error `rate_limited`, retry after this many
     /// seconds.
     RateLimited(u64),
@@ -220,18 +222,8 @@ fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
             ))
         }
         (_, "pull" | "subscribe") => Some(error("unknown_space", Vec::new())),
-        (Trouble::Unavailable, "push") => {
-            let frames = match field(request, 4) {
-                Value::Array(frames) => frames.len(),
-                _ => 0,
-            };
-            let rejected = map(vec![(3, Value::Text("unavailable".into()))]);
-            Some(message(
-                "pushed",
-                req,
-                &[(3, Value::Array(vec![rejected; frames]))],
-            ))
-        }
+        (Trouble::Unavailable, "push") => rejected(request, req, "unavailable"),
+        (Trouble::RejectPush(code), "push") => rejected(request, req, code),
         (Trouble::RateLimited(secs), "push") => {
             Some(error("rate_limited", vec![(4, Value::Unsigned(secs))]))
         }
@@ -247,4 +239,18 @@ fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
         }
         _ => None,
     }
+}
+
+/// The answer to a push that rejects each of its frames with `code`.
+fn rejected(request: &Value, req: Option<u64>, code: &str) -> Option<Value> {
+    let frames = match field(request, 4) {
+        Value::Array(frames) => frames.len(),
+        _ => 0,
+    };
+    let rejected = map(vec![(3, Value::Text(code.to_owned()))]);
+    Some(message(
+        "pushed",
+        req,
+        &[(3, Value::Array(vec![rejected; frames]))],
+    ))
 }
