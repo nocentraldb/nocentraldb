@@ -5,12 +5,13 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ids::{ChangeId, MemberId};
+use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{
     ACKNOWLEDGEMENT, Action, Entry, KEY_CHAIN, MembershipEntry, PERSON_KEY, Role, SHRED,
 };
 use super::certificate::MemberKind;
+use super::genesis::generation_id;
 use super::input::Node;
 use super::resolve::{Judged, Resolved};
 
@@ -38,19 +39,33 @@ pub(crate) fn needed(node: &Node) -> Role {
     }
 }
 
-/// A membership entry's own rules in the state of its causal past (step
-/// 1): an add's subject is not a member and its certificate holds; a set
-/// role's or a remove's subject is a member.
+/// A change's own rules in the state of its causal past (step 1): a key
+/// chain entry's previous generations exist and its generation id derives
+/// from its space, author and previous generations; an envelope's recipient
+/// is a member and its generation exists; an add's subject is not a member
+/// and its certificate holds; a set role's or a remove's subject is a
+/// member.
 ///
 /// A re-grant, an add of a former member or a set role that gives the
 /// right to write to a member without it, needs a fresh generation, which
 /// only key chain entries and envelopes can show. This core does not fold
 /// them yet, so it never finds one, and a re-grant is not valid: a
 /// revocation always holds.
-pub(crate) fn own_rules(node: &Node, past: &Resolved) -> bool {
-    let Some(MembershipEntry { subject, action }) = node.membership() else {
-        return true;
+pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
+    let entry = match &node.body.entry {
+        Entry::Membership(entry) => entry,
+        Entry::KeyChain(chain) => {
+            let previous: Vec<u64> = chain.previous_generations().collect();
+            return previous.iter().all(|p| past.generation(*p).is_some())
+                && chain.generation == generation_id(space, node.author, &previous);
+        }
+        Entry::KeyEnvelope(envelope) => {
+            return past.role(envelope.recipient).is_some()
+                && past.generation(envelope.generation).is_some();
+        }
+        _ => return true,
     };
+    let MembershipEntry { subject, action } = entry;
     match action {
         Action::Add { certificate, .. } => {
             past.member(*subject).is_none()

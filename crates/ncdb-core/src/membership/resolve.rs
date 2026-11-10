@@ -128,19 +128,19 @@ impl Resolved {
     }
 
     /// A generation of the generation graph.
-    pub fn generation(&self, _generation: u64) -> Option<&Generation> {
-        None
+    pub fn generation(&self, generation: u64) -> Option<&Generation> {
+        self.generations.0.get(&generation)
     }
 
     /// The generation graph, by generation id.
     pub fn generations(&self) -> impl Iterator<Item = (u64, &Generation)> + '_ {
-        self.generations.0.iter().map(|(id, g)| (*id, g)).take(0)
+        self.generations.0.iter().map(|(id, g)| (*id, g))
     }
 
-    /// Whether `generation` is `from` or descends from it in the
-    /// generation graph.
-    pub fn descends(&self, _generation: u64, _from: u64) -> bool {
-        false
+    /// Whether `generation` is in the generation graph and is `from` or
+    /// descends from it.
+    pub fn descends(&self, generation: u64, from: u64) -> bool {
+        self.generations.descends(generation, from)
     }
 
     /// The seniority of step 2, most senior first.
@@ -190,6 +190,7 @@ impl Resolved {
             &self.members,
             &self.verdicts,
             &self.gaps,
+            &self.generations,
         )
     }
 }
@@ -250,6 +251,8 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         .into_iter()
         .filter(|(id, node)| !node.is_genesis() || *id == genesis.id)
         .collect();
+    resolved.generations =
+        Generations::build(body.first_generation, folded.values().copied(), judged);
     resolved.seniority = rights::seniority(genesis, &folded, judged);
     let rank: BTreeMap<MemberId, usize> = resolved
         .seniority
@@ -305,7 +308,29 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
             }
         }
     }
+    reject_duplicate_generations(&mut resolved.verdicts, &folded);
     resolved
+}
+
+/// Decision M23: when two accepted key chain entries name the same
+/// generation id, both are rejected.
+fn reject_duplicate_generations(
+    verdicts: &mut BTreeMap<ChangeId, Verdict>,
+    folded: &BTreeMap<ChangeId, &Node>,
+) {
+    let mut by_generation: BTreeMap<u64, Vec<ChangeId>> = BTreeMap::new();
+    for (id, node) in folded {
+        if let Entry::KeyChain(chain) = &node.body.entry
+            && verdicts.get(id) == Some(&Verdict::Accepted)
+        {
+            by_generation.entry(chain.generation).or_default().push(*id);
+        }
+    }
+    for ids in by_generation.into_values().filter(|ids| ids.len() > 1) {
+        for id in ids {
+            verdicts.insert(id, Verdict::Rejected(Rejection::DuplicateGeneration));
+        }
+    }
 }
 
 /// What an accepted change does to the members.
@@ -363,7 +388,7 @@ fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved) -> Judgem
     }
     let valid = past.genesis.is_some()
         && past.role(node.author) >= Some(rights::needed(node))
-        && rights::own_rules(node, past);
+        && rights::own_rules(input.space, node, past);
     let depth = match (valid, node.membership()) {
         (true, Some(entry)) if entry.role() == Some(Role::Admin) => {
             let held = past.member(node.author).into_iter().flat_map(|s| &s.grants);

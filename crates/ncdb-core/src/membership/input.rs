@@ -40,6 +40,7 @@ impl Node {
 
 /// The nodes of a space, and the verdicts of the changes that are not.
 pub(crate) struct Input {
+    pub(crate) space: SpaceId,
     pub(crate) nodes: BTreeMap<ChangeId, Node>,
     pub(crate) verdicts: BTreeMap<ChangeId, Verdict>,
     /// Dependencies that name no change the holder holds.
@@ -123,6 +124,7 @@ impl Input {
             nodes.get_mut(&id).expect("a node").past = past;
         }
         Input {
+            space,
             nodes,
             verdicts,
             gaps,
