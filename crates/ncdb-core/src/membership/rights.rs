@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
-use super::certificate::MemberKind;
+use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
 use super::person_key::ShredEntry;
@@ -34,6 +34,18 @@ pub(crate) fn needed(node: &Node) -> Role {
             ACKNOWLEDGEMENT => Role::Reader,
             _ => Role::Admin,
         },
+    }
+}
+
+/// Whether a sub-agent's certificate carries its parent's account's
+/// statement, as RFC 0003 asks: both certificates carry a statement under
+/// the same recovery key, or neither carries one. Key 6 is not under key
+/// 5's signature, so a mismatch is refused rather than read either way.
+fn same_recovery_key(parent: &Certificate, sub_agent: &Certificate) -> bool {
+    match (&parent.statement, &sub_agent.statement) {
+        (Some(parent), Some(sub_agent)) => parent.recovery_key == sub_agent.recovery_key,
+        (None, None) => true,
+        _ => false,
     }
 }
 
@@ -89,6 +101,7 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
                             && past.member(parent).is_some_and(|p| {
                                 p.certificate.kind != MemberKind::Device
                                     && p.certificate.account_key == certificate.account_key
+                                    && same_recovery_key(&p.certificate, certificate)
                                     && certificate.verify(&p.key.signing)
                             })
                     }),
