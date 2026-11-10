@@ -19,8 +19,8 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 
 Feedback on any RFC goes to GitHub Discussions, category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback).
 
-- **Reply in the RFC's own discussion** when it has one. It is named after the RFC, such as [RFC 0001: NoCentralDB](https://github.com/nocentraldb/nocentraldb/discussions/21). Keep to one topic per reply, so that each point gets its own thread of answers.
-- **Start a new discussion** in the category when your point needs room of its own, or when the RFC has no discussion yet. The form asks which RFC and section you mean, your situation, and where the design would break for you.
+- **Reply in the RFC's own discussion.** It is named after the RFC, such as [RFC 0001: NoCentralDB](https://github.com/nocentraldb/nocentraldb/discussions/21). Keep to one topic per reply, so that each point gets its own thread of answers.
+- **Start a new discussion** in the category when your point needs room of its own. The form asks which RFC and section you mean, your situation, and where the design would break for you.
 - **Open a pull request** against the RFC's file to change its text: a typo, an unclear sentence, a wrong link.
 
 Tell us about your app, your situation and where the design would break for you: reports of problems help us more than feature requests. The [FAQ](../faq.md) may already answer your question. Security problems never go into a discussion: see [SECURITY.md](../../.github/SECURITY.md).

@@ -1,16 +1,9 @@
-// Asserts RFC 0009 as one complete text (NOC-101), as docs/rfc/README.md's
-// "How a decided RFC changes" asks: every amendment is folded into the design
-// where its rule belongs, so no "Amendment" section, mark or in-page link is
-// left; "Decisions" keeps S1 to S34 in short form, with the owner's name and
-// date, why, and the options not taken, S14 stays listed as withdrawn, and
-// S25 is the object id the owner decided on #91 (S26 to S28 followed on
-// NOC-114, S29 on NOC-116, S30 to S32 on NOC-149, S33 and S34 on NOC-150);
-// "History" lists dated lines
-// that name their ticket and pull request; the status says what is built; and
-// every link other files use into RFC 0009 still resolves. The rules the
-// amendments made are checked where they now stand: groups leave the design
-// (NOC-76), an nc.int and an object id in TypeScript (NOC-80), and references
-// (NOC-92).
+// Asserts RFC 0009 as one complete text (NOC-101): no "Amendment" section,
+// mark or in-page link is left, and every link other files use into RFC 0009
+// still resolves. The rules the amendments made are checked where they now
+// stand: groups leave the design (NOC-76), an nc.int and an object id in
+// TypeScript (NOC-80), and references (NOC-92). Its form as a fresh text, with
+// each decision in its section, is held by rfc-0009-fresh.test.mjs (NOC-165).
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, relative } from "node:path";
@@ -58,19 +51,6 @@ const section = (markdown, anchor) => {
 const line = (markdown, start) =>
   markdown.split("\n").find((l) => l.startsWith(start)) ?? "";
 
-/** The decisions under "## Decisions", one "### Mn. Title" heading each. */
-const decisions = () =>
-  [
-    ...section(read(), "decisions").matchAll(
-      /^### (S\d+)\. [^\n]+\n([\s\S]*?)(?=^### |(?![\s\S]))/gm,
-    ),
-  ].map((m) => ({ id: m[1], text: m[2] }));
-const decision = (id) => {
-  const found = decisions().find((d) => d.id === id);
-  assert.ok(found, `${RFC} has no decision ${id}`);
-  return found.text;
-};
-
 test("RFC 0009 has no amendment section, mark, in-page link or changelog left", () => {
   const rfc = read();
   for (const heading of headings(rfc)) {
@@ -84,74 +64,6 @@ test("RFC 0009 has no amendment section, mark, in-page link or changelog left", 
   );
   assert.doesNotMatch(rfc, /^\*\*Changelog\.\*\*/m, "the changelog is left");
   assert.doesNotMatch(line(rfc, "**Status.**"), /Amendment/);
-});
-
-test("the status says what is built, and names the owner's decisions with their dates", () => {
-  const status = line(read(), "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Decided\. /);
-  for (const date of ["2026-11-09", "2026-11-10"]) {
-    assert.ok(status.includes(`(Carsten, ${date})`), `no decision of ${date}`);
-  }
-  assert.doesNotMatch(status, /Nothing here is built/);
-  assert.doesNotMatch(
-    line(read(), "- **Code.**"),
-    /Nothing in `crates\/` or `packages\/` changes/,
-  );
-  assert.match(status, /crates\/nocentraldb/);
-});
-
-test("History lists dated lines, each with its ticket and pull request", () => {
-  const entries = section(read(), "history")
-    .split("\n")
-    .filter((l) => l.startsWith("- "));
-  for (const [ticket, pr] of [
-    ["NOC-64", 78],
-    ["NOC-35", 76],
-    ["NOC-76", 87],
-    ["NOC-75", 87],
-    ["NOC-80", 91],
-    ["NOC-92", 98],
-    ["NOC-106", 113],
-    ["NOC-101", null],
-    ["NOC-149", 135],
-    ["NOC-150", null],
-  ]) {
-    const entry = entries.find((l) => l.includes(` · ${ticket} · `));
-    assert.ok(entry, `History has no line for ${ticket}`);
-    assert.match(entry, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-\d+ · /);
-    if (pr) assert.ok(entry.includes(`(#${pr})`), `${ticket} names no #${pr}`);
-    else assert.match(entry, /\(#\d+\)/, `${ticket} names no pull request`);
-  }
-});
-
-test("Open questions says whether the owner still has one", () => {
-  assert.match(section(read(), "open-questions"), /\S/);
-});
-
-test("Decisions keeps S1 to S34 in short form: decided, why, and the options not taken", () => {
-  const found = decisions();
-  assert.deepEqual(
-    found.map((d) => d.id),
-    Array.from({ length: 34 }, (_, i) => `S${i + 1}`),
-  );
-  for (const { id, text } of found) {
-    const date = Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10";
-    assert.match(text, new RegExp(`^Decided \\(Carsten, ${date}\\)`, "m"), id);
-    assert.match(text, /^Why: /m, `${id} gives no reason`);
-    assert.match(
-      text,
-      /^Not taken:\n\n?- /m,
-      `${id} lists no option not taken`,
-    );
-    assert.doesNotMatch(text, /\*\(recommended/, id);
-    assert.doesNotMatch(text, /^Recommendation:/m, id);
-  }
-  assert.match(
-    decision("S14"),
-    /Withdrawn by the owner \(Carsten, 2026-11-09\)/,
-  );
-  assert.match(decision("S25"), /#91/);
-  assert.match(decision("S25"), /numbered in the rewrite/);
 });
 
 test("groups, nc.int, the object id and references stand in the design (NOC-76, NOC-80, NOC-92)", () => {

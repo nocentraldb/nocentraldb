@@ -2,7 +2,7 @@
 
 These eight situations show what NoCentralDB is for. In the first five, a central database is the weaker choice by design. In the last three, people often assume that real-time collaboration, notifications and streaming need a central server. NoCentralDB handles them without one.
 
-NoCentralDB is not released yet. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page uses the SDK API of [RFC 0009](rfc/0009-sdk-api.md), which the owner decided and which may still change before it is built. Rich text and streams have no RFC of their own yet, so their calls are sketches, and the code says so ([RFC 0009, "Conflicts", points 5 to 7](rfc/0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs)). Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
+NoCentralDB is not released yet. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page uses the SDK API of [RFC 0009](rfc/0009-sdk-api.md), which the owner decided and which may still change before it is built. Rich text and streams have no RFC of their own yet, so their calls are sketches, and the code says so ([RFC 0009, "What this RFC does not cover"](rfc/0009-sdk-api.md#what-this-rfc-does-not-cover)). Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
 
 Each use case has five parts:
 

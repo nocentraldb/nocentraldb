@@ -3,9 +3,6 @@
 //! (NOC-148): the view reads the states of the log back without opening
 //! its changes, so the tips open each folded sealed change once, the first
 //! time they are read, and equal a full recount from then on.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 

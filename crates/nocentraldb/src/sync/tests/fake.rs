@@ -28,6 +28,8 @@ pub fn stranger() -> Space {
 pub enum Trouble {
     /// Every frame of a push: `unavailable`.
     Unavailable,
+    /// Every frame of a push: rejected with this code.
+    RejectPush(&'static str),
     /// Every push: the error `rate_limited`, retry after this many
     /// seconds.
     RateLimited(u64),
@@ -45,6 +47,9 @@ pub enum Trouble {
     /// The TCP connection is accepted, but the WebSocket handshake never
     /// answered.
     Hang,
+    /// `hello` is answered with the error of this code, and the connection
+    /// ends.
+    Refuse(&'static str),
 }
 
 /// A fake relay on a free local port.
@@ -125,6 +130,11 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
         return;
     };
     let _hello = recv(&mut ws).await;
+    if let Trouble::Refuse(code) = trouble {
+        let error = message("error", None, &[(3, Value::Text(code.to_owned()))]);
+        send(&mut ws, &error).await;
+        return;
+    }
     let limits = map(vec![
         (1, Value::Unsigned(128 * 1024)),
         (2, Value::Unsigned(32)),
@@ -212,18 +222,8 @@ fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
             ))
         }
         (_, "pull" | "subscribe") => Some(error("unknown_space", Vec::new())),
-        (Trouble::Unavailable, "push") => {
-            let frames = match field(request, 4) {
-                Value::Array(frames) => frames.len(),
-                _ => 0,
-            };
-            let rejected = map(vec![(3, Value::Text("unavailable".into()))]);
-            Some(message(
-                "pushed",
-                req,
-                &[(3, Value::Array(vec![rejected; frames]))],
-            ))
-        }
+        (Trouble::Unavailable, "push") => rejected(request, req, "unavailable"),
+        (Trouble::RejectPush(code), "push") => rejected(request, req, code),
         (Trouble::RateLimited(secs), "push") => {
             Some(error("rate_limited", vec![(4, Value::Unsigned(secs))]))
         }
@@ -239,4 +239,18 @@ fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
         }
         _ => None,
     }
+}
+
+/// The answer to a push that rejects each of its frames with `code`.
+fn rejected(request: &Value, req: Option<u64>, code: &str) -> Option<Value> {
+    let frames = match field(request, 4) {
+        Value::Array(frames) => frames.len(),
+        _ => 0,
+    };
+    let rejected = map(vec![(3, Value::Text(code.to_owned()))]);
+    Some(message(
+        "pushed",
+        req,
+        &[(3, Value::Array(vec![rejected; frames]))],
+    ))
 }

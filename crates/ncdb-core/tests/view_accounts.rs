@@ -1,11 +1,8 @@
-//! The accounts a person confirmed (NOC-168; RFC 0009, "Invitations and
-//! members"): the database keeps each account whose fingerprint a person
+//! The accounts a person confirmed, on every target (NOC-168; RFC 0009,
+//! "Invitations and members"): the database keeps each account whose fingerprint a person
 //! compared, by its public key and when it was confirmed, in the table
 //! `confirmed_accounts` of the member's SQLite file. Unlike the view's
 //! tables, it is not computed from the log, so nothing rebuilds it.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 

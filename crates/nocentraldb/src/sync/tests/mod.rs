@@ -12,6 +12,8 @@ mod relay_support;
 
 mod added;
 mod backoff;
+mod codes;
+mod counts;
 mod fake;
 mod list;
 mod live;
@@ -19,6 +21,7 @@ mod members;
 mod pull;
 mod push;
 mod reconnect;
+mod refusals;
 mod removed;
 mod reopen;
 mod rotation;

@@ -25,8 +25,7 @@ const RELAY_SEES =
 const SHREDDING = "0003-keys-and-cryptography.md#shredding-a-persons-key";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
-const RFC_0003_DECISIONS =
-  "0003-keys-and-cryptography.md#9-post-quantum-key-agreement";
+const RFC_0003_QUANTUM = "0003-keys-and-cryptography.md#not-post-quantum-in-v1";
 const RFC_0003_SDK = "0003-keys-and-cryptography.md#how-the-sdk-hides-keys";
 const PERSON_KEY = "0003-keys-and-cryptography.md#the-person-key";
 
@@ -129,7 +128,7 @@ test("RFC 0001 says v1 is not post-quantum, with a link to RFC 0003", () => {
   const line = rfc.split("\n").find((l) => /post-quantum/i.test(l));
   assert.ok(line, "RFC 0001 does not mention post-quantum");
   assert.match(line, /not post-quantum/i);
-  assert.ok(links(line, RFC_0003_DECISIONS), "no link to RFC 0003's decisions");
+  assert.ok(links(line, RFC_0003_QUANTUM), "no link to RFC 0003's section");
 });
 
 test("RFC 0001 says a browser can evict its copy, and what the member fetches again", () => {

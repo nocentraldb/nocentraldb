@@ -1,10 +1,9 @@
 // Asserts RFC 0006 as one complete text (NOC-101), as docs/rfc/README.md's
 // "How a decided RFC changes" asks: every amendment is folded into the design
 // where its rule belongs, so no "Amendment" section, mark or in-page link is
-// left; "Decisions" keeps each decision in short form, with the owner's name
-// and date, why, and the options not taken; "History" lists dated lines that
-// name their ticket and pull request; and every link other files use into
-// RFC 0006 still resolves. The rules the amendments made are checked where
+// left, and every link other files use into RFC 0006 still resolves. Its form
+// as a fresh text, with each decision in its section, is held by
+// rfc-0006-fresh.test.mjs (NOC-165). The rules the amendments made are checked where
 // they now stand: RFC 0008's control state (NOC-44), the durability of a
 // browser copy and its findings (NOC-34, NOC-35, NOC-58), the cursor and the
 // plan check (NOC-72), the scope of an index and deleted objects (NOC-75),
@@ -56,19 +55,6 @@ const section = (markdown, anchor) => {
 const line = (markdown, start) =>
   markdown.split("\n").find((l) => l.startsWith(start)) ?? "";
 
-/** The decisions under "## Decisions", one "### N. Title" heading each. */
-const decisions = () =>
-  [
-    ...section(read(), "decisions").matchAll(
-      /^### (\d+)\. [^\n]+\n([\s\S]*?)(?=^### |(?![\s\S]))/gm,
-    ),
-  ].map((m) => ({ id: Number(m[1]), text: m[2] }));
-const decision = (id) => {
-  const found = decisions().find((d) => d.id === id);
-  assert.ok(found, `${RFC} has no decision ${id}`);
-  return found.text;
-};
-
 test("RFC 0006 has no amendment section, mark, in-page link or changelog left", () => {
   const rfc = read();
   for (const heading of headings(rfc)) {
@@ -84,68 +70,6 @@ test("RFC 0006 has no amendment section, mark, in-page link or changelog left", 
   assert.doesNotMatch(rfc, /Amendment step/, "a step named by an amendment");
   assert.doesNotMatch(rfc, /^\*\*Changelog\.\*\*/m, "the changelog is left");
   assert.doesNotMatch(line(rfc, "**Status.**"), /Amendment/);
-});
-
-test("the status names the owner's decisions with their dates", () => {
-  const status = line(read(), "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Decided\. /);
-  for (const date of ["2026-11-08", "2026-11-09", "2026-11-10"]) {
-    assert.ok(status.includes(`(Carsten, ${date})`), `no decision of ${date}`);
-  }
-  assert.doesNotMatch(status, /not built yet/);
-});
-
-test("History lists dated lines, each with its ticket and pull request", () => {
-  const entries = section(read(), "history")
-    .split("\n")
-    .filter((l) => l.startsWith("- "));
-  for (const [ticket, pr] of [
-    ["NOC-12", 36],
-    ["NOC-44", 61],
-    ["NOC-34", 73],
-    ["NOC-35", 76],
-    ["NOC-58", 85],
-    ["NOC-72", 85],
-    ["NOC-75", 87],
-    ["NOC-92", 98],
-    ["NOC-101", null],
-  ]) {
-    const entry = entries.find((l) => l.includes(` · ${ticket} · `));
-    assert.ok(entry, `History has no line for ${ticket}`);
-    assert.match(entry, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-\d+ · /);
-    if (pr) assert.ok(entry.includes(`(#${pr})`), `${ticket} names no #${pr}`);
-    else assert.match(entry, /\(#\d+\)/, `${ticket} names no pull request`);
-  }
-});
-
-test("Open questions says whether the owner still has one", () => {
-  assert.match(section(read(), "open-questions"), /\S/);
-});
-
-test("Decisions keeps 1 to 17 in short form: decided, why, and the options not taken", () => {
-  const found = decisions();
-  assert.deepEqual(
-    found.map((d) => d.id),
-    Array.from({ length: 17 }, (_, i) => i + 1),
-  );
-  for (const { id, text } of found) {
-    const date =
-      id <= 9 ? "2026-11-08" : id <= 16 ? "2026-11-09" : "2026-11-10";
-    assert.match(
-      text,
-      new RegExp(`^Decided \\(Carsten, ${date}[^)]*\\): `, "m"),
-      `decision ${id}`,
-    );
-    assert.match(text, /^Why: /m, `decision ${id} gives no reason`);
-    assert.match(
-      text,
-      /^Not taken:\n\n?- /m,
-      `decision ${id} lists no option not taken`,
-    );
-    assert.doesNotMatch(text, /\*\(recommended\)\*|^\s*Recommendation:/m);
-  }
-  assert.match(decision(12), /Confirmed \(Carsten, 2026-11-09\)/);
-  assert.match(decision(16), /#81/);
 });
 
 test("the fold follows RFC 0008: control state, resolve, un-folding, a shred that waits (NOC-44)", () => {
@@ -202,8 +126,7 @@ test("a page after a cursor is written key by key, and the plan check accepts a 
   );
   assert.match(line(rfc, "**The check.**"), /`SEARCH` or a `SCAN`/);
   assert.match(line(rfc, "**The check.**"), /row-value/);
-  assert.match(decision(16), /row value/);
-  assert.match(section(rfc, "rejected-options"), /row-value comparison/);
+  assert.match(indexes, /[Rr]ow values with ascending indexes only/);
 });
 
 test("scope space, deleted objects and a reference's column stand in Declared indexes (NOC-75, NOC-92)", () => {

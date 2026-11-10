@@ -69,6 +69,11 @@ test("the rule says Decisions appears only after publication, and History starts
   assert.match(rule, /git log/, "the drafts' history is in git");
 });
 
+test("the RFC README no longer says an RFC may have no discussion yet", () => {
+  // NOC-165: every RFC has its own discussion now.
+  assert.doesNotMatch(readme(), /no discussion yet/);
+});
+
 test("the RFC README speaks of amendments only to rule them out", () => {
   const rest = readme().replace(section(readme(), HEADING), "");
   assert.doesNotMatch(rest, /amendment/i);

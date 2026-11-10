@@ -98,11 +98,12 @@ test("RFC 0010 says how to give feedback", () => {
   const feedback = line(read(), "**How to give feedback.**");
   assert.ok(feedback, `${RFC} has no "How to give feedback" line`);
   assert.match(feedback, /\(README\.md#giving-feedback\)/);
+  // NOC-165: RFC 0010 has its own discussion now.
   assert.ok(
     feedback.includes(
-      "(https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback)",
+      "(https://github.com/nocentraldb/nocentraldb/discussions/154)",
     ),
-    "the line links the RFC feedback category",
+    "the line links RFC 0010's discussion",
   );
 });
 
@@ -219,6 +220,10 @@ test("History holds one line: the first publication as a fresh text", () => {
     .split("\n")
     .filter((l) => l.startsWith("- "));
   assert.deepEqual(lines, [
-    "- **2026-11-10** · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165).",
+    "- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)",
   ]);
+  // NOC-165: the intro names no decision of another RFC by its id.
+  const rfc = read();
+  assert.doesNotMatch(rfc, /decision S15/);
+  assert.doesNotMatch(rfc, /decisions? (16 and )?17/);
 });
