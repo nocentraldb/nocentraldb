@@ -1,6 +1,6 @@
 # RFC 0001: NoCentralDB
 
-REQUEST FOR COMMENTS · DRAFT 0.1 · OCTOBER 2026 · nocentraldb.io
+REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 A local-first database for people and agents.
 
@@ -8,7 +8,9 @@ A local-first database for people and agents.
 
 Everyone works on their own copy, under their own keys. The relay in the middle cannot read any of it.
 
-**Status.** NoCentralDB is not released yet. We have started building the core, and this RFC describes the design we are building toward. We want you to challenge it while changes are still cheap. The roadmap shows where we are.
+**Status.** Decided by the owner (Carsten, 2026-11-10).
+
+NoCentralDB is not released yet. We have started building the core, and this RFC describes the design we are building toward. We want you to challenge it while changes are still cheap. The roadmap shows where we are.
 
 Agents now read and write the same data as the people they work with, hundreds of records per task. Today almost every app routes each of those reads through a server, and that server can read everything it stores. NoCentralDB is a local-first database for teams of people and agents. Every member, human or agent, works on a full local copy of the spaces it belongs to, under its own keys. A relay that holds no keys carries the encrypted changes between the members.
 
@@ -36,10 +38,10 @@ So "trust the server" no longer has to be the default security model. Many apps 
 - **Convergence.** The same set of changes produces the same state on every device, in any order of arrival, computed fields included. Each field merges by the rules of its field type.
 - **Island mode.** With no relay at all, you keep working. When you reconnect, every copy converges.
 - **One schema, two SDKs.** You describe the model once in TypeScript. `ncdb model build` turns it into a versioned `model.lock.json`, which the Rust core and both SDKs (Rust and TypeScript) read. Schema changes are additive, and old clients keep data they do not understand yet.
-- **Reads cost only their result.** Queries run only through declared indexes. You declare counts, blockers and rankings as computed fields and views, and the database updates them as it folds new changes. A list of 100 entries is one range lookup, not a hundred fetches.
-- **Ordered pages.** Every index and every view keeps its order, so results arrive sorted, and you load the next page from a cursor only when you need it. "What should I work on next?" returns the first 50 ready tasks in rank order. The next 50 come when you ask for them.
+- **Reads cost only their result.** Queries run only through declared indexes. A list of 100 entries is one range lookup, not a hundred fetches. Counts, blockers and rankings are to become computed fields and views that the database updates as it folds new changes; their names are reserved until a later RFC designs them ([RFC 0005, "What this RFC does not cover"](0005-schema-and-model-lock.md#what-this-rfc-does-not-cover)).
+- **Ordered pages.** Every index keeps its order, so results arrive sorted, and you load the next page from a cursor only when you need it. "What should I work on next?" returns the first 50 open tasks in priority order. The next 50 come when you ask for them.
 - **Field types.** Every field has a type, and the type declares how concurrent changes to the field merge. NoCentralDB ships a set of field types (see [Field types we ship](#field-types-we-ship)). You can add your own as a plugin, with its own merge rules, and use it in the schema next to the built-in ones. Each member's core runs the same field types, so every copy merges the same way.
-- **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. The relay sees only an opaque envelope and content-free effects.
+- **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. The relay sees only an opaque envelope and content-free effects, such as the shred entry an erasure writes ([RFC 0008, "Shred entry"](0008-membership.md#shred-entry)).
 - **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)). Erasing a person destroys every one of those keys, once every admin device of the space has seen the erasure. The person's fields become unreadable in archives, in old snapshots and on every device that has deleted the key, but not where someone kept the key: on a device that never comes back online, in a modified client that ignores the shred, or for a member of the space who obtains a relay backup taken before the shred ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key); [the team lead](#the-team-lead-who-has-to-pass-the-data-protection-review) below lists every limit). Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design shredding to leave the signatures intact while the person's fields become unreadable.
 
 ```ts
@@ -69,7 +71,7 @@ The first two diagrams show the components. Every member, whether a browser, a p
 
 ![One member: your app or agent on top of the TypeScript or Rust SDK, on top of the core, ncdb-core, which folds the encrypted log of every space the member belongs to into a local SQLite view that queries read through declared indexes; field types are plugins of the core, and the core reads model.lock.json, built by ncdb model build](0001-one-member.svg)
 
-The relay stores and forwards encrypted changes and holds no keys. Adapters connect a space's change stream to other systems, such as EventBridge on AWS.
+The relay stores and forwards encrypted changes and holds no keys. An adapter connects a space's change stream to another system. Adapters are members of the space, with their own keys, not part of the relay ([RFC 0007, "What this RFC does not cover"](0007-relay.md#what-this-rfc-does-not-cover)); [use case 7](../use-cases.md#7-subscribe-instead-of-poll) shows one that feeds EventBridge on AWS.
 
 ![The relay in the middle: a person's device, an agent, a cloud function that reads content and an adapter are all members with their own keys; they push encrypted changes to the relay and receive them from it; the relay holds no keys, checks signatures, membership and the right to write, appends to each space's log and hands changes out from a cursor](0001-relay-in-the-middle.svg)
 
@@ -83,13 +85,13 @@ Every member of Project A receives the change and reads it: Alice's laptop, an a
 
 ## Field types we ship
 
-Each field type defines how a field stores its value and how concurrent changes merge. NoCentralDB ships the following field types. You can add your own as a plugin.
+Each field type defines how a field stores its value and how concurrent changes merge. NoCentralDB ships basic values, sets and links, and personal fields. Rich text and streams follow: their names, `nc.richText` and `nc.stream`, are reserved, and later RFCs design their field types ([RFC 0005, "What this RFC does not cover"](0005-schema-and-model-lock.md#what-this-rfc-does-not-cover)). You can add your own field type as a plugin.
 
 - **Basic values.** Strings, numbers, booleans and a choice from a fixed list. The last writer wins.
-- **Sets and links.** A set merges additions and removals from every member. A link points to another object in the same space, and computed fields and views can follow links, for example to find the open tasks a task depends on.
-- **Rich text.** A shared document, built on Yjs, with Yrs in the core. People edit it in an editor such as TipTap, and concurrent edits merge without conflicts. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the engine turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
-- **Stream.** A field that grows chunk by chunk, for example an agent's answer that appears word by word in the user interface. Each chunk travels over the same encrypted change stream as every other change. When the writer closes the stream, the field holds the complete value.
-- **Personal fields.** A basic value can be marked as personal when the field is added, and tied to a person ([RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks)). The SDK then encrypts it with that person's own key, one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), so that destroying those keys makes it unreadable wherever the key is gone (see [Shred and audit](#the-design-in-one-page) for where it is not).
+- **Sets and links.** A set merges additions and removals from every member. A link points to another object in the same space, and computed fields and views, once a later RFC designs them, will follow links, for example to find the open tasks a task depends on.
+- **Rich text** (planned). A shared document, built on Yjs, with Yrs in the core. People edit it in an editor such as TipTap, and concurrent edits merge without conflicts. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the engine turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
+- **Stream** (planned). A field that grows chunk by chunk, for example an agent's answer that appears word by word in the user interface. Each chunk travels over the same encrypted change stream as every other change. When the writer closes the stream, the field holds the complete value.
+- **Personal fields.** Only a basic value can be marked as personal, and only when the field is added; it is tied to a person ([RFC 0005, "Personal fields"](0005-schema-and-model-lock.md#personal-fields); [RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks)). The SDK then encrypts it with that person's own key, one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), so that destroying those keys makes it unreadable wherever the key is gone (see [Shred and audit](#the-design-in-one-page) for where it is not).
 
 [Eight use cases](../use-cases.md) show what this design means in practice. In five of them, a central database is the weaker choice by design. The other three show that collaborative editing, subscriptions and streaming work without a central server. Each use case ends with a question for you. The [FAQ](../faq.md) answers the questions readers ask most often.
 
@@ -99,7 +101,7 @@ Each field type defines how a field stores its value and how concurrent changes 
 
 **Before.** Her agent picks up the next task by calling the API for open tasks, then for each task's dependencies, then for the people involved. Each step waits for the network. A planning run takes minutes and trips the rate limit.
 
-**After.** The agent is a member of the project's space, with its own key and its own role. It asks a local view for the ready tasks and gets them in one lookup. It signs its writes with its own key, so everyone can see what the agent changed, and anyone with the right can remove the agent from the space at any time.
+**After.** The agent is a member of the project's space, with its own key and its own role. It reads the open tasks from its own copy through a declared index and gets them in one lookup. It signs its writes with its own key, so everyone can see what the agent changed, and anyone with the right can remove the agent from the space at any time.
 
 **What she would tell a colleague:** "The agent reads from its own copy. No round-trips, and it only ever sees the spaces we gave it."
 
@@ -136,7 +138,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above.
 
-1. **Agent task board.** A team's tasks with dependencies, and an agent that is a member of the project's space. The agent picks the next ready task from a local view and writes its changes under its own key. It shows spaces, membership, views, computed fields and ordered pages.
+1. **Agent task board.** A team's tasks with dependencies, and an agent that is a member of the project's space. The agent picks the next task from its own copy and writes its changes under its own key. It shows spaces, membership, declared indexes and ordered pages, and computed fields and views once a later RFC designs them.
 2. **Customer records with erasure.** A small customer database with personal fields. An erasure is a work order that one member performs and a second account signs off, and the audit trail survives it. It shows personal fields, work orders and the audit.
 3. **Proposal editor with an agent co-author.** A shared document edited in TipTap by two people and an agent at the same time, including a stretch without network. It shows the rich-text field type, anchored edits and island mode.
 4. **Agent chat.** A chat in which an agent's answer streams into the interface and a new message triggers a notification. It shows the stream field type and subscriptions.
@@ -150,7 +152,7 @@ Which example would show you whether NoCentralDB fits your app? Tell us, or prop
 - **A different choice, on purpose.** Some sync engines keep a trusted server that enforces fine-grained rights and can read the data. We chose a server that cannot read it. The cost is coarser rights. We offset it with many small spaces, keys that the SDK manages out of sight, and compaction instead of replaying long histories.
 - **Not a security boundary on your own device.** Rights bind third parties. A process running as you can read what you can read.
 - **Not post-quantum in v1.** v1 wraps keys with X25519, which a future quantum computer could break. Someone who records ciphertext today, the relay's operators included, could read it once such a computer exists. A hybrid suite is planned for later ([RFC 0003, "Not post-quantum in v1"](0003-keys-and-cryptography.md#not-post-quantum-in-v1)).
-- **Not a durable store in every browser.** A browser can evict a site's storage: under storage pressure unless the site has persistent storage, and Safari after seven days without user interaction for script-writable storage, unless the web app was added to the home screen. The browser deletes the member key with the copy, so it is no longer that member: the person pairs it again as a new device ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)), which fetches its spaces again from the relay; changes the old member wrote that the relay had not yet received are lost. [Browser apps and durability](../browser-durability.md) says what each browser does, what is lost when, and what to tell your users ([RFC 0006, "The browser"](0006-local-view.md#the-browser), "Limits of storage in the browser").
+- **Not a durable store in every browser.** A browser can evict a site's storage: under storage pressure unless the site has persistent storage, and Safari after seven days without user interaction for script-writable storage, unless the web app was added to the home screen. The browser deletes the member key with the copy, so it is no longer that member: the person pairs it again as a new device ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)), which fetches its spaces again from the relay; changes the old member wrote that the relay had not yet received are lost. [Browser apps and durability](../browser-durability.md) says what each browser does, what is lost when, and what to tell your users ([RFC 0006, "The browser"](0006-local-view.md#the-browser), "Limits of storage in the browser"; [RFC 0006, "What developers and their users read"](0006-local-view.md#what-developers-and-their-users-read)).
 
 ## Who is behind it
 
@@ -176,41 +178,12 @@ Reply in [this RFC's discussion](https://github.com/nocentraldb/nocentraldb/disc
 
 We read every reply, answer within a week, and publish a summary of the changes in the next draft. [What happens to your feedback](README.md#what-happens-to-your-feedback) says how a point becomes a change to this text, a ticket or an answer. Watch the repository's releases to hear when that draft is out.
 
-## Decisions
+## Groups leave the design
 
-This RFC states the design as a whole, and the RFCs after it decide the details. It holds one decision of its own and follows the decisions of the other RFCs that change what it says.
+Groups are not part of the design for now: they were withdrawn by the owner (Carsten, 2026-11-09), because they caused more problems than they solved. A member is a person's device, an agent or a sub-agent, and nothing else. An app that gives several members the same spaces adds each of them to each space. If a later need shows that groups are useful, they come back through a later RFC.
 
-### Groups leave the design
-
-- **Chosen.** Groups are not part of the design for now. A member is a person's device, an agent or a sub-agent, and nothing else. An app that gives several members the same spaces adds each of them to each space.
-- **Decided by** the owner (Carsten, 2026-11-09), NOC-76.
-- **Why.** Groups caused more problems than they solved. If a later need shows they are useful, they come back through a later RFC.
-- **Not taken:** groups as members of many spaces, as the first draft of this RFC had them; a group's membership would live outside the space, and one space's fold would depend on another space's log ([RFC 0008, "Groups"](0008-membership.md#groups)).
-- **Not taken:** groups as lists of members that the SDK expands, RFC 0008's M10, which this RFC followed from 2026-11-09 until M10 was withdrawn by the owner (Carsten, 2026-11-09).
-
-### Decisions this RFC follows
-
-Each line names a decision of another RFC that this text follows, and links where that RFC states it.
-
-- **What the relay reads of control changes.** The relay applies the membership rules, so it reads each member's role, which control changes each one builds on, the cutoffs of revocations and the account behind each device and agent: RFC 0008's M11 (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
-- **An erasure destroys the key once it is stable.** Destroying the person key waits until every admin device of the space has seen the shred, and after 7 days the SDK of every admin raises an alarm: RFC 0008's M20 and M21 (Carsten, 2026-11-08), [Effects that wait until a change is stable](0008-membership.md#effects-that-wait-until-a-change-is-stable).
-- **The relay learns more than the log shows.** RFC 0002 lists what the relay learns from the log, and RFC 0007 adds what it learns from its protocol and what its server sees: RFC 0007's conflict 1, ruled by the owner (Carsten, 2026-11-08), [What the relay sees](0007-relay.md#what-the-relay-sees).
-- **A browser copy takes its member key with it.** An evicted browser is paired again as a new device, and a page for developers says what each browser does: RFC 0006's decision 13 (Carsten, 2026-11-09), [Durability of a browser copy](0006-local-view.md#durability-of-a-browser-copy), [What developers and their users read](0006-local-view.md#what-developers-and-their-users-read) and [Browser apps and durability](../browser-durability.md).
-- **Only basic values can be personal, from the version that adds them.** RFC 0005's D9 (Carsten, 2026-11-08), [Personal fields](0005-schema-and-model-lock.md#personal-fields).
-- **Keeping names out of free text is the app's job.** The app stores a reference to the person and resolves it at display time: RFC 0005's D15 (Carsten, 2026-11-08), [Personal data in free text](0005-schema-and-model-lock.md#personal-data-in-free-text).
-- **The example queries a declared index.** Views are not designed yet, so the example in "The design in one page" queries an index with `db.find`, `take` and `after`: RFC 0009's S7 (Carsten, 2026-11-09), [Queries and indexes](0009-sdk-api.md#queries-and-indexes).
+Two forms were not taken. Groups as members of many spaces, as the first draft of this text had them: a group's membership would live outside the space, and one space's fold would depend on another space's log ([RFC 0008, "Groups"](0008-membership.md#groups)). And groups as lists of members that the SDK expands, which this text followed for part of the same day before the owner withdrew groups altogether.
 
 ## History
 
-- **2026-10-30** · The first draft ([8e444b4](https://github.com/nocentraldb/nocentraldb/commit/8e444b46e6357fb3cbd77492567f613c65f018b5)).
-- **2026-11-01** · Links the eight use cases ([#17](https://github.com/nocentraldb/nocentraldb/pull/17)).
-- **2026-11-02** · Plainer English, and a link to the FAQ ([#19](https://github.com/nocentraldb/nocentraldb/pull/19)).
-- **2026-11-08** · NOC-20 · Names everything the relay can see and every limit of erasure ([#45](https://github.com/nocentraldb/nocentraldb/pull/45)).
-- **2026-11-09** · NOC-44 · Follows RFC 0008: what the relay reads of control changes, and an erasure that destroys the key once it is stable. Groups became lists the SDK expands, later withdrawn by the owner (Carsten, 2026-11-09) ([#61](https://github.com/nocentraldb/nocentraldb/pull/61)).
-- **2026-11-09** · NOC-47 · The relay bullet links RFC 0007's list of what the relay sees next to RFC 0002's ([#64](https://github.com/nocentraldb/nocentraldb/pull/64)).
-- **2026-11-09** · NOC-53 · Advice goes to this RFC's discussion on GitHub ([#65](https://github.com/nocentraldb/nocentraldb/pull/65)).
-- **2026-11-09** · NOC-34 · A browser that deletes its copy deletes the member key too ([#73](https://github.com/nocentraldb/nocentraldb/pull/73)).
-- **2026-11-09** · NOC-35 · Personal fields follow RFC 0005: only basic values, the app's duty for free text, and removing a member is not erasure ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
-- **2026-11-10** · NOC-76, NOC-75 · Groups leave the design, withdrawn by the owner (Carsten, 2026-11-09), and the example queries a declared index, following RFC 0009 ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
-- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, "Decisions" records the decisions in short form, and this History replaces the changelog ([#109](https://github.com/nocentraldb/nocentraldb/pull/109)).
-- **2026-11-10** · NOC-157 · The two diagrams in "Architecture" become four simple ones, each next to the text it explains, and draw what the later RFCs decided ([#143](https://github.com/nocentraldb/nocentraldb/pull/143)).
+- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)

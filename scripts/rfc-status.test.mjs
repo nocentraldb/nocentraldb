@@ -59,7 +59,9 @@ const status = (markdown) =>
   markdown.split("\n").find((line) => line.startsWith("**Status.**"));
 
 test("the decision log names the RFCs the owner decided", () => {
-  assert.deepEqual(decidedRfcs().slice(0, 8), [
+  // RFC 0001 counts as decided since the owner confirmed it with NOC-165.
+  assert.deepEqual(decidedRfcs().slice(0, 9), [
+    "0001",
     "0002",
     "0003",
     "0004",
