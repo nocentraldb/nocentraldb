@@ -35,7 +35,7 @@ use rusqlite::Connection;
 use crate::change::Change;
 use crate::checks::SealChecks;
 use crate::ids::{ChangeId, SpaceId};
-use crate::log::{Appended, Log, State};
+use crate::log::{Appended, Log, State, StateCounts};
 use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 use crate::tips::Tips;
@@ -273,6 +273,16 @@ impl View {
     /// sealed change once with `checks`; see [`Log::tips`].
     pub fn tips(&mut self, space: SpaceId, checks: &impl Checks) -> Option<&Tips> {
         Some(self.logs.get_mut(&space)?.tips(checks))
+    }
+
+    /// How many changes of `space` are parked and rejected, and how many
+    /// operations of its folded changes are parked, per reason (RFC 0009,
+    /// "Sync and status"); nothing for a space the view does not hold.
+    pub fn state_counts(&self, space: SpaceId) -> StateCounts {
+        self.logs
+            .get(&space)
+            .map(|log| log.state_counts().clone())
+            .unwrap_or_default()
     }
 
     /// The state of a change the log of `space` holds.
