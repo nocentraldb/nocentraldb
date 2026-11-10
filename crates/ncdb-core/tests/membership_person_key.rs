@@ -222,3 +222,34 @@ fn the_person_keys_are_part_of_the_states_canonical_bytes() {
     assert_ne!(before.encode(), after.encode());
     assert_eq!(after.encode(), reversed.encode());
 }
+
+#[test]
+fn a_shred_stays_in_the_state_when_a_concurrent_first_entry_takes_the_person_key() {
+    let (mut s, held) = space();
+    // Bob creates person 1's key, and his shred, signed off by Carol's
+    // account, sees it. Alice, senior, writes a first entry of her own with
+    // another commitment, concurrently: it comes first in the order, so
+    // Bob's entry loses on its commitment, and the shred, which did not see
+    // Alice's, rejects hers.
+    let bobs = s.person_key(BOB, 1, 0xc1, &[&held[2]]);
+    let shred = s.shred(BOB, 1, &other_account(1), &[&bobs]);
+    let alices = s.person_key(ALICE, 1, 0xc2, &[&held[2]]);
+    let state = resolve(s.space, held.iter().chain([&bobs, &shred, &alices]));
+    assert_eq!(state.verdict(shred.id()), ACCEPTED);
+    assert_eq!(
+        state.verdict(bobs.id()),
+        Some(&Verdict::Rejected(Rejection::Commitment))
+    );
+    assert_eq!(
+        state.verdict(alices.id()),
+        Some(&Verdict::Rejected(Rejection::Shredded(shred.id())))
+    );
+    let key = state
+        .person_key(person(1))
+        .expect("the accepted shred keeps its person key in the state");
+    assert_eq!(key.shred, Some(shred.id()));
+    assert!(
+        key.records.is_empty(),
+        "no accepted entry announces a record"
+    );
+}
