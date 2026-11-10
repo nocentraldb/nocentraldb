@@ -25,6 +25,7 @@ mod person_keys;
 mod resolve;
 mod rights;
 mod state;
+mod statement;
 
 pub use body::{
     ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
@@ -48,3 +49,4 @@ pub use person_key::{
 pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
+pub use statement::AccountKeyStatement;
