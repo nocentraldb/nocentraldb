@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 432" width="880" height="432" role="img" aria-labelledby="rfc-0008-add-and-remove-title rfc-0008-add-and-remove-desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <title id="rfc-0008-add-and-remove-title">Adding and removing a member of a space</title>
+  <desc id="rfc-0008-add-and-remove-desc">To add a member, an admin writes a membership entry and a key envelope with the current generation for the new member, the relay sends added, and the new member pulls the log and walks the key chain back to generation 1; to remove a member, an admin writes a membership entry with a cutoff, a key chain entry for a new generation, key envelopes for every remaining member, and re-wraps the person-key records.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #1f2328; }
+    .m { fill: #59636e; }
+    .ac { fill: #0969da; }
+    .box { fill: #f6f8fa; stroke: #d1d9e0; }
+    .plain { fill: #ffffff; stroke: #d1d9e0; }
+    .focal { fill: #ddf4ff; stroke: #0969da; }
+    .zone { fill: none; stroke: #d1d9e0; }
+    .zonea { fill: #0969da; fill-opacity: 0.05; stroke: #0969da; }
+    .frame { fill: #f6f8fa; stroke: #d1d9e0; }
+    .life { stroke: #d1d9e0; }
+    .ln { stroke: #59636e; fill: none; }
+    .lna { stroke: #0969da; fill: none; }
+    .mk { fill: #59636e; }
+    .mka { fill: #0969da; }
+    .mask { fill: #ffffff; }
+    .num { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .ac { fill: #4493f8; }
+      .box { fill: #161b22; stroke: #3d444d; }
+      .plain { fill: #0d1117; stroke: #3d444d; }
+      .focal { fill: #0c2d4a; stroke: #4493f8; }
+      .zone { stroke: #3d444d; }
+      .zonea { fill: #4493f8; fill-opacity: 0.08; stroke: #4493f8; }
+      .frame { fill: #161b22; stroke: #3d444d; }
+      .life { stroke: #3d444d; }
+      .ln { stroke: #9198a1; }
+      .lna { stroke: #4493f8; }
+      .mk { fill: #9198a1; }
+      .mka { fill: #4493f8; }
+      .mask { fill: #0d1117; }
+      .num { fill: #0d1117; }
+    }
+  </style>
+  <defs>
+    <marker id="rfc-0008-add-and-remove-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mk"/></marker>
+    <marker id="rfc-0008-add-and-remove-ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mka"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="880" height="432"/>
+  <text x="24" y="32" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">ADD · AN ADMIN, AFTER IT CHECKED THE NEW MEMBER'S CERTIFICATE</text>
+  <path d="M208,96 L238,96" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="plain" x="24" y="44" width="184" height="104" rx="6"/>
+  <text x="38" y="66" class="t" font-size="13.5" font-weight="600">Membership entry</text>
+  <text x="38" y="86" class="m" font-size="12.5">add: the role, the</text>
+  <text x="38" y="104" class="m" font-size="12.5">member's two public</text>
+  <text x="38" y="122" class="m" font-size="12.5">keys, its certificate</text>
+  <circle cx="192" cy="60" r="10" class="mk"/>
+  <text x="192" y="64" class="num" font-size="11" font-weight="600" text-anchor="middle">1</text>
+  <path d="M424,96 L454,96" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="plain" x="240" y="44" width="184" height="104" rx="6"/>
+  <text x="254" y="66" class="t" font-size="13.5" font-weight="600">Key envelope</text>
+  <text x="254" y="86" class="m" font-size="12.5">the current generation,</text>
+  <text x="254" y="104" class="m" font-size="12.5">wrapped with HPKE to</text>
+  <text x="254" y="122" class="m" font-size="12.5">the new member's key</text>
+  <circle cx="408" cy="60" r="10" class="mk"/>
+  <text x="408" y="64" class="num" font-size="11" font-weight="600" text-anchor="middle">2</text>
+  <path d="M640,96 L670,96" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="box" x="456" y="44" width="184" height="104" rx="6"/>
+  <text x="470" y="66" class="t" font-size="13.5" font-weight="600">Relay sends added</text>
+  <text x="470" y="86" class="m" font-size="12.5">to the new member's</text>
+  <text x="470" y="104" class="m" font-size="12.5">open connections</text>
+  <circle cx="624" cy="60" r="10" class="mk"/>
+  <text x="624" y="64" class="num" font-size="11" font-weight="600" text-anchor="middle">3</text>
+  <rect class="plain" x="672" y="44" width="184" height="104" rx="6"/>
+  <text x="686" y="66" class="t" font-size="13.5" font-weight="600">New member</text>
+  <text x="686" y="86" class="m" font-size="12.5">pulls the log, opens</text>
+  <text x="686" y="104" class="m" font-size="12.5">its envelope, walks the</text>
+  <text x="686" y="122" class="m" font-size="12.5">key chain to gen. 1</text>
+  <circle cx="840" cy="60" r="10" class="mk"/>
+  <text x="840" y="64" class="num" font-size="11" font-weight="600" text-anchor="middle">4</text>
+  <text x="24" y="196" class="m" font-size="12.5">Adding costs one envelope.</text>
+  <text x="24" y="240" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">REMOVE · AN ADMIN</text>
+  <path d="M208,304 L238,304" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="plain" x="24" y="252" width="184" height="104" rx="6"/>
+  <text x="38" y="274" class="t" font-size="13.5" font-weight="600">Membership entry</text>
+  <text x="38" y="294" class="m" font-size="12.5">remove, with a cutoff:</text>
+  <text x="38" y="312" class="m" font-size="12.5">the removed member's</text>
+  <text x="38" y="330" class="m" font-size="12.5">highest sequence held</text>
+  <circle cx="192" cy="268" r="10" class="mk"/>
+  <text x="192" y="272" class="num" font-size="11" font-weight="600" text-anchor="middle">1</text>
+  <path d="M424,304 L454,304" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="focal" x="240" y="252" width="184" height="104" rx="6"/>
+  <text x="254" y="274" class="t" font-size="13.5" font-weight="600">Key chain entry</text>
+  <text x="254" y="294" class="m" font-size="12.5">a new generation; the</text>
+  <text x="254" y="312" class="m" font-size="12.5">previous keys encrypted</text>
+  <text x="254" y="330" class="m" font-size="12.5">under it</text>
+  <circle cx="408" cy="268" r="10" class="ac"/>
+  <text x="408" y="272" class="num" font-size="11" font-weight="600" text-anchor="middle">2</text>
+  <path d="M640,304 L670,304" class="ln" stroke-width="1.3" marker-end="url(#rfc-0008-add-and-remove-m)"/>
+  <rect class="plain" x="456" y="252" width="184" height="104" rx="6"/>
+  <text x="470" y="274" class="t" font-size="13.5" font-weight="600">Key envelopes</text>
+  <text x="470" y="294" class="m" font-size="12.5">the new generation, for</text>
+  <text x="470" y="312" class="m" font-size="12.5">every remaining member,</text>
+  <text x="470" y="330" class="m" font-size="12.5">the admin included</text>
+  <circle cx="624" cy="268" r="10" class="mk"/>
+  <text x="624" y="272" class="num" font-size="11" font-weight="600" text-anchor="middle">3</text>
+  <rect class="plain" x="672" y="252" width="184" height="104" rx="6"/>
+  <text x="686" y="274" class="t" font-size="13.5" font-weight="600">Person-key records</text>
+  <text x="686" y="294" class="m" font-size="12.5">re-wrapped under</text>
+  <text x="686" y="312" class="m" font-size="12.5">the new generation</text>
+  <circle cx="840" cy="268" r="10" class="mk"/>
+  <text x="840" y="272" class="num" font-size="11" font-weight="600" text-anchor="middle">4</text>
+  <text x="24" y="384" class="m" font-size="12.5">The relay refuses the removed member's changes above the cutoff and ends its subscriptions.</text>
+  <text x="24" y="402" class="m" font-size="12.5">The removed member keeps the copy it already holds; rotation only hides what is written afterwards.</text>
+</svg>

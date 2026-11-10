@@ -11,7 +11,7 @@ use crate::space::Space;
 const LOCK: &str = include_str!("../../tests/model/model.lock.json");
 
 /// The output of an SDK future, which is ready at its first poll.
-fn now<F: std::future::Future>(future: F) -> F::Output {
+pub(crate) fn now<F: std::future::Future>(future: F) -> F::Output {
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
     match std::pin::pin!(future).poll(&mut cx) {
         std::task::Poll::Ready(output) => output,
@@ -120,7 +120,7 @@ fn an_invitation_whose_certificate_does_not_hold_is_refused() {
 }
 
 /// Gives `to` every change of `space` that `from` holds, as a pull would.
-fn copy(from: &Db, to: &Db, space: &Space) {
+pub(crate) fn copy(from: &Db, to: &Db, space: &Space) {
     let changes: Vec<Vec<u8>> = {
         let inner = from.lock();
         let log = inner.view.log(space.id().0).expect("the space's log");
@@ -233,7 +233,7 @@ pub(crate) fn regrant(
 
 /// A space of the admin's, with the member `who` of the same account added
 /// as `role`; the member's database holds the space.
-fn joined(account: &SigningKey, role: Role) -> (Db, Space, Db, super::Invitation) {
+pub(crate) fn joined(account: &SigningKey, role: Role) -> (Db, Space, Db, super::Invitation) {
     let admin = of_account(1, account);
     let project = space(&admin);
     let member = of_account(2, account);

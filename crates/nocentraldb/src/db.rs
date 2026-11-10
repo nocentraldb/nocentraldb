@@ -238,7 +238,8 @@ fn open_at(
         (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
-    let view = View::open(&file, lock).map_err(view_error)?;
+    let checks = |space| SealChecks::new(space, keys.member.key());
+    let view = View::open_with(&file, lock, checks).map_err(view_error)?;
     Ok((view, keys))
 }
 
@@ -248,20 +249,24 @@ fn exists(file: &Path) -> Result<bool, Error> {
         .map_err(|error| keys::io("the database file cannot be found", &error))
 }
 
-/// A view that does not open: a lock it cannot fold, or a database folded
-/// by another model, is `ModelRefused`; any other failure a failure of
-/// storage. Until the on-device check of RFC 0005 (D11) is built, every
-/// change of the model refuses a database that exists, an additive one
-/// too.
+/// A view that does not open: a lock it cannot fold, one that is not a
+/// successor of the lock the database was last opened with (RFC 0005,
+/// D11), naming each refused change, or a database that holds no lock to
+/// check it against and was folded by another model, is `ModelRefused`;
+/// any other failure a failure of storage.
 fn view_error(error: ncdb_core::view::Error) -> Error {
     match error {
         ncdb_core::view::Error::Invalid(invalid) => Error::new(
             ErrorCode::ModelRefused,
             format!("the lock is refused: {invalid:?}"),
         ),
+        error @ ncdb_core::view::Error::Refused(_) => {
+            Error::new(ErrorCode::ModelRefused, error.to_string())
+        }
         ncdb_core::view::Error::Model => Error::new(
             ErrorCode::ModelRefused,
-            "the database was folded by another model than the lock's",
+            "the database was folded by another model than the lock's, \
+             and holds no lock to check this one against",
         ),
         error => storage(error),
     }
@@ -273,7 +278,12 @@ impl Db {
     /// open. Options that name no place, or both memory and a path or a
     /// key file, are refused with `InvalidValue`; a lock that cannot be
     /// read, or breaks the rules RFC 0005 gives a lock, with
-    /// `ModelRefused`; a relay URL that is not `ws://`, with
+    /// `ModelRefused`. An existing database checks the lock against the one
+    /// it was last opened with (RFC 0005, D11): a lock of another
+    /// `model.id`, or a change that is not additive, is `ModelRefused`,
+    /// naming each refused change, and nothing changes; an additive change
+    /// folds the database's log again by the new model before `open`
+    /// returns, so that what the old model parked is read. A relay URL that is not `ws://`, with
     /// `InvalidValue`. An existing database whose keys are gone fails with
     /// `StorageFailed`. With a relay, the database starts syncing in the
     /// background.
