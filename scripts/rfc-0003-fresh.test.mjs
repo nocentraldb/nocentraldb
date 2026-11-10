@@ -380,3 +380,14 @@ test("where the design makes GENESIS.md more precise", () => {
     "Agreement with GENESIS.md and RFC 0001",
   );
 });
+
+test("the relay takes a record from a current uploader, signed perhaps by a member who has since left", () => {
+  // NOC-133 point 2
+  const rule = line(
+    part("the-person-key"),
+    "- **Every record is signed and checked against the log.**",
+  );
+  assert.match(rule, /uploader is a current member/);
+  assert.match(rule, /has since left/);
+  assert.doesNotMatch(rule, /only from a current member/);
+});
