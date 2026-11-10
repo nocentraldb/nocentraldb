@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-89 · How the relay server answers where RFC 0007 leaves a detail open
+
+- Decided by: coding agent (NOC-89)
+- Why: a request before a valid `auth`, or an `auth` whose signature fails, gets `unauthenticated` and the connection closes, since the member must reconnect; so does a `hello` without a common version (`unsupported_version`). After `auth`, a message the server cannot read gets `malformed` with its request id, when it names one, and the connection stays. A message above 128 KiB closes the connection, as RFC 6455 does for a message too big. A subscription always answers with at least one catch-up page, an empty one when the cursor is at the head, so the member knows it is live; `unsubscribe` gets no answer, as the RFC draws none; a second `subscribe` to a space replaces the first. `removed_member` carries the request id of the subscription it ends; a subscription whose read fails otherwise ends with that code. A pull page holds at most 256 entries and only as many as fit into one message.
+- Instead of: keeping a connection open after a failed authentication, which lets a member retry signatures on one nonce; or a live subscription without any answer, which leaves the member unsure whether it was accepted.
+- Topics: relay, rfc-0007, errors
