@@ -72,7 +72,7 @@ fn field_type(kind: &model_lock::Kind) -> Option<Field> {
         model_lock::Kind::Links(t) => Some(Field::Links(Links {
             collections: targets(t),
         })),
-        model_lock::Kind::Plugin { .. } => None,
+        model_lock::Kind::Ref(_) | model_lock::Kind::Plugin { .. } => None,
     }
 }
 
