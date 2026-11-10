@@ -1,5 +1,5 @@
-//! The checks of steps 3 to 5 of RFC 0002 Amendment 1 ("What a member
-//! does with a change it receives") with the real signature and
+//! The checks of steps 3 to 5 of RFC 0002, "What a member does
+//! with a change it receives", with the real signature and
 //! decryption of RFC 0003 ("How a member signs and encrypts a change"):
 //! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
 //! [`seal::open`].
@@ -158,7 +158,8 @@ impl fmt::Debug for SealChecks {
 }
 
 /// Where a change stops when [`seal::verify`] or [`seal::open`] fails: the
-/// step of RFC 0002 Amendment 1 and its reason. An unknown author and a
+/// step of RFC 0002, "What a member does with a change it receives", and
+/// its reason. An unknown author and a
 /// missing space key do not come from here, since they depend on the keys
 /// the member holds, not on the change: [`SealChecks`] finds them first.
 ///

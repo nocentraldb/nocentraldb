@@ -1,7 +1,6 @@
-"""Writes the byte-exact examples E1 to E14 of RFC 0004 Amendment 1
-(docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples") and E15 to
-E17 of its Amendment 4 (the reference, "Byte-exact examples (E15 to E17)") in
-this directory, from their descriptions in the RFC and independently of the Rust
+"""Writes the byte-exact examples E1 to E17 of RFC 0004
+(docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples"; E15 to E17
+are the reference's) in this directory, from their descriptions in the RFC and independently of the Rust
 core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode).
 The gates do not run this script; scripts/rfc-0004-examples.test.mjs checks
 that the RFC's hex equals the committed files.
@@ -24,11 +23,11 @@ T1 = bytes([0x11] * 16)  # the object every example writes to
 T2 = bytes([0x22] * 16)  # the link target
 A = bytes([0xAA] * 32)  # change id A
 B = bytes([0xBB] * 32)  # change id B
-S = bytes([0x33] * 16)  # the space a reference points into (Amendment 4)
+S = bytes([0x33] * 16)  # the space a reference points into ("References")
 C1 = bytes([0x44] * 16)  # a customer in space S
 C2 = bytes([0x55] * 16)  # another customer in space S
 
-# Operation numbers (Amendment 1, "Operation numbers").
+# Operation numbers (RFC 0004, "Operation numbers").
 CREATE, SET, ADD, REMOVE, DELETE = 0, 1, 2, 3, 4
 
 
@@ -61,12 +60,12 @@ def set_(field, value, replaces=()):
 
 
 def ref(space, target):
-    """A reference's value (Amendment 4): [space id, object id]."""
+    """A reference's value ("The value and its encoding"): [space id, object id]."""
     return [space, target]
 
 
 def set_ref(value, replaces=()):
-    """A set of the reference field orders.customer (Amendment 4)."""
+    """A set of the reference field orders.customer (E15 to E17)."""
     return operation("customer", SET, {1: value, 2: ids(*replaces)}, "orders")
 
 

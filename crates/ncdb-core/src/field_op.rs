@@ -1,5 +1,6 @@
 //! How the operations of basic values, sets, links and references travel
-//! in a change, as RFC 0004 Amendments 1 and 4 define it: the operation
+//! in a change, as RFC 0004 defines it ("How field operations
+//! travel in a change" and "References"): the operation
 //! number in key 4 of RFC 0002's operation map, the arguments as a map in
 //! key 5.
 

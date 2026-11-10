@@ -1,4 +1,5 @@
-// nc.ref, a reference into another space (RFC 0005, Amendment 5): one
+// nc.ref, a reference into another space (RFC 0005, "References into
+// another space"): one
 // collection or a list of them, as nc.link takes them (D18), and only the
 // modifiers .describe and .deprecated (D22).
 import { describe, expect, expectTypeOf, test } from "vitest";

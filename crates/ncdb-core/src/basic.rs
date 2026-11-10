@@ -27,7 +27,7 @@ pub enum Kind {
 
 /// What a field lets a member write: the values of a [`Kind`], object ids,
 /// which links hold (RFC 0004, "Links"), or references, a space id and an
-/// object id (RFC 0004, Amendment 4). Internal to the core, so the public
+/// object id (RFC 0004, "References"). Internal to the core, so the public
 /// `Kind` keeps its variants.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Values<'a> {

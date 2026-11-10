@@ -78,7 +78,7 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
     }
     // One column per field with a single sortable value; a set has none
     // (RFC 0006: its read value is served from fs_task). Whether the object
-    // is deleted keeps it out of the declared indexes (Amendment 6).
+    // is deleted keeps it out of the declared indexes (RFC 0006, "Declared indexes").
     let columns: BTreeSet<String> = conn
         .prepare("SELECT name FROM pragma_table_info('c_task')")
         .unwrap()

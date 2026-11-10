@@ -61,7 +61,7 @@ export type Unknown = { unknown: string };
  * the app"): every field optional, without the deprecated ones. A choice
  * reads as its options or `Unknown`, an `nc.int` as a `number` (D16), a set
  * as an array, a link as an object id, a reference as `{ space, id }`
- * (RFC 0009, Amendment 4).
+ * (RFC 0009, "Get by id").
  */
 export type Infer<C extends Collection<Fields, boolean>> =
   C extends Collection<infer F, false>
@@ -118,13 +118,13 @@ type IndexState = {
   scope?: "space";
 };
 
-/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, Amendment 3). */
+/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, "Get by id"). */
 type ObjectId = string;
 
 /** A space id, in the form `$space` carries it. */
 type SpaceId = string;
 
-/** A reference as the app reads it: the target's space id and object id, without its state (RFC 0009, Amendment 4). */
+/** A reference as the app reads it: the target's space id and object id, without its state (RFC 0009, "Get by id"). */
 type Target = { space: SpaceId; id: ObjectId };
 
 const fieldStates = new WeakMap<object, FieldState>();
@@ -230,7 +230,7 @@ export const links = (target: string | readonly string[]): Field<ObjectId[]> =>
   field({
     spec: { kind: "link", type: "ncdb/links", targets: targets(target) },
   });
-/** A reference to one object, which may live in another space, in one collection or in one of several (RFC 0005, Amendment 5). */
+/** A reference to one object, which may live in another space, in one collection or in one of several (RFC 0005, "References into another space"). */
 export const ref = (target: string | readonly string[]): Ref =>
   reference({
     spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },

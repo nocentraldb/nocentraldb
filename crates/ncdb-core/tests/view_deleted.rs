@@ -1,4 +1,4 @@
-//! Deleted objects and declared indexes (RFC 0006, Amendment 6, point 2;
+//! Deleted objects and declared indexes (RFC 0006, "Declared indexes";
 //! NOC-81): no declared index holds a deleted object, so no page lists
 //! one, while a read by id still finds it, and a restore puts it back.
 //!

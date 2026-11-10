@@ -1,5 +1,5 @@
-//! A member takes a received change through the steps of RFC 0002
-//! Amendment 1, "What a member does with a change it receives", in order,
+//! A member takes a received change through the steps of RFC 0002,
+//! "What a member does with a change it receives", in order,
 //! and keeps it in its log folded, parked or rejected (NOC-28). One test
 //! per row of the amendment's table.
 
@@ -122,7 +122,7 @@ fn step_2_an_unknown_may_ignore_header_key_does_not_park() {
 
 #[test]
 fn a_raw_append_carries_no_member_state() {
-    // The relay's log holds no states (RFC 0002 Amendment 1): only a
+    // The relay's log holds no states (RFC 0002, "On the relay"): only a
     // change the member received through its checks has one.
     let mut m = Member::default();
     let change = Change::decode(&sealed(FOUNDER, 1, 0, vec![])).unwrap();

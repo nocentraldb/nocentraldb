@@ -25,7 +25,7 @@ use crate::redact::{Hidden, Size};
 /// frame, the payload in the header) does not reset the count; any other
 /// byte string is one item, whatever it holds.
 ///
-/// RFC 0002 Amendment 6 ("The CBOR profile"), decided by the owner in
+/// RFC 0002, "The CBOR profile", decided by the owner in
 /// NOC-24.
 pub const MAX_DEPTH: usize = 32;
 

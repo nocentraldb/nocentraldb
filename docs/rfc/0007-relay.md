@@ -112,7 +112,7 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `hello` lists the protocol versions the member speaks. The relay picks the highest it also speaks, or answers `unsupported_version` and closes.
 - `hello` may carry a client string, such as `ncdb-rs/0.3`, to help debug version problems. It is optional, and the relay sees it (see [What the relay sees](#what-the-relay-sees)).
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
-- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#decisions-for-the-owner): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
+- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
@@ -180,7 +180,7 @@ relay  → member  ok                {req}
 record = {person-key id, generation, writer member id, wrapped, signature}
 ```
 
-The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#decisions-for-the-owner). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
+The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
 
 - **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
@@ -223,9 +223,9 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `malformed` | The frame is not well-formed or not canonical CBOR (RFC 0002). | Report it as a bug; never retry the same bytes. |
 | `too_large` | The frame exceeds the largest frame the relay accepts. | The SDK reports it; the change stays local. |
 | `unsupported_suite` | The relay does not know the change's suite and so cannot verify its signature. | Keep the change local until the relay is upgraded. |
-| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
-| `author_not_member` | The author holds no grant that writes under the change's generation, or the change's author sequence lies above the cutoff of a revocation (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
-| `membership_rule` | A control change breaks the membership rules (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
+| `bad_signature` | The signature does not verify against the author's signing key. | Record the relay's refusal and check the change again ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
+| `author_not_member` | The author holds no grant that writes under the change's generation, or the change's author sequence lies above the cutoff of a revocation (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
+| `membership_rule` | A control change breaks the membership rules (RFC 0008). | Record the relay's refusal and check the change again ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). Push it to this relay again only once its own fold newly accepts it after a control change arrived ([RFC 0008, M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused)). |
 | `epoch_changed` | The cursor belongs to an earlier relay epoch, for example after a restore. | Treat every stored position of this relay as unconfirmed, pull from 0, push every change the relay lacks (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). |
 | `bad_record` | A person-key record is unsigned or badly signed, has no person-key entry with its generation and record hash, names a person-key id a shred entry destroyed, or would replace a record whose generation it does not descend from. | Report it as a bug; never retry the same record. |
 | `compacted` | The cursor points before a range moved into the archive (the compaction RFC). | Fetch the archive, then pull from its end. |
@@ -233,7 +233,7 @@ Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds
 | `rate_limited` | The member or the space exceeded its quota. | Retry after the given time. |
 | `unavailable` | The backend failed or timed out. | Retry with backoff. Nothing was appended. |
 
-A change the relay refuses is not dropped by the member. If the member already folded it, it stays folded. The member records the relay's refusal next to the change, does not push it to that relay again, and checks the change again against its own control changes ([RFC 0002 Amendment 1, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). The SDK reports the refusal (principle 3). A `rejected` result for one change says nothing about the others in the same push.
+A change the relay refuses is not dropped by the member. If the member already folded it, it stays folded. The member records the relay's refusal next to the change, does not push it to that relay again, and checks the change again against its own control changes ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). The SDK reports the refusal (principle 3). A `rejected` result for one change says nothing about the others in the same push.
 
 ## What the relay checks
 
@@ -597,7 +597,7 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The own
 1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show (RFC 0008, M11), and what the server sees, with the AWS setting each item depends on. Ruled: this RFC separates what the relay learns from what the server sees, as above. Resolved (NOC-47): RFC 0002's list links to this RFC's, and RFC 0001, GENESIS.md, use case 2 and the FAQ link both.
 2. **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Accepted. Resolved (NOC-47): use case 4 says "reads at no cost" and what the writes cost, with a link to [What it costs](#what-it-costs).
 3. **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Accepted. Resolved (NOC-47): use case 5 says how peers find each other is missing until the peer RFC exists.
-4. **RFC 0002, who uploads.** This RFC requires the uploader to be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it. Accepted. Resolved (NOC-47): RFC 0002 states the uploader rule in its Amendment 4.
+4. **RFC 0002, who uploads.** This RFC requires the uploader to be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it. Accepted. Resolved (NOC-47): RFC 0002 states the uploader rule in its section ["On the relay"](0002-change-and-log-format.md#on-the-relay).
 
 ## Summary of the choices
 
@@ -749,7 +749,7 @@ Not taken:
 - Text keys for every field, such as `"space"` and `"frames"`: easier to read in a capture, but larger in every message and unlike the error map.
 - Numbers picked by hand for each message, with gaps for future fields: CBOR maps already grow by adding keys at the end, and hand-picked numbers leave more to review.
 
-The protection of the person-key store and the key that authenticates a connection are decided in [RFC 0003](0003-keys-and-cryptography.md#decisions-for-the-owner) (decisions 14 and 13), because they are key handling.
+The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003, in its [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store) and [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay), because they are key handling.
 
 ## History
 
