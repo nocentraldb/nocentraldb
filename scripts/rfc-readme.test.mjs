@@ -1,7 +1,10 @@
-// Holds the rule of NOC-100 for how a decided RFC changes: docs/rfc/README.md
-// says that a decided change is written into the RFC's text, with a dated
-// History line that names its pull request and the decision under
-// "Decisions", and that an RFC has no amendment sections. Its "What happens to
+// Holds the rule for how a decided RFC changes (NOC-100, NOC-165):
+// docs/rfc/README.md says that an RFC is published as a fresh text with each
+// choice in its section and no list of decisions, that "Decisions" appears
+// only with the first decision made after publication, that History starts
+// with one line at publication, that a later change is written into the
+// RFC's text with a dated History line that names its pull request and the
+// decision under "Decisions", and that an RFC has no amendment sections. Its "What happens to
 // your feedback" list and CONTRIBUTING.md say the same. The test
 // checks that each rule is there and where it points; whether the wording is
 // right is the review of the PR.
@@ -43,6 +46,27 @@ test(`the RFC README has a "${HEADING}" section with the rule`, () => {
   );
   assert.match(rule, /withdrawn/, "a withdrawn decision stays listed");
   assert.match(rule, /owner/, "a change to a decision waits for the owner");
+});
+
+test("the rule says a published RFC states its design directly, with no list of decisions", () => {
+  const rule = section(readme(), HEADING);
+  assert.match(rule, /states its design directly/);
+  assert.match(rule, /section it belongs to/);
+  assert.match(
+    rule,
+    /why not X\?/,
+    "the options not taken where a reader asks",
+  );
+  assert.match(rule, /no list of decisions/);
+  assert.match(rule, /"decision S13"/, "no references to a decision by its id");
+});
+
+test("the rule says Decisions appears only after publication, and History starts with one line", () => {
+  const rule = section(readme(), HEADING);
+  assert.match(rule, /only once a decision is made after publication/);
+  assert.match(rule, /new findings/);
+  assert.match(rule, /starts at publication with one line/);
+  assert.match(rule, /git log/, "the drafts' history is in git");
 });
 
 test("the RFC README speaks of amendments only to rule them out", () => {

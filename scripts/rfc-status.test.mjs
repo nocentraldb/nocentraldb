@@ -5,7 +5,8 @@
 // cannot ask git which files are on main (CI checks out one commit), so the
 // decision log, which the gate already holds to its format, is the record.
 // Such an RFC's header line carries no draft number, its status paragraph
-// starts with "Decided." and names the owner with a date, and no sentence in it
+// starts with "Decided." or, once rewritten as a fresh text (NOC-165), with
+// "Decided by the owner", and names the owner with a date, and no sentence in it
 // still waits for its own pull request to be merged.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
@@ -86,7 +87,7 @@ test("a decided RFC's status says Decided, with the owner and a date", () => {
     assert.ok(line, `${path} has no status paragraph`);
     assert.match(
       line,
-      /^\*\*Status\.\*\* Decided\. /,
+      /^\*\*Status\.\*\* Decided(\. | by the owner )/,
       `${path}: ${line.slice(0, 80)}`,
     );
     assert.match(
