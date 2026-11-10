@@ -190,7 +190,10 @@ fn a_re_wrap_replaces_the_record_only_under_a_descendant_generation() {
         put(&relay, CREATOR, space.space, vec![newer.clone()]),
         Ok(())
     );
-    assert_eq!(stored(&relay, WRITER, space.space), std::slice::from_ref(&newer));
+    assert_eq!(
+        stored(&relay, WRITER, space.space),
+        std::slice::from_ref(&newer)
+    );
     // The first generation does not descend from the next.
     assert_eq!(
         put(&relay, WRITER, space.space, vec![older]),
