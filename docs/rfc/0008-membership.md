@@ -61,7 +61,7 @@ Membership rules decide how permissions behave, which GENESIS.md asks us to tell
 
 ### Who creates it
 
-Any member creates a space by writing its genesis, on its own device, offline if it likes. The creator becomes the space's first member and its first admin. A relay accepts the genesis only from a creator its operator allows, and answers `not_allowed` otherwise ([RFC 0007, "The errors"](0007-relay.md#the-errors)). Members do not check that, because it is a rule of the relay, not of the space.
+Any member creates a space by writing its genesis, on its own device, offline if it likes. The creator becomes the space's first member and its first admin. A relay accepts the genesis only from a creator its operator allows, and answers `not_allowed` otherwise ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)). Members do not check that, because it is a rule of the relay, not of the space.
 
 ### What it names
 
