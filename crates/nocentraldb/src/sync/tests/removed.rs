@@ -53,10 +53,8 @@ async fn shared(relay: &LocalRelay) -> Shared {
     now(on_admin.members().add(&invitation, writer)).unwrap();
     synced(&admin).await;
 
-    // The member learns of the space from `welcome` (RFC 0007, "Opening a
-    // connection"), so it connects again.
-    relay.proxy.cut();
-    relay.proxy.restore();
+    // The member stays connected: the relay tells it that it was added
+    // (RFC 0007, "Subscribe", decision R13).
     let mut on_member = Err(());
     eventually("the member holds the admin's task", || {
         on_member = now(member.spaces().get(on_admin.id())).map_err(|_| ());

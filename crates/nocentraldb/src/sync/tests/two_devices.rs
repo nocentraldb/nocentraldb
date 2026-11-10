@@ -74,11 +74,8 @@ async fn two_devices_share_a_space_through_the_relay_and_see_the_same_view() {
     now(on_a.members().add(&invitation, writer)).unwrap();
     synced(&a).await;
 
-    // A member learns which spaces it belongs to from `welcome` only (RFC
-    // 0007, "Opening a connection"); nothing tells a connected member it
-    // was added. B learns of the space when it connects again.
-    relay.proxy.cut();
-    relay.proxy.restore();
+    // B stays connected: the relay tells it that it was added (RFC 0007,
+    // "Subscribe", decision R13).
     let mut on_b = Err(());
     eventually("B holds the space", || {
         on_b = now(b.spaces().get(on_a.id())).map_err(|_| ());

@@ -26,10 +26,8 @@ async fn a_member_of_another_account_added_with_its_fingerprint_writes_after_syn
     now(project.members().add(&invitation, options)).unwrap();
     synced(&admin).await;
 
-    // A member learns which spaces it belongs to from `welcome` only (RFC
-    // 0007, "Opening a connection"), so the new member connects again.
-    relay.proxy.cut();
-    relay.proxy.restore();
+    // The new member stays connected: the relay tells it that it was
+    // added (RFC 0007, "Subscribe", decision R13).
     let mut joined = Err(());
     eventually("the new member holds the space", || {
         joined = now(joining.spaces().get(project.id())).map_err(|_| ());
