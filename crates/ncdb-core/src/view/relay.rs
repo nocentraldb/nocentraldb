@@ -101,6 +101,21 @@ impl View {
         Ok(())
     }
 
+    /// Forgets the relay's refusal of a change the log holds, because the
+    /// member's own fold newly accepts it and pushes it to the relay once
+    /// more (RFC 0008, M19). The change keeps its state; until the relay
+    /// answers again, it is unconfirmed, unless the relay already holds it.
+    pub fn clear_refusal(&mut self, space: SpaceId, id: ChangeId) -> Result<(), Error> {
+        self.conn.execute(
+            "UPDATE log SET relay_refusal = NULL WHERE space_id = ?1 AND change_id = ?2",
+            params![space.0, id.0],
+        )?;
+        if let Some(log) = self.logs.get_mut(&space) {
+            log.clear_relay_refusal(id);
+        }
+        Ok(())
+    }
+
     /// Forgets every relay position, of every space: the relay's epoch
     /// changed, so no position it gave holds any more (RFC 0007, "Restores
     /// and the relay epoch"). Refusals stay.
