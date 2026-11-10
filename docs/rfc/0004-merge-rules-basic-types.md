@@ -941,7 +941,7 @@ Not taken:
 
 Each line names a decision of another RFC that changes what this one says, and links where that RFC states it.
 
-- **The nesting limit.** A change nests at most 32 levels, so a value of an operation nests at most 26: RFC 0002's nesting limit, NOC-24 (Carsten, 2026-11-09), [The nesting limit](0002-change-and-log-format.md#the-nesting-limit).
+- **The nesting limit.** A change nests at most 32 levels, so a value of an operation nests at most 26: RFC 0002's nesting limit, NOC-24 (Carsten, 2026-11-09), [The CBOR profile](0002-change-and-log-format.md#the-cbor-profile).
 - **New rule versions for existing fields.** An existing field cannot move to a new rule version until the migrations RFC exists: RFC 0005's D12 (Carsten, 2026-11-08), [D12](0005-schema-and-model-lock.md#d12-moving-a-field-to-a-new-rule-version).
 - **A reference in the schema.** `nc.ref("collection")`, its index, its states for the app, subscriptions and modifiers: RFC 0005's D18 to D22 (Carsten, 2026-11-10), [D18](0005-schema-and-model-lock.md#d18-how-the-schema-declares-a-reference).
 

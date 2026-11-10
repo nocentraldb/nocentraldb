@@ -127,7 +127,7 @@ test("\"Decisions this RFC follows\" names RFC 0002's nesting limit and RFC 0005
     .split("\n")
     .filter((l) => l.startsWith("- **"));
   for (const [id, target] of [
-    ["NOC-24", "0002-change-and-log-format.md#the-nesting-limit"],
+    ["NOC-24", "0002-change-and-log-format.md#the-cbor-profile"],
     [
       "D12",
       "0005-schema-and-model-lock.md#d12-moving-a-field-to-a-new-rule-version",
