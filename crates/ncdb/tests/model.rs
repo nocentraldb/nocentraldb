@@ -143,7 +143,11 @@ fn fake_node(dir: &Path, version: &str) -> PathBuf {
     let bin = dir.join("bin");
     fs::create_dir_all(&bin).unwrap();
     let status = Command::new("/bin/sh")
-        .args(["-c", r#"printf '#!/bin/sh\necho %s\n' "$1" > node && chmod 755 node"#, "sh"])
+        .args([
+            "-c",
+            r#"printf '#!/bin/sh\necho %s\n' "$1" > node && chmod 755 node"#,
+            "sh",
+        ])
         .arg(version)
         .current_dir(&bin)
         .status()
