@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use ncdb_core::model_lock::{Draft, ModelId, ModelLock, build};
+use ncdb_core::model_lock::{Draft, ModelId, ModelLock, Scope, build};
 
 /// RFC 0005's lock at model version 2 (keys in canonical order).
 const EXAMPLE: &str = include_str!("../../ncdb-core/tests/model_lock/rfc-0005-v2.lock.json");
@@ -477,4 +477,57 @@ fn usage_errors_exit_2() {
     let run = ncdb(&dir, &["--help"]);
     assert_eq!(run.code, 0);
     assert!(run.stdout.contains("usage: ncdb model build"));
+}
+
+#[test]
+fn an_index_in_one_space_is_written_with_its_scope_and_the_option_comes_and_goes_as_a_change() {
+    let dir = project();
+    let scoped = SCHEMA_V2.replace(
+        r#"nc.index([{ field: "priority", direction: "desc" }])"#,
+        r#"nc.index([{ field: "priority", direction: "desc" }], { scope: "space" })"#,
+    );
+    write_schema(&dir.join("model.ts"), &scoped);
+    fs::write(dir.join("model.lock.json"), EXAMPLE).unwrap();
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 2 -> 3
+  ~ index tasks.byPriorityDesc (priority desc; scope space)
+additive: clients on model version 2 keep every change written under version 3.
+"
+    );
+    let written = read(dir.join("model.lock.json"));
+    assert_eq!(
+        written.matches(r#""scope": "space""#).count(),
+        1,
+        "{written}"
+    );
+    let lock = ModelLock::from_json(&written).unwrap();
+    let tasks = lock.collection("tasks").unwrap();
+    let scoped_index = &tasks.indexes["byPriorityDesc"];
+    assert_eq!((scoped_index.scope, scoped_index.since), (Scope::Space, 3));
+    let other = &tasks.indexes["byStatusPriority"];
+    assert_eq!((other.scope, other.since), (Scope::Member, 1));
+    assert_eq!(
+        ncdb(&dir, &["model", "check"]).stdout,
+        "model.lock.json: up to date (model version 3)\n"
+    );
+
+    // Leaving the option out again is a change to the index too.
+    write_schema(&dir.join("model.ts"), SCHEMA_V2);
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 3 -> 4
+  ~ index tasks.byPriorityDesc (priority desc)
+additive: clients on model version 3 keep every change written under version 4.
+"
+    );
+    let written = read(dir.join("model.lock.json"));
+    assert!(!written.contains("\"scope\""), "{written}");
+    let lock = ModelLock::from_json(&written).unwrap();
+    let index = &lock.collection("tasks").unwrap().indexes["byPriorityDesc"];
+    assert_eq!((index.scope, index.since), (Scope::Member, 4));
 }
