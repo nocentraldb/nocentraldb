@@ -131,6 +131,18 @@ fn ncdb_with(dir: &Path, args: &[&str], setup: impl FnOnce(&mut Command)) -> Run
     }
 }
 
+/// Writes a fake `node` into `dir/bin` that prints `version`, and returns `dir/bin`.
+#[cfg(unix)]
+fn fake_node(dir: &Path, version: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let node = bin.join("node");
+    fs::write(&node, format!("#!/bin/sh\necho {version}\n")).unwrap();
+    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    bin
+}
+
 fn read(path: PathBuf) -> String {
     fs::read_to_string(path).unwrap()
 }
@@ -467,14 +479,9 @@ fn without_node_it_says_what_it_needs() {
 #[cfg(unix)]
 #[test]
 fn a_node_older_than_24_is_refused_with_its_version() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = project();
     write_schema(&dir.join("model.ts"), SCHEMA_V1);
-    let bin = dir.join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    let node = bin.join("node");
-    fs::write(&node, "#!/bin/sh\necho v22.12.0\n").unwrap();
-    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let bin = fake_node(&dir, "v22.12.0");
     let run = ncdb_with(&dir, &["model", "build"], |c| {
         c.env("PATH", &bin);
     });
