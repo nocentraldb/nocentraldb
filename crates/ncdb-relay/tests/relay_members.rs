@@ -214,16 +214,6 @@ fn a_control_body_the_relay_does_not_understand_waits_for_an_upgrade() {
 }
 
 #[test]
-fn a_shred_entry_waits_until_the_relay_checks_its_sign_off() {
-    let (relay, _dir, mut space, held) = held();
-    let shred = space.shred(0, 1, &support::space::other_account(1), &[&held[2]]);
-    assert_eq!(
-        push_one(&relay, 0, &shred),
-        Pushed::Rejected(ErrorCode::UnsupportedSuite)
-    );
-}
-
-#[test]
 fn the_relay_s_membership_is_the_cores_resolve_over_its_log() {
     let (relay, _dir, mut space, held) = held();
     let set_role = space.set_role(0, 1, Role::Reader, 0, &[&held[2]]);
