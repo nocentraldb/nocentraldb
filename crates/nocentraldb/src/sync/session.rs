@@ -21,8 +21,27 @@ use super::{Connection, apply};
 use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
-/// "Liveness").
-const IDLE: Duration = Duration::from_secs(5 * 60);
+/// "Liveness"). The tests shorten this and every bound below.
+const IDLE: Duration = if cfg!(test) {
+    Duration::from_millis(300)
+} else {
+    Duration::from_secs(5 * 60)
+};
+
+/// The longest the WebSocket handshake may take.
+const CONNECT: Duration = if cfg!(test) {
+    Duration::from_millis(500)
+} else {
+    Duration::from_secs(30)
+};
+
+/// The longest the relay may take to answer a request, `ping` included;
+/// a relay that does not answer in time is a lost connection.
+const ANSWER: Duration = if cfg!(test) {
+    Duration::from_millis(500)
+} else {
+    Duration::from_secs(30)
+};
 
 /// How a session ended.
 pub(super) enum End {
@@ -77,7 +96,8 @@ pub(super) async fn session(
     url: &str,
     wake: &mut watch::Receiver<()>,
 ) -> End {
-    let Ok((ws, _)) = tokio_tungstenite::connect_async(url).await else {
+    let connect = tokio_tungstenite::connect_async(url);
+    let Ok(Ok((ws, _))) = tokio::time::timeout(CONNECT, connect).await else {
         return lost();
     };
     let mut session = Session {
@@ -106,7 +126,7 @@ impl Session<'_> {
     /// hello, challenge, auth, welcome.
     async fn authenticate(&mut self) -> Result<(), End> {
         self.send(wire::hello()).await?;
-        let (relay_id, nonce) = match self.recv().await? {
+        let (relay_id, nonce) = match self.answer_in_time().await? {
             Answer::Challenge { relay_id, nonce } => (relay_id, nonce),
             Answer::Error { code, .. } => return Err(self.failed(code)),
             _ => return Err(lost()),
@@ -118,7 +138,7 @@ impl Session<'_> {
             wire::auth(public.signing, public.agreement, signature.to_bytes())
         })?;
         self.send(auth).await?;
-        let (epoch, spaces) = match self.recv().await? {
+        let (epoch, spaces) = match self.answer_in_time().await? {
             Answer::Welcome { epoch, spaces } => (epoch, spaces),
             Answer::Error { code, .. } => return Err(self.failed(code)),
             _ => return Err(lost()),
@@ -175,6 +195,7 @@ impl Session<'_> {
                 () = tokio::time::sleep(IDLE) => {
                     let req = self.req();
                     self.send(wire::ping(req)).await?;
+                    self.ask(req).await?;
                 }
             }
         }
@@ -321,15 +342,28 @@ impl Session<'_> {
     }
 
     /// The answer to the request `req`; what arrives before it is handled
-    /// as a message the relay sent on its own.
+    /// as a message the relay sent on its own. A relay that does not
+    /// answer within [`ANSWER`] is a lost connection.
     async fn ask(&mut self, req: u64) -> Result<Answer, End> {
-        loop {
-            let answer = self.recv().await?;
-            if answer.req() == Some(req) {
-                return Ok(answer);
+        let answer = async {
+            loop {
+                let answer = self.recv().await?;
+                if answer.req() == Some(req) {
+                    return Ok(answer);
+                }
+                self.live(answer)?;
             }
-            self.live(answer)?;
-        }
+        };
+        tokio::time::timeout(ANSWER, answer)
+            .await
+            .unwrap_or_else(|_| Err(lost()))
+    }
+
+    /// The next message, within [`ANSWER`].
+    async fn answer_in_time(&mut self) -> Result<Answer, End> {
+        tokio::time::timeout(ANSWER, self.recv())
+            .await
+            .unwrap_or_else(|_| Err(lost()))
     }
 
     /// The next message from the relay.
