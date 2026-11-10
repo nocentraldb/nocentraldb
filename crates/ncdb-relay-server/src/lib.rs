@@ -13,6 +13,11 @@ use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
 use tokio::net::{TcpListener, ToSocketAddrs};
 
+use connection::Shared;
+
+mod connection;
+pub mod wire;
+
 /// The largest message, in bytes, on every backend (RFC 0007, decision R4).
 pub const MAX_MESSAGE: usize = 128 * 1024;
 
@@ -36,8 +41,7 @@ pub fn config(allowed_accounts: BTreeSet<[u8; 32]>) -> Config {
 /// A relay server, bound to its address.
 pub struct Server<S> {
     listener: TcpListener,
-    relay: Arc<Relay<S>>,
-    relay_id: [u8; 16],
+    shared: Arc<Shared<S>>,
 }
 
 impl<S: RelayStore + 'static> Server<S> {
@@ -49,11 +53,11 @@ impl<S: RelayStore + 'static> Server<S> {
         relay_id: [u8; 16],
     ) -> io::Result<Server<S>> {
         let listener = TcpListener::bind(addr).await?;
-        Ok(Server {
-            listener,
+        let shared = Arc::new(Shared {
             relay: Arc::new(relay),
             relay_id,
-        })
+        });
+        Ok(Server { listener, shared })
     }
 
     /// The address the server listens on.
@@ -63,12 +67,9 @@ impl<S: RelayStore + 'static> Server<S> {
 
     /// Accepts connections until the listener fails.
     pub async fn run(self) -> io::Result<()> {
-        let _ = (&self.relay, self.relay_id);
         loop {
             let (stream, _) = self.listener.accept().await?;
-            tokio::spawn(async move {
-                let _ = tokio_tungstenite::accept_async(stream).await;
-            });
+            tokio::spawn(connection::serve(stream, self.shared.clone()));
         }
     }
 }

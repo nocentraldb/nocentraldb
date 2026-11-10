@@ -1,0 +1,203 @@
+//! One member's connection (RFC 0007, "Opening a connection"): hello,
+//! challenge, auth, welcome, then requests until either side closes. Every
+//! check goes through the relay core; this module only reads and writes
+//! messages.
+
+use std::future::Future;
+use std::sync::Arc;
+
+use futures_util::{SinkExt, StreamExt};
+use ncdb_core::ids::MemberId;
+use ncdb_relay::store::RelayStore;
+use ncdb_relay::{ErrorCode, Relay, auth};
+use tokio::net::TcpStream;
+use tokio::sync::mpsc;
+use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+
+use crate::wire::{self, Malformed, Request};
+use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, VERSIONS};
+
+/// What every connection of one server shares.
+pub(crate) struct Shared<S> {
+    pub relay: Arc<Relay<S>>,
+    pub relay_id: [u8; 16],
+}
+
+/// What the writer task sends: a message, or a close after the messages
+/// before it.
+pub(crate) enum Out {
+    Message(Vec<u8>),
+    Close,
+}
+
+/// Where a connection stands in its opening.
+enum State {
+    /// Waiting for `hello`.
+    Hello,
+    /// Waiting for `auth` to this nonce.
+    Auth { nonce: [u8; 32] },
+    /// Acting as this member.
+    Member(MemberId),
+}
+
+/// Serves one TCP connection until it closes.
+pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Arc<Shared<S>>) {
+    let config = WebSocketConfig::default()
+        .max_message_size(Some(MAX_MESSAGE))
+        .max_frame_size(Some(MAX_MESSAGE));
+    let Ok(ws) = tokio_tungstenite::accept_async_with_config(stream, Some(config)).await else {
+        return;
+    };
+    let (mut sink, mut incoming) = ws.split();
+    let (out, mut outgoing) = mpsc::unbounded_channel::<Out>();
+    let writer = tokio::spawn(async move {
+        while let Some(next) = outgoing.recv().await {
+            match next {
+                Out::Message(bytes) => {
+                    if sink.send(Message::Binary(bytes.into())).await.is_err() {
+                        return;
+                    }
+                }
+                Out::Close => {
+                    let _ = sink.close().await;
+                    return;
+                }
+            }
+        }
+    });
+    let mut connection = Connection {
+        shared,
+        out,
+        state: State::Hello,
+    };
+    while let Some(Ok(message)) = incoming.next().await {
+        let open = match message {
+            Message::Binary(bytes) => connection.receive(&bytes).await,
+            Message::Text(_) => connection.malformed(Malformed { req: None }),
+            Message::Close(_) => false,
+            _ => true,
+        };
+        if !open {
+            break;
+        }
+    }
+    let _ = connection.out.send(Out::Close);
+    drop(connection);
+    let _ = writer.await;
+}
+
+struct Connection<S> {
+    shared: Arc<Shared<S>>,
+    out: mpsc::UnboundedSender<Out>,
+    state: State,
+}
+
+impl<S: RelayStore + 'static> Connection<S> {
+    fn send(&self, bytes: Vec<u8>) {
+        let _ = self.out.send(Out::Message(bytes));
+    }
+
+    /// Answers an error and keeps the connection open.
+    fn fail(&self, req: Option<u64>, code: ErrorCode) -> bool {
+        self.send(wire::error(req, code));
+        true
+    }
+
+    /// Answers an error and closes the connection.
+    fn refuse(&self, req: Option<u64>, code: ErrorCode) -> bool {
+        self.send(wire::error(req, code));
+        false
+    }
+
+    fn malformed(&self, malformed: Malformed) -> bool {
+        match self.state {
+            State::Member(_) => self.fail(malformed.req, ErrorCode::Malformed),
+            _ => self.refuse(malformed.req, ErrorCode::Unauthenticated),
+        }
+    }
+
+    /// Handles one message; false when the connection closes.
+    async fn receive(&mut self, bytes: &[u8]) -> bool {
+        let request = match wire::decode(bytes) {
+            Ok(request) => request,
+            Err(malformed) => return self.malformed(malformed),
+        };
+        match (&self.state, request) {
+            (State::Hello, Request::Hello { versions }) => {
+                let Some(version) = VERSIONS.into_iter().rev().find(|v| versions.contains(v))
+                else {
+                    return self.refuse(None, ErrorCode::UnsupportedVersion);
+                };
+                let mut nonce = [0u8; 32];
+                if getrandom::fill(&mut nonce).is_err() {
+                    return self.refuse(None, ErrorCode::Unavailable);
+                }
+                let limits = [MAX_MESSAGE, MAX_PUSH, MAX_FRAME];
+                self.send(wire::challenge(
+                    version,
+                    &self.shared.relay_id,
+                    &nonce,
+                    limits,
+                ));
+                self.state = State::Auth { nonce };
+                true
+            }
+            (State::Auth { nonce }, Request::Auth { key, signature }) => {
+                match auth::verify(&self.shared.relay_id, nonce, &key, &signature) {
+                    Ok(member) => self.welcome(member).await,
+                    Err(code) => self.refuse(None, code),
+                }
+            }
+            (State::Member(_), Request::Ping { req }) => {
+                self.send(wire::pong(req));
+                true
+            }
+            (State::Member(_), Request::Hello { .. } | Request::Auth { .. }) => {
+                self.fail(None, ErrorCode::Malformed)
+            }
+            (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated),
+        }
+    }
+
+    /// The connection acts as `member` from now on.
+    async fn welcome(&mut self, member: MemberId) -> bool {
+        let relay = self.shared.relay.clone();
+        let read = blocking(async move {
+            let epoch = relay.store().epoch().await?;
+            let spaces = relay.store().members_of(member).await?;
+            Ok::<_, ncdb_relay::store::StoreError>((epoch, spaces))
+        })
+        .await;
+        let Ok((epoch, spaces)) = read else {
+            return self.refuse(None, ErrorCode::Unavailable);
+        };
+        let spaces: Vec<[u8; 16]> = spaces.iter().map(|s| s.0).collect();
+        self.send(wire::welcome(&member.0, &epoch.0, &spaces));
+        self.state = State::Member(member);
+        true
+    }
+}
+
+impl Request {
+    /// The request id, if the request has one.
+    fn req(&self) -> Option<u64> {
+        match self {
+            Request::Hello { .. } | Request::Auth { .. } => None,
+            Request::Ping { req } => Some(*req),
+        }
+    }
+}
+
+/// Runs a future of the relay core on a thread that may block: the SQLite
+/// backend blocks the thread that polls it (`ncdb_relay::sqlite`).
+pub(crate) async fn blocking<T, F>(future: F) -> T
+where
+    T: Send + 'static,
+    F: Future<Output = T> + Send + 'static,
+{
+    let handle = tokio::runtime::Handle::current();
+    tokio::task::spawn_blocking(move || handle.block_on(future))
+        .await
+        .expect("a relay call does not panic")
+}
