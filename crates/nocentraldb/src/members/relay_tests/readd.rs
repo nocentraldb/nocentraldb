@@ -3,13 +3,13 @@
 //! generation first, with an envelope for every member, then adds the
 //! member from that generation, and the relay accepts every change.
 
-use super::support::*;
 use crate::db::Db;
 use crate::id::ObjectId;
 use crate::list::{SpaceInfo, SpaceModel};
 use crate::members::tests::remove;
 use crate::members::{AddMember, Invitation, NoticeCode, Role};
 use crate::space::Space;
+use crate::sync::tests::support::*;
 use crate::value::Value;
 
 /// The admin, who creates the space.
@@ -83,20 +83,21 @@ async fn a_former_member_is_added_again_from_a_fresh_generation() {
     assert_eq!(notice.code, NoticeCode::MemberAdded);
     let status = synced(&admin).await;
     assert_eq!(status.refused, 0);
-    let inner = crate::db::lock(&admin.inner);
-    let resolved = inner.spaces[&project.id().0].checks.resolved();
-    let after = resolved.current_generation().unwrap();
-    assert!(resolved.descends(after, before) && after != before);
-    let subject = resolved.member(invitation.key.id()).unwrap();
-    assert_eq!(subject.role, Some(Role::Writer.into()));
-    assert_eq!(
-        subject
-            .grants
-            .last()
-            .and_then(|grant| grant.from_generation),
-        Some(after)
-    );
-    drop(inner);
+    {
+        let inner = crate::db::lock(&admin.inner);
+        let resolved = inner.spaces[&project.id().0].checks.resolved();
+        let after = resolved.current_generation().unwrap();
+        assert!(resolved.descends(after, before) && after != before);
+        let subject = resolved.member(invitation.key.id()).unwrap();
+        assert_eq!(subject.role, Some(Role::Writer.into()));
+        assert_eq!(
+            subject
+                .grants
+                .last()
+                .and_then(|grant| grant.from_generation),
+            Some(after)
+        );
+    }
 
     eventually("the member lists the space as a writer again", || {
         listed(&member, &project, Some(Role::Writer))
