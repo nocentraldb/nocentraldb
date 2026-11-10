@@ -28,6 +28,7 @@ use std::time::Duration;
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
+use tokio::sync::Semaphore;
 
 use connection::Shared;
 use hub::Hub;
@@ -61,6 +62,18 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 /// working network finishes each step in well under a second.
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The most connections a server holds open at once, authenticated or
+/// not. A connection above it is closed as soon as it is accepted. It
+/// stays below the 1,024 file descriptors many systems give a process by
+/// default, and bounds the outgoing queues of all connections to 2 GiB.
+pub const MAX_CONNECTIONS: usize = 512;
+
+/// The most connections a server holds open at once that have not
+/// finished the opening handshake. A connection above it is closed as soon
+/// as it is accepted, so peers that stop in the handshake cannot take the
+/// places of authenticated members.
+pub const MAX_HANDSHAKES: usize = 64;
+
 /// The protocol versions this server speaks.
 pub const VERSIONS: [u64; 1] = [1];
 
@@ -76,6 +89,8 @@ pub fn config(allowed_accounts: BTreeSet<[u8; 32]>) -> Config {
 pub struct Server<S> {
     listener: TcpListener,
     shared: Arc<Shared<S>>,
+    max_connections: usize,
+    max_handshakes: usize,
 }
 
 impl<S: RelayStore + 'static> Server<S> {
@@ -109,7 +124,12 @@ impl<S: RelayStore + 'static> Server<S> {
             write_timeout: WRITE_TIMEOUT,
             handshake_timeout: HANDSHAKE_TIMEOUT,
         });
-        Ok(Server { listener, shared })
+        Ok(Server {
+            listener,
+            shared,
+            max_connections: MAX_CONNECTIONS,
+            max_handshakes: MAX_HANDSHAKES,
+        })
     }
 
     /// A connection closes once writing a message to its member makes no
@@ -130,16 +150,50 @@ impl<S: RelayStore + 'static> Server<S> {
         self
     }
 
+    /// The server holds at most `max` connections open at once, instead of
+    /// [`MAX_CONNECTIONS`].
+    pub fn with_max_connections(mut self, max: usize) -> Server<S> {
+        self.max_connections = max;
+        self
+    }
+
+    /// The server holds at most `max` connections open at once that have
+    /// not finished the opening handshake, instead of [`MAX_HANDSHAKES`].
+    pub fn with_max_handshakes(mut self, max: usize) -> Server<S> {
+        self.max_handshakes = max;
+        self
+    }
+
     /// The address the server listens on.
     pub fn local_addr(&self) -> io::Result<SocketAddr> {
         self.listener.local_addr()
     }
 
     /// Accepts connections until the listener fails.
+    ///
+    /// A connection takes a place among the server's connections for as
+    /// long as it is open, and one among its handshakes until it is sent
+    /// `welcome` or closes. When either has no place left, the server
+    /// closes the connection as soon as it accepts it, before the
+    /// WebSocket upgrade: RFC 0007 lets a relay close any connection at
+    /// any time ("Liveness"), and the member reconnects with back-off.
     pub async fn run(self) -> io::Result<()> {
+        let connections = Arc::new(Semaphore::new(self.max_connections));
+        let handshakes = Arc::new(Semaphore::new(self.max_handshakes));
         loop {
             let (stream, _) = self.listener.accept().await?;
-            tokio::spawn(connection::serve(stream, self.shared.clone()));
+            let (Ok(place), Ok(handshake)) = (
+                connections.clone().try_acquire_owned(),
+                handshakes.clone().try_acquire_owned(),
+            ) else {
+                drop(stream);
+                continue;
+            };
+            let shared = self.shared.clone();
+            tokio::spawn(async move {
+                connection::serve(stream, shared, handshake).await;
+                drop(place);
+            });
         }
     }
 }
