@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::cbor::{self, Value};
+use crate::cbor::Value;
 use crate::change::Header;
 use crate::ids::{ChangeId, MemberId};
 use crate::keys::MemberPublicKey;
@@ -13,7 +13,6 @@ use super::body::Role;
 use super::certificate::Certificate;
 use super::fields;
 use super::generations::Generations;
-use super::person_keys::PersonKeys;
 
 /// What `resolve` says about one control change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,16 +204,17 @@ impl Members {
     }
 }
 
-/// The canonical bytes of a state: equal states give equal bytes.
-pub(crate) fn encode(
+/// The fields of a state's canonical map, from key 1 to key 7, without its
+/// person keys; equal states give equal fields.
+pub(crate) fn fields(
     genesis: Option<ChangeId>,
     first_generation: Option<u64>,
     members: &Members,
     verdicts: &BTreeMap<ChangeId, Verdict>,
     gaps: &BTreeSet<ChangeId>,
     generations: &Generations,
-    person_keys: &PersonKeys,
-) -> Vec<u8> {
+    current: Option<u64>,
+) -> Vec<(u64, Value)> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
     let optional = |n: Option<u64>| n.map_or(Value::Null, Value::Unsigned);
@@ -248,11 +248,13 @@ pub(crate) fn encode(
             .iter()
             .map(|(change, author)| Value::Array(vec![id(change), fields::bytes(&author.0)]));
         let recipients = g.recipients.iter().map(|r| fields::bytes(&r.0));
+        let holders = g.holders.iter().map(|h| fields::bytes(&h.0));
         Value::Array(vec![
             Value::Unsigned(*generation),
             Value::Array(previous.collect()),
             Value::Array(entries.collect()),
             Value::Array(recipients.collect()),
+            Value::Array(holders.collect()),
         ])
     });
     let verdicts = verdicts.iter().map(|(change, verdict)| {
@@ -273,15 +275,15 @@ pub(crate) fn encode(
         };
         Value::Array(vec![id(change), Value::Unsigned(code), cause])
     });
-    cbor::encode(&fields::map([
+    Vec::from([
         (1, genesis.as_ref().map_or(Value::Null, id)),
         (2, optional(first_generation)),
         (3, Value::Array(members.collect())),
         (4, Value::Array(verdicts.collect())),
         (5, Value::Array(gaps.iter().map(id).collect())),
         (6, Value::Array(generations.collect())),
-        (7, person_keys.to_value()),
-    ]))
+        (7, optional(current)),
+    ])
 }
 
 fn rejection_code(rejection: Rejection) -> u64 {
