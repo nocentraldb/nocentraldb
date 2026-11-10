@@ -35,6 +35,7 @@ use crate::ids::{ChangeId, SpaceId};
 use crate::log::{Appended, Log, State};
 use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
+use crate::tips::Tips;
 
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
 pub use query::{Cursor, Page, QueryError};
@@ -260,6 +261,15 @@ impl View {
     /// The log of `space`, when the view holds one.
     pub fn log(&self, space: SpaceId) -> Option<&Log> {
         self.logs.get(&space)
+    }
+
+    /// The tips of the log of `space`, when the view holds one: what the
+    /// member's next change in the space takes from it (NOC-138). The view
+    /// reads each change's state back from the `log` table without opening
+    /// it, so after the view opens, the first read opens each folded
+    /// sealed change once with `checks`; see [`Log::tips`].
+    pub fn tips(&mut self, space: SpaceId, checks: &impl Checks) -> Option<&Tips> {
+        Some(self.logs.get_mut(&space)?.tips(checks))
     }
 
     /// The state of a change the log of `space` holds.

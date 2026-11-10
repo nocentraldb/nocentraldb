@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback). [Giving feedback](README.md#giving-feedback) says how, and what happens to your feedback.
 
-**Status.** Decided. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner. The owner accepted the recommendation of decisions 1 to 9, and this RFC was merged with the owner's approval in #36 (Carsten, 2026-11-08). The owner decided decisions 10 to 15, on the durability of a browser copy, as recommended (Carsten, 2026-11-09), confirmed decision 12 after a reload in a private window was measured (Carsten, 2026-11-09), and decided decision 16, how a page after a cursor is written, by merging #81 (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. The core builds the view natively in `crates/ncdb-core/src/view`. [History](#history) says when each part was written.
+**Status.** Decided. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner. The owner accepted the recommendation of decisions 1 to 9, and this RFC was merged with the owner's approval in #36 (Carsten, 2026-11-08). The owner decided decisions 10 to 15, on the durability of a browser copy, as recommended (Carsten, 2026-11-09), confirmed decision 12 after a reload in a private window was measured (Carsten, 2026-11-09), and decided decision 16, how a page after a cursor is written, by merging #81 (Carsten, 2026-11-09). The owner decided decision 17, where the view keeps the lock the device check runs against, on NOC-155 as recommended (Carsten, 2026-11-10). The design below describes those choices, and [Decisions](#decisions) records each one. The core builds the view natively in `crates/ncdb-core/src/view`. [History](#history) says when each part was written.
 
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encryption at rest on the device, beyond naming the question for the owner ([decision 6](#6-encryption-at-rest-on-the-device)). Compaction and snapshots (a later RFC). The sync protocol with the relay ([RFC 0007](0007-relay.md)).
 
@@ -52,7 +52,7 @@ The database contains these kinds of tables. The names are illustrative; the exa
 
 ```text
 log                 RFC 0002: the frames, the source of truth
-meta                view format version, model hash, per space the relay position
+meta                view format version, model hash, the stored lock, per space the relay position
 c_<collection>      one row per object: space id, object id, one column per field's read value
 fs_<collection>     merge state per object and field, as the field type encodes it (opaque bytes)
 ix_<collection>_*   one SQLite index per declared index on c_<collection>
@@ -62,7 +62,7 @@ parked, gaps        RFC 0002: changes stored but not folded, and dependencies no
 
 - **`c_<collection>`** has the primary key `(space id, object id)`. A field's column holds its read value in an SQLite type the field type names: `INTEGER`, `REAL`, `TEXT` (UTF-8) or `BLOB`. A field whose type has no single value that can be sorted (rich text, a set) has a column only if its type defines a sortable projection, such as the number of elements; otherwise the read value is served from `fs_<collection>`.
 - **`fs_<collection>`** holds, per `(space id, object id, field)`, the field type's merge state, encoded by the field type itself. The core does not interpret it; this is what lets a plugin field type keep any state it needs (RFC 0004, "The plugin contract"). Losing writes that the app can read (RFC 0004's conflicts, RFC 0002's concurrent losers) live in this state, so they survive a rebuild like everything else.
-- **`meta`** lets the core decide on open whether the view still matches the code and the model ([Rebuilding the view](#rebuilding-the-view)).
+- **`meta`** lets the core decide on open whether the view still matches the code and the model ([Rebuilding the view](#rebuilding-the-view)). It also keeps the newest lock the database has been opened with, which the check on the device runs against ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device)): under the key `lock`, as canonical JSON, the bytes `ncdb model build` writes ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)), written in the transaction that opens the view, so an open that fails leaves the stored lock as it was. The lock is one more row in a table the view already had, and the view's tables are internal ([decision 2](#2-is-the-views-layout-a-stable-format)), so the view format version stays 2. A database written before the view kept its lock (#134) holds no lock: it opens only with a lock whose model folds its view as it is, the model hash in `meta` unchanged, and keeps that lock from then on. With any other lock, `nc.open` refuses with `modelRefused` and writes nothing; the error names no refused change, since there is no stored lock to compare with. For the same reason, such a database takes and keeps a lock whose `model.id` differs from the one it was written with, as long as the model hash is unchanged. This is [decision 17](#17-where-the-view-keeps-the-lock).
 
 ## Folding
 
@@ -137,7 +137,7 @@ The view is a cache. Everything in it can be computed again from the frames in `
 
 ### When
 
-On open, the core compares `meta` with what it is running:
+On open, the core first checks the member's lock against the lock stored in `meta` (RFC 0005, D11 and D23). A lock the check refuses opens nothing, and nothing is written. Then the core compares `meta` with what it is running:
 
 | Mismatch                                                                                | What the core does                                                                                             |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -580,6 +580,17 @@ Not taken:
 - Row values with ascending indexes only, which leaves a cursor on an unset value broken.
 - Row values where they are correct and the key-by-key condition otherwise, which means two code paths.
 
+### 17. Where the view keeps the lock
+
+Decided (Carsten, 2026-11-10): one key `lock` in `meta`, as canonical JSON, and the view format version stays 2. A database without a stored lock opens only with a lock whose model folds its view as it is, and keeps that lock from then on. The owner answered NOC-155; #137 builds it.
+
+Why: RFC 0005 decides that the SDK stores the lock in the local database, not how. One row in a table the view already has costs nothing more, and since the view's tables are internal (decision 2), no format version has to change.
+
+Not taken:
+
+- A table of its own for the lock: cleaner to extend, with the same cost otherwise.
+- Raise the view format version: every existing database would be refused until a rebuild of the view exists.
+
 ## History
 
 - **2026-11-08** · NOC-12 · The first version, with the spike and decisions 1 to 9, which the owner decided as recommended (#36).
@@ -591,3 +602,4 @@ Not taken:
 - **2026-11-09** · NOC-75 · Follows RFC 0009: an index with `scope: "space"` puts the space id first, and no declared index holds a deleted object (#87).
 - **2026-11-10** · NOC-92 · A reference indexes as one 32-byte `BLOB` column, as RFC 0005's D19 decided (#98).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#112).
+- **2026-11-10** · NOC-162 · `meta` keeps the newest lock under the key `lock`, as canonical JSON, and the view format stays 2, as the owner decided in NOC-155 and #137 builds; decision 17 (#151).

@@ -10,6 +10,7 @@
 #[path = "../../../../ncdb-relay-server/tests/support/mod.rs"]
 mod relay_support;
 
+mod added;
 mod backoff;
 mod fake;
 mod list;

@@ -33,4 +33,4 @@ pub mod store;
 
 pub use error::ErrorCode;
 pub use keys::Keys;
-pub use relay::{Config, MAX_FRAME, Pulled, Pushed, Relay};
+pub use relay::{Config, MAX_FRAME, Pulled, Push, Pushed, Relay};

@@ -98,7 +98,7 @@ fn a_frame_that_is_not_well_formed_or_not_canonical_is_malformed() {
     let mut long = vec![0x83, 0x18, 0x01];
     long.extend_from_slice(&space.genesis.bytes()[2..]);
     let frames = vec![vec![0xff], trailing, long, Vec::new()];
-    let pushed = block_on(relay.push(id(0), space.space, frames));
+    let pushed = block_on(relay.push(id(0), space.space, frames)).results;
     assert_eq!(pushed, [Pushed::Rejected(ErrorCode::Malformed); 4]);
 }
 

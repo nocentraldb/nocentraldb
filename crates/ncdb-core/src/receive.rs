@@ -23,6 +23,7 @@ use crate::log::{
     State,
 };
 use crate::object::ObjectOperation;
+use crate::tips::Opened;
 
 /// Where a change stops when it fails a check: parked or rejected, with
 /// the reason of the step that failed.
@@ -163,9 +164,9 @@ impl Log {
             AppendError::WrongSpace => ReceiveError::WrongSpace,
         })?;
         if let Appended::New(_) = appended {
-            let state = check(&change, checks, fold);
+            let (state, opened) = check(&change, checks, fold);
             let control_passed = is_folded_control(&change, &state);
-            self.set_state(change.id(), state);
+            self.set_state_opened(change.id(), state, opened);
             if control_passed {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
@@ -180,9 +181,9 @@ impl Log {
         loop {
             let mut control_passed = false;
             for change in self.rejected() {
-                let state = check(&change, checks, fold);
+                let (state, opened) = check(&change, checks, fold);
                 control_passed |= is_folded_control(&change, &state);
-                self.set_state(change.id(), state);
+                self.set_state_opened(change.id(), state, opened);
             }
             if !control_passed {
                 return;
@@ -196,41 +197,46 @@ fn is_folded_control(change: &Change, state: &State) -> bool {
     change.header().kind == Kind::CONTROL && matches!(state, State::Folded { .. })
 }
 
-/// Steps 2 to 7 for one change.
-fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> State {
+/// Steps 2 to 7 for one change: its state, and for a sealed change that
+/// folds, what its payload gives the log's tips.
+fn check(
+    change: &Change,
+    checks: &mut impl Checks,
+    fold: &mut impl Fold,
+) -> (State, Option<Opened>) {
     let header = change.header();
     if !checks.knows_suite(header.suite) {
-        return State::Parked(ParkReason::UnknownSuite);
+        return (State::Parked(ParkReason::UnknownSuite), None);
     }
     if !header.kind.is_known() {
-        return State::Parked(ParkReason::UnknownKind);
+        return (State::Parked(ParkReason::UnknownKind), None);
     }
     if header.format != Header::FORMAT {
-        return State::Parked(ParkReason::UnknownHeaderFormat);
+        return (State::Parked(ParkReason::UnknownHeaderFormat), None);
     }
     if header.extensions().must_understand() {
-        return State::Parked(ParkReason::UnknownHeaderKey);
+        return (State::Parked(ParkReason::UnknownHeaderKey), None);
     }
     if let Err(stop) = checks.verify(change) {
-        return stop.into();
+        return (stop.into(), None);
     }
     if !checks.is_member(change) {
-        return State::Rejected(RejectReason::NotMember);
+        return (State::Rejected(RejectReason::NotMember), None);
     }
     if header.kind == Kind::CONTROL {
         // A control change stops after step 4: it has no payload to decrypt.
         checks.add_control(change);
-        return State::Folded { parked: Vec::new() };
+        return (State::Folded { parked: Vec::new() }, None);
     }
     let payload = match checks.open(change) {
         Ok(payload) => payload,
-        Err(stop) => return stop.into(),
+        Err(stop) => return (stop.into(), None),
     };
     if payload.format != Payload::FORMAT {
-        return State::Parked(ParkReason::UnknownPayloadFormat);
+        return (State::Parked(ParkReason::UnknownPayloadFormat), None);
     }
     if payload.extensions().must_understand() {
-        return State::Parked(ParkReason::UnknownPayloadKey);
+        return (State::Parked(ParkReason::UnknownPayloadKey), None);
     }
     let mut parked = Vec::new();
     for (position, operation) in (0..).zip(&payload.operations) {
@@ -244,7 +250,11 @@ fn check(change: &Change, checks: &mut impl Checks, fold: &mut impl Fold) -> Sta
             parked.push(ParkedOperation { position, reason });
         }
     }
-    State::Folded { parked }
+    let opened = Opened {
+        dependencies: payload.dependencies,
+        clock: payload.clock,
+    };
+    (State::Folded { parked }, Some(opened))
 }
 
 /// Folds one operation the model knows, a create or a delete of its object

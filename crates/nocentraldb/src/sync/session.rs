@@ -311,11 +311,19 @@ impl Session<'_> {
         }
     }
 
-    /// A message the relay sent on its own: live entries, or the end of a
-    /// subscription. Entries of a space this session did not subscribe to
-    /// are ignored: a relay sends them only by mistake, and folding them
-    /// would make that space one the database syncs.
+    /// A message the relay sent on its own: live entries, the end of a
+    /// subscription, or `added`. Entries of a space this session did not
+    /// subscribe to are ignored: a relay sends them only by mistake, and
+    /// folding them would make that space one the database syncs. A space
+    /// the member was added to is synced by [`Session::serve`] next, as a
+    /// space named in `welcome` is.
     fn live(&mut self, answer: Answer) -> Result<(), End> {
+        if let Answer::Added { space } = answer {
+            if with(self.db, |inner| apply::added(inner, space))? {
+                self.subscribed.remove(&space);
+            }
+            return Ok(());
+        }
         let space = match &answer {
             Answer::Entries { space, .. } => {
                 Some(*space).filter(|space| self.subscribed.contains(space))

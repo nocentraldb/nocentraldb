@@ -11,12 +11,17 @@
 //! one, beside the frame bytes. [`Log::receive`](crate::receive) sets both.
 //! The relay's log holds no states: an entry appended with [`Log::append`]
 //! has none.
+//!
+//! The log also keeps its [`Tips`] as it appends changes and sets their
+//! states: what the member's next change takes from it (NOC-138).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::change::{Change, Kind};
 use crate::ids::{ChangeId, SpaceId};
+use crate::receive::Checks;
+use crate::tips::{Opened, Tips};
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
 /// hands out the entries after `p`; [`Position::START`] hands out all.
@@ -171,6 +176,7 @@ pub struct Log {
     /// The changes whose state was set since [`Log::take_changed`] last
     /// ran, for a store that keeps the states.
     changed: BTreeSet<ChangeId>,
+    tips: Tips,
 }
 
 impl fmt::Debug for Log {
@@ -190,6 +196,7 @@ impl Log {
             entries: Vec::new(),
             positions: BTreeMap::new(),
             changed: BTreeSet::new(),
+            tips: Tips::default(),
         }
     }
 
@@ -207,6 +214,7 @@ impl Log {
         if let Some(position) = self.position_of(id) {
             return Ok(Appended::Duplicate(position));
         }
+        self.tips.appended(&change);
         self.entries.push(Entry {
             change,
             state: None,
@@ -263,10 +271,50 @@ impl Log {
 
     /// Sets the state of a change the log holds.
     pub(crate) fn set_state(&mut self, id: ChangeId, state: State) {
-        if let Some(entry) = self.entry_mut(id) {
-            entry.state = Some(state);
-            self.changed.insert(id);
+        self.set_state_opened(id, state, None);
+    }
+
+    /// Sets the state of a change the log holds, with what its payload
+    /// gave when the checks opened it, and keeps the tips.
+    pub(crate) fn set_state_opened(&mut self, id: ChangeId, state: State, opened: Option<Opened>) {
+        let Some(index) = self.index_of(id) else {
+            return;
+        };
+        let entry = &mut self.entries[index];
+        let folded = |state: &Option<State>| matches!(state, Some(State::Folded { .. }));
+        if folded(&entry.state) {
+            self.tips.unfolded(id);
         }
+        entry.state = Some(state);
+        if folded(&entry.state) {
+            self.tips.folded(&entry.change, opened);
+        }
+        self.changed.insert(id);
+    }
+
+    /// The heads among the folded control changes, which the member's next
+    /// control change depends on (RFC 0008). A control change's
+    /// dependencies are in its header, so this opens no change.
+    pub fn control_heads(&self) -> &BTreeSet<ChangeId> {
+        self.tips.control_heads()
+    }
+
+    /// The tips of the log: what the member's next change takes from it.
+    /// A folded sealed change whose state was read back from storage, and
+    /// so whose payload the log has not read, is opened with `checks`
+    /// once, here; one that does not open is left out until it does.
+    pub fn tips(&mut self, checks: &impl Checks) -> &Tips {
+        for id in self.tips.unread().clone() {
+            let change = &self.entries[self.index_of(id).expect("the log holds the change")].change;
+            if let Ok(payload) = checks.open(change) {
+                let opened = Opened {
+                    dependencies: payload.dependencies,
+                    clock: payload.clock,
+                };
+                self.tips.read(id, opened);
+            }
+        }
+        &self.tips
     }
 
     /// The changes whose state was set since the last call, which a store

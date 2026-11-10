@@ -309,7 +309,7 @@ At the top:
 | Key | Meaning |
 | --- | --- |
 | `format` | The version of the lock's own format. This RFC defines format 1. A reader that does not know the format refuses the lock, because the lock ships with the app and a mismatch is a build error, not data to keep. A later format is a superset of the previous one, and every SDK reads every earlier format. |
-| `model.id` | 128 random bits in hex, drawn by the first `ncdb model build` of the app and never changed. It names the model's lineage, so the SDK can refuse a lock that is not a successor of the one it last opened (see [Two checks: at build and on the device](#two-checks-at-build-and-on-the-device)). |
+| `model.id` | 128 random bits in hex, drawn by the first `ncdb model build` of the app and never changed. It names the model's lineage, so the SDK can refuse a lock that is not a successor of the newest one it opened the database with (see [Two checks: at build and on the device](#two-checks-at-build-and-on-the-device)). |
 | `model.version` | The model version: 1 for the first build, one higher for each build that changes the model. A build that changes only descriptions keeps the version. |
 | `model.hash` | `sha256:` and the SHA-256 hash of the canonical JSON (RFC 8785) of `format`, `plugins` and `collections`, with every `description` removed. It identifies the model's content: two locks with the same hash describe the same model. It is a fingerprint, not a security feature. |
 | `plugins` | The plugins whose field types the model uses, by namespace (see [How a field type is referenced](#how-a-field-type-is-referenced)). |
@@ -425,9 +425,11 @@ model.lock.json: refused, the change is not additive (model version stays 2)
 
 `ncdb model build` only knows the previous lock in the repository. If a developer deletes the lock, or two branches each build version 3 and the merge keeps one, the build cannot see what shipped before. So the same check runs a second time, on every device:
 
-- The SDK stores, in the local database, the lock it last opened the database with.
-- When the app opens the database with a different lock, the SDK runs the additive check between the stored lock and the new one. It compares content, not just version numbers. If the new lock has another `model.id`, or is not an additive successor, the SDK refuses to open the database, with an error that names each refused change. It deletes and rewrites nothing.
-- An app that is rolled back to an older version opens the database with an older lock. The SDK accepts that when the stored lock is an additive successor of the older one, and the app behaves as an old client: what it does not know stays in the database, as parked data.
+- The SDK stores, in the local database, the newest lock it has opened the database with ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives) says where).
+- When the app opens the database with a different lock, the SDK runs the additive check between the stored lock and the new one. It compares content, not just version numbers. A new lock that is an additive successor of the stored one opens the database and takes its place, in the same transaction that opens the view. If the new lock has another `model.id`, or is neither an additive successor of the stored one nor an older lock of which the stored one is a successor, the SDK refuses to open the database, with an error that names each refused change. It deletes and rewrites nothing.
+- An app that is rolled back to an older version opens the database with an older lock. The SDK accepts that when the stored lock is an additive successor of the older one, and the app behaves as an old client: what it does not know stays in the database, as parked data. The older lock does not replace the stored lock. A later lock must still be an additive successor of the newest lock the device has opened, so a lock that forks from the older one, for example a branch that built its next version from it with a field of the same name and another type, is refused. Were it accepted, data written under the newer lock would be folded by other rules than the ones it was written by, and members would diverge (GENESIS.md, principle 2).
+
+The limit: a device that has opened a newer lock once refuses every lock that does not descend from it, even after the app was rolled back on purpose. The developer then builds the next lock from the newer one, which removes nothing ([D23](#d23-which-lock-the-device-keeps)).
 
 Two branches that both raise the version conflict in `model.lock.json`, so git makes the developer resolve it; `ncdb model build` on the merged schema then writes the next version. A lock that shipped from a branch and was then dropped is caught by the device check.
 
@@ -728,7 +730,7 @@ Not taken:
 
 ### D11. The check on the device
 
-Decided (Carsten, 2026-11-08): the SDK runs the additive check against the lock it last opened the database with, and refuses to open on a refused change.
+Decided (Carsten, 2026-11-08): the SDK runs the additive check against the lock it stores in the database, and refuses to open on a refused change. Which lock it stores is [D23](#d23-which-lock-the-device-keeps).
 
 Why: the build can be bypassed by deleting the lock or by a bad merge; the device holds the data that would be at risk.
 
@@ -856,6 +858,17 @@ Not taken:
 
 - `nc.refs("collection")` as well, a set of references: a second type, and a field with many values cannot be indexed in v1.
 
+### D23. Which lock the device keeps
+
+Decided (Carsten, 2026-11-10): the newest lock the device has opened the database with, as the owner answered in NOC-155. A lock that is an additive successor of the stored one takes its place; an older lock of which the stored one is a successor opens the database as an old client and leaves the stored lock as it is; any other lock is refused. #137 builds it.
+
+Why: if an older lock took the stored lock's place after a rollback, a lock that forks from the older one would pass the check against it and fold data written under the newer lock by other rules, which the check exists to prevent.
+
+Not taken:
+
+- Store the last lock that opened the database, as D11's first wording read: after a rollback, a fork from the older lock would be accepted.
+- Keep both the newest and the last lock, and check against each: the most to build.
+
 ## History
 
 - **2026-11-08** · NOC-11 · The first version, with the decisions D1 to D15, which the owner decided as recommended (#35).
@@ -866,6 +879,7 @@ Not taken:
 - **2026-11-09** · NOC-73 · The example lock in canonical key order; D16 (`nc.int` as a `number`) and D17 (deprecating a collection), decided as recommended (#88).
 - **2026-11-10** · NOC-63 · `nc.ref`, a reference into another space, with the decisions D18 to D22, decided as recommended (#92).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#104).
+- **2026-11-10** · NOC-162 · The device keeps the newest lock it opened the database with, as the owner decided in NOC-155 and #137 builds; D23 (#151).
 
 ## How this RFC is tested
 
