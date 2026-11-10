@@ -23,12 +23,14 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use std::collections::BTreeSet;
 
-use ncdb_core::change::Change;
+use ncdb_core::change::{Change, Payload};
 use ncdb_core::checks::SealChecks;
+use ncdb_core::clock::Hlc;
 use ncdb_core::envelope;
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::{Log, RejectReason, State};
 use ncdb_core::membership::{self, Entry, KeyChainEntry, PreviousKey, Role};
+use ncdb_core::seal;
 
 use member::{Recorder, set_title};
 use space::{Space, Who, id, key, space_key};
@@ -257,4 +259,44 @@ fn two_key_chain_entries_that_disagree_give_every_copy_the_same_key_in_either_or
         assert_eq!(one.state(&d.by_bob), two.state(&d.by_bob), "{real_lower}");
         assert_eq!(one.fold, two.fold, "{real_lower}");
     }
+}
+
+#[test]
+fn a_change_folded_under_a_replaced_key_is_unfolded_and_its_field_folded_again_from_the_rest() {
+    // The other entry's change id is the lower one, so it wins: copy one
+    // folds Bob's change under the real key, then un-folds it when the
+    // other entry arrives. Alice's change under the second generation sets
+    // the same field and stays folded on both copies.
+    let d = disagreeing_with(false);
+    let payload = Payload::new(Hlc(1 << 32), BTreeSet::new(), vec![set_title(1)]);
+    let by_alice = seal::seal(
+        &key(ALICE),
+        &second_key(),
+        d.space.space,
+        100,
+        d.second,
+        &payload,
+    );
+    let before: Vec<&Change> = d.before.iter().chain([&d.by_bob, &by_alice]).collect();
+    let mut one = Copy::of(&d.space);
+    one.receive(&before);
+    one.receive(&[&d.real]);
+    assert_eq!(one.state(&d.by_bob), State::Folded { parked: vec![] });
+    assert!(one.fold.folded.contains(&d.by_bob.operation_id(0)));
+
+    one.receive(&[&d.other]);
+    let mut two = Copy::of(&d.space);
+    two.receive(&before);
+    two.receive(&[&d.other, &d.real]);
+
+    for copy in [&one, &two] {
+        assert_eq!(
+            copy.state(&d.by_bob),
+            State::Rejected(RejectReason::Undecryptable)
+        );
+        assert_eq!(copy.state(&by_alice), State::Folded { parked: vec![] });
+        let folded = &copy.fold.folded;
+        assert_eq!(*folded, BTreeSet::from([by_alice.operation_id(0)]));
+    }
+    assert_eq!(one.fold, two.fold);
 }
