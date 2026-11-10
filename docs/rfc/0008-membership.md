@@ -4,25 +4,27 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-23
 
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind), with its log state [*rejected*](0002-change-and-log-format.md#rejected-changes) (D11) and its rule for changes the relay refuses (D12), on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind), with its log state [*rejected*](0002-change-and-log-format.md#rejected-changes) and its rule for changes the relay refuses, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
 
 It also uses [RFC 0005](0005-schema-and-model-lock.md), above all the `model.id` in a space's first control entry ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)) and the person id ([Identifying the person](0005-schema-and-model-lock.md#identifying-the-person)).
 
 It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
 
-**Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26, and this RFC was merged with the owner's approval in #40 (Carsten, 2026-11-08). The owner confirmed M27 to M29, which building the core raised, on NOC-110 (Carsten, 2026-11-10). The design below describes those choices, except M10 on groups, which was withdrawn by the owner (Carsten, 2026-11-09). [Decisions](#decisions) records each one. The core computes `resolve` in `crates/ncdb-core`, and the relay runs the same code in `crates/ncdb-relay`. [History](#history) says when each part was written.
+**Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+**How to give feedback.** Reply in this RFC's discussion, [RFC 0008: Membership, roles and the first change of a space](https://github.com/nocentraldb/nocentraldb/discussions/148), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+
+Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decided both. Each choice below says why it was made and, where a reader would ask, which options were not taken. The core computes `resolve` in `crates/ncdb-core`, and the relay runs the same code in `crates/ncdb-relay`.
 
 ## What this RFC does not cover
 
 - **Work orders**, beyond who may perform an erasure and sign it off. A later RFC defines how a work order is claimed, performed and validated.
-- **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate, the account sign-off and the key-chain subkey are RFC 0003's (its section "Formats of what keys sign and derive", decision 15). This RFC places them in the control bodies (see [What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
-- **Revoking a member certificate.** Deferred to a later RFC about accounts, as RFC 0003 says. In v1, removing the member from every space it belongs to is the revocation.
-- **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. [RFC 0009](0009-sdk-api.md) covers both: an invitation is the joining member's public identity, which the app carries to an admin ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members), decision S12), and the role names below, working names under decision M12, are the public names (decision S13).
+- **Cryptography and the formats of signed objects.** The primitives, the key envelope's HPKE construction, the person-key commitment, the member certificate, the account sign-off and the key-chain subkey are RFC 0003's ([RFC 0003, "Formats of what keys sign and derive"](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)). This RFC places them in the control bodies (see [What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
+- **Revoking a member certificate.** [RFC 0010](0010-accounts.md) keeps it out too: removing the member from every space it belongs to is the revocation, and a new account key stops new certificates in the account's name.
+- **Invitations and public API names.** This RFC does not cover how a new member's public identity reaches the adding member, or what the SDK calls are named. [RFC 0009](0009-sdk-api.md) covers both: an invitation is the joining member's public identity, which the app carries to an admin ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members)), and RFC 0009 makes the role names below, and the outcome "lost grant", the public names, so that the SDK's API review decides every name a developer types in one place.
 - **Groups.** They are not part of the design: withdrawn by the owner (Carsten, 2026-11-09). A later RFC may bring them back (see [Groups](#groups)).
 - **Deleting a synced space**, at the relay and on every member, such as an ad-hoc space that synced (RFC 0003). Deferred to a later RFC: it concerns the relay's storage and each member's copy, and needs no control body here. A local ad-hoc space that never synced is deleted locally.
-- **Compaction.** A later RFC. This RFC says what compaction must keep: every control change (decision M16).
+- **Compaction.** A later RFC. This RFC says what compaction must keep: every control change of a space, forever. The state is a function of the whole set, and a snapshot every member can check is a design of its own. A membership entry is about 300 bytes and an envelope about 150, so a space with 100 removals keeps under 1 MB of control changes. Replacing old control changes by a signed snapshot of the control state was not taken.
 
 ## Terms
 
@@ -45,7 +47,7 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 
 ## The design in one page
 
-- **A space starts with a genesis.** The creator writes it. It names the creator's public keys, its certificate and the first key generation. The space id is derived from the creator's member id and a random nonce, so nobody else can write a genesis for that space (decision M7, which revises RFC 0002's D3 for space ids).
+- **A space starts with a genesis.** The creator writes it. It names the creator's public keys, its certificate and the first key generation. The space id is derived from the creator's member id and a random nonce, so nobody else can write a genesis for that space (see [What it names](#what-it-names)).
 - **Three roles.** A reader holds the keys and reads everything. A writer also writes content and person keys and performs erasures. An admin also changes membership, rotates the space key and signs off erasures. Rights apply to the whole space (RFC 0001).
 - **The fold reads only control bodies and headers.** Whether a change is accepted depends only on the control changes and on the headers of the changes. It never depends on decrypted content, or on a check only some members can make. The relay can therefore run the same code.
 - **A revocation names a cutoff.** Removing a member, or lowering its role, names the highest author sequence of that member the revoking admin held. The member's changes above it lose the revoked right on every member and on the relay.
@@ -59,17 +61,17 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 
 ### Who creates it
 
-Any member creates a space by writing its genesis, on its own device, offline if it likes. The creator becomes the space's first member and its first admin. A relay accepts the genesis only from a creator its operator allows (RFC 0007, decision R6). Members do not check that, because it is a rule of the relay, not of the space.
+Any member creates a space by writing its genesis, on its own device, offline if it likes. The creator becomes the space's first member and its first admin. A relay accepts the genesis only from a creator its operator allows, and answers `not_allowed` otherwise ([RFC 0007, "The errors"](0007-relay.md#the-errors)). Members do not check that, because it is a rule of the relay, not of the space.
 
 ### What it names
 
 The genesis is a control change whose body (see [Genesis](#genesis)) names:
 
-- **The space id, through a nonce.** The space id is the first 16 bytes of `H("nocentraldb/space-id" || creator member id || nonce)`, where the nonce is 16 random bytes in the body and H is SHA-256 (RFC 0003). It is 128 bits that nobody can predict, and it holds no time. RFC 0002's D3 decided that space ids are drawn like object ids, at random. The owner revisited that decision for space ids (M7), because a random space id does not bind the space to its creator.
+- **The space id, through a nonce.** The space id is the first 16 bytes of `H("nocentraldb/space-id" || creator member id || nonce)`, where the nonce is 16 random bytes in the body and H is SHA-256 (RFC 0003). It is 128 bits that nobody can predict, and it holds no time. Object ids are drawn at random (RFC 0002); a space id is derived instead, because a random space id does not bind the space to its creator: anyone who learns one could write a competing genesis, and with a lower change id take the space over on every member that holds both. Keeping 128 random bits, and the genesis with the lower change id wins, was not taken.
 - **The creator**: its signing key, its agreement key and its member certificate (RFC 0003). Its member id is the header's author member id (RFC 0002, header key 2), which every reader recomputes from the two keys.
 - **The first key generation**, by its generation id (see [Generation ids](#generation-ids)). The genesis carries no envelope. The creator writes a key envelope for itself as its second change, so that the relay's `keys` request finds it like any member's.
 - **The suite**, in the header (RFC 0002, header key 8). The genesis's suite is the space's suite. v1 has one suite.
-- **The model id** ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)). The owner decided D13 C (Carsten, 2026-11-08): a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model. The genesis carries it in key 13. The owner decided in M26 that it is sealed, so that only members can read it.
+- **The model id** ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)). A space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model, so two apps that share a space share one model lineage. The genesis carries it in key 13, sealed, so that only members can read it (see [Genesis](#genesis)). Keeping the model id out of the genesis was not taken.
 
 The genesis does **not** name the space's name or its description. Those are content, and the relay must not read them (principle 1).
 
@@ -82,7 +84,7 @@ A control change is a genesis when its entry type is genesis. It is valid when a
 - its signature verifies with the signing key in its body, which hashes, together with the agreement key, to the author member id;
 - the certificate verifies against the account key it names (RFC 0003).
 
-Only the creator can write a valid genesis for its space id, because anyone else's member id derives another space id. The creator can write two, with the same nonce: an equivocation (RFC 0002). RFC 0002 keeps and folds both changes of an equivocation. A space cannot have two first changes, so this RFC narrows that rule for the genesis (see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs)). Both stay in the log. The one with the lower change id, compared as bytes, is the genesis, and the other is kept with the reason "equivocated genesis" and folds nothing. A member that holds only one takes that one, and switches when it receives one with a lower id. Every member that holds both picks the same one.
+Only the creator can write a valid genesis for its space id, because anyone else's member id derives another space id. The creator can write two, with the same nonce: an equivocation (RFC 0002). RFC 0002 keeps and folds both changes of an equivocation. A space cannot have two first changes, so this RFC narrows that rule for the genesis. Both stay in the log. The one with the lower change id, compared as bytes, is the genesis, and the other is kept with the reason "equivocated genesis" and folds nothing. A member that holds only one takes that one, and switches when it receives one with a lower id. Every member that holds both picks the same one. Only the creator's own device can cause it, by a backup restore or a clone. The alternative was not taken: both are rejected, and the space is unusable.
 
 The relay creates a space's log when it accepts a valid genesis for a space id it does not hold, and answers `space_exists` otherwise (RFC 0007). Every other control change has the genesis in its causal past. A control change without control dependencies that is not a genesis is malformed.
 
@@ -103,16 +105,18 @@ Rights are per space. Every member of a space holds its keys and a full copy (RF
 | Sign off an erasure, through its account | | | yes |
 
 - **Who may write what is checked per change**, by members and the relay alike. Each control change type needs one right (see [The control bodies](#the-control-bodies)). A sealed change needs the right to write sealed changes.
-- **The sign-off of an erasure** comes from an account, not a member (RFC 0003). The account must hold an admin member in the space, in the state of the shred entry's causal past. It must not be the account of the member that performs the erasure. This narrows RFC 0003, which asks only for "an account that has a certified member in the space" (decision M9).
+- **The sign-off of an erasure** comes from an account, not a member (RFC 0003). The account must hold an admin member in the space, in the state of the shred entry's causal past. It must not be the account of the member that performs the erasure. An erasure cannot be undone, and a reader's account should not approve one, so any account with a member in the space, other than the performer's, was not taken. "Account" here means the account's identity, its recovery key, which the account key statement in every certificate names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)), so a new account key after a lost device does not make a second account.
 - **A reader cannot write content**, but it can read everything, and its device can leak what it read. The reader role limits writes, not knowledge (principle 4). Typical readers are adapters (RFC 0007), dashboards and auditors.
-- **Agents hold roles like every member.** The SDK adds an agent as a writer unless the app asks for another role (decision M14). A sub-agent in an ad-hoc space (RFC 0003) is a writer there, and its parent is the admin.
-- **A space can lose its last admin**, when the last admin leaves or admins remove each other at the same time. The SDK refuses to let the last admin leave, but it cannot prevent the concurrent case. A space without an admin keeps working for content, but nobody can change its membership or rotate its key (decision M13).
+- **Agents hold roles like every member.** The SDK adds an agent as a writer unless the app asks for another role, because most agents in RFC 0001's examples write; the SDK's notice says the role in plain words in every case. Reader, unless the app asks for more, was not taken: every writing agent would become a two-step setup. No default was not taken either: the safest, but every call grows for the common case. A sub-agent in an ad-hoc space (RFC 0003) is a writer there, and its parent is the admin.
+- **A space can lose its last admin**, when the last admin leaves or admins remove each other at the same time. The SDK refuses to let the last admin leave, but it cannot prevent the concurrent case. A space without an admin keeps working for content, but nobody can change its membership or rotate its key. That the most senior writer becomes admin automatically was not taken: it would give the role to someone who was never chosen for it.
 
 What the roles do **not** do:
 
 - They give no rights inside the space's data. Every writer may change every object of the space. Finer rights come from more spaces (RFC 0001, "What it is not").
 - A revocation does not take back what a member already read (RFC 0003, "What rotation does not do").
 - A role is checked against the changes a member holds. A member that has not seen a revocation yet treats the revoked member as it was, until the revocation reaches it.
+
+**Why three roles.** Readers cover adapters, dashboards and auditors, which should not write. Writer and admin only was not taken, nor capabilities per member, which would add a check per capability on every member and the relay, for cases nobody has asked for yet; more roles can come later. Rights per collection or per object were not taken: they need a reader that enforces them on content, which the relay cannot be (RFC 0001), and more spaces give the same effect. A quorum of admins for each membership change was not taken: it needs several admins online, and a small team's space would stop when one is on holiday.
 
 ## The control bodies
 
@@ -121,14 +125,14 @@ Every control change carries its body as RFC 0002's payload (header key 6). The 
 ```text
 control body (CBOR map; the payload of a kind 1 change)
 ├── 1 entry type          uint, see the table below (RFC 0002: "key 1 names the entry type")
-├── 2 clock               reserved; absent (decision M18)
+├── 2 clock               reserved; absent, see below
 ├── 3 control deps        array of change ids, sorted by bytes, no id twice:
 │                         the heads of the author's control DAG when it wrote
 ├── 4 to 7                reserved
 └── 8 ...                 the fields of the entry type
 ```
 
-Key 3 means what payload key 3 means in RFC 0002: the author's heads when it wrote, restricted to control changes. Key 2 is held free for a clock. Control changes carry none, because a clock would show the relay when admins act, offline work included, which RFC 0002 decided against for every change (D6). The audit of a space's membership therefore has an order (see [Folding the membership state](#folding-the-membership-state)) but no time of writing, only the relay's time of acceptance.
+Key 3 means what payload key 3 means in RFC 0002: the author's heads when it wrote, restricted to control changes. Key 2 is held free for a clock. Control changes carry none, because a clock would show the relay when admins act, offline work included, which RFC 0002 keeps from the relay for every change. Control bodies that carry the author's hybrid logical clock, as payloads do, were not taken. The audit of a space's membership therefore has an order (see [Folding the membership state](#folding-the-membership-state)) but no time of writing, only the relay's time of acceptance.
 
 | Entry type | Name | Right its author needs |
 | --- | --- | --- |
@@ -142,6 +146,8 @@ Key 3 means what payload key 3 means in RFC 0002: the author's heads when it wro
 
 Other entry types are reserved. A member that meets one keeps the change, parked, as RFC 0002 does for every [change it does not understand](0002-change-and-log-format.md#versioning-old-clients-keep-what-they-do-not-understand). Keys 8 to 63 of a body are "must understand", keys from 64 up "may ignore", as in RFC 0002's maps.
 
+One membership entry with an action keeps the rules about grants and revocations in one place, so one entry type per action, with add, set role and remove as separate types, was not taken. Field numbers from 8 up leave the keys RFC 0002's payload map uses free for meanings shared with it. The entry types and field numbers are part of the wire format, so they cannot change once shipped.
+
 **The header** of a control change has the same keys as every change (RFC 0002). Its key generation (header key 4) is the generation the author writes sealed changes with when it writes the control change, or the first generation for the genesis. The fold does not use it.
 
 ### Genesis
@@ -153,10 +159,10 @@ genesis (entry type 0)
 ├── 10 agreement key      32 bytes, the creator's X25519 public key
 ├── 11 certificate        the creator's member certificate (RFC 0003)
 ├── 12 first generation   uint, the generation id of generation 1
-└── 13 model id           bstr, required: the creator's model.id (RFC 0005, D13), sealed (below)
+└── 13 model id           bstr, required: the creator's model.id (RFC 0005), sealed (below)
 ```
 
-**The model id field** (key 13), byte by byte, as M26 decided:
+**The model id field** (key 13), byte by byte:
 
 ```text
 model id field = nonce (24 bytes) || ciphertext (16 bytes) || tag (16 bytes)     56 bytes
@@ -167,9 +173,9 @@ model id field = nonce (24 bytes) || ciphertext (16 bytes) || tag (16 bytes)    
   associated data = "nocentraldb/model-id" || space id (16 bytes) || creator member id (32 bytes)
 ```
 
-Every member can open it, because every member holds generation 1's key through the key chain (RFC 0003). The relay cannot. The associated data binds the field to its space and creator, so it cannot be copied into another genesis. M26's rejected option A would have made the field the 16 raw bytes of `model.id`, unencrypted.
+Every member can open it, because every member holds generation 1's key through the key chain (RFC 0003). The relay cannot. The associated data binds the field to its space and creator, so it cannot be copied into another genesis. `model.id` is 128 random bits, but readable in the genesis it would tell the relay which spaces share one app's model lineage, across every customer on the relay, and RFC 0002 lists the model as something the relay cannot see. No rule of the relay needs it. Sealing costs 40 bytes per space, a subkey label in RFC 0003 and a local check on decryption. Two other forms were not taken: the 16 raw bytes of `model.id`, readable by the relay; and `H(space id || model.id)`, which hides the id, but with which members could only confirm their own model, so the SDK could not tell a user which app a space needs.
 
-Key 13 is "must understand" and required: a genesis without it is malformed. A member checks it when it folds the genesis; a model id that does not decrypt is a local check (see [What the fold may read](#what-the-fold-may-read)): the member reports it and its SDK refuses to write into the space, because it cannot tell which model the space belongs to. The subkey label `"nocentraldb/model-id"` is a new use of a space key, so RFC 0003 lists it next to its other subkeys, as its [model-id subkey](0003-keys-and-cryptography.md#model-id-subkey) (decision 15).
+Key 13 is "must understand" and required: a genesis without it is malformed. A member checks it when it folds the genesis; a model id that does not decrypt is a local check (see [What the fold may read](#what-the-fold-may-read)): the member reports it and its SDK refuses to write into the space, because it cannot tell which model the space belongs to. The subkey label `"nocentraldb/model-id"` is a new use of a space key, so RFC 0003 lists it next to its other subkeys, as its [model-id subkey](0003-keys-and-cryptography.md#model-id-subkey).
 
 ### Membership entry
 
@@ -191,7 +197,7 @@ membership entry (entry type 1)
 - **Add** gives a role to a member that is not a member in the state of the add's causal past. Its author checks the certificate first (RFC 0003). The from generation is the generation the author writes with. The author then writes a key envelope for the new member, for that generation.
 - **Set role** changes a member's role. It is a grant of the new role. It is also a revocation, with a cutoff, of every right above the new role, for every grant of the same member that it did not see. A demotion therefore revokes what the member loses. A raise revokes nothing from the grants it saw, but caps a concurrent higher raise (see [The function](#the-function), step 3).
 - **Remove** is a revocation of every right, with a cutoff. An admin removes others. Any member may remove itself (leave), naming its own highest sequence as the cutoff. A removal is answered by a rotation (see [Key chain entry](#key-chain-entry)). A member that leaves cannot rotate, because it must not know the next key, so the next admin that sees the removal rotates for it.
-- **A re-grant** is an add of a member that was removed, or a set role that gives the right to write to a member that lost it, or to a reader. It must have the revocation in its causal past. Its from generation must be a **fresh generation**: one whose key chain entry the re-grant's author wrote, with no key envelope to the subject for it in the re-grant's causal past. Like every rule of step 1, this reads only the re-grant's causal past. The subject therefore cannot have held that key before the re-grant, unless another admin wrote it an envelope for that generation concurrently, while the subject was not a member in that admin's own view. Step 1 rejects such an envelope, and the exposure rule counts it, but a key once delivered cannot be taken back. Everything it wrote while it lacked the right is sealed under a generation it held before, which never counts under the re-grant (see [Sealed changes](#sealed-changes)). An admin that re-grants rotates first, so a re-grant costs one envelope per member (decision M5).
+- **A re-grant** is an add of a member that was removed, or a set role that gives the right to write to a member that lost it, or to a reader. It must have the revocation in its causal past. Its from generation must be a **fresh generation**: one whose key chain entry the re-grant's author wrote, with no key envelope to the subject for it in the re-grant's causal past. Like every rule of step 1, this reads only the re-grant's causal past. The subject therefore cannot have held that key before the re-grant, unless another admin wrote it an envelope for that generation concurrently, while the subject was not a member in that admin's own view. Step 1 rejects such an envelope, and the exposure rule counts it, but a key once delivered cannot be taken back. Everything it wrote while it lacked the right is sealed under a generation it held before, which never counts under the re-grant (see [Sealed changes](#sealed-changes)). An admin that re-grants rotates first, so a re-grant costs one envelope per member. A member key serves every space of a device, so never re-adding a member id would force a new device key everywhere for one mistake, and was not taken. A re-grant without a fresh generation was not taken either: a demoted or removed member's writes in between would count again, also ones it pre-dated with high sequence numbers.
 
 ![Adding and removing a member: to add one, an admin writes a membership entry with the role, the member's public keys and its certificate, then a key envelope with the current generation wrapped to the new member; the relay sends added, and the new member pulls the log and walks the key chain back to generation 1; to remove one, an admin writes a membership entry with a cutoff, a key chain entry for a new generation that encrypts the previous keys, key envelopes for every remaining member, and re-wraps the person-key records under the new generation](0008-add-and-remove.svg)
 
@@ -241,7 +247,9 @@ generation id (uint, 64 bits)
 
 The members and the relay recompute the tag from the key chain entry, and reject an entry whose generation id does not match. Two honest rotations differ in their author, or in their previous generations, because an author that rotates twice has seen its first rotation. Their ids are therefore different, except by a 48-bit hash collision. A member cannot steer one with a single try: the only inputs it controls are its own member id and which existing generations it lists. If two accepted key chain entries still name the same id, both are rejected, and the SDK reports it.
 
-**What the tag does not stop.** As RFC 0003 notes, an admin that wants a collision can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects, and get that key made admin. Both rotations are then rejected. The attack blocks a rotation and exposes no key, and a malicious admin can block rotations more simply by removing the admins who would rotate. A longer tag is not worth its cost: the header's 64 bits would leave fewer for the ordinal, or the header format would have to change (M6, option C). Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. The graph holds every key chain entry that is valid when written (see [The function](#the-function), step 1), accepted or later rejected. A rotation that a later revocation rejects still links its generation, so honest writes under it keep counting (decision M17). An entry that was never valid when written, such as one by a member that never held the admin role in its own causal past, does not count. The exposure rule counts every key chain entry and envelope in the set, whatever its verdict. Rejecting both rotations that share an id is decision M23. This keeps RFC 0002's format and gives its number a structure (decision M6).
+**What the tag does not stop.** As RFC 0003 notes, an admin that wants a collision can search about 2⁴⁸ member keys for one whose tag collides with a rotation it expects, and get that key made admin. Both rotations are then rejected. The attack blocks a rotation and exposes no key, and a malicious admin can block rotations more simply by removing the admins who would rotate. A longer tag is not worth its cost: the header's 64 bits would leave fewer for the ordinal, or the header format would have to change. Generations are related by the **generation graph**: each points to its previous generations, and "descends from" follows those links. The graph holds every key chain entry that is valid when written (see [The function](#the-function), step 1), accepted or later rejected. A rotation that a later revocation rejects still links its generation, so honest writes under it keep counting. That such changes are rejected with the generation was not taken: honest writes on an island whose admin is revoked later would be lost, and the exposure rule already makes the next admin rotate away from such a key. An entry that was never valid when written, such as one by a member that never held the admin role in its own causal past, does not count. The exposure rule counts every key chain entry and envelope in the set, whatever its verdict. Both rotations that share an id are rejected. If the first in the order kept the id, a member that grinds a colliding id could win against an honest rotation that comes later; rejecting both only blocks them, and with derived ids that needs about 2⁴⁸ tries. That the first in the order keeps the id was not taken.
+
+The structure keeps RFC 0002's header format, and 65,535 rotations per space are enough for v1. Generation numbers only, with the lower key chain hash winning, as RFC 0003 first sketched, were not taken: two keys under one number make the changes under it ambiguous. Nor was a 32-byte generation id in the header, which changes RFC 0002's header format; nor a random tag, with which an admin could pick a tag that collides with another rotation on purpose, with one try. Rejecting every generation id that two rotations share without deriving it was not taken either: changes written on the losing island would become undecryptable, and a malicious admin could cause it.
 
 ### Person-key entry
 
@@ -282,15 +290,15 @@ A member writes two acknowledgements per shred. It writes the first, with `delet
 
 ### What this RFC uses from RFC 0003
 
-RFC 0003 defines the formats of what keys sign and derive (its section "Formats of what keys sign and derive", decision 15). This RFC uses them as they are:
+RFC 0003 defines the formats of what keys sign and derive ([RFC 0003, "Formats of what keys sign and derive"](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)). This RFC uses them as they are:
 
-- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id. The account key signs a device's or an agent's certificate. A sub-agent's certificate is signed by its parent's member signing key, under its own context string (`"nocentraldb/sub-agent-cert"`), because a parent agent does not hold the account key and must not. Its key 1 still carries the parent's account key, for attribution. A member that checks a sub-agent's certificate, in an add entry or a genesis, checks the chain: the parent's own certificate, which must be of kind agent or sub-agent and name the same account key. The parent's certificate must be in this space's control changes, in the genesis or add entry that made the parent a member, so the check reads only the control set. In RFC 0003's ad-hoc space the parent is the creator, so it always is. An add entry whose sub-agent's parent is not a member in the state of the add's causal past is not valid when written. For the sign-off below, a sub-agent counts as its parent's account.
+- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id, and carries the account key statement. The account key signs a device's or an agent's certificate. A member that checks a certificate checks the chain from the account's identity: the statement against the recovery key it names, then the certificate against the account key the statement names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). A sub-agent's certificate is signed by its parent's member signing key, under its own context string (`"nocentraldb/sub-agent-cert"`), because a parent agent does not hold the account key and must not. Its key 1 still carries the parent's account key, for attribution. A member that checks a sub-agent's certificate, in an add entry or a genesis, checks the chain: the parent's own certificate, which must be of kind agent or sub-agent and name the same account key. The parent's certificate must be in this space's control changes, in the genesis or add entry that made the parent a member, so the check reads only the control set. In RFC 0003's ad-hoc space the parent is the creator, so it always is. An add entry whose sub-agent's parent is not a member in the state of the add's causal past is not valid when written. For the sign-off below, a sub-agent counts as its parent's account. The account key, as for every other kind, was not taken for a sub-agent: a parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space").
 - **The account sign-off** names the space id, the person-key id and the performer's member id, with the account key and its signature.
 - **The key-chain subkey** is the HKDF-SHA256 subkey of the new generation's key that encrypts the previous keys in a key chain entry.
 
 ## Folding the membership state
 
-The control state must be the same on every member that holds the same control changes, whatever order they arrived in (principle 2). The relay must reach the same state over the changes it holds. This section defines that state as a function of the set, as RFC 0004 defines a field's state.
+The control state must be the same on every member that holds the same control changes, whatever order they arrived in (principle 2). The relay must reach the same state over the changes it holds. This section defines that state as a function of the set, as RFC 0004 defines a field's state. The order of arrival, or the relay's order, does not decide: it differs between members and islands, so copies would diverge. Nor does a total order of membership changes, as MLS commits have, which needs one party to order them, and island mode cannot have one (RFC 0003).
 
 ### What the fold may read
 
@@ -300,7 +308,7 @@ The fold reads only what every member and the relay can read: the control bodies
 - whether a person-key record matches its commitment;
 - whether a sealed change decrypts.
 
-They are **local checks**. A member that finds a wrong key reports it, with the author whose signature covers it, and the SDK shows it. The control state does not change. RFC 0002 rejects a sealed change that does not decrypt ([Rejected changes](0002-change-and-log-format.md#rejected-changes)). Every member that holds the generation's key reaches the same verdict, because AEAD decryption is deterministic. A member that holds no key for it rejects it with the reason "no key" until an envelope arrives (D11).
+They are **local checks**. A member that finds a wrong key reports it, with the author whose signature covers it, and the SDK shows it. The control state does not change. RFC 0002 rejects a sealed change that does not decrypt ([Rejected changes](0002-change-and-log-format.md#rejected-changes)). Every member that holds the generation's key reaches the same verdict, because AEAD decryption is deterministic. A member that holds no key for it rejects it with the reason "no key" until an envelope arrives. Fold rules that check wrapped keys or decryption were not taken: only some members can check them, so the control state would split.
 
 ### The function
 
@@ -314,7 +322,7 @@ Let S be the set of control changes of a space that a holder has, each with a va
 - then every member that holds a grant of admin in S that is valid when written, by the smallest pair (depth, change id) over those grants. A grant's **depth** is one more than the smallest depth among the admin grants its author holds in the state of the grant's causal past; the creator has depth 0. Depth follows only the chain of admin grants, so a missing dependency elsewhere in the control DAG cannot change it. Change ids compare as bytes;
 - then every other member id, by its bytes.
 
-A grant is one deeper than the grant its author's right rested on. So an admin ranks before every admin whose only admin grants it wrote itself. A member that another admin made admin at a smaller depth ranks by that grant instead.
+A grant is one deeper than the grant its author's right rested on. So an admin ranks before every admin whose only admin grants it wrote itself. A member that another admin made admin at a smaller depth ranks by that grant instead. Seniority from each revocation's own causal past was not taken: two revocations could rank their authors differently, so the order would not be total.
 
 **3. Revocation edges.** A revocation R (a set role or a remove; a remove sets "none") *excludes* a change y of its subject when all of these hold:
 
@@ -338,7 +346,7 @@ A cycle arises when concurrent revocations exclude each other. The first revocat
 2. its author holds the right in the state so far: the accepted changes before it in the order;
 3. no accepted revocation before it in the order excludes it.
 
-An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* (D11) with its reason, and changes nothing. Two rules apply to the whole set rather than to the order:
+An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* with its reason, and changes nothing. Two rules apply to the whole set rather than to the order:
 
 - A person-key entry that a shred of the same person-key id did not see is rejected when S holds an accepted shred for that id, wherever the entry falls in the order. A shred therefore wins over a concurrent re-wrap.
 - Of two accepted shreds of one person-key id, the first in the order takes effect, and the second changes nothing.
@@ -354,9 +362,9 @@ A sealed change is judged by its header against the final state. The order plays
 - g is G's from generation, or descends from it in the generation graph; and
 - for every accepted revocation R of X's right to write that G did not see, s is at most R's cutoff.
 
-Otherwise the change is rejected with the reason "not a member" (D11). It is checked again whenever a control change of the space arrives (D11).
+Otherwise the change is rejected with the reason "not a member". It is checked again whenever a control change of the space arrives (RFC 0002).
 
-This **membership verdict** needs nothing but headers and control changes. It never waits for a sealed change that has not arrived, it never depends on which sealed changes a member holds, and every holder of the same control changes reaches the same one, the relay included. Decryption comes after it and is not part of it. RFC 0002's step 5 rejects a change with "no key" or "undecryptable", and that verdict differs from member to member: a member without the generation's key rejects with "no key" what a member with the key folds. Those rejections are local. They are checked again under D11 when an envelope arrives, and the convergence promise for them is RFC 0002's: every member that holds the key reaches the same verdict.
+This **membership verdict** needs nothing but headers and control changes. It never waits for a sealed change that has not arrived, it never depends on which sealed changes a member holds, and every holder of the same control changes reaches the same one, the relay included. Decryption comes after it and is not part of it. RFC 0002's step 5 rejects a change with "no key" or "undecryptable", and that verdict differs from member to member: a member without the generation's key rejects with "no key" what a member with the key folds. Those rejections are local. They are checked again when an envelope arrives, and the convergence promise for them is RFC 0002's: every member that holds the key reaches the same verdict.
 
 ### Why it converges
 
@@ -375,11 +383,11 @@ The fold does not need to be incremental. A space holds few control changes, hun
 - a shred arrives that a person-key entry did not see;
 - a change arrives that moves which of two shreds of one person-key id comes first in the order;
 - an equivocated genesis with a lower change id arrives late, and becomes the genesis (see [How the relay and members recognise it](#how-the-relay-and-members-recognise-it));
-- a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (decision M23).
+- a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (see [Generation ids](#generation-ids)).
 
-**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). Allowing un-folding at all is part of decision M4: without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
+**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). Un-folding is allowed because without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
 
-Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. A change that the authors of all possible revocations have seen can no longer flip. [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable) uses this. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change (decision M4).
+Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. A change that the authors of all possible revocations have seen can no longer flip. [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable) uses this. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change. That is the price of island mode under every option.
 
 ### The cutoff
 
@@ -387,7 +395,9 @@ A revocation's cutoff is the subject's highest author sequence that the revoking
 
 The cutoff is a number in a control body, and the author sequence is a number in every header. Members and the relay therefore compute the same verdict, without decrypting anything. The rule is safe against a member that lies about its control dependencies: it cannot change what the revoking member held. A change written after the revocation carries a higher sequence and is excluded.
 
-**What the cutoff does not stop.** A revoked member can write a new change under a sequence number at or below its cutoff that it already used. That is an equivocation (RFC 0002). Every member detects it once it holds both changes, and the SDK reports it, but the second change is inside the cutoff and is accepted, as RFC 0002 accepts both changes of every equivocation. The revoked member holds only generations up to the revocation's rotation, so such a change is sealed under an old generation. The SDK marks it as written by a revoked member under an old generation (decision M3).
+**What the cutoff does not stop.** A revoked member can write a new change under a sequence number at or below its cutoff that it already used. That is an equivocation (RFC 0002). Every member detects it once it holds both changes, and the SDK reports it, but the second change is inside the cutoff and is accepted, as RFC 0002 accepts both changes of every equivocation. The revoked member holds only generations up to the revocation's rotation, so such a change is sealed under an old generation. The SDK marks it as written by a revoked member under an old generation.
+
+**Why a cutoff.** It needs only headers, so members and the relay reach one verdict. The same cutoff plus a hash over the subject's change ids up to it was not taken: a member can check it only when it holds all of them, which splits verdicts between members. Counting the changes the relay accepted before the revocation, and refusing every change from the removal on, was not taken: it depends on the relay's order, which members on an island do not have, and refuses changes the remover had already received. A cutoff checked against the dependencies inside sealed changes was not taken: only members that decrypt and hold those changes can check it, so members and the relay would reach different verdicts. Revoking by time was not taken: the clock is encrypted, and a removed member can write any clock.
 
 ### Effects that wait until a change is stable
 
@@ -396,8 +406,10 @@ The view can always be recomputed, so un-folding a change costs nothing but work
 | Control change | Effect at once, reversible | Effect that waits until it is stable |
 | --- | --- | --- |
 | Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). The member writes its "seen" acknowledgement. | The member deletes its copy of the person key and then writes its "deleted" acknowledgement. The relay deletes the person-key record. |
-| Key envelope | The member unwraps the key into its keystore and can decrypt. | Nothing irreversible: if the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it (decision M17). |
+| Key envelope | The member unwraps the key into its keystore and can decrypt. | Nothing irreversible: if the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it. |
 | Membership entry, key chain entry, person-key entry, acknowledgement | They change the control state; the relay changes whom it serves. | Nothing irreversible. |
+
+Doing them as soon as the shred is accepted was not taken: a shred that a concurrent revocation later rejects must not have destroyed keys that cannot come back. The cost: one offline admin delays the destruction until it returns or is removed.
 
 **When a change is stable.** A holder computes its stable changes as the smallest set closed under this rule, starting from none. An accepted control change c is stable when, for every member id that holds the admin role in its state, or held it and lost it to an accepted revocation, the holder holds every change of that member from author sequence 1 up to one of:
 
@@ -414,7 +426,7 @@ A revocation that is not stable yet bounds nothing: until it is, its subject cou
 - **Demoting or removing the blocking admins.** An admin lowers each blocking device from admin to writer, or removes it. The demotion's cutoff ends the run the holder needs, and once the demotion is stable, the shred can become stable. A demotion to writer needs no rotation, because the device keeps the right to read and write.
 - **An admin's first acknowledgement counts.** Every admin device that is online writes a "seen" acknowledgement as soon as it accepts the shred (see [Acknowledgement](#acknowledgement)). An admin that is online but otherwise idle therefore never blocks; only one that does not come online does.
 
-How long the period is, and whether the SDK may demote an idle admin device on its own after a longer one, is decision M21. Until the shred is stable, the erasure has not fully happened. That conflicts with what principle 3's team lead expects, and the RFC names it (see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs)).
+The period is 7 days. It leaves well inside the one-month deadline of a data-subject request for a person to act, and it never changes a role without a person. Letting an admin's SDK demote the blocking admin devices on its own after 21 days was not taken: it lowers rights automatically, which the owner should allow explicitly. Destroying the key and acknowledging at once, so that only the relay's deletion waits, was not taken either: a shred that a concurrent revocation later rejects would then have destroyed keys for good. Until the shred is stable, the erasure has not fully happened, which principle 3's team lead does not expect (see [Agreement with GENESIS.md and the other RFCs](#agreement-with-genesismd-and-the-other-rfcs)).
 
 ### Concurrent add and remove of one member
 
@@ -422,7 +434,7 @@ Alice removes Mallory's laptop, which was stolen. At the same time, on another i
 
 Bob's entry is a grant that did not see the removal, so Alice's removal caps it at "none". On every copy the laptop is removed. Every change it made above Alice's cutoff is rejected, whether it reached a member before or after the removal. Bob's entry stays accepted but without effect, and the SDK shows it as a **lost grant**, the way RFC 0004 shows a lost removal.
 
-This is the opposite of RFC 0004's sets, where an addition wins over a concurrent removal. For data, a lost addition is data that is gone. For membership, a lost removal leaves a stolen device writing. So the removal wins, and Bob can repeat the grant once he has seen the removal and still wants it (decision M2). Concurrent role changes follow the same rule: when two admins set a member's role at the same time, the member ends with the lower role. Each set role carries a cutoff, so whatever the member did under the higher role above that cutoff is excluded on every copy, wherever it lands in the order.
+This is the opposite of RFC 0004's sets, where an addition wins over a concurrent removal. For data, a lost addition is data that is gone. For membership, a lost removal leaves a stolen device writing. So the removal wins, and Bob can repeat the grant once he has seen the removal and still wants it. The rule that the grant wins, as an addition does in RFC 0004's sets, was not taken: a lost grant is cheap to repeat. Concurrent role changes follow the same rule: when two admins set a member's role at the same time, the member ends with the lower role. Each set role carries a cutoff, so whatever the member did under the higher role above that cutoff is excluded on every copy, wherever it lands in the order.
 
 ### Two removals that rotate the key at once
 
@@ -430,9 +442,9 @@ Alice removes Xavier and rotates the key. At the same time, on another island, B
 
 1. Both removals are accepted; neither excludes the other. Xavier and Yvonne are removed on every copy.
 2. Both generations exist. Their ordinals are equal and their ids differ, because their authors differ.
-3. The **current generation**, which members write sealed changes with, is a head of the generation graph: a generation that no accepted key chain entry lists as previous. Among the heads, it is the one with the highest ordinal, then the one whose key chain entry comes first in the order. Every member picks the same one. A generation that two key chain entries name is never a head: both entries are rejected (decision M23), so neither can be the one writers seal under, and the generations before it stay heads ([M27](#m27-a-generation-that-two-key-chain-entries-name)). A generation whose key chain entry was valid when written but is rejected later is still a head and can be current: changes sealed under it keep counting (decision M17), and step 5 rotates away from it once it is exposed ([M28](#m28-a-rejected-rotation-can-be-current)). A member that holds no envelope for it writes with the newest generation it holds, and the SDK reports that it waits for an envelope.
-4. **Who may hold a generation**: the author of its key chain entry, every recipient of any envelope for it, and everyone who may hold a generation that descends from it. Every envelope in S counts, accepted or rejected, because a rejected envelope may still have been delivered. The creator holds the first generation, which has no key chain entry. The authors counted are those of every key chain entry the generation graph holds, valid when written, whatever its final verdict; an entry that was never valid when written adds no generation, so its author is not counted. The author of an envelope is not counted for it, since an admin that wraps a key holds it through its own entry or envelope ([M29](#m29-who-may-hold-a-generation)). A generation is **exposed** when anyone who may hold it is not a member of the state.
-5. When the current generation is exposed, an admin writes a **merge rotation**: a key chain entry that lists every head as previous, with envelopes for the current members only. The SDK of any admin that sees an exposed current generation does so after a random delay of up to a minute, unless it sees another admin's merge rotation first (decision M15).
+3. The **current generation**, which members write sealed changes with, is a head of the generation graph: a generation that no accepted key chain entry lists as previous. Among the heads, it is the one with the highest ordinal, then the one whose key chain entry comes first in the order. Every member picks the same one. A generation that two key chain entries name is never a head: both entries are rejected (see [Generation ids](#generation-ids)), so neither can be the one writers seal under, and the generations before it stay heads. The first generation, which no entry can name, keeps at least one head in every graph. Letting it be current was not taken: members would seal under an id that may name two keys. A generation whose key chain entry was valid when written but is rejected later is still a head and can be current: changes sealed under it keep counting, so the space keeps working until the next rotation, and step 5 rotates away from it once it is exposed. Leaving rejected rotations out of the heads was not taken: a generation a removed admin holds would never be rotated away from. A member that holds no envelope for it writes with the newest generation it holds, and the SDK reports that it waits for an envelope.
+4. **Who may hold a generation**: the author of its key chain entry, every recipient of any envelope for it, and everyone who may hold a generation that descends from it. Every envelope in S counts, accepted or rejected, because a rejected envelope may still have been delivered. The creator holds the first generation, which has no key chain entry. The authors counted are those of every key chain entry the generation graph holds, valid when written, whatever its final verdict; an entry that was never valid when written adds no generation, so its author is not counted. The author of an envelope is not counted for it, since an admin that wraps a key holds it through its own entry or envelope. Counting only accepted envelopes was not taken, because a rejected envelope may still have been delivered; nor was counting the authors of entries that were never valid when written, because a removed member could then force rotations by naming the current generation. A generation is **exposed** when anyone who may hold it is not a member of the state.
+5. When the current generation is exposed, an admin writes a **merge rotation**: a key chain entry that lists every head as previous, with envelopes for the current members only. The SDK of any admin that sees an exposed current generation does so after a random delay of up to a minute, unless it sees another admin's merge rotation first. Exposure means a removed member may read new changes, and an admin's app may not be built to handle a report; it costs one rotation per exposure, and rarely two. Leaving it to the SDK to report the exposure while the app asks an admin to rotate was not taken.
 6. Two merge rotations written at the same time are concurrent rotations again, and step 5 repeats. Each round needs two admins to rotate within the same minute without seeing each other.
 
 **What this does not do.** Until the merge rotation lands, members write under an exposed generation. Xavier or Yvonne could read those changes if they obtained them. The SDK reports the exposure until it ends. If no admin is online, it lasts until one is. Envelopes that a holder never received cannot count: a removed admin's envelope that never left its island makes a generation exposed only where it arrives. The same rule covers a member that left (it cannot rotate for itself) and a removal whose author never rotated, for example because its device crashed between the two changes.
@@ -443,7 +455,7 @@ Alice removes Bob, and at the same time Bob, or whoever holds Bob's device, remo
 
 In a ring of three, where A removes B, B removes C and C removes A at the same time, with A the most senior: A's and B's edges are added, and C's edge, which would close the cycle, is skipped. In the order, A's removal is accepted, B's is excluded, and C's is accepted, because nobody whose revocation is accepted revoked C. A and B are removed, C stays, and A's removal of B stands, because it comes before C's removal in the order.
 
-Seniority is not a judgement of who is right. It is a fixed way to keep one side of a cycle, so that a compromised admin cannot cancel its own removal by removing the remover at the same moment (decision M4). It protects only against a junior attacker. A compromised senior admin wins the cycle. Another admin, or the creator, must then remove it again once the honest admin reports it.
+Seniority is not a judgement of who is right. It is a fixed way to keep one side of a cycle, so that a compromised admin cannot cancel its own removal by removing the remover at the same moment. Both of two mutual removals taking effect was not taken: a stolen admin device would take an honest admin down with it, and could leave the space without an admin. Neither of two mutual removals taking effect was not taken either: a compromised admin would cancel its own removal. It protects only against a junior attacker. A compromised senior admin wins the cycle. Another admin, or the creator, must then remove it again once the honest admin reports it.
 
 ### A member removed while offline who keeps writing
 
@@ -453,9 +465,9 @@ Carol's laptop is offline for a week. Meanwhile Alice removes it, naming as cuto
 - **On members that received them directly**, on the laptop's island: when Alice's removal reaches them, the fold rejects sequences 41 to 60 and un-folds what they had applied (RFC 0006). Their state then equals that of every member that holds the same changes.
 - **On the laptop itself.** It folds its own removal like any member, and its own changes above the cutoff become rejected in its log. The SDK tells the app that no member accepts the changes made since the cutoff. The laptop keeps its copy of everything it received before.
 
-Changes the laptop wrote before Alice's removal but above sequence 40 are rejected too, because Alice had not received them. Neither the relay nor the members can tell an honest late change from a backdated one: the clock is encrypted, and the sequence number is the only order they can check. The SDK warns an admin who removes a member whose recent changes it has not received yet (decision M3).
+Changes the laptop wrote before Alice's removal but above sequence 40 are rejected too, because Alice had not received them. Neither the relay nor the members can tell an honest late change from a backdated one: the clock is encrypted, and the sequence number is the only order they can check. The SDK warns an admin who removes a member whose recent changes it has not received yet.
 
-Changes at or below the cutoff that arrive late are accepted everywhere, by the relay too, unlike RFC 0007's decision R7 A.
+Changes at or below the cutoff that arrive late are accepted everywhere, by the relay too.
 
 ### A member demoted and raised again
 
@@ -493,43 +505,45 @@ The control state is treated like a field type under RFC 0004's plugin contract.
 
 ## How the relay applies the rules
 
-The relay holds no key. It does hold every accepted control change of a space, and their bodies, cutoffs and control dependencies are readable (RFC 0002, kind 1). It therefore runs the same `resolve`, from the same Rust code that the members run, over the control changes in its log. Its membership table is `resolve` of its log, recomputed with each append of a control change. That table holds roles, grants with their from generations, revocations with their cutoffs, and the generation graph. RFC 0007's membership table holds them ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
+The relay holds no key. It does hold every accepted control change of a space, and their bodies, cutoffs and control dependencies are readable (RFC 0002, kind 1). It therefore runs the same `resolve`, from the same Rust code that the members run, over the control changes in its log. Its membership table is `resolve` of its log, recomputed with each append of a control change. That table holds roles, grants with their from generations, revocations with their cutoffs, and the generation graph. RFC 0007's membership table holds them ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)). The relay's membership table as the truth was not taken: members could not check it, and island mode would stop every membership change.
 
 **On a push**, the relay checks each change against its current state, in addition to RFC 0007's checks:
 
 - **A control change** is accepted when `resolve` over the relay's log plus that change accepts it. Dependencies the relay does not hold count as gaps, as on a member.
 - **A sealed change** is accepted by the rule in [Sealed changes](#sealed-changes), which needs only its header: author, author sequence and generation id.
 - **The uploader** must be a current member (RFC 0007).
-- **A person-key record** needs its person-key entry (RFC 0007, R12). It replaces the stored record when its generation is the stored record's generation or descends from it, because generation ids that carry a tag have no "newer" ([RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
-- **A shred's record deletion** happens when the shred becomes stable on the relay, by the same rule as on a member, not in the transaction that appends it (decision M20).
+- **A person-key record** needs its person-key entry. It replaces the stored record when its generation is the stored record's generation or descends from it, because generation ids that carry a tag have no "newer" ([RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
+- **A shred's record deletion** happens when the shred becomes stable on the relay, by the same rule as on a member, not in the transaction that appends it.
 
 Where the relay and the members can disagree, and who decides:
 
 | Case | Relay | Members | What follows |
 | --- | --- | --- | --- |
 | A revocation arrives after the relay accepted a change it excludes. | Has accepted it, and never removes an entry from its log. | Reject it when they hold the revocation. | The relay's table follows the revocation; the stale entry stays as bytes. The members decide. |
-| The relay refused a change because of a revocation that a concurrent change later makes ineffective. | Refused it at the time. | Accept it once they hold both. | D12 A alone would never push it to that relay again. By decision M19, a member pushes it again once its own fold accepts it, and the relay accepts it then. |
+| The relay refused a change because of a revocation that a concurrent change later makes ineffective. | Refused it at the time. | Accept it once they hold both. | RFC 0002's rule alone would never push it to that relay again. A member pushes it again, once, whenever its own fold newly accepts it after a control change arrived, and the relay accepts it then. |
 | Changes that never reach the relay, for example exchanged only on an island. | Does not know them. | Fold them. | Members that hold different sets can differ, as RFC 0002 states. |
-| A key or record is wrong, or a sealed change does not decrypt. | Cannot tell. | Report it, or reject the sealed change (D11); the signature names the author. | Local checks; the control state does not change. |
-| A space is created by a creator the relay operator does not allow. | Refuses the genesis (RFC 0007, R6). | Do not check it. | The space works in island mode and on relays that allow its creator. |
+| A key or record is wrong, or a sealed change does not decrypt. | Cannot tell. | Report it, or reject the sealed change; the signature names the author. | Local checks; the control state does not change. |
+| A space is created by a creator the relay operator does not allow. | Refuses the genesis with `not_allowed` (RFC 0007). | Do not check it. | The space works in island mode and on relays that allow its creator. |
 
-The relay decides nothing the members cannot check. It can refuse a change the members later accept; by decision M19, the members push it again.
+The relay decides nothing the members cannot check. It can refuse a change the members later accept; the members then push it again. Without that, a change that a concurrent revocation made the relay refuse, and that the members later accept, would never reach the members that sync only through the relay; it cannot loop. Keeping RFC 0002's rule, never to push it to that relay again, was not taken.
 
-**What the relay learns from this RFC**, in addition to the lists in RFC 0002 and RFC 0007 (decision M11):
+**What the relay learns from this RFC**, in addition to the lists in RFC 0002 and RFC 0007:
 
 - **Roles.** Each member's role in each space, and when it changes.
 - **Cutoffs.** For each revocation, how many of the subject's changes the revoking admin had received.
 - **Who saw what.** Through the control dependencies: which control changes each admin had seen when it wrote, so how up to date each admin was, and which admins acted on separate islands.
-- **Accounts across spaces.** The account key in each member certificate, so which devices and agents belong to one person or organisation, in every space the relay serves.
+- **Accounts across spaces.** The account key and its statement in each member certificate, so which devices and agents belong to one person or organisation, in every space the relay serves.
 - **The sub-agent tree.** Which member is a sub-agent of which parent, from the certificates.
 - **Erasure approvers.** Which accounts sign off erasures, and in which spaces.
 - **The generation graph.** When concurrent rotations happened, and which merge rotations followed.
 
-It still learns no content, no space name and, by decision M26, no model id.
+It still learns no content, no space name and no model id, which the genesis seals.
+
+Control bodies and control dependencies are readable so that the relay applies the same rules. Hiding the control bodies from the relay, so that only members apply the rules and the relay checks only signatures, was not taken: anyone with a valid key in the space could fill its log with changes every member rejects, and the relay could not stop a removed member. Of the list above, the account key weighs most, because it links one person's devices and agents in every space on that relay.
 
 ## Groups
 
-Groups are not part of this design: they were withdrawn by the owner (Carsten, 2026-11-09), who decided to keep them out of every definition for now, because they caused more problems than they solved. A member is a person's device, an agent or a sub-agent, and nothing else. There is no group in the control state, and the SDK expands no list of members into a space. An admin who gives several members the same spaces adds each of them to each space, and removes each of them from each space; [RFC 0009](0009-sdk-api.md) keeps adding several members in one call as plain batching. If a later need shows that groups are useful, they come back through a later RFC.
+Groups are not part of this design: they were withdrawn by the owner (Carsten, 2026-11-09), who decided to keep them out of every definition for now, because they caused more problems than they solved. A member is a person's device, an agent or a sub-agent, and nothing else. There is no group in the control state, and the SDK expands no list of members into a space. An admin who gives several members the same spaces adds each of them to each space, and removes each of them from each space; [RFC 0009](0009-sdk-api.md) keeps adding several members in one call as plain batching. If a later need shows that groups are useful, they come back through a later RFC. Designing groups now, as a principal with its own control state, was not taken: a group's membership lives outside the space, and folding one space must not depend on another space's changes.
 
 Such an RFC has to answer what makes a group that is a member of many spaces hard to design:
 
@@ -537,53 +551,26 @@ Such an RFC has to answer what makes a group that is a member of many spaces har
 - **Removing someone from a group rotates every space of the group.** With per-member envelopes ([RFC 0003, "Group key distribution: options compared"](0003-keys-and-cryptography.md#group-key-distribution-options-compared)), that is one rotation per space and one envelope per remaining member in each. A group key would reduce the envelopes, but it adds a second layer of keys and rotations to design.
 - **The relay would have to check membership through the group**, which needs the group's control state on every relay that holds any of its spaces.
 
-## Rejected options
+## Agreement with GENESIS.md and the other RFCs
 
-| Option | Why not |
-| --- | --- |
-| Add wins for membership, as RFC 0004's sets | A concurrent grant would undo the removal of a stolen device. |
-| The order of arrival, or the relay's order, decides | Differs between members and islands, so copies diverge (principle 2). |
-| The relay's membership table as the truth | Members could not check it, and island mode would stop every membership change. |
-| A cutoff checked against the dependencies inside sealed changes (draft 0.1) | Only members that decrypt and hold those changes can check it, so members and the relay would reach different verdicts. |
-| Refusing every change of a removed member from its removal on (RFC 0007, R7 A) | Depends on the relay's order, and refuses changes the remover had already received. |
-| Revoking by time | The clock is encrypted, and a removed member can write any clock. |
-| A re-grant without a fresh generation | A demoted or removed member's writes in between would count again, also ones it pre-dated with high sequence numbers. |
-| Never re-adding a member id | A member key serves every space of a device, so a removal by mistake would force a new device key everywhere. |
-| A total order of membership changes, as MLS commits | Needs one party to order them, which island mode cannot have (RFC 0003). |
-| A quorum of admins for each membership change | Needs several admins online; a small team's space would stop when one is on holiday. |
-| Both of two mutual removals take effect | A stolen admin device takes an honest admin down with it, and can leave the space without an admin. |
-| Neither of two mutual removals takes effect | A compromised admin cancels its own removal by removing the remover at the same moment. |
-| Seniority from each revocation's own causal past (draft 0.1) | Two revocations could rank their authors differently, so the order would not be total. |
-| A random tag in the generation id (draft 0.1) | An admin could pick a tag that collides with another rotation on purpose, with one try. |
-| Rejecting every generation id that two rotations share, without deriving it | Changes written on the losing island would become undecryptable, and a malicious admin could cause it. |
-| Fold rules that check wrapped keys or decryption | Only some members can check them, so the control state would split. |
-| Destroying a person key as soon as the shred is accepted | A concurrent revocation can still reject the shred, and the key could not come back. |
-| A random space id, and the first genesis wins | Anyone could write a competing genesis with a lower change id and take over the space on members that hold both. |
-| The model id in plain text in the genesis, as the default | The relay would learn which spaces belong to one app's model lineage, across every customer on that relay; RFC 0002 lists the model as something it cannot see. |
-| Free capability lists per member instead of three roles | More for every member and the relay to check and to get wrong; three roles cover the use cases, and more roles can come later. |
-| Rights per collection or per object | Needs a reader that enforces them on content, which the relay cannot be (RFC 0001). More spaces give the same effect. |
-| Hiding the control bodies and dependencies from the relay | The relay could not apply the rules, so a removed member could keep filling the space's log. |
+This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership without reading content; every member, an agent included, is visible in the member list with its own key and role; rights are per space; a removed member keeps its copy; and the rules converge in any order. It makes them, and the other RFCs, more precise in these points, each stated where the other text says it:
 
-## Conflicts with GENESIS.md and the other RFCs
-
-This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership without reading content; every member, an agent included, is visible in the member list with its own key and role; rights are per space; a removed member keeps its copy; and the rules converge in any order. It differs from them, or from the other RFCs, in these points. The owner decided each through the decisions it names (Carsten, 2026-11-08), and each point says where the other text follows this RFC.
-
-1. **Groups** (GENESIS.md, "Spaces"; RFC 0001, "The design in one page"). Both said groups can be members of many spaces. *Resolved for GENESIS.md, RFC 0001 and the FAQ: groups were withdrawn by the owner (Carsten, 2026-11-09), with M10, and none of them names groups ([RFC 0001, "Groups leave the design"](0001-nocentraldb.md#groups-leave-the-design)).*
-2. **RFC 0002, what the relay sees.** RFC 0002 says the relay cannot see which changes a change builds on. That stays true for sealed changes. For control changes, the relay sees it under M11. RFC 0002's list of what the relay sees, and the FAQ, should add the items in [How the relay applies the rules](#how-the-relay-applies-the-rules). *Resolved in [RFC 0002, "What the relay can see"](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) and in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page); the FAQ lists the items too.*
-3. **RFC 0002, D3.** The owner decided M7: space ids are derived from the creator's member id and a nonce, not drawn at random. This revises D3 for space ids; object ids keep D3. *Resolved in [RFC 0002, "Space"](0002-change-and-log-format.md#space).*
-4. **RFC 0002, header key 4.** The key generation gets a structure: ordinal and tag (M6). The format does not change. *Resolved in [RFC 0002, "Key generation, suite and kind"](0002-change-and-log-format.md#key-generation-suite-and-kind).*
-5. **RFC 0002, equivocation.** RFC 0002 keeps and folds both changes of an equivocation. For the genesis, both are kept but only the one with the lower change id is the genesis. For a revoked member, equivocations inside its cutoff are accepted (M3). *Resolved in [RFC 0002, "Author and author sequence"](0002-change-and-log-format.md#author-and-author-sequence).*
-6. **RFC 0002, payload keys.** RFC 0002 gives every payload a clock and dependencies (keys 2 and 3), and says key 1 of a control body names the entry type. The control body keeps key 1 as the entry type and key 3 as dependencies, and leaves key 2, the clock, absent (M18). *Resolved in [RFC 0002, "Key generation, suite and kind"](0002-change-and-log-format.md#key-generation-suite-and-kind).*
-7. **RFC 0002, D12.** A member does not push a refused change to that relay again. The owner decided one exception (M19): a member pushes it again once its own fold accepts it. *Resolved in [RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it).*
-8. **RFC 0003, concurrent rotations.** RFC 0003 picks "the generation whose entry has the lower hash". This RFC adds derived generation ids, exposure and the merge rotation (M6, M15). *Resolved in [RFC 0003, "Removing a member and rotating the space key"](0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key).*
-9. **RFC 0003, the sign-off.** Narrowed to an account with an admin member (M9). *Resolved in [RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key).*
-10. **RFC 0003, formats and deferrals.** RFC 0003 now defines the member certificate, the account sign-off and the key-chain subkey (decision 15), and this RFC uses them, including the sub-agent certificate signed by its parent. Revoking a member certificate is deferred to a later RFC about accounts; in v1, removal from every space is the revocation. Deleting a synced space is deferred to a later RFC (see [What this RFC does not cover](#what-this-rfc-does-not-cover)).
-11. **RFC 0003 and RFC 0007, the person-key entry.** RFC 0003 has it carry a commitment, RFC 0007 a record hash and a generation. This RFC carries both, and RFC 0003 and RFC 0007 should point to it. *Resolved for RFC 0003 in [RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key); and for RFC 0007 in its [person-key store](0007-relay.md#keys-and-the-person-key-store).*
-12. **RFC 0007, the membership table and its checks.** RFC 0007's draft stored, per member, the positions of addition and removal. This RFC needs roles, grants with from generations, revocations with cutoffs and the generation graph. RFC 0007 does not check author sequences; this RFC needs it to, for sealed changes. Its rule that a person-key record replaces one of "the same or a newer generation" becomes "the same or a descendant generation". It deletes a record in the append's transaction; this RFC waits for stability (M20). Its R7 A becomes the cutoff (M3). *Resolved in RFC 0007's [checks](0007-relay.md#what-the-relay-checks) and [person-key store](0007-relay.md#keys-and-the-person-key-store).*
-13. **RFC 0006, the control table.** RFC 0006's `control` table lists membership entries, key chain entries, held generations, shreds and acknowledgements. It also needs the genesis, the person-key entries, the cutoffs and grants, and the generation graph, as [The function](#the-function) lists them. RFC 0006 un-folds only sealed changes. Control changes are recomputed through `resolve`, and their irreversible effects wait until they are stable. RFC 0006's shred row destroyed the key and acknowledged at once; under M20 it waits until the shred is stable. *Resolved in [RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them).*
-14. **RFC 0005, D13.** The owner decided D13 C (Carsten, 2026-11-08). The genesis carries the `model.id` in key 13, required, sealed by default (M26). Part B of D13, a model id in every change's payload, is RFC 0002's and RFC 0005's to carry out, not this RFC's. RFC 0003 adds the subkey label `"nocentraldb/model-id"` under M26 B. *Resolved for RFC 0003 in [RFC 0003, "Model-id subkey"](0003-keys-and-cryptography.md#model-id-subkey).*
-15. **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Under M20 the key is destroyed only when the shred is stable, which an idle admin device delays. The view erases the fields at once, and M21 sets the alarm and the escalation, but until then the key exists on members. RFC 0001's list of what erasure does not reach names the wait. *Resolved for RFC 0001 in [its team lead's list](0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review), and for RFC 0003 and the FAQ alongside it.*
-16. **RFC 0004, add wins.** Membership resolves the other way, so the revocation wins (M2). Membership is not a field type of the schema, so RFC 0004's rule for sets stays as it is.
+- **Groups** (GENESIS.md, "Spaces"; RFC 0001, "The design in one page") were members of many spaces in the first texts. They were withdrawn by the owner (Carsten, 2026-11-09), and GENESIS.md, RFC 0001 and the FAQ no longer name them ([RFC 0001, "Groups leave the design"](0001-nocentraldb.md#groups-leave-the-design)).
+- **What the relay sees.** The relay cannot see which changes a sealed change builds on, but it sees the control dependencies of control changes and the items in [How the relay applies the rules](#how-the-relay-applies-the-rules) ([RFC 0002, "What the relay can see"](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot); [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page)). The FAQ lists them too.
+- **Space ids** are derived from the creator's member id and a nonce; object ids stay random ([RFC 0002, "Space"](0002-change-and-log-format.md#space)).
+- **The key generation** in RFC 0002's header key 4 has a structure, ordinal and tag; the format does not change ([RFC 0002, "Key generation, suite and kind"](0002-change-and-log-format.md#key-generation-suite-and-kind)).
+- **Equivocation.** Of two geneses, both are kept but only the one with the lower change id is the genesis; a revoked member's equivocations inside its cutoff are accepted ([RFC 0002, "Author and author sequence"](0002-change-and-log-format.md#author-and-author-sequence)).
+- **Payload keys.** A control body keeps key 1 as the entry type and key 3 as the dependencies, and leaves key 2, the clock, absent ([RFC 0002, "Key generation, suite and kind"](0002-change-and-log-format.md#key-generation-suite-and-kind)).
+- **Pushing again.** A member pushes a change the relay refused again once its own fold accepts it ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)).
+- **Concurrent rotations** get derived generation ids, exposure and the merge rotation ([RFC 0003, "Removing a member and rotating the space key"](0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key)).
+- **The sign-off** of an erasure comes from an account with an admin member in the space ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- **Formats.** RFC 0003 defines the member certificate, the account sign-off and the key-chain subkey, and this RFC uses them, including the sub-agent certificate its parent signs ([What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
+- **The person-key entry** carries RFC 0003's commitment and RFC 0007's record hash and generation ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key); [RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
+- **The relay's membership table** holds roles, grants with their from generations, revocations with their cutoffs and the generation graph. The relay checks author sequences against cutoffs, replaces a person-key record only with the same or a descendant generation, and deletes a record only once its shred is stable ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
+- **RFC 0006's control table** holds what [The function](#the-function) lists. Control changes are recomputed through `resolve`, and a shred's irreversible effects wait until it is stable ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)).
+- **The model id** stands in the genesis, key 13, required and sealed; RFC 0003 defines its subkey ([RFC 0003, "Model-id subkey"](0003-keys-and-cryptography.md#model-id-subkey)).
+- **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Here the key is destroyed only once the shred is stable, which an idle admin device delays. The view erases the fields at once, and the alarm after 7 days names the blocking devices, but until then the key exists on members. RFC 0001 names the wait in [its team lead's list](0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review), and RFC 0003 and the FAQ alongside it.
+- **Add wins** stays the rule for RFC 0004's sets. Membership resolves the other way, so the revocation wins; membership is not a field type of the schema.
 
 ## Summary of the choices
 
@@ -604,322 +591,6 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
 | Groups? | None: withdrawn by the owner (Carsten, 2026-11-09); a later RFC may bring them back. |
 
-## Open questions
-
-None. The owner has decided every question this RFC asked.
-
-## Decisions
-
-GENESIS.md reserves the wire format, how permissions behave and public API names for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The owner accepted every recommendation (Carsten, 2026-11-08, and for M27 to M29, 2026-11-10), and the design above describes the chosen options. M10 stays listed, withdrawn.
-
-### M1. Roles
-
-Decided (Carsten, 2026-11-08): reader, writer and admin, per space.
-
-Why: readers cover adapters, dashboards and auditors, which should not write. Capabilities per member would add a check per capability on every member and the relay, for cases nobody has asked for yet.
-
-Not taken:
-
-- Writer and admin only.
-- A set of capabilities per member.
-
-### M2. A grant concurrent with a revocation of the same member
-
-Decided (Carsten, 2026-11-08): the revocation wins; the grant stays visible as lost.
-
-Why: a lost grant is cheap to repeat; a lost removal leaves a stolen device writing.
-
-Not taken:
-
-- The grant wins, as an addition does in RFC 0004's sets.
-
-### M3. Which changes of a revoked member count
-
-Decided (Carsten, 2026-11-08): those at or below the cutoff, an author sequence the revocation names. A revoked member's equivocations at or below it are accepted, as RFC 0002 accepts every equivocation, and reported.
-
-Why: it needs only headers, so members and the relay reach one verdict.
-
-Not taken:
-
-- As chosen, plus a hash over the subject's change ids up to the cutoff: a member can check it only when it holds all of them, which splits verdicts between members.
-- Those the relay accepted before the revocation (RFC 0007's draft R7 A): depends on the relay's order, which members on an island do not have.
-
-### M4. Seniority and verdicts that can change
-
-Decided (Carsten, 2026-11-08): seniority by the depth of the admin grant, as specified; the senior admin's revocation wins a cycle; verdicts can change while concurrent control changes arrive, and the SDK reports each change. A control change that arrives late can un-fold changes a member already folded.
-
-Why: verdicts that change while concurrent changes arrive are the price of island mode under every option. Without un-folding, a stolen device's writes would stay in place on every member that received them before the removal.
-
-Not taken:
-
-- Both revocations of a cycle take effect: a compromised admin takes an honest one down with it.
-- Neither takes effect: a compromised admin cancels its own removal.
-
-### M5. Re-granting a right a member lost
-
-Decided (Carsten, 2026-11-08): allowed by a grant that saw the revocation and names a fresh generation; the admin rotates first.
-
-Why: a member key is shared by all spaces of a device, so never re-granting costs a new key everywhere for one mistake. A re-grant costs one rotation, one envelope per member.
-
-Not taken:
-
-- Never; the member needs a new member key.
-
-### M6. Generation ids
-
-Decided (Carsten, 2026-11-08): a 16-bit ordinal and a 48-bit tag derived from the space, the rotation's author and its previous generations.
-
-Why: it keeps RFC 0002's header format, and 65,535 rotations per space are enough for v1. Its limit: an admin that searches about 2⁴⁸ member keys can make one rotation collide and be rejected, which blocks that rotation and exposes no key (see [Generation ids](#generation-ids)).
-
-Not taken:
-
-- Generation numbers only, with the lower key chain hash winning (RFC 0003's sketch): two keys under one number make the changes under it ambiguous.
-- A 32-byte generation id in the header: changes RFC 0002's header format.
-
-### M7. Revisit RFC 0002's D3 for space ids
-
-Decided (Carsten, 2026-11-08): space ids derived from the creator's member id and a random nonce.
-
-Why: with random space ids, anyone who learns one can write a competing genesis, and with a lower change id take the space over on every member that holds both. Derived ids keep what D3 chose: 128 bits nobody can predict, with no time in them.
-
-Not taken:
-
-- Keep D3: 128 random bits, and the genesis with the lower change id wins.
-
-### M8. The model id
-
-Decided (Carsten, 2026-11-08), through RFC 0005's D13 C: the genesis carries the `model.id`, and the SDK refuses to write into a space of another model. How the genesis carries it is M26.
-
-Why: two apps that should share a space then share one model lineage ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)).
-
-Not taken (named in the rewrite; the original text listed no options):
-
-- Keep the model id out of the genesis, which draft 0.2 of this RFC recommended.
-
-### M9. Who signs off an erasure
-
-Decided (Carsten, 2026-11-08): an account with an admin member in the space, other than the performer's account.
-
-Why: an erasure cannot be undone, and a reader's account should not approve one.
-
-Not taken:
-
-- Any account with a member in the space, other than the performer's (RFC 0003's first wording).
-
-### M10. Groups
-
-Decided (Carsten, 2026-11-08): deferred to a later RFC, with the SDK expanding a group into one entry per member. Withdrawn by the owner (Carsten, 2026-11-09): groups leave the design, so neither option holds, and the SDK expands no list of members either (see [Groups](#groups)).
-
-Why: a group's membership lives outside the space, and folding one space must not depend on another space's changes. Later, groups caused more problems than they solved, and a later RFC may bring them back.
-
-Not taken:
-
-- Designed now, as a principal with its own control state.
-
-### M11. What the relay sees
-
-Decided (Carsten, 2026-11-08): control bodies and control dependencies are readable, so the relay applies the same rules. The relay then sees roles, cutoffs, who saw what, the account behind each member across spaces, the sub-agent tree, the erasure approvers and the generation graph.
-
-Why: with encrypted control bodies, anyone with a valid key in the space could fill its log with changes every member rejects, and the relay could not stop a removed member. The cost is the list in [How the relay applies the rules](#how-the-relay-applies-the-rules); the account key weighs most, because it links one person's devices and agents in every space on that relay.
-
-Not taken:
-
-- Control bodies encrypted; only members apply the rules, and the relay checks only signatures.
-
-### M12. Public names
-
-Decided (Carsten, 2026-11-08): reader, writer and admin, and the outcome "lost grant", are working names here, and the SDK's API review decides the public names. RFC 0009 then made the role names the public names (decision S13).
-
-Why: as RFC 0004 does for its names, the API review decides every name a developer types in one place.
-
-Not taken (named in the rewrite; the original text listed no options):
-
-- Fix the public names in this RFC.
-
-### M13. A space without an admin
-
-Decided (Carsten, 2026-11-08): its membership is frozen; content goes on.
-
-Why: making someone admin automatically would give the role to someone who was never chosen for it. The SDK refuses to let the last admin leave, so it arises only from concurrent removals.
-
-Not taken:
-
-- The most senior writer becomes admin automatically.
-
-### M14. The default role of an agent
-
-Decided (Carsten, 2026-11-08): writer, unless the app asks for another role.
-
-Why: most agents in RFC 0001's examples write. The SDK's notice says the role in plain words in every case.
-
-Not taken:
-
-- Reader, unless the app asks for more: every writing agent becomes a two-step setup.
-- No default: the safest, but every call grows for the common case.
-
-### M15. Automatic merge rotations
-
-Decided (Carsten, 2026-11-08): the SDK of every admin device writes a merge rotation when it sees an exposed current generation, after a random delay.
-
-Why: exposure means a removed member may read new changes, and an admin's app may not be built to handle a report. It costs one rotation per exposure, and rarely two.
-
-Not taken:
-
-- The SDK reports the exposure, and the app asks an admin to rotate.
-
-### M16. Keeping every control change
-
-Decided (Carsten, 2026-11-08): compaction keeps every control change of a space forever.
-
-Why: the state is a function of the whole set, and a snapshot every member can check is a design of its own. A membership entry is about 300 bytes and an envelope about 150, so a space with 100 removals keeps under 1 MB of control changes.
-
-Not taken:
-
-- Compaction replaces old control changes by a signed snapshot of the control state.
-
-### M17. Sealed changes under a generation whose key chain entry is later rejected
-
-Decided (Carsten, 2026-11-08): they stay accepted when their author's grant allows them. Members keep the key of a rejected generation to read, never to write.
-
-Why: otherwise honest writes on an island whose admin is revoked later would be lost. The exposure rule already makes the next admin rotate away from such a key.
-
-Not taken:
-
-- They are rejected with the generation.
-
-### M18. No clock in control bodies
-
-Decided (Carsten, 2026-11-08): control bodies carry no clock; key 2 stays reserved.
-
-Why: a clock shows the relay when each admin acted, offline work included, which RFC 0002's D6 kept from it for every change. The audit keeps the order of membership changes and the relay's time of acceptance.
-
-Not taken:
-
-- Control bodies carry the author's hybrid logical clock, as payloads do.
-
-### M19. Pushing again a change the relay refused
-
-Decided (Carsten, 2026-11-08): a member pushes a refused change to that relay again, once, whenever its own fold newly accepts the change after a control change arrived.
-
-Why: otherwise a change that a concurrent revocation made the relay refuse, and that the members later accept, never reaches the members that sync only through the relay. It amends RFC 0002's D12 only for that case, and cannot loop.
-
-Not taken:
-
-- Keep RFC 0002's D12 A: never push it to that relay again.
-
-### M20. Irreversible effects wait until a change is stable
-
-Decided (Carsten, 2026-11-08): destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record wait until the shred is stable; the view erases the fields at once.
-
-Why: a shred that a concurrent revocation later rejects must not have destroyed keys that cannot come back. The cost: one offline admin delays the destruction until it returns or is removed.
-
-Not taken:
-
-- They happen as soon as the shred is accepted.
-
-### M21. How long a shred may wait, and the escalation
-
-Decided (Carsten, 2026-11-08): the SDK raises an alarm on every admin device when a shred has waited 7 days. It names the blocking admin devices, and an admin demotes or removes them.
-
-Why: it leaves well inside the one-month deadline of a data-subject request for a person to act, and it never changes a role without a person.
-
-Not taken:
-
-- As chosen, and after 21 days an admin's SDK demotes the blocking admin devices on its own: it lowers rights automatically, which the owner should allow explicitly.
-- Destroy the key and acknowledge at once; only the relay's deletion waits: a shred that a concurrent revocation later rejects has then destroyed keys for good.
-
-### M22. The wire layout of the control bodies
-
-Decided (Carsten, 2026-11-08): the entry types 0 to 6, the common keys (1 entry type, 2 reserved for a clock, 3 control dependencies), and the field numbers from 8 up for each entry type, as in [The control bodies](#the-control-bodies). They are part of the wire format, so they cannot change once shipped.
-
-Why: one membership entry with an action keeps the rules about grants and revocations in one place. Field numbers from 8 up leave the keys RFC 0002's payload map uses free for meanings shared with it.
-
-Not taken:
-
-- One entry type per action: add, set role and remove as separate types.
-
-### M23. Two rotations that name the same generation id
-
-Decided (Carsten, 2026-11-08): both are rejected, and the SDK reports it.
-
-Why: if the first in the order kept the id, a member that grinds a colliding id could win against an honest rotation that comes later. Rejecting both only blocks them, and with derived ids that needs about 2⁴⁸ tries. Changes sealed under a rejected generation keep their verdict by M17.
-
-Not taken:
-
-- The one that comes first in the order keeps the id; the other is rejected.
-
-### M24. A creator that writes two geneses
-
-Decided (Carsten, 2026-11-08): both stay in the log; the one with the lower change id is the genesis, and the other folds nothing.
-
-Why: RFC 0002 keeps and folds both changes of every equivocation, which a space cannot do with two first changes; this keeps both and picks one deterministically. Only the creator's own device can cause it, by a backup restore or a clone.
-
-Not taken:
-
-- Both are rejected, and the space is unusable.
-
-### M25. Who signs a sub-agent's certificate
-
-Decided (Carsten, 2026-11-08): the parent agent's member signing key, under its own context string; key 1 carries the parent's account key, and members check the chain through the parent's certificate, as RFC 0003's member certificate has it.
-
-Why: a parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space"). The chain check reads only the space's control changes, because the parent's certificate is in the genesis or add entry that made the parent a member.
-
-Not taken:
-
-- The account key, as for every other kind (draft 0.2 of this RFC).
-
-### M26. How the genesis carries the model id
-
-Decided (Carsten, 2026-11-08): sealed under a subkey of generation 1's key, as in [Genesis](#genesis): 56 bytes, readable by members only.
-
-Why: `model.id` is 128 random bits, but readable in the genesis it would tell the relay which spaces share one app's model lineage, across every customer on the relay, and RFC 0002 lists the model as something the relay cannot see. No rule of the relay needs it. It costs 40 bytes per space, a subkey label in RFC 0003 and a local check on decryption.
-
-Not taken:
-
-- The 16 raw bytes of `model.id`, readable by the relay.
-- `H(space id || model.id)`: hides the id, but members could only confirm their own model, so the SDK could not tell a user which app a space needs.
-
-### M27. A generation that two key chain entries name
-
-Decided (Carsten, 2026-11-10), on NOC-110: it is never a head, so never current; an accepted key chain entry for it lists nothing, and the generations before it stay heads.
-
-Why: under M23 both entries are rejected, and the id may stand for two keys, which generation ids are built to prevent. The first generation, which no entry can name, keeps at least one head in every graph. It is what the core builds (NOC-86).
-
-Not taken:
-
-- Letting it be current: members would seal under an id that may name two keys.
-
-### M28. A rejected rotation can be current
-
-Decided (Carsten, 2026-11-10), on NOC-110: a generation whose key chain entry was valid when written but is rejected later (M17) is a head and can be current; the exposure rule then rotates away from it.
-
-Why: changes sealed under it keep counting (M17), so the space keeps working until the next rotation, and M17's reason needs the exposure rule to rotate away from it. It is what the core builds (NOC-86).
-
-Not taken:
-
-- Leaving rejected rotations out of the heads: a generation a removed admin holds would never be rotated away from.
-
-### M29. Who may hold a generation
-
-Decided (Carsten, 2026-11-10), on NOC-110: the creator for the first generation, the author of every key chain entry the graph holds, valid when written whatever its final verdict, every recipient of an envelope for it, whatever the envelope's verdict, and whoever may hold a generation that descends from it. The author of an envelope is not counted for it, nor the author of an entry that was never valid when written.
-
-Why: it is the stricter reading of "the exposure rule counts every key chain entry and envelope in the set, whatever its verdict". It is what the core builds (NOC-86).
-
-Not taken:
-
-- Counting only accepted envelopes: a rejected envelope may still have been delivered.
-- Counting the authors of entries that were never valid when written: a removed member could then force rotations by naming the current generation.
-
-The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's ([Formats of what keys sign and derive](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)), not this RFC's.
-
 ## History
 
-- **2026-11-08** · NOC-23 · The first version. Draft 0.2 reworked draft 0.1 after pm's review: the fold uses only control bodies and headers, seniority and the order are fully specified, re-grants cannot bring back writes made without the right, and irreversible effects wait until a change is stable. The owner decided M1 to M26 as recommended (#40).
-- **2026-11-09** · NOC-44 · The Conflicts list says where RFC 0001, 0002, 0003, 0006 and the FAQ follow this RFC (#61).
-- **2026-11-09** · NOC-55 · How to give feedback on this RFC (#72).
-- **2026-11-09** · NOC-35 · The status follows the decided RFCs (#76).
-- **2026-11-09** · NOC-76 · Groups withdrawn by the owner (Carsten, 2026-11-09): M10 withdrawn, and groups leave every definition (#87).
-- **2026-11-09** · NOC-75 · Links RFC 0009 for how a new member's identity reaches an admin, and for the public role names (#87).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#114).
-- **2026-11-10** · NOC-110 · The current generation and who may hold a generation, where the core had to decide: M27 to M29, which the owner confirmed (#124).
-- **2026-11-10** · NOC-157 · A diagram after [Membership entry](#membership-entry) shows the entries that add and remove a member (#143).
+- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
