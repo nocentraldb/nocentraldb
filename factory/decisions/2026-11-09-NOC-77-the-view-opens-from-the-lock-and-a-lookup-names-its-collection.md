@@ -1,0 +1,6 @@
+# 2026-11-09 · NOC-77 · The view opens from the lock, and a lookup names its collection
+
+- Decided by: coding agent (NOC-77)
+- Why: RFC 0005 says the core reads only the lock, so `View::open` takes the member's `ModelLock` and converts it with `view::Model::from_lock`, which first runs the lock's own checks; no caller builds the view's model by hand any more, which replaces the `view::Model` input of 2026-11-09-NOC-69-the-view-s-layout-for-objects-columns-and-model.md. Index names are scoped per collection, as in the lock, so `View::page` and `View::plans` take the collection with the index name, and a cursor carries both. The SQLite index stays `ix_<collection>_<index>`; a lock name has no `_`, so two declared indexes never share one. The `model` hash in `meta` stays the hash of the view's model, not the lock's `model.hash`, so a lock change the view does not see (a description, a deprecation, a computed field's name) does not refuse the database.
+- Instead of: index names unique across the model (two collections could not each have a `byName`), or the lock's `model.hash` in `meta`, which would refuse a database after a change that leaves the view as it is.
+- Topics: view, model-lock, rfc-0005, rfc-0006, indexes

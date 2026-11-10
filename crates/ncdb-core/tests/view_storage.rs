@@ -51,7 +51,7 @@ fn id(frame: &[u8]) -> ncdb_core::ids::ChangeId {
 #[test]
 fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
     let db = TempDb::new("tables");
-    let _view = View::open(&db.0, model()).unwrap();
+    let _view = View::open(&db.0, &lock()).unwrap();
     let conn = Connection::open(&db.0).unwrap();
     let schema = schema(&conn);
     for table in [
@@ -68,7 +68,12 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
             "{table} in {schema:?}"
         );
     }
-    for index in ["ix_task_by_rank", "ix_task_by_title"] {
+    for index in [
+        "ix_task_byRank",
+        "ix_task_byTitle",
+        "ix_task_byName",
+        "ix_project_byName",
+    ] {
         assert!(schema.contains(&("index".to_owned(), index.to_owned())));
     }
     // One column per field with a single sortable value; a set has none
@@ -94,7 +99,7 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
 #[test]
 fn the_database_runs_in_wal_mode() {
     let db = TempDb::new("wal");
-    let _view = View::open(&db.0, model()).unwrap();
+    let _view = View::open(&db.0, &lock()).unwrap();
     let conn = Connection::open(&db.0).unwrap();
     let mode: String = conn
         .query_row("PRAGMA journal_mode", [], |row| row.get(0))
@@ -113,7 +118,7 @@ type LogRow = (Vec<u8>, Vec<u8>, String, Option<String>, Vec<u8>);
 #[test]
 fn a_received_change_is_in_the_log_with_its_frame_and_state() {
     let db = TempDb::new("log");
-    let mut view = View::open(&db.0, model()).unwrap();
+    let mut view = View::open(&db.0, &lock()).unwrap();
     let mut control = Control::default();
     let key = envelope(FOUNDER, 1, 0);
     let unknown = ncdb_core::change::Operation::new(T, "nope".into(), None, 0, None);
@@ -172,14 +177,14 @@ fn reopening_the_view_keeps_the_log_and_the_states_of_its_changes() {
     let mut control = Control::default();
     let early = create(1, 0);
     {
-        let mut view = View::open(&db.0, model()).unwrap();
+        let mut view = View::open(&db.0, &lock()).unwrap();
         view.receive(&early, &mut control).unwrap();
         assert_eq!(
             view.state(SPACE, id(&early)),
             Some(State::Rejected(RejectReason::NoKey))
         );
     }
-    let mut view = View::open(&db.0, model()).unwrap();
+    let mut view = View::open(&db.0, &lock()).unwrap();
     assert_eq!(
         view.state(SPACE, id(&early)),
         Some(State::Rejected(RejectReason::NoKey))
@@ -197,7 +202,7 @@ fn reopening_the_view_keeps_the_log_and_the_states_of_its_changes() {
         Some(State::Folded { parked: Vec::new() })
     );
     drop(view);
-    let view = View::open(&db.0, model()).unwrap();
+    let view = View::open(&db.0, &lock()).unwrap();
     assert_eq!(
         view.state(SPACE, id(&early)),
         Some(State::Folded { parked: Vec::new() })
@@ -207,13 +212,13 @@ fn reopening_the_view_keeps_the_log_and_the_states_of_its_changes() {
 #[test]
 fn a_view_of_another_format_version_is_refused() {
     let db = TempDb::new("format");
-    drop(View::open(&db.0, model()).unwrap());
+    drop(View::open(&db.0, &lock()).unwrap());
     let conn = Connection::open(&db.0).unwrap();
     conn.execute("UPDATE meta SET value = '999' WHERE key = 'format'", [])
         .unwrap();
     drop(conn);
     assert!(matches!(
-        View::open(&db.0, model()),
+        View::open(&db.0, &lock()),
         Err(Error::Format { found: 999 })
     ));
 }
@@ -221,10 +226,9 @@ fn a_view_of_another_format_version_is_refused() {
 #[test]
 fn a_view_folded_by_another_model_is_refused() {
     let db = TempDb::new("model");
-    drop(View::open(&db.0, model()).unwrap());
-    let mut other = model();
-    other.indexes.pop();
-    assert!(matches!(View::open(&db.0, other), Err(Error::Model)));
+    drop(View::open(&db.0, &lock()).unwrap());
+    let other = lock_without(TASK, BY_NAME);
+    assert!(matches!(View::open(&db.0, &other), Err(Error::Model)));
 }
 
 /// The test double's checks, which panic on the `n`th decryption, as a
@@ -270,7 +274,7 @@ fn a_change_and_everything_its_fold_wrote_are_committed_together_or_not_at_all()
         vec![field_op::create(ObjectId([2; 16]), TASK)],
     );
     let key = envelope(FOUNDER, 3, 0);
-    let mut view = View::open(&db.0, model()).unwrap();
+    let mut view = View::open(&db.0, &lock()).unwrap();
     let mut checks = CrashOnOpen {
         control: Control::default(),
         opens: Cell::new(0),

@@ -1,6 +1,7 @@
 //! Test support for the local view on SQLite (NOC-69, RFC 0006): a
-//! minimal model, a fresh database file per test, and the in-memory fold
-//! the SQLite view must agree with.
+//! minimal model read from its `model.lock.json` (NOC-77), a fresh
+//! database file per test, and the in-memory fold the SQLite view must
+//! agree with.
 //!
 //! Each test file includes this module with `#[path]`; not every file uses
 //! every helper.
@@ -10,82 +11,56 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ncdb_core::basic::{self, BasicValue, Kind};
+use ncdb_core::basic;
 use ncdb_core::change::Operation;
 use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::ObjectId;
-use ncdb_core::link::Link;
 use ncdb_core::log::OperationParkReason;
+use ncdb_core::model_lock::ModelLock;
 use ncdb_core::object::{Object, ObjectOperation};
 use ncdb_core::receive::Fold;
-use ncdb_core::set::{self, Set};
-use ncdb_core::view::{Direction, Field, FieldState, Index, Model};
+use ncdb_core::set;
+use ncdb_core::view::{Field, FieldState, Model};
 
-/// The collection with fields, as `member.rs` names it.
+/// The tasks, with fields of each kind, as `member.rs` names them.
 pub const TASK: &str = "task";
-/// A collection without fields.
+/// Projects, with a name.
 pub const PROJECT: &str = "project";
 pub const TITLE: &str = "title";
 pub const RANK: &str = "rank";
 pub const TAGS: &str = "tags";
 pub const OWNER: &str = "owner";
+pub const NAME: &str = "name";
 /// An index of tasks by rank, with no equality prefix.
-pub const BY_RANK: &str = "by_rank";
+pub const BY_RANK: &str = "byRank";
 /// An index of tasks by title, then by rank, descending; a query fixes the
 /// title.
-pub const BY_TITLE: &str = "by_title";
-/// An index of tasks by title alone, with no equality prefix.
-pub const BY_NAME: &str = "by_name";
+pub const BY_TITLE: &str = "byTitle";
+/// An index of tasks by title alone, and of projects by name alone, with
+/// no equality prefix: each collection has its own index of this name.
+pub const BY_NAME: &str = "byName";
 
-/// The model of the tests: tasks with a text title, an integer rank, a set
-/// of text tags and a link to a project; projects without fields; three
-/// declared indexes.
+/// The lock of the tests' model, as `ncdb model build` wrote it from
+/// `tests/view/model.ts`: tasks with a text title, an integer rank, a set
+/// of text tags and a link to a project, and three declared indexes;
+/// projects with a text name and an index of the same name as one of the
+/// tasks'.
+pub fn lock() -> ModelLock {
+    ModelLock::from_json(include_str!("../view/model.lock.json")).unwrap()
+}
+
+/// The view's model of [`lock`].
 pub fn model() -> Model {
-    let text = || BasicValue { kind: Kind::Text };
-    let mut task = BTreeMap::new();
-    task.insert(TITLE.to_owned(), Field::Basic(text()));
-    task.insert(
-        RANK.to_owned(),
-        Field::Basic(BasicValue {
-            kind: Kind::Integer,
-        }),
-    );
-    task.insert(TAGS.to_owned(), Field::Set(Set { kind: Kind::Text }));
-    task.insert(
-        OWNER.to_owned(),
-        Field::Link(Link {
-            collections: [PROJECT.to_owned()].into(),
-        }),
-    );
-    let mut collections = BTreeMap::new();
-    collections.insert(TASK.to_owned(), task);
-    collections.insert(PROJECT.to_owned(), BTreeMap::new());
-    Model {
-        collections,
-        indexes: vec![
-            Index {
-                name: BY_RANK.to_owned(),
-                collection: TASK.to_owned(),
-                keys: vec![(RANK.to_owned(), Direction::Ascending)],
-                equality: 0,
-            },
-            Index {
-                name: BY_TITLE.to_owned(),
-                collection: TASK.to_owned(),
-                keys: vec![
-                    (TITLE.to_owned(), Direction::Ascending),
-                    (RANK.to_owned(), Direction::Descending),
-                ],
-                equality: 1,
-            },
-            Index {
-                name: BY_NAME.to_owned(),
-                collection: TASK.to_owned(),
-                keys: vec![(TITLE.to_owned(), Direction::Ascending)],
-                equality: 0,
-            },
-        ],
-    }
+    Model::from_lock(&lock()).unwrap()
+}
+
+/// [`lock`] without the index `index` of `collection`: a lock of another
+/// model.
+pub fn lock_without(collection: &str, index: &str) -> ModelLock {
+    let mut lock = lock();
+    let collection = lock.collections.get_mut(collection).unwrap();
+    collection.indexes.remove(index).unwrap();
+    lock
 }
 
 /// A path for a database file no other test uses. The directory is the
