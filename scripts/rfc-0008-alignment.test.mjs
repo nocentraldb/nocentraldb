@@ -1,7 +1,8 @@
 // Asserts that the RFCs on main follow RFC 0008's decisions (NOC-44): RFC
-// 0001, 0002, 0003 and 0006 each carry an amendment that a dated changelog
-// line at the top announces, every point of that amendment links the RFC 0008
-// decision or section it follows, the FAQ lists what the relay sees of
+// 0002, 0003 and 0006 each carry an amendment that a dated changelog line at
+// the top announces, every point of that amendment links the RFC 0008
+// decision or section it follows (RFC 0001 states them in its text since
+// NOC-100, which rfc-0001-complete.test.mjs holds), the FAQ lists what the relay sees of
 // control changes, no limit of erasure is stated more weakly than RFC 0008
 // states it, and RFC 0008's "Conflicts" section says which of its points are
 // resolved. The test checks that each claim is there and points to its
@@ -28,16 +29,19 @@ const RFC_0008_FILE = "0008-membership.md";
 const STABLE = `${RFC_0008_FILE}#effects-that-wait-until-a-change-is-stable`;
 const RELAY_RULES = `${RFC_0008_FILE}#how-the-relay-applies-the-rules`;
 
-/** Each amended RFC, the number of its new amendment, and the RFC 0008 decisions it must name. */
+/**
+ * Each amended RFC, the number of its new amendment, and the RFC 0008
+ * decisions it must name. RFC 0006 carries its points (M4, M20) in its text
+ * since NOC-101 folded its amendments in; the test of its control table below
+ * checks them where they stand.
+ */
 const AMENDMENTS = [
-  { path: RFC_0001, number: 1, decisions: ["M10", "M11", "M20", "M21"] },
   {
     path: RFC_0002,
     number: 3,
     decisions: ["M3", "M6", "M7", "M11", "M18", "M19", "M24"],
   },
   { path: RFC_0003, number: 2, decisions: ["M6", "M9", "M15", "M20", "M26"] },
-  { path: RFC_0006, number: 1, decisions: ["M4", "M20"] },
 ];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0008`;
 
@@ -327,8 +331,14 @@ test("RFC 0008's Conflicts section says which points NOC-44 resolved", () => {
     assert.ok(point, `no conflict ${n}`);
     assert.match(point, /Resolved/, `conflict ${n} is not marked resolved`);
     assert.ok(
-      targets(point).some((t) => /#amendment-\d+-following-rfc-0008$/.test(t)),
-      `conflict ${n} links no amendment`,
+      targets(point).some(
+        (t) =>
+          /#amendment-\d+-following-rfc-0008$/.test(t) ||
+          t.startsWith("0001-nocentraldb.md#") ||
+          // RFC 0006 states it in its text since NOC-101 folded its amendments in.
+          t.startsWith("0006-local-view.md#"),
+      ),
+      `conflict ${n} links no amendment and no section of RFC 0001 or RFC 0006`,
     );
   }
 });

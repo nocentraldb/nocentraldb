@@ -283,6 +283,17 @@ impl Log {
             .collect()
     }
 
+    /// The control changes that passed their checks, in log order.
+    pub(crate) fn folded_controls(&self) -> impl Iterator<Item = &Change> {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                entry.change.header().kind == Kind::CONTROL
+                    && matches!(entry.state, Some(State::Folded { .. }))
+            })
+            .map(|entry| &entry.change)
+    }
+
     /// The folded changes that are not control changes, in log order, with
     /// their parked operations.
     pub(crate) fn folded_sealed(&self) -> Vec<(Change, Vec<ParkedOperation>)> {

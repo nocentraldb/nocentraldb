@@ -7,10 +7,11 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 - **2026-11-08** · NOC-15, NOC-30 · [Amendment 1: the bytes of a sealed change](#amendment-1-the-bytes-of-a-sealed-change) fixes the content-key derivation, the nonce, the associated data, the padding and the crate versions. The owner decided all five (Carsten, 2026-11-08). The sentence it makes precise elsewhere is marked *(Amendment 1)*.
 - **2026-11-08** · NOC-44 · [Amendment 2: following RFC 0008](#amendment-2-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): generation ids, exposure and the merge rotation, the narrower sign-off, the person-key entry, the model-id subkey, and the wait before a shredded key is destroyed. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 2)*.
 - **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) brings the sketch in "How the SDK hides keys" in line with the names the owner decided in [RFC 0009](0009-sdk-api.md), and says where the source of a copy in an ad-hoc space is kept. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
+- **2026-11-10** · NOC-106 · Where the member key lives, with a key file for a headless agent (decision 16), the account key each database draws until the accounts RFC (decision 17), and the 72 bytes of an encrypted previous key (decision 18), as the owner decided on NOC-95 and NOC-97, written into the text where each belongs (#113).
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), and this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08). The design below describes the decided options. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) records the owner's decision on each.
+**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner): 1 to 15 when this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08), and 16 to 18, on where the SDK keeps keys before the accounts RFC and on the bytes of an encrypted previous key (Carsten, 2026-11-10). The design below describes the decided options. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) records the owner's decision on each.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -50,7 +51,7 @@ It does not protect against:
 
 | Key | Kind | Who creates it | Where it lives | What it can do |
 | --- | --- | --- | --- | --- |
-| Member key | Ed25519 signing key and X25519 key-agreement key | The member (device or agent), on itself | The member's platform keystore; never leaves the member | Sign the member's changes; receive wrapped space keys |
+| Member key | Ed25519 signing key and X25519 key-agreement key | The member (device or agent), on itself | The member's platform keystore, or a key file that a headless agent names; never leaves the member | Sign the member's changes; receive wrapped space keys |
 | Account key | Ed25519 signing key | The person's first device, when the account is created | The account's devices, plus a recovery copy the person keeps | Certify and revoke the account's member keys; sign off irreversible work orders |
 | Space key | 256-bit random symmetric key, one per generation | The member that creates the space, then the member that rotates it | Wrapped to each member key in the space's key envelopes; unwrapped only inside each member | Encrypt and decrypt the space's changes |
 | Person key | 256-bit random symmetric key | The member that first writes a personal field for that person in that space | The space's person-key store, wrapped under the current space key; unwrapped only inside each member | Encrypt and decrypt that person's personal fields; destroying it erases them |
@@ -64,6 +65,8 @@ A member is one device or one agent: a laptop, a phone, a browser profile, an ag
 
 Both public halves form the member's public identity. Its **member id** is the SHA-256 hash of the two public keys, with a fixed context string in front (`"nocentraldb/member-id"`), and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
+The SDK keeps the private halves in the platform keystore (see [How the SDK hides keys](#how-the-sdk-hides-keys)). A headless agent, in a container or on a server, often has no keystore. Such an agent names a key file instead, with the Rust SDK's `key_file` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)), and the SDK keeps the member key there, readable only by the user the agent runs as. Only its file permissions protect it: whoever reads the file, or a backup of it, holds the member key. Where no keystore is reachable and no key file is named, the SDK does not open the database ([decision 16](#decisions-for-the-owner)).
+
 The signing key also **authenticates the member to the relay**. The relay sends a fresh random challenge, and the member signs `H("nocentraldb/relay-auth" || relay id || nonce)`, so that one relay cannot replay the answer against another. Every signature a member key makes signs either a canonical CBOR header (RFC 0002), whose first byte marks a CBOR map, or a message that starts with a `"nocentraldb/..."` context string, whose first byte is a letter; one can never be read as the other, so a signed challenge can never pass as a signed change. A separate key just for the relay is the alternative (decision 13).
 
 We use two keys instead of converting the Ed25519 key into an X25519 key. Converting is possible, but it uses one secret in two protocols, and the analyses that show it safe are narrower than the ones for separate keys.
@@ -76,7 +79,9 @@ A person has one account and usually several members: a laptop, a phone, the age
 
 The account key also signs what must come from a person rather than a device, above all the second account's sign-off of an irreversible work order such as an erasure (GENESIS.md, "Work orders for clean-ups").
 
-The account key is created on the person's first device. A second device receives it, wrapped to the new device's member key, after the person confirms the pairing on a device that already holds it, for example by scanning a code. The person keeps a recovery copy, such as a printed recovery code, for the case that every device is lost. Where the account key lives exactly is a decision for the owner (decision 8).
+The account key is created on the person's first device. A second device receives it, wrapped to the new device's member key, after the person confirms the pairing on a device that already holds it, for example by scanning a code. The person keeps a recovery copy, such as a printed recovery code, for the case that every device is lost. Decision 8 chose where the account key lives.
+
+Pairing and the recovery copy belong to the accounts RFC, which is not written yet. Until it is, each database draws its own account key once, on its first open, and keeps it next to the member key, in the same keystore or key file. It certifies its own member as a device, or as an agent when the app opens the database with the Rust SDK's `agent()` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). A person's devices are then unrelated accounts: an admin who adds a second device of the same person compares its fingerprint, as for any account new to it. A genesis carries its creator's certificate for good, so the accounts RFC must accept the members certified this way, for example by letting a later pairing vouch for them ([decision 17](#decisions-for-the-owner)).
 
 An organisation that runs agents does so under an account, so every agent traces back to an account that answers for it.
 
@@ -265,6 +270,14 @@ key-chain subkey = HKDF-SHA256(ikm = new generation's key, salt = none,
 
 Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry.
 
+```text
+encrypted previous key = nonce (24 bytes) || ciphertext (32 bytes) || tag (16 bytes)     72 bytes
+  plaintext            = the previous generation's 32-byte space key
+  AEAD                 = XChaCha20-Poly1305, random nonce
+```
+
+It is the layout of a sealed payload ([Amendment 1](#amendment-1-the-bytes-of-a-sealed-change), point 2) and of the [model id field](#model-id-subkey): one layout for everything a space key seals. Every key chain entry stores its previous keys this way, a merge rotation's included, which lists every head as previous ([RFC 0008, "Key chain entry"](0008-membership.md#key-chain-entry)) ([decision 18](#decisions-for-the-owner)).
+
 ### Model-id subkey
 
 The genesis of a space carries the creator's `model.id` (RFC 0005, D13) sealed, so that members can read it and the relay cannot (RFC 0008, decision M26). It is sealed under a subkey of generation 1's key:
@@ -313,7 +326,7 @@ await db.workOrders.erase({ person: customerId });   // shreds the person key af
 The names are [RFC 0009](0009-sdk-api.md)'s, which the owner decided, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). *(Amendment 3.)* What the SDK does underneath:
 
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
-- **Stores** private keys in the platform's keystore and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB, optionally unlocked by a passkey. Details of passkeys and browser storage are out of scope here.
+- **Stores** private keys in the platform's keystore, or in the key file a headless agent names, and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB, optionally unlocked by a passkey. Only the file's permissions protect a key file. Details of passkeys and browser storage are out of scope here.
 - **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. The one way a private key leaves a device is the account recovery flow, which a person runs, not an app.
 - **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
@@ -404,6 +417,15 @@ GENESIS.md reserves crypto, key handling and formats for the owner. Each decisio
 15. **Formats of what keys sign and derive**, as [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) proposes them for RFC 0008: the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`. **Recommendation:** accept them, including the change from RFC 0008 draft 0.2 that a parent agent, not the account, signs a sub-agent's certificate.
 
    Decided (Carsten, 2026-11-08): the recommendation. RFC 0008's decision M26 B adds the [model-id subkey](#model-id-subkey) to these formats (Carsten, 2026-11-08). *(Amendment 2.)*
+16. **Where the member key lives** (NOC-95, point 1). The keystore leaves out headless agents, which often have none. (a) The platform keystore, and a key file for an agent that names one; without either, the database does not open. (b) The platform's app data directory, found from an app id, with the same keystore. (c) In memory only, until a keystore ticket. **Recommendation: (a)**: it works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one, with its limit stated. (b) suits apps but rarely servers and agents, and (c) keeps no native data at all.
+
+   Decided (Carsten, 2026-11-10): the recommendation, (a). Asked on NOC-95.
+17. **The account key before the accounts RFC** (NOC-95, point 2). (a) Each database draws its own account key once and keeps it next to the member key; an option marks the member as an agent. (b) The app passes the account key. (c) No space can be created until the accounts RFC exists. **Recommendation: (a)**: a person's devices are unrelated accounts until the accounts RFC links them, which that RFC must allow for. (b) puts a key in the app's hands, which principle 5 rules out, and (c) blocks every space.
+
+   Decided (Carsten, 2026-11-10): the recommendation, (a). Asked on NOC-95. The accounts RFC follows (NOC-107).
+18. **The bytes of an encrypted previous key** in a key chain entry (NOC-97). (a) `nonce (24) || ciphertext (32) || tag (16)`, 72 bytes, with a random nonce, as a sealed payload. (b) A CBOR map `{1: nonce, 2: ciphertext and tag}`, about 76 bytes. (c) A deterministic nonce, 48 bytes. **Recommendation: (a)**: one layout everywhere. (b) is a second layout to read for room it does not need, and (c) could repeat a nonce under one key when two rotations name the same generation (RFC 0008, M23).
+
+   Decided (Carsten, 2026-11-10): the recommendation, (a). Asked on NOC-97.
 
 ## Agreement with GENESIS.md and RFC 0001
 

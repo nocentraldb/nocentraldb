@@ -2,7 +2,7 @@
 
 A NoCentralDB app keeps a full copy of its spaces on the device. In a native app on a desktop or a phone, that copy is the app's own files. In a web app, it lives in the browser's storage for your site, and the browser may delete it. This page says when that happens, what is lost with it, how you reduce the risk, and what you can tell your users.
 
-**Status.** The SDK interface this page describes and the text for your users are decided in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy) (Carsten, 2026-11-09), and the interface is not built yet. The facts about browsers come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
+**Status.** The SDK interface this page describes and the text for your users are decided in [RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy) (Carsten, 2026-11-09), and the interface is not built yet. The facts about browsers come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
 
 **Where each statement comes from.** Every row below names, in its Source column, the rows of [the findings table](browser-storage.md#findings) it rests on, as `kind: Browser · Behaviour`:
 
@@ -51,7 +51,7 @@ What the relay has confirmed is never lost with a browser copy: the relay holds 
 
 In a private window, the copy lasts at most as long as the private session:
 
-- **Firefox and WebKit** offer no OPFS in a private window: opening it fails, while IndexedDB works (measured: Firefox (Playwright) · Private window: storage (private browsing mode); measured: WebKit (Playwright) · Private window: storage (ephemeral context)). The SDK then keeps the copy in memory and reports it as `temporary` ([RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy), decision 12), so a reload of the page loses the copy.
+- **Firefox and WebKit** offer no OPFS in a private window: opening it fails, while IndexedDB works (measured: Firefox (Playwright) · Private window: storage (private browsing mode); measured: WebKit (Playwright) · Private window: storage (ephemeral context)). The SDK then keeps the copy in memory and reports it as `temporary` ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy), decision 12), so a reload of the page loses the copy.
 - **Chromium** offers OPFS in a private window and deletes it when the window closes (measured: Chromium (Playwright) · Private window: storage (off-the-record context); measured: Chromium (Playwright) · Private window: after close (off-the-record context)). The SDK cannot tell such a window from a normal one, so it reports `best-effort` there.
 - **The member key**, which lives in IndexedDB, survives a reload within one open private session in all three engines (measured: Chromium (Playwright) · Private window: survives a reload (off-the-record context); measured: Firefox (Playwright) · Private window: survives a reload (private browsing mode); measured: WebKit (Playwright) · Private window: survives a reload (ephemeral context)). So a reload in a private window is not a new device, even where the copy itself is lost with it.
 - **Firefox** as a branded browser has no OPFS in a private window either, and what IndexedDB held was gone once the private window closed (measured: Firefox · Private window). Whether IndexedDB lasts across a reload in branded Firefox, Safari, Chrome and Edge has not been checked by hand; only Playwright's builds measured it.
@@ -61,7 +61,7 @@ Each private session is a new device: its member key is created in the session, 
 
 ## What the SDK tells you
 
-The SDK reports how durable this copy is and how many changes would be lost with it. The names below are decided in [RFC 0006, Amendment 2](rfc/0006-local-view.md#amendment-2-durability-of-a-browser-copy), decision 10; the SDK does not have them yet.
+The SDK reports how durable this copy is and how many changes would be lost with it. The names below are decided in [RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy), decision 10; the SDK does not have them yet.
 
 ```ts
 const db = await nc.open({ model });

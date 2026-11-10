@@ -19,12 +19,14 @@ const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
 
 const PLAINTEXT = "0006-local-view.md#what-the-view-stores-in-plaintext";
-const RFC_0006_DECISIONS = "0006-local-view.md#decisions-for-the-owner";
+const RFC_0006_DECISION_6 =
+  "0006-local-view.md#6-encryption-at-rest-on-the-device";
+const RFC_0006_DECISION_8 =
+  "0006-local-view.md#8-persistent-storage-in-the-browser";
 const RFC_0006_BROWSER = "0006-local-view.md#the-browser";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
 const ACCOUNT_KEY = "0003-keys-and-cryptography.md#the-account-key";
-const PERSONAL = "0005-schema-and-model-lock.md#personal-fields";
 const BUILD_CHECKS = "0005-schema-and-model-lock.md#what-the-build-checks";
 const FREE_TEXT = "0005-schema-and-model-lock.md#personal-data-in-free-text";
 const NOT_ERASURE = "0005-schema-and-model-lock.md#about-whom-not-by-whom";
@@ -96,7 +98,12 @@ test("the FAQ says a lost device holds every space in plaintext, with RFC 0006's
 
 test("the FAQ says v1 relies on the device's disk encryption, with RFC 0006's decision 6", () => {
   const answer = section(read(FAQ), LOST_DEVICE);
-  linkingSentence(answer, RFC_0006_DECISIONS, /disk encryption/i, "decision 6");
+  linkingSentence(
+    answer,
+    RFC_0006_DECISION_6,
+    /disk encryption/i,
+    "decision 6",
+  );
   assert.match(answer, /decision 6/, "the FAQ does not name decision 6");
 });
 
@@ -134,7 +141,7 @@ test("the FAQ says the SDK asks for persistent storage, with RFC 0006's decision
   const answer = section(read(FAQ), STORAGE);
   linkingSentence(
     answer,
-    RFC_0006_DECISIONS,
+    RFC_0006_DECISION_8,
     /persistent storage/i,
     "decision 8",
   );
@@ -210,29 +217,6 @@ test("GENESIS.md's Shred and audit names the app's duty for free text", () => {
 test("GENESIS.md links no RFC", () => {
   const link = read(GENESIS).match(/\]\([^)]*docs\/rfc\/[^)]*\)/);
   assert.ok(!link, `GENESIS.md links an RFC: ${link?.[0]}`);
-});
-
-test("RFC 0001 announces Amendment 4 in a dated NOC-35 changelog line, and its section decides nothing", () => {
-  const rfc = read(RFC_0001);
-  const top = rfc.split(/^## /m)[0];
-  assert.match(
-    top,
-    /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-35 · \[Amendment 4: [^\]]+\]\(#amendment-4-[^)]+\)/m,
-    "no changelog line for Amendment 4",
-  );
-  const heading = rfc.split("\n").find((l) => l.startsWith("## Amendment 4: "));
-  assert.ok(heading, "no section Amendment 4");
-  const body = section(rfc, heading.slice(3));
-  assert.match(body, /decides nothing new/, "Amendment 4 must decide nothing");
-  assert.ok(
-    sentencesLinking(body, PERSONAL).length +
-      sentencesLinking(body, FREE_TEXT).length >
-      0,
-  );
-  assert.ok(
-    (rfc.match(/\*\(Amendment 4\.\)\*/g) ?? []).length >= 3,
-    "the changed sentences are not marked",
-  );
 });
 
 test("every relative link in the changed documents resolves, anchors included", () => {
@@ -357,10 +341,9 @@ test("RFC 0004 Amendment 2 parks a create that carries key 5, decided by the own
 // rows of docs/browser-storage.md, not #74's log headings (Amendment 3).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 
-test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, citing the findings rows", () => {
+// RFC 0006 carries this in its text since NOC-101 folded its amendments in.
+test("RFC 0006 says a closed Firefox private window loses its data, citing the findings rows", () => {
   const rfc = read(RFC_0006);
-  const body = amendment(rfc, 3, "NOC-35");
-  assert.match(body, /decides nothing/, "Amendment 3 must decide nothing");
   assert.ok(
     !/whether the first window was closed/.test(rfc),
     "RFC 0006 still doubts the window was closed",
@@ -376,14 +359,13 @@ test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, 
         "- **Private windows.** Firefox and WebKit have no OPFS in a private window (`getDirectory()` fails)",
       ),
     );
-  assert.ok(privateWindows, "no Private windows finding in Amendment 2");
+  assert.ok(privateWindows, "no Private windows finding");
   assert.match(
     privateWindows,
     /measured: Firefox · Private window/,
     "the finding cites no row",
   );
-  assert.match(privateWindows, /NOC-58/, "the open question names no ticket");
-  assert.match(privateWindows, /\*\(Amendment 3\.\)\*/);
+  assert.match(privateWindows, /NOC-58/, "the reload names no ticket");
   const findings = read("docs/browser-storage.md");
   for (const row of [
     "Safari (macOS) · SQLite on OPFS (`opfs-sahpool`)",

@@ -93,6 +93,12 @@ impl Object {
         COLLECTION.read(&self.creates)
     }
 
+    /// The state of the object's deletion, as a basic value of booleans: a
+    /// member that deletes or restores the object replaces what it holds.
+    pub fn deletion(&self) -> &basic::State {
+        &self.deleted
+    }
+
     /// Whether the object is deleted: the winning write of its deletion is
     /// `true`. Anything else, a value of the wrong kind included, reads as
     /// not deleted.
