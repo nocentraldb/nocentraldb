@@ -136,7 +136,10 @@ fn a_reopened_view_keeps_positions_and_refusals() {
         view.relay_refusal(space.space, changes[1].id()),
         Some(RelayRefusal("membership_rule".into()))
     );
-    assert_eq!(ids(&view.unconfirmed(space.space).unwrap()), ids(&changes[2..]));
+    assert_eq!(
+        ids(&view.unconfirmed(space.space).unwrap()),
+        ids(&changes[2..])
+    );
 }
 
 #[test]
