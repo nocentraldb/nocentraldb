@@ -236,12 +236,51 @@ fn a_record_is_signed_by_its_writer_over_its_clear_fields_and_wrapped_bytes() {
     let generation = 0x0001_0000_0000_0042;
     let signature = sign_record(&writer, SPACE, PERSON, generation, &wrapped);
     let public = writer.public();
-    assert!(verify_record(&public, SPACE, PERSON, generation, &wrapped, &signature));
+    assert!(verify_record(
+        &public, SPACE, PERSON, generation, &wrapped, &signature
+    ));
     // Another space, person key, generation, writer or wrapped key fails.
-    assert!(!verify_record(&public, SpaceId([1; 16]), PERSON, generation, &wrapped, &signature));
-    assert!(!verify_record(&public, SPACE, [1; 16], generation, &wrapped, &signature));
-    assert!(!verify_record(&public, SPACE, PERSON, generation + 1, &wrapped, &signature));
-    assert!(!verify_record(&key(6).public(), SPACE, PERSON, generation, &wrapped, &signature));
-    assert!(!verify_record(&public, SPACE, PERSON, generation, &[0xef; 80], &signature));
-    assert!(!verify_record(&public, SPACE, PERSON, generation, &wrapped, &signature[..63]));
+    assert!(!verify_record(
+        &public,
+        SpaceId([1; 16]),
+        PERSON,
+        generation,
+        &wrapped,
+        &signature
+    ));
+    assert!(!verify_record(
+        &public, SPACE, [1; 16], generation, &wrapped, &signature
+    ));
+    assert!(!verify_record(
+        &public,
+        SPACE,
+        PERSON,
+        generation + 1,
+        &wrapped,
+        &signature
+    ));
+    assert!(!verify_record(
+        &key(6).public(),
+        SPACE,
+        PERSON,
+        generation,
+        &wrapped,
+        &signature
+    ));
+    assert!(!verify_record(
+        &public,
+        SPACE,
+        PERSON,
+        generation,
+        &[0xef; 80],
+        &signature
+    ));
+    assert!(!verify_record(
+        &public,
+        SPACE,
+        PERSON,
+        generation,
+        &wrapped,
+        &signature[..63]
+    ));
 }

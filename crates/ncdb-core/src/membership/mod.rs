@@ -19,6 +19,7 @@ mod generations;
 mod genesis;
 mod input;
 mod key_chain;
+mod person_key;
 mod resolve;
 mod rights;
 mod state;
@@ -34,5 +35,9 @@ pub use genesis::{
     generation_id, open_model_id, seal_model_id, seal_model_id_with_nonce, space_id,
 };
 pub use key_chain::{KeyChainEntry, PreviousKey};
+pub use person_key::{
+    PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, record_hash,
+    sign_record, verify_record,
+};
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};

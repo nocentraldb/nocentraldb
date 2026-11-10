@@ -101,7 +101,7 @@ fn other_entry_types_need_the_right_their_type_names() {
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Reader, &[&g]);
     let ack = s.other(BOB, membership::ACKNOWLEDGEMENT, &[&bob]);
-    let person_key = s.other(BOB, membership::PERSON_KEY, &[&bob]);
+    let person_key = s.person_key(BOB, 1, 1, &[&bob]);
     let (chain, _) = s.rotate(ALICE, &[s.first_generation], &[&bob]);
     let state = resolve(s.space, [&g, &bob, &ack, &person_key, &chain]);
     assert_eq!(state.verdict(ack.id()), Some(&Verdict::Accepted));
