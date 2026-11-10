@@ -105,7 +105,7 @@ test('"Decisions" names each decision of another RFC that the text follows, with
     ["M20", "0008-membership.md#effects-that-wait-until-a-change-is-stable"],
     ["M21", "0008-membership.md#effects-that-wait-until-a-change-is-stable"],
     ["conflict 1", "0007-relay.md#what-the-relay-sees"],
-    ["decision 13", "0006-local-view.md#13-the-developer-documentation"],
+    ["decision 13", "0006-local-view.md#what-developers-and-their-users-read"],
     ["D9", "0005-schema-and-model-lock.md#personal-fields"],
     ["D15", "0005-schema-and-model-lock.md#personal-data-in-free-text"],
     ["S7", "0009-sdk-api.md#queries-and-indexes"],

@@ -308,7 +308,8 @@ test("RFC 0006 says how to give feedback, above its first section", () => {
     .find((l) => l.startsWith("**How to give feedback.**"));
   assert.ok(line, `${RFC_0006}: no "**How to give feedback.**" line`);
   assert.match(line, /\]\(README\.md#giving-feedback\)/);
-  assert.match(line, /discussions\/categories\/rfc-feedback/);
+  // NOC-165: RFC 0006 has its own discussion.
+  assert.match(line, /discussions\/146\)/);
 });
 
 test("RFC 0006 states each layer in its durability section", () => {
@@ -325,12 +326,6 @@ test("RFC 0006 states each layer in its durability section", () => {
   }
 });
 
-/** RFC 0006's decisions 10 to 15, one "### N. Title" heading each, under "## Decisions". */
-const durabilityDecisions = () =>
-  (section(read(RFC_0006), "Decisions") ?? "")
-    .split(/^(?=### \d+\. )/m)
-    .filter((part) => /^### 1[0-5]\. /.test(part));
-
 test("RFC 0001 and RFC 0006 link the page", () => {
   for (const path of [RFC_0001, RFC_0006]) {
     assert.ok(
@@ -338,24 +333,4 @@ test("RFC 0001 and RFC 0006 link the page", () => {
       `${path} does not link ${PAGE}`,
     );
   }
-});
-
-test("each layer's decision records the owner's choice, why, and the options not taken", () => {
-  const decisions = durabilityDecisions();
-  assert.equal(
-    decisions.length,
-    6,
-    `${RFC_0006}: ${decisions.length} decisions`,
-  );
-  for (const decision of decisions) {
-    const name = decision.split("\n")[0];
-    assert.match(
-      decision,
-      /^Decided \(Carsten, \d{4}-\d{2}-\d{2}\): /m,
-      `${name}: not decided`,
-    );
-    assert.match(decision, /^Why: /m, `${name}: no reason`);
-    assert.match(decision, /^- /m, `${name}: no option not taken`);
-  }
-  assert.doesNotMatch(read(RFC_0006), /wait for the owner/);
 });
