@@ -1,6 +1,8 @@
 // Asserts that the texts RFC 0009's "Conflicts" section names follow it
 // (NOC-75): each point is carried out in the text it names, as a marked
-// amendment that decides nothing and links the point; the use cases use only
+// amendment that decides nothing and links the point (RFC 0001 states point 6
+// in its text since NOC-100, which rfc-0001-complete.test.mjs holds); the
+// use cases use only
 // calls RFC 0009 defines; and RFC 0009 marks each point resolved. The test
 // checks that each change is there and points to its source; whether the
 // wording is right is the owner's review of the PR.
@@ -25,7 +27,6 @@ const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
 
 /** Each amended RFC, the number of its amendment, and the RFC 0009 points it carries out. */
 const AMENDMENTS = [
-  { path: RFC_0001, number: 6, points: [6] },
   { path: RFC_0003, number: 3, points: [5, 9] },
   { path: RFC_0005, number: 3, points: [1, 3, 4] },
   { path: RFC_0006, number: 6, points: [1, 2] },

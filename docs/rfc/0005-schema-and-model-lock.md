@@ -753,7 +753,7 @@ Added on 2026-11-09 for NOC-54. [RFC 0002, Amendment 5](0002-change-and-log-form
 
 ## Amendment 2: following RFC 0001 Amendment 4
 
-Added on 2026-11-09 for NOC-35. [RFC 0001, Amendment 4](0001-nocentraldb.md#amendment-4-following-rfc-0005-on-personal-fields) changed RFC 0001's "Personal fields" to follow this RFC's D9: only basic values can be personal, and only from the version that adds the field. [Personal fields](#personal-fields) quoted RFC 0001's old wording, "any field can be marked as personal"; it now quotes the new one, marked *(Amendment 2)* above. It decides nothing.
+Added on 2026-11-09 for NOC-35. RFC 0001 changed its "Personal fields" ([RFC 0001, "Field types we ship"](0001-nocentraldb.md#field-types-we-ship)) to follow this RFC's D9: only basic values can be personal, and only from the version that adds the field. [Personal fields](#personal-fields) quoted RFC 0001's old wording, "any field can be marked as personal"; it now quotes the new one, marked *(Amendment 2)* above. It decides nothing.
 
 ## Amendment 3: following RFC 0009
 
