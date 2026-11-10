@@ -105,13 +105,24 @@ impl<S: RelayStore> Relay<S> {
     /// for `reader`.
     pub async fn pull(
         &self,
-        _reader: MemberId,
-        _space: SpaceId,
-        _epoch: Epoch,
-        _after: Position,
-        _limit: u32,
+        reader: MemberId,
+        space: SpaceId,
+        epoch: Epoch,
+        after: Position,
+        limit: u32,
     ) -> Result<Pulled, ErrorCode> {
-        Err(ErrorCode::Unavailable)
+        if self.store.epoch().await? != epoch {
+            return Err(ErrorCode::EpochChanged);
+        }
+        let Some(head) = self.store.head(space).await? else {
+            return Err(ErrorCode::UnknownSpace);
+        };
+        self.check_uploader(reader, space).await?;
+        if after > head {
+            return Err(ErrorCode::BadCursor);
+        }
+        let entries = self.store.read(space, after, limit).await?;
+        Ok(Pulled { entries, head })
     }
 
     /// Checks each frame `uploader` pushes to `space`, one by one, and
@@ -214,7 +225,7 @@ impl<S: RelayStore> Relay<S> {
         Ok(effects(&resolved))
     }
 
-    /// The uploader is a current member of the space.
+    /// The uploader or reader is a current member of the space.
     async fn check_uploader(&self, uploader: MemberId, space: SpaceId) -> Result<(), ErrorCode> {
         match self.store.member(space, uploader).await? {
             Some(row) if row.current => Ok(()),
