@@ -363,7 +363,7 @@ The ticket asked to compare existing protocols for distributing a group key and 
 | What the relay must do | Store envelopes and serve each member its own | Relay pairwise messages | Act as the delivery service and order every commit; it still holds no key |
 | Rust crate | Built from the primitives above | Built from the primitives above | `openmls` (audited by SRLabs; one high-severity finding, fixed) |
 
-**Recommendation: the per-member wrapped space key.** It is the only one of the three that gives a new member the full history, which NoCentralDB promises (every member keeps the complete log). It needs no ordering of membership changes, so island mode keeps working. And it costs the relay only storage of opaque envelopes. Its price is no forward secrecy within a generation and a removal cost that grows with the number of members, which is acceptable because spaces are meant to be small and removals rare.
+**The owner chose the per-member wrapped space key** (decision 1). It is the only one of the three that gives a new member the full history, which NoCentralDB promises (every member keeps the complete log). It needs no ordering of membership changes, so island mode keeps working. And it costs the relay only storage of opaque envelopes. Its price is no forward secrecy within a generation and a removal cost that grows with the number of members, which is acceptable because spaces are meant to be small and removals rare.
 
 **Rejected:**
 
@@ -604,7 +604,7 @@ This RFC follows GENESIS.md and RFC 0001: the relay holds no keys and checks onl
 
 It differs from them, or makes them more precise, in these points:
 
-1. **"One key per person"** (GENESIS.md, "Shred and audit"). This RFC recommends one key per person per space (decision 7). An erasure still destroys every key of that person, but it is more than one key.
+1. **"One key per person"** (GENESIS.md, "Shred and audit"). [Decision 7](#7-scope-of-the-person-key) gives one key per person per space. An erasure still destroys every key of that person, but it is more than one key.
 
    Accepted (Carsten, 2026-11-08).
 2. **The limits of erasure.** GENESIS.md and RFC 0001 name offline devices, exports, unmarked free text and an agent running as the user. This RFC adds two: a modified client that ignores the shred, and a member that obtains a relay backup taken before the shred. Both follow from the fact that a key once held cannot be taken back. RFC 0001 should list them.
@@ -613,7 +613,7 @@ It differs from them, or makes them more precise, in these points:
 3. **Use case 3** says a removed agent "receives no new changes". True for the relay. A member that has not yet seen the removal may still write under the old generation, which the removed agent could read if it got hold of those changes (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
    Accepted (Carsten, 2026-11-08).
-4. **Use case 3** passes `agentPublicKey` to `members.add`. This RFC recommends invitations or member ids, so a developer never handles key material (decision 12).
+4. **Use case 3** passes `agentPublicKey` to `members.add`. [Decision 12](#12-public-api-names) gives invitations or member ids instead, so a developer never handles key material.
 
    Accepted (Carsten, 2026-11-08).
 5. **Use case 1** says that without the key "every copy of those fields is unreadable, on every device". That holds for copies whose device has deleted the key; a device that never comes back keeps it, as the same use case says further down. The sentence should name that limit where it makes the claim.
