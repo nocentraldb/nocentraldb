@@ -19,7 +19,10 @@ const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
 
 const PLAINTEXT = "0006-local-view.md#what-the-view-stores-in-plaintext";
-const RFC_0006_DECISIONS = "0006-local-view.md#decisions-for-the-owner";
+const RFC_0006_DECISION_6 =
+  "0006-local-view.md#6-encryption-at-rest-on-the-device";
+const RFC_0006_DECISION_8 =
+  "0006-local-view.md#8-persistent-storage-in-the-browser";
 const RFC_0006_BROWSER = "0006-local-view.md#the-browser";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
@@ -96,7 +99,12 @@ test("the FAQ says a lost device holds every space in plaintext, with RFC 0006's
 
 test("the FAQ says v1 relies on the device's disk encryption, with RFC 0006's decision 6", () => {
   const answer = section(read(FAQ), LOST_DEVICE);
-  linkingSentence(answer, RFC_0006_DECISIONS, /disk encryption/i, "decision 6");
+  linkingSentence(
+    answer,
+    RFC_0006_DECISION_6,
+    /disk encryption/i,
+    "decision 6",
+  );
   assert.match(answer, /decision 6/, "the FAQ does not name decision 6");
 });
 
@@ -134,7 +142,7 @@ test("the FAQ says the SDK asks for persistent storage, with RFC 0006's decision
   const answer = section(read(FAQ), STORAGE);
   linkingSentence(
     answer,
-    RFC_0006_DECISIONS,
+    RFC_0006_DECISION_8,
     /persistent storage/i,
     "decision 8",
   );
@@ -357,10 +365,9 @@ test("RFC 0004 Amendment 2 parks a create that carries key 5, decided by the own
 // rows of docs/browser-storage.md, not #74's log headings (Amendment 3).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 
-test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, citing the findings rows", () => {
+// RFC 0006 carries this in its text since NOC-101 folded its amendments in.
+test("RFC 0006 says a closed Firefox private window loses its data, citing the findings rows", () => {
   const rfc = read(RFC_0006);
-  const body = amendment(rfc, 3, "NOC-35");
-  assert.match(body, /decides nothing/, "Amendment 3 must decide nothing");
   assert.ok(
     !/whether the first window was closed/.test(rfc),
     "RFC 0006 still doubts the window was closed",
@@ -376,14 +383,13 @@ test("RFC 0006 Amendment 3 says a closed Firefox private window loses its data, 
         "- **Private windows.** Firefox and WebKit have no OPFS in a private window (`getDirectory()` fails)",
       ),
     );
-  assert.ok(privateWindows, "no Private windows finding in Amendment 2");
+  assert.ok(privateWindows, "no Private windows finding");
   assert.match(
     privateWindows,
     /measured: Firefox · Private window/,
     "the finding cites no row",
   );
-  assert.match(privateWindows, /NOC-58/, "the open question names no ticket");
-  assert.match(privateWindows, /\*\(Amendment 3\.\)\*/);
+  assert.match(privateWindows, /NOC-58/, "the reload names no ticket");
   const findings = read("docs/browser-storage.md");
   for (const row of [
     "Safari (macOS) · SQLite on OPFS (`opfs-sahpool`)",

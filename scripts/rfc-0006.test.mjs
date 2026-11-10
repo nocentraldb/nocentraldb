@@ -61,8 +61,11 @@ test("RFC 0006 has the sections its ticket asks for", () => {
     "reads never touch the network",
     "the spike",
     "rejected options",
-    "decisions for the owner",
     "agreement with genesis.md and rfc 0001",
+    "durability of a browser copy",
+    "open questions",
+    "decisions",
+    "history",
   ]) {
     assert.ok(
       found.some((heading) => heading.startsWith(wanted)),
