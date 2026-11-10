@@ -12,7 +12,7 @@ use ncdb_core::membership::{self, ControlBody, Entry, Resolved};
 use crate::Relay;
 use crate::error::ErrorCode;
 use crate::relay::PAGE;
-use crate::store::{Entry as LogEntry, PersonKeyRecord, RelayStore};
+use crate::store::{Entry as LogEntry, PersonKeyPut, PersonKeyRecord, RelayStore};
 
 /// A member's keys in one space: the key envelopes addressed to it and the
 /// key chain entries, in position order.
@@ -89,13 +89,16 @@ impl<S: RelayStore> Relay<S> {
             .into_iter()
             .map(|r| (r.id.0, r.generation))
             .collect();
-        for record in &records {
-            if !acceptable(&resolved, space, record, current.get(&record.id.0).copied()) {
+        let mut puts = Vec::with_capacity(records.len());
+        for record in records {
+            let replaces = current.insert(record.id.0, record.generation);
+            if !acceptable(&resolved, space, &record, replaces) {
                 return Err(ErrorCode::BadRecord);
             }
-            current.insert(record.id.0, record.generation);
+            puts.push(PersonKeyPut { record, replaces });
         }
-        Ok(self.store().put_person_keys(space, records).await?)
+        self.store().put_person_keys(space, puts).await?;
+        Ok(())
     }
 
     /// The space exists and `reader` is a current member of it.

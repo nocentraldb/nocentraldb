@@ -24,8 +24,8 @@ use rusqlite::{
 };
 
 use crate::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyRecord,
-    Position, RelayStore, StoreError,
+    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
 };
 
 /// How long a write waits for another handle's write lock.
@@ -373,11 +373,11 @@ impl RelayStore for SqliteStore {
     async fn put_person_keys(
         &self,
         space: SpaceId,
-        records: Vec<PersonKeyRecord>,
-    ) -> Result<(), StoreError> {
+        puts: Vec<PersonKeyPut>,
+    ) -> Result<PutOutcome, StoreError> {
         let mut connection = self.connection();
         let tx = immediate(&mut connection)?;
-        for record in records {
+        for PersonKeyPut { record, .. } in puts {
             tx.execute(
                 "INSERT INTO person_keys (space, id, generation, writer, wrapped, signature)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -395,7 +395,8 @@ impl RelayStore for SqliteStore {
             )
             .map_err(failed("put person keys"))?;
         }
-        tx.commit().map_err(failed("put person keys"))
+        tx.commit().map_err(failed("put person keys"))?;
+        Ok(PutOutcome::Stored)
     }
 
     async fn delete_person_keys(

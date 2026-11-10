@@ -24,8 +24,8 @@ use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 
 use crate::store::{
-    AppendOutcome, Effect, MemberRecord, NewEntry, PersonKeyId, PersonKeyRecord, Position,
-    RelayStore,
+    AppendOutcome, Effect, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut, PersonKeyRecord,
+    Position, PutOutcome, RelayStore,
 };
 
 /// A backend under test: storage that several handles can open at once.
@@ -161,6 +161,23 @@ fn person_key(id: u8, generation: u64) -> PersonKeyRecord {
         wrapped: vec![id; 48 + id as usize],
         signature: vec![id ^ 0xFF; 64],
     }
+}
+
+/// Puts each record as replacing the stored record of the generation
+/// paired with it, and returns what the backend did.
+fn put<S: RelayStore>(
+    store: &S,
+    space: SpaceId,
+    puts: &[(PersonKeyRecord, Option<u64>)],
+) -> PutOutcome {
+    let puts = puts
+        .iter()
+        .map(|(record, replaces)| PersonKeyPut {
+            record: record.clone(),
+            replaces: *replaces,
+        })
+        .collect();
+    block_on(store.put_person_keys(space, puts)).expect("the backend puts")
 }
 
 /// The relay holds nothing of a space nobody appended to.
@@ -390,12 +407,19 @@ pub fn effects_of_a_refused_append_are_not_applied<B: Backend>(backend: &B) {
 pub fn person_key_records_are_stored_replaced_and_deleted<B: Backend>(backend: &B) {
     let store = backend.connect();
     let (a, b) = (space(1), space(2));
-    block_on(store.put_person_keys(a, vec![person_key(3, 1), person_key(1, 1)])).unwrap();
-    block_on(store.put_person_keys(b, vec![person_key(2, 1)])).unwrap();
+    let both = [(person_key(3, 1), None), (person_key(1, 1), None)];
+    assert_eq!(put(&store, a, &both), PutOutcome::Stored);
+    assert_eq!(
+        put(&store, b, &[(person_key(2, 1), None)]),
+        PutOutcome::Stored
+    );
     let got = block_on(store.person_keys(a)).unwrap();
     assert_eq!(got, [person_key(1, 1), person_key(3, 1)]);
 
-    block_on(store.put_person_keys(a, vec![person_key(3, 2)])).unwrap();
+    assert_eq!(
+        put(&store, a, &[(person_key(3, 2), Some(1))]),
+        PutOutcome::Stored
+    );
     let got = block_on(backend.connect().person_keys(a)).unwrap();
     assert_eq!(got, [person_key(1, 1), person_key(3, 2)]);
 

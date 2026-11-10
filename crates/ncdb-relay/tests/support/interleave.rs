@@ -6,8 +6,8 @@ use std::sync::Mutex;
 
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyRecord,
-    Position, RelayStore, StoreError,
+    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
 };
 
 /// What runs once, right before the first person-key write reaches the
@@ -86,10 +86,10 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
     async fn put_person_keys(
         &self,
         space: SpaceId,
-        records: Vec<PersonKeyRecord>,
-    ) -> Result<(), StoreError> {
+        puts: Vec<PersonKeyPut>,
+    ) -> Result<PutOutcome, StoreError> {
         self.run_rival();
-        self.inner.put_person_keys(space, records).await
+        self.inner.put_person_keys(space, puts).await
     }
 
     async fn delete_person_keys(
