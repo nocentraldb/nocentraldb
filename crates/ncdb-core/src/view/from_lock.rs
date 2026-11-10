@@ -44,6 +44,7 @@ impl Model {
                     keys,
                     // validate holds `equal` to at most the index's fields.
                     equality: i.equal as usize,
+                    scope: i.scope,
                 });
             }
         }

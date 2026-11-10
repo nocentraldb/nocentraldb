@@ -17,7 +17,7 @@ use ncdb_core::basic::{BasicValue, Kind};
 use ncdb_core::link::Link;
 use ncdb_core::model_lock::{self, ModelLock, Refusal};
 use ncdb_core::set::Set;
-use ncdb_core::view::{Direction, Field, Index, Invalid, Model};
+use ncdb_core::view::{Direction, Field, Index, Invalid, Model, Scope};
 
 /// The lock of the view's tests, as `ncdb model build` wrote it from
 /// `tests/view/model.ts`.
@@ -32,6 +32,7 @@ fn index(collection: &str, name: &str, keys: &[(&str, Direction)], equality: usi
         name: name.to_owned(),
         collection: collection.to_owned(),
         keys: keys.iter().map(|(k, d)| ((*k).to_owned(), *d)).collect(),
+        scope: Scope::Member,
         equality,
     }
 }

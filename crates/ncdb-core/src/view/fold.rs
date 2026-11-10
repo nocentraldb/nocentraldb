@@ -89,14 +89,48 @@ impl<'a> SqlFold<'a> {
         Ok(())
     }
 
-    /// Makes sure `c_<collection>` has a row for the object.
+    /// Makes sure `c_<collection>` has a row for the object; a new row
+    /// takes whether the object is deleted.
     fn row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
-        self.conn.execute(
+        let inserted = self.conn.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
                 rows(collection)
             ),
             params![self.space.0, object.0],
+        )?;
+        if inserted == 1 && self.object(object)?.object().is_deleted() {
+            self.mark_deleted(collection, object, true)?;
+        }
+        Ok(())
+    }
+
+    /// The object's creates and deletes, empty when it has none.
+    fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
+        let bytes: Option<Vec<u8>> = self
+            .conn
+            .query_row(
+                "SELECT state FROM objects WHERE space_id = ?1 AND object_id = ?2",
+                params![self.space.0, object.0],
+                |r| r.get(0),
+            )
+            .optional()?;
+        match bytes {
+            Some(bytes) => ObjectState::read(&bytes),
+            None => Ok(ObjectState::default()),
+        }
+    }
+
+    /// Records in the object's row of `c_<collection>`, if it has one,
+    /// whether the object is deleted: the declared indexes hold only the
+    /// rows of objects that are not (RFC 0006, Amendment 6).
+    fn mark_deleted(&self, collection: &str, object: ObjectId, deleted: bool) -> Result<(), Error> {
+        self.conn.execute(
+            &format!(
+                "UPDATE {} SET deleted = ?3 WHERE space_id = ?1 AND object_id = ?2",
+                rows(collection)
+            ),
+            params![self.space.0, object.0, deleted],
         )?;
         Ok(())
     }
@@ -145,24 +179,23 @@ impl<'a> SqlFold<'a> {
         object: ObjectId,
         operation: &ObjectOperation,
     ) -> Result<(), Error> {
-        let bytes: Option<Vec<u8>> = self
-            .conn
-            .query_row(
-                "SELECT state FROM objects WHERE space_id = ?1 AND object_id = ?2",
-                params![self.space.0, object.0],
-                |r| r.get(0),
-            )
-            .optional()?;
-        let mut state = match bytes {
-            Some(bytes) => ObjectState::read(&bytes)?,
-            None => ObjectState::default(),
-        };
+        let mut state = self.object(object)?;
+        let was_deleted = state.object().is_deleted();
         state.insert(operation.clone());
         self.conn.execute(
             "INSERT INTO objects (space_id, object_id, state) VALUES (?1, ?2, ?3)
              ON CONFLICT DO UPDATE SET state = excluded.state",
             params![self.space.0, object.0, state.bytes()],
         )?;
+        // A delete or a restore takes the object's rows out of the
+        // declared indexes or puts them back, in whichever collection's
+        // table the object has one.
+        let deleted = state.object().is_deleted();
+        if deleted != was_deleted {
+            for collection in self.model.collections.keys() {
+                self.mark_deleted(collection, object, deleted)?;
+            }
+        }
         // A create puts the object into the table of its collection.
         if let ObjectOperation::Create(create) = operation
             && self.model.collections.contains_key(&create.collection)

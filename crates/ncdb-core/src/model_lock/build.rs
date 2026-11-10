@@ -15,7 +15,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Map, Value};
 
 use super::read::{
-    direction, entries, error, field_core, join, object, parse, plugins, required, string, whole,
+    direction, entries, error, field_core, join, object, parse, plugins, required, scope, string,
+    whole,
 };
 use super::{
     Collection, Deprecation, Field, Index, IndexField, LockError, ModelId, ModelInfo, ModelLock,
@@ -137,6 +138,7 @@ fn draft_index(map: &Map<String, Value>, path: &str) -> Result<Index, LockError>
     Ok(Index {
         fields,
         equal: whole(required(map, path, "equal")?, &join(path, "equal"))?,
+        scope: scope(map, path)?,
         since: 0,
     })
 }
@@ -239,7 +241,9 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
         .map(|(name, index)| {
             let since = old
                 .and_then(|o| o.indexes.get(name))
-                .filter(|b| b.fields == index.fields && b.equal == index.equal)
+                .filter(|b| {
+                    b.fields == index.fields && b.equal == index.equal && b.scope == index.scope
+                })
                 .map_or(version, |b| b.since);
             (
                 name.clone(),
