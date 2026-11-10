@@ -306,9 +306,7 @@ impl RelayStore for SqliteStore {
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError> {
         let connection = self.connection();
         let mut statement = connection
-            .prepare(
-                "SELECT space FROM members WHERE member = ?1 AND current = 1 ORDER BY space",
-            )
+            .prepare("SELECT space FROM members WHERE member = ?1 AND current = 1 ORDER BY space")
             .map_err(failed("members of"))?;
         let rows = statement
             .query_map([member.0], |row| row.get::<_, Vec<u8>>(0))

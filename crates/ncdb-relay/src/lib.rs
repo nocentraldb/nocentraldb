@@ -7,5 +7,6 @@
 //! SQLite, is [`sqlite`].
 
 pub mod conformance;
+pub mod record;
 pub mod sqlite;
 pub mod store;
