@@ -2,8 +2,8 @@
 // RFCs state them in their text since NOC-100 and NOC-101, which their own
 // tests hold; here, the FAQ lists what the relay sees of
 // control changes, no limit of erasure is stated more weakly than RFC 0008
-// states it, and RFC 0008's "Conflicts" section says which of its points are
-// resolved. The test checks that each claim is there and points to its
+// states it, and RFC 0008's agreement section links where each other text
+// states what RFC 0008 made more precise (rfc-0008-fresh.test.mjs). The test checks that each claim is there and points to its
 // source; whether the wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
@@ -236,37 +236,6 @@ test("RFC 0006's control table holds what RFC 0008 lists, and the shred row wait
   );
 });
 
-test("RFC 0008's Conflicts section says which points NOC-44 resolved", () => {
-  const conflicts = section(
-    read(RFC_0008),
-    "conflicts-with-genesismd-and-the-other-rfcs",
-  );
-  assert.ok(conflicts, "no Conflicts section");
-  const points = new Map(
-    conflicts
-      .split("\n")
-      .filter((l) => /^\d+\. /.test(l))
-      .map((l) => [Number(l.split(".")[0]), l]),
-  );
-  for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 13, 14, 15]) {
-    const point = points.get(n);
-    assert.ok(point, `no conflict ${n}`);
-    assert.match(point, /Resolved/, `conflict ${n} is not marked resolved`);
-    assert.ok(
-      targets(point).some(
-        (t) =>
-          /#amendment-\d+-following-rfc-0008$/.test(t) ||
-          t.startsWith("0001-nocentraldb.md#") ||
-          t.startsWith("0002-change-and-log-format.md#") ||
-          t.startsWith("0003-keys-and-cryptography.md#") ||
-          // RFC 0006 states it in its text since NOC-101 folded its amendments in.
-          t.startsWith("0006-local-view.md#"),
-      ),
-      `conflict ${n} links no amendment and no section of RFC 0001, 0002, 0003 or 0006`,
-    );
-  }
-});
-
 test("the decision log records NOC-44's routing and the owner's D13", () => {
   const files = readdirSync(join(root, DECISIONS)).filter((f) =>
     f.includes("-NOC-44-"),
@@ -299,15 +268,13 @@ test("GENESIS.md's Spaces bullet follows M10: members are devices, agents and su
   }
 });
 
-test("RFC 0008's conflict 1 is resolved for GENESIS.md too", () => {
-  const conflicts = section(
+test("RFC 0008's agreement says GENESIS.md no longer names groups", () => {
+  const agreement = section(
     read(RFC_0008),
-    "conflicts-with-genesismd-and-the-other-rfcs",
+    "agreement-with-genesismd-and-the-other-rfcs",
   );
-  const point = conflicts.split("\n").find((l) => l.startsWith("1. "));
-  assert.match(point, /Resolved for GENESIS\.md/);
-  assert.ok(
-    !/stands until the owner rewrites it/.test(conflicts),
-    "the intro still says GENESIS.md's sentence stands",
-  );
+  const point = agreement.split("\n").find((l) => l.startsWith("- **Groups"));
+  assert.ok(point, "no point on groups");
+  assert.match(point, /GENESIS\.md/);
+  assert.doesNotMatch(agreement, /stands until the owner rewrites it/);
 });

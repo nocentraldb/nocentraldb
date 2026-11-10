@@ -3,9 +3,9 @@
 // return through a later RFC. RFC 0001 records the decision under "Groups
 // leave the design" (NOC-100's rfc-0001-complete.test.mjs holds that
 // section), and RFC 0008 and RFC 0009 state it in their text since NOC-101
-// folded their amendments in; the
-// decision about groups, RFC 0008's M10, is marked withdrawn instead of
-// deleted, and RFC 0009, a fresh text, says the SDK has no group object; the decision log records the owner's call;
+// folded their amendments in; RFC 0008 and RFC 0009, fresh texts (NOC-165),
+// say in their Groups section and bullet that groups were withdrawn and the
+// SDK has no group object; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
 // that withdraws them. Whether the wording is right is the owner's review.
 import assert from "node:assert/strict";
@@ -24,22 +24,6 @@ const DECISIONS = "factory/decisions";
 const WITHDRAWING =
   /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
 const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
-
-/** The text of the decision `id` (such as "M10"), up to the next decision or heading. */
-const decision = (markdown, id) => {
-  const lines = markdown.split("\n");
-  const start = lines.findIndex(
-    (line) =>
-      line.startsWith(`**${id}. `) ||
-      new RegExp(`^#{1,6} ${id}\\. `).test(line),
-  );
-  if (start < 0) return undefined;
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex(
-    (line) => /^\*\*[A-Z]+\d+\. /.test(line) || /^#{1,6} /.test(line),
-  );
-  return [lines[start], ...(end < 0 ? rest : rest.slice(0, end))].join("\n");
-};
 
 /**
  * Uses of the word "group" that are not the withdrawn feature: an auditor's
@@ -108,15 +92,15 @@ const units = (markdown) => {
   return result;
 };
 
-for (const [path, id] of [[RFC_0008, "M10"]]) {
-  test(`${path} marks decision ${id} on groups as withdrawn by the owner, and keeps it`, () => {
-    const text = decision(read(path), id);
-    assert.ok(text, `no decision ${id}`);
-    assert.match(text, WITHDRAWN, `${id} is not marked withdrawn`);
-    assert.match(text, WITHDRAWING, `${id} does not link the amendment`);
-    assert.match(text, /Decided: |Decided \(/, `${id} lost its decision`);
-  });
-}
+test("RFC 0008's Groups section says the owner withdrew groups, and a later RFC may bring them back", () => {
+  const lines = read(RFC_0008).split("\n");
+  const start = lines.indexOf("## Groups");
+  assert.ok(start >= 0, "no section Groups");
+  const end = lines.findIndex((l, i) => i > start && l.startsWith("## "));
+  const groups = lines.slice(start, end).join("\n");
+  assert.match(groups, WITHDRAWN);
+  assert.match(groups, /later RFC/);
+});
 
 // RFC 0009 is a fresh text (NOC-165): it keeps no decision list, so it says
 // in its own bullet that the SDK has no group object, and links RFC 0008.
