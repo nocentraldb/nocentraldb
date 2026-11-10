@@ -11,6 +11,7 @@
 //!
 //! Native only for now: the browser's SQLite on OPFS is a later ticket.
 
+mod accounts;
 mod fold;
 mod from_lock;
 mod log_table;
