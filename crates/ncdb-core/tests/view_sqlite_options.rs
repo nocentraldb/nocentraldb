@@ -1,16 +1,17 @@
 //! The view relies on no SQLite option that only one build has (NOC-185,
 //! decided as A by the owner): the native and the browser builds share the
-//! SQLite release, not the compile options. Natively foreign keys are on by
-//! default and FTS and R-Tree are built in; in the browser the page size is
-//! 8192 and neither FTS nor R-Tree exists. So the view's schema holds no
-//! virtual table and no foreign key, and what it reads does not depend on
-//! the page size.
+//! SQLite release, not the compile options. Their defaults differ: natively
+//! foreign keys are on and the page size is 4096, on wasm32 foreign keys
+//! are off and the page size is 8192; and which optional modules, such as
+//! FTS and R-Tree, a build carries may differ too. So the view's schema
+//! holds no virtual table and no foreign key, and what it holds does not
+//! depend on the page size.
 //!
 //! It runs on both targets: natively, and on wasm32 in the gate's test
 //! runner, on the SQLite build the browser uses (sqlite-wasm-rs). The plan
 //! check, which `View::open` runs on both, stays as it is. The fixtures
-//! show that the check fires: a foreign key on both targets, FTS and R-Tree
-//! natively, since the browser build cannot even create them.
+//! show that the check fires, for a foreign key, an FTS table and an
+//! R-Tree table.
 
 mod support;
 
@@ -41,8 +42,36 @@ use view_support::*;
 /// SQLite build has: each virtual table, such as FTS or R-Tree, and each
 /// table with a foreign key. Empty when the schema runs on both builds.
 fn unportable(conn: &Connection) -> Vec<String> {
-    let _ = conn;
-    Vec::new()
+    let mut statement = conn
+        .prepare(
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'table'
+             AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+        )
+        .unwrap();
+    let tables: Vec<(String, Option<String>)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect();
+    let mut found = Vec::new();
+    for (name, sql) in tables {
+        let sql = sql.unwrap_or_default().to_ascii_uppercase();
+        if sql.starts_with("CREATE VIRTUAL TABLE") {
+            found.push(format!("{name}: a virtual table"));
+            continue;
+        }
+        let keys: u32 = conn
+            .query_row(
+                "SELECT count(*) FROM pragma_foreign_key_list(?1)",
+                [&name],
+                |row| row.get(0),
+            )
+            .unwrap();
+        if keys > 0 {
+            found.push(format!("{name}: a foreign key"));
+        }
+    }
+    found
 }
 
 /// A task with a title and a rank.
@@ -96,7 +125,6 @@ fn a_foreign_key_relies_on_an_option_one_build_lacks() {
     assert_eq!(unportable(&conn), ["child: a foreign key"]);
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn fts_and_r_tree_rely_on_options_one_build_lacks() {
     let db = MemDb::new();
