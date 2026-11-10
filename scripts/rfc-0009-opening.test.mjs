@@ -98,11 +98,10 @@ test("RFC 0009 records S26 to S28 as decided on NOC-114, with History and status
   assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-114 · .*\(#\d+\)\.?$/m);
 });
 
-test("NOC-114 leaves RFC 0009's open questions, and NOC-116 and NOC-115 stay", () => {
+test("NOC-114 leaves RFC 0009's open questions, and NOC-115 stays", () => {
   const open = section(read(RFC_0009), "open-questions");
   assert.doesNotMatch(open, /NOC-114/);
-  assert.match(open, /^Two questions wait for the owner/m);
-  assert.match(open, /\*\*NOC-116\.\*\*/);
+  assert.match(open, /^One question waits for the owner/m);
   assert.match(open, /\*\*NOC-115, question 10\.\*\*/);
 });
 
@@ -115,7 +114,8 @@ test("RFC 0003's member key says opening fails with keyStoreUnavailable", () => 
 
 test("RFC 0003 records decision 19 as decided on NOC-114, with History and status", () => {
   const text = decision(RFC_0003, "19");
-  assert.match(text, DECIDED);
+  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
+  assert.match(text, /Asked on NOC-114\./);
   assert.match(text, /`keyStoreUnavailable`/);
   assert.match(text, NOT_TAKEN);
   const rfc = read(RFC_0003);
