@@ -71,7 +71,10 @@ fn the_database_keeps_the_account_key_and_when_it_was_confirmed() {
     let after = millis();
 
     let at = admin.lock().view.account_confirmed_at(&key).unwrap();
-    assert!(at.is_some_and(|at| (before..=after).contains(&at)), "{at:?}");
+    assert!(
+        at.is_some_and(|at| (before..=after).contains(&at)),
+        "{at:?}"
+    );
 }
 
 /// The database's own account is known without a confirmation, and is not

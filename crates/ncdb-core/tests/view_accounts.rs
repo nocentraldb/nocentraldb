@@ -77,7 +77,12 @@ fn the_table_holds_the_account_key_and_when_it_was_confirmed_and_nothing_else() 
         .prepare("SELECT name, type, \"notnull\", pk FROM pragma_table_info('confirmed_accounts')")
         .unwrap()
         .query_map([], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get::<_, i64>(3)? == 1))
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get::<_, i64>(3)? == 1,
+            ))
         })
         .unwrap()
         .map(Result::unwrap)
