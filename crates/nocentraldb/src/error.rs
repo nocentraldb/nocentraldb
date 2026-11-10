@@ -47,6 +47,13 @@ pub enum ErrorCode {
     NotAllowed,
     /// The member is no longer a member of the space.
     NotMember,
+    /// The invitation's certificate does not hold: its account did not
+    /// sign it, it certifies another member than the invitation's keys, or
+    /// it is a sub-agent's. It can mean a forged invitation, which a person
+    /// may need to see.
+    InvalidCertificate,
+    /// The invitation's member is a member of the space already.
+    AlreadyMember,
 }
 
 impl Error {

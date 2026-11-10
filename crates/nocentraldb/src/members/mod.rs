@@ -96,14 +96,14 @@ impl Members<'_> {
     /// Only an admin adds members: another member is refused with
     /// `NotAllowed`, one that was removed, or that the relay answered
     /// `not_member` or `removed_member` for the space, with `NotMember`
-    /// (RFC 0009, "Errors"). The member of the invitation must not be a member, and
-    /// must not have been one, which is refused with `InvalidValue`:
-    /// adding a former member again needs a rotation first (RFC 0008, M5),
-    /// which is not built.
+    /// (RFC 0009, "Errors"). A member of the space is refused with
+    /// `AlreadyMember`, and a former member with `InvalidValue`: adding it
+    /// again needs a rotation first (RFC 0008, M5), which is not built.
     ///
     /// An invitation whose certificate does not hold is refused with
-    /// `InvalidValue`: one its account did not sign, one that certifies
-    /// another member than the invitation's keys, or a sub-agent's. An account other than this database's own is new to it, since each
+    /// `InvalidCertificate`: one its account did not sign, one that
+    /// certifies another member than the invitation's keys, or a
+    /// sub-agent's. An account other than this database's own is new to it, since each
     /// database draws its own account key (RFC 0009, S20): its member is
     /// refused with `UnknownAccount` unless `options` carry the
     /// invitation's fingerprint.
@@ -192,7 +192,7 @@ fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<(
     match resolved.member(subject) {
         None => Ok(()),
         Some(state) if state.role.is_some() => Err(Error::new(
-            ErrorCode::InvalidValue,
+            ErrorCode::AlreadyMember,
             "the invitation's member is a member of the space already",
         )),
         Some(_) => Err(Error::new(
@@ -215,7 +215,7 @@ fn certified(invitation: &Invitation) -> Result<(), Error> {
     match holds {
         true => Ok(()),
         false => Err(Error::new(
-            ErrorCode::InvalidValue,
+            ErrorCode::InvalidCertificate,
             "the invitation's certificate does not hold",
         )),
     }
