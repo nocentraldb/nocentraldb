@@ -125,11 +125,11 @@ test("Open questions says whether the owner still has one", () => {
   assert.match(section(read(), "open-questions"), /\S/);
 });
 
-test("Decisions keeps S1 to S29 in short form: decided, why, and the options not taken", () => {
+test("Decisions keeps S1 to S32 in short form: decided, why, and the options not taken", () => {
   const found = decisions();
   assert.deepEqual(
     found.map((d) => d.id),
-    Array.from({ length: 29 }, (_, i) => `S${i + 1}`),
+    Array.from({ length: 32 }, (_, i) => `S${i + 1}`),
   );
   for (const { id, text } of found) {
     const date = Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10";
