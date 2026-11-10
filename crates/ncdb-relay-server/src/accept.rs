@@ -37,9 +37,23 @@ pub(crate) async fn next(listener: &TcpListener) -> io::Result<TcpStream> {
     }
 }
 
-/// Whether `error` means the listener itself is gone. None does yet.
-fn listener_gone(_error: &io::Error) -> bool {
-    false
+/// Whether `error` means the listener itself is gone, as `accept(2)`
+/// names it: the descriptor is closed (EBADF), is not a listening socket
+/// (EINVAL, ENOTSOCK), or not one that accepts (EOPNOTSUPP). No pause
+/// mends these.
+#[cfg(unix)]
+fn listener_gone(error: &io::Error) -> bool {
+    matches!(
+        error.raw_os_error(),
+        Some(libc::EBADF | libc::EINVAL | libc::ENOTSOCK | libc::EOPNOTSUPP)
+    )
+}
+
+/// Whether `error` means the listener itself is gone: on platforms other
+/// than Unix, only an invalid listener is.
+#[cfg(not(unix))]
+fn listener_gone(error: &io::Error) -> bool {
+    error.kind() == io::ErrorKind::InvalidInput
 }
 
 #[cfg(all(test, unix))]
