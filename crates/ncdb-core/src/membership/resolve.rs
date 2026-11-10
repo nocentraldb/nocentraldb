@@ -21,6 +21,7 @@ use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
+use super::current;
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::rights;
@@ -41,6 +42,8 @@ pub struct Resolved {
     /// its causal past.
     seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
     generations: Generations,
+    heads: BTreeSet<u64>,
+    current: Option<u64>,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -143,6 +146,21 @@ impl Resolved {
         self.generations.descends(generation, from)
     }
 
+    /// The heads of the generation graph: the generations no accepted key
+    /// chain entry lists as previous, leaving out a generation that two
+    /// entries name (decision M23).
+    pub fn heads(&self) -> BTreeSet<u64> {
+        self.heads.clone()
+    }
+
+    /// The current generation, which a writer seals under (RFC 0008, "Two
+    /// removals that rotate the key at once"): the head with the highest
+    /// ordinal, then the one whose key chain entry comes first in the
+    /// order. None without a genesis.
+    pub fn current_generation(&self) -> Option<u64> {
+        self.current
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -225,6 +243,8 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         gaps: BTreeSet::new(),
         seen: BTreeMap::new(),
         generations: Generations::default(),
+        heads: BTreeSet::new(),
+        current: None,
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -308,6 +328,8 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         }
     }
     reject_duplicate_generations(&mut resolved.verdicts, &folded);
+    resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
+    resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
     resolved
 }
 
