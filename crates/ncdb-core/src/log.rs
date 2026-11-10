@@ -347,6 +347,29 @@ impl Log {
         }
     }
 
+    /// The newest model version the parked data of the member's own model
+    /// needs (RFC 0002, "What the model version is for"): the highest
+    /// version in payload key 64 among the changes parked for an unknown
+    /// "must understand" payload key and the folded changes with parked
+    /// operations, whose key 64 names `model`. A change parked as another
+    /// model, or for a payload this core cannot read, does not count, nor
+    /// does one without key 64. It opens each such change with `checks`,
+    /// so it costs one decryption per counted change.
+    pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
+        self.entries
+            .iter()
+            .filter(|entry| match &entry.state {
+                Some(State::Parked(ParkReason::UnknownPayloadKey)) => true,
+                Some(State::Folded { parked }) => !parked.is_empty(),
+                _ => false,
+            })
+            .filter_map(|entry| {
+                let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
+                (writer.id == model).then_some(writer.version)
+            })
+            .max()
+    }
+
     /// The relay counts of `author`'s changes in this log.
     pub fn relay_counts(&self, author: MemberId) -> RelayCounts {
         self.relay_counts.get(&author).copied().unwrap_or_default()
