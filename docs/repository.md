@@ -9,6 +9,7 @@ crates/ncdb-core/     Rust core (placeholder)
 crates/ncdb/          the command line ncdb: ncdb model build and ncdb model check (RFC 0005)
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
 crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
+crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
 docs/rfc/             design documents; README.md lists them and says where feedback goes
@@ -84,6 +85,7 @@ What each project's `gates` task runs:
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); it runs natively only, so it has no wasm tasks |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
 | Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, and the `ncdb-relay` binary, on SQLite in temporary directories and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
+| Rust SDK (`nocentraldb`) | `format-check`, `lint` and `test` as for `ncdb-core`; it builds on the core's local view, which is native only, so it has no wasm tasks |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
 | Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `file-size` (`node scripts/check-file-size.mjs`: no tracked code or test file is longer than the limit in the row "Largest code or test file" of `factory/CONFIG.md`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs` and the three `release-workflow*.test.mjs`, which assert the contracts of `changes.yml` and `release.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and that this table and the uncached commands below list every task the gate runs, and the tests of the release tooling under `scripts/release/`, among them a `set-version` test that runs `cargo` in a two-crate fixture and `index.test.mjs`, which holds the committed `release-notes/index.json` to its shape), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](release-management.md#writing-a-change-fragment)), `decisions` (`node scripts/decisions.mjs --check`: every decision file in `factory/decisions/` has a well-formed name, heading and fields, and every `Supersedes:` names a file that exists; `pnpm decisions` reads the same folder), `version` (`node scripts/release/check-version.mjs`: `Cargo.toml` `[workspace.package]` holds a plain `X.Y.Z`, every crate inherits it, dependencies between workspace crates are pinned to it in `[workspace.dependencies]`, and every workspace `package.json` and `Cargo.lock` carry it; see [Versioning](release-management.md#versioning)), `api-report` (`node scripts/release/api-report.mjs`: the TypeScript SDK's public declarations, regenerated with `tsc`, equal the committed `packages/sdk/etc/api-report.d.ts`), `wasm-runner` (`cargo install wasm-bindgen-cli --version =0.2.130 --locked --root target/tools`: installs the runner that `test-wasm` needs, at the `wasm-bindgen` version `Cargo.lock` holds; a cold run builds `wasm-bindgen-cli` once, which takes about a minute, and later runs reuse it from the cached `target/`); `rust-toolchain` runs before every Rust task and before `test` and `wasm-runner` |
 
@@ -106,6 +108,9 @@ moon run ncdb-relay:test --force
 moon run ncdb-relay-server:format-check --force
 moon run ncdb-relay-server:lint --force
 moon run ncdb-relay-server:test --force
+moon run nocentraldb:format-check --force
+moon run nocentraldb:lint --force
+moon run nocentraldb:test --force
 moon run sdk:format-check --force
 moon run sdk:lint --force
 moon run sdk:typecheck --force
