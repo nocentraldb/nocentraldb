@@ -124,3 +124,21 @@ fn a_space_the_member_was_removed_from_is_listed_without_a_role() {
         }]
     );
 }
+
+#[test]
+fn a_space_of_another_model_is_listed_as_another() {
+    let db = database();
+    let (space, changes) = shared([1; 16], CoreRole::Writer, true);
+    receive(&db, &all(&changes));
+
+    let listed = now(db.spaces().list()).unwrap();
+
+    assert_eq!(
+        listed,
+        vec![SpaceInfo {
+            id: SpaceId(space.space),
+            role: Some(Role::Writer),
+            model: SpaceModel::Another,
+        }]
+    );
+}
