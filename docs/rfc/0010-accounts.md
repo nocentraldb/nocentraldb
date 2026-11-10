@@ -2,13 +2,13 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-107
 
-This RFC defines accounts: the account key and where it lives, the recovery code, how a device or an agent joins an account, how the accounts that each database draws today are linked into one, and what a member certificate signed by an account means for membership. It turns the sketch in [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) into a design, so that a person's devices can be linked before the first release, as the owner asked when deciding that each database draws its own account key for now (NOC-95, choice 2 A, Carsten, 2026-11-10).
+This RFC defines accounts: the account key and where it lives, the recovery key that is the account's identity, the recovery code, how a device or an agent joins an account, how the accounts that each database draws today are linked into one, what happens when a device is lost, and what a member certificate signed by an account means for membership. It turns the sketch in [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) into a design, so that a person's devices can be linked before the first release, as the owner asked when deciding that each database draws its own account key for now (NOC-95, Carsten, 2026-11-10).
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page); on [RFC 0003](0003-keys-and-cryptography.md), which defines the account key, the [member certificate](0003-keys-and-cryptography.md#member-certificate) and the [account sign-off of a shred](0003-keys-and-cryptography.md#account-sign-off-of-a-shred); on [RFC 0008](0008-membership.md), which places certificates in the genesis and in membership entries; on [RFC 0007](0007-relay.md), whose relay sees certificates; on [RFC 0006](0006-local-view.md), which keeps one database per member; and on [RFC 0009](0009-sdk-api.md), which names the entry points this RFC designs ([Accounts and devices](0009-sdk-api.md#accounts-and-devices), decision S15).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. GENESIS.md reserves crypto, key handling, the wire and on-disk formats and public API names for the owner ([What has to come back through me](../../factory/GENESIS.md#what-has-to-come-back-through-me)), and every choice in this RFC falls under one of them. The owner decided every question, Q1 to Q12, as this RFC proposed them, on NOC-115 (Carsten, 2026-11-10); the design below describes those choices, and [Decisions](#decisions) lists each in short form. Some of them change RFC 0003, RFC 0008, RFC 0009 and the FAQ; [Changes to the decided RFCs](#changes-to-the-decided-rfcs) lists what changes, and those texts follow in their own pull requests. Nothing here is built.
+**Status.** Decided. GENESIS.md reserves crypto, key handling, the wire and on-disk formats and public API names for the owner ([What has to come back through me](../../factory/GENESIS.md#what-has-to-come-back-through-me)), and every choice in this RFC falls under one of them. The owner decided every point as proposed, on NOC-115 (Carsten, 2026-11-10), and the text below describes those choices. Some of them change RFC 0003, RFC 0008, RFC 0009 and the FAQ; [Changes to the decided RFCs](#changes-to-the-decided-rfcs) lists what changes, and those texts follow in their own pull requests. Nothing here is built.
 
 **Out of scope.** How a work order is claimed and signed off, beyond naming the account key as the key that signs (a later RFC on work orders). Passkeys and how the browser unlocks its keys (RFC 0003 leaves them out). Accounts shared by several people, such as an organisation with many administrators, beyond what one account with several devices gives. Deleting a space. A directory that finds an account by name or address: there is none, and people compare fingerprints.
 
@@ -18,11 +18,11 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | --- | --- |
 | What is an account? | A key pair that answers for members: it signs the certificates of its devices and agents, and the sign-off of an erasure. It is not a login, and no server holds it. |
 | Where does the account key live? | On every device of the account, in the platform keystore next to the member key, as RFC 0003 decided. Never on an agent, never at the relay. |
-| What is the account's identity? | A recovery key that only the recovery code holds. It signs a statement naming the current account key, so a lost device can be answered with a new account key ([Q1](#q1-the-accounts-identity)). |
-| What is the recovery code? | Twelve words that hold 128 random bits; the recovery key derives from them ([Q2](#q2-the-form-of-the-recovery-code)). |
-| What does it restore? | The account, not the spaces: a new device under the account, which other members then add to their spaces ([Q3](#q3-what-the-recovery-code-restores)). |
-| How does a device join? | Two codes: the new device shows its invitation, a device of the account reads it, the person confirms, and the answer carries the certificate and the sealed account key back ([Q5](#q5-how-a-pairing-travels), [Q6](#q6-how-the-person-confirms-a-pairing)). |
-| How are per-database accounts linked? | A database with its own account pairs like a new device; both account keys sign a link; the old key is deleted; memberships already written keep their certificate ([Q9](#q9-memberships-written-under-a-per-database-account-after-linking)). |
+| What is the account's identity? | A recovery key that only the recovery code holds. It signs a statement naming the current account key, so a lost device is answered with a new account key. |
+| What is the recovery code? | Twelve words that hold 128 random bits; the recovery key derives from them. |
+| What does it restore? | The account, not the spaces: a new device under the account, which other members then add to their spaces. |
+| How does a device join? | Two codes: the new device shows its invitation, a device of the account reads it, the person confirms, and the answer carries the certificate and the sealed account key back. |
+| How are per-database accounts linked? | A database with its own account pairs like a new device; both account keys sign a link; the old key is deleted; memberships already written keep their certificate. |
 | What does a certificate mean for RFC 0008? | Who answers for a member. It is checked once, when the member enters a space, and gives no right of its own. |
 
 ## Terms
@@ -30,7 +30,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Term | Meaning in this RFC |
 | --- | --- |
 | Member, member key, member id | As in RFC 0003 and RFC 0008: a device, an agent or a sub-agent, its two key pairs, and the id that covers both public keys. |
-| Account | Whatever answers for a set of members: a recovery key, and the account key it names ([Q1](#q1-the-accounts-identity)). |
+| Account | Whatever answers for a set of members: a recovery key, and the account key it names. |
 | Account key | The Ed25519 signing key that signs member certificates and erasure sign-offs (RFC 0003). |
 | Recovery key | The account's identity: an Ed25519 key derived from the recovery code, held by no device, that names the current account key. |
 | Account key statement | The recovery key's signature on "the account key is K, number n". |
@@ -38,10 +38,10 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Device | A member of kind 1 in its certificate: an app's database on a phone, a laptop or in a browser, run by a person. |
 | Agent | A member of kind 2: software that runs for an account. It never holds the account key. |
 | Pairing | Adding a device or an agent to an account: it receives a certificate, and a device also receives the account key. |
-| Account space | An ordinary space whose members are the account's devices, holding the account's own records ([Q4](#q4-an-account-space-for-the-accounts-records)). |
+| Account space | An ordinary space whose members are the account's devices, holding the account's own records. |
 | Per-database account | The account key each database draws for itself on first open today ([RFC 0003, decision 17](0003-keys-and-cryptography.md#17-the-account-key-before-the-accounts-rfc)). |
 | Linking | Turning a per-database account into a part of another account. |
-| Fingerprint | A short, readable digest of the account's identity, which people compare once ([Q12](#q12-the-fingerprint)). |
+| Fingerprint | A short, readable digest of the account's identity, which people compare once. |
 
 ## Where things stand today
 
@@ -55,17 +55,17 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 The account key is an Ed25519 key pair, as RFC 0003 defines it. It is drawn on the account's first device when the account is created; today, that is every database's first open.
 
-**Where it lives** is decided: on every device of the account ([RFC 0003, decision 8](0003-keys-and-cryptography.md#8-where-the-account-key-lives)). The SDK keeps it where it keeps the member key, in the platform keystore, and never hands its bytes to the app ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). In the browser, a non-extractable WebCrypto key wraps it in IndexedDB, and a browser that evicts the origin's data takes the account key with it ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). The recovery code is then the way back, as for a lost phone.
+**Where it lives** was decided in RFC 0003: on every device of the account ([decision 8](0003-keys-and-cryptography.md#8-where-the-account-key-lives)). The SDK keeps it where it keeps the member key, in the platform keystore, and never hands its bytes to the app ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). In the browser, a non-extractable WebCrypto key wraps it in IndexedDB, and a browser that evicts the origin's data takes the account key with it ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). The recovery code is then the way back, as for a lost phone. RFC 0003 did not take the other two places it weighed: an account key derived from a passkey, and an account key only on designated admin devices, which may come back later as an option for organisations.
 
-**Who never holds it.** An agent or a sub-agent never holds the account key, following RFC 0003, whose holders are "the account's devices" and which keeps the account key from a parent agent ([Sub-agents get an ad-hoc space](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). An agent holds only the certificate its account signed for it on a device. The relay never holds it. An organisation that runs agents does so under an account whose key lives on the devices of the people who answer for those agents.
+**Who never holds it.** An agent or a sub-agent never holds the account key, following RFC 0003, whose holders are "the account's devices" and which keeps the account key from a parent agent ([Sub-agents get an ad-hoc space](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). An agent holds only the certificate its account signed for it on a device. The relay never holds it either: an account at the relay, with a password that unlocks an account key held there, would let the relay or a backup of it hold a key wrapped by a secret people choose, which can be guessed offline, and that breaks the first principle ([GENESIS.md, "Principles, in priority order"](../../factory/GENESIS.md#principles-in-priority-order)). An organisation that runs agents does so under an account whose key lives on the devices of the people who answer for those agents.
 
-**One database is one member** ([RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member)). Two apps on one laptop are two databases, so two members. Each keeps its own copy of the account key and pairs on its own ([Q8](#q8-one-account-key-per-app-or-per-device)): phones and browsers keep apps apart, so sharing a copy would make accounts behave differently by platform.
+**One database is one member** ([RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member)). Two apps on one laptop are two databases, so two members, and each keeps its own copy of the account key and pairs on its own. Phones and browsers keep apps apart, so letting apps share a keystore entry where a desktop platform allows it would make accounts behave differently by platform, which principle 7 rules out. The cost is that a person pairs each app once.
 
 **What it signs.** Member certificates of the account's devices and agents ([RFC 0003, "Member certificate"](0003-keys-and-cryptography.md#member-certificate)); the sign-off of an erasure; and the link statements of [Linking accounts drawn per database](#linking-accounts-drawn-per-database).
 
 ### The account's identity
 
-The account's identity is a **recovery key**, not the account key ([Q1](#q1-the-accounts-identity)). The account key lives on every device, so a device that is lost or stolen carries it away, and nothing could take it back if it were the identity. The recovery key derives from the recovery code, and no device keeps it. It signs an **account key statement** that names the current account key and a number. The account's fingerprint is the recovery key's, so it stays the same when the account key changes. A lost device is answered by a new account key, with the next number, signed with the recovery key.
+The account's identity is a **recovery key**, not the account key. The account key lives on every device, so a device that is lost or stolen carries it away. If the account key were the identity, nothing could take it back: a lost phone would sign certificates and erasure sign-offs in the person's name for as long as the account exists, and the only answer would be a new account. The recovery key derives from the recovery code, and no device keeps it. It signs an **account key statement** that names the current account key and a number. The account's fingerprint is the recovery key's, so it stays the same when the account key changes. A lost device is answered by a new account key, with the next number, signed with the recovery key. The cost is that the person needs the recovery code to answer a lost device, and that RFC 0003's certificate and RFC 0008's check change, which costs least before the first release, while no certificate outside development exists.
 
 ```text
 account key statement (CBOR map, canonical)
@@ -79,6 +79,10 @@ account key statement (CBOR map, canonical)
 The member certificate carries the statement as a new key, so a member checks a chain of two: the statement against the recovery key, then the certificate against the account key it names. The statement is the only new thing that is signed; it follows RFC 0003's rule for every signed input, a context string of its own and a canonical map ([Formats of what keys sign and derive](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)). RFC 0003's certificate format and RFC 0008's check change with it ([Changes to the decided RFCs](#changes-to-the-decided-rfcs)).
 
 What the higher number does, and where it stops, is in [Losing a device](#losing-a-device).
+
+### The fingerprint
+
+People compare an account's fingerprint once, the way messaging apps compare safety numbers, when an account is new to their device or when they pair a device. It is SHA-256 over the context string `"nocentraldb/account-fingerprint"` and the recovery key, shown as 60 digits in twelve blocks of five. Digits read aloud the same in every language, and messaging apps have taught people to compare them. The first 16 bytes of the hash in hexadecimal would be harder to read aloud, and words from the recovery code's list would invite people to confuse the fingerprint with the code.
 
 ## What a member certificate means for RFC 0008
 
@@ -94,21 +98,21 @@ RFC 0003 defines the certificate's bytes and RFC 0008 where it stands. This is w
 
 ## The recovery code
 
-The recovery code is made when the account is created, on its first device. The SDK hands it to the app once, for the person to write down or store in a password manager, as an object whose string, JSON and debug forms are redacted so that it never reaches a log; the app shows the words and calls `confirm()` ([Q11](#q11-how-the-recovery-code-reaches-the-person)). It is the one way a private key leaves a device that RFC 0003 allows: "the account recovery flow, which a person runs, not an app".
+The recovery code is made when the account is created, on its first device. The SDK hands it to the app once, for the person to write down or store in a password manager, as an object whose string, JSON and debug forms are redacted so that it never reaches a log ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). The app shows the words and calls `confirm()`. Apps own their screens, so the SDK does not ship its own screen, which would be a user interface on every platform; and the SDK does not store the code in the platform's password manager itself, because that would put it on the devices it is meant to outlive. It is the one way a private key leaves a device that RFC 0003 allows: "the account recovery flow, which a person runs, not an app".
 
-**Its form** is twelve words ([Q2](#q2-the-form-of-the-recovery-code)) from the BIP-39 English word list. They encode 128 random bits and a 4-bit checksum. The words are only an encoding: BIP-39's step that stretches the words with PBKDF2 into a wallet seed is not used. The recovery key derives from the 128 bits with HKDF-SHA256 under its own context string, `"nocentraldb/recovery-key"`, as RFC 0003 derives its other subkeys. 128 bits match the strength of Ed25519 itself, and twelve words are short enough to copy by hand without a mistake the checksum misses.
+**Its form** is twelve words from the BIP-39 English word list. They encode 128 random bits and a 4-bit checksum. The words are only an encoding: BIP-39's step that stretches the words with PBKDF2 into a wallet seed is not used. The recovery key derives from the 128 bits with HKDF-SHA256 under its own context string, `"nocentraldb/recovery-key"`, as RFC 0003 derives its other subkeys. 128 bits match the strength of Ed25519 itself, twelve words are copied by hand with fewer mistakes than twenty-four words or 26 characters in Crockford's base32, and people recognise the word list. Twenty-four words could encode the 32-byte Ed25519 seed itself, but would only make the code longer to copy for no strength the key has.
 
 **What the device keeps.** The device forgets the recovery code once the app confirms that the person stored it, and keeps only the recovery key's public half. A stolen device therefore holds no recovery code.
 
 **Recovering.** On a new device, the person enters the code. The SDK derives the recovery key, draws a new account key, signs its statement with the next number, certifies the new device's member key and forgets the recovery key again. The account comes back with its fingerprint unchanged.
 
-**What it restores** is the account, not the spaces ([Q3](#q3-what-the-recovery-code-restores)). The new device is a member of nothing yet. A space comes back when another member of it, a person's other account or an agent, adds the new device. A space whose every member is lost stays unreadable, because the relay holds only ciphertext and nobody holds a key to it. The SDK says so where it matters: when an account's only device is the only member of a space, the space's status says that losing this device loses the space.
+**What it restores** is the account, not the spaces. The new device is a member of nothing yet. A space comes back when another member of it, a person's other account or an agent, adds the new device. A space whose every member is lost stays unreadable, because the relay holds only ciphertext and nobody holds a key to it. The SDK says so where it matters: when an account's only device is the only member of a space, the space's status says that losing this device loses the space. An app that must not lose a space adds a second member to it, another person or an agent. Recovery reaches no further on purpose: a recovery member derived from the code, added as a reader to every space the account administers, would put a member nobody runs into every member list, and a backup of the space keys at the relay, sealed under a key derived from the code, would need a new store at the relay. With either, a leaked code would read everything instead of only signing. Splitting the code among other people, social recovery, is more for people to manage and to explain; it can come later on top of a recovery key.
 
-**Losing the code.** While a device of the account remains, the person can still use the account. Nobody can then make a new account key, so the account can no longer be answered after a lost device; the person makes a new account and links the old one into it. A new recovery code for the same account is not possible without the old one, because the old one is the identity.
+**Losing the code.** While a device of the account remains, the person can still use the account, but nobody can make a new account key, so the account can no longer be answered after a lost device; the person makes a new account and links the old one into it. A new recovery code for the same account is not possible without the old one, because the old one is the identity.
 
 ## Adding a device or an agent to an account
 
-Pairing uses two codes and no server ([Q5](#q5-how-a-pairing-travels)). It reuses RFC 0009's invitation as the first code:
+Pairing uses two codes and no server. It reuses RFC 0009's invitation as the first code:
 
 ```ts
 // 1. On the new device, a database opened for pairing shows its invitation:
@@ -124,24 +128,24 @@ const answer = await db.account.pair({ kind: "device", invitation });
 await db.account.completePairing(answer);       // certificate, and for a device the account key
 ```
 
-RFC 0009 named `db.account.pair` and `nc.open({ pairing })` and left the rest to this RFC, which names the others ([Q10](#q10-the-public-names-of-pairing-linking-and-recovery)). Linking uses the same calls, and `nc.open({ model, lock, recover: words })` recovers an account on a new device.
+RFC 0009 named `db.account.pair` and `nc.open({ pairing })` and left the rest to this RFC, which names the others. Linking uses the same calls, because linking is pairing a database that already has data, so one flow and one set of names covers both, without a separate `db.account.link`. `nc.open({ model, lock, recover: words })` recovers an account on a new device.
 
 What happens underneath:
 
 1. **The new device** draws its member key, as on every first open, and shows its invitation without a certificate, as a sub-agent's invitation already is ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)). Nothing in it is secret.
-2. **The device of the account** reads it. The person confirms on that device that this is their new device or their agent ([Q6](#q6-how-the-person-confirms-a-pairing)). A device is confirmed only by a scanned code or by a full fingerprint compared on both screens, because the answer carries the account key. An agent may be paired through any channel the person trusts, such as text copied from the agent's terminal, because it receives no account key.
+2. **The device of the account** reads it, and the person confirms on that device that this is their new device or their agent. A device is confirmed only by a scanned code, which proves the two devices are side by side, or by a full fingerprint compared on both screens, because the answer carries the account key: a swapped invitation would hand the account to an attacker. An agent may be paired through any channel the person trusts, such as text copied from the agent's terminal, because it receives no account key, only a certificate, which a person can remove again. A short code compared on both screens is not enough for either: an attacker who draws keys until a short digest matches defeats it, and making it safe needs a commitment protocol we would design ourselves, which GENESIS.md forbids.
 3. **The answer** carries the certificate the account key signed, and the account key statement. For a device, it also carries the account key, sealed with HPKE to the new device's agreement key, the same construction as RFC 0003's [key envelope](0003-keys-and-cryptography.md#key-envelope) under its own `info` label, `"nocentraldb/account-key"`. A camera that films the answer learns nothing it can open.
 4. **The new device** checks the certificate against its own member id, opens the account key, and is a device of the account. Through the [account space](#the-account-space), it learns the account's other devices and spaces.
 
-On pairing, the account key passes neither through the relay nor through the account space: it travels once, sealed, from one device to the other. Pairing works in island mode, because the two codes need no network.
+On pairing, the account key passes neither through the relay nor through the account space: it travels once, sealed, from one device to the other. Pairing works in island mode, because the two codes need no network, and the relay learns nothing of it. The cost is two scans, or two copy-pastes for an agent. One code and a mailbox at the relay for the rest would need a new request in RFC 0007 and tell the relay when pairings happen; a short code typed on the new device, with a password-authenticated key exchange (PAKE) through such a mailbox, would also need a PAKE crate whose audit we would first have to establish.
 
-**Which spaces a new device joins** ([Q7](#q7-which-spaces-a-new-device-joins)): the SDK adds a new device to every space where a device of the account is an admin, with the role the account's devices hold there, and returns one notice per space, because it changes who can read ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). Where no device of the account is an admin, the SDK lists the spaces, and the app asks those spaces' admins with the new device's invitation, which their SDK accepts without a fingerprint check, because the account is known to it. An agent joins no space automatically: it gets the spaces its task needs and no more.
+**Which spaces a new device joins.** The SDK adds a new device to every space where a device of the account is an admin, with the role the account's devices hold there, and returns one notice per space, because it changes who can read ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). A person expects their new phone to show their data, so the app does not have to add it space by space. Where no device of the account is an admin, the SDK lists the spaces, and the app asks those spaces' admins with the new device's invitation, which their SDK accepts without a fingerprint check, because the account is known to it. Other admins' SDKs do not admit a certified device of a known account on their own: that would let a certificate admit a member without any admin deciding, which RFC 0008 never allows. An agent joins no space automatically: it gets the spaces its task needs and no more.
 
 ### The account space
 
-The account's devices need records they share: which devices and agents the account certified, which spaces each device belongs to, which accounts are linked into it, and the account key statements. They live in an **account space** ([Q4](#q4-an-account-space-for-the-accounts-records)): an ordinary space under RFC 0008, created by the account's first device, whose members are the account's devices, each an admin. Its model is one the SDK ships. It needs no new format: its genesis, its adds and its key envelopes are RFC 0008's, and its records are sealed content the relay cannot read.
+The account's devices need records they share: which devices and agents the account certified, which spaces each device belongs to, which accounts are linked into it, and the account key statements. They live in an **account space**: an ordinary space under RFC 0008, created by the account's first device, whose members are the account's devices, each an admin. Its model is one the SDK ships. It needs no new format: its genesis, its adds and its key envelopes are RFC 0008's, and its records are sealed content the relay cannot read. With no shared record, each device would know only what it did itself: `removeMember` could not find the spaces of a lost device it is not in, and a new device could not learn which spaces to ask for. The cost is that the relay sees one more space per account and when devices join it.
 
-Its content never holds the account key or the recovery code in a form its members can read. Content is sealed under the space key, so every device that joins later would walk the key chain back ([RFC 0003, decision 5](0003-keys-and-cryptography.md#5-what-a-new-member-reads)) and read every account key the account ever had. When a new account key must reach the remaining devices ([Losing a device](#losing-a-device)), the account space carries it wrapped with HPKE to each device's agreement key, as a key envelope wraps a space key, so that only that device opens it.
+Its content never holds the account key or the recovery code in a form its members can read. Content is sealed under the space key, so every device that joins later would walk the key chain back ([RFC 0003, decision 5](0003-keys-and-cryptography.md#5-what-a-new-member-reads)) and read every account key the account ever had, and an append-only log never forgets one. When a new account key must reach the remaining devices ([Losing a device](#losing-a-device)), the account space carries it wrapped with HPKE to each device's agreement key, as a key envelope wraps a space key, so that only that device opens it.
 
 ## Linking accounts drawn per database
 
@@ -152,7 +156,7 @@ Under RFC 0003's decision 17, each database has an account of its own, and each 
 3. **The old account key is deleted** from the database's keystore or key file. Nobody can make a new certificate in the old account's name. An agent that drew its own account key keeps none: after linking, it holds an agent certificate of the account it joined, as any agent does.
 4. **New spaces and new adds use the new certificate.**
 
-**Memberships already written** keep the old certificate, because RFC 0008's entries are fixed (see [What a member certificate means for RFC 0008](#what-a-member-certificate-means-for-rfc-0008)). They stay as written ([Q9](#q9-memberships-written-under-a-per-database-account-after-linking)): the person's own SDK shows them as one account through the link statement, and an invitation carries the link statements of its account, so that other members' SDKs can show "linked to" next to the old fingerprint. This is local display only: the fold and the relay keep counting the old account as an account of its own, for the sign-off of an erasure and for the allowlist of decision R6. It costs no rotation and changes no format.
+**Memberships already written** keep the old certificate, because RFC 0008's entries are fixed (see [What a member certificate means for RFC 0008](#what-a-member-certificate-means-for-rfc-0008)). They stay as written: the person's own SDK shows them as one account through the link statement, and an invitation carries the link statements of its account, so that other members' SDKs can show "linked to" next to the old fingerprint. This is local display only: the fold and the relay keep counting the old account as an account of its own, for the sign-off of an erasure and for the allowlist of decision R6. That limit, two accounts in the fold for one person, is no weaker than what anybody can do by drawing a second account. Leaving them as written costs no rotation and changes no format. To re-add each such member with the new certificate, where the account administers the space, would cost one rotation per space, and a new membership action that replaces a member's certificate would change RFC 0008's control bodies.
 
 Linking needs the old database. A per-database account whose database is gone cannot be linked, and its memberships stay as they are.
 
@@ -180,7 +184,7 @@ It learns no key. The account key travels sealed between two devices, mostly not
 
 ## What this does not do
 
-- **Recovery does not bring back a space whose every member was lost.** The relay holds only ciphertext and nobody holds its key ([Q3](#q3-what-the-recovery-code-restores)).
+- **Recovery does not bring back a space whose every member was lost.** The relay holds only ciphertext and nobody holds its key.
 - **A lost device keeps its copy**, of the spaces and of the account key. Removal stops it from reading what is written next; nothing takes back what it holds.
 - **The new account key does not reach a member that has not learnt it**, and the fold does not refuse the old key until a statement can be written into a space.
 - **Linking does not rewrite memberships.** Other members, the fold and the relay may see two accounts where the person sees one.
@@ -188,17 +192,6 @@ It learns no key. The account key travels sealed between two devices, mostly not
 - **Losing every device and the recovery code loses the account.** Nobody can restore it, by design: no server holds anything that could.
 - **No directory.** Nothing finds an account by name, address or phone number; people compare fingerprints once, the way messaging apps compare safety numbers.
 - **Not post-quantum**, as RFC 0003 says for v1 (decision 9).
-
-## Rejected options
-
-| Option | Why not |
-| --- | --- |
-| An account at the relay, with a password that unlocks the account key held there | The relay or a backup of it would hold a key wrapped by a secret people choose, which can be guessed offline; that breaks the first principle ([GENESIS.md, "Principles, in priority order"](../../factory/GENESIS.md#principles-in-priority-order)). |
-| An account key derived from a passkey | RFC 0003, decision 8, option (c), not taken by the owner. |
-| The account key only on designated admin devices | RFC 0003, decision 8, option (b), not taken for v1; it may come back as an option for organisations. |
-| The account key or the recovery code as readable content of the account space | Every device that joins later would read, back through the key chain, every account key the account ever had, and an append-only log never forgets one. A key wrapped to one device's agreement key reaches only that device. |
-| A short code compared on both screens to confirm a pairing | An attacker who draws keys until a short digest matches defeats it; making it safe needs a commitment protocol we would design ourselves, which GENESIS.md forbids. A full fingerprint or a scanned code needs none. |
-| Splitting the recovery code among other people (social recovery) | More for people to manage and to explain; it can come later on top of a recovery key. |
 
 ## Agreement with GENESIS.md and the decided RFCs
 
@@ -215,154 +208,20 @@ It learns no key. The account key travels sealed between two devices, mostly not
 
 ### Changes to the decided RFCs
 
-Some decisions change other texts. Each change is written into that text in its own pull request, as [How a decided RFC changes](README.md#how-a-decided-rfc-changes) says:
+Some choices change other texts. Each change is written into that text in its own pull request, as [How a decided RFC changes](README.md#how-a-decided-rfc-changes) says:
 
-- **RFC 0003**, from [Q1](#q1-the-accounts-identity) and [Q2](#q2-the-form-of-the-recovery-code): the member certificate carries the account key statement; the key table names the recovery key, held by no device; the sentence that the person keeps "a recovery copy" of the account key becomes the recovery code that derives the recovery key; and the recovery key's derivation, the account key statement and the `info` label `"nocentraldb/account-key"` of a pairing answer join "Formats of what keys sign and derive".
-- **RFC 0008**, from [Q1](#q1-the-accounts-identity): a member checks the chain from the recovery key through the statement to the certificate; accounts are compared by the recovery key, also for the sign-off of an erasure (decision M9); and a control entry that carries a newer statement into a space, so that the fold refuses certificates and sign-offs by an older account key.
-- **RFC 0009**, from [Q10](#q10-the-public-names-of-pairing-linking-and-recovery) and [Q11](#q11-how-the-recovery-code-reaches-the-person): `nc.open({ pairing: "request" })`, `db.account.pair({ kind, invitation })`, `db.account.completePairing(answer)`, `nc.open({ recover })` and the recovery code object with `confirm()` join "Accounts and devices" and "Public names".
+- **RFC 0003**, from the account's identity, the recovery code and the fingerprint: the member certificate carries the account key statement; the key table names the recovery key, held by no device; the sentence that the person keeps "a recovery copy" of the account key becomes the recovery code that derives the recovery key; and the recovery key's derivation, the account key statement, the `info` label `"nocentraldb/account-key"` of a pairing answer and the fingerprint's context string join "Formats of what keys sign and derive".
+- **RFC 0008**, from the account's identity: a member checks the chain from the recovery key through the statement to the certificate; accounts are compared by the recovery key, also for the sign-off of an erasure (decision M9); and a control entry that carries a newer statement into a space, so that the fold refuses certificates and sign-offs by an older account key.
+- **RFC 0009**, from the names of pairing, linking and recovery and the recovery code object: `nc.open({ pairing: "request" })`, `db.account.pair({ kind, invitation })`, `db.account.completePairing(answer)`, `nc.open({ recover })` and the recovery code object with `confirm()` join "Accounts and devices" and "Public names".
 - **The FAQ**: its answer that the recovery code "restores your account key" becomes that it makes a new account key under the same account.
-
-## Open questions
-
-None. The owner decided every question this RFC asked.
-
-## Decisions
-
-GENESIS.md reserves crypto, key handling, formats and public names for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The design above describes the chosen options.
-
-### Q1. The account's identity
-
-Decided (Carsten, 2026-11-10), on NOC-115: a recovery key, derived from the recovery code and kept by no device, signs an account key statement; a lost device is answered by a new account key with the next number.
-
-Why: phones get lost, and an account key that can never be replaced turns every lost phone into a permanent signer of certificates and erasure sign-offs in the person's name. The change to the formats costs least before the first release, while no certificate outside development exists.
-
-Not taken:
-
-- The account key is the identity, and the recovery code a copy of it: a lost device signs in the account's name for good.
-
-### Q2. The form of the recovery code
-
-Decided (Carsten, 2026-11-10), on NOC-115: twelve words from the BIP-39 English list, 128 random bits and a 4-bit checksum; the recovery key derives with HKDF-SHA256 under `"nocentraldb/recovery-key"`.
-
-Why: 128 bits match Ed25519's own strength, twelve words are copied by hand with fewer mistakes, and people recognise the list. Only the list and its checksum are used, not BIP-39's PBKDF2 step.
-
-Not taken:
-
-- Twenty-four BIP-39 words that encode the 32-byte Ed25519 seed itself.
-- 26 characters in Crockford's base32.
-
-### Q3. What the recovery code restores
-
-Decided (Carsten, 2026-11-10), on NOC-115: the account only; spaces come back when other members add the new device, and the status warns when losing a device would lose a space.
-
-Why: it needs no new member and no new store, and a leaked code cannot read anything by itself. An app that must not lose a space adds a second member to it.
-
-Not taken:
-
-- A recovery member, derived from the code, as a reader in every space the account administers: a member nobody runs, and a leaked code reads everything.
-- A backup of the space keys at the relay, sealed under a key derived from the code: a new store, and the same exposure.
-
-### Q4. An account space for the account's records
-
-Decided (Carsten, 2026-11-10), on NOC-115: an ordinary space whose members are the account's devices, each an admin, holding the certified devices and agents, the spaces of each device, the links and the statements, never a readable key.
-
-Why: without it, `removeMember` cannot find the spaces of a lost device it is not in, and a new device cannot learn which spaces to ask for. It needs no new format.
-
-Not taken:
-
-- No shared record: each device knows only what it did itself.
-
-### Q5. How a pairing travels
-
-Decided (Carsten, 2026-11-10), on NOC-115: two codes, the new device's invitation and the answer, as QR codes or text; nothing goes through the relay.
-
-Why: it uses only RFC 0009's invitation and RFC 0003's sealing, works in island mode, and the relay learns nothing.
-
-Not taken:
-
-- One code and a mailbox at the relay: a new request in RFC 0007, and the relay learns when pairings happen.
-- A short typed code with a PAKE through a relay mailbox: the mailbox, and a crate whose audit we would first have to establish.
-
-### Q6. How the person confirms a pairing
-
-Decided (Carsten, 2026-11-10), on NOC-115: a device only by a scanned code or a full fingerprint compared on both screens; an agent through any channel the person trusts.
-
-Why: a device receives the account key, so a swapped invitation would hand the account to an attacker; an agent receives only a certificate, which a person can remove again.
-
-Not taken:
-
-- Any channel for devices and agents alike, with the fingerprint shown.
-
-### Q7. Which spaces a new device joins
-
-Decided (Carsten, 2026-11-10), on NOC-115: every space where a device of the account is an admin, added by the SDK with a notice each; the others listed for the app to ask; agents none.
-
-Why: a person expects their new phone to show their data, and only an admin of a space admits a member to it.
-
-Not taken:
-
-- None automatically: the app adds the device space by space.
-- Other admins' SDKs admit a certified device of a known account on their own: a certificate would admit a member without any admin deciding.
-
-### Q8. One account key per app, or per device
-
-Decided (Carsten, 2026-11-10), on NOC-115: per database: each app's database keeps its own copy and pairs on its own.
-
-Why: phones and browsers keep apps apart, so sharing would make accounts behave differently by platform, which principle 7 rules out.
-
-Not taken:
-
-- Per device where the platform lets apps share a keystore entry, per database elsewhere.
-
-### Q9. Memberships written under a per-database account, after linking
-
-Decided (Carsten, 2026-11-10), on NOC-115: they stay as written; the person's SDK shows one account through the link statement, and invitations carry it so others can show "linked to".
-
-Why: it costs no rotation and no format, and the limit it leaves, two accounts in the fold for one person, is no weaker than what anybody can do by drawing a second account.
-
-Not taken:
-
-- Re-added with the new certificate where the account administers a space: one rotation per space.
-- A new membership action that replaces a certificate: a change to RFC 0008's control bodies.
-
-### Q10. The public names of pairing, linking and recovery
-
-Decided (Carsten, 2026-11-10), on NOC-115: `nc.open({ pairing: "request" })`, `db.invitation()`, `db.account.pair({ kind, invitation })`, `db.account.completePairing(answer)`, the same calls to link a database that has its own account, and `nc.open({ recover: words })`.
-
-Why: linking is pairing a database that already has data, so one flow and one set of names covers both.
-
-Not taken:
-
-- The same, with a separate `db.account.link(answer)` for linking.
-
-### Q11. How the recovery code reaches the person
-
-Decided (Carsten, 2026-11-10), on NOC-115: the SDK hands the app the code once, as an object whose string, JSON and debug forms are redacted; the app shows the words and calls `confirm()`, and the device then forgets the code.
-
-Why: apps own their screens, and the redacted forms keep the code out of logs.
-
-Not taken:
-
-- The SDK ships its own screen: a user interface on every platform.
-- The SDK stores it in the platform's password manager: on the devices it is meant to outlive.
-
-### Q12. The fingerprint
-
-Decided (Carsten, 2026-11-10), on NOC-115: SHA-256 over `"nocentraldb/account-fingerprint"` and the recovery key, shown as 60 digits in twelve blocks of five.
-
-Why: digits read aloud the same in every language, and messaging apps have taught people to compare them.
-
-Not taken:
-
-- The first 16 bytes of the hash in hexadecimal.
-- Words from the recovery code's list, which people would confuse with the code.
 
 ## History
 
-- **2026-11-10** · NOC-107 · Draft 0.1: the account key and its identity, the recovery code, pairing a device or an agent, linking per-database accounts, losing a device, and what a certificate means for RFC 0008, with open questions Q1 to Q12 (#115).
+- **2026-11-10** · NOC-107 · Draft 0.1: the account key and its identity, the recovery code, pairing a device or an agent, linking per-database accounts, losing a device, and what a certificate means for RFC 0008, with twelve open questions for the owner (#115).
 - **2026-11-10** · NOC-107 · Follows RFC 0003's and RFC 0009's rewrites: links their decisions by their new headings, and cites RFC 0003's decisions 16 and 17 for the per-database account key and its key file (#115).
-- **2026-11-10** · NOC-115 · Decided: the owner accepted every recommendation, Q1 to Q12 (Carsten, 2026-11-10). Each choice is written into the design, the decisions stand in short form, and the changes to RFC 0003, 0008, 0009 and the FAQ are listed (#115).
+- **2026-11-10** · NOC-115 · Decided: the owner decided every point as proposed (Carsten, 2026-11-10). The changes to RFC 0003, 0008, 0009 and the FAQ are listed (#115).
+- **2026-11-10** · NOC-107 · Reads as one design, as the owner asked on #115 (Carsten, 2026-11-10): each decision, its reasons and the options not taken stand in the section they belong to. No decision changed (#115).
 
 ## How this RFC is tested
 
-`scripts/rfc-0010.test.mjs` checks the shape of this RFC: that the RFC index lists it, that its status says the owner decided it and when, that it links GENESIS.md and the RFCs it builds on and every link resolves, that it has a section for every part NOC-107 names, that no question is left open, that each decision stands under "Decisions" in short form and is cited where it applies, and that the decision log records it. Whether the design is right is the owner's review.
+`scripts/rfc-0010.test.mjs` checks the shape of this RFC: that the RFC index lists it, that its status says the owner decided it and when, that it links GENESIS.md and the RFCs it builds on and every link resolves, that it has a section for every part NOC-107 names, that it reads as one design with no list of decisions, rejected options or open questions and no reference to a question's number, that every option not taken still stands in the text, and that the decision log records it. Whether the design is right is the owner's review.
