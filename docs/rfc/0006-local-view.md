@@ -6,11 +6,11 @@ This RFC defines how the core turns a space's log into the local view an app rea
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded, and [RFC 0008](0008-membership.md) the control changes that decide who may write. [RFC 0004](0004-merge-rules-basic-types.md) defines how a field merges. [RFC 0005](0005-schema-and-model-lock.md) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
-**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback). [Giving feedback](README.md#giving-feedback) says how, and what happens to your feedback.
+**How to give feedback.** Reply in this RFC's discussion, [RFC 0006: The local view on SQLite](https://github.com/nocentraldb/nocentraldb/discussions/146), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. The layout of the view on disk is an on-disk format, which GENESIS.md reserves for the owner. The owner accepted the recommendation of decisions 1 to 9, and this RFC was merged with the owner's approval in #36 (Carsten, 2026-11-08). The owner decided decisions 10 to 15, on the durability of a browser copy, as recommended (Carsten, 2026-11-09), confirmed decision 12 after a reload in a private window was measured (Carsten, 2026-11-09), and decided decision 16, how a page after a cursor is written, by merging #81 (Carsten, 2026-11-09). The owner decided decision 17, where the view keeps the lock the device check runs against, on NOC-155 as recommended (Carsten, 2026-11-10). The design below describes those choices, and [Decisions](#decisions) records each one. The core builds the view natively in `crates/ncdb-core/src/view`. [History](#history) says when each part was written.
+**Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encryption at rest on the device, beyond naming the question for the owner ([decision 6](#6-encryption-at-rest-on-the-device)). Compaction and snapshots (a later RFC). The sync protocol with the relay ([RFC 0007](0007-relay.md)).
+**Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encrypting the database file on the device, beyond saying why v1 relies on the device ([What the view stores in plaintext](#what-the-view-stores-in-plaintext)). Compaction and snapshots (a later RFC). The sync protocol with the relay ([RFC 0007](0007-relay.md)).
 
 ## Summary
 
@@ -23,6 +23,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 | How does an app page?                      | Keyset pagination: the cursor is the index key of the last row, and the next page is "the rows after this key", in index order.                                             |
 | Which SQLite natively?                     | `rusqlite` with SQLite compiled from source (`bundled`), pinned, on desktop and mobile.                                                                                    |
 | Which SQLite in the browser?               | The same `rusqlite`, backed by `sqlite-wasm-rs` (SQLite compiled to `wasm32-unknown-unknown`) and the `opfs-sahpool` VFS of `sqlite-wasm-vfs`, in a dedicated Web Worker.   |
+| Which SQLite in Node.js?                   | The native one: the TypeScript SDK runs the core as a native addon that wraps the Rust SDK, and falls back to the browser's wasm core where no prebuilt binary exists.        |
 | Does it work in a browser?                 | Yes in Chromium, shown by [the spike](#the-spike). The official build's `opfs-sahpool`, which `sqlite-wasm-vfs` ports to Rust, also works in Firefox and in Safari on iOS and macOS ([NOC-33's findings](../browser-storage.md#findings)); the Rust port has run only in Chromium. |
 | What is in plaintext on the device?        | Every decrypted field value of every space the member belongs to, its merge state and its indexes. Keys are not in the database. See [what that means for a lost device](#what-the-view-stores-in-plaintext). |
 | Can a read wait for the network?           | No. The read path has no network code in it.                                                                                                                                |
@@ -37,7 +38,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - **Read value.** What a field type says an app reads for a field, given its merge state (RFC 0004: for a basic value, the winning write).
 - **Merge state.** What a field type keeps to compute the read value and stay convergent (RFC 0004: for a basic value, the live writes and the replaced ids).
 - **Control change.** A change of kind 1 in RFC 0002, with a body [RFC 0008](0008-membership.md#the-control-bodies) defines: the genesis, a membership entry, a key envelope, a key chain entry, a person-key entry, a shred entry or an acknowledgement. It carries no content.
-- **Rejected.** A change kept in the log but not folded because it failed a check: its signature, its author's membership at its key generation, or its decryption. The log state and its reasons are defined in [RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes), decision D11. A rejected change **waits** for a control change of its space that may let it pass.
+- **Rejected.** A change kept in the log but not folded because it failed a check: its signature, its author's membership at its key generation, or its decryption. The log state and its reasons are defined in [RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes). A rejected change **waits** for a control change of its space that may let it pass.
 - **Declared index.** An index declared in `model.lock.json`. RFC 0005 defines the declaration. This RFC needs only three things from it: the collection, the ordered list of fields with a direction each, and which leading fields a query must fix with equality.
 - **Cursor.** In this RFC, a **page cursor**: the position after the last row of a page in a declared index. Not to be confused with the relay cursor of RFC 0002, which this RFC calls the **relay position**.
 - **Target.** A platform the core runs on: native desktop (macOS, Linux, Windows), native mobile (iOS, Android), or a browser (Chromium-based, Firefox, Safari).
@@ -46,9 +47,9 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 Each member on a device has one SQLite database. It holds the log of every space the member belongs to (RFC 0002) and the view folded from it. A device with two members, for example a person and an agent that runs as its own member, has two databases: the agent's database holds only the agent's spaces, so the agent never sees more than its spaces (GENESIS.md, "Never give an agent more than its spaces").
 
-One database per member, rather than one per space, lets a declared index span all of a member's spaces: "my next 50 tasks across every project" is one range lookup, not one per space. Every row carries its space id, so leaving a space deletes the rows of that space. This is [decision 1](#1-how-many-databases-per-member).
+One database per member, rather than one per space, lets a declared index span all of a member's spaces: "my next 50 tasks across every project" is one range lookup, not one per space. Every row carries its space id, so leaving a space deletes the rows of that space. One database per space was not taken: an index could not span spaces, so that query would be one query per space and a merge in memory.
 
-The database contains these kinds of tables. The names are illustrative; the exact layout is not a stable format (see [decision 2](#2-is-the-views-layout-a-stable-format)).
+The database contains these kinds of tables. The names are illustrative; the exact layout is not a stable format. Only the log (RFC 0002) is a stable on-disk format. The view's tables are internal to the core, versioned in `meta`, and a new core may rebuild them: the view can always be rebuilt from the log, and apps never see the tables, since there is no raw SQL. A stable layout, versioned and migrated like the log, was not taken: it would freeze the implementation without protecting any data.
 
 ```text
 log                 RFC 0002: the frames, the source of truth
@@ -62,7 +63,7 @@ parked, gaps        RFC 0002: changes stored but not folded, and dependencies no
 
 - **`c_<collection>`** has the primary key `(space id, object id)`. A field's column holds its read value in an SQLite type the field type names: `INTEGER`, `REAL`, `TEXT` (UTF-8) or `BLOB`. A field whose type has no single value that can be sorted (rich text, a set) has a column only if its type defines a sortable projection, such as the number of elements; otherwise the read value is served from `fs_<collection>`.
 - **`fs_<collection>`** holds, per `(space id, object id, field)`, the field type's merge state, encoded by the field type itself. The core does not interpret it; this is what lets a plugin field type keep any state it needs (RFC 0004, "The plugin contract"). Losing writes that the app can read (RFC 0004's conflicts, RFC 0002's concurrent losers) live in this state, so they survive a rebuild like everything else.
-- **`meta`** lets the core decide on open whether the view still matches the code and the model ([Rebuilding the view](#rebuilding-the-view)). It also keeps the newest lock the database has been opened with, which the check on the device runs against ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device)): under the key `lock`, as canonical JSON, the bytes `ncdb model build` writes ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)), written in the transaction that opens the view, so an open that fails leaves the stored lock as it was. The lock is one more row in a table the view already had, and the view's tables are internal ([decision 2](#2-is-the-views-layout-a-stable-format)), so the view format version stays 2. A database written before the view kept its lock (#134) holds no lock: it opens only with a lock whose model folds its view as it is, the model hash in `meta` unchanged, and keeps that lock from then on. With any other lock, `nc.open` refuses with `modelRefused` and writes nothing; the error names no refused change, since there is no stored lock to compare with. For the same reason, such a database takes and keeps a lock whose `model.id` differs from the one it was written with, as long as the model hash is unchanged. This is [decision 17](#17-where-the-view-keeps-the-lock).
+- **`meta`** lets the core decide on open whether the view still matches the code and the model ([Rebuilding the view](#rebuilding-the-view)). It also keeps the newest lock the database has been opened with, which the check on the device runs against ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device)): under the key `lock`, as canonical JSON, the bytes `ncdb model build` writes ([RFC 0005, "Canonical form"](0005-schema-and-model-lock.md#canonical-form)), written in the transaction that opens the view, so an open that fails leaves the stored lock as it was. The lock is one more row in a table the view already had, and the view's tables are internal, so the view format version stays 2: RFC 0005 says that the SDK stores the lock in the local database, and one row costs nothing more. A database written before the view kept its lock (#134) holds no lock: it opens only with a lock whose model folds its view as it is, the model hash in `meta` unchanged, and keeps that lock from then on. With any other lock, `nc.open` refuses with `modelRefused` and writes nothing; the error names no refused change, since there is no stored lock to compare with. For the same reason, such a database takes and keeps a lock whose `model.id` differs from the one it was written with, as long as the model hash is unchanged. A table of its own for the lock was not taken: cleaner to extend, with the same cost otherwise. Raising the view format version was not taken either: every existing database would be refused until a rebuild of the view exists.
 
 ## Folding
 
@@ -75,9 +76,9 @@ Every change goes through the seven steps of [RFC 0002, "What a member does with
 1. **Decode and append** (RFC 0002's step 1). A frame that is not well-formed or not canonical is not appended. Otherwise insert the frame into `log` ([RFC 0002](0002-change-and-log-format.md#the-log-on-disk)). If the change id is already there, stop: a duplicate changes nothing.
 2. **Check and decrypt** (steps 2 to 6). Understand the header, verify the signature, check that the author is a member at the change's key generation, decrypt the payload in memory, understand the payload. The checks use the control state this member holds now ([Control changes and changes that wait for them](#control-changes-and-changes-that-wait-for-them)). A change that stops here changes nothing in the view:
    - An unknown suite, kind, header format or payload format leaves it **parked**, as before.
-   - An unknown author, a bad signature, an author who is not a member, a missing key envelope ("no key") or a payload that does not decrypt leaves it **rejected**, with that reason (D11). A missing key envelope is "rejected, no key", not parked.
+   - An unknown author, a bad signature, an author who is not a member, a missing key envelope ("no key") or a payload that does not decrypt leaves it **rejected**, with that reason ([RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes)). A missing key envelope is "rejected, no key", not parked.
    - A control change stops after the membership check: it has no payload to decrypt, and it folds as the next section says.
-3. **Fold, operation by operation** (step 7, D10). For each operation, in the order of the change:
+3. **Fold, operation by operation** (step 7, [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit)). For each operation, in the order of the change:
    1. Look up the collection and field in the member's `model.lock.json`. If either is unknown, or the operation carries an unknown "must understand" key, park that operation alone and go on with the next.
    2. Load the field's merge state from `fs_<collection>` (empty for a new object).
    3. Call the field type's apply function with the state and the operation; it returns the new state (RFC 0004, "The plugin contract").
@@ -94,7 +95,7 @@ Because appending and folding are one transaction, the log and the view agree af
 
 Some changes carry no content: the control changes of RFC 0002 (kind 1), whose bodies RFC 0008 defines. They decide whether other changes can be checked and decrypted, so the fold handles them first-class, and the order in which they arrive must not change the result.
 
-**The control state.** The view keeps a `control` table set per space that holds RFC 0008's control state: the genesis; each member's public keys, certificate and role; its accepted grants with their from generations and its accepted revocations with their cutoffs; the generation graph, with each generation's previous generations and envelopes; the person-key entries, with each person key's commitment and newest record; and the shred entries and their acknowledgements. It also records which key generations this member holds an envelope for ([RFC 0008, "The function"](0008-membership.md#the-function)). Key material itself is never in the database; the SDK keeps it in the platform keystore ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). Like every field's merge state, the control state is a function of the set of control changes the member holds: it is RFC 0008's `resolve` of that set, and it does not depend on their order. The `control` table's layout is not a stable format ([decision 2](#2-is-the-views-layout-a-stable-format)).
+**The control state.** The view keeps a `control` table set per space that holds RFC 0008's control state: the genesis; each member's public keys, certificate and role; its accepted grants with their from generations and its accepted revocations with their cutoffs; the generation graph, with each generation's previous generations and envelopes; the person-key entries, with each person key's commitment and newest record; and the shred entries and their acknowledgements. It also records which key generations this member holds an envelope for ([RFC 0008, "The function"](0008-membership.md#the-function)). Key material itself is never in the database; the SDK keeps it in the platform keystore ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). Like every field's merge state, the control state is a function of the set of control changes the member holds: it is RFC 0008's `resolve` of that set, and it does not depend on their order. The `control` table's layout is not a stable format ([Where the view lives](#where-the-view-lives)).
 
 **How each control change folds,** in the same transaction as any change (steps 1, 2, 5 and 6 above; steps 3 and 4 are replaced by this):
 
@@ -105,11 +106,11 @@ Some changes carry no content: the control changes of RFC 0002 (kind 1), whose b
 | Shred entry             | Records the person key as shredded. The fold erases that person's personal fields from the view at once, in every object of the space, and the member writes a "seen" acknowledgement. Once the shred is stable, the member deletes its copy of the key and writes a "deleted" acknowledgement ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable); [RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)). The key waits until the shred is stable because a destroyed key cannot come back if a concurrent revocation rejects the shred later. |
 | Acknowledgement         | Records which member saw which shred, and which deleted its copy of the key, for the audit.                                                                                     |
 
-**Re-checking.** Whenever the member appends a control change of a space, it checks the rejected changes of that space again from step 3 of RFC 0002, in the same transaction, as D11 defines. A change that now passes is decrypted and folded (steps 2 to 5 above) as if it had just arrived. A change that still fails stays rejected. The core may skip changes that can never pass, such as a bad signature or a payload that does not decrypt under a key the member holds.
+**Re-checking.** Whenever the member appends a control change of a space, it checks the rejected changes of that space again from step 3 of RFC 0002, in the same transaction, as [RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes) defines. A change that now passes is decrypted and folded (steps 2 to 5 above) as if it had just arrived. A change that still fails stays rejected. The core may skip changes that can never pass, such as a bad signature or a payload that does not decrypt under a key the member holds.
 
-**Un-folding.** A later control change can make a check fail that a change has already passed, for example a removal whose cutoff lies below changes the member already folded. RFC 0008 lists every way this happens ([What a new change can change](0008-membership.md#what-a-new-change-can-change), decision M4). A sealed change then moves from folded to rejected in the transaction that appends the control change, and the fold refolds every field the change touched from the operations of the changes still folded. A field's state is a function of its set of operations (RFC 0004), so the view then equals the view of a member that never folded the change. A bookkeeping table from object and field to the operations that touched them, rebuildable from the log, makes this a lookup instead of a scan. Only sealed changes are un-folded. A control change that loses its verdict is recomputed through `resolve`: its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
+**Un-folding.** A later control change can make a check fail that a change has already passed, for example a removal whose cutoff lies below changes the member already folded. RFC 0008 lists every way this happens ([What a new change can change](0008-membership.md#what-a-new-change-can-change)). A sealed change then moves from folded to rejected in the transaction that appends the control change, and the fold refolds every field the change touched from the operations of the changes still folded. A field's state is a function of its set of operations (RFC 0004), so the view then equals the view of a member that never folded the change. A bookkeeping table from object and field to the operations that touched them, rebuildable from the log, makes this a lookup instead of a scan. Only sealed changes are un-folded. A control change that loses its verdict is recomputed through `resolve`: its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
 
-**A change the relay refuses after the member folded it.** It stays folded, as D12 defines. The member records the relay's refusal on the log entry, and the SDK reports it to the app. The view changes only if the member's own check, run again with the control changes it holds, now rejects the change; then it is un-folded as above.
+**A change the relay refuses after the member folded it.** It stays folded, as [RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it) defines. The member records the relay's refusal on the log entry, and the SDK reports it to the app. The view changes only if the member's own check, run again with the control changes it holds, now rejects the change; then it is un-folded as above.
 
 **Why the end state depends only on the set.** A change is folded exactly when it passes its checks against the control state computed from all control changes the member holds. Re-checking and un-folding keep that true after every control change, whatever the order of arrival. Two members that hold the same set of changes therefore hold the same control state, fold the same set of changes, and, by RFC 0004, reach the same view (principle 2). The convergence harness (NOC-9) checks this with control changes in the generated sets, delivered in any order.
 
@@ -137,7 +138,7 @@ The view is a cache. Everything in it can be computed again from the frames in `
 
 ### When
 
-On open, the core first checks the member's lock against the lock stored in `meta` (RFC 0005, D11 and D23). A lock the check refuses opens nothing, and nothing is written. Then the core compares `meta` with what it is running:
+On open, the core first checks the member's lock against the newest lock stored in `meta` ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device)). A lock the check refuses opens nothing, and nothing is written. Then the core compares `meta` with what it is running:
 
 | Mismatch                                                                                | What the core does                                                                                             |
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -148,7 +149,7 @@ On open, the core first checks the member's lock against the lock stored in `met
 | `PRAGMA integrity_check` fails on a view table, or a view table is missing, while `log` is intact | Full rebuild.                                                                                          |
 | `log` itself is damaged or missing                                                      | Not a rebuild: the member restores its log from the relay or a peer, from relay position 0, and folds it.       |
 
-Changes the member wrote but the relay has not yet confirmed exist only in this member's log. Losing the log loses them; this is why the log is kept with full durability ([decision 7](#7-durability-of-a-commit)).
+Changes the member wrote but the relay has not yet confirmed exist only in this member's log. Losing the log loses them; this is why the log is kept with full durability ([Desktop and mobile](#desktop-and-mobile)).
 
 ### How
 
@@ -177,13 +178,13 @@ CREATE INDEX ix_tasks_by_status_priority
 
 Every index ends with `(space_id, object_id)`. Together they are unique, so the index order is total: no two rows tie, and a page boundary is always exact.
 
-An index declared with `scope: "space"` ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)) puts the space id first instead, `(space_id, status, priority, object_id)` for the index above, and still ends with the object id, so its order is total too. Its equality prefix starts with the space id, which `space.find` fixes, so a query on it reads one space's rows ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes), decision S8). An index without the option spans every space of the member, as [decision 1](#1-how-many-databases-per-member) chose. The cursor condition, the bound on the first key and the plan check below work on any key order after the equality prefix, so they apply to it unchanged.
+An index declared with `scope: "space"` ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)) puts the space id first instead, `(space_id, status, priority, object_id)` for the index above, and still ends with the object id, so its order is total too. Its equality prefix starts with the space id, which `space.find` fixes, so a query on it reads one space's rows ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). An index without the option spans every space of the member, as one database per member allows ([Where the view lives](#where-the-view-lives)). The cursor condition, the bound on the first key and the plan check below work on any key order after the equality prefix, so they apply to it unchanged.
 
-No declared index holds a deleted object, so a query never returns one, while reading the object by its id still finds it, to show or restore it ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id), decision S9). The implementation keeps the rows out, for example through a partial index on the rows whose object is not deleted, and a restore puts them back; how is the implementation's, as the layout of the tables is ([decision 2](#2-is-the-views-layout-a-stable-format)).
+No declared index holds a deleted object, so a query never returns one, while reading the object by its id still finds it, to show or restore it ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). The implementation keeps the rows out, for example through a partial index on the rows whose object is not deleted, and a restore puts them back; how is the implementation's, as the layout of the tables is ([Where the view lives](#where-the-view-lives)).
 
 A reference, `nc.ref` ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)), indexes as one column of 32 bytes, an SQLite `BLOB`: the target's space id followed by the object id, each the 16 bytes RFC 0002 defines, as the reference is stored and whatever its state. The state differs from member to member, so the column leaves it out, and every member of the space builds the same index (principle 2; [RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). "All orders of customer X" is then one equality lookup. An index on a reference ends with the referencing object's `(space_id, object_id)`, as every index does. An unset reference, and a value that does not fit ([RFC 0004, "The value and its encoding"](0004-merge-rules-basic-types.md#the-value-and-its-encoding)), index as unset (`NULL`). A cursor holds the 32 bytes as it holds any indexed value.
 
-A query is always "the rows of this index, with these values for its equality prefix, after this cursor, at most N". The SDK offers no other query and no raw SQL. The core builds the SQL from the model, and it has one shape. For an index on `status` (equality) and `priority` (ascending), the page after a cursor whose last row has priority 3 reads:
+A query is always "the rows of this index, with these values for its equality prefix, after this cursor, at most N". The SDK offers no other query and no raw SQL: with raw SQL an app could run a full table scan, which breaks principle 6, and could read the merge state and the log directly. The core builds the SQL from the model, and it has one shape. For an index on `status` (equality) and `priority` (ascending), the page after a cursor whose last row has priority 3 reads:
 
 ```sql
 SELECT status, priority, space_id, object_id FROM c_tasks
@@ -205,7 +206,7 @@ The first page has neither the bound nor the cursor condition. The cursor condit
 
 This follows the order of [The order of values](#the-order-of-values): an unset value sorts first ascending and last descending. On the first key after the equality prefix, the query adds a bound so that SQLite seeks instead of walking the prefix from its start: `k >= ?` when the key is ascending and the cursor's value is set, `k IS NULL` when it is descending and unset, and none otherwise, so a descending first key scans within the equality prefix. The equality prefix is written `k IS ?`, so a lookup can fix a key to unset.
 
-**The check.** When the core opens a view, it runs `EXPLAIN QUERY PLAN` for the two query shapes of every declared index, its first page and a page after a cursor. It accepts a plan when every step that reads the table, a `SEARCH` or a `SCAN`, goes `USING INDEX` or `USING COVERING INDEX` through the declared index. It refuses to open when a step reads the table without it or through another index, or when the plan sorts in a temporary B-tree (`USE TEMP B-TREE`). An index without an equality prefix plans its first page as `SCAN ... USING COVERING INDEX`, which walks the index in order and stops after the page, so a `SCAN` on the declared index is accepted. A test in the implementation does the same for a model that uses every field type. The spike measured the plan of an earlier shape, a row-value comparison `(priority, id) > (?, ?)`: `SEARCH tasks USING COVERING INDEX tasks_by_priority ((priority,id)>(?,?))`. That shape gives an empty page after a row with an unset value, and cannot page a descending key, which is why the cursor condition goes key by key ([decision 16](#16-a-page-after-a-cursor)).
+**The check.** When the core opens a view, it runs `EXPLAIN QUERY PLAN` for the two query shapes of every declared index, its first page and a page after a cursor. It accepts a plan when every step that reads the table, a `SEARCH` or a `SCAN`, goes `USING INDEX` or `USING COVERING INDEX` through the declared index. It refuses to open when a step reads the table without it or through another index, or when the plan sorts in a temporary B-tree (`USE TEMP B-TREE`). An index without an equality prefix plans its first page as `SCAN ... USING COVERING INDEX`, which walks the index in order and stops after the page, so a `SCAN` on the declared index is accepted. A test in the implementation does the same for a model that uses every field type. The spike measured the plan of an earlier shape, a row-value comparison `(priority, id) > (?, ?)`: `SEARCH tasks USING COVERING INDEX tasks_by_priority ((priority,id)>(?,?))`. That shape, a row-value comparison for the cursor, gives an empty page after a row with an unset value, because compared with an unset value it is `NULL`, and it cannot page a descending key, because it compares every key in one direction. That is why the cursor condition goes key by key ([the decision log](../../factory/decisions/2026-11-09-NOC-69-a-page-after-a-cursor-is-written-key-by-key.md) records the call). Row values with ascending indexes only, which leaves a cursor on an unset value broken, and row values where they are correct with the key-by-key condition otherwise, which means two code paths, were not taken.
 
 Filters on a field that is not in the index are not offered. An app that needs one declares an index, or a computed field and a view (the later RFC). This is the price of "reads cost only their result" (RFC 0001), and RFC 0001's [What it is not](0001-nocentraldb.md#what-it-is-not) names it.
 
@@ -213,7 +214,7 @@ Filters on a field that is not in the index are not offered. An app that needs o
 
 The order of an index must be the same on every member and every target, or two members show the same page differently. So:
 
-- **Text sorts by its UTF-8 bytes** (SQLite's `BINARY` collation), never by a locale's rules. Locale-aware collation depends on the platform's ICU or OS version, which would fork behaviour by platform (principle 7). An app that wants "Ä" next to "A" declares a computed sort key (the later RFC). This is [decision 5](#5-the-order-of-text-in-indexes).
+- **Text sorts by its UTF-8 bytes** (SQLite's `BINARY` collation), never by a locale's rules. Locale-aware collation depends on the platform's ICU or OS version, which would fork behaviour by platform (principle 7). An app that wants "Ä" next to "A" declares a computed sort key (the later RFC). Locale-aware collation in the index was not taken, because two members could then order the same page differently.
 - **Numbers** sort numerically; integers and floats as SQLite compares them. The canonical encoding of RFC 0002 gives every value one representation, so equal values sort as equal.
 - **An unset field** sorts first in ascending order and last in descending order (SQLite's `NULL` order).
 - **A reference sorts by its 32 bytes** (SQLite's `BLOB` comparison, `memcmp`): first by the target's space id, then by its object id, the same on every target.
@@ -223,7 +224,7 @@ The order of an index must be the same on every member and every target, or two 
 
 A page is at most N rows, in index order, and a cursor that points after its last row. The cursor holds the last row's index key: the values of the indexed fields, the space id and the object id, plus the index's name and the model hash. The next page is the rows whose key comes after the cursor's in the index's order, written key by key as [Declared indexes](#declared-indexes) shows, which is one walk of the index from the cursor, whatever page it is.
 
-- **A page is cheap at any depth.** Unlike `OFFSET`, a keyset cursor does not read the rows before it.
+- **A page is cheap at any depth.** Unlike `OFFSET`, a keyset cursor does not read the rows before it. `OFFSET` pagination was not taken: page N reads all rows before it, and rows shift when a fold inserts one before the page boundary.
 - **Concurrent folds do not break paging.** A row that did not change between two pages is never skipped and never repeated. A row that changed its indexed values between two pages may appear twice or not at all, because it moved across the boundary. The SDK says so in the cursor's documentation; a consistent snapshot over many pages is not offered (it would hold a read transaction open and block the WAL from shrinking).
 - **A cursor is local and holds content.** Its key values are plaintext field values. It never leaves the device in the SDK's design, is never logged, and its `Debug` output is redacted ([RFC 0003, "Secret types do not print"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)). An app that puts it in a URL makes a copy the core cannot erase.
 - **A cursor from another model is refused.** If the model hash in the cursor differs from the view's, the query fails with a plain error and the app starts from the first page.
@@ -238,13 +239,26 @@ Principle 7: "The same core runs natively and in a web browser. Behaviour never 
 | Desktop: macOS, Linux, Windows | `rusqlite` with `bundled`: SQLite compiled from source by `libsqlite3-sys`                   | A file in the app's data directory, WAL mode                    | One writer connection, reader connections       |
 | Mobile: iOS, Android           | The same, built for the mobile target                                                        | A file in the app's sandbox, WAL mode                           | As desktop                                      |
 | Browser: Chromium, Firefox, Safari | `rusqlite` with `ffi-sqlite-wasm-rs`: `sqlite-wasm-rs`, SQLite compiled to `wasm32-unknown-unknown` | The Origin Private File System (OPFS), through the `opfs-sahpool` VFS of `sqlite-wasm-vfs` | One connection, in a dedicated Web Worker |
+| Node.js, through the TypeScript SDK | The Rust SDK's core, as a native addon built with napi-rs; the browser's wasm core where no prebuilt binary exists | As desktop: a file in a directory the app names | As desktop |
+
+One SQLite binding and one body of fold code on every target keeps behaviour the same (principle 7), and the spike shows it works. The risk is two young crates in the browser; the fallback is to fork them ([The spike](#the-spike)). The stacks not taken:
+
+| Rejected | Why |
+| --- | --- |
+| The official SQLite WebAssembly build (`sqlite3.wasm` with its JavaScript API) in the browser | SQLite would live in a second WebAssembly module, driven from JavaScript. The Rust fold would call it through JavaScript for every statement, and the browser would run a different SQLite binding than native: behaviour would fork (principle 7). |
+| wa-sqlite in the browser | The same problem: a separate module behind a JavaScript API. Its `OPFSCoopSyncVFS` handles many tabs better than `opfs-sahpool`; if the owner tab proves fragile, its approach can be ported to the Rust VFS. |
+| A VFS on IndexedDB | Works on the main thread and in older browsers, but writes each page through an asynchronous store and is much slower. OPFS exists in every browser we target. |
+| The `opfs` VFS of the official build | Needs `SharedArrayBuffer`, so every app's site must send COOP and COEP headers, which break many third-party embeds. |
+| SQLite on the browser's main thread | OPFS synchronous access handles are not available there (the spike: `NotSupported`), and a long fold would freeze the page. |
+| The system's SQLite natively | Its version differs by OS release, so query plans and edge cases would fork by platform. |
 
 ### Desktop and mobile
 
 - **Library.** `rusqlite`, pinned to an exact version, with the `bundled` feature, so the SQLite in the binary is the one we tested, compiled from source. The system's SQLite is never used: its version differs between macOS releases, Linux distributions and Android versions, and so would query plans and edge cases.
-- **Durability.** WAL mode with `synchronous = FULL`, so a committed transaction survives a power loss. The log holds the member's unconfirmed writes, which exist nowhere else ([decision 7](#7-durability-of-a-commit)).
-- **iOS.** The file uses the data-protection class "complete until first user authentication", so the core can fold in the background after the device has been unlocked once since boot. The stricter class "complete" would make the file unreadable while the device is locked, and background sync would fail. This is part of [decision 6](#6-encryption-at-rest-on-the-device).
+- **Durability.** WAL mode with `synchronous = FULL`, so a committed transaction survives a power loss. The log holds the member's unconfirmed writes, which exist nowhere else (principle 3: nothing is lost silently). `synchronous = NORMAL` was not taken: faster, but the last commits before a power loss may be lost.
+- **iOS.** The file uses the data-protection class "complete until first user authentication", so the core can fold in the background after the device has been unlocked once since boot. The stricter class "complete" would make the file unreadable while the device is locked, and background sync would fail. It is part of how v1 relies on the device ([What the view stores in plaintext](#what-the-view-stores-in-plaintext)).
 - **Limits.** The OS may kill the app at any point; the transaction guarantees the database is consistent afterwards. A full disk makes the fold fail; the change stays with the relay or peer and is folded later, and the SDK reports the error.
+- **Node.js.** The TypeScript SDK runs the core as a native addon, built with napi-rs, that wraps the Rust SDK: SQLite on disk as on a desktop, the platform keystore, and native speed, with the same code as the Rust SDK ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)). On a platform without a prebuilt binary, it falls back to the wasm core the browser runs.
 
 ### The browser
 
@@ -252,13 +266,13 @@ Principle 7: "The same core runs natively and in a web browser. Behaviour never 
 - **Where it runs.** In a dedicated Web Worker. `opfs-sahpool` uses OPFS synchronous access handles, which browsers offer only in dedicated workers. On the main thread it fails (the spike: `NotSupported`). The SDK starts the worker; the app talks to it through the SDK's asynchronous API, which is the same API it uses natively.
 - **Browser support.** OPFS synchronous access handles exist in Chromium 108+, Firefox 111+ and Safari 16.4+. The spike ran only in Chromium. The official build's `opfs-sahpool`, which `sqlite-wasm-vfs` ports to Rust, wrote and read back in Playwright's Firefox and WebKit and in branded Safari on iOS and macOS ([NOC-33's findings](../browser-storage.md#findings), measured: Safari (iOS) · SQLite on OPFS (`opfs-sahpool`); measured: Safari (macOS) · SQLite on OPFS (`opfs-sahpool`)); the Rust port must still run in Firefox and Safari before the implementation ships (see [The spike](#the-spike)).
 - **No special headers.** `opfs-sahpool` needs no `SharedArrayBuffer`, so the app's site does not need the COOP and COEP headers.
-- **One tab owns the database.** A pool of access handles is exclusive: while one tab's worker holds it, another tab of the same origin cannot open it. The SDK elects one tab as the owner with the Web Locks API; the other tabs send their reads and writes to it with a `BroadcastChannel`. When the owner closes, the next tab takes the lock and opens the database. This is [decision 4](#4-several-tabs-of-the-same-app-in-one-browser).
+- **One tab owns the database.** A pool of access handles is exclusive: while one tab's worker holds it, another tab of the same origin cannot open it. The SDK elects one tab as the owner with the Web Locks API; the other tabs send their reads and writes to it with a `BroadcastChannel`. When the owner closes, the next tab takes the lock and opens the database. Users open apps in several tabs, and refusing all but one would surprise them. Letting only one tab run the app, while the others show a notice, was not taken. The owner tab needs its own test, as the spike did not cover it.
 - **Size.** The spike's module, SQLite included, is 1.8 MB, or 0.69 MB compressed with gzip.
 
 **Limits of storage in the browser.** These are limits of the platform, and the SDK states them to the developer:
 
-- **The browser can evict the data.** Under storage pressure, a browser may delete an origin's storage unless the site has persistent storage (`navigator.storage.persist()`). Safari deletes all script-writable storage of a site the user has not interacted with for seven days, unless it is a web app added to the home screen. An eviction takes the view, the log and the member key together. The SDK asks for persistent storage on open and reports what is at risk ([decision 8](#8-persistent-storage-in-the-browser)); [Durability of a browser copy](#durability-of-a-browser-copy) says what each browser does and how the SDK reports it.
-- **Private windows.** Firefox and WebKit have no OPFS in a private window. Where OPFS is missing, the SDK reports that the copy is temporary, runs on SQLite's in-memory VFS and syncs from the relay on every open ([decision 12](#12-the-fallback-in-a-private-window)).
+- **The browser can evict the data.** Under storage pressure, a browser may delete an origin's storage unless the site has persistent storage (`navigator.storage.persist()`). Safari deletes all script-writable storage of a site the user has not interacted with for seven days, unless it is a web app added to the home screen. An eviction takes the view, the log and the member key together. The SDK asks for persistent storage on open and reports what is at risk ([What the SDK reports](#what-the-sdk-reports)); [Durability of a browser copy](#durability-of-a-browser-copy) says what each browser does and how the SDK reports it.
+- **Private windows.** Firefox and WebKit have no OPFS in a private window. Where OPFS is missing, the SDK reports that the copy is temporary, runs on SQLite's in-memory VFS and syncs from the relay on every open ([What the SDK reports](#what-the-sdk-reports)).
 - **Quota.** The origin's storage quota limits the size of the copy. The SDK reports the quota error instead of failing silently.
 
 ### The same fold code on every target
@@ -294,7 +308,7 @@ A browser may delete a member's copy, and with it what only that member holds. N
 
 ### What the SDK reports
 
-The SDK reports durability in one namespace, `db.durability`, the same on every target ([decision 10](#10-how-the-sdk-reports-durability)). `current()` returns `{ storage, unconfirmed, oldestUnconfirmedAt, atRisk }`. `subscribe(listener)` calls the listener whenever one of them changes, at most once per fold or push, and returns a function that stops it. `requestPersistent()` asks the browser for persistent storage and resolves when the browser answers. The values:
+The SDK reports durability in one namespace, `db.durability`, the same on every target. One object answers the question a developer has: what would this user lose if the browser deleted the copy now; only the core knows which changes the relay has confirmed. Two places, `db.storage.persistent` and `db.sync.pending`, each with its own event, would split one answer in two, and a boolean `db.isPersistent` only would leave apps guessing which changes are unconfirmed; neither was taken. `current()` returns `{ storage, unconfirmed, oldestUnconfirmedAt, atRisk }`. `subscribe(listener)` calls the listener whenever one of them changes, at most once per fold or push, and returns a function that stops it. `requestPersistent()` asks the browser for persistent storage and resolves when the browser answers. The values:
 
 - `storage: "persistent"`: a native app, or a browser whose `navigator.storage.persisted()` is true. It does not promise that the copy survives the user clearing site data, a lost device, or Safari's seven-day deletion, which persistent storage may or may not stop (unknown).
 - `storage: "best-effort"`: the copy is on OPFS and the browser has not granted persistent storage. The browser may delete it when storage runs low, and Safari after seven days without interaction. A Chromium private window reports `best-effort`, because the SDK cannot tell it from a normal window; its copy is deleted when the window closes (measured).
@@ -304,15 +318,15 @@ The SDK reports durability in one namespace, `db.durability`, the same on every 
 
 The SDK reads `persisted()` on open, after `requestPersistent()`, and whenever the page becomes visible again, because a user can grant or revoke it in the browser's settings.
 
-The SDK asks for persistent storage on open ([decision 8](#8-persistent-storage-in-the-browser)), without waiting: `nc.open` resolves before the browser answers, and `subscribe` reports the answer ([decision 11](#11-when-the-sdk-asks-for-persistent-storage)). An app that wants to explain first opens with `nc.open({ model, persistentStorage: "on-request" })` and calls `requestPersistent()` after its own onboarding text.
+The SDK asks for persistent storage on open, without waiting: `nc.open` resolves before the browser answers, and `subscribe` reports the answer. Eviction loses the member's unconfirmed writes, and the developer must learn that from the SDK, not from a user; leaving it to the app was not taken. An app that wants to explain first opens with `nc.open({ model, persistentStorage: "on-request" })` and calls `requestPersistent()` after its own onboarding text. Two other forms were not taken: `nc.open` waiting for the answer, which leaves it hanging in Firefox until the user answers the popup; and asking only when the app calls `requestPersistent()`, which leaves every app that forgets the call with a best-effort copy.
 
-Where OPFS is missing, as in a private window of Firefox or WebKit, the SDK runs on SQLite's in-memory VFS with `storage: "temporary"`, and syncs from the relay on every open ([decision 12](#12-the-fallback-in-a-private-window)). A reload of the page loses the copy and its unconfirmed changes, and the SDK fetches the spaces again from the relay. The member key in IndexedDB survives the reload, so a reload in a private window is not a new device; once the window closes, the key is gone too.
+Where OPFS is missing, as in a private window of Firefox or WebKit, the SDK runs on SQLite's in-memory VFS with `storage: "temporary"`, and syncs from the relay on every open. A reload of the page loses the copy and its unconfirmed changes, and the SDK fetches the spaces again from the relay. The member key in IndexedDB survives the reload, so a reload in a private window is not a new device; once the window closes, the key is gone too. A VFS on IndexedDB for the length of the private session was not taken: it would help only between a reload and the end of the private session, and would add a second, much slower storage path to build and test in three engines, with a durability no spike has checked. Either way the copy is temporary and the user is told the same. If apps report lost changes, it can be revisited with those rows.
 
 ### What developers and their users read
 
-- **The developer page.** [Browser apps and durability](../browser-durability.md) states NOC-33's findings in plain words per browser: what is lost when, how to reduce the risk (keep syncing, ask for persistent storage, install the app, offer a native app), private windows, the SDK's report and the text for users ([decision 13](#13-the-developer-documentation)). Every row names the finding it rests on, and the gate (`scripts/browser-durability.test.mjs`) fails when a row claims more than its finding.
-- **Text for end users.** The page carries short English texts that the developer copies into the app, with the placeholders `{appName}` and `{count}`: one for the onboarding of a browser app, one for unsaved changes (for one change and for more), and one for a private window. The SDK ships no text for users ([decision 14](#14-text-for-end-users)). The gate checks that each text names the app, stays under 60 words, and uses no word that promises more than the findings.
-- **The warning in development.** The README and RFC 0001 link the page. In development, the SDK logs one `console.warn` per page load when `storage` is not `persistent` ([decision 15](#15-where-the-developer-meets-it-and-the-warning-in-development)). "Development" is `process.env.NODE_ENV !== "production"`, which bundlers replace at build time; where nothing replaces it, the warning stays on. `nc.open({ model, warnings: false })` turns it off. The warning names the status, the number of unconfirmed changes and the page, and nothing else: no content and no ids ("Never write content, keys or personal fields into logs", GENESIS.md). Its text: `NoCentralDB: this browser copy is best-effort. The browser may delete it, together with 3 changes the relay has not confirmed and this browser's member key. See https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md`
+- **The developer page.** [Browser apps and durability](../browser-durability.md) states NOC-33's findings in plain words per browser: what is lost when, how to reduce the risk (keep syncing, ask for persistent storage, install the app, offer a native app), private windows, the SDK's report and the text for users. Every row names the finding it rests on, and the gate (`scripts/browser-durability.test.mjs`) fails when a row claims more than its finding. A developer has to know this before choosing a browser app for their users (principle 4), which is before reading an API reference, so the same facts in the SDK's API reference only were not taken.
+- **Text for end users.** The page carries short English texts that the developer copies into the app, with the placeholders `{appName}` and `{count}`: one for the onboarding of a browser app, one for unsaved changes (for one change and for more), and one for a private window. The SDK ships no text for users: the app owns its interface and its languages, and exported texts, such as `nc.text.durability.unsaved({ appName, count })`, would be more public API to keep stable and translate. The gate checks that each text names the app, stays under 60 words, and uses no word that promises more than the findings.
+- **The warning in development.** The README and RFC 0001 link the page. In development, the SDK logs one `console.warn` per page load when `storage` is not `persistent`, so a developer trying a browser app sees the limit on the first day, without reading anything, and the end user's console stays quiet. The same warning in every build, production included, and no warning at all, were not taken. "Development" is `process.env.NODE_ENV !== "production"`, which bundlers replace at build time; where nothing replaces it, the warning stays on. `nc.open({ model, warnings: false })` turns it off. The warning names the status, the number of unconfirmed changes and the page, and nothing else: no content and no ids ("Never write content, keys or personal fields into logs", GENESIS.md). Its text: `NoCentralDB: this browser copy is best-effort. The browser may delete it, together with 3 changes the relay has not confirmed and this browser's member key. See https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md`
 
 ## What the view stores in plaintext
 
@@ -323,7 +337,7 @@ The log stores ciphertext (RFC 0002). The view does not: it exists so that reads
 - **The indexes**, which repeat the indexed values.
 - **Personal fields**, decrypted, for as long as the person key exists. After a shred (RFC 0003), the fold erases them from the view.
 - **Metadata**: space ids, object ids, member ids, relay positions.
-- **Leftovers SQLite keeps**: the WAL file, and free pages that still hold deleted rows. With `secure_delete` on, SQLite overwrites deleted content with zeros, and after a shred the core checkpoints the WAL with `TRUNCATE` ([decision 9](#9-deleted-content-in-the-database-file)).
+- **Leftovers SQLite keeps**: the WAL file, and free pages that still hold deleted rows. With `secure_delete` on, SQLite overwrites deleted content with zeros, and after a shred or after leaving a space the core checkpoints the WAL with `TRUNCATE`. Erasure should remove what the database can reach on a device that comes back online, at a small cost in write speed; SQLite's defaults, where free pages keep old content until reused, were not taken. The limits on flash storage stay, as below.
 
 The database holds **no keys**. Private keys live in the platform's keystore, and in the browser as a non-extractable WebCrypto key that wraps the core's keys in IndexedDB ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)).
 
@@ -335,7 +349,7 @@ The database holds **no keys**. Private keys live in the platform's keystore, an
 - **Overwriting is not erasing on flash storage.** `secure_delete` overwrites the bytes SQLite can reach. An SSD or a phone's flash memory may keep old copies of a block where SQLite cannot reach them. Only the device's own disk encryption covers those.
 - **A process running as the user can read the database.** As RFC 0001 says in [What it is not](0001-nocentraldb.md#what-it-is-not), the device is not a security boundary against the user's own processes, agents included.
 
-Encrypting the database itself, for example with SQLCipher, is the owner's question and out of scope here: see [decision 6](#6-encryption-at-rest-on-the-device).
+**Encryption at rest.** For v1 the view relies on the device: the operating system's disk encryption, the platform keystore for keys, and on iOS the data-protection class "complete until first user authentication". The SDK documents what that does not cover. A key held on the same unlocked device protects little more than disk encryption does. Encrypting the database file with SQLCipher or SQLite3 Multiple Ciphers, under a key in the platform keystore, was not taken: it costs speed and adds a key the SDK must manage, and it can be a later RFC if a user's review asks for it. Deciding later, after v1, was not taken either. Storing read values encrypted in the view was not taken: an index cannot order ciphertext, and every read would decrypt every row it scans.
 
 ## Reads never touch the network
 
@@ -369,27 +383,9 @@ What it did: one Rust function, `fold_and_page`, creates a table and a declared 
 What it did not show, and must be shown before the implementation ships:
 
 - **Firefox and Safari.** Only Chromium was available to the spike. Both browsers support the API `opfs-sahpool` needs, and the official build's `opfs-sahpool` works in both ([NOC-33's findings](../browser-storage.md#findings)), but the Rust spike has not run in them. The wasm32 gate (NOC-10) or the implementation ticket must run the same check in Firefox and WebKit.
-- **More than one tab** ([decision 4](#4-several-tabs-of-the-same-app-in-one-browser)).
+- **More than one tab** ([The browser](#the-browser)).
 - **Speed** at the size of a real space. The spike measured nothing.
 - **The library's maturity.** `sqlite-wasm-rs` and `sqlite-wasm-vfs` are young crates with one main maintainer. They are small and wrap the official SQLite source and a port of its official VFS, so forking them is feasible if they stop being maintained.
-
-## Rejected options
-
-| Option                                                                                         | Why not                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| The official SQLite WebAssembly build (`sqlite3.wasm` with its JavaScript API) in the browser   | SQLite would live in a second WebAssembly module, driven from JavaScript. The Rust fold would call it through JavaScript for every statement, and the browser would run a different SQLite binding than native: behaviour would fork (principle 7). |
-| wa-sqlite in the browser                                                                       | The same problem: a separate module behind a JavaScript API. Its `OPFSCoopSyncVFS` handles many tabs better than `opfs-sahpool`; if decision 4's leader tab proves fragile, its approach can be ported to the Rust VFS.                          |
-| A VFS on IndexedDB                                                                             | Works on the main thread and in older browsers, but writes each page through an asynchronous store and is much slower. OPFS exists in every browser we target.                                                                               |
-| The `opfs` VFS of the official build                                                           | Needs `SharedArrayBuffer`, so every app's site must send COOP and COEP headers, which break many third-party embeds.                                                                                                                             |
-| SQLite on the browser's main thread                                                            | OPFS synchronous access handles are not available there (the spike: `NotSupported`), and a long fold would freeze the page.                                                                                                                     |
-| The system's SQLite natively                                                                   | Its version differs by OS release, so query plans and edge cases would fork by platform.                                                                                                                                                       |
-| One database per space                                                                         | An index could not span spaces: "my next 50 tasks across every project" would be one query per space and a merge in memory. See decision 1.                                                                                                  |
-| Storing read values encrypted in the view                                                      | An index cannot order ciphertext, and every read would decrypt every row it scans. Protecting data at rest belongs to the disk or the database file (decision 6).                                                                              |
-| Raw SQL for apps                                                                               | An app could run a full table scan, which breaks principle 6, and could read the merge state and the log directly.                                                                                                                              |
-| `OFFSET` pagination                                                                            | Page N reads all rows before it, and rows shift when a fold inserts one before the page boundary.                                                                                                                                              |
-| A row-value comparison for the cursor, `(priority, space_id, object_id) > (?, ?, ?)`                | Compared with an unset value it is `NULL`, so the page after a row with an unset value would be empty; and it compares every key in one direction, so an index with a descending key could not be paged. See [decision 16](#16-a-page-after-a-cursor). |
-| Locale-aware collation in indexes                                                              | Depends on ICU or OS versions, so two members could order the same page differently (principle 7).                                                                                                                                            |
-| A stable, versioned view layout that every client must keep reading                            | The view can always be rebuilt from the log. A promise about its layout would freeze the implementation without protecting any data. See decision 2.                                                                                         |
 
 ## Agreement with GENESIS.md and RFC 0001
 
@@ -405,201 +401,8 @@ What it did not show, and must be shown before the implementation ships:
 | "Never write content, keys or personal fields into logs [...]."                             | Plaintext exists only in memory and in the view; notifications carry ids; cursors are redacted.                                                |
 | "Runs on any device [...] web apps in a browser (Chromium-based, Firefox, and Safari)."      | The design uses only APIs those browsers offer. The Rust spike ran in Chromium only; the official build's `opfs-sahpool` works in Firefox and Safari ([Durability of a browser copy](#durability-of-a-browser-copy)). The Rust port in Firefox and Safari is an open check, not a claim. |
 
-**Conflicts.** None with GENESIS.md. One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit, and that the member key goes with the copy; RFC 0001's [What it is not](0001-nocentraldb.md#what-it-is-not) says the same.
-
-## Open questions
-
-None. The owner has decided every question this RFC asked. What the spike did not show ([The spike](#the-spike)) and what no browser finding covers yet ([Durability of a browser copy](#durability-of-a-browser-copy)) are checks for the implementation, not questions for the owner.
-
-## Decisions
-
-GENESIS.md reserves the on-disk format and anything a user sees first for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The design above describes the chosen options.
-
-### 1. How many databases per member
-
-Decided (Carsten, 2026-11-08): one database per member on a device, holding all its spaces, with a space id in every row.
-
-Why: indexes span spaces, so cross-space pages are one range lookup; leaving a space deletes its rows.
-
-Not taken:
-
-- One database per space.
-
-### 2. Is the view's layout a stable format?
-
-Decided (Carsten, 2026-11-08): no. Only the log (RFC 0002) is a stable on-disk format. The view's tables are internal to the core, versioned in `meta`, and a new core may rebuild them.
-
-Why: the view can always be rebuilt from the log; a stable layout would only slow down the core's development. Apps never see the tables (no raw SQL).
-
-Not taken:
-
-- Yes, versioned and migrated like the log.
-
-### 3. The SQLite stack
-
-Decided (Carsten, 2026-11-08): `rusqlite`, pinned, with `bundled` natively and `ffi-sqlite-wasm-rs` (`sqlite-wasm-rs`, `opfs-sahpool` from `sqlite-wasm-vfs`) in the browser, in a dedicated worker.
-
-Why: one SQLite binding and one body of fold code on every target (principle 7), and the spike shows it works. The risk is two young crates; the fallback is to fork them.
-
-Not taken:
-
-- `rusqlite` natively, and the official SQLite WebAssembly build or wa-sqlite in the browser, called through JavaScript.
-
-### 4. Several tabs of the same app in one browser
-
-Decided (Carsten, 2026-11-08): one tab owns the database, elected with Web Locks; other tabs reach it through a `BroadcastChannel`.
-
-Why: users open apps in several tabs, and refusing all but one would surprise them. It needs its own test, as the spike did not cover it.
-
-Not taken:
-
-- Only one tab may run the app; the others show a notice.
-
-### 5. The order of text in indexes
-
-Decided (Carsten, 2026-11-08): UTF-8 byte order everywhere; locale-aware order only through a computed sort key.
-
-Why: locale-aware collation makes the order depend on the platform's ICU version, so two members could order the same page differently.
-
-Not taken:
-
-- Locale-aware collation in the index.
-
-### 6. Encryption at rest on the device
-
-Decided (Carsten, 2026-11-08): for v1, rely on the device: the OS's disk encryption, the platform keystore for keys, and on iOS the data-protection class "complete until first user authentication". The SDK documents what that does not cover. Encrypting the database file can be a later RFC if a user's review asks for it.
-
-Why: a key held on the same unlocked device protects little more than disk encryption does.
-
-Not taken:
-
-- Encrypt the database file with SQLCipher or SQLite3 Multiple Ciphers, under a key in the platform keystore: it costs speed and adds a key the SDK must manage.
-- Decide later, after v1.
-
-### 7. Durability of a commit
-
-Decided (Carsten, 2026-11-08): WAL with `synchronous = FULL`, so a committed change survives a power loss.
-
-Why: the log holds the member's writes the relay has not confirmed, which exist nowhere else (principle 3: nothing is lost silently).
-
-Not taken:
-
-- WAL with `synchronous = NORMAL`: faster, but the last commits before a power loss may be lost.
-
-### 8. Persistent storage in the browser
-
-Decided (Carsten, 2026-11-08): the SDK asks for persistent storage on open and tells the app whether it was granted and how many unconfirmed changes it holds.
-
-Why: eviction loses the member's unconfirmed writes; the developer must learn that from the SDK, not from a user.
-
-Not taken:
-
-- Leave it to the app.
-
-### 9. Deleted content in the database file
-
-Decided (Carsten, 2026-11-08): `PRAGMA secure_delete = ON`, and a WAL checkpoint with `TRUNCATE` after a shred or after leaving a space.
-
-Why: erasure should remove what the database can reach on a device that comes back online, at a small cost in write speed. The limits on flash storage stay, and the SDK says so.
-
-Not taken:
-
-- SQLite's defaults, where free pages keep old content until reused.
-
-### 10. How the SDK reports durability
-
-Decided (Carsten, 2026-11-09): one namespace, `db.durability`, the same on every target, with `current()`, `subscribe(listener)` and `requestPersistent()` (see [What the SDK reports](#what-the-sdk-reports)).
-
-Why: one object answers the question a developer has: what would this user lose if the browser deleted the copy now. Only the core knows which changes the relay has confirmed.
-
-Not taken:
-
-- Two places, `db.storage.persistent` and `db.sync.pending`, each with its own event, which splits one answer in two.
-- A boolean `db.isPersistent` only, which leaves apps guessing which changes are unconfirmed.
-
-### 11. When the SDK asks for persistent storage
-
-Decided (Carsten, 2026-11-09): on open, as decision 8 says, without waiting; `nc.open({ model, persistentStorage: "on-request" })` lets an app ask after its own onboarding text.
-
-Why: it keeps decision 8 for an app that does nothing, and refines it rather than reversing it.
-
-Not taken:
-
-- On open, with `nc.open` waiting for the answer, which leaves it hanging in Firefox until the user answers the popup.
-- Only when the app calls `requestPersistent()`, which reverses decision 8 and leaves every app that forgets the call with a best-effort copy.
-
-### 12. The fallback in a private window
-
-Decided (Carsten, 2026-11-09): SQLite's in-memory VFS where OPFS is missing, with `storage: "temporary"`. Confirmed (Carsten, 2026-11-09) after NOC-58 measured that IndexedDB, and the member key, survive a reload in a private window in Playwright's Chromium, Firefox and WebKit: it stays.
-
-Why: an IndexedDB copy would help only between a reload and the end of the private session, and would add a second, much slower storage path to build and test in three engines, with a durability no spike has checked against decision 7. Either way the copy is temporary and the user is told the same. If apps report lost changes, it can be revisited with those rows.
-
-Not taken:
-
-- A VFS on IndexedDB for the length of the private session.
-
-### 13. The developer documentation
-
-Decided (Carsten, 2026-11-09): one page, [Browser apps and durability](../browser-durability.md), with NOC-33's findings in plain words per browser; every row names its finding, and the gate checks it.
-
-Why: a developer has to know this before choosing a browser app for their users (principle 4), which is before reading an API reference.
-
-Not taken:
-
-- The same facts in the SDK's API reference only.
-
-### 14. Text for end users
-
-Decided (Carsten, 2026-11-09): the page carries short English texts with `{appName}` and `{count}` that the developer copies into the app; the SDK ships no text for users.
-
-Why: the app owns its interface and its languages; exported texts would be more public API to keep stable and translate.
-
-Not taken:
-
-- The SDK exports the texts, such as `nc.text.durability.unsaved({ appName, count })`.
-
-### 15. Where the developer meets it, and the warning in development
-
-Decided (Carsten, 2026-11-09): the README and RFC 0001 link the page, and in development the SDK logs one `console.warn` per page load when `storage` is not `persistent`, which `warnings: false` turns off.
-
-Why: a developer trying a browser app sees the limit on the first day, without reading anything, and the end user's console stays quiet.
-
-Not taken:
-
-- The same warning in every build, production included.
-- No warning; the page and `db.durability` only.
-
-### 16. A page after a cursor
-
-Decided (Carsten, 2026-11-09, by approving and merging #81): the cursor condition is written key by key, `NULL`-aware and per direction, with a bound on the first key; the plan check accepts a `SEARCH` or a `SCAN` on the declared index. pm chose it on the question the view's coding agent raised in NOC-69, and the decision log records why ([`2026-11-09-NOC-69-a-page-after-a-cursor-is-written-key-by-key.md`](../../factory/decisions/2026-11-09-NOC-69-a-page-after-a-cursor-is-written-key-by-key.md)).
-
-Why: a row value compared with an unset value is `NULL`, so the page after a row with an unset value was empty although rows followed; and a row value compares every key in one direction, so an index with a descending key could not be paged.
-
-Not taken:
-
-- Row values with ascending indexes only, which leaves a cursor on an unset value broken.
-- Row values where they are correct and the key-by-key condition otherwise, which means two code paths.
-
-### 17. Where the view keeps the lock
-
-Decided (Carsten, 2026-11-10): one key `lock` in `meta`, as canonical JSON, and the view format version stays 2. A database without a stored lock opens only with a lock whose model folds its view as it is, and keeps that lock from then on. The owner answered NOC-155; #137 builds it.
-
-Why: RFC 0005 decides that the SDK stores the lock in the local database, not how. One row in a table the view already has costs nothing more, and since the view's tables are internal (decision 2), no format version has to change.
-
-Not taken:
-
-- A table of its own for the lock: cleaner to extend, with the same cost otherwise.
-- Raise the view format version: every existing database would be refused until a rebuild of the view exists.
+One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a cache the browser may drop, unlike on a native device. This RFC states that limit, and that the member key goes with the copy; RFC 0001's [What it is not](0001-nocentraldb.md#what-it-is-not) says the same.
 
 ## History
 
-- **2026-11-08** · NOC-12 · The first version, with the spike and decisions 1 to 9, which the owner decided as recommended (#36).
-- **2026-11-08** · NOC-44 · Follows RFC 0008: the control table holds its control state, control changes are recomputed through `resolve`, sealed changes are un-folded, and a shred deletes the key only once it is stable (#61).
-- **2026-11-09** · NOC-34 · The durability of a browser copy, from NOC-33's findings, with decisions 10 to 15 and the page [Browser apps and durability](../browser-durability.md) (#73).
-- **2026-11-09** · NOC-35 · The owner's device checks cited by their rows in NOC-33's findings: a Firefox private window keeps nothing once it closes (#76).
-- **2026-11-09** · NOC-58 · A reload in a private window keeps IndexedDB and the member key, as measured; decision 12 confirmed (#85).
-- **2026-11-09** · NOC-72 · A page after a cursor is written key by key, and the plan check accepts a `SCAN` on the declared index, as the view built in #81 does; decision 16 (#85).
-- **2026-11-09** · NOC-75 · Follows RFC 0009: an index with `scope: "space"` puts the space id first, and no declared index holds a deleted object (#87).
-- **2026-11-10** · NOC-92 · A reference indexes as one 32-byte `BLOB` column, as RFC 0005's D19 decided (#98).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#112).
-- **2026-11-10** · NOC-162 · `meta` keeps the newest lock under the key `lock`, as canonical JSON, and the view format stays 2, as the owner decided in NOC-155 and #137 builds; decision 17 (#151).
+- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
