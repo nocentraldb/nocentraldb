@@ -66,7 +66,7 @@ pub fn push(
     changes: &[&Change],
 ) -> Vec<Pushed> {
     let frames = changes.iter().map(|c| c.bytes().to_vec()).collect();
-    block_on(relay.push(id(uploader), space, frames))
+    block_on(relay.push(id(uploader), space, frames)).results
 }
 
 /// `uploader` pushes one change.

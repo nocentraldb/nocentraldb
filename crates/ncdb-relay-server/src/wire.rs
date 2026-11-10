@@ -343,6 +343,11 @@ pub fn welcome(member: &[u8; 32], epoch: &[u8; 16], spaces: &[[u8; 16]]) -> Vec<
     )
 }
 
+/// `added {space}`: the member was added to the space (decision R13).
+pub fn added(space: SpaceId) -> Vec<u8> {
+    message("added", None, vec![(3, Value::Bytes(space.0.to_vec()))])
+}
+
 /// `pushed {req, results}`: per frame `{1: position}` when accepted,
 /// `{2: position}` when the relay already held it, `{3: code}` when refused.
 pub fn pushed(req: u64, results: &[Pushed]) -> Vec<u8> {

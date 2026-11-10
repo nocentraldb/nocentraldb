@@ -70,9 +70,10 @@ pub struct SyncStatus {
     pub epoch_changed: bool,
     /// The last error that stops syncing, by its RFC 0007 code, such as
     /// `unsupported_version`; never content. Once the relay answered
-    /// `not_member` or `removed_member` for a space, that code stays here
-    /// while no error of the connection replaces it, since the space is
-    /// no longer synced.
+    /// `not_member` or `removed_member` for a space, that code stays here,
+    /// since the space is no longer synced, while no error of the
+    /// connection replaces it and until the relay says, with `added`, that
+    /// the member was added again to every space it stopped.
     pub error: Option<String>,
 }
 
@@ -115,7 +116,8 @@ pub(crate) struct SyncState {
     /// The cursor of each space: the highest relay position folded, with
     /// every position below it.
     pub(crate) cursors: BTreeMap<CoreSpaceId, u64>,
-    /// The spaces the relay said this member may no longer read.
+    /// The spaces the relay said this member may no longer read, until it
+    /// says the member was added to them again.
     pub(crate) stopped: BTreeSet<CoreSpaceId>,
     /// The code the relay last stopped a space with, `not_member` or
     /// `removed_member`.
