@@ -94,7 +94,11 @@ fn a_member_added_again_after_its_removal_becomes_current_again() {
         .collect();
     let push = block_on(relay.push(id(0), space.space, frames));
     assert_eq!(push.results.len(), 4);
-    assert!(push.results.iter().all(|r| matches!(r, Pushed::Accepted(_))));
+    assert!(
+        push.results
+            .iter()
+            .all(|r| matches!(r, Pushed::Accepted(_)))
+    );
 
     // RFC 0008, M5: a removed member comes back with a new grant.
     let again = space.add_at(0, 1, Role::Writer, next, &[&rotation]);

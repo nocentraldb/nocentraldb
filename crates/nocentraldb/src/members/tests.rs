@@ -173,6 +173,64 @@ pub(crate) fn remove(
     removal
 }
 
+/// The admin adds the member of `invitation` again as a writer, after its
+/// removal (RFC 0008, decision M5): it rotates to a fresh generation and
+/// grants the member the right to write from it. The SDK does not rotate
+/// yet, so the key chain entry carries stand-ins for the previous key,
+/// which `resolve` does not open. Neither change is folded into the
+/// admin's database; the test pushes them to the relay itself.
+pub(crate) fn regrant(
+    admin: &Db,
+    space: &Space,
+    invitation: &super::Invitation,
+) -> [ncdb_core::change::Change; 2] {
+    use ncdb_core::membership::{
+        self, Action, ControlBody, Entry, KeyChainEntry, MembershipEntry, PreviousKey,
+    };
+
+    let inner = admin.lock();
+    let member = inner.member.key();
+    let id = space.id().0;
+    let state = &inner.spaces[&id];
+    let next = crate::next::next(&inner.view, id, &state.checks, member.id());
+    let generation = next.generation.expect("a generation");
+    let fresh = membership::generation_id(id, member.id(), &[generation]);
+    let chain = KeyChainEntry {
+        generation: fresh,
+        previous: vec![PreviousKey {
+            generation,
+            key: [0xc4; membership::PREVIOUS_KEY_LEN],
+        }],
+        answers: std::collections::BTreeSet::new(),
+    };
+    let heads = super::control_heads(&inner.view, id);
+    let rotation = membership::write(
+        &member,
+        id,
+        next.sequence,
+        generation,
+        &ControlBody::new(heads, Entry::KeyChain(chain)),
+    );
+    let entry = Entry::Membership(MembershipEntry {
+        subject: invitation.key.id(),
+        action: Action::Add {
+            role: Role::Writer.into(),
+            key: invitation.key,
+            certificate: Box::new(invitation.certificate.clone()),
+            from_generation: fresh,
+        },
+    });
+    let heads = std::collections::BTreeSet::from([rotation.id()]);
+    let add = membership::write(
+        &member,
+        id,
+        next.sequence + 1,
+        generation,
+        &ControlBody::new(heads, entry),
+    );
+    [rotation, add]
+}
+
 /// A space of the admin's, with the member `who` of the same account added
 /// as `role`; the member's database holds the space.
 fn joined(account: &SigningKey, role: Role) -> (Db, Space, Db, super::Invitation) {

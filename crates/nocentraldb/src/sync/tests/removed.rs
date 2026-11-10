@@ -14,7 +14,7 @@ use crate::db::Db;
 use crate::error::ErrorCode;
 use crate::id::ObjectId;
 use crate::list::{SpaceInfo, SpaceModel};
-use crate::members::tests::remove;
+use crate::members::tests::{regrant, remove};
 use crate::members::{AddMember, Invitation, Role};
 use crate::space::Space;
 use crate::value::Value;
@@ -151,4 +151,42 @@ async fn a_member_removed_while_offline_sees_itself_removed_when_it_connects() {
     let status = synced(&shared.member).await;
     assert_eq!(status.error.as_deref(), Some("not_member"));
     reads_but_may_not_write(&shared);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_member_added_again_syncs_the_space_again() {
+    let relay = LocalRelay::start().await;
+    let shared = shared(&relay).await;
+    remove(&shared.admin, &shared.on_admin, &shared.invitation);
+    synced(&shared.admin).await;
+    eventually("the member lists the space without a role", || {
+        listed_without_a_role(&shared.member, &shared.on_admin)
+    })
+    .await;
+
+    // The admin rotates and adds the member again (RFC 0008, M5); the
+    // changes reach the relay through a raw connection of its member key.
+    let [rotation, add] = regrant(&shared.admin, &shared.on_admin, &shared.invitation);
+    let mut client = relay.client(ADMIN).await;
+    push(&mut client, &[&rotation, &add]).await;
+
+    eventually("the member lists the space as a writer again", || {
+        now(shared.member.spaces().list()).unwrap()
+            == vec![SpaceInfo {
+                id: shared.on_admin.id(),
+                role: Some(Role::Writer),
+                model: SpaceModel::Ours,
+            }]
+    })
+    .await;
+    let status = synced(&shared.member).await;
+    assert_eq!(status.error, None);
+    let space = shared.on_admin.id().0;
+    let log = relay.log(space).await;
+    eventually("the member holds the relay's whole log", || {
+        let inner = crate::db::lock(&shared.member.inner);
+        log.iter()
+            .all(|id| inner.view.relay_position(space, *id).is_some())
+    })
+    .await;
 }
