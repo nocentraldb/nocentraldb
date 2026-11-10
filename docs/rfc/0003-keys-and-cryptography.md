@@ -49,6 +49,8 @@ It does not protect against:
 | Space key | 256-bit random symmetric key, one per generation | The member that creates the space, then the member that rotates it | Wrapped to each member key in the space's key envelopes; unwrapped only inside each member | Encrypt and decrypt the space's changes |
 | Person key | 256-bit random symmetric key | The member that first writes a personal field for that person in that space | The space's person-key store, wrapped under the current space key; unwrapped only inside each member | Encrypt and decrypt that person's personal fields; destroying it erases them |
 
+![Which key protects which: the account key certifies member keys; a member key receives each space key generation in a key envelope; a generation encrypts the previous generations in the key chain, derives the content key and wraps the person keys; the content key encrypts a change's payload, a person key encrypts that person's personal fields inside the payload, and the member key signs the change](0003-which-key-wraps-which.svg)
+
 ### The member key
 
 A member is one device or one agent: a laptop, a phone, a browser profile, an agent process, a cloud function. Each member creates its own member key the first time it opens a database. The member key is two keys:
