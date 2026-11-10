@@ -86,7 +86,9 @@ fn refuses_a_scope_other_than_space() {
 
 #[test]
 fn a_build_keeps_the_scope_and_a_changed_scope_takes_the_new_version() {
-    let v1 = build(&draft(r#", "scope": "space""#), None, id).unwrap().lock;
+    let v1 = build(&draft(r#", "scope": "space""#), None, id)
+        .unwrap()
+        .lock;
     let index = &v1.collection("tasks").unwrap().indexes["inSpace"];
     assert_eq!((index.scope, index.since), (Scope::Space, 1));
     let v2 = build(&draft(""), Some(&v1), id).unwrap().lock;

@@ -14,7 +14,7 @@ use serde_json::{Map, Value};
 
 use super::{
     Collection, Deprecation, Direction, Element, FORMAT, Field, Index, IndexField, Kind, ModelId,
-    ModelInfo, ModelLock, Named, Person, Plugin,
+    ModelInfo, ModelLock, Named, Person, Plugin, Scope,
 };
 
 /// Why a lock (or a schema's description) could not be read: the JSON
@@ -334,8 +334,21 @@ fn index(map: &Map<String, Value>, path: &str) -> Result<Index, LockError> {
     Ok(Index {
         fields,
         equal: whole(required(map, path, "equal")?, &join(path, "equal"))?,
+        scope: scope(map, path)?,
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
     })
+}
+
+/// An index's `scope`: `"space"`, or left out for every space.
+pub(super) fn scope(map: &Map<String, Value>, path: &str) -> Result<Scope, LockError> {
+    match optional(map, "scope") {
+        None => Ok(Scope::Member),
+        Some(value) if value.as_str() == Some("space") => Ok(Scope::Space),
+        Some(_) => Err(error(
+            &join(path, "scope"),
+            "expected \"space\" or no scope",
+        )),
+    }
 }
 
 pub(super) fn direction(value: &Value, path: &str) -> Result<Direction, LockError> {
