@@ -268,3 +268,32 @@ fn a_member_reads_its_own_key_envelopes_and_every_key_chain_entry() {
         Err(ErrorCode::UnknownSpace)
     );
 }
+
+#[test]
+fn no_record_is_accepted_for_a_key_whose_shred_outlived_its_entries() {
+    let (relay, _dir, mut space, held) = held();
+    // The writer's entry (held[4]) and its shred; the creator, senior,
+    // writes a concurrent first entry with another commitment, which takes
+    // the person key in the order, and which the shred then rejects. The
+    // rival reaches the relay first: after the shred, the relay would
+    // refuse it.
+    let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
+    let rival = space.person_key(CREATOR, 1, 0xc2, &[&held[3]]);
+    let pushed = push(&relay, CREATOR, space.space, &[&rival, &shred]);
+    assert_eq!(pushed, [Pushed::Accepted(6), Pushed::Accepted(7)]);
+    for (writer, record) in [
+        (
+            WRITER,
+            record(space.space, WRITER, 1, space.first_generation),
+        ),
+        (
+            CREATOR,
+            record(space.space, CREATOR, 1, space.first_generation),
+        ),
+    ] {
+        assert_eq!(
+            put(&relay, writer, space.space, vec![record]),
+            Err(ErrorCode::BadRecord)
+        );
+    }
+}

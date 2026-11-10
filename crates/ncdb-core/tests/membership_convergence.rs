@@ -399,3 +399,25 @@ fn m_c10_shreds_and_re_wraps_end_in_one_shred_in_any_order() {
         Some(Verdict::Rejected(Rejection::Shredded(_)))
     ));
 }
+
+#[test]
+fn m_c10_a_shred_holds_in_any_order_when_a_concurrent_first_entry_takes_its_person_key() {
+    const ALICE: u8 = 1;
+    const BOB: u8 = 2;
+    const CAROL: u8 = 3;
+    let mut s = space::Space::with_nonce(ALICE, [9; 16]);
+    let g = s.genesis.clone();
+    let bob = s.add(ALICE, BOB, Role::Writer, &[&g]);
+    s.certify_by(CAROL, space::other_account(1));
+    let carol = s.add(ALICE, CAROL, Role::Admin, &[&bob]);
+    let bobs = s.person_key(BOB, 1, 1, &[&carol]);
+    let shred = s.shred(BOB, 1, &space::other_account(1), &[&bobs]);
+    let alices = s.person_key(ALICE, 1, 2, &[&carol]);
+    let base = [g, bob, carol];
+    let state = in_every_order(s.space, &base, &[bobs, shred.clone(), alices]);
+    let key = state
+        .person_key(space::person(1))
+        .expect("the shredded key");
+    assert_eq!(key.shred, Some(shred.id()));
+    assert_eq!(key.commitment, None);
+}
