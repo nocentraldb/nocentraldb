@@ -185,7 +185,14 @@ pub(super) fn pushed(
 pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
     let sync = sync(inner);
     sync.stopped.insert(space);
+    sync.live.remove(&space);
     sync.removed = Some(code);
+}
+
+/// Records that the subscription to `space` caught up with the relay's
+/// head.
+pub(super) fn caught_up(inner: &mut Inner, space: SpaceId) {
+    sync(inner).live.insert(space);
 }
 
 /// This member's changes the relay has not confirmed, and those it

@@ -42,6 +42,8 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
 fn set(inner: &Mutex<Inner>, connection: Connection, error: Option<String>) {
     if let Some(sync) = lock(inner).sync.as_mut() {
         sync.connection = connection;
+        // Connecting or offline, no subscription is live.
+        sync.live.clear();
         if error.is_some() {
             sync.error = error;
         }

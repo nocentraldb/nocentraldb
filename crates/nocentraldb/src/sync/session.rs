@@ -290,6 +290,8 @@ impl Session<'_> {
                 let cursor = with(self.db, |inner| apply::cursor(inner, space))?;
                 if cursor < head {
                     self.gaps.insert(space);
+                } else {
+                    with(self.db, |inner| apply::caught_up(inner, space))?;
                 }
                 Ok(())
             }
