@@ -45,6 +45,9 @@ pub enum Trouble {
     /// The TCP connection is accepted, but the WebSocket handshake never
     /// answered.
     Hang,
+    /// `hello` is answered with the error of this code, and the connection
+    /// ends.
+    Refuse(&'static str),
 }
 
 /// A fake relay on a free local port.
@@ -125,6 +128,11 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
         return;
     };
     let _hello = recv(&mut ws).await;
+    if let Trouble::Refuse(code) = trouble {
+        let error = message("error", None, &[(3, Value::Text(code.to_owned()))]);
+        send(&mut ws, &error).await;
+        return;
+    }
     let limits = map(vec![
         (1, Value::Unsigned(128 * 1024)),
         (2, Value::Unsigned(32)),
