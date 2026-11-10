@@ -6,8 +6,8 @@
 // byte-exact examples M1, M2, N1 and N2 decode under RFC 0002's profile and
 // equal the committed vectors that docs/rfc/vectors/0002/generate.py writes
 // with Python's cbor2, independently of this reader and of the Rust core.
-// rfc-0002-complete.test.mjs holds the text's form: no amendments,
-// "Decisions" and "History".
+// rfc-0002-complete.test.mjs holds the text's form as a fresh text (NOC-165):
+// no list of decisions, each decision in its section, one History line.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -81,7 +81,7 @@ const stepRows = () =>
         .map((cell) => cell.trim()),
     );
 
-test("the step table has steps 1 to 7 and 5a, with the states of D13 and key 64", () => {
+test("the step table has steps 1 to 7 and 5a, with the states of step 5a and key 64", () => {
   const rows = stepRows();
   const steps = rows.map(([step]) => step.split(".")[0]);
   assert.deepEqual(steps, ["1", "2", "3", "4", "5", "5a", "6", "7"]);
@@ -124,7 +124,7 @@ test("a change the relay refuses stays folded, and is pushed again once the fold
   assert.match(text, /keeps the change folded/);
   assert.match(text, /relay refusal/);
   assert.match(text, /newly accepts/);
-  assert.match(text, /M19/);
+  assert.match(text, /pushes it to that relay once more/);
 });
 
 test("a payload that decrypts but does not decode is parked, whatever the cause", () => {
@@ -214,10 +214,7 @@ test("the writer's model: key 64 in the may-ignore range, a change of another mo
   assert.match(text, /never parks a change by itself/);
   assert.match(text, /relay sees nothing new/i);
   assert.ok(
-    links(
-      text,
-      "0005-schema-and-model-lock.md#d10-the-model-version-in-changes",
-    ),
+    links(text, "0005-schema-and-model-lock.md#data-from-a-newer-model"),
   );
   const glance = section("a-change-at-a-glance");
   const payload = glance.split(/^payload \(/m)[1]?.split(/\n\n/)[0] ?? "";
