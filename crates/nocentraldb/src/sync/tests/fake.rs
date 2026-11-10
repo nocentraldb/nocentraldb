@@ -14,7 +14,14 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::WebSocketStream;
 use tokio_tungstenite::tungstenite::Message;
 
+use super::relay_support::space::Space;
 use super::relay_support::{field, get, kind, message, uint};
+
+/// The space whose entries [`Trouble::Stranger`] sends: one of another
+/// simulated member's, which the database's member does not belong to.
+pub fn stranger() -> Space {
+    Space::with_nonce(0, [0x5a; 16])
+}
 
 /// How the fake relay answers once a member authenticated.
 #[derive(Clone, Copy, Debug)]
@@ -32,6 +39,9 @@ pub enum Trouble {
     NoPong,
     /// Right after `welcome`, a message of 200 KiB.
     Huge,
+    /// Right after `welcome`, live entries of a space the member never
+    /// subscribed to: the genesis of [`stranger`].
+    Stranger,
     /// The TCP connection is accepted, but the WebSocket handshake never
     /// answered.
     Hang,
@@ -145,6 +155,24 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
     if let Trouble::Huge = trouble {
         let huge = message("pong", Some(0), &[(3, Value::Bytes(vec![0; 200 * 1024]))]);
         send(&mut ws, &huge).await;
+    }
+    if let Trouble::Stranger = trouble {
+        let space = stranger();
+        let entry = map(vec![
+            (1, Value::Unsigned(1)),
+            (2, Value::Unsigned(0)),
+            (3, Value::Bytes(space.genesis.bytes().to_vec())),
+        ]);
+        let entries = message(
+            "entries",
+            None,
+            &[
+                (3, Value::Bytes(space.space.0.to_vec())),
+                (4, Value::Array(vec![entry])),
+                (5, Value::Unsigned(1)),
+            ],
+        );
+        send(&mut ws, &entries).await;
     }
     while let Some(request) = recv(&mut ws).await {
         requests.fetch_add(1, Ordering::SeqCst);

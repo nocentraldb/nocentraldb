@@ -312,10 +312,14 @@ impl Session<'_> {
     }
 
     /// A message the relay sent on its own: live entries, or the end of a
-    /// subscription.
+    /// subscription. Entries of a space this session did not subscribe to
+    /// are ignored: a relay sends them only by mistake, and folding them
+    /// would make that space one the database syncs.
     fn live(&mut self, answer: Answer) -> Result<(), End> {
         let space = match &answer {
-            Answer::Entries { space, .. } => Some(*space),
+            Answer::Entries { space, .. } => {
+                Some(*space).filter(|space| self.subscribed.contains(space))
+            }
             other => other
                 .req()
                 .and_then(|req| self.subscriptions.get(&req).copied()),
