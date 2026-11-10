@@ -28,6 +28,7 @@ mod object;
 mod query;
 mod space;
 mod subscribe;
+mod sync;
 mod tx;
 mod value;
 

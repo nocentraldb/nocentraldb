@@ -5,7 +5,7 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 publish = false
-description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, read, query and subscribe."
+description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, read, query and subscribe, and sync with a relay (RFC 0007)."
 
 # The SDK wraps the core: the change, its signature and seal, membership and
 # the local view on SQLite. The view is native only, so is this crate.
@@ -21,3 +21,18 @@ ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["all
 # generator, wiped from memory when they are dropped.
 getrandom = { version = "=0.4.3", default-features = false }
 zeroize = { version = "=1.9.1", default-features = false }
+# Syncing with one relay (RFC 0007, "The protocol"): a WebSocket client on
+# a tokio runtime of the SDK's own, on a thread of its own, so an app needs
+# no runtime. The versions Cargo.lock already held for the relay server.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+# What the member signs to authenticate a connection, as the relay checks
+# it (RFC 0003, decision 13).
+ncdb-relay.workspace = true
+
+# The sync tests run the relay server on SQLite locally and talk to it as a
+# simulated member would.
+[dev-dependencies]
+ncdb-relay-server.workspace = true
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "time", "io-util", "net", "macros"] }
