@@ -50,3 +50,14 @@ async fn rate_limited_waits_its_retry_after() {
     let connections = relay.connections();
     assert_eq!(connections, 1, "{connections} connections in 1.5 s");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pull_that_does_not_move_the_cursor_ends_the_session() {
+    let relay = FakeRelay::start(Trouble::NoProgress).await;
+
+    let _db = write_for(&relay, Duration::from_millis(1500)).await;
+
+    // One pull per attempt, and at most 6 attempts in 1.5 seconds.
+    let requests = relay.requests();
+    assert!(requests <= 6, "{requests} requests in 1.5 s");
+}
