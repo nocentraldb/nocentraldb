@@ -85,7 +85,7 @@ async fn push_large(zero: &mut Client, space: &mut Space, count: u64) {
 async fn a_slow_reader_gets_every_entry_in_order() {
     let (addr, _dir) = server_with_write_timeout(WRITE_TIMEOUT).await;
     let (mut zero, mut one, mut space, _) = subscribed(addr).await;
-    push_large(&mut zero, &mut space, 60).await;
+    let pushing = tokio::spawn(async move { push_large(&mut zero, &mut space, 60).await });
 
     let mut seen = Vec::new();
     while seen.len() < 60 {
@@ -95,6 +95,7 @@ async fn a_slow_reader_gets_every_entry_in_order() {
         assert!(seen.last().is_some_and(|last| *last <= head));
     }
     assert_eq!(seen, (3..=62).collect::<Vec<_>>());
+    pushing.await.expect("every push is accepted");
 }
 
 #[tokio::test(flavor = "multi_thread")]
