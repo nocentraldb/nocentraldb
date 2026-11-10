@@ -86,8 +86,8 @@ fn listed_without_a_role(member: &Db, space: &Space) -> bool {
         }]
 }
 
-/// The member keeps reading its copy, and a write into the space is
-/// refused with `NotMember`.
+/// The member keeps reading its copy, and a write into the space, or
+/// adding a member to it, is refused with `NotMember`.
 fn reads_but_may_not_write(shared: &Shared) {
     let held = now(shared.member.spaces().get(shared.on_admin.id())).unwrap();
     let task = now(held.get("tasks", shared.task)).unwrap();
@@ -97,6 +97,13 @@ fn reads_but_may_not_write(shared: &Shared) {
         Ok(())
     }))
     .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotMember);
+    let other = now(shared.admin.invitation());
+    let writer = AddMember {
+        role: Role::Writer,
+        fingerprint: None,
+    };
+    let refused = now(shared.on_member.members().add(&other, writer)).unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotMember);
 }
 
