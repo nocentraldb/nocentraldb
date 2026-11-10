@@ -1,8 +1,10 @@
 // Asserts that groups have left the design (NOC-76). The owner decided to
 // keep groups out of every definition for now (Carsten, 2026-11-09); they may
-// return through a later RFC. RFC 0001 and RFC 0009 each carry an amendment
-// that withdraws them, announced in a dated changelog line, and RFC 0008
-// states it in its text since NOC-101 folded its amendments in; the
+// return through a later RFC. RFC 0009 carries an amendment that withdraws
+// them, announced in a dated changelog line; RFC 0001 records the decision
+// under "Groups leave the design" (NOC-100's rfc-0001-complete.test.mjs holds
+// that section), and RFC 0008 states it in "Groups" since NOC-101 folded its
+// amendments in; the
 // decisions about groups, RFC 0008's M10 and RFC 0009's S14, are marked
 // withdrawn instead of deleted; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
@@ -16,19 +18,17 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
 
-const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
 /** The amendment of each RFC that withdraws groups. */
 const AMENDMENTS = [
-  { path: RFC_0001, number: 5 },
   { path: RFC_0009, number: 1 },
 ];
 const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
 const WITHDRAWING =
-  /#amendment-\d+-groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
+  /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
 const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
