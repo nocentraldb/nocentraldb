@@ -6,7 +6,8 @@
 //!
 //! [`wire`] reads and writes the messages, `connection` serves one member's
 //! connection, `subscription` one subscription, and `hub` tells the
-//! subscriptions of a space that a push appended to it. The `ncdb-relay`
+//! subscriptions of a space that a push appended to it, and the open
+//! connections of a member that a push added it to a space (`added`). The `ncdb-relay`
 //! binary runs a [`Server`] locally on the SQLite backend.
 //!
 //! **What this does not do yet**, refused with one of RFC 0007's codes:

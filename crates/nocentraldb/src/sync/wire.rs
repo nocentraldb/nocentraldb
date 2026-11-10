@@ -150,6 +150,11 @@ pub(crate) enum Answer {
         entries: Vec<Entry>,
         head: u64,
     },
+    /// The member was added to `space` while connected (RFC 0007,
+    /// decision R13).
+    Added {
+        space: SpaceId,
+    },
     Error {
         req: Option<u64>,
         code: String,
@@ -168,7 +173,7 @@ impl Answer {
         match self {
             Answer::Pushed { req, .. } => Some(*req),
             Answer::Entries { req, .. } | Answer::Error { req, .. } | Answer::Other { req } => *req,
-            Answer::Challenge { .. } | Answer::Welcome { .. } => None,
+            Answer::Challenge { .. } | Answer::Welcome { .. } | Answer::Added { .. } => None,
         }
     }
 }
@@ -255,6 +260,9 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
                 .map(entry)
                 .collect::<Result<_, _>>()?,
             head: uint(field(m, 5)?)?,
+        },
+        "added" => Answer::Added {
+            space: SpaceId(fixed(field(m, 3)?)?),
         },
         "error" => Answer::Error {
             req,
