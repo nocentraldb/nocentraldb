@@ -14,13 +14,13 @@
 //! `#[non_exhaustive]`, so each field comes when it is built, instead of
 //! a field that always reads empty and claims nothing waits.
 
+mod lost;
 mod reasons;
 
 use std::collections::BTreeMap;
 
 use futures_core::Stream;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
-use ncdb_core::membership::Verdict;
 
 use crate::db::Inner;
 use crate::id::ChangeId;
@@ -62,8 +62,10 @@ pub struct SpaceStatus {
     /// order. They stay folded on this member and do not reach members
     /// that sync only through the relay (RFC 0002, D12).
     pub refused: Vec<Refused>,
-    /// The accepted grants a revocation they did not see capped (RFC
-    /// 0008, "Concurrent add and remove of one member").
+    /// The accepted grants that a concurrent revocation of their subject
+    /// capped, so that they stay accepted without effect (RFC 0008,
+    /// "Concurrent add and remove of one member"). A grant that a later
+    /// revocation revoked after seeing it is not lost.
     pub lost_grants: Vec<ChangeId>,
     /// Whether the space's current key generation may be held by someone
     /// who is no longer a member (RFC 0008, "Two removals that rotate the
@@ -163,12 +165,12 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         status.role = resolved.role(me).map(Role::of);
     }
     status.gaps = resolved.gaps().iter().map(|id| ChangeId(*id)).collect();
-    status.lost_grants = resolved
-        .verdicts()
-        .iter()
-        .filter(|(_, verdict)| **verdict == Verdict::Lost)
-        .map(|(id, _)| ChangeId(*id))
-        .collect();
+    if let Some(log) = inner.view.log(space) {
+        status.lost_grants = lost::lost_grants(resolved, log)
+            .into_iter()
+            .map(ChangeId)
+            .collect();
+    }
     if let Some(current) = resolved.current_generation() {
         status.exposed = resolved.exposed(current);
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();
