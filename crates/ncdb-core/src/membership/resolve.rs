@@ -368,7 +368,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     }
     for state in members.0.values() {
         for grant in &state.grants {
-            if grant.effective < Some(grant.role) {
+            if lost(state, grant, &saw) {
                 resolved.verdicts.insert(grant.change, Verdict::Lost);
             }
         }
@@ -379,6 +379,27 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     resolved.person_keys =
         person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
     resolved
+}
+
+/// Whether an accepted grant is lost (RFC 0008, "Concurrent add and remove
+/// of one member"): an accepted entry about the same member caps it below
+/// the role it gives, and the two are concurrent, neither in the other's
+/// causal past. Every cap is a revocation (RFC 0008, "Roles"), an add's
+/// too. A grant that a later removal or demotion saw was revoked on
+/// purpose; it stays accepted, though its effective role is lowered all
+/// the same.
+fn lost(state: &MemberState, grant: &Grant, saw: impl Fn(ChangeId, ChangeId) -> bool) -> bool {
+    let caps = state
+        .grants
+        .iter()
+        .map(|g| (g.change, Some(g.role)))
+        .chain(state.revocations.iter().map(|r| (r.change, r.role)));
+    caps.into_iter().any(|(change, role)| {
+        change != grant.change
+            && role < Some(grant.role)
+            && !saw(grant.change, change)
+            && !saw(change, grant.change)
+    })
 }
 
 /// Decision M23: when two accepted key chain entries name the same
