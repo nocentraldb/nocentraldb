@@ -16,6 +16,11 @@
 //! # }
 //! ```
 //!
+//! A database lives in the directory [`OpenOptions::path`] names, with its
+//! keys in the platform keystore or the file [`OpenOptions::key_file`]
+//! names, and is found again when it is reopened; [`OpenOptions::in_memory`]
+//! keeps both in memory, for tests (RFC 0009, S19).
+//!
 //! Every call runs on the device and never waits for the network (RFC
 //! 0006, "Reads never touch the network"). A database opened with
 //! [`OpenOptions::relay`] syncs with that relay in the background (RFC
