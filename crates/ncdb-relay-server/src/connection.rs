@@ -51,8 +51,8 @@ enum State {
     Hello,
     /// Waiting for `auth` to this nonce.
     Auth { nonce: [u8; 32] },
-    /// Acting as this member.
-    Member(MemberId),
+    /// Acting as this member, listed in the hub under this id.
+    Member(MemberId, u64),
 }
 
 /// Serves one TCP connection until it closes.
@@ -165,6 +165,9 @@ struct Connection<S> {
 impl<S> Drop for Connection<S> {
     fn drop(&mut self) {
         self.subscriptions.values().for_each(JoinHandle::abort);
+        if let State::Member(member, id) = self.state {
+            self.shared.hub.unlist(member, id);
+        }
     }
 }
 
@@ -174,7 +177,7 @@ impl<S: RelayStore + 'static> Connection<S> {
         match self.state {
             State::Hello => Step::Hello,
             State::Auth { .. } => Step::Auth,
-            State::Member(_) => Step::Member,
+            State::Member(..) => Step::Member,
         }
     }
 
@@ -211,7 +214,7 @@ impl<S: RelayStore + 'static> Connection<S> {
 
     async fn malformed(&self, malformed: Malformed) -> bool {
         match self.state {
-            State::Member(_) => self.fail(malformed.req, ErrorCode::Malformed).await,
+            State::Member(..) => self.fail(malformed.req, ErrorCode::Malformed).await,
             _ => self.refuse(malformed.req, ErrorCode::Unauthenticated).await,
         }
     }
@@ -230,9 +233,9 @@ impl<S: RelayStore + 'static> Connection<S> {
                     Err(code) => self.refuse(None, code).await,
                 }
             }
-            (State::Member(member), request) => {
-                let member = *member;
-                self.request(member, request).await
+            (State::Member(member, id), request) => {
+                let (member, id) = (*member, *id);
+                self.request(member, id, request).await
             }
             (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated).await,
         }
@@ -256,13 +259,15 @@ impl<S: RelayStore + 'static> Connection<S> {
         true
     }
 
-    /// A request of an authenticated member.
-    async fn request(&mut self, member: MemberId, request: Request) -> bool {
+    /// A request of an authenticated member, on the connection listed in
+    /// the hub as `id`.
+    async fn request(&mut self, member: MemberId, id: u64, request: Request) -> bool {
         let relay = self.shared.relay.clone();
         match request {
             Request::Push { req, space, frames } => {
-                let results = push(relay, member, space, frames).await;
+                let (results, added) = push(relay, member, space, frames).await;
                 self.send(wire::pushed(req, &results)).await;
+                self.shared.hub.added(space, &added, id);
                 let appended = results.iter().filter_map(|result| match result {
                     Pushed::Accepted(position) => Some(*position),
                     _ => None,
@@ -355,7 +360,8 @@ impl<S: RelayStore + 'static> Connection<S> {
         };
         let spaces: Vec<[u8; 16]> = spaces.iter().map(|s| s.0).collect();
         self.send(wire::welcome(&member.0, &epoch.0, &spaces)).await;
-        self.state = State::Member(member);
+        let id = self.shared.hub.list(member, self.out.clone());
+        self.state = State::Member(member, id);
         true
     }
 }
@@ -378,15 +384,15 @@ impl Request {
     }
 }
 
-/// The results of a push: the relay core checks and appends the frames, in
-/// order; a reference to an upload is `too_large`, since this server
-/// accepts no upload.
+/// The results of a push, and the members it made current: the relay core
+/// checks and appends the frames, in order; a reference to an upload is
+/// `too_large`, since this server accepts no upload.
 async fn push<S: RelayStore + 'static>(
     relay: Arc<Relay<S>>,
     member: MemberId,
     space: SpaceId,
     frames: Vec<Frame>,
-) -> Vec<Pushed> {
+) -> (Vec<Pushed>, Vec<MemberId>) {
     let uploads: Vec<bool> = frames
         .iter()
         .map(|f| matches!(f, Frame::Upload(_)))
@@ -398,17 +404,18 @@ async fn push<S: RelayStore + 'static>(
             Frame::Upload(_) => None,
         })
         .collect();
-    let checked = blocking(async move { relay.push(member, space, changes).await.results }).await;
-    let mut checked = checked.into_iter();
-    uploads
+    let checked = blocking(async move { relay.push(member, space, changes).await }).await;
+    let mut results = checked.results.into_iter();
+    let results = uploads
         .into_iter()
         .map(|upload| match upload {
             true => Pushed::Rejected(ErrorCode::TooLarge),
-            false => checked
+            false => results
                 .next()
                 .unwrap_or(Pushed::Rejected(ErrorCode::Unavailable)),
         })
-        .collect()
+        .collect();
+    (results, checked.added)
 }
 
 /// Runs a future of the relay core on a thread that may block: the SQLite
