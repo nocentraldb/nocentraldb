@@ -1,5 +1,5 @@
 //! An object id shows as 32 lowercase hex digits, its 16 bytes in order,
-//! and reads back from them (RFC 0009, Amendment 3). A space id has the
+//! and reads back from them (RFC 0009, "Get by id"). A space id has the
 //! same form.
 
 mod support;

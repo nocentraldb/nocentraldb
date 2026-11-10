@@ -135,7 +135,7 @@ The calls on `tx`, and the operations they become ([RFC 0004, "Operation numbers
 | --- | --- | --- |
 | `nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf` | The value, such as `{ priority: 3 }`. `null` clears the field. | set (1). `replaces` names the winner and every conflict the copy holds ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). |
 | `nc.link` | The target's object id, or `null`. | set (1), as a basic value. |
-| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it (decision [S24](#s24-how-an-app-writes-a-reference)). | set (1), as a basic value ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). |
+| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it (decision [S24](#s24-how-an-app-writes-a-reference)). | set (1), as a basic value ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). |
 | `nc.set`, `nc.links` | `nc.add(...elements)` or `nc.remove(...elements)`. | add (2) per element, or remove (3) per element with `observed`, the tags of its additions the copy holds ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)). |
 | A plugin's type | What the plugin's write function returns. | The plugin's operations, 64 and up. |
 
@@ -221,7 +221,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 - **Basic values and single links:** `value` and `conflicts`, each conflict with its value, author member id and stamp. Conflicts whose value equals the winner's are left out, as RFC 0004 says.
 - **Sets and many links:** `elements`, and per element its `lostRemovals`, each with author and stamp.
 - **Links:** per target its `status`: `"ok"`, `"deleted"`, `"missing"` or `"wrongCollection"` ([RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution)).
-- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space); [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
+- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references); [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
 - **The object:** its collection and whether it is deleted, each a basic value with conflicts ([RFC 0004, "Two creates of one object id"](0004-merge-rules-basic-types.md#two-creates-of-one-object-id)).
 - **A field outside the kind:** `{ raw: value }`.
 
@@ -246,14 +246,14 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 
 There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)).
 
-**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query RFC 0006 allows. RFC 0005 and RFC 0006 are silent on it, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
+**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query such an index allows, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
 
 ```ts
 // in the schema: indexes: { openByPriority: nc.index(["status", "priority"], { equal: 1, scope: "space" }) }
 const mine = await project.find(model.tasks.indexes.openByPriority.equal("open").take(50));
 ```
 
-This needs an amendment to RFC 0005 (the option and its key in the lock) and to RFC 0006 (the index's columns); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs).
+RFC 0005 states the option and its key in the lock ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)), and RFC 0006 the index's columns ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs), point 1.
 
 **What a page does not promise,** as RFC 0006 says: a row that changes its indexed values between two pages may appear twice or not at all; there is no snapshot over many pages. A cursor holds plaintext field values, never leaves the device in the SDK's design, and prints as `[redacted]`; an app that puts it in a URL makes a copy the core cannot erase.
 
@@ -482,9 +482,9 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `space.get` | Reads one object | [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app) |
-| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#decisions-for-the-owner) |
+| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
 | `space.outcome` | The outcome of one change on one field | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
-| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#decisions-for-the-owner) |
+| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
 | `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` | Link statuses | [RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution) |
 | `"ok"`, `"notAccessible"`, `"missing"` | Reference states | [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states) |
 | `"won"`, `"lost"`, `"replaced"`, `"applied"` | Outcomes | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
@@ -697,7 +697,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-09): queries skip deleted objects, and `space.get` returns them with `$deleted: true`; the index does not hold them.
 
-Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#decisions-for-the-owner)), so `get` still finds the object to restore it.
+Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#4-object-deletion)), so `get` still finds the object to restore it.
 
 Not taken:
 

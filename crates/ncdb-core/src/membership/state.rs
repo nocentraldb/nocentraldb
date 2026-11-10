@@ -22,7 +22,7 @@ pub enum Verdict {
     /// An accepted grant that a revocation it did not see capped below the
     /// role it gives (RFC 0008, "Concurrent add and remove of one member").
     Lost,
-    /// Rejected, with its reason (RFC 0002 Amendment 1, D11): it stays in
+    /// Rejected, with its reason (RFC 0002, "Rejected changes", D11): it stays in
     /// the log and changes nothing.
     Rejected(Rejection),
     /// Kept but not folded: an entry type or a key this core does not

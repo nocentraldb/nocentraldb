@@ -1,6 +1,6 @@
-// Checks the byte-exact examples of RFC 0004 Amendment 1 (NOC-37), which
-// NOC-16 and NOC-17 build their encoders from, and those of Amendment 4
-// (NOC-63, E15 to E17, the reference): every example's hex in the
+// Checks the byte-exact examples of RFC 0004, "Byte-exact examples": E1 to
+// E14 (NOC-37), which NOC-16 and NOC-17 build their encoders from, and E15
+// to E17 (NOC-63, the reference): every example's hex in the
 // RFC decodes as canonical CBOR under RFC 0002's profile (read strictly and
 // re-encoded to the same bytes), and equals the committed vector that
 // docs/rfc/vectors/0004/generate.py writes with Python's cbor2, independently

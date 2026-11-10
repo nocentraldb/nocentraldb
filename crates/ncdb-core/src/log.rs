@@ -7,7 +7,7 @@
 //! out in order. Persistence to SQLite is a later ticket.
 //!
 //! On a member, each entry also carries its [`State`]: folded, parked or
-//! rejected (RFC 0002 Amendment 1), and the relay's refusal when there is
+//! rejected (RFC 0002, "Rejected changes"), and the relay's refusal when there is
 //! one, beside the frame bytes. [`Log::receive`](crate::receive) sets both.
 //! The relay's log holds no states: an entry appended with [`Log::append`]
 //! has none.
@@ -54,7 +54,7 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
-/// Where a member's check of a change stopped (RFC 0002 Amendment 1, "What
+/// Where a member's check of a change stopped (RFC 0002, "What
 /// a member does with a change it receives"). New states and reasons may
 /// follow, so the enums are open to extension.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,13 +117,14 @@ pub enum OperationParkReason {
     /// The operation carries an unknown "must understand" key.
     UnknownKey,
     /// The field's type does not define the operation's number (RFC 0004,
-    /// Amendment 1).
+    /// "Operations a member does not understand").
     UnknownOperation,
     /// The operation's arguments carry a "must understand" key, 4 to 63,
-    /// that the operation does not define (RFC 0004, Amendment 1).
+    /// that the operation does not define (RFC 0004, "Operations a member
+    /// does not understand").
     UnknownArgument,
-    /// The operation's arguments are malformed (RFC 0004, Amendment 1,
-    /// decision 12).
+    /// The operation's arguments are malformed (RFC 0004, "The
+    /// arguments of each operation", decision 12).
     MalformedArguments,
 }
 

@@ -40,7 +40,7 @@ pub enum Field {
     Set(Set),
     /// Links to many objects.
     Links(Links),
-    /// A reference to one object, in any space (RFC 0004, Amendment 4).
+    /// A reference to one object, in any space (RFC 0004, "References").
     Ref(Reference),
 }
 
@@ -68,7 +68,7 @@ pub struct Index {
     /// id when the index runs in one space.
     pub equality: usize,
     /// Whether the index spans every space of the member, or runs in one
-    /// and puts the space id first (RFC 0006, Amendment 6).
+    /// and puts the space id first (RFC 0006, "Declared indexes").
     pub scope: Scope,
 }
 

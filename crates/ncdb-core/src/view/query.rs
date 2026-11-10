@@ -10,7 +10,7 @@
 //! they compare to nothing). Every index ends with the object id after the
 //! space id, so the order is total and a page boundary is exact. An index
 //! that runs in one space puts the space id first, as the start of its
-//! equality prefix (RFC 0006, Amendment 6).
+//! equality prefix (RFC 0006, "Declared indexes").
 
 use std::fmt;
 
@@ -241,7 +241,7 @@ impl View {
     /// One page of the declared index `index` of `collection`, which runs
     /// in one space, in `space`: the space id starts the equality prefix,
     /// and `equal` holds the values of the declared equality prefix after
-    /// it (RFC 0006, Amendment 6).
+    /// it (RFC 0006, "Declared indexes").
     pub fn page_in(
         &self,
         space: SpaceId,

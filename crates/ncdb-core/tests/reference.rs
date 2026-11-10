@@ -1,4 +1,4 @@
-//! Resolving a reference (RFC 0004 Amendment 4, "Resolution"): the state
+//! Resolving a reference (RFC 0004, "How a reference resolves"): the state
 //! is worked out when the app reads, from the member's own copies of the
 //! spaces it holds, to ok, not accessible or missing (decisions 17 to 20).
 //! It is never part of the field's state. Encoding is in
