@@ -14,11 +14,14 @@
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{
+    Connection, ErrorCode, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 
 use crate::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyRecord,
@@ -87,9 +90,7 @@ impl SqliteStore {
         connection
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(failed("busy timeout"))?;
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .map_err(failed("journal mode"))?;
+        wal(&connection)?;
         let tx = immediate(&mut connection)?;
         tx.execute_batch(SCHEMA).map_err(failed("schema"))?;
         tx.execute(
@@ -109,6 +110,23 @@ impl SqliteStore {
         self.connection
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// Switches the database to WAL. When several handles open a new database
+/// at once, SQLite can answer SQLITE_BUSY here without calling the busy
+/// handler (NOC-137), so this retries until `BUSY_TIMEOUT` itself.
+fn wal(connection: &Connection) -> Result<(), StoreError> {
+    let deadline = Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == ErrorCode::DatabaseBusy && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10));
+            }
+            result => return result.map_err(failed("journal mode")),
+        }
     }
 }
 
