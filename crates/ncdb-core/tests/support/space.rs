@@ -247,7 +247,7 @@ impl Space {
                 .into_iter()
                 .map(|generation| PreviousKey {
                     generation,
-                    key: vec![0xc4; 72],
+                    key: [0xc4; 72],
                 })
                 .collect(),
             answers: BTreeSet::new(),
