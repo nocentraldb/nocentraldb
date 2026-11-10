@@ -170,6 +170,7 @@ pub(crate) fn encode(
     verdicts: &BTreeMap<ChangeId, Verdict>,
     gaps: &BTreeSet<ChangeId>,
     generations: &Generations,
+    current: Option<u64>,
 ) -> Vec<u8> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
@@ -234,6 +235,7 @@ pub(crate) fn encode(
         (4, Value::Array(verdicts.collect())),
         (5, Value::Array(gaps.iter().map(id).collect())),
         (6, Value::Array(generations.collect())),
+        (7, optional(current)),
     ]))
 }
 

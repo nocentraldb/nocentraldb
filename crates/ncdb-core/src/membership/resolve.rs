@@ -236,6 +236,7 @@ impl Resolved {
             &self.verdicts,
             &self.gaps,
             &self.generations,
+            self.current,
         )
     }
 }
