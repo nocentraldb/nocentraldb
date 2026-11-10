@@ -200,6 +200,11 @@ impl View {
         Ok(appended)
     }
 
+    /// The spaces whose log the view holds, in id order.
+    pub fn spaces(&self) -> impl Iterator<Item = SpaceId> + '_ {
+        self.logs.keys().copied()
+    }
+
     /// The log of `space`, when the view holds one.
     pub fn log(&self, space: SpaceId) -> Option<&Log> {
         self.logs.get(&space)
