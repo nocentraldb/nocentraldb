@@ -1,10 +1,9 @@
 // Asserts that groups have left the design (NOC-76). The owner decided to
 // keep groups out of every definition for now (Carsten, 2026-11-09); they may
-// return through a later RFC. RFC 0009 carries an amendment that withdraws
-// them, announced in a dated changelog line; RFC 0001 records the decision
-// under "Groups leave the design" (NOC-100's rfc-0001-complete.test.mjs holds
-// that section), and RFC 0008 states it in "Groups" since NOC-101 folded its
-// amendments in; the
+// return through a later RFC. RFC 0001 records the decision under "Groups
+// leave the design" (NOC-100's rfc-0001-complete.test.mjs holds that
+// section), and RFC 0008 and RFC 0009 state it in their text since NOC-101
+// folded their amendments in; the
 // decisions about groups, RFC 0008's M10 and RFC 0009's S14, are marked
 // withdrawn instead of deleted; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
@@ -23,7 +22,9 @@ const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
 /** The amendment of each RFC that withdraws groups. */
-const AMENDMENTS = [{ path: RFC_0009, number: 1 }];
+// Every RFC that withdrew groups has since folded the withdrawal into its
+// text (NOC-100, NOC-101), so none keeps an amendment that does.
+const AMENDMENTS = [];
 const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
 const WITHDRAWING =
   /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
