@@ -30,7 +30,7 @@ interface Field<T = unknown, D extends boolean = false> extends Value<T, D> {
 }
 
 /** A reference field, deprecated when `D` is true: it takes `describe` and `deprecated`, and cannot be personal (RFC 0005, D22). */
-interface Ref<D extends boolean = false> extends Value<unknown, D> {
+interface Ref<D extends boolean = false> extends Value<Target, D> {
   /** Adds a description, which is copied into the lock. */
   describe(text: string): Ref<D>;
   /** Hides the field from the app, and keeps it in the model and the data. */
@@ -60,7 +60,8 @@ export type Unknown = { unknown: string };
  * An object of the collection `C` as the app reads it (RFC 0005, "Types for
  * the app"): every field optional, without the deprecated ones. A choice
  * reads as its options or `Unknown`, an `nc.int` as a `number` (D16), a set
- * as an array, a link as an object id.
+ * as an array, a link as an object id, a reference as `{ space, id }`
+ * (RFC 0009, Amendment 4).
  */
 export type Infer<C extends Collection<Fields, boolean>> =
   C extends Collection<infer F, false>
@@ -120,6 +121,12 @@ type IndexState = {
 /** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, Amendment 3). */
 type ObjectId = string;
 
+/** A space id, in the form `$space` carries it. */
+type SpaceId = string;
+
+/** A reference as the app reads it: the target's space id and object id, without its state (RFC 0009, Amendment 4). */
+type Target = { space: SpaceId; id: ObjectId };
+
 const fieldStates = new WeakMap<object, FieldState>();
 const collectionStates = new WeakMap<object, CollectionState>();
 const indexStates = new WeakMap<object, IndexState>();
@@ -140,8 +147,7 @@ const field = <T>(state: FieldState): Field<T> => {
 const reference = <D extends boolean>(state: FieldState): Ref<D> => {
   const made = {
     describe: (text: string) => reference({ ...state, description: text }),
-    deprecated: (reason: string) =>
-      reference({ ...state, deprecated: reason }),
+    deprecated: (reason: string) => reference({ ...state, deprecated: reason }),
   } as unknown as Ref<D>;
   fieldStates.set(made, state);
   return made;
