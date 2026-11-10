@@ -16,7 +16,8 @@ use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::membership::{
-    self, Action, Certificate, ControlBody, Entry, Genesis, MemberKind, MembershipEntry, Role,
+    self, Action, Certificate, ControlBody, Entry, Genesis, KeyChainEntry, MemberKind,
+    MembershipEntry, PreviousKey, Role,
 };
 use ncdb_core::seal;
 
@@ -105,9 +106,29 @@ impl Space {
     /// `author` adds `subject` with `role`. The subject is a device unless
     /// [`Space::agent`] made it an agent.
     pub fn add(&mut self, author: Who, subject: Who, role: Role, deps: &[&Change]) -> Change {
+        let generation = self.first_generation;
+        self.add_at(author, subject, role, generation, deps)
+    }
+
+    /// `author` adds `subject` with `role`, counting its sealed changes
+    /// from `generation`.
+    pub fn add_at(
+        &mut self,
+        author: Who,
+        subject: Who,
+        role: Role,
+        generation: u64,
+        deps: &[&Change],
+    ) -> Change {
         let kind = *self.kinds.entry(subject).or_insert(MemberKind::Device);
         let certificate = Certificate::sign(&account(), id(subject), kind);
-        self.add_certified(author, subject, role, certificate, deps)
+        let action = Action::Add {
+            role,
+            key: key(subject).public(),
+            certificate: Box::new(certificate),
+            from_generation: generation,
+        };
+        self.membership(author, subject, action, deps)
     }
 
     /// `author` adds `subject` with this certificate.
@@ -142,7 +163,22 @@ impl Space {
         cutoff: u64,
         deps: &[&Change],
     ) -> Change {
-        let from_generation = (role >= Role::Writer).then_some(self.first_generation);
+        let generation = self.first_generation;
+        self.set_role_at(author, subject, role, generation, cutoff, deps)
+    }
+
+    /// `author` sets the role of `subject`, with this cutoff, counting its
+    /// sealed changes from `generation` when the role writes.
+    pub fn set_role_at(
+        &mut self,
+        author: Who,
+        subject: Who,
+        role: Role,
+        generation: u64,
+        cutoff: u64,
+        deps: &[&Change],
+    ) -> Change {
+        let from_generation = (role >= Role::Writer).then_some(generation);
         let action = Action::SetRole {
             role,
             from_generation,
@@ -174,15 +210,49 @@ impl Space {
     /// key envelope. The ephemeral key derives from the two members, so the
     /// same call gives the same change.
     pub fn envelope(&mut self, author: Who, recipient: Who, deps: &[&Change]) -> Change {
+        self.envelope_at(author, recipient, self.first_generation, deps)
+    }
+
+    /// `author` wraps the space key of `generation` to `recipient`. Every
+    /// simulated generation has the same key, [`space_key`].
+    pub fn envelope_at(
+        &mut self,
+        author: Who,
+        recipient: Who,
+        generation: u64,
+        deps: &[&Change],
+    ) -> Change {
         let sealed = envelope::seal_with_ephemeral(
             &space_key(),
             self.space,
-            self.first_generation,
+            generation,
             &key(recipient).public(),
             [author ^ (recipient << 4) ^ 0x5e; 32],
         )
         .expect("a simulated member's key takes an envelope");
         self.write(author, Entry::KeyEnvelope(sealed), deps)
+    }
+
+    /// `author` rotates the space key to a new generation after `previous`,
+    /// in a key chain entry whose id derives as RFC 0008's "Generation ids"
+    /// says: the change and the new generation id. The encrypted previous
+    /// keys are stand-ins, which the fold does not open.
+    pub fn rotate(&mut self, author: Who, previous: &[u64], deps: &[&Change]) -> (Change, u64) {
+        let mut previous = previous.to_vec();
+        previous.sort_unstable();
+        let generation = membership::generation_id(self.space, id(author), &previous);
+        let chain = KeyChainEntry {
+            generation,
+            previous: previous
+                .into_iter()
+                .map(|generation| PreviousKey {
+                    generation,
+                    key: vec![0xc4; 72],
+                })
+                .collect(),
+            answers: BTreeSet::new(),
+        };
+        (self.write(author, Entry::KeyChain(chain), deps), generation)
     }
 
     /// A sealed change by `author` under `generation`, with these

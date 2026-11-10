@@ -16,11 +16,16 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
-use crate::cbor::Value;
+use crate::cbor::{Key, Value};
 use crate::change::ChangeError;
 use crate::ids::ChangeId;
 
-use super::fields::Fields;
+use super::fields::{self, Fields};
+
+/// The body keys of entry type 3.
+const GENERATION: u64 = 8;
+const PREVIOUS: u64 = 9;
+const ANSWERS: u64 = 10;
 
 /// A key chain entry (entry type 3). Its `Debug` output shows generation
 /// ids and change ids, and each encrypted key only by its length.
@@ -51,12 +56,64 @@ impl KeyChainEntry {
     }
 
     pub(crate) fn fields(&self) -> Vec<(u64, Value)> {
-        Vec::new()
+        let previous = self.previous.iter().map(|p| {
+            fields::map([
+                (1, Value::Unsigned(p.generation)),
+                (2, fields::bytes(&p.key)),
+            ])
+        });
+        let answers = self.answers.iter().map(|id| fields::bytes(&id.0));
+        vec![
+            (GENERATION, Value::Unsigned(self.generation)),
+            (PREVIOUS, Value::Array(previous.collect())),
+            (ANSWERS, Value::Array(answers.collect())),
+        ]
     }
 
-    pub(crate) fn take(_map: &mut Fields) -> Result<KeyChainEntry, ChangeError> {
-        Err(ChangeError::MissingKey(8))
+    /// Takes keys 8 to 10 out of the map. Every key is required; the
+    /// previous generations are sorted by id, at least one and none twice,
+    /// each a map of exactly keys 1 and 2, so each entry has one encoding.
+    pub(crate) fn take(map: &mut Fields) -> Result<KeyChainEntry, ChangeError> {
+        let generation = fields::unsigned(map.required(GENERATION)?)?;
+        let previous = previous(map.required(PREVIOUS)?.1)?;
+        let answers = fields::change_ids(map.required(ANSWERS)?)?;
+        Ok(KeyChainEntry {
+            generation,
+            previous,
+            answers,
+        })
     }
+}
+
+fn previous(value: Value) -> Result<Vec<PreviousKey>, ChangeError> {
+    let invalid = ChangeError::InvalidValue(PREVIOUS);
+    let Value::Array(items) = value else {
+        return Err(invalid);
+    };
+    let mut previous: Vec<PreviousKey> = Vec::with_capacity(items.len());
+    for item in items {
+        let Value::Map(entries) = item else {
+            return Err(invalid);
+        };
+        let (Some(Value::Unsigned(generation)), Some(Value::Bytes(key)), 2) = (
+            entries.get(&Key::Unsigned(1)),
+            entries.get(&Key::Unsigned(2)),
+            entries.len(),
+        ) else {
+            return Err(invalid);
+        };
+        if previous.last().is_some_and(|p| p.generation >= *generation) {
+            return Err(invalid);
+        }
+        previous.push(PreviousKey {
+            generation: *generation,
+            key: key.clone(),
+        });
+    }
+    if previous.is_empty() {
+        return Err(invalid);
+    }
+    Ok(previous)
 }
 
 impl fmt::Debug for KeyChainEntry {

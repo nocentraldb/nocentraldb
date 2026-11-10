@@ -258,7 +258,8 @@ impl ControlBody {
             GENESIS => Entry::Genesis(Genesis::take(&mut map)?),
             MEMBERSHIP => Entry::Membership(MembershipEntry::take(&mut map)?),
             KEY_ENVELOPE => Entry::KeyEnvelope(take_envelope(&mut map)?),
-            KEY_CHAIN..=ACKNOWLEDGEMENT => Entry::Other {
+            KEY_CHAIN => Entry::KeyChain(KeyChainEntry::take(&mut map)?),
+            PERSON_KEY..=ACKNOWLEDGEMENT => Entry::Other {
                 entry_type,
                 fields: map.0.split_off(&8),
             },
