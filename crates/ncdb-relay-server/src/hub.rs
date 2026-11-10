@@ -51,11 +51,11 @@ impl Hub {
         }
     }
 
-    /// Sends `added {space}` to every open connection of each of `added`,
-    /// except the connection `from`, whose own push made its member
-    /// current. Best-effort: each message waits for room in its
-    /// connection's queue on a task of its own, so a slow connection does
-    /// not hold up the push, and a connection that closes first loses it.
+    /// Sends `added {space}` to every open connection of each of `added`
+    /// except `from`, which queues its own right after its `pushed`.
+    /// Best-effort: each message waits for room in its connection's queue
+    /// on a task of its own, so a slow connection does not hold up the
+    /// push, and a connection that closes first loses it.
     pub fn added(&self, space: SpaceId, added: &[MemberId], from: u64) {
         let members = self.members.lock().unwrap_or_else(|e| e.into_inner());
         for member in added {

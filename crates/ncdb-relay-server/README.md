@@ -38,7 +38,7 @@ Each step of the opening handshake (RFC 0007, "Opening a connection") must finis
 
 ## A member added while it is connected
 
-When a push makes a member current in a space, such as a membership entry that adds it, the server sends `added {space}` to each of that member's open connections (RFC 0007, "Subscribe", decision R13), and the member pulls and subscribes to the space. The connection whose own push made it current, the creator's with a genesis, gets none: it already follows the space it created. Delivery is best-effort: a connection that closes before the message is written loses it, and its member learns of the space from `welcome` when it connects again.
+When a push makes a member current in a space, such as a membership entry that adds it, the server sends `added {space}` to each of that member's open connections (RFC 0007, "Subscribe", decision R13), and the member pulls and subscribes to the space. The connection whose own push made its member current, the creator's with a genesis, gets `added` too, right after `pushed`; a member that already follows the space has nothing to do. Delivery is best-effort: a connection that closes before the message is written loses it, and its member learns of the space from `welcome` when it connects again.
 
 ## What it does not do yet
 

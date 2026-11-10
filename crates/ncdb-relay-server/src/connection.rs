@@ -267,6 +267,9 @@ impl<S: RelayStore + 'static> Connection<S> {
             Request::Push { req, space, frames } => {
                 let (results, added) = push(relay, member, space, frames).await;
                 self.send(wire::pushed(req, &results)).await;
+                if added.contains(&member) {
+                    self.send(wire::added(space)).await;
+                }
                 self.shared.hub.added(space, &added, id);
                 let appended = results.iter().filter_map(|result| match result {
                     Pushed::Accepted(position) => Some(*position),
