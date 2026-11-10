@@ -959,6 +959,7 @@ dependencies = [
  "ed25519-dalek",
  "futures-util",
  "getrandom",
+ "libc",
  "ncdb-core",
  "ncdb-relay",
  "tokio",

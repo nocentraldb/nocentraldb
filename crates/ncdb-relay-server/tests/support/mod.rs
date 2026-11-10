@@ -246,6 +246,25 @@ impl Client {
         }
     }
 
+    /// A connection authenticated as `who`, retrying while the server
+    /// closes it, as a member that reconnects with back-off does.
+    pub async fn member_eventually(addr: SocketAddr, who: Who) -> Client {
+        let started = std::time::Instant::now();
+        loop {
+            assert!(
+                started.elapsed() < WAIT,
+                "the server admits the member in time"
+            );
+            if let Ok((ws, _)) = tokio_tungstenite::connect_async(format!("ws://{addr}")).await {
+                let mut client = Client { ws };
+                if client.try_authenticate(who).await {
+                    return client;
+                }
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
     /// A connection authenticated as `who`, and its welcome.
     pub async fn member(addr: SocketAddr, who: Who) -> (Client, Welcome) {
         let mut client = Client::connect(addr).await;
