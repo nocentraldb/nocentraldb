@@ -55,7 +55,9 @@ test("RFC 0007 has a section for every topic of NOC-13", () => {
     "What it costs",
     "Island mode",
     "Rejected options",
-    "Decisions for the owner",
+    "Open questions",
+    "Decisions",
+    "History",
   ];
   for (const heading of required) {
     assert.ok(found.includes(heading), `missing section: ## ${heading}`);
