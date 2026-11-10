@@ -10,7 +10,7 @@ It also uses [RFC 0005](0005-schema-and-model-lock.md), above all its [decisions
 
 It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
 
-**Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26, and this RFC was merged with the owner's approval in #40 (Carsten, 2026-11-08). The design below describes those choices, except M10 on groups, which was withdrawn by the owner (Carsten, 2026-11-09). [Decisions](#decisions) records each one. The core computes `resolve` in `crates/ncdb-core`, and the relay runs the same code in `crates/ncdb-relay`. [History](#history) says when each part was written.
+**Status.** Decided. Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decides both. The owner accepted the recommendation of every decision M1 to M26, and this RFC was merged with the owner's approval in #40 (Carsten, 2026-11-08). The owner confirmed M27 to M29, which building the core raised, on NOC-110 (Carsten, 2026-11-10). The design below describes those choices, except M10 on groups, which was withdrawn by the owner (Carsten, 2026-11-09). [Decisions](#decisions) records each one. The core computes `resolve` in `crates/ncdb-core`, and the relay runs the same code in `crates/ncdb-relay`. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -428,8 +428,8 @@ Alice removes Xavier and rotates the key. At the same time, on another island, B
 
 1. Both removals are accepted; neither excludes the other. Xavier and Yvonne are removed on every copy.
 2. Both generations exist. Their ordinals are equal and their ids differ, because their authors differ.
-3. The **current generation**, which members write sealed changes with, is a head of the generation graph: a generation that no accepted key chain entry lists as previous. Among the heads, it is the one with the highest ordinal, then the one whose key chain entry comes first in the order. Every member picks the same one. A member that holds no envelope for it writes with the newest generation it holds, and the SDK reports that it waits for an envelope.
-4. **Who may hold a generation**: the author of its key chain entry, every recipient of any envelope for it, and everyone who may hold a generation that descends from it. Every envelope in S counts, accepted or rejected, because a rejected envelope may still have been delivered. A generation is **exposed** when anyone who may hold it is not a member of the state.
+3. The **current generation**, which members write sealed changes with, is a head of the generation graph: a generation that no accepted key chain entry lists as previous. Among the heads, it is the one with the highest ordinal, then the one whose key chain entry comes first in the order. Every member picks the same one. A generation that two key chain entries name is never a head: both entries are rejected (decision M23), so neither can be the one writers seal under, and the generations before it stay heads ([M27](#m27-a-generation-that-two-key-chain-entries-name)). A generation whose key chain entry was valid when written but is rejected later is still a head and can be current: changes sealed under it keep counting (decision M17), and step 5 rotates away from it once it is exposed ([M28](#m28-a-rejected-rotation-can-be-current)). A member that holds no envelope for it writes with the newest generation it holds, and the SDK reports that it waits for an envelope.
+4. **Who may hold a generation**: the author of its key chain entry, every recipient of any envelope for it, and everyone who may hold a generation that descends from it. Every envelope in S counts, accepted or rejected, because a rejected envelope may still have been delivered. The creator holds the first generation, which has no key chain entry. The authors counted are those of every key chain entry the generation graph holds, valid when written, whatever its final verdict; an entry that was never valid when written adds no generation, so its author is not counted. The author of an envelope is not counted for it, since an admin that wraps a key holds it through its own entry or envelope ([M29](#m29-who-may-hold-a-generation)). A generation is **exposed** when anyone who may hold it is not a member of the state.
 5. When the current generation is exposed, an admin writes a **merge rotation**: a key chain entry that lists every head as previous, with envelopes for the current members only. The SDK of any admin that sees an exposed current generation does so after a random delay of up to a minute, unless it sees another admin's merge rotation first (decision M15).
 6. Two merge rotations written at the same time are concurrent rotations again, and step 5 repeats. Each round needs two admins to rotate within the same minute without seeing each other.
 
@@ -608,7 +608,7 @@ None. The owner has decided every question this RFC asked.
 
 ## Decisions
 
-GENESIS.md reserves the wire format, how permissions behave and public API names for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The owner accepted every recommendation (Carsten, 2026-11-08), and the design above describes the chosen options. M10 stays listed, withdrawn.
+GENESIS.md reserves the wire format, how permissions behave and public API names for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The owner accepted every recommendation (Carsten, 2026-11-08, and for M27 to M29, 2026-11-10), and the design above describes the chosen options. M10 stays listed, withdrawn.
 
 ### M1. Roles
 
@@ -877,6 +877,37 @@ Not taken:
 - The 16 raw bytes of `model.id`, readable by the relay.
 - `H(space id || model.id)`: hides the id, but members could only confirm their own model, so the SDK could not tell a user which app a space needs.
 
+### M27. A generation that two key chain entries name
+
+Decided (Carsten, 2026-11-10), on NOC-110: it is never a head, so never current; an accepted key chain entry for it lists nothing, and the generations before it stay heads.
+
+Why: under M23 both entries are rejected, and the id may stand for two keys, which generation ids are built to prevent. The first generation, which no entry can name, keeps at least one head in every graph. It is what the core builds (NOC-86).
+
+Not taken:
+
+- Letting it be current: members would seal under an id that may name two keys.
+
+### M28. A rejected rotation can be current
+
+Decided (Carsten, 2026-11-10), on NOC-110: a generation whose key chain entry was valid when written but is rejected later (M17) is a head and can be current; the exposure rule then rotates away from it.
+
+Why: changes sealed under it keep counting (M17), so the space keeps working until the next rotation, and M17's reason needs the exposure rule to rotate away from it. It is what the core builds (NOC-86).
+
+Not taken:
+
+- Leaving rejected rotations out of the heads: a generation a removed admin holds would never be rotated away from.
+
+### M29. Who may hold a generation
+
+Decided (Carsten, 2026-11-10), on NOC-110: the creator for the first generation, the author of every key chain entry the graph holds, valid when written whatever its final verdict, every recipient of an envelope for it, whatever the envelope's verdict, and whoever may hold a generation that descends from it. The author of an envelope is not counted for it, nor the author of an entry that was never valid when written.
+
+Why: it is the stricter reading of "the exposure rule counts every key chain entry and envelope in the set, whatever its verdict". It is what the core builds (NOC-86).
+
+Not taken:
+
+- Counting only accepted envelopes: a rejected envelope may still have been delivered.
+- Counting the authors of entries that were never valid when written: a removed member could then force rotations by naming the current generation.
+
 The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
 
 ## History
@@ -888,3 +919,4 @@ The formats of the member certificate, the account sign-off and the key-chain su
 - **2026-11-09** · NOC-76 · Groups withdrawn by the owner (Carsten, 2026-11-09): M10 withdrawn, and groups leave every definition (#87).
 - **2026-11-09** · NOC-75 · Links RFC 0009 for how a new member's identity reaches an admin, and for the public role names (#87).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#114).
+- **2026-11-10** · NOC-110 · The current generation and who may hold a generation, where the core had to decide: M27 to M29, which the owner confirmed (#124).

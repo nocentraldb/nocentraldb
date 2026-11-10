@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner decided 1 to 15 when this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08), the bytes of a sealed change (Carsten, 2026-11-08, NOC-30), and 16 to 18, on where the SDK keeps keys before the accounts RFC and on the bytes of an encrypted previous key (Carsten, 2026-11-10). The design below describes the decided options. [Decisions](#decisions) lists each one, [Open questions](#open-questions) what the owner has not decided yet, and [History](#history) every change since the first version. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions](#decisions) records the owner's decision on each.
+**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner decided 1 to 15 when this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08), the bytes of a sealed change (Carsten, 2026-11-08, NOC-30), and 16 to 21, on where the SDK keeps keys before the accounts RFC, what opening reports when it has neither a keystore nor a key file, the bytes of an encrypted previous key and of its associated data, and the bytes a writer signs for a person-key record (Carsten, 2026-11-10). The design below describes the decided options. [Decisions](#decisions) lists each one, [Open questions](#open-questions) says that none is left, and [History](#history) every change since the first version. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions](#decisions) records the owner's decision on each.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -58,7 +58,7 @@ A member is one device or one agent: a laptop, a phone, a browser profile, an ag
 
 Both public halves form the member's public identity. Its **member id** is the SHA-256 hash of the two public keys, with a fixed context string in front (`"nocentraldb/member-id"`), and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
-The SDK keeps the private halves in the platform keystore (see [How the SDK hides keys](#how-the-sdk-hides-keys)). A headless agent, in a container or on a server, often has no keystore. Such an agent names a key file instead, with the Rust SDK's `key_file` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)), and the SDK keeps the member key there, readable only by the user the agent runs as. Only its file permissions protect it: whoever reads the file, or a backup of it, holds the member key. Where no keystore is reachable and no key file is named, the SDK does not open the database ([decision 16](#16-where-the-member-key-lives)).
+The SDK keeps the private halves in the platform keystore (see [How the SDK hides keys](#how-the-sdk-hides-keys)). A headless agent, in a container or on a server, often has no keystore. Such an agent names a key file instead, with the Rust SDK's `key_file` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)), and the SDK keeps the member key there, readable only by the user the agent runs as. Only its file permissions protect it: whoever reads the file, or a backup of it, holds the member key. Where no keystore is reachable and no key file is named, the SDK does not open the database ([decision 16](#16-where-the-member-key-lives)): opening fails with the error `keyStoreUnavailable`, whose message names the key-file option, and the SDK never falls back to a key file the app did not choose ([decision 19](#19-opening-without-a-keystore-or-a-key-file)).
 
 The signing key also **authenticates the member to the relay**. The relay sends a fresh random challenge, and the member signs `H("nocentraldb/relay-auth" || relay id || nonce)`, so that one relay cannot replay the answer against another. Every signature a member key makes signs either a canonical CBOR header (RFC 0002), whose first byte marks a CBOR map, or a message that starts with a `"nocentraldb/..."` context string, whose first byte is a letter; one can never be read as the other, so a signed challenge can never pass as a signed change. A separate key just for the relay is the alternative (decision 13).
 
@@ -95,7 +95,7 @@ For each person and each space that holds that person's data, the SDK creates a 
 The relay cannot check what a record contains, so the store must not let any one member swap a key or erase one on its own. Three rules hold it together (decision 14):
 
 - **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is), a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`, and the generation and SHA-256 hash of the record it stores, so that the relay accepts a record only with its entry. Every re-wrap of the record writes a further person-key entry that repeats the commitment. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's body ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)).
-- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`; the bytes it signs are an [open question](#open-questions)). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
+- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key, over the bytes [Person-key record](#person-key-record) gives. The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
 - **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record once the shred is stable, not when it appends the entry ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). No other request deletes a record.
 
 So a member cannot swap a person key without every other member noticing, and cannot erase one without a second account. A member that overwrites a record with garbage can make the key unavailable to new members until another member repairs it, and the signature on the record names it. It cannot make the other members delete their copies; only a shred entry does that.
@@ -262,6 +262,16 @@ sign-off (CBOR map, canonical)
 
 The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
 
+### Person-key record
+
+The writer of a person-key record signs, with Ed25519 and its member key:
+
+```text
+SHA-256("nocentraldb/person-key-record" || space id (16 bytes) || person-key id (16 bytes) || generation (8 bytes, big-endian) || writer member id (32 bytes) || wrapped bytes)
+```
+
+The context comes first, the fields of fixed length follow, and the one field of variable length, the wrapped bytes, comes last, as in the [account sign-off of a shred](#account-sign-off-of-a-shred). The space id keeps a record from being replayed into another space. The relay checks the signature before it stores a record, and every member checks it before it accepts one ([decision 21](#21-the-bytes-signed-for-a-person-key-record)).
+
 ### Key-chain subkey
 
 The key chain entry encrypts each previous generation's key under a subkey of the new generation's key:
@@ -272,7 +282,14 @@ key-chain subkey = HKDF-SHA256(ikm = new generation's key, salt = none,
                                       new generation id (8 bytes, big-endian))
 ```
 
-Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry. Their bytes are not decided yet ([Open questions](#open-questions)).
+Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry:
+
+```text
+associated data = space id (16 bytes) || new generation id (8 bytes, big-endian) ||
+                  previous generation id (8 bytes, big-endian)                          32 bytes
+```
+
+It has no label, because the subkey's `info` already carries one, and it encodes the generation ids as the subkey's `info` does ([decision 20](#20-the-associated-data-of-an-encrypted-previous-key)).
 
 ```text
 encrypted previous key = nonce (24 bytes) || ciphertext (32 bytes) || tag (16 bytes)     72 bytes
@@ -565,6 +582,38 @@ Not taken:
 - A CBOR map `{1: nonce, 2: ciphertext and tag}`, about 76 bytes: a second layout to read, for room it does not need.
 - A deterministic nonce, 48 bytes: it could repeat a nonce under one key when two rotations name the same generation (RFC 0008, M23).
 
+### 19. Opening without a keystore or a key file
+
+Decided (Carsten, 2026-11-10): opening fails with a new error code, `keyStoreUnavailable`, whose message names the key-file option ([RFC 0009, S26](0009-sdk-api.md#s26-opening-without-a-keystore-or-a-key-file)). Asked on NOC-114.
+
+Why: the developer learns what to do, and a key reaches disk only in a file the app chose.
+
+Not taken:
+
+- A key file in the database's directory, without being asked: a key on disk that nobody chose is the risk decision 16 avoids.
+- `storageFailed`, the code of any other storage failure: it does not tell the developer what to do.
+
+### 20. The associated data of an encrypted previous key
+
+Decided (Carsten, 2026-11-10): `space id (16) || new generation id (8, big-endian) || previous generation id (8, big-endian)`, with no label, as in [Key-chain subkey](#key-chain-subkey). Asked on NOC-110, point 4.
+
+Why: it encodes the ids as the subkey's `info` does, and the subkey's `info` already carries the label. It is what the core builds (NOC-86).
+
+Not taken:
+
+- A label in front, such as `"nocentraldb/previous-key"`, as the key envelope's `info` has one: a few more bytes, to separate a use the subkey already separates.
+
+### 21. The bytes signed for a person-key record
+
+Decided (Carsten, 2026-11-10): Ed25519 over `SHA-256("nocentraldb/person-key-record" || space id (16) || person-key id (16) || generation (8, big-endian) || writer member id (32) || wrapped bytes)`, as in [Person-key record](#person-key-record). Asked on NOC-117.
+
+Why: it follows the rule of every other hash input here, context first and the one variable field last, and binds the space. It is what the relay and the core build (NOC-96).
+
+Not taken:
+
+- The canonical CBOR of the record without its signature, with the space id as key 0: a second way of building signature inputs.
+- The record hash in place of the wrapped bytes: every field of fixed length, but the wrapped bytes are hashed twice, and the signature depends on a second hash.
+
 ### The bytes of a sealed change
 
 Decided (Carsten, 2026-11-08): the content key, the nonce, the associated data and the padding of a sealed payload as [Sealed payload](#sealed-payload) gives them, and the crate versions in [Primitives](#primitives), each as recommended (NOC-30).
@@ -625,8 +674,7 @@ It differs from them, or makes them more precise, in these points:
 
 ## Open questions
 
-- **The bytes of the associated data of an encrypted previous key.** [Key-chain subkey](#key-chain-subkey) names its three parts, the space id, the new generation id and the previous generation id, but not their bytes, nor whether a label leads them as one leads the key envelope's `info`. The core encodes them as `space id (16) || new generation id (8, big-endian) || previous generation id (8, big-endian)`, with no label, until the owner decides ([NOC-110](https://linear.app/nocentraldb/issue/NOC-110/owner-three-rfc-0008-points-100-decides-inside-the-core-current), point 4).
-- **The bytes a writer signs for a person-key record.** [The person key](#the-person-key) names the context of the signature, `"nocentraldb/person-key-record"`, but not the bytes that follow it. Until the owner decides, #111 (NOC-96) builds the signature over `SHA-256(context || space id (16) || person-key id (16) || generation (8, big-endian) || writer member id (32) || wrapped bytes)` ([NOC-117](https://linear.app/nocentraldb/issue/NOC-117/owner-the-bytes-a-writer-signs-for-a-person-key-record-111)).
+None. The owner has decided every question this RFC asked.
 
 ## Sources
 
@@ -648,3 +696,5 @@ It differs from them, or makes them more precise, in these points:
 - **2026-11-10** · NOC-75 · Follows RFC 0009: the sketch in "How the SDK hides keys" uses its names, and the source of a copy in an ad-hoc space stays on the parent ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
 - **2026-11-10** · NOC-106 · Where the member key lives, with a key file for a headless agent, the account key each database draws until the accounts RFC, and the 72 bytes of an encrypted previous key; decisions 16 to 18 ([#113](https://github.com/nocentraldb/nocentraldb/pull/113)).
 - **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#119](https://github.com/nocentraldb/nocentraldb/pull/119)).
+- **2026-11-10** · NOC-114 · Opening without a keystore or a key file fails with `keyStoreUnavailable`, which names the key-file option; decision 19 ([#124](https://github.com/nocentraldb/nocentraldb/pull/124)).
+- **2026-11-10** · NOC-110, NOC-117 · The bytes of the associated data of an encrypted previous key, and the bytes a writer signs for a person-key record; decisions 20 and 21, and no open question is left ([#124](https://github.com/nocentraldb/nocentraldb/pull/124)).
