@@ -66,3 +66,17 @@ pub(crate) fn storage(error: ncdb_core::view::Error) -> Error {
         format!("the local view failed: {error}"),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Only a full disk tells the app to free space (NOC-95, 4 B); the
+    /// core's own test holds which SQLite errors are full.
+    #[test]
+    fn a_failure_of_the_view_that_is_not_a_full_disk_is_storage_failed() {
+        let error = storage(ncdb_core::view::Error::Corrupt("log"));
+
+        assert_eq!(error.code(), ErrorCode::StorageFailed);
+    }
+}
