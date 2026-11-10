@@ -248,6 +248,14 @@ impl Fold for Tasks {
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         self.objects.entry(object).or_default().apply(operation);
     }
+
+    fn clear_field(&mut self, object: ObjectId, _collection: &str, _field: &str) {
+        self.titles.remove(&object);
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        self.objects.remove(&object);
+    }
 }
 
 #[test]

@@ -4,7 +4,9 @@
 //! loads the field's merge state from `fs_<collection>`, applies the
 //! operation through its field type, writes the state back and the read
 //! value into the field's column of `c_<collection>`. A create or a delete
-//! goes into the object's state in `objects`.
+//! goes into the object's state in `objects`. Un-folding clears a field's
+//! state or an object's, and the row of an object nothing else holds,
+//! before the changes still folded fold into them again.
 
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -21,6 +23,7 @@ use crate::ids::{ObjectId, SpaceId};
 use crate::log::OperationParkReason;
 use crate::object::ObjectOperation;
 use crate::receive::Fold;
+use crate::reference;
 
 /// The fold of one change's operations into the tables of a space's
 /// collections, on the connection of the transaction that appends it.
@@ -157,6 +160,8 @@ impl<'a> SqlFold<'a> {
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
             (Field::Link(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
+            (Field::Ref(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
+                .map(|(bytes, read)| (bytes, Some(reference_column(read.value)))),
             (Field::Set(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
@@ -201,6 +206,76 @@ impl<'a> SqlFold<'a> {
             && self.model.collections.contains_key(&create.collection)
         {
             self.row(&create.collection, object)?;
+        }
+        Ok(())
+    }
+}
+
+impl SqlFold<'_> {
+    /// Forgets a field's state and empties its column.
+    fn clear_field_state(
+        &self,
+        collection: &str,
+        field: &str,
+        object: ObjectId,
+    ) -> Result<(), Error> {
+        self.conn.execute(
+            &format!(
+                "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
+                states(collection)
+            ),
+            params![self.space.0, object.0, field],
+        )?;
+        if let Some(Field::Basic(_) | Field::Link(_)) = self.model.field(collection, field) {
+            self.conn.execute(
+                &format!(
+                    "UPDATE {} SET {} = NULL WHERE space_id = ?1 AND object_id = ?2",
+                    rows(collection),
+                    column(field)
+                ),
+                params![self.space.0, object.0],
+            )?;
+        }
+        self.drop_empty_row(collection, object)
+    }
+
+    /// Forgets the object's creates and deletes: it is no longer deleted,
+    /// and a row only its create held goes.
+    fn clear_object_state(&self, object: ObjectId) -> Result<(), Error> {
+        let was_deleted = self.object(object)?.object().is_deleted();
+        self.conn.execute(
+            "DELETE FROM objects WHERE space_id = ?1 AND object_id = ?2",
+            params![self.space.0, object.0],
+        )?;
+        for collection in self.model.collections.keys() {
+            if was_deleted {
+                self.mark_deleted(collection, object, false)?;
+            }
+            self.drop_empty_row(collection, object)?;
+        }
+        Ok(())
+    }
+
+    /// Removes the object's row of `c_<collection>` when neither a field
+    /// state of the collection nor a create into it holds it: [`Self::row`]
+    /// makes a row only for those.
+    fn drop_empty_row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
+        let has_state: bool = self.conn.query_row(
+            &format!(
+                "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
+                states(collection)
+            ),
+            params![self.space.0, object.0],
+            |r| r.get(0),
+        )?;
+        if !has_state && !self.object(object)?.creates_in(collection) {
+            self.conn.execute(
+                &format!(
+                    "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                    rows(collection)
+                ),
+                params![self.space.0, object.0],
+            )?;
         }
         Ok(())
     }
@@ -256,6 +331,23 @@ fn column_value(winner: Option<Entry>) -> Sql {
     }
 }
 
+/// The column value of a reference's winning write: the target's space id
+/// followed by its object id, 32 bytes, as stored and whatever its state
+/// (RFC 0006, Amendment 7). NULL when no write is live, the reference is
+/// cleared, or its value does not fit (RFC 0004, decision 17).
+fn reference_column(winner: Option<Entry>) -> Sql {
+    winner.map_or(Sql::Null, |entry| reference_sql(&entry.value))
+}
+
+/// A reference's value as the SQLite value its column holds: 32 bytes, or
+/// NULL for a value that names no target.
+pub(super) fn reference_sql(value: &Value) -> Sql {
+    match reference::target(value) {
+        Some(target) => Sql::Blob([target.space.0, target.object.0].concat()),
+        None => Sql::Null,
+    }
+}
+
 /// A basic value as the SQLite value its column holds: text as `TEXT`,
 /// an integer and a boolean as `INTEGER`, a float as `REAL`, bytes (an
 /// object id) as `BLOB`, anything else as NULL.
@@ -296,6 +388,20 @@ impl Fold for SqlFold<'_> {
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         if self.error.is_none() {
             let result = self.fold_object_operation(object, operation);
+            self.keep(result);
+        }
+    }
+
+    fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str) {
+        if self.error.is_none() && self.model.field(collection, field).is_some() {
+            let result = self.clear_field_state(collection, field, object);
+            self.keep(result);
+        }
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        if self.error.is_none() {
+            let result = self.clear_object_state(object);
             self.keep(result);
         }
     }

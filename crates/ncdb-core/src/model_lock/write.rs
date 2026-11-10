@@ -159,7 +159,7 @@ fn field(field: &Field, descriptions: bool) -> Value {
             }
             entry.insert("of".into(), Value::Object(of));
         }
-        Kind::Link(targets) | Kind::Links(targets) => {
+        Kind::Link(targets) | Kind::Links(targets) | Kind::Ref(targets) => {
             entry.insert("targets".into(), strings(targets));
         }
         Kind::Plugin {

@@ -131,6 +131,31 @@ fn ncdb_with(dir: &Path, args: &[&str], setup: impl FnOnce(&mut Command)) -> Run
     }
 }
 
+/// Writes a fake `node` into `dir/bin` that prints `version`, and returns `dir/bin`.
+///
+/// A child `sh` writes the script, never this process: a file this process
+/// held open for writing would leak into every child another test thread
+/// forks meanwhile, and running the script while such a child lives fails
+/// with ETXTBSY (NOC-94). Renaming a finished file into place would not help,
+/// since the leaked descriptor points at the same file.
+#[cfg(unix)]
+fn fake_node(dir: &Path, version: &str) -> PathBuf {
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let status = Command::new("/bin/sh")
+        .args([
+            "-c",
+            r#"printf '#!/bin/sh\necho %s\n' "$1" > node && chmod 755 node"#,
+            "sh",
+        ])
+        .arg(version)
+        .current_dir(&bin)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    bin
+}
+
 fn read(path: PathBuf) -> String {
     fs::read_to_string(path).unwrap()
 }
@@ -467,14 +492,9 @@ fn without_node_it_says_what_it_needs() {
 #[cfg(unix)]
 #[test]
 fn a_node_older_than_24_is_refused_with_its_version() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = project();
     write_schema(&dir.join("model.ts"), SCHEMA_V1);
-    let bin = dir.join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    let node = bin.join("node");
-    fs::write(&node, "#!/bin/sh\necho v22.12.0\n").unwrap();
-    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let bin = fake_node(&dir, "v22.12.0");
     let run = ncdb_with(&dir, &["model", "build"], |c| {
         c.env("PATH", &bin);
     });
@@ -485,6 +505,30 @@ fn a_node_older_than_24_is_refused_with_its_version() {
         run.stderr
     );
     assert!(!dir.join("model.lock.json").exists());
+}
+
+/// Many threads write a fake node and run it while the others spawn
+/// processes: a forked child must never hold the script open for writing
+/// when it runs (ETXTBSY, NOC-94).
+#[cfg(unix)]
+#[test]
+fn a_fake_node_runs_while_other_threads_spawn() {
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            std::thread::spawn(|| {
+                for _ in 0..25 {
+                    let dir = project();
+                    let bin = fake_node(&dir, "v22.12.0");
+                    let output = Command::new(bin.join("node")).output().unwrap();
+                    assert_eq!(String::from_utf8(output.stdout).unwrap(), "v22.12.0\n");
+                    fs::remove_dir_all(&dir).unwrap();
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
 }
 
 #[test]
@@ -562,4 +606,65 @@ additive: clients on model version 3 keep every change written under version 4.
     let lock = ModelLock::from_json(&written).unwrap();
     let index = &lock.collection("tasks").unwrap().indexes["byPriorityDesc"];
     assert_eq!((index.scope, index.since), (Scope::Member, 4));
+}
+
+#[test]
+fn a_reference_is_written_with_its_targets_listed_like_a_links_and_a_target_comes_but_does_not_go()
+{
+    let dir = project();
+    let schema = |targets: &str| {
+        SCHEMA_V2.replace(
+            "dependsOn: nc.links(\"tasks\"),",
+            &format!("dependsOn: nc.links(\"tasks\"),\n      customer: nc.ref({targets}),"),
+        )
+    };
+    write_schema(&dir.join("model.ts"), &schema(r#""people""#));
+    fs::write(dir.join("model.lock.json"), EXAMPLE).unwrap();
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 2 -> 3
+  + tasks.customer    ncdb/ref -> people
+additive: clients on model version 2 keep every change written under version 3.
+"
+    );
+    let lock = ModelLock::from_json(&read(dir.join("model.lock.json"))).unwrap();
+    let customer = &lock.collection("tasks").unwrap().fields["customer"];
+    assert_eq!(
+        (
+            customer.kind.type_id(),
+            customer.kind.targets(),
+            customer.rule,
+            customer.since
+        ),
+        ("ncdb/ref", Some(&["people".to_owned()][..]), 1, 3)
+    );
+
+    // Adding a target is accepted and listed, as for a link.
+    write_schema(&dir.join("model.ts"), &schema(r#"["people", "tasks"]"#));
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 3 -> 4
+  + tasks.customer    targets tasks
+additive: clients on model version 3 keep every change written under version 4.
+"
+    );
+
+    // Removing one is refused, and the lock stays as it was.
+    let before = read(dir.join("model.lock.json"));
+    write_schema(&dir.join("model.ts"), &schema(r#""tasks""#));
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stderr,
+        "model.lock.json: refused, the change is not additive (model version stays 4)
+  x tasks.customer: target people removed.
+    Existing links into people would read as wrong collection, and references into it as missing, on upgraded clients only.
+    Keep people in the targets.
+"
+    );
+    assert_eq!(read(dir.join("model.lock.json")), before);
 }
