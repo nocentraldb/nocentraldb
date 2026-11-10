@@ -426,11 +426,11 @@ await db.sync.resume();
 | `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
 | `refused` | Changes of this member the relay refused ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). |
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
-| `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. A code RFC 0007 does not list shows as `unknownError`, so the app still learns that syncing stopped, and the relay's own text never reaches the app. |
+| `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. A code RFC 0007 does not list shows as `unknown_error`, so the app still learns that syncing stopped, and the relay's own text never reaches the app. |
 
 In Rust the report is a `SyncReport`, and its values are a `SyncStatus` ([The Rust SDK](#the-rust-sdk)).
 
-An unknown relay code is shown as `unknownError` because a faulty or hostile relay could otherwise put any string where the app reads `error`. An empty `error` would not tell the app why syncing stopped, and keeping the previous `error` could show a stale reason; neither was taken.
+An unknown relay code is shown as `unknown_error` because a faulty or hostile relay could otherwise put any string where the app reads `error`. An empty `error` would not tell the app why syncing stopped, and keeping the previous `error` could show a stale reason; neither was taken.
 
 **`space.status`**, a report per space, with everything a space can hold that an app does not see in a read:
 
@@ -510,7 +510,7 @@ while let Some(page) = live.next().await { /* ... */ }
 - **The role is required in Rust.** `AddMember.role` is a `Role`, not an `Option<Role>`, so an app passes `Role::Writer` for an agent, where TypeScript lets it leave the role out. An `Option<Role>`, with `None` meaning a writer for an agent and an error for a device, was not taken.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
 - `subscribe` returns a `Stream`; dropping it stops it.
-- **The sync report.** `db.sync()` returns a `SyncReport`, whose `current()` gives a `SyncStatus` with `connection`, `unconfirmed`, `refused`, `epoch_changed` and `error`, and whose `subscribe()` follows it. `connection` is one of `Connection::Connected`, `Connecting`, `Offline`, `Paused` or `None`, the values of [Sync and status](#sync-and-status). The report is not named `Sync`, which would shadow Rust's `Sync` marker trait. An unknown relay code is `unknownError` here too ([Sync and status](#sync-and-status)).
+- **The sync report.** `db.sync()` returns a `SyncReport`, whose `current()` gives a `SyncStatus` with `connection`, `unconfirmed`, `refused`, `epoch_changed` and `error`, and whose `subscribe()` follows it. `connection` is one of `Connection::Connected`, `Connecting`, `Offline`, `Paused` or `None`, the values of [Sync and status](#sync-and-status). The report is not named `Sync`, which would shadow Rust's `Sync` marker trait. An unknown relay code is `unknown_error` here too ([Sync and status](#sync-and-status)).
 - Errors are `nocentraldb::Error` with an `ErrorCode` enum whose variants are the codes above in Rust case, such as `ErrorCode::LockOutOfDate`. `Debug` of every type that holds content or a cursor prints `[redacted]` ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
 
 ## Public names
@@ -611,7 +611,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `invalidValue`, `deprecated`, `noPerson` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount`, `invalidCertificate`, `alreadyMember` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
-| `unknownError` | The sync report's `error` for a relay code RFC 0007 does not list | [RFC 0007, "The errors"](0007-relay.md#the-errors) |
+| `unknown_error` | The sync report's `error` for a relay code RFC 0007 does not list | [RFC 0007, "The errors"](0007-relay.md#the-errors) |
 
 **Rust** (`nocentraldb`): every name above in snake case, and:
 
