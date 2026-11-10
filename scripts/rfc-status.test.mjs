@@ -44,7 +44,7 @@ const decidedRfcs = () => {
 
 const rfcFile = (number) => {
   const file = readdirSync(join(root, "docs/rfc")).find((f) =>
-    f.startsWith(`${number}-`),
+    f.startsWith(`${number}-`) && f.endsWith(".md"),
   );
   assert.ok(
     file,
