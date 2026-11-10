@@ -51,11 +51,20 @@ use crate::seal::{self, OpenError};
 /// an admin that holds the new key could write, so leave every copy with
 /// the same key, in whichever order they arrived.
 ///
-/// **What this does not do.** A space key, once unwrapped, stays known,
-/// even if a later control change rejects its envelope. Whether a sealed
-/// change that passed still passes when a later control change arrives is
-/// asked again through [`Checks::is_member`], and the log un-folds it when
-/// it no longer does (RFC 0006, "Un-folding").
+/// **Replaced keys.** A key chain key can therefore be replaced by a later
+/// control change: by an entry with a lower change id, or by an envelope's
+/// key. A sealed change that opened under the old key may then no longer
+/// open; [`Checks::still_opens`] says so, and the log un-folds the change
+/// (RFC 0006, "Un-folding"). The checks keep every key they held for a
+/// generation, but use the replaced ones only in [`Checks::open_folded`],
+/// so un-folding finds what the change folded; they never open a change
+/// for its checks or its fold with a replaced key.
+///
+/// **What this does not do.** A space key from an envelope, once
+/// unwrapped, stays known, even if a later control change rejects its
+/// envelope. Whether a sealed change that passed still passes when a later
+/// control change arrives is asked again through [`Checks::is_member`] and
+/// [`Checks::still_opens`].
 pub struct SealChecks {
     space: SpaceId,
     member: MemberKey,
@@ -63,6 +72,8 @@ pub struct SealChecks {
     keys: BTreeMap<MemberId, MemberPublicKey>,
     envelope_keys: BTreeMap<u64, SpaceKey>,
     chain_keys: BTreeMap<u64, SpaceKey>,
+    /// Every key held for a generation, the current one included.
+    held: BTreeMap<u64, Vec<SpaceKey>>,
     resolved: Resolved,
 }
 
@@ -77,6 +88,7 @@ impl SealChecks {
             keys: BTreeMap::new(),
             envelope_keys: BTreeMap::new(),
             chain_keys: BTreeMap::new(),
+            held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
         }
     }
@@ -163,6 +175,35 @@ impl Checks for SealChecks {
         Ok(seal::open(change, &author, key)?)
     }
 
+    /// Without opening the change while its generation has had one key
+    /// only, the one held now.
+    fn still_opens(&self, change: &Change) -> Result<(), Stop> {
+        let generation = change.header().key_generation;
+        let replaced = self
+            .held
+            .get(&generation)
+            .is_some_and(|keys| keys.len() > 1);
+        if !replaced && self.space_key(generation).is_some() {
+            return Ok(());
+        }
+        self.open(change).map(drop)
+    }
+
+    /// With the key held now, else with each key held for the generation
+    /// before.
+    fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
+        let stop = match self.open(change) {
+            Ok(payload) => return Ok(payload),
+            Err(stop) => stop,
+        };
+        let author = self.author(change)?;
+        let held = self.held.get(&change.header().key_generation);
+        held.into_iter()
+            .flatten()
+            .find_map(|key| seal::open(change, &author, key).ok())
+            .ok_or(stop)
+    }
+
     fn add_control(&mut self, change: &Change) {
         if change.header().space != self.space || self.controls.contains_key(&change.id()) {
             return;
@@ -182,6 +223,7 @@ impl Checks for SealChecks {
         self.controls.insert(change.id(), change.clone());
         self.resolved = membership::resolve(self.space, self.controls.values());
         self.walk_key_chain();
+        self.hold_keys();
     }
 }
 
@@ -236,6 +278,19 @@ impl SealChecks {
             }
             if !opened {
                 return;
+            }
+        }
+    }
+}
+
+impl SealChecks {
+    /// Adds every key the checks hold now to the keys held for its
+    /// generation, once.
+    fn hold_keys(&mut self) {
+        for (&generation, key) in self.envelope_keys.iter().chain(&self.chain_keys) {
+            let held = self.held.entry(generation).or_default();
+            if !held.iter().any(|k| k.bytes() == key.bytes()) {
+                held.push(SpaceKey::from_bytes(*key.bytes()));
             }
         }
     }
