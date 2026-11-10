@@ -12,8 +12,10 @@ mod space;
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::change::{Change, Header};
+use ncdb_core::keys::RecoveryKey;
 use ncdb_core::membership::{
-    self, Certificate, ControlBody, Entry, MemberKind, Rejection, Role, Verdict, resolve,
+    self, AccountKeyStatement, Certificate, ControlBody, Entry, MemberKind, Rejection, Role,
+    Verdict, resolve,
 };
 use ncdb_core::seal;
 
@@ -253,6 +255,26 @@ fn a_certificate_that_does_not_verify_makes_the_add_invalid() {
     let not_valid = Some(&Verdict::Rejected(Rejection::NotValidWhenWritten));
     assert_eq!(state.verdict(bad.id()), not_valid);
     assert_eq!(state.verdict(wrong_member.id()), not_valid);
+}
+
+#[test]
+fn a_statement_in_the_certificate_must_name_its_account_key() {
+    let mut s = Space::new(ALICE);
+    let g = s.genesis.clone();
+    let recovery = RecoveryKey::from_code(&[7; 16]);
+    let account_key = account().verifying_key().to_bytes();
+    let named = Certificate::sign(&account(), id(BOB), MemberKind::Device)
+        .with_statement(AccountKeyStatement::sign(&recovery, account_key, 1));
+    let named = s.add_certified(ALICE, BOB, Role::Writer, named, &[&g]);
+    let other = Certificate::sign(&account(), id(CAROL), MemberKind::Device)
+        .with_statement(AccountKeyStatement::sign(&recovery, [9; 32], 1));
+    let other = s.add_certified(ALICE, CAROL, Role::Writer, other, &[&g]);
+    let state = resolve(s.space, [&g, &named, &other]);
+    assert_eq!(state.verdict(named.id()), Some(&Verdict::Accepted));
+    assert_eq!(
+        state.verdict(other.id()),
+        Some(&Verdict::Rejected(Rejection::NotValidWhenWritten))
+    );
 }
 
 #[test]
