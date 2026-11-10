@@ -42,6 +42,7 @@ const MESSAGES = [
   ["entries", "relay → member", "2 req, 3 space, 4 entries, 5 head"],
   ["subscribe", "member → relay", "2 req, 3 space, 4 epoch, 5 after"],
   ["unsubscribe", "member → relay", "2 req, 3 space"],
+  ["added", "relay → member", "3 space"],
   ["keys", "member → relay", "2 req, 3 space"],
   ["keys", "relay → member", "2 req, 3 space, 4 envelopes, 5 chain"],
   ["person-keys", "member → relay", "2 req, 3 space"],
