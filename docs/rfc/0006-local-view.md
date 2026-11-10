@@ -590,4 +590,4 @@ Not taken:
 - **2026-11-09** · NOC-72 · A page after a cursor is written key by key, and the plan check accepts a `SCAN` on the declared index, as the view built in #81 does; decision 16 (#85).
 - **2026-11-09** · NOC-75 · Follows RFC 0009: an index with `scope: "space"` puts the space id first, and no declared index holds a deleted object (#87).
 - **2026-11-10** · NOC-92 · A reference indexes as one 32-byte `BLOB` column, as RFC 0005's D19 decided (#98).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#PR).
+- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#112).
