@@ -291,7 +291,7 @@ The seed is the recovery key's Ed25519 secret. The recovery code encodes the 128
 
 ### Pairing answer
 
-When a device joins an account, the answer carries the account key sealed with HPKE to the new device's X25519 key: the construction of the [key envelope](#key-envelope), under its own `info` label, `"nocentraldb/account-key"`. The HPKE ciphertext is the 32-byte account key. A label of its own keeps an account key from ever being opened as a space key ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
+When a device joins an account, the answer carries the account key sealed with HPKE to the new device's X25519 key: the construction of the [key envelope](#key-envelope), under its own `info` label, `"nocentraldb/account-key"`. The `info` input is that label alone: no space id, generation or recipient member id follows it, because an account key belongs to no space and is sealed to one device's key. The HPKE ciphertext is the 32-byte account key. A label of its own keeps an account key from ever being opened as a space key ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
 
 ### Account fingerprint
 

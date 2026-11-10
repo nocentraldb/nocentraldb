@@ -228,7 +228,7 @@ key chain entry (entry type 3)
 └── 10 answers            array of change ids: the revocations this rotation answers
 ```
 
-Each encrypted previous key is 72 bytes, `nonce (24) || ciphertext (32) || tag (16)` with a random nonce, the layout of everything a space key seals ([RFC 0003, "Key-chain subkey"](0003-keys-and-cryptography.md#key-chain-subkey), as the owner decided on NOC-97, Carsten, 2026-11-10).
+Each encrypted previous key is 72 bytes, `nonce (24) || ciphertext (32) || tag (16)` with a random nonce, the layout of everything a space key seals ([RFC 0003, "Key-chain subkey"](0003-keys-and-cryptography.md#key-chain-subkey)).
 
 The author must be an admin, and every listed previous generation must exist in the state of the entry's causal past. After a key chain entry, the author writes a key envelope for every member of the state, itself included, and none for anyone else. It also re-wraps the person-key records under the new generation (RFC 0003, step 3). Whether the encrypted previous keys are correct only a holder of the new key can tell. That is a local check.
 
@@ -264,6 +264,8 @@ person-key entry (entry type 4)
 ```
 
 The first accepted entry for a person-key id creates the person key. Every later one announces a re-wrapped record and must repeat the same commitment, or it is rejected. Whether the record's key matches the commitment only a member that unwraps it can tell. That is a local check, as RFC 0003 already has it.
+
+**What this does not protect against.** The first accepted person-key entry in the order creates the person key. A member earlier in the order can win with its own concurrent first entry and choose the key. Honest entries are then rejected as "commitment". This adds little, since every member already reads every personal field while the key exists, and a shred never protects against a member who copied the data ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
 
 [RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) gives a person a person id that spans spaces. The person-key id stays per space, as RFC 0003 decided ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), and never derives from the person. The erasure work order finds the person-key ids of a person through the person id inside sealed data. The relay never sees the person id.
 
@@ -568,7 +570,7 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 - **The person-key entry** carries RFC 0003's commitment and RFC 0007's record hash and generation ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key); [RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
 - **The relay's membership table** holds roles, grants with their from generations, revocations with their cutoffs and the generation graph. The relay checks author sequences against cutoffs, replaces a person-key record only with the same or a descendant generation, and deletes a record only once its shred is stable ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
 - **RFC 0006's control table** holds what [The function](#the-function) lists. Control changes are recomputed through `resolve`, and a shred's irreversible effects wait until it is stable ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)).
-- **The model id** stands in the genesis, key 13, required and sealed; RFC 0003 defines its subkey ([RFC 0003, "Model-id subkey"](0003-keys-and-cryptography.md#model-id-subkey)).
+- **The model id** stands in the genesis, key 13, required and sealed; RFC 0003 defines its subkey ([RFC 0003, "Model-id subkey"](0003-keys-and-cryptography.md#model-id-subkey)). A model id in every change's payload is RFC 0002's and RFC 0005's to carry out, not this RFC's ([RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model)).
 - **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Here the key is destroyed only once the shred is stable, which an idle admin device delays. The view erases the fields at once, and the alarm after 7 days names the blocking devices, but until then the key exists on members. RFC 0001 names the wait in [its team lead's list](0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review), and RFC 0003 and the FAQ alongside it.
 - **Add wins** stays the rule for RFC 0004's sets. Membership resolves the other way, so the revocation wins; membership is not a field type of the schema.
 

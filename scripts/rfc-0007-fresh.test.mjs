@@ -246,3 +246,9 @@ test("where this RFC makes GENESIS.md, RFC 0001 and RFC 0002 more precise", () =
   holds(agreement, [/[Uu]se case 4/, /[Uu]se case 5/], "Agreement");
   assert.doesNotMatch(agreement, /Resolved \(NOC-47\)/);
 });
+
+test("the cost figures state their limit in the present tense", () => {
+  const costs = part("what-it-costs");
+  assert.doesNotMatch(costs, /Before the owner decides/);
+  assert.match(costs, /not yet checked in the AWS pricing calculator/);
+});
