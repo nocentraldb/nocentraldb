@@ -31,6 +31,8 @@ pub(crate) struct Shared<S> {
     pub relay: Arc<Relay<S>>,
     pub relay_id: [u8; 16],
     pub hub: Hub,
+    /// How long writing one message may make no progress.
+    pub write_timeout: std::time::Duration,
 }
 
 /// What the writer task sends: a message, or a close after the messages

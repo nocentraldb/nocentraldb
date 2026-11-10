@@ -22,6 +22,7 @@ use std::collections::BTreeSet;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
@@ -45,6 +46,10 @@ pub const MAX_PUSH: usize = 32;
 /// fits into one `entries` message, since this server carries no large
 /// changes (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = MAX_MESSAGE - 1024;
+
+/// How long a connection waits for progress in writing a message to its
+/// member before it closes the connection (RFC 0007, "Liveness").
+pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The protocol versions this server speaks.
 pub const VERSIONS: [u64; 1] = [1];
@@ -91,8 +96,18 @@ impl<S: RelayStore + 'static> Server<S> {
             relay: Arc::new(relay),
             relay_id,
             hub: Hub::default(),
+            write_timeout: WRITE_TIMEOUT,
         });
         Ok(Server { listener, shared })
+    }
+
+    /// A connection closes once writing a message to its member makes no
+    /// progress for `timeout`, instead of [`WRITE_TIMEOUT`].
+    pub fn with_write_timeout(mut self, timeout: Duration) -> Server<S> {
+        if let Some(shared) = Arc::get_mut(&mut self.shared) {
+            shared.write_timeout = timeout;
+        }
+        self
     }
 
     /// The address the server listens on.
