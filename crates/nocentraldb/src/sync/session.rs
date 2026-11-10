@@ -48,6 +48,8 @@ const ANSWER: Duration = if cfg!(test) {
 pub(super) enum End {
     /// The database was dropped: syncing ends.
     Dropped,
+    /// The app paused syncing: the connection is dropped until it resumes.
+    Paused,
     /// The connection was lost or the relay ended it; the member
     /// reconnects. `progress` says whether the session synced every space
     /// once, so that the backoff starts over; `retry_after` is how long the
@@ -84,11 +86,23 @@ fn lost() -> End {
     }
 }
 
-/// Runs `f` on the database, unless it was dropped.
+/// Runs `f` on the database, unless it was dropped or the app paused
+/// syncing, and tells the followers of the sync status.
 fn with<R>(db: &Weak<Mutex<Inner>>, f: impl FnOnce(&mut Inner) -> R) -> Result<R, End> {
     let inner: Arc<Mutex<Inner>> = db.upgrade().ok_or(End::Dropped)?;
     let mut guard = lock(&inner);
-    Ok(f(&mut guard))
+    running(&guard)?;
+    let result = f(&mut guard);
+    guard.status.notify();
+    Ok(result)
+}
+
+/// Whether the session may go on: the app has not paused syncing.
+fn running(inner: &Inner) -> Result<(), End> {
+    match inner.sync.as_ref().is_some_and(|sync| sync.paused()) {
+        true => Err(End::Paused),
+        false => Ok(()),
+    }
 }
 
 /// One connection to the relay at `url`, served until it ends.
@@ -124,7 +138,7 @@ pub(super) async fn session(
             progress: session.progress,
             retry_after,
         },
-        End::Dropped => End::Dropped,
+        end @ (End::Dropped | End::Paused) => end,
     }
 }
 
@@ -354,7 +368,11 @@ impl Session<'_> {
         self.next_req
     }
 
+    /// Sends `message`, unless the app paused syncing meanwhile.
     async fn send(&mut self, message: Vec<u8>) -> Result<(), End> {
+        let inner = self.db.upgrade().ok_or(End::Dropped)?;
+        running(&lock(&inner))?;
+        drop(inner);
         self.ws
             .send(Message::Binary(message.into()))
             .await

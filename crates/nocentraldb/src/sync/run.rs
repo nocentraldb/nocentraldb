@@ -3,7 +3,9 @@
 //! trouble (RFC 0007, "Liveness" and "Island mode"). The backoff starts
 //! over only after a session synced every space once, it waits at least
 //! the retry-after of `rate_limited`, and a local write does not cut it
-//! short. The thread ends when the database is dropped.
+//! short. A pause drops the connection, or the wait, and holds the thread
+//! until the app resumes; resuming connects at once. The thread ends when
+//! the database is dropped.
 
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -24,7 +26,8 @@ const LONGEST: Duration = Duration::from_secs(120);
 /// Starts syncing the database `inner` with the relay at `url`.
 pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
     let (wake, receiver) = watch::channel(());
-    lock(inner).sync = Some(SyncState::new(wake));
+    let (pause, paused) = watch::channel(false);
+    lock(inner).sync = Some(SyncState::new(wake, pause));
     let db = Arc::downgrade(inner);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -32,32 +35,54 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
     let started = runtime.map(|runtime| {
         std::thread::Builder::new()
             .name("nocentraldb-sync".into())
-            .spawn(move || runtime.block_on(run(db, url, receiver)))
+            .spawn(move || runtime.block_on(run(db, url, receiver, paused)))
     });
     if !matches!(started, Ok(Ok(_))) {
         set(inner, Connection::Offline, Some("unavailable".into()));
     }
 }
 
+/// Records the state of the connection; a paused database stays
+/// `Paused`.
 fn set(inner: &Mutex<Inner>, connection: Connection, error: Option<String>) {
-    if let Some(sync) = lock(inner).sync.as_mut() {
-        sync.connection = connection;
-        // Connecting or offline, no subscription is live.
+    let mut inner = lock(inner);
+    if let Some(sync) = inner.sync.as_mut() {
+        if !sync.paused() {
+            sync.connection = connection;
+        }
+        // Connecting, offline or paused, no subscription is live.
         sync.live.clear();
         if error.is_some() {
             sync.error = error;
         }
     }
+    inner.status.notify();
 }
 
-async fn run(db: Weak<Mutex<Inner>>, url: String, mut wake: watch::Receiver<()>) {
+async fn run(
+    db: Weak<Mutex<Inner>>,
+    url: String,
+    mut wake: watch::Receiver<()>,
+    mut pause: watch::Receiver<bool>,
+) {
     let mut delay = FIRST;
     loop {
+        if !resumed(&mut pause).await {
+            return;
+        }
         let Some(inner) = db.upgrade() else { return };
         set(&inner, Connection::Connecting, None);
         drop(inner);
-        let (progress, retry_after) = match session(&db, &url, &mut wake).await {
+        let end = tokio::select! {
+            end = session(&db, &url, &mut wake) => end,
+            () = paused(&mut pause) => End::Paused,
+        };
+        let (progress, retry_after) = match end {
             End::Dropped => return,
+            End::Paused => {
+                delay = FIRST;
+                continue;
+            }
             End::Lost {
                 progress,
                 retry_after,
@@ -70,22 +95,62 @@ async fn run(db: Weak<Mutex<Inner>>, url: String, mut wake: watch::Receiver<()>)
             delay = FIRST;
         }
         let wait = jitter(delay).max(retry_after.unwrap_or_default());
-        if !sleep(wait, &mut wake).await {
-            return;
+        match sleep(wait, &mut wake, &mut pause).await {
+            Slept::Dropped => return,
+            Slept::Paused => {
+                delay = FIRST;
+                continue;
+            }
+            Slept::Elapsed => {}
         }
         delay = (delay * 2).min(LONGEST);
     }
 }
 
-/// Sleeps for `wait`; a local write does not cut it short. Returns
-/// `false` when the database was dropped meanwhile.
-async fn sleep(wait: Duration, wake: &mut watch::Receiver<()>) -> bool {
+/// Waits while the app has paused syncing. Returns `false` when the
+/// database was dropped meanwhile.
+async fn resumed(pause: &mut watch::Receiver<bool>) -> bool {
+    while *pause.borrow_and_update() {
+        if pause.changed().await.is_err() {
+            return false;
+        }
+    }
+    true
+}
+
+/// Resolves when the app pauses syncing; never, once the database was
+/// dropped, which the session notices on its own.
+async fn paused(pause: &mut watch::Receiver<bool>) {
+    loop {
+        if *pause.borrow_and_update() {
+            return;
+        }
+        if pause.changed().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    }
+}
+
+/// How a wait between two attempts ended.
+enum Slept {
+    Elapsed,
+    Paused,
+    Dropped,
+}
+
+/// Sleeps for `wait`; a local write does not cut it short, a pause does.
+async fn sleep(
+    wait: Duration,
+    wake: &mut watch::Receiver<()>,
+    pause: &mut watch::Receiver<bool>,
+) -> Slept {
     let sleep = tokio::time::sleep(wait);
     tokio::pin!(sleep);
     loop {
         tokio::select! {
-            () = &mut sleep => return true,
-            changed = wake.changed() => if changed.is_err() { return false },
+            () = &mut sleep => return Slept::Elapsed,
+            changed = wake.changed() => if changed.is_err() { return Slept::Dropped },
+            () = paused(pause) => return Slept::Paused,
         }
     }
 }
