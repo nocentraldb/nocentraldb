@@ -143,7 +143,9 @@ pub(super) fn open(conn: &Connection, model: &Model) -> Result<(), Error> {
 }
 
 /// Creates the tables of every collection and the SQLite index of every
-/// declared index.
+/// declared index. A collection's table holds, beside the columns of its
+/// fields, whether the object is deleted, so that its indexes leave the
+/// deleted objects out while a read by id still finds them.
 fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
     for (collection, fields) in &model.collections {
         let columns: String = fields
@@ -154,7 +156,8 @@ fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
         conn.execute_batch(&format!(
             "CREATE TABLE {} (
                 space_id BLOB NOT NULL,
-                object_id BLOB NOT NULL{columns},
+                object_id BLOB NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0{columns},
                 PRIMARY KEY (space_id, object_id)
             ) STRICT;
             CREATE TABLE {} (
@@ -176,8 +179,10 @@ fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
                 Direction::Descending => format!("{name} DESC"),
             })
             .collect();
+        // A partial index: no declared index holds a deleted object
+        // (RFC 0006, Amendment 6), and a lookup names the same condition.
         conn.execute_batch(&format!(
-            "CREATE INDEX {} ON {} ({});",
+            "CREATE INDEX {} ON {} ({}) WHERE deleted = 0;",
             quote(&index_name(index)),
             rows(&index.collection),
             keys.join(", "),

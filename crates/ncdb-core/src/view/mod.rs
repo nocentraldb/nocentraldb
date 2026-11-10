@@ -110,7 +110,7 @@ impl From<rusqlite::Error> for Error {
 impl View {
     /// The version of the view's layout. A core that lays out the view
     /// differently writes another version.
-    pub const FORMAT: u64 = 1;
+    pub const FORMAT: u64 = 2;
 
     /// Opens the view in the database file at `path`, creating it when it
     /// does not exist: WAL mode, `synchronous = FULL` and `secure_delete`

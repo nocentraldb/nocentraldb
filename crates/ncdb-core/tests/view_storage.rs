@@ -77,7 +77,8 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
         assert!(schema.contains(&("index".to_owned(), index.to_owned())));
     }
     // One column per field with a single sortable value; a set has none
-    // (RFC 0006: its read value is served from fs_task).
+    // (RFC 0006: its read value is served from fs_task). Whether the object
+    // is deleted keeps it out of the declared indexes (Amendment 6).
     let columns: BTreeSet<String> = conn
         .prepare("SELECT name FROM pragma_table_info('c_task')")
         .unwrap()
@@ -85,7 +86,14 @@ fn opening_a_view_creates_a_table_per_collection_the_log_and_meta() {
         .unwrap()
         .map(Result::unwrap)
         .collect();
-    let expected = ["space_id", "object_id", "f_owner", "f_rank", "f_title"];
+    let expected = [
+        "space_id",
+        "object_id",
+        "deleted",
+        "f_owner",
+        "f_rank",
+        "f_title",
+    ];
     assert_eq!(columns, expected.iter().map(|c| c.to_string()).collect());
 
     let format: String = conn

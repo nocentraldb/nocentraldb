@@ -123,9 +123,13 @@ fn statement(
     let columns = index_columns(index);
     let tail = tail(index);
     let mut parameters: Vec<Sql> = equal.to_vec();
-    let mut conditions: Vec<String> = columns[..prefix(index)]
-        .iter()
-        .map(|(name, _)| format!("{name} IS ?"))
+    // The condition of the partial index: no deleted object.
+    let mut conditions: Vec<String> = std::iter::once("deleted = 0".to_owned())
+        .chain(
+            columns[..prefix(index)]
+                .iter()
+                .map(|(name, _)| format!("{name} IS ?")),
+        )
         .collect();
     if let Some(after) = after {
         // A bound on the first key lets SQLite seek to the cursor; the
@@ -152,14 +156,11 @@ fn statement(
         })
         .collect();
     let names: Vec<&str> = columns.iter().map(|(name, _)| name.as_str()).collect();
-    let filter = match conditions.is_empty() {
-        true => String::new(),
-        false => format!(" WHERE {}", conditions.join(" AND ")),
-    };
     let sql = format!(
-        "SELECT {} FROM {}{filter} ORDER BY {} LIMIT ?",
+        "SELECT {} FROM {} WHERE {} ORDER BY {} LIMIT ?",
         names.join(", "),
         rows(&index.collection),
+        conditions.join(" AND "),
         order.join(", "),
     );
     parameters.push(Sql::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
