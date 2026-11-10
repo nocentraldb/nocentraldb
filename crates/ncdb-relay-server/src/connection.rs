@@ -14,6 +14,7 @@ use ncdb_relay::{ErrorCode, Pushed, Relay, auth};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
@@ -61,12 +62,17 @@ enum State {
 /// the member takes its entries. When writing one message makes no
 /// progress for the server's write timeout, the writer gives up and the
 /// connection closes (RFC 0007, "Liveness"); the member resumes from its
-/// cursors.
+/// cursors. Each step of the opening (the WebSocket upgrade, `hello`, and
+/// `auth` after the challenge) closes the connection once it takes longer
+/// than the server's handshake timeout, counted from the step's start, so
+/// a peer that stops halfway holds no task for long.
 pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Arc<Shared<S>>) {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE))
         .max_frame_size(Some(MAX_MESSAGE));
-    let Ok(ws) = tokio_tungstenite::accept_async_with_config(stream, Some(config)).await else {
+    let handshake = shared.handshake_timeout;
+    let upgrade = tokio_tungstenite::accept_async_with_config(stream, Some(config));
+    let Ok(Ok(ws)) = tokio::time::timeout(handshake, upgrade).await else {
         return;
     };
     let (mut sink, mut incoming) = ws.split();
@@ -95,6 +101,10 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         subscriptions: HashMap::new(),
     };
     let mut writing = true;
+    // The deadline of the current step of the opening, none once the
+    // connection acts as a member.
+    let mut step = connection.step();
+    let mut deadline = Some(Instant::now() + handshake);
     loop {
         let message = tokio::select! {
             message = incoming.next() => message,
@@ -102,6 +112,7 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
                 writing = false;
                 break;
             }
+            () = expires(deadline) => break,
         };
         let open = match message {
             Some(Ok(Message::Binary(bytes))) => connection.receive(&bytes).await,
@@ -112,6 +123,10 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         if !open {
             break;
         }
+        if connection.step() != step {
+            step = connection.step();
+            deadline = (step != Step::Member).then(|| Instant::now() + handshake);
+        }
     }
     let out = connection.out.clone();
     drop(connection);
@@ -120,6 +135,22 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         drop(out);
         let _ = writer.await;
     }
+}
+
+/// Waits until `deadline`, or forever when there is none.
+async fn expires(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// The steps of a connection's opening, without their data.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Step {
+    Hello,
+    Auth,
+    Member,
 }
 
 struct Connection<S> {
@@ -138,6 +169,15 @@ impl<S> Drop for Connection<S> {
 }
 
 impl<S: RelayStore + 'static> Connection<S> {
+    /// The step of the opening this connection stands at.
+    fn step(&self) -> Step {
+        match self.state {
+            State::Hello => Step::Hello,
+            State::Auth { .. } => Step::Auth,
+            State::Member(_) => Step::Member,
+        }
+    }
+
     /// Queues a message, waiting for room in the queue.
     async fn send(&self, bytes: Vec<u8>) {
         let _ = self.out.send(Out::Message(bytes)).await;
