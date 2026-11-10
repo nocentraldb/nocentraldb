@@ -7,6 +7,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 - **2026-11-09** · NOC-64 · The owner decided S1 to S18 as recommended (Carsten, 2026-11-09), in chat with pm, on #78.
 - **2026-11-09** · NOC-76 · [Amendment 1: groups leave the design](#amendment-1-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now, and marks decision S14 withdrawn. `members.add` keeps taking a list of invitations, as plain batching. The sentences it changes are marked *(Amendment 1)*.
 - **2026-11-09** · NOC-80 · [Amendment 2: following RFC 0005 Amendment 4](#amendment-2-following-rfc-0005-amendment-4) follows RFC 0005's D16, which the owner decided: the TypeScript SDK reads and writes an `nc.int` as a `number`, so a write must be a safe integer, and a stored int beyond that range reads `undefined` and is named in `$raw`. It decides nothing. The sentences it changes are marked *(Amendment 2)*.
+- **2026-11-10** · NOC-80 · [Amendment 3: the object id in TypeScript](#amendment-3-the-object-id-in-typescript) records the owner's decision (Carsten, 2026-11-10) on PR #91: in TypeScript an object id is a `string`, its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id`. The sentence it changes is marked *(Amendment 3)*.
 
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
@@ -194,6 +195,8 @@ const task = await project.get(model.tasks, taskId);
 - every field optional; an unset field is `undefined`;
 - a choice as the union of its options, and `nc.Unknown`, `{ unknown: rawValue }`, for an option the lock does not list yet (decision [S5](#decisions-for-the-owner));
 - a set as an array, in the order of its elements' canonical bytes; a link as the target's object id; many links as an array of ids.
+
+In TypeScript an object id is a `string`: its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id` ([RFC 0005, "The keys"](0005-schema-and-model-lock.md#the-keys)). An id can then be a map key, compared with `===`, and logged as it is. *(Amendment 3.)*
 
 An object id is unique in its space, not across spaces: a hostile member can create an id that exists in another space ([RFC 0002, "Object ids"](0002-change-and-log-format.md#object-ids)). So a single object is read through its space, and an object read from a query carries its space.
 
@@ -772,3 +775,11 @@ Added on 2026-11-09 for NOC-80. [RFC 0005, Amendment 4](0005-schema-and-model-lo
 - **Writes.** A value for an `nc.int`, or for an element of a set of ints, must be a safe integer, between −(2^53 − 1) and 2^53 − 1. Any other number, such as `2 ** 53` or `1.5`, is refused with `invalidValue` before anything is written, so the SDK never rounds a value it writes.
 - **Reads.** `$raw` names a field whose stored int lies beyond that range, as it does for a value that does not fit the field's kind. Such an int reads `undefined`, never rounded, and a set of ints holding one reads `undefined` as a whole. `space.inspect` gives the stored int exactly, as a `bigint`.
 - **The Rust SDK** reads and writes an `nc.int` as an `i64` and has no such range.
+
+## Amendment 3: the object id in TypeScript
+
+Added on 2026-11-10 for NOC-80. RFC 0002 makes an object id 16 random bytes ([RFC 0002, "Object ids"](0002-change-and-log-format.md#object-ids)), and no RFC said how those bytes look in TypeScript, where `nc.Infer` types a link as an object id. PR #91 put the options to the owner: a lowercase hex string, a base64url string, a `Uint8Array`, or a branded string type. The owner decided the hex string (Carsten, 2026-11-10).
+
+- **The shape.** An object id is a `string` of 32 lowercase hex digits, the 16 bytes in order. It is the form the lock already writes `model.id` in, so one encoding serves both. `$id`, a link and each element of many links read this way, and a write takes an id this way.
+- **What it adds.** No public name: the type is a plain `string`.
+- **The Rust SDK** keeps the 16 bytes as they are.

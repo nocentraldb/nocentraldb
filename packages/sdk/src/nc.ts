@@ -100,7 +100,7 @@ type IndexState = {
   equal: number;
 };
 
-/** An object id, as a link reads. */
+/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, Amendment 3). */
 type ObjectId = string;
 
 const fieldStates = new WeakMap<object, FieldState>();
