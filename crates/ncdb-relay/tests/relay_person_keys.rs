@@ -13,8 +13,9 @@ use ncdb_relay::conformance::block_on;
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::store::{PersonKeyId, PersonKeyRecord};
 use ncdb_relay::{ErrorCode, Pushed, Relay};
+use support::interleave::Interleave;
 use support::space::{Space, account, id, key, other_account, person, wrapped};
-use support::{push, push_one, relay};
+use support::{config, push, push_one, relay};
 
 const CREATOR: u8 = 0;
 const WRITER: u8 = 1;
@@ -205,6 +206,41 @@ fn a_re_wrap_replaces_the_record_only_under_a_descendant_generation() {
         Ok(())
     );
     assert_eq!(stored(&relay, WRITER, space.space), [newer]);
+}
+
+#[test]
+fn a_put_overtaken_by_a_newer_generation_never_takes_the_record_back() {
+    let (relay, dir, mut space, held) = held();
+    let first = space.first_generation;
+    let (chain, next) = space.rotate(CREATOR, &[first], &[&held[4]]);
+    let rewrap = space.person_key_at(CREATOR, 1, 0xc1, next, &[&chain]);
+    let pushed = push(&relay, CREATOR, space.space, &[&chain, &rewrap]);
+    assert_eq!(pushed, [Pushed::Accepted(6), Pushed::Accepted(7)]);
+    let older = record(space.space, WRITER, 1, first);
+    let newer = record(space.space, CREATOR, 1, next);
+    assert_eq!(
+        put(&relay, WRITER, space.space, vec![older.clone()]),
+        Ok(())
+    );
+
+    // A second relay process on the same database stores the newer record
+    // after this relay checked the older one against the stored record and
+    // before it writes it. The older generation then no longer descends
+    // from the stored one.
+    let (rival, in_space) = (newer.clone(), space.space);
+    let racing = Relay::new(
+        Interleave::new(dir.store(), move || {
+            let put = relay.put_person_keys(id(CREATOR), in_space, vec![rival]);
+            assert_eq!(block_on(put), Ok(()));
+        }),
+        config(),
+    );
+    assert_eq!(
+        block_on(racing.put_person_keys(id(WRITER), space.space, vec![older])),
+        Err(ErrorCode::BadRecord)
+    );
+    let stored = block_on(racing.person_keys(id(WRITER), space.space));
+    assert_eq!(stored, Ok(vec![newer]));
 }
 
 #[test]

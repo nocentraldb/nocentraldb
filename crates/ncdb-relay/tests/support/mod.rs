@@ -6,6 +6,8 @@
 #[path = "../../../ncdb-core/tests/support/space.rs"]
 pub mod space;
 
+pub mod interleave;
+
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
