@@ -57,8 +57,7 @@ fn the_info_is_the_label_alone() {
 
 #[test]
 fn sealing_with_the_vectors_ephemeral_gives_its_bytes() {
-    let sealed =
-        pairing::seal_account_key_with_ephemeral(&account(), &recipient().public(), ikm());
+    let sealed = pairing::seal_account_key_with_ephemeral(&account(), &recipient().public(), ikm());
     assert_eq!(sealed, Ok(vector()));
 }
 
