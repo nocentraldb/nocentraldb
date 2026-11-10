@@ -316,6 +316,18 @@ impl Log {
         self.entry(id)?.refusal.as_ref()
     }
 
+    /// The changes of `author` the relay refused, in local order, with the
+    /// relay's refusal of each.
+    pub fn refused_by(
+        &self,
+        author: MemberId,
+    ) -> impl Iterator<Item = (ChangeId, &RelayRefusal)> + '_ {
+        self.entries.iter().filter_map(move |entry| {
+            let refusal = entry.refusal.as_ref()?;
+            (entry.change.header().author == author).then(|| (entry.change.id(), refusal))
+        })
+    }
+
     /// Records the relay's refusal of a change the log holds, beside the
     /// change; its state stays as it is (D12). Returns `false`, and records
     /// nothing, when the log does not hold the change.
