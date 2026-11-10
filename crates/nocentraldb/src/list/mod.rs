@@ -43,3 +43,6 @@ impl Spaces<'_> {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests;
