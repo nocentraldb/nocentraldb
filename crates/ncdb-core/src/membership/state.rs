@@ -204,11 +204,13 @@ pub(crate) fn encode(
             .iter()
             .map(|(change, author)| Value::Array(vec![id(change), fields::bytes(&author.0)]));
         let recipients = g.recipients.iter().map(|r| fields::bytes(&r.0));
+        let holders = g.holders.iter().map(|h| fields::bytes(&h.0));
         Value::Array(vec![
             Value::Unsigned(*generation),
             Value::Array(previous.collect()),
             Value::Array(entries.collect()),
             Value::Array(recipients.collect()),
+            Value::Array(holders.collect()),
         ])
     });
     let verdicts = verdicts.iter().map(|(change, verdict)| {

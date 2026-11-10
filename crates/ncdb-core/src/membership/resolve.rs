@@ -161,6 +161,14 @@ impl Resolved {
         self.current
     }
 
+    /// Whether a generation of the graph is exposed: someone who may hold
+    /// it is not a member of the state (RFC 0008, "Two removals that
+    /// rotate the key at once", step 4).
+    pub fn exposed(&self, generation: u64) -> bool {
+        self.generation(generation)
+            .is_some_and(|g| g.holders.iter().any(|m| self.role(*m).is_none()))
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -270,8 +278,12 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         .into_iter()
         .filter(|(id, node)| !node.is_genesis() || *id == genesis.id)
         .collect();
-    resolved.generations =
-        Generations::build(body.first_generation, folded.values().copied(), judged);
+    resolved.generations = Generations::build(
+        body.first_generation,
+        genesis.author,
+        folded.values().copied(),
+        judged,
+    );
     resolved.seniority = rights::seniority(genesis, &folded, judged);
     let rank: BTreeMap<MemberId, usize> = resolved
         .seniority
