@@ -7,8 +7,8 @@ use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::log::Appended;
 use ncdb_core::view::Error as ViewError;
 
-use super::SyncState;
 use super::wire::{self, Entry, Pushed};
+use super::{SyncState, again};
 use crate::db::{Inner, SpaceState};
 use crate::subscribe::touched;
 
@@ -125,6 +125,9 @@ pub(super) fn entries(
             Ok(Appended::New(_)) => {
                 folded = true;
                 sync(inner).folds += 1;
+                if again::check(inner, space)? {
+                    sync(inner).wake.send_replace(());
+                }
             }
             Ok(Appended::Duplicate(_)) | Err(ViewError::Receive(_)) => {}
             Err(error) => return Err(error),
@@ -143,11 +146,14 @@ pub(super) fn entries(
 }
 
 /// The changes of `space` the relay has neither confirmed nor refused, in
-/// local order: this member's own and those it received from others.
+/// local order: this member's own and those it received from others. A
+/// refused change the fold newly accepted since, after a control change
+/// the member wrote itself, is among them (RFC 0008, M19).
 pub(super) fn unconfirmed(
-    inner: &Inner,
+    inner: &mut Inner,
     space: SpaceId,
 ) -> Result<Vec<(ChangeId, Vec<u8>)>, ViewError> {
+    again::check(inner, space)?;
     Ok(inner
         .view
         .unconfirmed(space)?
@@ -178,6 +184,7 @@ pub(super) fn pushed(
                     return Ok(Some(code));
                 }
                 inner.view.refuse(space, *id, &code)?;
+                again::refused(inner, space, *id);
             }
         }
     }

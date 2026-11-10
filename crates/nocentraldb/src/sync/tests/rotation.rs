@@ -31,7 +31,7 @@ const ADMIN: Who = 0;
 const ME: Who = 1;
 
 /// The `model.id` of the test lock.
-fn model_id() -> [u8; 16] {
+pub(super) fn model_id() -> [u8; 16] {
     ModelLock::from_json(LOCK)
         .expect("the test lock")
         .model
