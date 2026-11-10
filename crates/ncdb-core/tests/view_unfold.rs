@@ -4,9 +4,6 @@
 //! tables, in the transaction that appends it. The tables then equal those
 //! of a view that never folded the changes, and the log holds them as
 //! rejected.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 #[path = "support/space.rs"]
 mod space;

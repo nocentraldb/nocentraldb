@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::change::{Change, Kind};
-use crate::ids::{ChangeId, SpaceId};
+use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::receive::Checks;
 use crate::tips::{Opened, Tips};
 
@@ -157,12 +157,24 @@ pub enum RejectReason {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RelayRefusal(pub String);
 
-/// One entry: the change, and on a member its state and the relay's
-/// refusal.
+/// How many of one author's changes in a log the relay has neither
+/// confirmed nor refused, and how many it refused (NOC-147). A refused
+/// change counts as refused alone, even when the relay also confirmed it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct RelayCounts {
+    /// The changes with neither a relay position nor a refusal.
+    pub unconfirmed: u64,
+    /// The changes the relay refused.
+    pub refused: u64,
+}
+
+/// One entry: the change, and on a member its state, whether the relay
+/// confirmed it and the relay's refusal.
 #[derive(Clone)]
 struct Entry {
     change: Change,
     state: Option<State>,
+    confirmed: bool,
     refusal: Option<RelayRefusal>,
 }
 
@@ -177,6 +189,9 @@ pub struct Log {
     /// ran, for a store that keeps the states.
     changed: BTreeSet<ChangeId>,
     tips: Tips,
+    /// The relay counts of each author, kept as changes are appended,
+    /// confirmed and refused, so reading them costs no pass over the log.
+    relay_counts: BTreeMap<MemberId, RelayCounts>,
 }
 
 impl fmt::Debug for Log {
@@ -197,6 +212,7 @@ impl Log {
             positions: BTreeMap::new(),
             changed: BTreeSet::new(),
             tips: Tips::default(),
+            relay_counts: BTreeMap::new(),
         }
     }
 
@@ -215,9 +231,11 @@ impl Log {
             return Ok(Appended::Duplicate(position));
         }
         self.tips.appended(&change);
+        self.counts_mut(change.header().author).unconfirmed += 1;
         self.entries.push(Entry {
             change,
             state: None,
+            confirmed: false,
             refusal: None,
         });
         let position = self.head();
@@ -260,13 +278,57 @@ impl Log {
     /// change; its state stays as it is (D12). Returns `false`, and records
     /// nothing, when the log does not hold the change.
     pub fn record_relay_refusal(&mut self, id: ChangeId, refusal: RelayRefusal) -> bool {
-        match self.entry_mut(id) {
-            Some(entry) => {
-                entry.refusal = Some(refusal);
-                true
+        let Some(entry) = self.entry_mut(id) else {
+            return false;
+        };
+        let newly = entry.refusal.replace(refusal).is_none();
+        let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        if newly {
+            let counts = self.counts_mut(author);
+            counts.refused += 1;
+            if !confirmed {
+                counts.unconfirmed -= 1;
             }
-            None => false,
         }
+        true
+    }
+
+    /// Records that the relay holds a change the log holds, at a position
+    /// the member keeps elsewhere. Returns `false`, and records nothing,
+    /// when the log does not hold the change.
+    pub fn record_relay_confirmation(&mut self, id: ChangeId) -> bool {
+        let Some(entry) = self.entry_mut(id) else {
+            return false;
+        };
+        let newly = !std::mem::replace(&mut entry.confirmed, true);
+        let (author, refused) = (entry.change.header().author, entry.refusal.is_some());
+        if newly && !refused {
+            self.counts_mut(author).unconfirmed -= 1;
+        }
+        true
+    }
+
+    /// Forgets every confirmation of the relay, whose epoch changed;
+    /// refusals stay (RFC 0007, "Restores and the relay epoch").
+    pub fn forget_relay_confirmations(&mut self) {
+        let mut returned = Vec::new();
+        for entry in &mut self.entries {
+            if std::mem::take(&mut entry.confirmed) && entry.refusal.is_none() {
+                returned.push(entry.change.header().author);
+            }
+        }
+        for author in returned {
+            self.counts_mut(author).unconfirmed += 1;
+        }
+    }
+
+    /// The relay counts of `author`'s changes in this log.
+    pub fn relay_counts(&self, author: MemberId) -> RelayCounts {
+        self.relay_counts.get(&author).copied().unwrap_or_default()
+    }
+
+    fn counts_mut(&mut self, author: MemberId) -> &mut RelayCounts {
+        self.relay_counts.entry(author).or_default()
     }
 
     /// Sets the state of a change the log holds.

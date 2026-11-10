@@ -12,7 +12,7 @@ use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{ErrorCode, Pushed, Relay, auth};
 use tokio::net::TcpStream;
-use tokio::sync::mpsc;
+use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
@@ -66,13 +66,20 @@ enum State {
 /// `auth` after the challenge) closes the connection once it takes longer
 /// than the server's handshake timeout, counted from the step's start, so
 /// a peer that stops halfway holds no task for long.
-pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Arc<Shared<S>>) {
+///
+/// `handshake` is the connection's place among the server's handshakes; it
+/// is given back when the member is sent `welcome`.
+pub(crate) async fn serve<S: RelayStore + 'static>(
+    stream: TcpStream,
+    shared: Arc<Shared<S>>,
+    handshake: OwnedSemaphorePermit,
+) {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE))
         .max_frame_size(Some(MAX_MESSAGE));
-    let handshake = shared.handshake_timeout;
+    let step_timeout = shared.handshake_timeout;
     let upgrade = tokio_tungstenite::accept_async_with_config(stream, Some(config));
-    let Ok(Ok(ws)) = tokio::time::timeout(handshake, upgrade).await else {
+    let Ok(Ok(ws)) = tokio::time::timeout(step_timeout, upgrade).await else {
         return;
     };
     let (mut sink, mut incoming) = ws.split();
@@ -98,13 +105,14 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         shared,
         out,
         state: State::Hello,
+        handshake: Some(handshake),
         subscriptions: HashMap::new(),
     };
     let mut writing = true;
     // The deadline of the current step of the opening, none once the
     // connection acts as a member.
     let mut step = connection.step();
-    let mut deadline = Some(Instant::now() + handshake);
+    let mut deadline = Some(Instant::now() + step_timeout);
     loop {
         let message = tokio::select! {
             message = incoming.next() => message,
@@ -125,7 +133,7 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         }
         if connection.step() != step {
             step = connection.step();
-            deadline = (step != Step::Member).then(|| Instant::now() + handshake);
+            deadline = (step != Step::Member).then(|| Instant::now() + step_timeout);
         }
     }
     let out = connection.out.clone();
@@ -157,6 +165,9 @@ struct Connection<S> {
     shared: Arc<Shared<S>>,
     out: mpsc::Sender<Out>,
     state: State,
+    /// The connection's place among the server's handshakes, until its
+    /// member is sent `welcome`.
+    handshake: Option<OwnedSemaphorePermit>,
     /// The running subscription of each space: a subscription lives as
     /// long as its connection.
     subscriptions: HashMap<SpaceId, JoinHandle<()>>,
@@ -362,6 +373,7 @@ impl<S: RelayStore + 'static> Connection<S> {
             return self.refuse(None, ErrorCode::Unavailable).await;
         };
         let spaces: Vec<[u8; 16]> = spaces.iter().map(|s| s.0).collect();
+        self.handshake = None;
         self.send(wire::welcome(&member.0, &epoch.0, &spaces)).await;
         let id = self.shared.hub.list(member, self.out.clone());
         self.state = State::Member(member, id);
