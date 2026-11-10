@@ -61,5 +61,7 @@ jobs:
       # the system libraries they need.
       - run: pnpm exec playwright install --with-deps chromium firefox webkit
 
+      # As the root script `gates` does: a CI checkout is shallow, so moon
+      # must not diff against `main` to find what changed.
       - name: The view in a worker in every engine
-        run: moon run repo:browser-view
+        run: moon exec repo:browser-view --force --base HEAD --head HEAD
