@@ -14,6 +14,7 @@ use ncdb_core::ids::SpaceId;
 use tokio::net::TcpStream;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::wire::{self, Answer};
@@ -96,7 +97,12 @@ pub(super) async fn session(
     url: &str,
     wake: &mut watch::Receiver<()>,
 ) -> End {
-    let connect = tokio_tungstenite::connect_async(url);
+    // RFC 0007's largest message, on every backend; a larger one ends the
+    // connection instead of being read.
+    let config = WebSocketConfig::default()
+        .max_message_size(Some(wire::MAX_MESSAGE))
+        .max_frame_size(Some(wire::MAX_MESSAGE));
+    let connect = tokio_tungstenite::connect_async_with_config(url, Some(config), false);
     let Ok(Ok((ws, _))) = tokio::time::timeout(CONNECT, connect).await else {
         return lost();
     };
