@@ -13,7 +13,7 @@
 //! (RFC 0003, "Key-chain subkey"). Each control change that passes
 //! therefore checks the log's rejected changes again (D11).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::change::{Change, Kind, Payload};
@@ -39,12 +39,17 @@ use crate::seal::{self, OpenError};
 /// gives the verdicts.
 ///
 /// **Space keys.** An envelope to the checks' member gives the key of its
-/// generation. A key chain entry that the generation graph holds, valid
-/// when written, gives the keys of its previous generations, once the key
-/// of its own generation is known; the walk repeats until no entry gives a
-/// new key, so a member added after rotations reaches the first
-/// generation. A key chain key fills only a generation the checks hold no
-/// key for; an envelope's key replaces it.
+/// generation, and that key wins over any other for it. A key chain entry
+/// that the generation graph holds, valid when written, gives the keys of
+/// its previous generations, once the key of its own generation is known,
+/// so a member added after rotations reaches the first generation. The
+/// key chain keys are derived again from scratch after every control
+/// change, from the envelope keys and the set of entries alone: the walk
+/// takes the entries in change id order, pass after pass until no entry
+/// gives a new key, and a generation keeps the first key a pass opens for
+/// it. Two entries that give different keys for one generation, which only
+/// an admin that holds the new key could write, so leave every copy with
+/// the same key, in whichever order they arrived.
 ///
 /// **What this does not do.** A space key, once unwrapped, stays known,
 /// even if a later control change rejects its envelope. Whether a sealed
@@ -56,7 +61,8 @@ pub struct SealChecks {
     member: MemberKey,
     controls: BTreeMap<ChangeId, Change>,
     keys: BTreeMap<MemberId, MemberPublicKey>,
-    space_keys: BTreeMap<u64, SpaceKey>,
+    envelope_keys: BTreeMap<u64, SpaceKey>,
+    chain_keys: BTreeMap<u64, SpaceKey>,
     resolved: Resolved,
 }
 
@@ -69,7 +75,8 @@ impl SealChecks {
             member,
             controls: BTreeMap::new(),
             keys: BTreeMap::new(),
-            space_keys: BTreeMap::new(),
+            envelope_keys: BTreeMap::new(),
+            chain_keys: BTreeMap::new(),
             resolved: membership::resolve(space, []),
         }
     }
@@ -83,7 +90,9 @@ impl SealChecks {
     /// member unwrapped it or the key chain opened it: the key a writer
     /// seals under, and a reader opens with.
     pub fn space_key(&self, generation: u64) -> Option<&SpaceKey> {
-        self.space_keys.get(&generation)
+        self.envelope_keys
+            .get(&generation)
+            .or_else(|| self.chain_keys.get(&generation))
     }
 
     /// The `model.id` the space's genesis names, opened with the space key
@@ -96,7 +105,7 @@ impl SealChecks {
         let Entry::Genesis(genesis) = body.entry else {
             return None;
         };
-        let key = self.space_keys.get(&genesis.first_generation)?;
+        let key = self.space_key(genesis.first_generation)?;
         membership::open_model_id(key, self.space, genesis.creator.id(), &genesis.model_id)
     }
 
@@ -149,8 +158,7 @@ impl Checks for SealChecks {
     fn open(&self, change: &Change) -> Result<Payload, Stop> {
         let author = self.author(change)?;
         let key = self
-            .space_keys
-            .get(&change.header().key_generation)
+            .space_key(change.header().key_generation)
             .ok_or(Stop::Rejected(RejectReason::NoKey))?;
         Ok(seal::open(change, &author, key)?)
     }
@@ -168,7 +176,7 @@ impl Checks for SealChecks {
             if let Entry::KeyEnvelope(sealed) = &body.entry
                 && let Ok(key) = envelope::open(sealed, self.space, &self.member)
             {
-                self.space_keys.insert(sealed.generation, key);
+                self.envelope_keys.insert(sealed.generation, key);
             }
         }
         self.controls.insert(change.id(), change.clone());
@@ -178,13 +186,15 @@ impl Checks for SealChecks {
 }
 
 impl SealChecks {
-    /// Opens the previous keys of every key chain entry the generation
-    /// graph holds whose own generation's key is known, until no entry
-    /// gives a new key. Entries are taken in the order of their change ids,
-    /// so of two entries that encrypt different keys for one previous
-    /// generation, which only an admin that holds the new key could write,
-    /// the copy keeps the same one each time.
+    /// Derives the key chain keys again from scratch: opens the previous
+    /// keys of every key chain entry the generation graph holds whose own
+    /// generation's key is known, in passes over the entries in change id
+    /// order, until a pass gives no new key. A previous generation that an
+    /// envelope gave a key for, or that an earlier entry or pass filled,
+    /// keeps that key. The result depends only on the envelope keys and the
+    /// set of entries, never on the order in which they arrived.
     fn walk_key_chain(&mut self) {
+        self.chain_keys.clear();
         let chains: Vec<(ChangeId, KeyChainEntry)> = self
             .controls
             .iter()
@@ -203,13 +213,13 @@ impl SealChecks {
         loop {
             let mut opened = false;
             for (_, chain) in &chains {
-                let Some(new_key) = self.space_keys.get(&chain.generation) else {
+                let Some(new_key) = self.space_key(chain.generation) else {
                     continue;
                 };
                 let found: Vec<(u64, SpaceKey)> = chain
                     .previous
                     .iter()
-                    .filter(|previous| !self.space_keys.contains_key(&previous.generation))
+                    .filter(|previous| self.space_key(previous.generation).is_none())
                     .filter_map(|previous| {
                         let key = membership::open_previous_key(
                             new_key,
@@ -222,7 +232,7 @@ impl SealChecks {
                     })
                     .collect();
                 opened |= !found.is_empty();
-                self.space_keys.extend(found);
+                self.chain_keys.extend(found);
             }
             if !opened {
                 return;
@@ -239,7 +249,14 @@ impl fmt::Debug for SealChecks {
         f.debug_struct("SealChecks")
             .field("member", &self.member.id())
             .field("members", &self.keys.keys())
-            .field("key_generations", &self.space_keys.keys())
+            .field(
+                "key_generations",
+                &self
+                    .envelope_keys
+                    .keys()
+                    .chain(self.chain_keys.keys())
+                    .collect::<BTreeSet<_>>(),
+            )
             .field("controls", &self.controls.len())
             .finish_non_exhaustive()
     }
