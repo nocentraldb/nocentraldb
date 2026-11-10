@@ -167,36 +167,94 @@ fn a_key_chain_entry_the_generation_graph_does_not_hold_gives_no_key() {
     assert_eq!(carol.state(&r.by_bob), State::Rejected(RejectReason::NoKey));
 }
 
-#[test]
-fn two_key_chain_entries_that_disagree_give_every_copy_the_same_key_in_either_order() {
-    // Carol holds the second generation's key before either entry arrives;
-    // Alice then writes two rotations to it, one with the first
-    // generation's real key and one with another.
+/// Alice's space in which Carol holds the second generation's key from an
+/// envelope before either key chain entry arrives, and Bob's change under
+/// the first generation. Alice then writes two key chain entries for the
+/// second generation: `real` with the first generation's real key, and
+/// `other`, sealed with `nonce`, with another key.
+struct Disagreeing {
+    space: Space,
+    before: Vec<Change>,
+    by_bob: Change,
+    second: u64,
+    real: Change,
+    other: Change,
+}
+
+fn disagreeing(nonce: u8) -> Disagreeing {
     let mut space = Space::new(ALICE);
     let genesis = space.genesis.clone();
     let add_bob = space.add(ALICE, BOB, Role::Writer, &[&genesis]);
     let to_bob = space.envelope(ALICE, BOB, &[&add_bob]);
     let by_bob = space.sealed(BOB, vec![set_title(1)]);
     let add_carol = space.add(ALICE, CAROL, Role::Reader, &[&to_bob]);
-    let second = membership::generation_id(space.space, id(ALICE), &[space.first_generation]);
-    let sealed = envelope::seal(&second_key(), space.space, second, &key(CAROL).public())
-        .expect("a simulated member's key takes an envelope");
-    let to_carol = space.write(ALICE, Entry::KeyEnvelope(sealed), &[&add_carol]);
-    let real = chain_entry(&space, second, &space_key());
+    let first = space.first_generation;
+    let second = membership::generation_id(space.space, id(ALICE), &[first]);
+    let to_carol = envelope::seal_with_ephemeral(
+        &second_key(),
+        space.space,
+        second,
+        &key(CAROL).public(),
+        [0x3c; 32],
+    )
+    .expect("a simulated member's key takes an envelope");
+    let to_carol = space.write(ALICE, Entry::KeyEnvelope(to_carol), &[&add_carol]);
+    let entry = |previous: &SpaceKey, nonce: u8| {
+        Entry::KeyChain(KeyChainEntry {
+            generation: second,
+            previous: vec![PreviousKey {
+                generation: first,
+                key: membership::seal_previous_key_with_nonce(
+                    &second_key(),
+                    space.space,
+                    second,
+                    first,
+                    previous,
+                    [nonce; 24],
+                ),
+            }],
+            answers: BTreeSet::new(),
+        })
+    };
+    let real = entry(&space_key(), 0);
+    let other = entry(&SpaceKey::from_bytes([0x77; 32]), nonce);
     let real = space.write(ALICE, real, &[&to_carol]);
-    let other = chain_entry(&space, second, &SpaceKey::from_bytes([0x77; 32]));
     let other = space.write(ALICE, other, &[&to_carol]);
-    let before = [&genesis, &add_bob, &to_bob, &add_carol, &to_carol, &by_bob];
+    Disagreeing {
+        before: vec![genesis, add_bob, to_bob, add_carol, to_carol],
+        space,
+        by_bob,
+        second,
+        real,
+        other,
+    }
+}
 
-    let mut one = Copy::of(&space);
-    one.receive(&before);
-    one.receive(&[&real, &other]);
-    let mut two = Copy::of(&space);
-    two.receive(&before);
-    two.receive(&[&other, &real]);
+/// The first [`disagreeing`] space, by nonce, in which the real entry's
+/// change id is below the other's exactly when `real_lower`.
+fn disagreeing_with(real_lower: bool) -> Disagreeing {
+    (1..=u8::MAX)
+        .map(disagreeing)
+        .find(|d| (d.real.id() < d.other.id()) == real_lower)
+        .expect("a nonce gives each order of the change ids")
+}
 
-    let generations = one.checks.resolved().generation(second);
-    assert_eq!(generations.map(|g| g.entries.len()), Some(2));
-    assert_eq!(one.checks.model_id(), two.checks.model_id());
-    assert_eq!(one.state(&by_bob), two.state(&by_bob));
+#[test]
+fn two_key_chain_entries_that_disagree_give_every_copy_the_same_key_in_either_order() {
+    for real_lower in [true, false] {
+        let d = disagreeing_with(real_lower);
+        let before: Vec<&Change> = d.before.iter().chain([&d.by_bob]).collect();
+        let mut one = Copy::of(&d.space);
+        one.receive(&before);
+        one.receive(&[&d.real, &d.other]);
+        let mut two = Copy::of(&d.space);
+        two.receive(&before);
+        two.receive(&[&d.other, &d.real]);
+
+        let generation = one.checks.resolved().generation(d.second);
+        assert_eq!(generation.map(|g| g.entries.len()), Some(2));
+        assert_eq!(one.checks.model_id(), two.checks.model_id(), "{real_lower}");
+        assert_eq!(one.state(&d.by_bob), two.state(&d.by_bob), "{real_lower}");
+        assert_eq!(one.fold, two.fold, "{real_lower}");
+    }
 }
