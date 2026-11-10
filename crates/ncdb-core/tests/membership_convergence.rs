@@ -5,7 +5,9 @@
 //! chain entries, key envelopes and entries of the other types from their
 //! own view of the space, so that concurrent grants, revocations, cutoffs,
 //! cycles of removals, rotations and re-grants under a fresh generation
-//! arise (NOC-71).
+//! arise (NOC-71). Admins merge concurrent rotations once their current
+//! generation is exposed, so every copy must also end in the same current
+//! generation, with the same exposure (NOC-86).
 
 mod support;
 
@@ -79,18 +81,6 @@ impl Copy {
         heads
     }
 
-    /// The heads of the copy's generation graph: the generations no other
-    /// lists as previous.
-    fn generation_heads(&self) -> Vec<u64> {
-        let generations: Vec<_> = self.resolved().generations().collect();
-        let listed: BTreeSet<u64> = generations
-            .iter()
-            .flat_map(|(_, g)| g.previous.iter().copied())
-            .collect();
-        let ids = generations.iter().map(|(id, _)| *id);
-        ids.filter(|id| !listed.contains(id)).collect()
-    }
-
     /// The newest generation `author` rotated to with no envelope to
     /// `subject` in the copy, which a re-grant may name; otherwise the
     /// newest generation of the copy.
@@ -128,7 +118,7 @@ impl std::fmt::Debug for Copy {
 
 impl Mergeable for Copy {
     type Change = Change;
-    type Read = Vec<(MemberId, Role)>;
+    type Read = Read;
 
     fn apply(&mut self, op: &Op<Change>) {
         if let std::collections::btree_map::Entry::Vacant(entry) = self.changes.entry(op.id) {
@@ -141,8 +131,15 @@ impl Mergeable for Copy {
         self.resolved().encode()
     }
 
-    fn read(&self) -> Vec<(MemberId, Role)> {
-        self.resolved().members().collect()
+    fn read(&self) -> Read {
+        let resolved = self.resolved();
+        let current = resolved.current_generation();
+        Read {
+            members: resolved.members().collect(),
+            current,
+            exposed: current.is_some_and(|c| resolved.exposed(c)),
+            heads: resolved.heads(),
+        }
     }
 
     fn outcome(&self, id: OpId) -> Outcome {
@@ -152,6 +149,16 @@ impl Mergeable for Copy {
             _ => Outcome::Lost,
         }
     }
+}
+
+/// What the SDK reads of a copy: its members, its current generation and
+/// whether that is exposed, and the heads a merge rotation would list.
+#[derive(Debug, PartialEq)]
+struct Read {
+    members: Vec<(MemberId, Role)>,
+    current: Option<u64>,
+    exposed: bool,
+    heads: BTreeSet<u64>,
 }
 
 /// What a member does next, before its view decides the details.
@@ -166,8 +173,9 @@ struct Raw {
     skip: u8,
 }
 
-/// Members that add, raise, lower and remove each other, leave, and write
-/// entries of the other types, all from their own copy.
+/// Members that add, raise, lower and remove each other, leave, rotate
+/// (with a merge rotation when their current generation is exposed), wrap
+/// keys, and write entries of the other types, all from their own copy.
 struct Members;
 
 impl Generator<Copy> for Members {
@@ -222,18 +230,22 @@ impl Generator<Copy> for Members {
                 },
             }),
             (None, 7) => {
-                let previous = copy.generation_heads();
-                Entry::KeyChain(KeyChainEntry {
-                    generation: membership::generation_id(space, space::id(who), &previous),
-                    previous: previous
-                        .into_iter()
-                        .map(|generation| PreviousKey {
-                            generation,
-                            key: vec![0xc4; 72],
-                        })
-                        .collect(),
-                    answers: BTreeSet::new(),
-                })
+                if let Some(merge) = copy.resolved().merge_rotation(space::id(who)) {
+                    Entry::KeyChain(merge.entry(|_| vec![0xc4; 72]))
+                } else {
+                    let previous: Vec<u64> = copy.resolved().heads().into_iter().collect();
+                    Entry::KeyChain(KeyChainEntry {
+                        generation: membership::generation_id(space, space::id(who), &previous),
+                        previous: previous
+                            .into_iter()
+                            .map(|generation| PreviousKey {
+                                generation,
+                                key: vec![0xc4; 72],
+                            })
+                            .collect(),
+                        answers: BTreeSet::new(),
+                    })
+                }
             }
             (None, 8) => Entry::KeyEnvelope(
                 envelope::seal_with_ephemeral(
