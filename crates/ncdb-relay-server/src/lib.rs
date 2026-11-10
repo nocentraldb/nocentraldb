@@ -28,6 +28,7 @@ use std::time::Duration;
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
+use tokio::sync::Semaphore;
 
 use connection::Shared;
 use hub::Hub;
@@ -169,10 +170,30 @@ impl<S: RelayStore + 'static> Server<S> {
     }
 
     /// Accepts connections until the listener fails.
+    ///
+    /// A connection takes a place among the server's connections for as
+    /// long as it is open, and one among its handshakes until it is sent
+    /// `welcome` or closes. When either has no place left, the server
+    /// closes the connection as soon as it accepts it, before the
+    /// WebSocket upgrade: RFC 0007 lets a relay close any connection at
+    /// any time ("Liveness"), and the member reconnects with back-off.
     pub async fn run(self) -> io::Result<()> {
+        let connections = Arc::new(Semaphore::new(self.max_connections));
+        let handshakes = Arc::new(Semaphore::new(self.max_handshakes));
         loop {
             let (stream, _) = self.listener.accept().await?;
-            tokio::spawn(connection::serve(stream, self.shared.clone()));
+            let (Ok(place), Ok(handshake)) = (
+                connections.clone().try_acquire_owned(),
+                handshakes.clone().try_acquire_owned(),
+            ) else {
+                drop(stream);
+                continue;
+            };
+            let shared = self.shared.clone();
+            tokio::spawn(async move {
+                connection::serve(stream, shared, handshake).await;
+                drop(place);
+            });
         }
     }
 }
