@@ -77,6 +77,12 @@ pub async fn server_with_write_timeout(timeout: Duration) -> (SocketAddr, TempDi
     server_with(|server| server.with_write_timeout(timeout)).await
 }
 
+/// As [`server`], with a deadline of `timeout` on each step of the
+/// opening handshake.
+pub async fn server_with_handshake_timeout(timeout: Duration) -> (SocketAddr, TempDir) {
+    server_with(|server| server.with_handshake_timeout(timeout)).await
+}
+
 async fn server_with(
     configure: impl FnOnce(Server<SqliteStore>) -> Server<SqliteStore>,
 ) -> (SocketAddr, TempDir) {
@@ -262,6 +268,28 @@ impl Client {
                 None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return,
                 Some(Ok(Message::Ping(_) | Message::Pong(_))) => continue,
                 Some(Ok(other)) => panic!("a message after the error: {other:?}"),
+            }
+        }
+    }
+
+    /// Sends a WebSocket ping every `every` until the server closes the
+    /// connection, which it must do in time.
+    pub async fn ping_until_closed(&mut self, every: Duration) {
+        let started = std::time::Instant::now();
+        loop {
+            assert!(started.elapsed() < WAIT, "the server closes in time");
+            if self
+                .ws
+                .send(Message::Ping(Vec::new().into()))
+                .await
+                .is_err()
+            {
+                return;
+            }
+            match tokio::time::timeout(every, self.ws.next()).await {
+                Err(_) | Ok(Some(Ok(Message::Ping(_) | Message::Pong(_)))) => continue,
+                Ok(None | Some(Err(_)) | Some(Ok(Message::Close(_)))) => return,
+                Ok(Some(Ok(other))) => panic!("a message before the close: {other:?}"),
             }
         }
     }

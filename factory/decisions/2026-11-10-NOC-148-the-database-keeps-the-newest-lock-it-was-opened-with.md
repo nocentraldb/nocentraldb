@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-148 · The database keeps the newest lock it was opened with, and an older lock opens it without taking its place
+
+- Decided by: owner (Carsten, 2026-11-10, NOC-155), on the coding agent's proposal (NOC-148)
+- Why: RFC 0005 ("Two checks: at build and on the device") stores "the lock it last opened the database with" and accepts an older lock when the stored one is its additive successor, but does not say whether that older lock then becomes the stored one. If it did, a later lock that forks from the older one (a branch that also built the next version, with a field of the same name and another type) would pass the check against it and fold data written under the newer lock by other rules, which the check exists to prevent (GENESIS.md, principle 2). So a lock that is an additive successor of the stored one replaces it, an older lock of which the stored one is a successor opens the database as an old client and leaves the stored lock as it is, and any other lock is refused with `ModelRefused`, naming each refused change, `model.id` included.
+- Instead of: storing every lock that opens the database, the RFC's words read literally, which lets a fork in after a rollback.
+- What this does not do: a device that has opened a newer lock once refuses every lock that does not descend from it, even after the app was rolled back on purpose; the developer then builds the next lock from the newer one.
+- Topics: sdk-rust, rfc-0005, model-lock, safe-subset

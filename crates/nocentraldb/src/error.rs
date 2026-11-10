@@ -17,7 +17,10 @@ pub struct Error {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ErrorCode {
-    /// The lock cannot be read, or breaks the rules RFC 0005 gives a lock.
+    /// The lock cannot be read, or breaks the rules RFC 0005 gives a lock,
+    /// or is refused against the lock the database was last opened with:
+    /// another `model.id`, or a change that is not additive (RFC 0005,
+    /// D11). The message names each refused change.
     ModelRefused,
     /// The disk or the quota is full: freeing space may help.
     StorageFull,
