@@ -28,7 +28,7 @@ const rustRows = () => {
 };
 
 test("The Rust SDK lists spaces().list() with SpaceInfo, Role and SpaceModel", () => {
-  const bullet = rustBullet("- **Spaces and their list**");
+  const bullet = rustBullet("- **Spaces and their list");
   assert.ok(bullet, "The Rust SDK has no bullet on the list of spaces");
   assert.match(bullet, /`db\.spaces\(\)\.list\(\)` returns `Vec<SpaceInfo>`/);
   assert.match(
@@ -41,7 +41,7 @@ test("The Rust SDK lists spaces().list() with SpaceInfo, Role and SpaceModel", (
 });
 
 test("The Rust SDK lists db.invitation() and members().add with Invitation, Fingerprint, Members and AddMember", () => {
-  const bullet = rustBullet("- **Invitations and members**");
+  const bullet = rustBullet("- **Invitations and members");
   assert.ok(bullet, "The Rust SDK has no bullet on invitations and members");
   assert.match(bullet, /`db\.invitation\(\)` returns an `Invitation`/);
   assert.match(

@@ -4,8 +4,9 @@
 // bytes a writer signs for a person-key record in RFC 0003; NOC-110 point 4 A,
 // the bytes of the associated data of an encrypted previous key in RFC 0003;
 // and NOC-110 points 1 to 3, the current generation and who may hold a
-// generation, in RFC 0008. Each stands where it belongs, with a decision in
-// short form and a dated History line, and leaves the open questions.
+// generation, in RFC 0008. Each stands where it belongs; in RFC 0003 and RFC
+// 0008 with a decision in short form and a dated History line. RFC 0009 is a
+// fresh text (NOC-165), whose reasons rfc-0009-fresh.test.mjs holds.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { read, section, slug } from "./lib/rfc-text.mjs";
@@ -50,13 +51,12 @@ test("RFC 0009's Rust SDK names SyncReport, SyncStatus and Connection", () => {
     /`Connection::Connected`, `Connecting`, `Offline`, `Paused` or `None`/,
   );
   assert.match(rust, /shadow Rust's `Sync` marker trait/);
-  assert.match(rust, /#s29-the-rust-names-of-the-sync-report/);
 });
 
 test("RFC 0009's Sync and status points to the Rust names", () => {
   const sync = section(read(RFC_0009), "sync-and-status");
   assert.match(sync, /`SyncReport`/);
-  assert.match(sync, /#s29-the-rust-names-of-the-sync-report/);
+  assert.ok(sync.includes("(#the-rust-sdk)"), "no link to The Rust SDK");
 });
 
 test("RFC 0009's Public names lists Db::sync, SyncReport, SyncStatus and Connection", () => {
@@ -65,21 +65,6 @@ test("RFC 0009's Public names lists Db::sync, SyncReport, SyncStatus and Connect
     const pattern = new RegExp(`\`${name.replace(/:/g, "\\:")}[\`(]`);
     assert.ok(rowsStarting(names, pattern).length > 0, `no row for ${name}`);
   }
-});
-
-test("RFC 0009 records S29 on NOC-116, removes it from Open questions, and dates it", () => {
-  const text = decision(RFC_0009, "S29. ");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\), on NOC-116: /m);
-  assert.match(text, /`SyncReport`/);
-  assert.match(text, /^Not taken:\n\n- /m);
-  const open = section(read(RFC_0009), "open-questions");
-  assert.doesNotMatch(open, /NOC-116/);
-  assert.match(open, /\*\*NOC-115, question 10\.\*\*/);
-  const status = read(RFC_0009)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /S26 to S29/);
-  assert.match(historyLine(RFC_0009, "NOC-116") ?? "", /\(#\d+\)\.?$/);
 });
 
 // NOC-117 A

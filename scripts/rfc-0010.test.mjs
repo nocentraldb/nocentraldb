@@ -98,11 +98,12 @@ test("RFC 0010 says how to give feedback", () => {
   const feedback = line(read(), "**How to give feedback.**");
   assert.ok(feedback, `${RFC} has no "How to give feedback" line`);
   assert.match(feedback, /\(README\.md#giving-feedback\)/);
+  // NOC-165: RFC 0010 has its own discussion now.
   assert.ok(
     feedback.includes(
-      "(https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback)",
+      "(https://github.com/nocentraldb/nocentraldb/discussions/154)",
     ),
-    "the line links the RFC feedback category",
+    "the line links RFC 0010's discussion",
   );
 });
 

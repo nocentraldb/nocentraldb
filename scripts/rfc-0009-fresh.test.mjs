@@ -239,7 +239,7 @@ test("spaces have no name in the SDK, and members join by one hop", () => {
   holds(part("spaces"), [/reserved core collection/], "Spaces");
   holds(
     part("invitations-and-members"),
-    [/[Tt]wo hops/, /mailbox/, /`"viewer"`/, /no group object/],
+    [/[Tt]wo hops/, /mailbox/, /`"viewer"`/, /[Nn]o group object/],
     "Invitations and members",
   );
 });

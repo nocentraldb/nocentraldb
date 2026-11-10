@@ -4,8 +4,8 @@
 // leave the design" (NOC-100's rfc-0001-complete.test.mjs holds that
 // section), and RFC 0008 and RFC 0009 state it in their text since NOC-101
 // folded their amendments in; the
-// decisions about groups, RFC 0008's M10 and RFC 0009's S14, are marked
-// withdrawn instead of deleted; the decision log records the owner's call;
+// decision about groups, RFC 0008's M10, is marked withdrawn instead of
+// deleted, and RFC 0009, a fresh text, says the SDK has no group object; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
 // that withdraws them. Whether the wording is right is the owner's review.
 import assert from "node:assert/strict";
@@ -108,10 +108,7 @@ const units = (markdown) => {
   return result;
 };
 
-for (const [path, id] of [
-  [RFC_0008, "M10"],
-  [RFC_0009, "S14"],
-]) {
+for (const [path, id] of [[RFC_0008, "M10"]]) {
   test(`${path} marks decision ${id} on groups as withdrawn by the owner, and keeps it`, () => {
     const text = decision(read(path), id);
     assert.ok(text, `no decision ${id}`);
@@ -120,6 +117,16 @@ for (const [path, id] of [
     assert.match(text, /Decided: |Decided \(/, `${id} lost its decision`);
   });
 }
+
+// RFC 0009 is a fresh text (NOC-165): it keeps no decision list, so it says
+// in its own bullet that the SDK has no group object, and links RFC 0008.
+test("RFC 0009 says the SDK has no group object, and links RFC 0008's Groups", () => {
+  const line = read(RFC_0009)
+    .split("\n")
+    .find((l) => l.startsWith("- **No group object.**"));
+  assert.ok(line, "no bullet on groups");
+  assert.match(line, WITHDRAWING);
+});
 
 test("RFC 0009 keeps adding several invitations in one call as plain batching", () => {
   const rfc = read(RFC_0009);
