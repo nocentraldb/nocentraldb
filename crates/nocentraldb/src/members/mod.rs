@@ -45,6 +45,17 @@ pub enum Role {
     Admin,
 }
 
+impl Role {
+    /// The SDK's name of a role of the core's membership.
+    pub(crate) fn of(role: membership::Role) -> Role {
+        match role {
+            membership::Role::Reader => Role::Reader,
+            membership::Role::Writer => Role::Writer,
+            membership::Role::Admin => Role::Admin,
+        }
+    }
+}
+
 impl From<Role> for membership::Role {
     fn from(role: Role) -> membership::Role {
         match role {
