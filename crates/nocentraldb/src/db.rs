@@ -142,6 +142,8 @@ pub(crate) struct Inner {
     pub(crate) watchers: Vec<Watcher>,
     /// What the database keeps of its relay, when it syncs with one.
     pub(crate) sync: Option<SyncState>,
+    /// The followers of the sync status.
+    pub(crate) status: crate::sync::Notify,
 }
 
 /// What the database keeps of one space besides its log: the checks,
@@ -359,6 +361,7 @@ impl Db {
             spaces,
             watchers: Vec::new(),
             sync: None,
+            status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
         if let Some(url) = options.relay {

@@ -14,11 +14,13 @@
 //! [`Spaces::get`](crate::Spaces::get) gives the handle that writes into
 //! it.
 //!
-//! **What this does not do yet.** `db.sync().subscribe()`, `pause()`,
-//! `resume()`, `is_confirmed()`, `confirmed()` and the per-space `status`
-//! of RFC 0009 are not built: the relay's refusals are recorded per change
-//! in the log, by the same code `SyncStatus::error` would show (NOC-188),
-//! and [`SyncStatus`] counts them. A log written before NOC-188 may hold a
+//! `status` follows the report and the confirmation of one write; `pause`
+//! stops and restarts syncing.
+//!
+//! **What this does not do yet.** The per-space `status` of RFC 0009 is
+//! not built: the relay's refusals are recorded per change in the log, by
+//! the same code `SyncStatus::error` would show (NOC-188), and
+//! [`SyncStatus`] counts them. A log written before NOC-188 may hold a
 //! relay's own text there, so the API that first shows a refusal's code
 //! must read it through `wire::mapped_code`. The relay is reached over plain
 //! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
@@ -27,8 +29,10 @@
 //! until NOC-121 reads the link.
 
 mod apply;
+mod pause;
 mod run;
 mod session;
+mod status;
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -39,6 +43,7 @@ use tokio::sync::watch;
 use crate::db::{Db, Inner};
 
 pub(crate) use run::start;
+pub(crate) use status::Notify;
 
 /// The state of the relay connection (RFC 0009, "Sync and status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -98,16 +103,20 @@ impl Db {
 impl SyncReport<'_> {
     /// The report as it is now.
     pub fn current(&self) -> SyncStatus {
-        let inner = self.db.lock();
-        let (unconfirmed, refused) = apply::own_counts(&inner);
-        let sync = inner.sync.as_ref();
-        SyncStatus {
-            connection: sync.map_or(Connection::None, |s| s.connection),
-            unconfirmed,
-            refused,
-            epoch_changed: sync.is_some_and(|s| s.epoch_changed),
-            error: sync.and_then(|s| s.error.clone().or_else(|| s.removed.clone())),
-        }
+        status(&self.db.lock())
+    }
+}
+
+/// The sync status of the database `inner`.
+fn status(inner: &Inner) -> SyncStatus {
+    let (unconfirmed, refused) = apply::own_counts(inner);
+    let sync = inner.sync.as_ref();
+    SyncStatus {
+        connection: sync.map_or(Connection::None, |s| s.connection),
+        unconfirmed,
+        refused,
+        epoch_changed: sync.is_some_and(|s| s.epoch_changed),
+        error: sync.and_then(|s| s.error.clone().or_else(|| s.removed.clone())),
     }
 }
 
@@ -137,10 +146,16 @@ pub(crate) struct SyncState {
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
+    /// Whether the app paused syncing, which the sync thread watches.
+    pub(crate) pause: watch::Sender<bool>,
+    /// Set by a pause, cleared only by the sync thread once it dropped the
+    /// connection and the app resumed: a session open when the app paused
+    /// sends and records nothing more, even after an immediate resume.
+    pub(crate) halted: bool,
 }
 
 impl SyncState {
-    fn new(wake: watch::Sender<()>) -> SyncState {
+    fn new(wake: watch::Sender<()>, pause: watch::Sender<bool>) -> SyncState {
         SyncState {
             connection: Connection::Connecting,
             epoch_changed: false,
@@ -152,7 +167,14 @@ impl SyncState {
             live: BTreeSet::new(),
             folds: 0,
             wake,
+            pause,
+            halted: false,
         }
+    }
+
+    /// Whether the app paused syncing.
+    pub(crate) fn paused(&self) -> bool {
+        *self.pause.borrow()
     }
 }
 
@@ -167,11 +189,13 @@ pub(crate) fn stopped(inner: &Inner, space: CoreSpaceId) -> bool {
         .is_some_and(|sync| sync.stopped.contains(&space))
 }
 
-/// Tells the sync thread, if there is one, that the database wrote.
+/// Tells the sync thread, if there is one, and the followers of the sync
+/// status that the database wrote.
 pub(crate) fn wake(inner: &Inner) {
     if let Some(sync) = &inner.sync {
         sync.wake.send_replace(());
     }
+    inner.status.notify();
 }
 
 #[cfg(test)]
