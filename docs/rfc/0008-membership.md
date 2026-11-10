@@ -885,4 +885,4 @@ The formats of the member certificate, the account sign-off and the key-chain su
 - **2026-11-09** · NOC-35 · The status follows the decided RFCs (#76).
 - **2026-11-09** · NOC-76 · Groups withdrawn by the owner (Carsten, 2026-11-09): M10 withdrawn, and groups leave every definition (#87).
 - **2026-11-09** · NOC-75 · Links RFC 0009 for how a new member's identity reaches an admin, and for the public role names (#87).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#PR).
+- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#114).
