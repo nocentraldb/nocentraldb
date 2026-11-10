@@ -6,7 +6,7 @@ This RFC proposes the API an app or an agent uses to work with NoCentralDB: how 
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S28, on opening a database (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -84,6 +84,8 @@ await db.close();
 3. **Checks the lock on the device.** It runs the additive check between the lock the database was last opened with and this one, and refuses with `modelRefused`, naming each refused change, if the `model.id` differs or the change is not additive. It deletes and rewrites nothing ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device), D11).
 4. **Brings the view up to date.** It adds columns, tables and indexes for an additive change, folds parked operations that are now known, and starts a full rebuild where RFC 0006 asks for one ([RFC 0006, "Rebuilding the view"](0006-local-view.md#rebuilding-the-view)). `nc.open` resolves before a rebuild ends; the app reads the old view meanwhile, and `db.view` reports the rebuild's progress.
 5. **Starts syncing** in the background when a relay is given ([Sync and status](#sync-and-status)), and asks the browser for persistent storage unless the app opened with `persistentStorage: "on-request"` ([RFC 0006, decision 11](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage)).
+
+**Where the database lives.** In Node.js, `nc.open` takes the options of the Rust SDK under the names `path`, `keyFile`, `inMemory` and `agent`, with the same meaning (decision [S28](#s28-the-typescript-names-of-the-open-options)): `path` names a directory the SDK owns, `keyFile` keeps the keys in that file for a headless agent with no keystore, `inMemory` keeps the database and its keys in memory for tests, and `agent` certifies the member as an agent ([The Rust SDK](#the-rust-sdk)). Opened with neither `path` nor `inMemory`, it is refused with `invalidValue`, so no data lands where the app did not say (decision [S27](#s27-opening-without-a-path-or-memory)). With no platform keystore reachable and no `keyFile` given, it fails with `keyStoreUnavailable`, whose message names the `keyFile` option (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). These options exist in Node.js only: the browser has no path, and keeps its key as [RFC 0006, "What the view stores in plaintext"](0006-local-view.md#what-the-view-stores-in-plaintext) says.
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
@@ -409,9 +411,10 @@ The SDK throws one error class, `nc.Error`, with a string `code` and the ids it 
 | `spaceOfAnotherModel` | `db.spaces.get`, writes | The space's genesis names another `model.id`; names both ids. |
 | `storageFull` | writes, `nc.open` | The disk or the browser's quota is full. |
 | `storageFailed` | writes, reads, `nc.open` | Any other storage failure, such as a damaged database file. Freeing space would not help, so it is not `storageFull` (decision [S22](#s22-error-codes-for-cases-this-rfc-named-no-code-for)). |
+| `keyStoreUnavailable` | `nc.open` in Node.js, `Db::open` | No platform keystore is reachable and the app named no key file. The message names the key-file option, `keyFile` or `key_file` (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). |
 | `closed` | every call | The database was closed. |
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
-| `invalidValue`, `deprecated`, `noPerson` | writes, queries | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. |
+| `invalidValue`, `deprecated`, `noPerson` | writes, queries; `invalidValue` also `nc.open` in Node.js and `Db::open` | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. Opening is `invalidValue` when it names neither a path nor memory to keep the database in (decision [S27](#s27-opening-without-a-path-or-memory)). |
 | `notAllowed`, `notMember`, `lastAdmin` | writes, membership calls | The member's role does not allow it, it is no longer a member, or it is the last admin. |
 | `unknownAccount` | `members.add` | The invitation's account is new to this device; carries its fingerprint. |
 | `cursorOfAnotherModel` | `db.find` | The cursor was made under another model or index. |
@@ -445,7 +448,7 @@ while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
-- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns, which holds the database, and the SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped.
+- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns, which holds the database, and the SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped. `Db::open` with neither `path(dir)` nor `in_memory()` is refused with `invalidValue` (decision [S27](#s27-opening-without-a-path-or-memory)); with no platform keystore reachable and no `key_file` given, it fails with `keyStoreUnavailable`, whose message names `key_file` (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)).
 - **The account key and the member's kind** (decision [S20](#s20-the-account-key-that-signs-the-member-certificate)). Until the accounts RFC exists, each database draws its own account key once and keeps it next to the member key ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate, so a space adds it as a writer when no role is given ([RFC 0008, decision M14](0008-membership.md#m14-the-default-role-of-an-agent)); without it, the member is a device.
 - **The Rust names** (decision [S21](#s21-rust-names-this-rfc-did-not-list)). Besides `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`, which follow [Terms](#terms), the SDK has `ObjectId`, `SpaceId` and `ChangeId`, which print and parse as lowercase hex; `Object`, a read object, whose `id()`, `space()` and `deleted()` stand for `$id`, `$space` and `$deleted`, and whose `get::<T>(name)` reads a field; `Written`, what `write` returns, with `change` and `ids`; and `page.has_more` for `hasMore`.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
@@ -460,7 +463,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 
 | Name | What it is | Builds on |
 | --- | --- | --- |
-| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
+| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing`, and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `db.close` | Closes the database | [RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers) |
 | `nc.Error` | The one error class, with `code` | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
 
@@ -545,6 +548,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | --- | --- | --- |
 | `lockOutOfDate`, `modelRefused`, `spaceOfAnotherModel` | Model errors | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `storageFull`, `storageFailed`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
+| `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `invalidValue`, `deprecated`, `noPerson` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 
@@ -599,9 +603,8 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 
 ## Open questions
 
-Three questions wait for the owner, each in its own ticket:
+Two questions wait for the owner, each in its own ticket:
 
-- **NOC-114.** Opening a database on a device with no keystore, `Db::open` with neither a path nor `in_memory()`, and the TypeScript names for `path`, `keyFile`, `inMemory` and `agent`.
 - **NOC-116.** The Rust names of the sync status that [Sync and status](#sync-and-status) reports.
 - **NOC-115, question 10.** The public names for pairing a device, linking an account and recovery, which the accounts RFC (RFC 0010) designs behind the entry points of [S15](#s15-accounts).
 
@@ -869,6 +872,38 @@ Not taken:
 - A `Uint8Array`.
 - A branded string type.
 
+### S26. Opening without a keystore or a key file
+
+Decided (Carsten, 2026-11-10), on NOC-114: `nc.open` in Node.js and `Db::open` fail with a new error code, `keyStoreUnavailable`, whose message names the key-file option.
+
+Why: a headless machine often has no keystore, and the code tells the developer what to do, while a key reaches disk only in a file the app chose. RFC 0003 records it ([decision 19](0003-keys-and-cryptography.md#19-opening-without-a-keystore-or-a-key-file)). It costs one more code.
+
+Not taken:
+
+- A key file in the database's directory, without being asked: convenient, but a key on disk that nobody chose is the risk RFC 0003 avoids.
+- `storageFailed`: no new code, but it does not tell the developer what to do.
+
+### S27. Opening without a path or memory
+
+Decided (Carsten, 2026-11-10), on NOC-114: opening with neither `path(dir)` nor `in_memory()`, in Node.js with neither `path` nor `inMemory`, is refused with `invalidValue`.
+
+Why: the app must say where its data lives, so no data lands somewhere unexpected.
+
+Not taken:
+
+- In memory by default: safe for tests, but an app that forgets its path loses its data silently.
+- The platform's app data directory by default: convenient, but the owner did not choose it for [S19](#s19-where-a-database-and-its-member-key-live).
+
+### S28. The TypeScript names of the open options
+
+Decided (Carsten, 2026-11-10), on NOC-114: in Node.js, `nc.open` takes `path`, `keyFile`, `inMemory` and `agent`, the Rust SDK's options in camel case. The browser has no path and keeps its key as RFC 0006 says.
+
+Why: both SDKs name the same options the same way, and a browser keeps its copy where RFC 0006 decides, so a path means nothing there.
+
+Not taken:
+
+- Leaving the TypeScript names open until the Node.js SDK is built.
+
 ## How this RFC is tested
 
 `scripts/rfc-0009.test.mjs` and `scripts/rfc-0009-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file exists, links to RFC 0001 to 0008 and GENESIS.md, that every relative link and its anchor resolve, links from other files included, that it has a section for every part NOC-64 names, that every decision records the owner's choice, why and the options not taken, that every SDK name its TypeScript examples use is listed under [Public names](#public-names) and every row there links the RFC it builds on, that it shows the Rust SDK, and that the [RFC index](README.md) lists it. The design itself is tested where it is built: the Rust SDK's calls in `crates/nocentraldb`, and each call against the convergence harness and the view, natively and in the browser, as it is built.
@@ -883,3 +918,4 @@ Not taken:
 - **2026-11-10** · NOC-92 · A reference reads `{ space, id }`, `space.inspect` gives its state, and a subscription does not follow its target, as RFC 0005's D20 and D21 decided (#98).
 - **2026-11-10** · NOC-106 · S19 to S24, which the owner decided as recommended on NOC-95, written into the text where each belongs (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#118).
+- **2026-11-10** · NOC-114 · Opening a database: `keyStoreUnavailable` without a keystore or a key file, `invalidValue` without a path or memory, and the Node.js names `path`, `keyFile`, `inMemory` and `agent`, which the owner decided as recommended (S26 to S28) (#124).
