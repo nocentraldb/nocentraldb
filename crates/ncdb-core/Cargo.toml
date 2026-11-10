@@ -60,6 +60,14 @@ getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js
 # libsqlite3-sys builds natively: 0.6.3 and libsqlite3-sys 0.39.1 both carry
 # SQLite 3.54.1. Its `wasm-bindgen` feature provides the host functions.
 sqlite-wasm-rs = { version = "=0.6.3", default-features = false, features = ["wasm-bindgen"] }
+# The `opfs-sahpool` VFS on the Origin Private File System, in a dedicated
+# Web Worker (RFC 0006, "The browser"; src/view/browser.rs).
+sqlite-wasm-vfs = { version = "=0.3.0", default-features = false, features = ["sahpool"] }
+# src/view/browser.rs tells a dedicated worker from the page's main thread;
+# the versions Cargo.lock already holds.
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+web-sys = { version = "=0.3.107", default-features = false, features = ["std", "DedicatedWorkerGlobalScope"] }
 
 # The native SQLite, pinned here although rusqlite brings it, for the same
 # reason: libsqlite3-sys 0.39.1 builds SQLite 3.54.1 with `bundled`.

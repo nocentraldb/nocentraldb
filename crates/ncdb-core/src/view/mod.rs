@@ -12,6 +12,8 @@
 //! The same code runs natively and on wasm32 (RFC 0006, "The same fold
 //! code on every target"): only the SQLite under `rusqlite` differs.
 
+#[cfg(target_arch = "wasm32")]
+pub mod browser;
 mod fold;
 mod from_lock;
 mod log_table;

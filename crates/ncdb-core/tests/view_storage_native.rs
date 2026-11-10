@@ -16,6 +16,12 @@ mod member;
 #[path = "support/view.rs"]
 mod view_support;
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, as in every test file (NOC-10), although
+// this file is native only.
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use std::cell::Cell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
