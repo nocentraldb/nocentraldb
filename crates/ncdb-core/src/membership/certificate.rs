@@ -6,6 +6,12 @@
 //! the account key, and `"nocentraldb/sub-agent-cert"` for a sub-agent,
 //! signed by its parent's member signing key. Key 1 of a sub-agent's
 //! certificate still carries its parent's account key.
+//!
+//! Key 6, when present, carries the account key statement that names key 1
+//! ([`AccountKeyStatement`]); a sub-agent's carries its parent's account's.
+//! Key 5 does not cover it, because the statement carries the recovery
+//! key's own signature. A certificate without key 6 is one written before
+//! accounts are built (RFC 0010), and verifies as before.
 
 use std::fmt;
 
@@ -19,6 +25,7 @@ use crate::keys::MemberKey;
 use crate::redact;
 
 use super::fields::{self, Fields};
+use super::statement::AccountKeyStatement;
 
 /// What a certified member is (RFC 0003, key 3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -62,8 +69,11 @@ pub struct Certificate {
     pub kind: MemberKind,
     /// Key 4: the parent member, for a sub-agent only.
     pub parent: Option<MemberId>,
-    /// Key 5: the Ed25519 signature.
+    /// Key 5: the Ed25519 signature, over keys 1 to 4.
     pub signature: [u8; 64],
+    /// Key 6: the account key statement that names key 1, when the
+    /// certificate carries one.
+    pub statement: Option<AccountKeyStatement>,
 }
 
 impl Certificate {
@@ -86,6 +96,7 @@ impl Certificate {
             kind,
             parent: None,
             signature: [0; 64],
+            statement: None,
         };
         certificate.signature = account.sign(&certificate.digest()).to_bytes();
         certificate
@@ -104,9 +115,17 @@ impl Certificate {
             kind: MemberKind::SubAgent,
             parent: Some(parent.id()),
             signature: [0; 64],
+            statement: None,
         };
         certificate.signature = parent.signing().sign(&certificate.digest()).to_bytes();
         certificate
+    }
+
+    /// The certificate with `statement` as its key 6. Key 5 does not cover
+    /// it, so the signature stays as it is.
+    pub fn with_statement(mut self, statement: AccountKeyStatement) -> Certificate {
+        self.statement = Some(statement);
+        self
     }
 
     /// What the signer signs: the SHA-256 hash of the context of the kind
@@ -122,15 +141,23 @@ impl Certificate {
         hash.finalize().into()
     }
 
-    /// Whether the signature verifies, strictly, with `signer`: the account
-    /// key for a device or an agent, the parent's signing key for a
-    /// sub-agent. Checking that the signer is the right one is the caller's.
+    /// Whether the certificate holds: the signature verifies, strictly,
+    /// with `signer`, the account key for a device or an agent, the
+    /// parent's signing key for a sub-agent; and a statement in key 6
+    /// verifies with its recovery key and names key 1's account key.
+    /// Checking that the signer is the right one, and that the recovery key
+    /// is the account's expected one, is the caller's.
     pub fn verify(&self, signer: &[u8; 32]) -> bool {
         let Ok(key) = VerifyingKey::from_bytes(signer) else {
             return false;
         };
-        key.verify_strict(&self.digest(), &Signature::from_bytes(&self.signature))
-            .is_ok()
+        let statement_holds = self.statement.as_ref().is_none_or(|statement| {
+            statement.account_key == self.account_key && statement.verify()
+        });
+        statement_holds
+            && key
+                .verify_strict(&self.digest(), &Signature::from_bytes(&self.signature))
+                .is_ok()
     }
 
     /// The canonical bytes of the certificate map.
@@ -158,11 +185,15 @@ impl Certificate {
     pub(crate) fn to_value(&self) -> Value {
         let mut entries = self.unsigned_fields();
         entries.push((5, fields::bytes(&self.signature)));
+        if let Some(statement) = &self.statement {
+            entries.push((6, statement.to_value()));
+        }
         fields::map(entries)
     }
 
-    /// A certificate from its map. Every key is required by its kind, and
-    /// no other key may appear: RFC 0003 defines no extensions for it.
+    /// A certificate from its map. Keys 1 to 5 are required by its kind,
+    /// key 6 is optional, and no other key may appear: RFC 0003 defines no
+    /// extensions for it.
     pub(crate) fn from_value(value: Value) -> Result<Certificate, ChangeError> {
         let mut map = Fields::of(value)?;
         let account_key = fields::fixed(map.required(1)?)?;
@@ -177,6 +208,12 @@ impl Certificate {
             }
         };
         let signature = fields::fixed(map.required(5)?)?;
+        let statement = map
+            .optional(6)
+            .map(|(_, value)| {
+                AccountKeyStatement::from_value(value).map_err(|_| ChangeError::InvalidValue(6))
+            })
+            .transpose()?;
         if let Some(key) = map.0.keys().next() {
             return Err(ChangeError::InvalidValue(*key));
         }
@@ -186,6 +223,7 @@ impl Certificate {
             kind,
             parent,
             signature,
+            statement,
         })
     }
 }
@@ -203,6 +241,7 @@ impl fmt::Debug for Certificate {
             .field("member", &self.member)
             .field("kind", &self.kind)
             .field("parent", &self.parent)
+            .field("statement", &self.statement)
             .finish_non_exhaustive()
     }
 }

@@ -34,7 +34,9 @@ fn recovery() -> RecoveryKey {
 }
 
 fn account_key() -> [u8; 32] {
-    SigningKey::from_bytes(&[0x11; 32]).verifying_key().to_bytes()
+    SigningKey::from_bytes(&[0x11; 32])
+        .verifying_key()
+        .to_bytes()
 }
 
 /// The statement's map with one entry changed.
@@ -105,7 +107,8 @@ fn a_statement_signed_by_another_key_does_not_verify() {
     // Signed by a key that is not the one key 1 names.
     let mut other = code();
     other[0] ^= 1;
-    let mut statement = AccountKeyStatement::sign(&RecoveryKey::from_code(&other), account_key(), 1);
+    let mut statement =
+        AccountKeyStatement::sign(&RecoveryKey::from_code(&other), account_key(), 1);
     statement.recovery_key = recovery().public();
     assert!(!statement.verify());
 }

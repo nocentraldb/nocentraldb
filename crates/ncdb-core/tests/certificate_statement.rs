@@ -71,7 +71,10 @@ fn the_vector_decodes_encodes_and_verifies_with_its_statement() {
     let certificate = Certificate::decode(&bytes).unwrap();
     assert_eq!(certificate.encode(), bytes);
     assert_eq!(certificate.statement, Some(statement()));
-    assert_eq!(certificate.statement.as_ref().unwrap().recovery_key, recovery().public());
+    assert_eq!(
+        certificate.statement.as_ref().unwrap().recovery_key,
+        recovery().public()
+    );
     assert!(certificate.verify(&certificate.account_key));
 }
 
@@ -106,7 +109,9 @@ fn a_sub_agents_certificate_carries_its_parents_account_statement() {
     assert!(decoded.verify(&creator().public().signing));
     assert_eq!(
         decoded.signature,
-        Certificate::decode(&hex(SUB_AGENT_CERTIFICATE)).unwrap().signature
+        Certificate::decode(&hex(SUB_AGENT_CERTIFICATE))
+            .unwrap()
+            .signature
     );
 }
 
@@ -114,8 +119,8 @@ fn a_sub_agents_certificate_carries_its_parents_account_statement() {
 fn a_statement_that_names_another_account_key_does_not_verify() {
     let other = AccountKeyStatement::sign(&recovery(), [0x99; 32], 1);
     assert!(other.verify());
-    let certificate = Certificate::sign(&account(), creator().id(), MemberKind::Agent)
-        .with_statement(other);
+    let certificate =
+        Certificate::sign(&account(), creator().id(), MemberKind::Agent).with_statement(other);
     assert!(!certificate.verify(&certificate.account_key));
 }
 
@@ -123,8 +128,8 @@ fn a_statement_that_names_another_account_key_does_not_verify() {
 fn a_statement_whose_signature_fails_does_not_verify() {
     let mut broken = statement();
     broken.signature[0] ^= 1;
-    let certificate = Certificate::sign(&account(), creator().id(), MemberKind::Agent)
-        .with_statement(broken);
+    let certificate =
+        Certificate::sign(&account(), creator().id(), MemberKind::Agent).with_statement(broken);
     assert!(!certificate.verify(&certificate.account_key));
 
     let mut sub = Certificate::decode(&hex(SUB_AGENT_WITH_STATEMENT)).unwrap();

@@ -32,7 +32,6 @@ pub use body::{
     MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
 };
 pub use certificate::{Certificate, MemberKind};
-pub use statement::AccountKeyStatement;
 pub use current::MergeRotation;
 pub use generations::Generation;
 pub use genesis::{
@@ -50,3 +49,4 @@ pub use person_key::{
 pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
+pub use statement::AccountKeyStatement;
