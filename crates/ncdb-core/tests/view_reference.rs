@@ -47,11 +47,6 @@ const LOCK: &str = r#"{
           "equal": 1,
           "fields": [{ "direction": "asc", "field": "customer" }],
           "since": 1
-        },
-        "customerOrder": {
-          "equal": 0,
-          "fields": [{ "direction": "asc", "field": "customer" }],
-          "since": 1
         }
       },
       "since": 1
@@ -69,6 +64,15 @@ const CUSTOMERS: SpaceId = SpaceId([0x33; 16]);
 
 fn lock() -> ModelLock {
     ModelLock::from_json(LOCK).unwrap()
+}
+
+/// [`LOCK`] whose index fixes nothing, so that a page reads every order
+/// in the index's order.
+fn sorted() -> ModelLock {
+    let text = LOCK
+        .replace("\"byCustomer\"", "\"customerOrder\"")
+        .replace("\"equal\": 1", "\"equal\": 0");
+    ModelLock::from_json(&text).unwrap()
 }
 
 fn customer(n: u8) -> Value {
@@ -105,7 +109,12 @@ fn order(n: u8, value: Value) -> Vec<Operation> {
 
 /// A view of [`LOCK`] in `db` that received `operations` in one change.
 fn view_with(db: &MemDb, operations: Vec<Operation>) -> View {
-    let mut view = View::open(&db.0, &lock()).unwrap();
+    view_of(&lock(), db, operations)
+}
+
+/// A view of `lock` in `db` that received `operations` in one change.
+fn view_of(lock: &ModelLock, db: &MemDb, operations: Vec<Operation>) -> View {
+    let mut view = View::open(&db.0, lock).unwrap();
     let mut control = Control::default();
     view.receive(&envelope(FOUNDER, 1, 0), &mut control)
         .unwrap();
@@ -215,7 +224,8 @@ fn references_sort_by_their_bytes_with_unset_first() {
             object: ObjectId([n; 16]),
         })
     };
-    let view = view_with(
+    let view = view_of(
+        &sorted(),
         &db,
         [
             order(1, customer(0x11)),
