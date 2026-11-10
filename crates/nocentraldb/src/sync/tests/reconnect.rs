@@ -97,8 +97,11 @@ async fn a_restore_makes_the_member_pull_from_zero_and_push_again_without_foldin
     relay.proxy.restore();
 
     eventually("pushed again", || now(relay.log(own.id().0)).len() == 3).await;
-    let status = synced(&db).await;
-    assert!(!status.epoch_changed);
+    synced(&db).await;
+    eventually("every space synced in the new epoch", || {
+        !db.sync().current().epoch_changed
+    })
+    .await;
     assert_eq!(relay.log(own.id().0).await[2], lost.change.0);
     let inner = crate::db::lock(&db.inner);
     assert_eq!(inner.sync_folds(), 4, "the shared space's changes, once");
