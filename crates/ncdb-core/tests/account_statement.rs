@@ -114,6 +114,33 @@ fn a_statement_signed_by_another_key_does_not_verify() {
 }
 
 #[test]
+fn a_statement_with_number_zero_does_not_verify() {
+    // Its fields are public, so a statement with number 0 can be built in
+    // memory with a valid signature by the recovery key; it still does not
+    // hold. The seed is derived here as RFC 0003 gives it.
+    let mut seed = [0; 32];
+    hkdf::Hkdf::<sha2::Sha256>::new(None, &code())
+        .expand(b"nocentraldb/recovery-key", &mut seed)
+        .unwrap();
+    let signer = SigningKey::from_bytes(&seed);
+    assert_eq!(signer.verifying_key().to_bytes(), recovery().public());
+    let mut statement = AccountKeyStatement::sign(&recovery(), account_key(), 1);
+    statement.number = 0;
+    statement.signature = ed25519_dalek::Signer::sign(&signer, &statement.digest()).to_bytes();
+    assert!(
+        signer
+            .verifying_key()
+            .verify_strict(
+                &statement.digest(),
+                &ed25519_dalek::Signature::from_bytes(&statement.signature)
+            )
+            .is_ok(),
+        "the signature itself is valid"
+    );
+    assert!(!statement.verify());
+}
+
+#[test]
 fn a_statement_with_number_zero_does_not_decode() {
     // RFC 0003: 1 for the first account key, one more with each new one.
     assert!(AccountKeyStatement::decode(&changed(3, Value::Unsigned(0))).is_err());
