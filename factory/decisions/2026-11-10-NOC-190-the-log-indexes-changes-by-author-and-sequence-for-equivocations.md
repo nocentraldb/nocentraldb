@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-190 · The log indexes its changes by author and sequence, and the space status lists every change of an equivocation
+
+- Decided by: coding agent (NOC-190), the shape `Vec<ChangeId>` is the owner's (NOC-193)
+- Why: RFC 0002, "Author sequence", says two different changes with the same author and sequence are an equivocation; "both changes are kept and both are folded … and the SDK reports it". The core's `Log` keeps, as changes are appended, the change ids of each author and sequence, the way it keeps its tips and relay counts in memory, and `Log::equivocations` lists every change of a group of two or more, in local order. `SpaceStatus::equivocations` reports them by change id, with no member id (NOC-193, no public `MemberId` in v1). A reopened view appends every frame again, so the index needs no table, and the on-disk format does not change.
+- Instead of: a pass over the log at every read, which a subscription would repeat after every change; or reporting the authors, which needs a public member id the owner left out of v1.
+- What this does not do: the genesis is RFC 0002's exception, "both stay in the log, the one with the lower change id is the genesis"; two geneses of one creator are listed as an equivocation like any other two changes under one sequence. The index costs one change id per change in memory.
+- Topics: sdk-rust, rfc-0002, rfc-0009, local-view

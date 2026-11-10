@@ -9,8 +9,8 @@
 //! parked changes and operations, and the reason "another model" need the
 //! writer's model in each change (RFC 0002, payload key 64), which the
 //! core does not read yet. `shreds_waiting` needs the stability of a shred
-//! (RFC 0008, M20 and M21), which the core does not compute yet.
-//! `equivocations` follows in its own change. The struct is
+//! (RFC 0008, M20 and M21), which the core does not compute yet. The
+//! struct is
 //! `#[non_exhaustive]`, so each field comes when it is built, instead of
 //! a field that always reads empty and claims nothing waits.
 
@@ -67,6 +67,11 @@ pub struct SpaceStatus {
     /// "Concurrent add and remove of one member"). A grant that a later
     /// revocation revoked after seeing it is not lost.
     pub lost_grants: Vec<ChangeId>,
+    /// The changes of every equivocation in the space, in local order: two
+    /// or more different changes of one author under one sequence, as a
+    /// device restored from a backup writes (RFC 0002, "Author
+    /// sequence"; RFC 0008, "The cutoff"). Both are kept and folded.
+    pub equivocations: Vec<ChangeId>,
     /// Whether the space's current key generation may be held by someone
     /// who is no longer a member (RFC 0008, "Two removals that rotate the
     /// key at once").
@@ -154,6 +159,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         rejected,
         refused,
         lost_grants: Vec::new(),
+        equivocations: Vec::new(),
         exposed: false,
         waiting_for_key: false,
     };
@@ -170,6 +176,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
             .into_iter()
             .map(ChangeId)
             .collect();
+        status.equivocations = log.equivocations().into_iter().map(ChangeId).collect();
     }
     if let Some(current) = resolved.current_generation() {
         status.exposed = resolved.exposed(current);
