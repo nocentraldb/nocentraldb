@@ -81,7 +81,10 @@ fn a_link_takes_the_id_of_an_object_of_the_same_space() {
     .unwrap();
 
     let task = now(project.get("tasks", written.ids[1])).unwrap().unwrap();
-    assert_eq!(task.get::<ObjectId>("project").unwrap(), Some(written.ids[0]));
+    assert_eq!(
+        task.get::<ObjectId>("project").unwrap(),
+        Some(written.ids[0])
+    );
 }
 
 #[test]

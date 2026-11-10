@@ -7,12 +7,13 @@ use std::collections::BTreeMap;
 use ncdb_core::cbor;
 use ncdb_core::field::FieldType;
 use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
+use ncdb_core::set;
 use ncdb_core::view::{Field, FieldState, Row};
 
 use crate::db::Inner;
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ObjectId, SpaceId};
-use crate::value::Value;
+use crate::value::{Repr, Value};
 
 /// One object read from the view.
 #[derive(Clone, PartialEq)]
@@ -116,6 +117,20 @@ fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
             let entry = link.read(state).value.filter(|entry| entry.known)?;
             Value::from_cbor(&entry.value, true)
         }
+        (Field::Set(set), FieldState::Set(state)) => Some(list(set.read(state), false)),
+        (Field::Links(links), FieldState::Set(state)) => Some(list(links.read(state), true)),
         _ => None,
     }
+}
+
+/// The elements of a set or of many links, in the order of their canonical
+/// bytes. An element the reader's schema does not allow is left out.
+fn list(read: set::Read, ids: bool) -> Value {
+    let elements = read
+        .elements
+        .iter()
+        .filter(|element| element.known)
+        .filter_map(|element| Value::from_cbor(&element.value, ids))
+        .collect();
+    Value(Repr::List(elements))
 }

@@ -21,6 +21,7 @@
 //! sync yet; see [`Db`] for what else it leaves out.
 
 mod db;
+mod encode;
 mod error;
 mod id;
 mod object;

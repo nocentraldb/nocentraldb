@@ -1,21 +1,20 @@
 //! A transaction (RFC 0009, "One write, one change"): the writes an app
 //! records in one [`crate::Space::write`] call, and the operations of RFC
 //! 0004 they become in the change. An operation cannot name another of its
-//! own change, so a field written twice in one transaction is written once,
-//! with its last value: the net effect.
+//! own change, so the change carries the net effect: a field written twice
+//! keeps its last value, and an element added and removed keeps its last
+//! action.
 
 use std::collections::BTreeMap;
 
+use ncdb_core::basic::{BasicValue, Kind};
+use ncdb_core::cbor;
 use ncdb_core::change::Operation;
-use ncdb_core::clock::Hlc;
 use ncdb_core::field_op;
-use ncdb_core::ids::{
-    ChangeId as CoreChangeId, MemberId, ObjectId as CoreObjectId, OperationId,
-    SpaceId as CoreSpaceId,
-};
-use ncdb_core::link::Target;
-use ncdb_core::view::{Field, FieldState, Model, View};
+use ncdb_core::ids::{MemberId, ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
+use ncdb_core::view::{Model, View};
 
+use crate::encode::Site;
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::ObjectId;
 use crate::value::{Repr, Value};
@@ -37,18 +36,48 @@ impl std::fmt::Debug for Transaction<'_> {
 
 /// One recorded write.
 enum Record {
-    Create {
-        collection: String,
-        id: CoreObjectId,
-        values: Vec<(String, Value)>,
-    },
+    Create(String, CoreObjectId, Vec<(String, Value)>),
+    Update(String, CoreObjectId, Vec<(String, Value)>),
+    Delete(String, CoreObjectId),
 }
 
-/// What a field of one object becomes in the change, after every write of
-/// the transaction.
-struct FieldWrite {
-    collection: String,
-    value: Value,
+/// What one field of one object becomes in the change.
+pub(crate) enum Intent {
+    /// A basic value or a link: the last value written.
+    Set(Value),
+    /// A set or many links: each element with whether it is added, by its
+    /// last action.
+    Elements(Vec<(Value, bool)>),
+}
+
+impl Intent {
+    /// The first write of the field.
+    fn new(value: Value) -> Intent {
+        let mut intent = Intent::Elements(Vec::new());
+        intent.write(value);
+        intent
+    }
+
+    /// Takes in one more write of the field.
+    fn write(&mut self, value: Value) {
+        let (elements, add) = match value.0 {
+            Repr::Add(elements) => (elements, true),
+            Repr::Remove(elements) => (elements, false),
+            _ => return *self = Intent::Set(value),
+        };
+        if let Intent::Set(_) = self {
+            *self = Intent::Elements(Vec::new());
+        }
+        let Intent::Elements(actions) = self else {
+            unreachable!("made a list of elements above");
+        };
+        for element in elements {
+            match actions.iter_mut().find(|(e, _)| *e == element) {
+                Some(action) => action.1 = add,
+                None => actions.push((element, add)),
+            }
+        }
+    }
 }
 
 impl<'a> Transaction<'a> {
@@ -68,12 +97,33 @@ impl<'a> Transaction<'a> {
     ) -> Result<ObjectId, Error> {
         let values = self.fields(collection, values)?;
         let id = CoreObjectId::random();
-        self.records.push(Record::Create {
-            collection: collection.to_owned(),
-            id,
-            values,
-        });
+        self.records
+            .push(Record::Create(collection.to_owned(), id, values));
         Ok(ObjectId(id))
+    }
+
+    /// Records a write of `values` to the object `id` of `collection`. The
+    /// write fails with `NotFound` when the copy holds no such object and
+    /// this transaction does not create it.
+    pub fn update<'v>(
+        &mut self,
+        collection: &str,
+        id: ObjectId,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+    ) -> Result<(), Error> {
+        let values = self.fields(collection, values)?;
+        self.records
+            .push(Record::Update(collection.to_owned(), id.0, values));
+        Ok(())
+    }
+
+    /// Records the deletion of the object `id` of `collection`, which
+    /// fails as an update does when the copy holds no such object.
+    pub fn delete(&mut self, collection: &str, id: ObjectId) -> Result<(), Error> {
+        self.fields(collection, [])?;
+        self.records
+            .push(Record::Delete(collection.to_owned(), id.0));
+        Ok(())
     }
 
     /// The values, each for a field `collection` has.
@@ -100,122 +150,115 @@ impl<'a> Transaction<'a> {
             .collect()
     }
 
-    /// The operations of the change, in the order the transaction recorded
-    /// them, and the ids of the objects it created. A value a field does
-    /// not take is refused with `InvalidValue`.
+    /// The operations of the change: the creates and deletes in the order
+    /// the transaction recorded them, then each field written, in the order
+    /// it was first written; and the ids of the objects it created. A value
+    /// a field does not take is refused with `InvalidValue`.
     pub(crate) fn operations(
         self,
         view: &View,
         space: CoreSpaceId,
         author: MemberId,
     ) -> Result<(Vec<Operation>, Vec<ObjectId>), Error> {
-        let mut objects = Vec::new();
-        let mut created = Vec::new();
-        let mut fields: BTreeMap<(CoreObjectId, String), FieldWrite> = BTreeMap::new();
+        let mut operations = Vec::new();
+        let mut created: Vec<(CoreObjectId, String)> = Vec::new();
+        let mut intents: BTreeMap<(CoreObjectId, String), (String, Intent)> = BTreeMap::new();
         let mut order = Vec::new();
         for record in self.records {
-            match record {
-                Record::Create {
-                    collection,
-                    id,
-                    values,
-                } => {
-                    objects.push(field_op::create(id, &collection));
-                    created.push(ObjectId(id));
-                    for (name, value) in values {
-                        let key = (id, name);
-                        if !fields.contains_key(&key) {
-                            order.push(key.clone());
-                        }
-                        let collection = collection.clone();
-                        fields.insert(key, FieldWrite { collection, value });
+            let (collection, id, values) = match record {
+                Record::Create(collection, id, values) => {
+                    operations.push(field_op::create(id, &collection));
+                    created.push((id, collection.clone()));
+                    (collection, id, values)
+                }
+                Record::Update(collection, id, values) => {
+                    held(view, space, &created, &collection, id)?;
+                    (collection, id, values)
+                }
+                Record::Delete(collection, id) => {
+                    let deletion = held(view, space, &created, &collection, id)?;
+                    let write = BasicValue {
+                        kind: Kind::Boolean,
+                    }
+                    .set(
+                        &deletion,
+                        Site::ID,
+                        author,
+                        Site::STAMP,
+                        cbor::Value::Bool(true),
+                    )
+                    .expect("a boolean is a deletion's value");
+                    operations.push(field_op::delete(id, &collection, &write));
+                    continue;
+                }
+            };
+            for (name, value) in values {
+                let key = (id, name);
+                match intents.get_mut(&key) {
+                    Some((_, intent)) => intent.write(value),
+                    None => {
+                        order.push(key.clone());
+                        intents.insert(key, (collection.clone(), Intent::new(value)));
                     }
                 }
             }
         }
-        let mut operations = objects;
         for key in order {
-            let write = &fields[&key];
+            let (collection, intent) = &intents[&key];
             let (object, name) = &key;
             let field = self
                 .model
-                .field(&write.collection, name)
+                .field(collection, name)
                 .expect("a recorded field is in the model");
             let state = match view
-                .get(space, &write.collection, *object)
+                .get(space, collection, *object)
                 .map_err(storage)?
                 .and_then(|mut row| row.fields.remove(name))
             {
                 Some(state) => state,
                 None => field.empty(),
             };
-            let at = Site {
+            let site = Site {
                 object: *object,
-                collection: &write.collection,
+                collection,
                 name,
                 space,
                 author,
             };
-            operations.push(at.encode(field, &state, &write.value)?);
+            operations.extend(site.encode(field, &state, intent)?);
         }
-        Ok((operations, created))
+        let ids = created.into_iter().map(|(id, _)| ObjectId(id)).collect();
+        Ok((operations, ids))
     }
 }
 
-/// Where a field operation goes, and who writes it.
-struct Site<'a> {
-    object: CoreObjectId,
-    collection: &'a str,
-    name: &'a str,
+/// The state of the deletion of `object`, which the copy holds in
+/// `collection` or this transaction created there; `NotFound` otherwise.
+fn held(
+    view: &View,
     space: CoreSpaceId,
-    author: MemberId,
-}
-
-impl Site<'_> {
-    /// The operation that writes `value` to the field, replacing what
-    /// `state`, the copy's state of the field, holds.
-    fn encode(&self, field: &Field, state: &FieldState, value: &Value) -> Result<Operation, Error> {
-        // The operation's id, author and stamp come from the change; they
-        // are not part of the operation's bytes.
-        let id = OperationId {
-            change: CoreChangeId([0; 32]),
-            position: 0,
-        };
-        let stamp = Hlc(0);
-        let invalid = || {
-            Error::new(
-                ErrorCode::InvalidValue,
-                format!(
-                    "the value does not fit the field {} of {}",
-                    self.name, self.collection
-                ),
-            )
-        };
-        match (field, state) {
-            (Field::Basic(basic), FieldState::Basic(state)) => {
-                let write = basic
-                    .set(state, id, self.author, stamp, value.to_cbor())
-                    .map_err(|_| invalid())?;
-                Ok(self.operation(basic, &write))
-            }
-            (Field::Link(link), FieldState::Basic(state)) => {
-                let Repr::Id(target) = &value.0 else {
-                    return Err(invalid());
-                };
-                let target = Target {
-                    space: self.space,
-                    object: target.0,
-                };
-                let write = link
-                    .set(state, id, self.author, stamp, self.space, Some(target))
-                    .map_err(|_| invalid())?;
-                Ok(self.operation(link, &write))
-            }
-            _ => Err(invalid()),
+    created: &[(CoreObjectId, String)],
+    collection: &str,
+    object: CoreObjectId,
+) -> Result<ncdb_core::basic::State, Error> {
+    let not_found = || {
+        Error::new(
+            ErrorCode::NotFound,
+            format!(
+                "the copy holds no object {} in {collection}",
+                ObjectId(object)
+            ),
+        )
+    };
+    let row = view.get(space, collection, object).map_err(storage)?;
+    match row {
+        Some(row)
+            if row.object.collection().value.map(|e| e.value)
+                == Some(cbor::Value::Text(collection.to_owned())) =>
+        {
+            Ok(row.object.deletion().clone())
         }
-    }
-
-    fn operation<T: field_op::Encoding>(&self, field: &T, op: &T::Operation) -> Operation {
-        field_op::encode(field, op, self.object, self.collection, self.name)
+        _ if created.contains(&(object, collection.to_owned())) => Ok(Default::default()),
+        _ => Err(not_found()),
     }
 }

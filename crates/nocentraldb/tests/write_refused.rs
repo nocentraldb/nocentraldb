@@ -22,7 +22,11 @@ fn a_value_of_another_kind_is_refused_and_nothing_is_written() {
     .unwrap_err();
 
     assert_eq!(error.code(), ErrorCode::InvalidValue);
-    assert!(now(project.get("tasks", created.unwrap())).unwrap().is_none());
+    assert!(
+        now(project.get("tasks", created.unwrap()))
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[test]
@@ -45,7 +49,8 @@ fn an_update_or_delete_of_an_object_the_copy_does_not_hold_is_refused() {
     let project = now(db.spaces().create()).unwrap();
     let unknown: ObjectId = "00112233445566778899aabbccddeeff".parse().unwrap();
 
-    let update = now(project.write(|tx| tx.update("tasks", unknown, [("priority", Value::from(1))])));
+    let update =
+        now(project.write(|tx| tx.update("tasks", unknown, [("priority", Value::from(1))])));
     let delete = now(project.write(|tx| tx.delete("tasks", unknown)));
 
     assert_eq!(update.unwrap_err().code(), ErrorCode::NotFound);
