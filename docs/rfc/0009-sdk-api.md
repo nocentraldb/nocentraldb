@@ -599,7 +599,7 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 
 ## Open questions
 
-Three questions wait for the owner, each in its own ticket. Until the owner answers, the SDK does not offer what they name.
+Three questions wait for the owner, each in its own ticket:
 
 - **NOC-114.** Opening a database on a device with no keystore, `Db::open` with neither a path nor `in_memory()`, and the TypeScript names for `path`, `keyFile`, `inMemory` and `agent`.
 - **NOC-116.** The Rust names of the sync status that [Sync and status](#sync-and-status) reports.
