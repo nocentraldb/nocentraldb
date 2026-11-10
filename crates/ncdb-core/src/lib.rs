@@ -30,8 +30,9 @@
 //! that members and the relay fold from them, RFC 0008
 //! (`docs/rfc/0008-membership.md`), are [`membership`].
 //!
-//! Natively, a member keeps its log and the view folded from it in SQLite,
-//! as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it ([`view`]).
+//! A member keeps its log and the view folded from it in SQLite, natively
+//! and on wasm32, as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it
+//! ([`view`]).
 
 pub mod basic;
 pub mod cbor;
@@ -55,7 +56,6 @@ pub mod seal;
 pub mod set;
 pub mod tips;
 mod unfold;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod view;
 
 /// Returns the crate name; exists so the gates have real code to check.

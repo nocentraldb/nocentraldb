@@ -4,9 +4,6 @@
 //! reference and a value that does not fit index as `NULL`. "All orders of
 //! customer X" is one equality lookup, also for a member that holds no
 //! copy of the customers' space.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 

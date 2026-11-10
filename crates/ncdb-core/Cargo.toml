@@ -46,15 +46,33 @@ zeroize = { version = "=1.9.1", default-features = false }
 # already held.
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 
-# The local view natively (RFC 0006, "Desktop and mobile"): rusqlite with
-# SQLite compiled from source (`bundled`), never the system's SQLite. Its
-# default features pull in the browser's SQLite; the browser view (OPFS) is
-# a later ticket, so the view and this dependency are native only.
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
+# The local view (RFC 0006, "SQLite on each target"): one rusqlite on every
+# target. Natively with SQLite compiled from source (`bundled`), never the
+# system's SQLite; on wasm32 through `ffi-sqlite-wasm-rs`, SQLite compiled to
+# wasm32-unknown-unknown by sqlite-wasm-rs. Both build the same SQLite
+# release, which tests/sqlite_release.rs checks on both targets.
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled", "ffi-sqlite-wasm-rs"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
+# The browser's SQLite (RFC 0006, "The browser"), pinned here although
+# rusqlite brings it, so that its SQLite release cannot drift from the one
+# libsqlite3-sys builds natively: 0.6.3 and libsqlite3-sys 0.39.1 both carry
+# SQLite 3.54.1. Its `wasm-bindgen` feature provides the host functions.
+sqlite-wasm-rs = { version = "=0.6.3", default-features = false, features = ["wasm-bindgen"] }
+# The `opfs-sahpool` VFS on the Origin Private File System, in a dedicated
+# Web Worker (RFC 0006, "The browser"; src/view/browser.rs).
+sqlite-wasm-vfs = { version = "=0.3.0", default-features = false, features = ["sahpool"] }
+# src/view/browser.rs tells a dedicated worker from the page's main thread;
+# the versions Cargo.lock already holds.
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+web-sys = { version = "=0.3.107", default-features = false, features = ["std", "DedicatedWorkerGlobalScope"] }
+
+# The native SQLite, pinned here although rusqlite brings it, for the same
+# reason: libsqlite3-sys 0.39.1 builds SQLite 3.54.1 with `bundled`.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libsqlite3-sys = { version = "=0.39.1", default-features = false }
 
 [dev-dependencies]
 # The convergence harness (tests/support/convergence.rs) generates and shrinks
@@ -67,3 +85,8 @@ proptest = { version = "=1.12.0", default-features = false, features = ["alloc",
 # wasm-bindgen that Cargo.lock holds; the root task `wasm-runner` pins it.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.80"
+# The browser view's harness (examples/browser_view.rs) exports its calls
+# to the worker with the wasm-bindgen that Cargo.lock holds, its async
+# `open` through wasm-bindgen-futures.
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+wasm-bindgen-futures = { version = "=0.4.80", default-features = false, features = ["std"] }

@@ -5,9 +5,6 @@
 //! another model or a change that is not additive and changes nothing,
 //! and folds the log again for an additive change, so that what the old
 //! model parked is folded.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 
