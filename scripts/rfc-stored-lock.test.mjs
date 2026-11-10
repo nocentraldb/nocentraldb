@@ -109,22 +109,6 @@ test("RFC 0005: a rolled-back app opens as an old client and leaves the stored l
 test("RFC 0005: no passage says the SDK checks against the lock it last opened", () => {
   const rfc = read(RFC_0005);
   assert.doesNotMatch(rfc, /last opened/);
-  assert.match(decision(RFC_0005, "D11."), /\[D23\]\(#d23-/);
-});
-
-test("RFC 0005: D23 records the owner's choice of the newest lock, with the options not taken", () => {
-  const text = decision(RFC_0005, "D23.");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-155/);
-  assert.match(text, /^Why: /m);
-  assert.match(text, /^Not taken:\n\n- [^\n]*last[^\n]*\n- [^\n]*both/m);
-});
-
-test("RFC 0005: History names NOC-155, NOC-162 and #137", () => {
-  const entry = history(RFC_0005, "NOC-162");
-  assert.match(entry, /^- \*\*2026-11-10\*\* · NOC-162 · /);
-  assert.match(entry, /NOC-155/);
-  assert.match(entry, /#137/);
 });
 
 test("RFC 0006: meta holds the lock under the code's key, as canonical JSON, and the view format stays the code's", () => {

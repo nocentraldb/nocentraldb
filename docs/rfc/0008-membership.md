@@ -6,7 +6,7 @@ This RFC defines who belongs to a space and what each member may do. It covers t
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind), with its log state [*rejected*](0002-change-and-log-format.md#rejected-changes) (D11) and its rule for changes the relay refuses (D12), on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
 
-It also uses [RFC 0005](0005-schema-and-model-lock.md), above all its [decisions](0005-schema-and-model-lock.md#decisions) D13, the `model.id` in a space's first control entry, and D14, the person id.
+It also uses [RFC 0005](0005-schema-and-model-lock.md), above all the `model.id` in a space's first control entry ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)) and the person id ([Identifying the person](0005-schema-and-model-lock.md#identifying-the-person)).
 
 It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
 
@@ -69,7 +69,7 @@ The genesis is a control change whose body (see [Genesis](#genesis)) names:
 - **The creator**: its signing key, its agreement key and its member certificate (RFC 0003). Its member id is the header's author member id (RFC 0002, header key 2), which every reader recomputes from the two keys.
 - **The first key generation**, by its generation id (see [Generation ids](#generation-ids)). The genesis carries no envelope. The creator writes a key envelope for itself as its second change, so that the relay's `keys` request finds it like any member's.
 - **The suite**, in the header (RFC 0002, header key 8). The genesis's suite is the space's suite. v1 has one suite.
-- **The model id** ([RFC 0005, D13](0005-schema-and-model-lock.md#d13-two-models-in-one-space)). The owner decided D13 C (Carsten, 2026-11-08): a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model. The genesis carries it in key 13. The owner decided in M26 that it is sealed, so that only members can read it.
+- **The model id** ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)). The owner decided D13 C (Carsten, 2026-11-08): a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model. The genesis carries it in key 13. The owner decided in M26 that it is sealed, so that only members can read it.
 
 The genesis does **not** name the space's name or its description. Those are content, and the relay must not read them (principle 1).
 
@@ -257,7 +257,7 @@ person-key entry (entry type 4)
 
 The first accepted entry for a person-key id creates the person key. Every later one announces a re-wrapped record and must repeat the same commitment, or it is rejected. Whether the record's key matches the commitment only a member that unwraps it can tell. That is a local check, as RFC 0003 already has it.
 
-[RFC 0005's D14](0005-schema-and-model-lock.md#d14-one-person-across-spaces) gives a person a person id that spans spaces. The person-key id stays per space, as RFC 0003 decided (decision 7), and never derives from the person. The erasure work order finds the person-key ids of a person through the person id inside sealed data. The relay never sees the person id.
+[RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) gives a person a person id that spans spaces. The person-key id stays per space, as RFC 0003 decided (decision 7), and never derives from the person. The erasure work order finds the person-key ids of a person through the person id inside sealed data. The relay never sees the person id.
 
 ### Shred entry
 
@@ -690,7 +690,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-08), through RFC 0005's D13 C: the genesis carries the `model.id`, and the SDK refuses to write into a space of another model. How the genesis carries it is M26.
 
-Why: two apps that should share a space then share one model lineage ([RFC 0005, D13](0005-schema-and-model-lock.md#d13-two-models-in-one-space)).
+Why: two apps that should share a space then share one model lineage ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model)).
 
 Not taken (named in the rewrite; the original text listed no options):
 
