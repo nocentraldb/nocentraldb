@@ -13,7 +13,7 @@ use ncdb_core::envelope;
 use ncdb_core::ids::ObjectId as CoreObjectId;
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
-use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis};
+use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis, Role};
 use ncdb_core::seal;
 use ncdb_core::view::View;
 
@@ -21,7 +21,7 @@ use crate::db::{Db, Inner, SpaceState, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ChangeId, ObjectId, SpaceId};
 use crate::list::SpaceModel;
-use crate::members::Members;
+use crate::members::{Members, holds};
 use crate::next;
 use crate::object::Object;
 use crate::subscribe::touched;
@@ -205,6 +205,12 @@ impl Space {
     /// `record` records; it does not read, and must not call the database.
     /// When it returns an error, or a recorded write is refused, nothing is
     /// written.
+    ///
+    /// Only a writer or an admin writes content (RFC 0008, "Roles and
+    /// rights"): a reader is refused with `NotAllowed`, a member whose copy
+    /// folded its removal, or that the relay answered `not_member` or
+    /// `removed_member` for the space, with `NotMember` (RFC 0009,
+    /// "Errors"), before any change is made.
     pub async fn write<F>(&self, record: F) -> Result<Written, Error>
     where
         F: FnOnce(&mut Transaction<'_>) -> Result<(), Error>,
@@ -220,6 +226,8 @@ impl Space {
             operations.iter().map(|op| op.collection.clone()).collect();
         writable(&inner, self.id)?;
         not_stopped(&inner, self.id)?;
+        let resolved = inner.spaces[&space].checks.resolved();
+        holds(resolved, member.id(), Role::Writer, "writes content")?;
         let wall = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));

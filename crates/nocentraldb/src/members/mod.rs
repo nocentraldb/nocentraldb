@@ -54,6 +54,15 @@ impl Role {
             membership::Role::Admin => Role::Admin,
         }
     }
+
+    /// The role's name in an error's text, with its article.
+    fn name(self) -> &'static str {
+        match self {
+            Role::Reader => "a member",
+            Role::Writer => "a writer or an admin",
+            Role::Admin => "an admin",
+        }
+    }
 }
 
 impl From<Role> for membership::Role {
@@ -152,24 +161,34 @@ impl Members<'_> {
     }
 }
 
+/// Whether `member` holds at least the role `needed` in the membership
+/// state `resolved` (RFC 0008, "Roles and rights"): a member with a lower
+/// role is refused with `NotAllowed`, one without a role, which was
+/// removed, with `NotMember` (RFC 0009, "Errors"). `doing` names what the
+/// role is needed for.
+pub(crate) fn holds(
+    resolved: &Resolved,
+    member: MemberId,
+    needed: membership::Role,
+    doing: &str,
+) -> Result<(), Error> {
+    match resolved.role(member) {
+        Some(role) if role >= needed => Ok(()),
+        Some(_) => Err(Error::new(
+            ErrorCode::NotAllowed,
+            format!("only {} of the space {doing}", Role::of(needed).name()),
+        )),
+        None => Err(Error::new(
+            ErrorCode::NotMember,
+            "the member is no longer a member of the space",
+        )),
+    }
+}
+
 /// Whether `member` may add `subject` in the membership state `resolved`:
 /// it is an admin, and `subject` is not a member and never was one.
 fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<(), Error> {
-    match resolved.role(member) {
-        Some(membership::Role::Admin) => {}
-        Some(_) => {
-            return Err(Error::new(
-                ErrorCode::NotAllowed,
-                "only an admin of the space adds members",
-            ));
-        }
-        None => {
-            return Err(Error::new(
-                ErrorCode::NotMember,
-                "the member is no longer a member of the space",
-            ));
-        }
-    }
+    holds(resolved, member, membership::Role::Admin, "adds members")?;
     match resolved.member(subject) {
         None => Ok(()),
         Some(state) if state.role.is_some() => Err(Error::new(
