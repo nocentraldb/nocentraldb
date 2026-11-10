@@ -8,7 +8,7 @@ use ncdb_core::log::Appended;
 use ncdb_core::view::Error as ViewError;
 
 use super::SyncState;
-use super::wire::{Entry, Pushed};
+use super::wire::{self, Entry, Pushed};
 use crate::db::{Inner, SpaceState};
 use crate::subscribe::touched;
 
@@ -156,9 +156,11 @@ pub(super) fn unconfirmed(
         .collect())
 }
 
-/// Records the results of a push of the changes `ids` of `space`. Returns
-/// the transient code that stopped it, after which the rest stays
-/// unconfirmed.
+/// Records the results of a push of the changes `ids` of `space`. A
+/// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
+/// sync status shows it, so the relay's own text never reaches the log
+/// (NOC-188). Returns the transient code that stopped it, after which the
+/// rest stays unconfirmed.
 pub(super) fn pushed(
     inner: &mut Inner,
     space: SpaceId,
@@ -170,10 +172,13 @@ pub(super) fn pushed(
             Pushed::Accepted(position) | Pushed::Duplicate(position) => {
                 inner.view.confirm(space, *id, position)?;
             }
-            Pushed::Rejected(code) if TRANSIENT.contains(&code.as_str()) => {
-                return Ok(Some(code));
+            Pushed::Rejected(code) => {
+                let code = wire::mapped_code(&code);
+                if TRANSIENT.contains(&code.as_str()) {
+                    return Ok(Some(code));
+                }
+                inner.view.refuse(space, *id, &code)?;
             }
-            Pushed::Rejected(code) => inner.view.refuse(space, *id, &code)?,
         }
     }
     Ok(None)

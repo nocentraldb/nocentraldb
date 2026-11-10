@@ -44,14 +44,16 @@ const CODES: [&str; 19] = [
     "unavailable",
 ];
 
-/// What the sync status shows for a code the relay sent that RFC 0007
-/// does not list (NOC-146).
+/// What the SDK keeps of a code the relay sent that RFC 0007 does not
+/// list (NOC-146).
 const UNKNOWN_ERROR: &str = "unknown_error";
 
-/// The code the sync status shows for `code`, which the relay sent: the
-/// code itself when RFC 0007 lists it, else [`UNKNOWN_ERROR`], so the
-/// relay's own text never reaches the app.
-pub(crate) fn shown_code(code: &str) -> String {
+/// What the SDK keeps of `code`, which the relay sent: the code itself
+/// when RFC 0007 lists it, else [`UNKNOWN_ERROR`], so the relay's own text
+/// never reaches the app. The one mapping for every code the relay sends:
+/// the sync status shows it (NOC-146), and the log records a refusal of a
+/// change by it (NOC-188).
+pub(crate) fn mapped_code(code: &str) -> String {
     let shown = if CODES.contains(&code) {
         code
     } else {
