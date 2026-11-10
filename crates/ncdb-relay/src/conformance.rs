@@ -6,7 +6,7 @@
 //! [`conformance_suite!`](crate::conformance_suite), which writes one test
 //! per rule:
 //!
-//! ```ignore
+//! ```text
 //! ncdb_relay::conformance_suite!(fresh_sqlite_backend);
 //! ```
 //!
