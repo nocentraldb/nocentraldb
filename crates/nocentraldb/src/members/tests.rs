@@ -20,12 +20,12 @@ pub(crate) fn now<F: std::future::Future>(future: F) -> F::Output {
 }
 
 /// A database in memory, of an account of its own.
-fn database() -> Db {
+pub(crate) fn database() -> Db {
     now(Db::open(OpenOptions::new(LOCK).in_memory())).expect("the test lock opens")
 }
 
 /// A database in memory of the member `who` of `account`.
-fn of_account(who: u8, account: &SigningKey) -> Db {
+pub(crate) fn of_account(who: u8, account: &SigningKey) -> Db {
     let options = OpenOptions::new(LOCK).in_memory();
     now(Db::open_as(
         options,
@@ -37,11 +37,11 @@ fn of_account(who: u8, account: &SigningKey) -> Db {
 }
 
 /// A space the admin's database creates.
-fn space(admin: &Db) -> Space {
+pub(crate) fn space(admin: &Db) -> Space {
     now(admin.spaces().create()).unwrap()
 }
 
-fn writer() -> AddMember {
+pub(crate) fn writer() -> AddMember {
     AddMember {
         role: Role::Writer,
         fingerprint: None,
