@@ -6,9 +6,8 @@
 //! membership or a missing key is folded once the control change it lacked
 //! arrives, whatever came first (D11).
 //!
-//! The pool holds no revocation that excludes a sealed change: a change
-//! folded before such a revocation arrives stays folded until un-folding
-//! exists (NOC-49).
+//! The pool holds no revocation that excludes a sealed change;
+//! `tests/unfold_convergence.rs` adds them.
 
 mod support;
 

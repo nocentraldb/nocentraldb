@@ -16,7 +16,7 @@ const RFC = "docs/rfc/0009-sdk-api.md";
 const TITLE = "Amendment 4: following RFC 0005's references";
 const ANCHOR = "amendment-4-following-rfc-0005s-references";
 const DECISIONS =
-  "0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22";
+  "0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states";
 const MARK = "*(Amendment 4.)*";
 const MARK_CELL = "*(Amendment 4)*";
 
@@ -49,7 +49,7 @@ test("Amendment 4 names D20 and D21, the owner's decision, and decides nothing",
   const body = section(TITLE);
   assert.ok(body, `no section "${TITLE}"`);
   assert.match(body, /NOC-92/);
-  assert.ok(body.includes(DECISIONS), "Amendment 4 does not link D18 to D22");
+  assert.ok(body.includes(DECISIONS), "Amendment 4 does not link D20");
   assert.match(body, /D20/);
   assert.match(body, /D21/);
   assert.match(body, /Carsten, 2026-11-10/);
