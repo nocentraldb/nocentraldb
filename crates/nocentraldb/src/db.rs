@@ -248,13 +248,20 @@ fn exists(file: &Path) -> Result<bool, Error> {
         .map_err(|error| keys::io("the database file cannot be found", &error))
 }
 
-/// A view that does not open: a lock it cannot fold is `ModelRefused`, any
-/// other failure a failure of storage.
+/// A view that does not open: a lock it cannot fold, or a database folded
+/// by another model, is `ModelRefused`; any other failure a failure of
+/// storage. Until the on-device check of RFC 0005 (D11) is built, every
+/// change of the model refuses a database that exists, an additive one
+/// too.
 fn view_error(error: ncdb_core::view::Error) -> Error {
     match error {
         ncdb_core::view::Error::Invalid(invalid) => Error::new(
             ErrorCode::ModelRefused,
             format!("the lock is refused: {invalid:?}"),
+        ),
+        ncdb_core::view::Error::Model => Error::new(
+            ErrorCode::ModelRefused,
+            "the database was folded by another model than the lock's",
         ),
         error => storage(error),
     }
