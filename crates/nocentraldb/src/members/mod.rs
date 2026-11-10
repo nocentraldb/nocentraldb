@@ -8,6 +8,7 @@
 //! adding a list of invitations.
 
 use std::collections::BTreeSet;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
@@ -17,7 +18,7 @@ use ncdb_core::membership::{
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
-use crate::error::{Error, ErrorCode};
+use crate::error::{Error, ErrorCode, storage};
 use crate::next;
 use crate::space::{Space, fold, not_stopped, writable};
 
@@ -104,10 +105,13 @@ impl Members<'_> {
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
     /// certifies another member than the invitation's keys, or a
-    /// sub-agent's. An account other than this database's own is new to it, since each
-    /// database draws its own account key (RFC 0009, S20): its member is
-    /// refused with `UnknownAccount` unless `options` carry the
-    /// invitation's fingerprint.
+    /// sub-agent's. An account other than this database's own is new to it,
+    /// since each database draws its own account key (RFC 0009, S20),
+    /// until a person confirmed its fingerprint: its member is refused
+    /// with `UnknownAccount` unless `options` carry the invitation's
+    /// fingerprint. Once an add with the fingerprint succeeds, the database
+    /// remembers the account, in its file or in memory, and a later add of
+    /// any member of it needs no fingerprint (NOC-154 point 3).
     pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
@@ -116,7 +120,7 @@ impl Members<'_> {
         let resolved = inner.spaces[&space.0].checks.resolved();
         allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         certified(invitation)?;
-        known(&inner, invitation, options.fingerprint)?;
+        let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner { view, spaces, .. } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
@@ -156,6 +160,9 @@ impl Members<'_> {
         );
         for change in [&added, &sent] {
             fold(view, &mut state.checks, change)?;
+        }
+        if confirming {
+            confirm(view, &invitation.certificate.account_key)?;
         }
         crate::sync::wake(&inner);
         Ok(Notice::MEMBER_ADDED)
@@ -223,15 +230,25 @@ fn certified(invitation: &Invitation) -> Result<(), Error> {
 }
 
 /// Whether the account of `invitation` is known: it is the database's
-/// own, or `fingerprint` is its fingerprint, which a person compared.
+/// own, or one a person confirmed before, or `fingerprint` is its
+/// fingerprint, which a person compared. Says whether the add confirms the
+/// account, which the database then remembers.
 fn known(
     inner: &Inner,
     invitation: &Invitation,
     fingerprint: Option<Fingerprint>,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     let account = invitation.fingerprint();
-    if account.0 == inner.account.verifying_key().to_bytes() || fingerprint == Some(account) {
-        return Ok(());
+    let confirmed = inner
+        .view
+        .account_confirmed_at(&account.0)
+        .map_err(storage)?
+        .is_some();
+    if account.0 == inner.account.verifying_key().to_bytes() || confirmed {
+        return Ok(false);
+    }
+    if fingerprint == Some(account) {
+        return Ok(true);
     }
     Err(Error::new(
         ErrorCode::UnknownAccount,
@@ -239,6 +256,16 @@ fn known(
          once a person compared it",
     )
     .with_fingerprint(account))
+}
+
+/// Remembers that a person confirmed the account with the public key
+/// `account`, now.
+fn confirm(view: &mut View, account: &[u8; 32]) -> Result<(), Error> {
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let at = u64::try_from(since.as_millis()).unwrap_or(u64::MAX);
+    view.confirm_account(account, at).map_err(storage)
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control
@@ -252,6 +279,8 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
         .unwrap_or_default()
 }
 
+#[cfg(test)]
+mod known_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
