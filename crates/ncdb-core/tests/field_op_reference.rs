@@ -53,7 +53,10 @@ fn the_value_is_an_array_of_two_16_byte_strings_and_takes_35_bytes() {
     let value = reference(C1);
     assert_eq!(
         value,
-        Value::Array(vec![Value::Bytes(vec![0x33; 16]), Value::Bytes(vec![0x44; 16])])
+        Value::Array(vec![
+            Value::Bytes(vec![0x33; 16]),
+            Value::Bytes(vec![0x44; 16])
+        ])
     );
     assert_eq!(ncdb_core::cbor::encode(&value).len(), 35);
     let target = reference::target(&value).expect("a reference names a target");
@@ -63,7 +66,10 @@ fn the_value_is_an_array_of_two_16_byte_strings_and_takes_35_bytes() {
 #[test]
 fn a_value_that_does_not_fit_names_no_target() {
     let bare = Value::Bytes(C1.0.to_vec());
-    let short = Value::Array(vec![Value::Bytes(vec![0x33; 16]), Value::Bytes(vec![0x44; 15])]);
+    let short = Value::Array(vec![
+        Value::Bytes(vec![0x33; 16]),
+        Value::Bytes(vec![0x44; 15]),
+    ]);
     let three = Value::Array(vec![
         Value::Bytes(vec![0x33; 16]),
         Value::Bytes(vec![0x44; 16]),

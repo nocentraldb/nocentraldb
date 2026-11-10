@@ -18,6 +18,7 @@
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
 //! ([`field`]), basic values ([`basic`]), sets ([`set`]), links ([`link`])
 //! and what links resolve against, the objects of a copy ([`object`]).
+//! A reference into another space, RFC 0004 Amendment 4, is [`reference`].
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
 //!
@@ -45,6 +46,7 @@ pub mod model_lock;
 pub mod object;
 pub mod receive;
 mod redact;
+pub mod reference;
 pub mod seal;
 pub mod set;
 #[cfg(not(target_arch = "wasm32"))]
