@@ -26,6 +26,11 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["sin
 # The challenge's nonce and a new relay id: the platform's secure generator.
 getrandom = { version = "=0.4.3", default-features = false }
 
+# The errno values of `accept` that mean the listener itself is gone. Already
+# in the tree through tokio; the same pinned version.
+[target.'cfg(unix)'.dependencies]
+libc = { version = "=0.2.191", default-features = false }
+
 # The tests talk to the server as a member would: a WebSocket client that
 # signs the challenge, and the core's simulated space for real changes.
 [dev-dependencies]

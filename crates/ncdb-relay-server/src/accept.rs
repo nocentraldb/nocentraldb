@@ -41,3 +41,37 @@ pub(crate) async fn next(listener: &TcpListener) -> io::Result<TcpStream> {
 fn listener_gone(_error: &io::Error) -> bool {
     false
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::listener_gone;
+    use std::io;
+
+    fn os(code: i32) -> io::Error {
+        io::Error::from_raw_os_error(code)
+    }
+
+    #[test]
+    fn the_errors_of_a_listener_that_is_gone_end_the_server() {
+        for code in [libc::EBADF, libc::EINVAL, libc::ENOTSOCK, libc::EOPNOTSUPP] {
+            assert!(listener_gone(&os(code)), "{}", os(code));
+        }
+    }
+
+    #[test]
+    fn running_out_of_resources_or_a_peer_that_gave_up_does_not() {
+        for code in [
+            libc::EMFILE,
+            libc::ENFILE,
+            libc::ENOBUFS,
+            libc::ENOMEM,
+            libc::ECONNABORTED,
+            libc::EINTR,
+            libc::EPROTO,
+            libc::EPERM,
+        ] {
+            assert!(!listener_gone(&os(code)), "{}", os(code));
+        }
+        assert!(!listener_gone(&io::Error::other("no errno")));
+    }
+}
