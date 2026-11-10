@@ -247,3 +247,23 @@ fn the_relay_s_membership_is_the_cores_resolve_over_its_log() {
         Pushed::Rejected(ErrorCode::AuthorNotMember)
     );
 }
+
+#[test]
+fn a_sealed_change_under_a_generation_that_descends_from_the_grant_is_accepted() {
+    let (relay, _dir, mut space, held) = held();
+    let first = space.first_generation;
+    let (rotation, next) = space.rotate(0, &[first], &[&held[2]]);
+    assert_eq!(push_one(&relay, 0, &rotation), Pushed::Accepted(4));
+    let change = space.sealed_under(1, next, Vec::new());
+    assert_eq!(push_one(&relay, 1, &change), Pushed::Accepted(5));
+    // A generation the graph does not hold still counts for nobody.
+    let unknown = space.sealed_under(1, next ^ 1, Vec::new());
+    assert_eq!(
+        push_one(&relay, 1, &unknown),
+        Pushed::Rejected(ErrorCode::AuthorNotMember)
+    );
+    let mut all = held.clone();
+    all.push(rotation);
+    let resolved = membership::resolve(space.space, &all);
+    assert!(resolved.admits(change.header()));
+}
