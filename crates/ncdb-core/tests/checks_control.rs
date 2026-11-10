@@ -216,3 +216,16 @@ fn a_control_change_whose_author_is_unknown_waits_for_the_entry_that_names_it() 
     carol.receive(&[&f.bob]);
     assert_eq!(carol.state(&leave), folded());
 }
+
+#[test]
+fn a_change_under_a_rotated_generation_is_folded_with_its_envelope() {
+    let mut f = founded();
+    let first = f.space.first_generation;
+    let (rotation, two) = f.space.rotate(ALICE, &[first], &[&f.to_carol]);
+    let to_carol = f.space.envelope_at(ALICE, CAROL, two, &[&rotation]);
+    let by_bob = f.space.sealed_under(BOB, two, vec![set_title(1)]);
+    let mut carol = Copy::of(&f.space, CAROL);
+    carol.receive(&f.controls());
+    carol.receive(&[&rotation, &to_carol, &by_bob]);
+    assert_eq!(carol.state(&by_bob), folded());
+}
