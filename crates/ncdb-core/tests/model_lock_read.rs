@@ -127,6 +127,7 @@ fn reads_a_deprecated_field_and_collection() {
       "collections": {
         "tasks": {
           "deprecated": 4,
+          "deprecatedReason": "Use issues.",
           "fields": {
             "priority": { "deprecated": 3, "deprecatedReason": "Use rank.", "rule": 1, "since": 1, "type": "ncdb/int" }
           },
@@ -138,7 +139,16 @@ fn reads_a_deprecated_field_and_collection() {
       "plugins": {}
     }"#;
     let lock = ModelLock::from_json(text).unwrap();
-    assert_eq!(lock.collection("tasks").unwrap().deprecated, Some(4));
+    let collection = lock
+        .collection("tasks")
+        .unwrap()
+        .deprecated
+        .clone()
+        .unwrap();
+    assert_eq!(
+        (collection.since, collection.reason.as_str()),
+        (4, "Use issues.")
+    );
     let deprecation = lock
         .field("tasks", "priority")
         .unwrap()

@@ -85,7 +85,11 @@ tasks:
     # scripts/groups-withdrawn.test.mjs (groups leave RFC 0001, 0008, 0009 and
     # the docs, and factory/decisions/ records NOC-76),
     # scripts/rfc-0009-alignment.test.mjs (RFC 0001, 0003, 0005, 0006, 0008
-    # and the use cases follow RFC 0009's Conflicts; NOC-75), and the tests of the
+    # and the use cases follow RFC 0009's Conflicts; NOC-75),
+    # scripts/rfc-0009-amendment-2.test.mjs (RFC 0009 follows RFC 0005's D16
+    # on unsafe ints in writes and in $raw; NOC-80),
+    # scripts/rfc-0009-amendment-3.test.mjs (the owner's decision on the
+    # TypeScript object id; NOC-80), and the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on

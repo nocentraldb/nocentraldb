@@ -194,9 +194,7 @@ fn collection(map: &Map<String, Value>, path: &str) -> Result<Collection, LockEr
     };
     Ok(Collection {
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
-        deprecated: optional(map, "deprecated")
-            .map(|v| whole(v, &join(path, "deprecated")))
-            .transpose()?,
+        deprecated: deprecation(map, path)?,
         fields: match optional(map, "fields") {
             None => BTreeMap::new(),
             Some(value) => entries(value, &join(path, "fields"), field)?,
@@ -211,21 +209,25 @@ fn collection(map: &Map<String, Value>, path: &str) -> Result<Collection, LockEr
 }
 
 fn field(map: &Map<String, Value>, path: &str) -> Result<Field, LockError> {
-    let deprecated = match optional(map, "deprecated") {
-        None => None,
-        Some(value) => Some(Deprecation {
-            since: whole(value, &join(path, "deprecated"))?,
-            reason: optional(map, "deprecatedReason")
-                .map(|v| string(v, &join(path, "deprecatedReason")))
-                .transpose()?
-                .unwrap_or_default(),
-        }),
-    };
     Ok(Field {
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
-        deprecated,
+        deprecated: deprecation(map, path)?,
         ..field_core(map, path)?
     })
+}
+
+/// The keys `deprecated` and `deprecatedReason` of a field or a collection.
+fn deprecation(map: &Map<String, Value>, path: &str) -> Result<Option<Deprecation>, LockError> {
+    let Some(value) = optional(map, "deprecated") else {
+        return Ok(None);
+    };
+    Ok(Some(Deprecation {
+        since: whole(value, &join(path, "deprecated"))?,
+        reason: optional(map, "deprecatedReason")
+            .map(|v| string(v, &join(path, "deprecatedReason")))
+            .transpose()?
+            .unwrap_or_default(),
+    }))
 }
 
 /// What a field is, apart from its history: its type, rule, person and

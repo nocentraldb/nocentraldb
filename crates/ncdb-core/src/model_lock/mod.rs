@@ -105,8 +105,8 @@ pub struct Plugin {
 pub struct Collection {
     /// The model version that added the collection.
     pub since: u64,
-    /// The model version that deprecated the collection, if it is.
-    pub deprecated: Option<u64>,
+    /// When and why the collection was deprecated.
+    pub deprecated: Option<Deprecation>,
     /// The stored fields, by name.
     pub fields: BTreeMap<String, Field>,
     /// The computed fields, by name only (a later RFC designs them).
@@ -193,10 +193,10 @@ pub struct Field {
     pub deprecated: Option<Deprecation>,
 }
 
-/// A field's deprecation.
+/// The deprecation of a field or a collection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Deprecation {
-    /// The model version that deprecated the field (`deprecated`).
+    /// The model version that deprecated it (`deprecated`).
     pub since: u64,
     /// The text of `.deprecated()` (`deprecatedReason`).
     pub reason: String,

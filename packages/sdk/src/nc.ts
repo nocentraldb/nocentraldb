@@ -9,22 +9,55 @@
 // Only `nc` and its members are public names; the interfaces below are not
 // exported, so an app cannot name them. Each type carries a brand (a key it
 // is never given at run time), so a collection, a name and an index cannot be
-// passed for one another.
+// passed for one another. A field's brands also carry what it reads as and
+// whether it is deprecated, and a collection's carry its fields, which is
+// what `Infer` reads.
 
-/** A field of the model: its type, and the modifiers chained after it. */
-interface Field {
+/** A field of the model that reads as `T`, deprecated when `D` is true: its type, and the modifiers chained after it. */
+interface Field<T = unknown, D extends boolean = false> {
+  readonly "nc.reads": T;
+  readonly "nc.deprecated": D;
   /** Marks the field as personal, about `person`: `"self"` or a link field of the same collection. */
-  personal(options: { person: string }): Field;
+  personal(options: { person: string }): Field<T, D>;
   /** Adds a description, which is copied into the lock. */
-  describe(text: string): Field;
+  describe(text: string): Field<T, D>;
   /** Hides the field from the app, and keeps it in the model and the data. */
-  deprecated(reason: string): Field;
+  deprecated(reason: string): Field<T, true>;
 }
 
-/** A collection of the model: its fields, and the places for computed fields, views and indexes. */
-interface Collection {
-  readonly "nc.collection": true;
+/** The fields of a collection, by name. */
+type Fields = Record<string, Field<unknown, boolean>>;
+
+/** A collection of the model with the fields `F`, deprecated when `D` is true: its fields, and the places for computed fields, views and indexes. */
+interface Collection<F extends Fields = Fields, D extends boolean = false> {
+  readonly "nc.collection": F;
+  readonly "nc.deprecated": D;
+  /** Hides the collection from the app, and keeps it in the model and the data. */
+  deprecated(reason: string): Collection<F, true>;
 }
+
+/** The collections of a model without the deprecated ones, which the app does not see. */
+type Visible<C> = {
+  [K in keyof C as C[K] extends Collection<Fields, true> ? never : K]: C[K];
+};
+
+/** A choice option the lock does not list yet, kept as written (RFC 0009, S5). */
+export type Unknown = { unknown: string };
+
+/**
+ * An object of the collection `C` as the app reads it (RFC 0005, "Types for
+ * the app"): every field optional, without the deprecated ones. A choice
+ * reads as its options or `Unknown`, an `nc.int` as a `number` (D16), a set
+ * as an array, a link as an object id.
+ */
+export type Infer<C extends Collection<Fields, boolean>> =
+  C extends Collection<infer F, false>
+    ? {
+        [K in keyof F as F[K] extends Field<unknown, true>
+          ? never
+          : K]?: F[K]["nc.reads"];
+      }
+    : never;
 
 /** A computed field or a view: named now, designed by a later RFC. */
 interface Named {
@@ -42,7 +75,7 @@ const DESCRIBE = Symbol.for("nocentraldb.model.describe");
 /** A field's type, as the lock names it. */
 type Spec =
   | { kind: "basic"; type: string; options?: string[] }
-  | { kind: "set"; of: Field }
+  | { kind: "set"; of: Field<unknown, boolean> }
   | { kind: "link"; type: "ncdb/link" | "ncdb/links"; targets: string[] }
   | { kind: "reserved"; name: string };
 
@@ -55,7 +88,8 @@ type FieldState = {
 };
 
 type CollectionState = {
-  fields: Record<string, Field>;
+  deprecated?: string;
+  fields: Fields;
   computed: Record<string, Named>;
   views: Record<string, Named>;
   indexes: Record<string, Index>;
@@ -67,23 +101,26 @@ type IndexState = {
   scope?: "space";
 };
 
+/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, Amendment 3). */
+type ObjectId = string;
+
 const fieldStates = new WeakMap<object, FieldState>();
 const collectionStates = new WeakMap<object, CollectionState>();
 const indexStates = new WeakMap<object, IndexState>();
 const names = new WeakSet<object>();
 
 /** The field with this state; each modifier returns a new field. */
-const field = (state: FieldState): Field => {
-  const made: Field = {
-    personal: ({ person }) => field({ ...state, person }),
-    describe: (text) => field({ ...state, description: text }),
-    deprecated: (reason) => field({ ...state, deprecated: reason }),
-  };
+const field = <T>(state: FieldState): Field<T> => {
+  const made = {
+    personal: ({ person }: { person: string }) => field({ ...state, person }),
+    describe: (text: string) => field({ ...state, description: text }),
+    deprecated: (reason: string) => field({ ...state, deprecated: reason }),
+  } as unknown as Field<T>;
   fieldStates.set(made, state);
   return made;
 };
 
-const basic = (type: string, options?: readonly string[]): Field =>
+const basic = <T>(type: string, options?: readonly string[]): Field<T> =>
   field({
     spec:
       options === undefined
@@ -95,63 +132,76 @@ const targets = (target: string | readonly string[]): string[] =>
   typeof target === "string" ? [target] : [...target];
 
 /** Declares the model: the collections, by name. */
-export function model<C extends Record<string, Collection>>(collections: C): C {
+export function model<C extends Record<string, Collection<Fields, boolean>>>(
+  collections: C,
+): Visible<C> {
   const declared = { ...collections };
   Object.defineProperty(declared, DESCRIBE, {
     value: () => describeModel(declared),
     enumerable: false,
   });
-  return declared;
+  return declared as Visible<C>;
 }
 
 /** Declares a collection: its fields by name, and its computed fields, views and indexes. */
-export function collection(
-  fields: Record<string, Field>,
+export function collection<F extends Fields>(
+  fields: F,
   options: {
     computed?: Record<string, Named>;
     views?: Record<string, Named>;
     indexes?: Record<string, Index>;
   } = {},
-): Collection {
-  const made = {} as Collection;
-  collectionStates.set(made, {
+): Collection<F> {
+  return makeCollection({
     fields: { ...fields },
     computed: { ...options.computed },
     views: { ...options.views },
     indexes: { ...options.indexes },
   });
-  return made;
 }
 
+/** The collection with this state; `deprecated` returns a new collection. */
+const makeCollection = <F extends Fields, D extends boolean>(
+  state: CollectionState,
+): Collection<F, D> => {
+  const made = {
+    deprecated: (reason: string) =>
+      makeCollection({ ...state, deprecated: reason }),
+  } as unknown as Collection<F, D>;
+  collectionStates.set(made, state);
+  return made;
+};
+
 /** A string, basic value. */
-export const string = (): Field => basic("ncdb/string");
-/** A signed 64-bit integer, basic value. */
-export const int = (): Field => basic("ncdb/int");
+export const string = (): Field<string> => basic("ncdb/string");
+/** A signed 64-bit integer, basic value. The app reads and writes it as a `number`, a safe integer (D16). */
+export const int = (): Field<number> => basic("ncdb/int");
 /** A binary64 number, basic value. */
-export const float = (): Field => basic("ncdb/float");
+export const float = (): Field<number> => basic("ncdb/float");
 /** A boolean, basic value. */
-export const boolean = (): Field => basic("ncdb/boolean");
+export const boolean = (): Field<boolean> => basic("ncdb/boolean");
 /** A choice from a fixed list of options, basic value. */
-export const oneOf = (options: readonly string[]): Field =>
-  basic("ncdb/choice", options);
+export const oneOf = <const O extends readonly string[]>(
+  options: O,
+): Field<O[number] | Unknown> => basic("ncdb/choice", options);
 /** A set of basic values. */
-export const set = (element: Field): Field =>
+export const set = <T>(element: Field<T>): Field<T[]> =>
   field({ spec: { kind: "set", of: element } });
 /** A link to one object, in one collection or in one of several. */
-export const link = (target: string | readonly string[]): Field =>
+export const link = (target: string | readonly string[]): Field<ObjectId> =>
   field({
     spec: { kind: "link", type: "ncdb/link", targets: targets(target) },
   });
 /** Links to many objects, in one collection or in several. */
-export const links = (target: string | readonly string[]): Field =>
+export const links = (target: string | readonly string[]): Field<ObjectId[]> =>
   field({
     spec: { kind: "link", type: "ncdb/links", targets: targets(target) },
   });
 /** Rich text: reserved, its field type belongs to a later RFC. */
-export const richText = (): Field =>
+export const richText = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.richText" } });
 /** A stream: reserved, its field type belongs to a later RFC. */
-export const stream = (): Field =>
+export const stream = (): Field<never> =>
   field({ spec: { kind: "reserved", name: "nc.stream" } });
 
 const name = (): Named => {
@@ -184,7 +234,9 @@ export const index = (
 };
 
 /** The model as `ncdb model build` reads it (the core's `Draft`). */
-const describeModel = (collections: Record<string, Collection>) => {
+const describeModel = (
+  collections: Record<string, Collection<Fields, boolean>>,
+) => {
   const described: Record<string, unknown> = {};
   for (const [name, declared] of Object.entries(collections)) {
     const state = collectionStates.get(declared);
@@ -221,6 +273,7 @@ const describeCollection = (name: string, state: CollectionState) => {
     indexes[key] = declared;
   }
   return {
+    ...(state.deprecated === undefined ? {} : { deprecated: state.deprecated }),
     fields,
     computed: named(
       state.computed,
@@ -233,7 +286,7 @@ const describeCollection = (name: string, state: CollectionState) => {
 
 const describeField = (
   path: string,
-  declared: Field,
+  declared: Field<unknown, boolean>,
 ): Record<string, unknown> => {
   const state = fieldStates.get(declared);
   if (state === undefined) {

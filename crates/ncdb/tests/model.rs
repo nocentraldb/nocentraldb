@@ -266,6 +266,38 @@ additive: clients on model version 2 keep every change written under version 3.
 }
 
 #[test]
+fn deprecating_a_collection_writes_it_into_the_lock_and_lists_it() {
+    let dir = project();
+    let schema = SCHEMA_V2.replace(
+        "email: nc.string().personal({ person: \"self\" }),\n  }),",
+        "email: nc.string().personal({ person: \"self\" }),\n  }).deprecated(\"Use members.\"),",
+    );
+    assert_ne!(schema, SCHEMA_V2);
+    write_schema(&dir.join("model.ts"), &schema);
+    fs::write(dir.join("model.lock.json"), EXAMPLE).unwrap();
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 2 -> 3
+  ~ collection people deprecated: Use members.
+additive: clients on model version 2 keep every change written under version 3.
+"
+    );
+    let lock = ModelLock::from_json(&read(dir.join("model.lock.json"))).unwrap();
+    let deprecation = lock
+        .collection("people")
+        .unwrap()
+        .deprecated
+        .clone()
+        .unwrap();
+    assert_eq!(
+        (deprecation.since, deprecation.reason.as_str()),
+        (3, "Use members.")
+    );
+}
+
+#[test]
 fn check_passes_on_an_up_to_date_lock_and_writes_nothing() {
     let dir = project();
     write_schema(&dir.join("model.ts"), SCHEMA_V2);

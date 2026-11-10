@@ -180,6 +180,30 @@ describe("field functions and modifiers", () => {
   });
 });
 
+describe("a deprecated collection", () => {
+  const people = nc.collection({ name: nc.string() });
+  const model = nc.model({
+    people: people.deprecated("Use members."),
+    members: people,
+  });
+  const collections = (draft(model) as { collections: Record<string, unknown> })
+    .collections;
+
+  test("keeps the collection with its reason for model build", () => {
+    expect(collections.people).toEqual({
+      deprecated: "Use members.",
+      fields: { name: { type: "ncdb/string", rule: 1 } },
+      computed: [],
+      views: [],
+      indexes: {},
+    });
+  });
+
+  test("returns a new collection and leaves the one it was called on as it was", () => {
+    expect(collections.members).not.toHaveProperty("deprecated");
+  });
+});
+
 describe("what model build refuses before the lock", () => {
   test("rich text and streams are reserved, not designed yet", () => {
     for (const reserved of [nc.richText(), nc.stream()]) {
