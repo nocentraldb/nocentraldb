@@ -21,6 +21,7 @@ mod push;
 mod reconnect;
 mod removed;
 mod reopen;
+mod rotation;
 mod spaces;
 mod support;
 mod timeouts;
