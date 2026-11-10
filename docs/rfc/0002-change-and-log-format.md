@@ -747,4 +747,4 @@ This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the p
 - **2026-11-09** · NOC-55 · How to give feedback ([#72](https://github.com/nocentraldb/nocentraldb/pull/72)).
 - **2026-11-09** · NOC-35 · The header drops its draft number ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
 - **2026-11-10** · NOC-62 · A change nests at most 32 levels, and a full clock counter carries into the next millisecond, with the examples N1 and N2 ([#86](https://github.com/nocentraldb/nocentraldb/pull/86)).
-- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#0](https://github.com/nocentraldb/nocentraldb/pull/0)).
+- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#116](https://github.com/nocentraldb/nocentraldb/pull/116)).
