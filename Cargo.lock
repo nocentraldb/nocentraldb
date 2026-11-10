@@ -939,6 +939,8 @@ dependencies = [
  "serde_json",
  "sha2 0.11.1",
  "sqlite-wasm-rs",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "zeroize",
 ]

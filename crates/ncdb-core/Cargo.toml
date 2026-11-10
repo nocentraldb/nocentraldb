@@ -77,3 +77,8 @@ proptest = { version = "=1.12.0", default-features = false, features = ["alloc",
 # wasm-bindgen that Cargo.lock holds; the root task `wasm-runner` pins it.
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 wasm-bindgen-test = "=0.3.80"
+# The browser view's harness (examples/browser_view.rs) exports its calls
+# to the worker with the wasm-bindgen that Cargo.lock holds, its async
+# `open` through wasm-bindgen-futures.
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+wasm-bindgen-futures = { version = "=0.4.80", default-features = false, features = ["std"] }
