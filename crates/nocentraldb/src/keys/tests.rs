@@ -13,7 +13,6 @@ use super::*;
 use crate::{Db, OpenOptions};
 
 const LOCK: &str = include_str!("../../tests/model/model.lock.json");
-use super::*;
 
 #[test]
 fn a_key_record_reads_back_as_the_same_keys() {
@@ -41,11 +40,16 @@ struct Fake(Arc<Mutex<BTreeMap<String, Vec<u8>>>>);
 impl SecretStore for Fake {
     fn get(&self, user: &str) -> Result<Option<Zeroizing<Vec<u8>>>, Error> {
         let entries = self.0.lock().unwrap();
-        Ok(entries.get(user).map(|record| Zeroizing::new(record.clone())))
+        Ok(entries
+            .get(user)
+            .map(|record| Zeroizing::new(record.clone())))
     }
 
     fn set(&self, user: &str, record: &[u8]) -> Result<(), Error> {
-        self.0.lock().unwrap().insert(user.to_owned(), record.to_vec());
+        self.0
+            .lock()
+            .unwrap()
+            .insert(user.to_owned(), record.to_vec());
         Ok(())
     }
 
@@ -85,8 +89,9 @@ fn run<F: std::future::Future>(future: F) -> F::Output {
     }
 }
 
-fn unavailable() -> Result<Box<dyn SecretStore>, Error> {
-    Err(Error::new(ErrorCode::KeyStoreUnavailable, "no keystore in this test"))
+/// No keystore, as on a machine without a Secret Service.
+fn unavailable() -> Result<Box<dyn SecretStore>, keyring_core::Error> {
+    Err(keyring_core::Error::NoDefaultStore)
 }
 
 #[test]
@@ -122,7 +127,10 @@ fn a_reopened_database_finds_its_keys_in_the_keystore() {
     .unwrap();
     let entries = fake.0.lock().unwrap();
     let canonical = dir.0.join("data").canonicalize().unwrap();
-    assert_eq!(entries.keys().collect::<Vec<_>>(), [&canonical.to_string_lossy().into_owned()]);
+    assert_eq!(
+        entries.keys().collect::<Vec<_>>(),
+        [&canonical.to_string_lossy().into_owned()]
+    );
 }
 
 #[test]
@@ -130,7 +138,12 @@ fn an_existing_database_whose_keystore_entry_is_gone_does_not_open() {
     let dir = Dir::new("gone");
     let options = || OpenOptions::new(LOCK).path(dir.0.join("data"));
     let first = Fake::default();
-    drop(Db::open_with_store(options(), &|| Ok(Box::new(first.clone()) as Box<dyn SecretStore>)).unwrap());
+    drop(
+        Db::open_with_store(options(), &|| {
+            Ok(Box::new(first.clone()) as Box<dyn SecretStore>)
+        })
+        .unwrap(),
+    );
 
     let empty = Fake::default();
     let store = || Ok(Box::new(empty.clone()) as Box<dyn SecretStore>);

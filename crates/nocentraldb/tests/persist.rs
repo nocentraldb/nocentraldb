@@ -101,7 +101,9 @@ fn memory_with_a_path_or_a_key_file_is_invalid_value() {
     let dir = TempDir::new("both");
     for options in [
         OpenOptions::new(LOCK).in_memory().path(dir.join("data")),
-        OpenOptions::new(LOCK).in_memory().key_file(dir.join("member.key")),
+        OpenOptions::new(LOCK)
+            .in_memory()
+            .key_file(dir.join("member.key")),
     ] {
         let error = now(Db::open(options)).unwrap_err();
         assert_eq!(error.code(), ErrorCode::InvalidValue);
@@ -113,7 +115,10 @@ fn memory_with_a_path_or_a_key_file_is_invalid_value() {
 fn a_key_file_without_a_path_is_invalid_value() {
     let dir = TempDir::new("no-path");
 
-    let error = now(Db::open(OpenOptions::new(LOCK).key_file(dir.join("member.key")))).unwrap_err();
+    let error = now(Db::open(
+        OpenOptions::new(LOCK).key_file(dir.join("member.key")),
+    ))
+    .unwrap_err();
 
     assert_eq!(error.code(), ErrorCode::InvalidValue);
     assert!(!dir.join("member.key").exists());

@@ -22,5 +22,8 @@ fn a_database_in_memory_opens_and_holds_its_spaces() {
 
     let created = now(db.spaces().create()).unwrap();
 
-    assert_eq!(now(db.spaces().get(created.id())).unwrap().id(), created.id());
+    assert_eq!(
+        now(db.spaces().get(created.id())).unwrap().id(),
+        created.id()
+    );
 }

@@ -11,6 +11,7 @@
 //! bytes each. No other format is read.
 
 mod file;
+pub(crate) mod store;
 
 use ed25519_dalek::SigningKey;
 use ncdb_core::keys::MemberKey;
@@ -19,6 +20,7 @@ use zeroize::Zeroizing;
 use crate::error::{Error, ErrorCode};
 
 pub(crate) use file::from_file;
+pub(crate) use store::{SecretStore, from_store};
 
 /// What a key record starts with.
 const MAGIC: &[u8; 16] = b"nocentraldb-keys";

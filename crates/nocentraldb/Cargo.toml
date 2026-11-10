@@ -30,6 +30,21 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["sin
 # What the member signs to authenticate a connection, as the relay checks
 # it (RFC 0003, decision 13).
 ncdb-relay.workspace = true
+# The member key and the account key of a database at a path live in the
+# platform keystore (RFC 0003, "The member key"; RFC 0009, S19), through
+# keyring-core and one store per platform: the Keychain on macOS, the
+# Credential Manager on Windows, the Secret Service on Linux, reached in pure
+# Rust over D-Bus, so no system library is needed to build.
+keyring-core = { version = "=1.0.1", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = { version = "=1.1.0", default-features = false }
+
+[target.'cfg(all(unix, not(any(target_os = "macos", target_os = "ios", target_os = "android"))))'.dependencies]
+zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = false, features = ["crypto-rust"] }
 
 # The sync tests run the relay server on SQLite locally and talk to it as a
 # simulated member would.

@@ -29,7 +29,7 @@ use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
 
 use crate::error::{Error, ErrorCode, storage};
-use crate::keys::{self, Keys, Secrets};
+use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
 use crate::sync::{self, SyncState};
@@ -198,23 +198,33 @@ impl OpenOptions {
     }
 }
 
+/// What gives the keystore a database at a path keeps its keys in: the
+/// platform's, or a test's.
+type Store<'a> = dyn Fn() -> Result<Box<dyn SecretStore>, keyring_core::Error> + 'a;
+
 /// Opens the view and the keys of the database in `dir`, creating the
-/// directory, the database and the keys on first open.
+/// directory, the database and the keys on first open. The keys come from
+/// the key file when the app names one, and from the keystore otherwise;
+/// without a keystore, nothing is created.
 fn open_at(
     dir: PathBuf,
     key_file: Option<PathBuf>,
+    store: &Store<'_>,
     lock: &ModelLock,
 ) -> Result<(View, Keys), Error> {
-    let Some(key_file) = key_file else {
-        return Err(Error::new(
-            ErrorCode::KeyStoreUnavailable,
-            "no platform keystore is reachable; name a key file with key_file(path)",
-        ));
+    let store = match key_file {
+        Some(_) => None,
+        None => Some(store().map_err(keys::store::unavailable)?),
     };
     std::fs::create_dir_all(&dir)
         .map_err(|error| keys::io("the database directory cannot be created", &error))?;
     let file = dir.join(DATABASE_FILE);
-    let keys = keys::from_file(&key_file, exists(&file)?)?;
+    let existed = exists(&file)?;
+    let keys = match (&key_file, &store) {
+        (Some(key_file), _) => keys::from_file(key_file, existed)?,
+        (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
+        (None, None) => unreachable!("a database without a key file has a keystore"),
+    };
     let view = View::open(&file, lock).map_err(view_error)?;
     Ok((view, keys))
 }
@@ -248,7 +258,14 @@ impl Db {
     /// `StorageFailed`. With a relay, the database starts syncing in the
     /// background.
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
-        Db::open_with(options, None)
+        Db::open_with(options, None, &keys::store::platform)
+    }
+
+    /// Opens the database with keys from `store` in place of the
+    /// platform's keystore, as the keystore's tests need it.
+    #[cfg(test)]
+    pub(crate) fn open_with_store(options: OpenOptions, store: &Store<'_>) -> Result<Db, Error> {
+        Db::open_with(options, None, store)
     }
 
     /// Opens the database of the member with these secrets, of this
@@ -264,10 +281,14 @@ impl Db {
             member: Secrets::new(signing, agreement),
             account,
         };
-        Db::open_with(options, Some(keys))
+        Db::open_with(options, Some(keys), &keys::store::platform)
     }
 
-    fn open_with(options: OpenOptions, given: Option<Keys>) -> Result<Db, Error> {
+    fn open_with(
+        options: OpenOptions,
+        given: Option<Keys>,
+        store: &Store<'_>,
+    ) -> Result<Db, Error> {
         let place = options.place()?;
         if let Some(url) = &options.relay
             && !url.starts_with("ws://")
@@ -288,7 +309,7 @@ impl Db {
                 let view = View::open_in_memory(&lock).map_err(view_error)?;
                 (view, given.unwrap_or_else(Keys::generate))
             }
-            Place::Path { dir, key_file } => open_at(dir, key_file, &lock)?,
+            Place::Path { dir, key_file } => open_at(dir, key_file, store, &lock)?,
         };
         let model = Arc::new(view.model().clone());
         let spaces = view
