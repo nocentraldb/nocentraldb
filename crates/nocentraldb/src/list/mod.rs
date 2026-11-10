@@ -41,7 +41,10 @@ impl Spaces<'_> {
             .map(|(&space, state)| SpaceInfo {
                 id: SpaceId(space),
                 role: state.checks.resolved().role(member).map(Role::of),
-                model: SpaceModel::Ours,
+                model: match state.checks.model_id() {
+                    Some(model_id) if model_id == inner.model_id => SpaceModel::Ours,
+                    _ => SpaceModel::Another,
+                },
             })
             .collect())
     }
