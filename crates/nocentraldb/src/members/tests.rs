@@ -113,3 +113,102 @@ fn an_invitation_whose_certificate_does_not_hold_is_refused() {
         assert_eq!(refused.code(), ErrorCode::InvalidValue);
     }
 }
+
+/// Gives `to` every change of `space` that `from` holds, as a pull would.
+fn copy(from: &Db, to: &Db, space: &Space) {
+    let changes: Vec<Vec<u8>> = {
+        let inner = from.lock();
+        let log = inner.view.log(space.id().0).expect("the space's log");
+        log.after(ncdb_core::log::Position::START)
+            .map(|(_, change)| change.bytes().to_vec())
+            .collect()
+    };
+    let mut inner = to.lock();
+    let member = inner.member.key();
+    let crate::db::Inner { view, spaces, .. } = &mut *inner;
+    let state = spaces
+        .entry(space.id().0)
+        .or_insert_with(|| crate::db::SpaceState::new(space.id().0, member));
+    for bytes in changes {
+        view.receive(&bytes, &mut state.checks).expect("the change is received");
+    }
+}
+
+/// The admin removes the member of `invitation` from `space`, through the
+/// crate's internals, since `members().remove` is not built.
+fn remove(admin: &Db, space: &Space, invitation: &super::Invitation) {
+    use ncdb_core::membership::{self, Action, ControlBody, Entry, MembershipEntry};
+
+    let mut inner = admin.lock();
+    let member = inner.member.key();
+    let crate::db::Inner { view, spaces, .. } = &mut *inner;
+    let state = spaces.get_mut(&space.id().0).expect("the admin holds the space");
+    let next = crate::next::next(view, space.id().0, &state.checks, member.id());
+    let entry = Entry::Membership(MembershipEntry {
+        subject: invitation.key.id(),
+        action: Action::Remove { cutoff: 0 },
+    });
+    let removal = membership::write(
+        &member,
+        space.id().0,
+        next.sequence,
+        next.generation.expect("a generation"),
+        &ControlBody::new(super::control_heads(view, space.id().0), entry),
+    );
+    crate::space::fold(view, &mut state.checks, &removal).unwrap();
+}
+
+/// A space of the admin's, with the member `who` of the same account added
+/// as `role`; the member's database holds the space.
+fn joined(account: &SigningKey, role: Role) -> (Db, Space, Db, super::Invitation) {
+    let admin = of_account(1, account);
+    let project = space(&admin);
+    let member = of_account(2, account);
+    let invitation = now(member.invitation());
+    let options = AddMember {
+        role,
+        fingerprint: None,
+    };
+    now(project.members().add(&invitation, options)).unwrap();
+    copy(&admin, &member, &project);
+    (admin, project, member, invitation)
+}
+
+#[test]
+fn a_member_that_is_no_admin_may_not_add_one() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let (_, project, member, _) = joined(&account, Role::Writer);
+    let on_member = now(member.spaces().get(project.id())).unwrap();
+    let invitation = now(of_account(3, &account).invitation());
+
+    let refused = now(on_member.members().add(&invitation, writer())).unwrap_err();
+
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
+
+#[test]
+fn a_member_that_was_removed_may_not_add_one() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let (admin, project, member, invitation) = joined(&account, Role::Admin);
+    remove(&admin, &project, &invitation);
+    copy(&admin, &member, &project);
+    let on_member = crate::space::Space::handle(member.inner.clone(), project.id());
+    let other = now(of_account(3, &account).invitation());
+
+    let refused = now(on_member.members().add(&other, writer())).unwrap_err();
+
+    assert_eq!(refused.code(), ErrorCode::NotMember);
+}
+
+#[test]
+fn a_member_or_a_former_member_is_not_added_again() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let (admin, project, _, invitation) = joined(&account, Role::Writer);
+
+    let again = now(project.members().add(&invitation, writer())).unwrap_err();
+    remove(&admin, &project, &invitation);
+    let re_grant = now(project.members().add(&invitation, writer())).unwrap_err();
+
+    assert_eq!(again.code(), ErrorCode::InvalidValue);
+    assert_eq!(re_grant.code(), ErrorCode::InvalidValue);
+}
