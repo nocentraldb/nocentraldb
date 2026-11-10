@@ -3,7 +3,7 @@
 
 use ed25519_dalek::SigningKey;
 
-use super::{AddMember, Role};
+use super::{AddMember, NoticeCode, Role};
 use crate::db::{Db, OpenOptions};
 use crate::error::ErrorCode;
 use crate::space::Space;
@@ -79,6 +79,24 @@ fn a_fingerprint_of_another_account_does_not_confirm_the_invitations() {
     let refused = now(project.members().add(&invitation, options)).unwrap_err();
 
     assert_eq!(refused.code(), ErrorCode::UnknownAccount);
+}
+
+/// `add` returns RFC 0009's notice, which says what adding a member does
+/// (RFC 0009, "Invitations and members", "Notices").
+#[test]
+fn adding_a_member_returns_the_notice_that_it_reads_the_whole_history() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let admin = of_account(1, &account);
+    let project = space(&admin);
+    let invitation = now(of_account(2, &account).invitation());
+
+    let notice = now(project.members().add(&invitation, writer())).unwrap();
+
+    assert_eq!(notice.code, NoticeCode::MemberAdded);
+    assert_eq!(
+        notice.text,
+        "The new member reads the whole history of this space."
+    );
 }
 
 #[test]
