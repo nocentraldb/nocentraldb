@@ -1,7 +1,5 @@
 // Asserts that the documents follow the owner's rulings on RFC 0007's
-// "Conflicts" section (NOC-47): RFC 0002 carries Amendment 4, which a dated
-// changelog line at the top announces and whose every point links RFC 0007;
-// RFC 0002's list of what the relay sees links RFC 0007's, and so does every
+// "Conflicts" section (NOC-47): RFC 0002's list of what the relay sees links RFC 0007's, and so does every
 // text that links RFC 0002's list; RFC 0002 states the uploader rule; use
 // case 4 promises only reads at no cost; use case 5 says how peers find each
 // other is still missing; and RFC 0007 marks those conflicts resolved. The
@@ -24,7 +22,6 @@ const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
 const DECISIONS = "factory/decisions";
 
-const AMENDMENT = "amendment-4-following-rfc-0007";
 const RFC_0002_LIST =
   "0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot";
 const RFC_0007_SEES = "0007-relay.md#what-the-relay-sees";
@@ -66,58 +63,7 @@ const targets = (text) =>
   [...text.matchAll(/\]\(([^)\s]+)\)/g)].map((m) => m[1]);
 const links = (text, target) => targets(text).some((t) => t.endsWith(target));
 
-/** True if `target`, relative to `from`, names a heading of RFC 0007 that exists. */
-const resolvesInto0007 = (from, target) => {
-  const [file, anchor] = target.split("#");
-  if (normalize(join(dirname(from), file)) !== RFC_0007 || !anchor) {
-    return false;
-  }
-  return anchors(read(RFC_0007)).has(anchor);
-};
-
-test("RFC 0002 announces Amendment 4 in a dated NOC-47 changelog line that links RFC 0007", () => {
-  const top = read(RFC_0002).split(/^## /m)[0];
-  const line = top
-    .split("\n")
-    .find((l) => /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-47 · /.test(l));
-  assert.ok(line, "no dated changelog line for NOC-47 above the first section");
-  assert.ok(
-    links(line, `#${AMENDMENT}`),
-    `the changelog line does not link #${AMENDMENT}`,
-  );
-  assert.ok(
-    targets(line).some((t) => t.split("#")[0] === "0007-relay.md"),
-    "the changelog line does not link RFC 0007",
-  );
-});
-
-test("RFC 0002's status says Amendment 4 decides nothing and follows RFC 0007", () => {
-  const status = read(RFC_0002)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.ok(links(status, `#${AMENDMENT}`), "the status does not name it");
-  assert.match(status, /NOC-47/);
-});
-
-test("RFC 0002 has the section of Amendment 4, and every point links a heading of RFC 0007", () => {
-  const body = section(read(RFC_0002), AMENDMENT);
-  assert.ok(body, `no section #${AMENDMENT}`);
-  const points = body.split("\n").filter((line) => line.startsWith("- **"));
-  assert.ok(points.length >= 2, "the amendment lists fewer than two points");
-  for (const point of points) {
-    assert.ok(
-      targets(point).some((t) => resolvesInto0007(RFC_0002, t)),
-      `a point links no heading of RFC 0007: ${point.slice(0, 100)}`,
-    );
-  }
-  assert.match(body, /uploader/i, "the amendment does not name the uploader");
-  assert.ok(
-    links(body, RFC_0007_SEES),
-    "the amendment does not link RFC 0007's What the relay sees",
-  );
-});
-
-test("RFC 0002's list of what the relay sees links RFC 0007's, marked Amendment 4", () => {
+test("RFC 0002's list of what the relay sees links RFC 0007's", () => {
   const list = section(
     read(RFC_0002),
     "what-the-relay-can-see-and-what-it-cannot",
@@ -126,7 +72,6 @@ test("RFC 0002's list of what the relay sees links RFC 0007's, marked Amendment 
   const line = list.split("\n").find((l) => links(l, RFC_0007_SEES));
   assert.ok(line, "the list does not link RFC 0007's What the relay sees");
   assert.match(line, /server/i, "does not say RFC 0007 separates the server");
-  assert.match(line, /\*\(Amendment 4\.\)\*/, "the sentence is not marked");
 });
 
 test("RFC 0002 says the uploader must be an authenticated current member, the author any member", () => {
@@ -144,7 +89,6 @@ test("RFC 0002 says the uploader must be an authenticated current member, the au
     links(line, "0007-relay.md#what-the-relay-checks"),
     "no link to RFC 0007's What the relay checks",
   );
-  assert.match(line, /\*\(Amendment 4\.\)\*/, "the sentence is not marked");
   assert.ok(
     !/does not need to know who uploaded/.test(read(RFC_0002)),
     "RFC 0002 still says the relay need not know the uploader",
