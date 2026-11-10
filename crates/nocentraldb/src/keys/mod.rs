@@ -135,25 +135,4 @@ pub(crate) fn io(what: &str, error: &std::io::Error) -> Error {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_key_record_reads_back_as_the_same_keys() {
-        let keys = Keys::generate();
-
-        let read = Keys::decode(&keys.encode()).unwrap();
-
-        assert_eq!(read.member.key().id(), keys.member.key().id());
-        assert_eq!(read.account.to_bytes(), keys.account.to_bytes());
-        assert_eq!(keys.encode().len(), LEN);
-    }
-
-    #[test]
-    fn a_record_of_another_format_or_length_is_not_read() {
-        let mut record = Keys::generate().encode().to_vec();
-        assert!(Keys::decode(&record[..LEN - 1]).is_none());
-        record[MAGIC.len()] = 2;
-        assert!(Keys::decode(&record).is_none());
-    }
-}
+mod tests;
