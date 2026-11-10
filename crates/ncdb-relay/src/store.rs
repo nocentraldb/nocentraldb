@@ -10,6 +10,9 @@
 //! - **One change id, one position**: the check for a duplicate and the
 //!   append are one atomic step.
 //! - **An append and its effects are atomic.**
+//! - **A person-key put is conditional on the stored generation**: the
+//!   check that every record still replaces the generation the core
+//!   checked it against and the write are one atomic step.
 //! - **Exact bytes**: a frame comes back byte for byte.
 //! - **Read your writes**, also through another handle on the same storage.
 //! - **A new epoch after any loss.**
@@ -104,6 +107,32 @@ pub struct PersonKeyRecord {
     pub wrapped: Vec<u8>,
     /// The writer's signature over the record.
     pub signature: Vec<u8>,
+}
+
+/// A person-key record to store, and the generation of the stored record
+/// it replaces, which the core checked it against: none when no record of
+/// its id is stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PersonKeyPut {
+    /// The record.
+    pub record: PersonKeyRecord,
+    /// The generation of the record it replaces, if any.
+    pub replaces: Option<u64>,
+}
+
+/// What a put of person-key records did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PutOutcome {
+    /// Every record is stored.
+    Stored,
+    /// Another put got there first: the record of this id is not the one a
+    /// put replaces. Nothing was stored.
+    Moved {
+        /// The person key whose stored record moved.
+        id: PersonKeyId,
+        /// The generation of its stored record, if any.
+        stored: Option<u64>,
+    },
 }
 
 /// What an append did.
@@ -202,14 +231,17 @@ pub trait RelayStore: Send + Sync {
     ) -> impl Future<Output = Result<Vec<PersonKeyRecord>, StoreError>> + Send;
 
     /// Stores records the core has matched to their person-key entries,
-    /// each replacing the record of its person-key id. There is no delete
-    /// request: a record goes only through [`RelayStore::delete_person_keys`]
-    /// once its shred entry is stable (RFC 0008, M20).
+    /// each replacing the record of its person-key id, if and only if every
+    /// put still replaces the generation it names, and nothing otherwise:
+    /// one atomic step. The puts apply in order, so a later put of one id
+    /// replaces the generation of the earlier. There is no delete request:
+    /// a record goes only through [`RelayStore::delete_person_keys`] once
+    /// its shred entry is stable (RFC 0008, M20).
     fn put_person_keys(
         &self,
         space: SpaceId,
-        records: Vec<PersonKeyRecord>,
-    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+        puts: Vec<PersonKeyPut>,
+    ) -> impl Future<Output = Result<PutOutcome, StoreError>> + Send;
 
     /// Deletes the person-key records of shred entries that became stable.
     fn delete_person_keys(
