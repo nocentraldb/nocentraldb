@@ -941,7 +941,7 @@ Not taken:
 
 ### S32. An existing database whose keys are gone
 
-Decided (Carsten, 2026-11-10), on NOC-144, as #134 builds it: `Db::open` of an existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys. `keyStoreUnavailable` stays the error for no reachable keystore and no key file ([S26](#s26-opening-without-a-keystore-or-a-key-file)).
+Decided (Carsten, 2026-11-10) on NOC-144, and confirmed on NOC-149 as #134 builds it: `Db::open` of an existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys. `keyStoreUnavailable` stays the error for no reachable keystore and no key file ([S26](#s26-opening-without-a-keystore-or-a-key-file)).
 
 Why: new keys would hold none of the space keys of the database's spaces, and every space would turn `notFound`. A keystore that is reachable but holds no entry is a failure of what is stored, not a missing keystore.
 

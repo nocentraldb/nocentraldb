@@ -1,6 +1,6 @@
 # 2026-11-10 · NOC-149 · RFC 0009's S32 follows the code: a missing keystore entry is storageFailed, not keyStoreUnavailable
 
-- Decided by: coding agent (NOC-149), as pm's ticket and #134 say
-- Why: NOC-144 listed, among the safe subsets the owner accepted, `keyStoreUnavailable` for an existing database whose keystore entry is missing. #134 builds `StorageFailed` for that case (`crates/nocentraldb/src/keys/store.rs`), as for a missing key file, and NOC-149 asks for that. The RFC records what the code does, and the PR names the difference so the owner can see it.
-- Instead of: writing NOC-144's wording into RFC 0009, which would put the RFC out of step with the merged code.
+- Decided by: Carsten, 2026-11-10, on NOC-144, and confirmed on NOC-149 as #134 builds it
+- Why: NOC-144 listed, among the safe subsets the owner accepted, `keyStoreUnavailable` for an existing database whose keystore entry is missing. #134 builds `StorageFailed` for that case (`crates/nocentraldb/src/keys/store.rs`), as for a missing key file, and the owner confirmed that build on NOC-149 (option A). `keyStoreUnavailable` then always means that no keystore is reachable (S26), and a lost key is a storage failure.
+- Instead of: `keyStoreUnavailable` for a missing keystore entry, as NOC-144's text said, which needed a code change.
 - Topics: rfc-0009, errors, sdk-rust, on-disk-format
