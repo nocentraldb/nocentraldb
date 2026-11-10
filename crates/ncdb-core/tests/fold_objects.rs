@@ -140,6 +140,32 @@ fn a_delete_sets_the_deleted_flag_and_a_link_to_the_object_reads_deleted() {
 }
 
 #[test]
+fn a_write_of_the_deletion_from_the_objects_state_replaces_the_deletions_the_copy_holds() {
+    let mut m = with_key();
+    m.receive(&at(2, 5, vec![field_op::create(T, COLLECTION)]));
+    let deletion = m.receive(&at(3, 6, vec![delete(true, &[])]));
+
+    // What the SDK writes for a delete or a restore (NOC-88).
+    let deleted = BasicValue {
+        kind: basic::Kind::Boolean,
+    };
+    let id = OperationId {
+        change: ncdb_core::ids::ChangeId([0; 32]),
+        position: 0,
+    };
+    let restore = deleted
+        .set(
+            m.fold.objects[&T].deletion(),
+            id,
+            member(FOUNDER),
+            Hlc(7),
+            Value::Bool(false),
+        )
+        .unwrap();
+    assert_eq!(restore.replaces, BTreeSet::from([deletion.operation_id(0)]));
+}
+
+#[test]
 fn a_delete_before_its_create_is_kept_and_applies_once_the_object_exists() {
     let mut m = with_key();
     m.receive(&at(2, 6, vec![delete(true, &[])]));

@@ -101,6 +101,18 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl Error {
+    /// Whether SQLite failed because the disk or the quota is full: the one
+    /// failure that freeing space can mend.
+    pub fn is_full(&self) -> bool {
+        matches!(
+            self,
+            Error::Sqlite(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == rusqlite::ErrorCode::DiskFull
+        )
+    }
+}
+
 impl From<rusqlite::Error> for Error {
     fn from(error: rusqlite::Error) -> Error {
         Error::Sqlite(error)
