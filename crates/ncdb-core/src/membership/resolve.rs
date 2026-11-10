@@ -21,6 +21,7 @@ use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
+use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
@@ -39,6 +40,7 @@ pub struct Resolved {
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
     seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
+    generations: Generations,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -125,6 +127,22 @@ impl Resolved {
         &self.order
     }
 
+    /// A generation of the generation graph.
+    pub fn generation(&self, generation: u64) -> Option<&Generation> {
+        self.generations.0.get(&generation)
+    }
+
+    /// The generation graph, by generation id.
+    pub fn generations(&self) -> impl Iterator<Item = (u64, &Generation)> + '_ {
+        self.generations.0.iter().map(|(id, g)| (*id, g))
+    }
+
+    /// Whether `generation` is in the generation graph and is `from` or
+    /// descends from it.
+    pub fn descends(&self, generation: u64, from: u64) -> bool {
+        self.generations.descends(generation, from)
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -139,13 +157,10 @@ impl Resolved {
     /// RFC 0008's membership verdict for a sealed change ("Sealed
     /// changes"), from its header alone: whether its author holds an
     /// accepted grant of a role that writes, whose from generation is the
-    /// change's key generation, such that its author sequence is at most
-    /// the cutoff of every accepted revocation of the right to write that
-    /// the grant did not see.
-    ///
-    /// **What this does not do.** The generation graph is not folded yet
-    /// (NOC-71), so a key generation counts only when it is the grant's
-    /// from generation, not when it descends from it.
+    /// change's key generation or one it descends from in the generation
+    /// graph, such that its author sequence is at most the cutoff of every
+    /// accepted revocation of the right to write that the grant did not
+    /// see.
     pub fn admits(&self, header: &Header) -> bool {
         let Some(state) = self.members.0.get(&header.author) else {
             return false;
@@ -154,7 +169,9 @@ impl Resolved {
         state.grants.iter().any(|grant| {
             let seen = self.seen.get(&grant.change);
             writes(Some(grant.role))
-                && grant.from_generation == Some(header.key_generation)
+                && grant
+                    .from_generation
+                    .is_some_and(|from| self.descends(header.key_generation, from))
                 && state
                     .revocations
                     .iter()
@@ -172,6 +189,7 @@ impl Resolved {
             &self.members,
             &self.verdicts,
             &self.gaps,
+            &self.generations,
         )
     }
 }
@@ -206,6 +224,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         seniority: Vec::new(),
         gaps: BTreeSet::new(),
         seen: BTreeMap::new(),
+        generations: Generations::default(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -231,6 +250,8 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         .into_iter()
         .filter(|(id, node)| !node.is_genesis() || *id == genesis.id)
         .collect();
+    resolved.generations =
+        Generations::build(body.first_generation, folded.values().copied(), judged);
     resolved.seniority = rights::seniority(genesis, &folded, judged);
     let rank: BTreeMap<MemberId, usize> = resolved
         .seniority
@@ -286,7 +307,29 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
             }
         }
     }
+    reject_duplicate_generations(&mut resolved.verdicts, &folded);
     resolved
+}
+
+/// Decision M23: when two accepted key chain entries name the same
+/// generation id, both are rejected.
+fn reject_duplicate_generations(
+    verdicts: &mut BTreeMap<ChangeId, Verdict>,
+    folded: &BTreeMap<ChangeId, &Node>,
+) {
+    let mut by_generation: BTreeMap<u64, Vec<ChangeId>> = BTreeMap::new();
+    for (id, node) in folded {
+        if let Entry::KeyChain(chain) = &node.body.entry
+            && verdicts.get(id) == Some(&Verdict::Accepted)
+        {
+            by_generation.entry(chain.generation).or_default().push(*id);
+        }
+    }
+    for ids in by_generation.into_values().filter(|ids| ids.len() > 1) {
+        for id in ids {
+            verdicts.insert(id, Verdict::Rejected(Rejection::DuplicateGeneration));
+        }
+    }
 }
 
 /// What an accepted change does to the members.
@@ -344,7 +387,7 @@ fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved) -> Judgem
     }
     let valid = past.genesis.is_some()
         && past.role(node.author) >= Some(rights::needed(node))
-        && rights::own_rules(node, past);
+        && rights::own_rules(input.space, node, past);
     let depth = match (valid, node.membership()) {
         (true, Some(entry)) if entry.role() == Some(Role::Admin) => {
             let held = past.member(node.author).into_iter().flat_map(|s| &s.grants);
