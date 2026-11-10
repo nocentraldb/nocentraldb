@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-90 · The relay's answers live in the view's log, and a push result other than a transient one is a refusal
+
+- Decided by: coding agent (NOC-90)
+- Why: RFC 0002's log on disk already has `relay_position` and `relay_refusal` columns. `View::confirm`, `View::refuse` and `View::forget_relay_positions` write them, and `View::unconfirmed` hands out the changes with neither, in local order, which is what a member pushes (RFC 0007, "Island mode", step 2). `unconfirmed` and `refused` in the sync status are disjoint and count only this member's own changes. A push result `unavailable` or `rate_limited` leaves the change unconfirmed and ends the connection, to retry after backoff; every other code is recorded as the relay's refusal and the change is not pushed to that relay again (RFC 0002, D12), `unknown_space` after a refused genesis included. A new relay epoch clears every position, keeps every refusal, and resets every cursor to 0. The relay epoch and the cursors are kept in memory, like the rest of the database until NOC-108.
+- Instead of: keeping positions in the SDK's memory only, which a database on disk (NOC-108) would have to move; or counting refused changes as unconfirmed too, which would report a change as on its way that never will be.
+- What this does not do: pushing a refused change again once the member's own fold newly accepts it (RFC 0008, M19) is not built.
+- Topics: sdk-rust, relay, rfc-0007, rfc-0002, local-view
