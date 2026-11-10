@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-100 · RFCs are rewritten as complete texts; decided changes go into the text, not into amendments
+
+- Decided by: owner (Carsten, 2026-11-10, in chat with pm); the split and order by pm
+- Why: after a few days the nine RFCs carried 37 amendments, so a reader had to assemble the current design from a base text and its amendments. The owner wants each RFC complete on its own. Two coding agents rewrite them (NOC-100: README and RFC 0001–0004; NOC-101: RFC 0005–0009), one PR per RFC, deciding nothing, with every folded-in amendment listed in the PR so nothing is lost. From now on a decided change is written into the RFC's text with a dated History line, and the decision is kept under "Decisions". The rewrite runs in the expedite lane because the owner asked for it now; RFC 0007 and 0009 go last, because NOC-89 and open owner questions still touch them. The RFC discussions are announced once the rewritten texts are merged, so the first readers see the integrated design.
+- Instead of: keeping amendment sections, which keep the history in the text but make the current design hard to read; or one agent for all nine RFCs, which would take twice as long.
+- Topics: rfc, process, factory
