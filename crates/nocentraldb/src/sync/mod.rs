@@ -45,7 +45,7 @@ use tokio::sync::watch;
 use crate::db::{Db, Inner};
 
 pub(crate) use run::start;
-pub(crate) use status::Notify;
+pub(crate) use status::{Notify, follow};
 
 /// The state of the relay connection (RFC 0009, "Sync and status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
