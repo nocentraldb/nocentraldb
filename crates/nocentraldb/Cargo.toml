@@ -36,3 +36,6 @@ ncdb-relay.workspace = true
 [dev-dependencies]
 ncdb-relay-server.workspace = true
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "time", "io-util", "net", "macros"] }
+# A backup of the relay's database, to restore it from (RFC 0007,
+# "Restores and the relay epoch").
+rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }

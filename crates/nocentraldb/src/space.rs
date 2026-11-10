@@ -101,6 +101,7 @@ impl Spaces<'_> {
             fold(&mut inner, &mut state, change)?;
         }
         inner.spaces.insert(space, state);
+        crate::sync::wake(&inner);
         Ok(Space {
             inner: self.db.inner.clone(),
             id: SpaceId(space),
@@ -124,6 +125,13 @@ fn fold(inner: &mut Inner, state: &mut SpaceState, change: &Change) -> Result<()
 }
 
 impl Space {
+    /// A handle on a space the database holds, as the sync tests read a
+    /// space the member was added to.
+    #[cfg(test)]
+    pub(crate) fn handle(inner: Arc<Mutex<Inner>>, id: SpaceId) -> Space {
+        Space { inner, id }
+    }
+
     /// The space id.
     pub fn id(&self) -> SpaceId {
         self.id
@@ -188,6 +196,9 @@ impl Space {
             })
         })();
         inner.spaces.insert(space, state);
+        if result.is_ok() {
+            crate::sync::wake(&inner);
+        }
         result
     }
 

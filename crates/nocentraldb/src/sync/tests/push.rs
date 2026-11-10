@@ -66,7 +66,9 @@ async fn the_status_counts_own_changes_the_relay_has_not_confirmed() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_database_without_a_relay_reports_none_and_counts_every_change() {
-    let db = crate::Db::open(crate::OpenOptions::new(LOCK)).await.unwrap();
+    let db = crate::Db::open(crate::OpenOptions::new(LOCK))
+        .await
+        .unwrap();
 
     db.spaces().create().await.unwrap();
 

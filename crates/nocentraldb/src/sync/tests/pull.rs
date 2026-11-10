@@ -46,7 +46,10 @@ async fn a_space_the_member_was_added_to_is_pulled_and_folded() {
 
     eventually("the task", || holds(&db, &space, FIRST)).await;
     let view = &crate::db::lock(&db.inner).view;
-    assert_eq!(view.relay_position(space.space, space.genesis.id()), Some(1));
+    assert_eq!(
+        view.relay_position(space.space, space.genesis.id()),
+        Some(1)
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

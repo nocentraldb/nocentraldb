@@ -73,34 +73,35 @@ async fn a_reconnect_pushes_what_was_written_offline_and_pulls_what_was_missed()
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_new_epoch_pulls_from_zero_and_pushes_again_without_folding_twice() {
-    let relay = LocalRelay::start().await;
+async fn a_restore_makes_the_member_pull_from_zero_and_push_again_without_folding_twice() {
+    let mut relay = LocalRelay::start().await;
     let (space, _client) = shared(&relay).await;
     let db = open(ME, &relay.url()).await;
     let own = db.spaces().create().await.unwrap();
     eventually("the shared task", || holds(&db, space.space, FIRST)).await;
     synced(&db).await;
-
-    relay.proxy.cut();
-    offline(&db).await;
-    let written = own
+    let backup = relay.backup();
+    let lost = own
         .write(|tx| {
-            tx.create("tasks", [("title", Value::from("after the restore"))])?;
+            tx.create("tasks", [("title", Value::from("lost in the restore"))])?;
             Ok(())
         })
         .await
         .unwrap();
-    relay.new_epoch().await;
+    synced(&db).await;
+
+    relay.proxy.cut();
+    offline(&db).await;
+    relay.restore(backup).await;
+    assert_eq!(relay.log(own.id().0).await.len(), 2, "the restore lost it");
     relay.proxy.restore();
 
+    eventually("pushed again", || now(relay.log(own.id().0)).len() == 3).await;
     let status = synced(&db).await;
     assert!(!status.epoch_changed);
-    assert_eq!(relay.log(own.id().0).await[2], written.change.0);
+    assert_eq!(relay.log(own.id().0).await[2], lost.change.0);
     let inner = crate::db::lock(&db.inner);
-    assert_eq!(inner.sync_folds(), 4, "the shared space's four changes, once");
-    for change in [&space.genesis] {
-        assert_eq!(inner.view.relay_position(space.space, change.id()), Some(1));
-    }
-    assert!(inner.view.unconfirmed(space.space).unwrap().is_empty());
-    assert!(inner.view.unconfirmed(own.id().0).unwrap().is_empty());
+    assert_eq!(inner.sync_folds(), 4, "the shared space's changes, once");
+    let genesis = inner.view.relay_position(space.space, space.genesis.id());
+    assert_eq!(genesis, Some(1), "pulled again from 0");
 }

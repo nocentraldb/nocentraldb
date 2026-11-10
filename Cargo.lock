@@ -590,6 +590,7 @@ dependencies = [
  "ncdb-core",
  "ncdb-relay",
  "ncdb-relay-server",
+ "rusqlite",
  "tokio",
  "tokio-tungstenite",
  "zeroize",
