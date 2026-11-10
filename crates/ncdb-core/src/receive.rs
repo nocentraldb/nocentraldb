@@ -64,7 +64,10 @@ impl From<Stop> for State {
 /// The checks of steps 3 to 5, against the control state of the space:
 /// the membership entries, key chain entries and key envelopes the member
 /// holds. Their result must depend only on the change and the set of
-/// control changes added, never on their order or on the time.
+/// control changes added, never on their order or on the time. A change
+/// that passed [`Checks::verify`] and [`Checks::open`] keeps passing them
+/// as control changes are added; only [`Checks::is_member`] may turn from
+/// pass to fail, and the log then un-folds the change.
 pub trait Checks {
     /// Whether this member knows the suite (step 2).
     fn knows_suite(&self, suite: u64) -> bool;

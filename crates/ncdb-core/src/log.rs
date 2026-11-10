@@ -61,7 +61,10 @@ impl std::error::Error for AppendError {}
 #[non_exhaustive]
 pub enum State {
     /// Passed every check and folded. Operations the member's model does
-    /// not know yet are parked on their own (D10), listed here in order.
+    /// not know yet are parked on their own (D10), listed here in order. A
+    /// sealed change moves on to rejected, and is un-folded, when a later
+    /// control change makes its membership check fail (RFC 0006,
+    /// "Un-folding").
     Folded {
         /// The operations of the change that were not folded.
         parked: Vec<ParkedOperation>,
@@ -69,8 +72,9 @@ pub enum State {
     /// Kept and not folded, because this client does not understand it
     /// yet; folded after an upgrade.
     Parked(ParkReason),
-    /// Kept and not folded, because it failed a check; checked again when a
-    /// control change of the space arrives (D11).
+    /// Kept and not folded, because it failed a check, or un-folded,
+    /// because a later control change made it fail; checked again when a
+    /// control change of the space passes (D11).
     Rejected(RejectReason),
 }
 
