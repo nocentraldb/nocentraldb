@@ -41,7 +41,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **The relay is a transport, not the truth.** Every member holds the full log. The relay appends changes in the order it accepts them, numbers them densely, and hands them out after a cursor. Members decide what a space contains; the relay decides nothing about content.
 - **One connection, three things to do.** A member opens one connection, proves which member key it holds, and then pushes changes, pulls from a cursor and subscribes to spaces, all over the same connection.
 - **Every check uses public data.** The relay checks that a frame is well-formed, that its signature is valid for the author's public key, and that the author and the uploader are members. Public keys and membership come from control changes in the log, which are signed but not encrypted. No check needs a key that decrypts anything.
-- **Backends are interchangeable.** All checks live in one relay core. A backend only stores: it appends at the next position if nobody else did, reads a range, and keeps the membership table and the person-key store. SQLite, Postgres and DynamoDB with S3 all implement the same interface and pass the same test suite.
+- **Backends are interchangeable.** All checks live in one relay core. A backend only stores: it appends at the next position if nobody else did, reads a range, keeps the membership table, and puts a person-key record only if the stored record is still the one the core checked it against. SQLite, Postgres and DynamoDB with S3 all implement the same interface and pass the same test suite.
 - **On AWS, it costs nothing while nobody writes.** API Gateway WebSockets, Lambda, DynamoDB and S3. A small team pays about 10 dollars a month. 1,000 agents that each read 1,000 times a minute pay nothing for the reads, because reads are local; their writes cost about 800 dollars a month at one write per agent per minute.
 - **Without the relay, members keep working.** Writes go into the local log at once. On reconnect, a member pulls what it missed and pushes what the relay has not confirmed. The relay recognises changes it already holds by their ids. A relay restored from a backup announces a new epoch, so no member trusts a position the restore undid.
 
@@ -184,7 +184,7 @@ The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#14-inte
 
 - **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
-- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`.
+- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`. The check and the write are one step: the backend stores the records only if the stored records are still the ones they were checked against, so two members that put a record of one person key at the same time cannot both replace the generation each of them checked against ([The backend interface](#the-backend-interface)).
 - **Members check the commitment.** A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A relay that swaps records is caught, and the signature names who wrote each record.
 - **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only after it appended a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003, narrowed by RFC 0008). The relay deletes the record when the shred entry becomes stable, by the same rule as on a member, not in the transaction that appends it ([RFC 0008, M20](0008-membership.md#effects-that-wait-until-a-change-is-stable)). Until then a shred that a concurrent revocation rejects can still be undone.
 
@@ -345,11 +345,20 @@ pub trait RelayStore {
 
     /// The person-key store (RFC 0003): opaque wrapped records.
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError>;
-    /// Stores records the core has matched to their person-key entries.
-    /// There is no delete request: a record goes only through the effect of
-    /// a shred entry once that entry is stable (RFC 0008, M20).
-    async fn put_person_keys(&self, space: SpaceId, records: Vec<PersonKeyRecord>)
-        -> Result<(), StoreError>;
+    /// Stores records the core has matched to their person-key entries,
+    /// each replacing the record of its person-key id, if and only if every
+    /// put still replaces the generation it names, and nothing otherwise:
+    /// one atomic step, the way an append is conditional on the head. The
+    /// puts apply in order, so a later put of one id replaces the generation
+    /// of the earlier. Returns `Moved` when another put got there first; the
+    /// core then re-checks and retries. There is no delete request: a record
+    /// goes only through `delete_person_keys` once its shred entry is stable
+    /// (RFC 0008, M20).
+    async fn put_person_keys(
+        &self,
+        space: SpaceId,
+        puts: Vec<PersonKeyPut>,
+    ) -> Result<PutOutcome, StoreError>;
 
     /// The relay epoch, and setting a new one, which a restore must do
     /// before the relay serves any request.
@@ -363,6 +372,23 @@ pub trait RelayStore {
     /// Large frames: an upload URL, and reading what was uploaded.
     async fn begin_upload(&self, space: SpaceId, size: u64) -> Result<Upload, StoreError>;
     async fn take_upload(&self, id: UploadId) -> Result<Vec<u8>, StoreError>;
+}
+
+/// A person-key record to store, and the generation of the stored record it
+/// replaces, which the core checked it against: None when no record of its
+/// person-key id is stored.
+pub struct PersonKeyPut {
+    pub record: PersonKeyRecord,
+    pub replaces: Option<u64>,
+}
+
+/// What a put of person-key records did.
+pub enum PutOutcome {
+    /// Every record is stored.
+    Stored,
+    /// The stored record of `id` is not the one a put replaces: its
+    /// generation is `stored`. Nothing was stored.
+    Moved { id: PersonKeyId, stored: Option<u64> },
 }
 
 /// Delivers appended entries to subscribed connections. In-process for a
@@ -381,6 +407,7 @@ The rules every backend must keep:
 - **Dense positions, without a gap and without a position used twice.** The append is conditional on the head, so two relay processes appending to one space at the same time cannot both win. The loser gets `HeadMoved` and the core retries.
 - **One change id, one position.** The check for a duplicate and the append are one atomic step.
 - **An append and its effects are atomic.** A control change and the membership table change together or not at all. The deletion of a person-key record is not such an effect: it waits until its shred entry is stable, and the core requests it then (RFC 0008, M20).
+- **A person-key put is conditional on the stored generation.** Each put names the generation of the stored record it replaces, none when no record of its person-key id is stored. The backend stores the request's records only if every one still replaces that generation, in one atomic step, and otherwise stores none and answers `Moved`. The core then reads the log and the records again, checks again and retries, up to the append's 64 tries before it answers `unavailable`. The condition is on the generation alone, because whether a record is acceptable depends on nothing else of the stored record: a re-wrap under the same generation stays acceptable whichever record of that generation is stored.
 - **Exact bytes.** A backend returns the frame byte for byte as it was appended.
 - **Read your writes.** A read after a successful append sees the appended entries.
 - **A new epoch after any loss.** A backend restored from a backup, or one that may have lost appends for any other reason, draws a new epoch before it serves a request.
@@ -391,6 +418,7 @@ One conformance test suite, run against every backend, holds these rules, so a n
 | --- | --- | --- | --- |
 | Conditional append | One write transaction; the head is a row in `spaces`. | `UPDATE spaces SET head = head + n WHERE id = $1 AND head = $2`, then the inserts, in one transaction. | `TransactWriteItems`: a condition on the head item, plus the entry and change-id items (see [The AWS backend](#the-aws-backend)). |
 | One change id, one position | A unique index on (space, change id). | A unique index on (space, change id). | A change-id item per change, put with `attribute_not_exists`, in the same transaction. |
+| Conditional person-key put | One write transaction that reads each stored generation before it writes. | In one transaction, `UPDATE person_keys SET ... WHERE space = $1 AND id = $2 AND generation = $3`, or an insert where none is stored; a row count of zero rolls back and answers `Moved`. | `TransactWriteItems` with a condition expression on each item's generation in `person_keys`, or `attribute_not_exists` where none is stored. |
 | Large frames | Kept inline. | Kept inline. | Frames above 8 KiB in S3, the entry points to them. |
 | Notifier | In process. | In process, plus `LISTEN`/`NOTIFY` across relay processes. | API Gateway's connection API. |
 
@@ -435,7 +463,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
-| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008); deleted only when its shred entry is stable (RFC 0008, M20). |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only when its shred entry is stable (RFC 0008, M20). |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. An operator who sets decision R9 to B keeps the records after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -759,3 +787,4 @@ The protection of the person-key store and the key that authenticates a connecti
 - **2026-11-09** · NOC-35 · The first line drops the draft number of a decided RFC (#76).
 - **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: the decisions in short form, an Open questions section, and a status that says what is built (#117).
+- **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118).
