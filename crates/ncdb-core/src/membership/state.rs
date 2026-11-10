@@ -5,6 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cbor::{self, Value};
+use crate::change::Header;
 use crate::ids::{ChangeId, MemberId};
 use crate::keys::MemberPublicKey;
 
@@ -65,6 +66,35 @@ pub struct MemberState {
     pub grants: Vec<Grant>,
     /// Its accepted revocations, in the order.
     pub revocations: Vec<Revocation>,
+}
+
+impl MemberState {
+    /// RFC 0008's membership verdict for a sealed change of this member
+    /// ("Sealed changes"), from its header alone: whether the member holds
+    /// an accepted grant of a role that writes, whose from generation is
+    /// the change's key generation, such that its author sequence is at
+    /// most the cutoff of every accepted revocation of the right to write
+    /// that the grant did not see. `seen` holds, for each accepted grant,
+    /// the accepted revocations it saw ([`super::Resolved::seen`]). The
+    /// header's author is the caller's to match with this member.
+    ///
+    /// **What this does not do.** The generation graph is not folded yet
+    /// (NOC-71), so a key generation counts only when it is the grant's
+    /// from generation, not when it descends from it.
+    pub fn admits(&self, header: &Header, seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>) -> bool {
+        let writes = |role: Option<Role>| role >= Some(Role::Writer);
+        self.grants.iter().any(|grant| {
+            let seen = seen.get(&grant.change);
+            writes(Some(grant.role))
+                && grant.from_generation == Some(header.key_generation)
+                && self
+                    .revocations
+                    .iter()
+                    .filter(|r| !writes(r.role))
+                    .filter(|r| !seen.is_some_and(|seen| seen.contains(&r.change)))
+                    .all(|r| header.sequence <= r.cutoff)
+        })
+    }
 }
 
 /// An accepted grant: a genesis, an add or a set role.
