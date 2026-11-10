@@ -27,12 +27,20 @@ const section = (markdown, heading) => {
 
 test(`the RFC README has a "${HEADING}" section with the rule`, () => {
   const rule = section(readme(), HEADING);
-  assert.match(rule, /written into the (RFC's )?text/, "the change goes into the text");
+  assert.match(
+    rule,
+    /written into the (RFC's )?text/,
+    "the change goes into the text",
+  );
   assert.match(rule, /"History"/, "a History line records the change");
   assert.match(rule, /dated/, "the History line is dated");
   assert.match(rule, /pull request/, "the History line names the pull request");
   assert.match(rule, /"Decisions"/, "the decision goes under Decisions");
-  assert.match(rule, /no amendment section/, "an RFC has no amendment sections");
+  assert.match(
+    rule,
+    /no amendment section/,
+    "an RFC has no amendment sections",
+  );
   assert.match(rule, /withdrawn/, "a withdrawn decision stays listed");
   assert.match(rule, /owner/, "a change to a decision waits for the owner");
 });
@@ -61,9 +69,15 @@ test("CONTRIBUTING.md and pm's tick name the same ends, without amendments", () 
   const contributing = read("CONTRIBUTING.md")
     .split("\n")
     .find((line) => line.includes("What happens to your feedback"));
-  assert.ok(contributing, 'CONTRIBUTING.md does not link "What happens to your feedback"');
+  assert.ok(
+    contributing,
+    'CONTRIBUTING.md does not link "What happens to your feedback"',
+  );
   assert.doesNotMatch(contributing, /amendment/i);
-  assert.match(contributing, /change to an RFC's text|change to the RFC's text/);
+  assert.match(
+    contributing,
+    /change to an RFC's text|change to the RFC's text/,
+  );
 
   const tick = read("factory/roles/pm.md")
     .split("\n")
