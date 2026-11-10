@@ -15,8 +15,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0006-local-view.md";
 const TITLE = "Amendment 7: following RFC 0005's references";
 const ANCHOR = "amendment-7-following-rfc-0005s-references";
-const D19 =
-  "0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22";
+const D19 = "0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22";
 const MARK = "*(Amendment 7.)*";
 
 const rfc = readFileSync(join(root, RFC), "utf8");
