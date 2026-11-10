@@ -64,10 +64,14 @@ impl AccountKeyStatement {
         hash.finalize().into()
     }
 
-    /// Whether the signature verifies, strictly, with the recovery key of
-    /// key 1. Whether that recovery key is the account's expected one is
-    /// the caller's to check.
+    /// Whether the statement holds: its number is at least 1, and the
+    /// signature verifies, strictly, with the recovery key of key 1.
+    /// Whether that recovery key is the account's expected one is the
+    /// caller's to check.
     pub fn verify(&self) -> bool {
+        if self.number == 0 {
+            return false;
+        }
         let Ok(key) = VerifyingKey::from_bytes(&self.recovery_key) else {
             return false;
         };
