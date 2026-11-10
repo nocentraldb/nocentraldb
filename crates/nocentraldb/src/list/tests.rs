@@ -142,3 +142,14 @@ fn a_space_of_another_model_is_listed_as_another() {
         }]
     );
 }
+
+#[test]
+fn a_space_whose_key_has_not_arrived_is_left_out() {
+    let db = database();
+    let (_, changes) = shared(model_id(), CoreRole::Writer, false);
+    receive(&db, &all(&changes));
+
+    let listed = now(db.spaces().list()).unwrap();
+
+    assert_eq!(listed, Vec::new());
+}
