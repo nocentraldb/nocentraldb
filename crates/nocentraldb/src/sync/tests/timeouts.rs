@@ -1,6 +1,8 @@
-//! A relay that stops answering is a lost connection (RFC 0007,
-//! "Liveness"): the WebSocket handshake, every request and every ping
-//! wait a bounded time. The bounds are short in these tests.
+//! A relay that stops answering, or sends a message above RFC 0007's 128
+//! KiB, is a lost connection (RFC 0007, "Liveness" and "Transport and
+//! encoding"): the WebSocket handshake, every request and every ping wait
+//! a bounded time, and a larger message is not read. The bounds are short
+//! in these tests.
 
 use std::time::Duration;
 
@@ -35,4 +37,10 @@ async fn a_request_that_is_never_answered_times_out() {
 async fn a_ping_without_a_pong_is_a_lost_connection() {
     let n = connections(Trouble::NoPong).await;
     assert!(n >= 2, "{n} connections: the first one never timed out");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_above_128_kib_ends_the_connection() {
+    let n = connections(Trouble::Huge).await;
+    assert!(n >= 2, "{n} connections: the 200 KiB message was read");
 }
