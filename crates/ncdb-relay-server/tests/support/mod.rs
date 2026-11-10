@@ -278,7 +278,12 @@ impl Client {
         let started = std::time::Instant::now();
         loop {
             assert!(started.elapsed() < WAIT, "the server closes in time");
-            if self.ws.send(Message::Ping(Vec::new().into())).await.is_err() {
+            if self
+                .ws
+                .send(Message::Ping(Vec::new().into()))
+                .await
+                .is_err()
+            {
                 return;
             }
             match tokio::time::timeout(every, self.ws.next()).await {

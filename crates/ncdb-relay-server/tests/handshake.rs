@@ -3,7 +3,9 @@
 //! deadline; when it passes, the server closes the connection, so a peer
 //! that stops halfway cannot hold a task forever. The deadline runs per
 //! step from the moment the step starts: WebSocket pings do not extend it.
-//! An authenticated member is no longer under it.
+//! An authenticated member is no longer under it. Each test starts its
+//! clock before whatever starts the server's step, so a close it sees too
+//! early is one the server made too early.
 
 mod support;
 
@@ -21,7 +23,11 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_millis(300);
 const WAIT: Duration = Duration::from_secs(20);
 
 fn hello() -> Value {
-    message("hello", None, &[(3, Value::Array(vec![Value::Unsigned(1)]))])
+    message(
+        "hello",
+        None,
+        &[(3, Value::Array(vec![Value::Unsigned(1)]))],
+    )
 }
 
 /// The server ends the TCP connection: a read returns end of file or an
@@ -42,8 +48,8 @@ async fn tcp_closed(stream: &mut TcpStream) {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_peer_that_never_sends_the_upgrade_is_closed() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
-    let mut stream = TcpStream::connect(addr).await.expect("a TCP connection");
     let started = Instant::now();
+    let mut stream = TcpStream::connect(addr).await.expect("a TCP connection");
     tcp_closed(&mut stream).await;
     assert!(started.elapsed() >= HANDSHAKE_TIMEOUT);
 }
@@ -51,8 +57,8 @@ async fn a_peer_that_never_sends_the_upgrade_is_closed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_peer_that_stops_halfway_through_the_upgrade_is_closed() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
-    let mut stream = TcpStream::connect(addr).await.expect("a TCP connection");
     let started = Instant::now();
+    let mut stream = TcpStream::connect(addr).await.expect("a TCP connection");
     stream
         .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n")
         .await
@@ -64,8 +70,8 @@ async fn a_peer_that_stops_halfway_through_the_upgrade_is_closed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_peer_that_never_says_hello_is_closed() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
-    let mut client = Client::connect(addr).await;
     let started = Instant::now();
+    let mut client = Client::connect(addr).await;
     client.closed().await;
     assert!(started.elapsed() >= HANDSHAKE_TIMEOUT);
 }
@@ -74,9 +80,9 @@ async fn a_peer_that_never_says_hello_is_closed() {
 async fn a_peer_that_never_answers_the_challenge_is_closed() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
     let mut client = Client::connect(addr).await;
+    let started = Instant::now();
     let challenge = client.ask(&hello()).await;
     assert_eq!(kind(&challenge), "challenge");
-    let started = Instant::now();
     client.closed().await;
     assert!(started.elapsed() >= HANDSHAKE_TIMEOUT);
 }
@@ -84,8 +90,8 @@ async fn a_peer_that_never_answers_the_challenge_is_closed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn pings_do_not_extend_a_step() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
-    let mut client = Client::connect(addr).await;
     let started = Instant::now();
+    let mut client = Client::connect(addr).await;
     client.ping_until_closed(Duration::from_millis(50)).await;
     assert!(started.elapsed() >= HANDSHAKE_TIMEOUT);
 }
@@ -110,7 +116,9 @@ async fn each_step_has_its_own_deadline() {
 async fn an_authenticated_member_is_not_under_the_deadline() {
     let (addr, _dir) = server_with_handshake_timeout(HANDSHAKE_TIMEOUT).await;
     let (mut client, _) = Client::member(addr, 0).await;
-    client.quiet(u64::try_from((HANDSHAKE_TIMEOUT * 3).as_millis()).unwrap()).await;
+    client
+        .quiet(u64::try_from((HANDSHAKE_TIMEOUT * 3).as_millis()).unwrap())
+        .await;
     let pong = client.ask(&message("ping", Some(7), &[])).await;
     assert_eq!(kind(&pong), "pong", "{pong:?}");
 }
