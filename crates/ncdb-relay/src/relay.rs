@@ -11,7 +11,9 @@ use ncdb_core::seal;
 
 use crate::error::ErrorCode;
 use crate::record;
-use crate::store::{AppendOutcome, Effect, NewEntry, Position, RelayStore, StoreError};
+use crate::store::{
+    AppendOutcome, Effect, Entry as LogEntry, Epoch, NewEntry, Position, RelayStore, StoreError,
+};
 
 /// How often the core re-checks and retries an append that another append
 /// overtook before it answers `unavailable`.
@@ -72,6 +74,15 @@ pub enum Pushed {
     Rejected(ErrorCode),
 }
 
+/// A page of a space's log.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Pulled {
+    /// The entries after the cursor, in position order.
+    pub entries: Vec<LogEntry>,
+    /// The space's head.
+    pub head: Position,
+}
+
 /// The relay core over a backend.
 #[derive(Debug)]
 pub struct Relay<S> {
@@ -88,6 +99,19 @@ impl<S: RelayStore> Relay<S> {
     /// The backend.
     pub fn store(&self) -> &S {
         &self.store
+    }
+
+    /// The entries of `space` after the cursor `after`, at most `limit`,
+    /// for `reader`.
+    pub async fn pull(
+        &self,
+        _reader: MemberId,
+        _space: SpaceId,
+        _epoch: Epoch,
+        _after: Position,
+        _limit: u32,
+    ) -> Result<Pulled, ErrorCode> {
+        Err(ErrorCode::Unavailable)
     }
 
     /// Checks each frame `uploader` pushes to `space`, one by one, and

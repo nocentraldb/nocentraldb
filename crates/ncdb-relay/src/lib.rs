@@ -6,6 +6,7 @@
 //! suite every backend passes is [`conformance`], and the first backend,
 //! SQLite, is [`sqlite`].
 
+pub mod auth;
 pub mod conformance;
 mod error;
 pub mod record;
@@ -14,4 +15,4 @@ pub mod sqlite;
 pub mod store;
 
 pub use error::ErrorCode;
-pub use relay::{Config, MAX_FRAME, Pushed, Relay};
+pub use relay::{Config, MAX_FRAME, Pulled, Pushed, Relay};
