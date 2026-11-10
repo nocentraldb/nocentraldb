@@ -599,7 +599,11 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 
 ## Open questions
 
-None. The owner has decided every question this RFC asked, the six NOC-95 raised included.
+Three questions wait for the owner, each in its own ticket. Until the owner answers, the SDK does not offer what they name.
+
+- **NOC-114.** Opening a database on a device with no keystore, `Db::open` with neither a path nor `in_memory()`, and the TypeScript names for `path`, `keyFile`, `inMemory` and `agent`.
+- **NOC-116.** The Rust names of the sync status that [Sync and status](#sync-and-status) reports.
+- **NOC-115, question 10.** The public names for pairing a device, linking an account and recovery, which the accounts RFC (RFC 0010) designs behind the entry points of [S15](#s15-accounts).
 
 ## Decisions
 
