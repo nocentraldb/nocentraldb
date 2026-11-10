@@ -4,8 +4,8 @@
 //! (RFC 0008, "Membership entry" and "Key envelope"; RFC 0003, "Sharing a
 //! space key with a new member").
 //!
-//! **What this does not do yet.** `list`, `set_role` and `remove`, adding
-//! a list of invitations, and the notice RFC 0009 has `add` return.
+//! **What this does not do yet.** `list`, `set_role` and `remove`, and
+//! adding a list of invitations.
 
 use std::collections::BTreeSet;
 
@@ -24,8 +24,10 @@ use crate::next;
 use crate::space::{Space, fold, not_stopped, writable};
 
 mod invitation;
+mod notice;
 
 pub use invitation::{Fingerprint, Invitation};
+pub use notice::{Notice, NoticeCode};
 
 /// The members of one space, from [`Space::members`].
 #[derive(Debug)]
@@ -91,7 +93,8 @@ impl Members<'_> {
     /// `options` gives: writes the membership entry and the new member's
     /// key envelope of the current generation, after the heads of the
     /// space's control DAG, and folds them, on the device. The new member
-    /// reads the whole history of the space once it syncs.
+    /// reads the whole history of the space once it syncs, which the
+    /// returned [`Notice`] says (`MemberAdded`).
     ///
     /// Only an admin adds members: another member is refused with
     /// `NotAllowed`, one that was removed, or that the relay answered
@@ -107,7 +110,7 @@ impl Members<'_> {
     /// database draws its own account key (RFC 0009, S20): its member is
     /// refused with `UnknownAccount` unless `options` carry the
     /// invitation's fingerprint.
-    pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<(), Error> {
+    pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
@@ -157,7 +160,7 @@ impl Members<'_> {
             fold(view, &mut state.checks, change)?;
         }
         crate::sync::wake(&inner);
-        Ok(())
+        Ok(Notice::MEMBER_ADDED)
     }
 }
 
