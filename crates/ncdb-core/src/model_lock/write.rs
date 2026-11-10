@@ -80,8 +80,9 @@ impl ModelLock {
 fn collection(collection: &Collection, descriptions: bool) -> Value {
     let mut entry = Map::new();
     entry.insert("since".into(), collection.since.into());
-    if let Some(version) = collection.deprecated {
-        entry.insert("deprecated".into(), version.into());
+    if let Some(deprecation) = &collection.deprecated {
+        entry.insert("deprecated".into(), deprecation.since.into());
+        entry.insert("deprecatedReason".into(), deprecation.reason.clone().into());
     }
     let fields = collection
         .fields

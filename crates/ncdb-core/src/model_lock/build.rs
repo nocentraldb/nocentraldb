@@ -34,6 +34,8 @@ pub struct Draft {
 /// A collection as the schema declares it.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct DraftCollection {
+    /// The text of the collection's `.deprecated()`, when it is deprecated.
+    pub deprecated: Option<String>,
     /// The stored fields; their `since` is unused, and `deprecated`, when
     /// set, holds only the reason.
     pub fields: BTreeMap<String, Field>,
@@ -50,14 +52,15 @@ impl Draft {
     ///
     /// ```json
     /// { "collections": { "tasks": {
+    ///     "deprecated": "Use issues.",
     ///     "fields": { "title": { "rule": 1, "type": "ncdb/string", "deprecated": "Use summary." } },
     ///     "computed": ["blocked"], "views": ["ready"],
     ///     "indexes": { "byTitle": { "equal": 0, "fields": [{ "direction": "asc", "field": "title" }] } } } },
     ///   "plugins": {} }
     /// ```
     ///
-    /// Fields take the keys of the lock without `since`, and `deprecated`
-    /// is the reason.
+    /// Collections and fields take the keys of the lock without `since`, and
+    /// `deprecated` is the reason.
     pub fn from_json(text: &str) -> Result<Draft, LockError> {
         let root = parse(text)?;
         let top = object(&root, "")?;
@@ -87,15 +90,16 @@ fn draft_collection(map: &Map<String, Value>, path: &str) -> Result<DraftCollect
             .map(|(i, item)| string(item, &join(&at, &i.to_string())))
             .collect()
     };
+    let reason = |map: &Map<String, Value>, at: &str| {
+        map.get("deprecated")
+            .map(|v| string(v, &join(at, "deprecated")))
+            .transpose()
+    };
     let fields = match map.get("fields") {
         None => BTreeMap::new(),
         Some(value) => entries(value, &join(path, "fields"), |field, at| {
-            let reason = field
-                .get("deprecated")
-                .map(|v| string(v, &join(at, "deprecated")))
-                .transpose()?;
             Ok(Field {
-                deprecated: reason.map(|reason| Deprecation { since: 0, reason }),
+                deprecated: reason(field, at)?.map(|reason| Deprecation { since: 0, reason }),
                 ..field_core(field, at)?
             })
         })?,
@@ -105,6 +109,7 @@ fn draft_collection(map: &Map<String, Value>, path: &str) -> Result<DraftCollect
         Some(value) => entries(value, &join(path, "indexes"), draft_index)?,
     };
     Ok(DraftCollection {
+        deprecated: reason(map, path)?,
         fields,
         computed: names("computed")?,
         views: names("views")?,
@@ -212,12 +217,11 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
         .iter()
         .map(|(name, field)| {
             let before = old.and_then(|o| o.fields.get(name));
-            let deprecated = field.deprecated.as_ref().map(|d| Deprecation {
-                since: before
-                    .and_then(|b| b.deprecated.as_ref())
-                    .map_or(version, |b| b.since),
-                reason: d.reason.clone(),
-            });
+            let deprecated = deprecation(
+                field.deprecated.as_ref().map(|d| &d.reason),
+                before.and_then(|b| b.deprecated.as_ref()),
+                version,
+            );
             let since = before.map_or(version, |b| b.since);
             (
                 name.clone(),
@@ -248,10 +252,27 @@ fn collection(draft: &DraftCollection, old: Option<&Collection>, version: u64) -
         .collect();
     Collection {
         since: old.map_or(version, |o| o.since),
-        deprecated: old.and_then(|o| o.deprecated),
+        deprecated: deprecation(
+            draft.deprecated.as_ref(),
+            old.and_then(|o| o.deprecated.as_ref()),
+            version,
+        ),
         fields,
         computed: named(&draft.computed, old.map(|o| &o.computed)),
         views: named(&draft.views, old.map(|o| &o.views)),
         indexes,
     }
+}
+
+/// The deprecation the schema declares with `reason`: since the version of
+/// the deprecation `before` when there was one, else since `version`.
+fn deprecation(
+    reason: Option<&String>,
+    before: Option<&Deprecation>,
+    version: u64,
+) -> Option<Deprecation> {
+    reason.map(|reason| Deprecation {
+        since: before.map_or(version, |b| b.since),
+        reason: reason.clone(),
+    })
 }

@@ -53,6 +53,7 @@ fn writes_what_it_reads() {
       "collections": {
         "tasks": {
           "deprecated": 4,
+          "deprecatedReason": "Use issues.",
           "fields": {
             "priority": { "deprecated": 3, "deprecatedReason": "Use rank.", "rule": 1, "since": 1, "type": "ncdb/int" },
             "kinds": { "of": { "options": ["bug", "feature"], "type": "ncdb/choice" }, "rule": 1, "since": 1, "type": "ncdb/set" },
@@ -74,6 +75,10 @@ fn writes_what_it_reads() {
     );
     assert!(
         written.contains("\"deprecatedReason\": \"Use rank.\""),
+        "{written}"
+    );
+    assert!(
+        written.contains("\"deprecatedReason\": \"Use issues.\""),
         "{written}"
     );
     assert!(
