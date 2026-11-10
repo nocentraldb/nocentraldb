@@ -306,7 +306,7 @@ test("the formats of RFC 0010 join the formats: statement, recovery key, pairing
   );
   holds(
     part("pairing-answer"),
-    [/"nocentraldb\/account-key"/, /HPKE/],
+    [/"nocentraldb\/account-key"/, /HPKE/, /label alone/],
     "Pairing answer",
   );
   holds(
