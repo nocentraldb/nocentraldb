@@ -292,6 +292,13 @@ impl Log {
         self.changed.insert(id);
     }
 
+    /// The heads among the folded control changes, which the member's next
+    /// control change depends on (RFC 0008). A control change's
+    /// dependencies are in its header, so this opens no change.
+    pub fn control_heads(&self) -> &BTreeSet<ChangeId> {
+        self.tips.control_heads()
+    }
+
     /// The tips of the log: what the member's next change takes from it.
     /// A folded sealed change whose state was read back from storage, and
     /// so whose payload the log has not read, is opened with `checks`
