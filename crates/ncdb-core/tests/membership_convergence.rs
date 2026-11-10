@@ -1,9 +1,11 @@
 //! RFC 0008's M-C1 and M-C2 with the convergence harness (NOC-9, NOC-19):
 //! the same control changes, in any order of arrival and with duplicates,
 //! resolve to the same membership state and the same verdicts on every
-//! copy. Simulated members write genesis-based membership entries and
-//! entries of the other types from their own view of the space, so that
-//! concurrent grants, revocations, cutoffs and cycles of removals arise.
+//! copy. Simulated members write genesis-based membership entries, key
+//! chain entries, key envelopes and entries of the other types from their
+//! own view of the space, so that concurrent grants, revocations, cutoffs,
+//! cycles of removals, rotations and re-grants under a fresh generation
+//! arise (NOC-71).
 
 mod support;
 
@@ -20,9 +22,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::change::Change;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
+use ncdb_core::envelope;
 use ncdb_core::membership::{
-    self, Action, Certificate, ControlBody, Entry, MemberKind, MembershipEntry, Resolved, Role,
-    Verdict, resolve,
+    self, Action, Certificate, ControlBody, Entry, KeyChainEntry, MemberKind, MembershipEntry,
+    PreviousKey, Resolved, Role, Verdict, resolve,
 };
 use proptest::prelude::*;
 use support::convergence::{self, Author, Config, Generator, Mergeable, Op, OpId, Outcome};
@@ -74,6 +77,34 @@ impl Copy {
             }
         }
         heads
+    }
+
+    /// The heads of the copy's generation graph: the generations no other
+    /// lists as previous.
+    fn generation_heads(&self) -> Vec<u64> {
+        let generations: Vec<_> = self.resolved().generations().collect();
+        let listed: BTreeSet<u64> = generations
+            .iter()
+            .flat_map(|(_, g)| g.previous.iter().copied())
+            .collect();
+        let ids = generations.iter().map(|(id, _)| *id);
+        ids.filter(|id| !listed.contains(id)).collect()
+    }
+
+    /// The newest generation `author` rotated to with no envelope to
+    /// `subject` in the copy, which a re-grant may name; otherwise the
+    /// newest generation of the copy.
+    fn generation_for(&self, author: MemberId, subject: MemberId) -> u64 {
+        let generations: Vec<_> = self.resolved().generations().collect();
+        let fresh = generations.iter().filter(|(_, g)| {
+            g.entries.values().any(|by| *by == author) && !g.recipients.contains(&subject)
+        });
+        let newest = generations.iter().map(|(id, _)| *id).max();
+        fresh
+            .map(|(id, _)| *id)
+            .max()
+            .or(newest)
+            .expect("the first generation")
     }
 
     /// The highest author sequence of `member` the copy holds.
@@ -143,7 +174,7 @@ impl Generator<Copy> for Members {
     type Raw = Raw;
 
     fn raw(&self, _member: u8) -> BoxedStrategy<Raw> {
-        (0..7u8, 2..=SUBJECTS, 1..=3u8, 0..2u8, 0..2u8)
+        (0..9u8, 2..=SUBJECTS, 1..=3u8, 0..2u8, 0..2u8)
             .prop_map(|(action, subject, role, slack, skip)| Raw {
                 action,
                 subject,
@@ -161,7 +192,8 @@ impl Generator<Copy> for Members {
         let subject = space::id(raw.subject);
         let role = [Role::Reader, Role::Writer, Role::Admin][usize::from(raw.role - 1)];
         let cutoff = copy.highest(subject).saturating_sub(u64::from(raw.slack));
-        let from_generation = (role >= Role::Writer).then_some(first_generation);
+        let generation = copy.generation_for(space::id(who), subject);
+        let from_generation = (role >= Role::Writer).then_some(generation);
         let action = match raw.action {
             0 | 1 => Some(Action::Add {
                 role,
@@ -171,7 +203,7 @@ impl Generator<Copy> for Members {
                     subject,
                     MemberKind::Device,
                 )),
-                from_generation: first_generation,
+                from_generation: generation,
             }),
             2 => Some(Action::SetRole {
                 role,
@@ -189,6 +221,30 @@ impl Generator<Copy> for Members {
                     cutoff: copy.highest(space::id(who)),
                 },
             }),
+            (None, 7) => {
+                let previous = copy.generation_heads();
+                Entry::KeyChain(KeyChainEntry {
+                    generation: membership::generation_id(space, space::id(who), &previous),
+                    previous: previous
+                        .into_iter()
+                        .map(|generation| PreviousKey {
+                            generation,
+                            key: vec![0xc4; 72],
+                        })
+                        .collect(),
+                    answers: BTreeSet::new(),
+                })
+            }
+            (None, 8) => Entry::KeyEnvelope(
+                envelope::seal_with_ephemeral(
+                    &space::space_key(),
+                    space,
+                    generation,
+                    &space::key(raw.subject).public(),
+                    [who ^ (raw.subject << 4); 32],
+                )
+                .expect("a simulated member's key takes an envelope"),
+            ),
             (None, n) => Entry::Other {
                 entry_type: [membership::ACKNOWLEDGEMENT, membership::PERSON_KEY]
                     [usize::from(n % 2)],
@@ -211,4 +267,72 @@ fn m_c1_the_same_control_changes_resolve_to_the_same_state_in_any_order() {
     };
     let result = convergence::check::<Copy, _>(&config, &Members);
     assert!(result.is_ok(), "{}", result.unwrap_err());
+}
+
+/// Every order of `items`.
+fn permutations<T: Clone>(items: &[T]) -> Vec<Vec<T>> {
+    if items.len() <= 1 {
+        return vec![items.to_vec()];
+    }
+    let mut all = Vec::new();
+    for i in 0..items.len() {
+        let mut rest = items.to_vec();
+        let first = rest.remove(i);
+        for mut tail in permutations(&rest) {
+            tail.insert(0, first.clone());
+            all.push(tail);
+        }
+    }
+    all
+}
+
+/// The state of `base` and then `changes`, these arriving in every order:
+/// one state, or the test fails.
+fn in_every_order(space: SpaceId, base: &[Change], changes: &[Change]) -> Resolved {
+    let first = resolve(space, base.iter().chain(changes));
+    for order in permutations(changes) {
+        let state = resolve(space, base.iter().chain(&order));
+        assert_eq!(state.encode(), first.encode());
+    }
+    first
+}
+
+#[test]
+fn a_re_grant_and_revocations_end_in_the_same_membership_in_any_order() {
+    const ALICE: u8 = 1;
+    const BOB: u8 = 2;
+    const DAN: u8 = 4;
+    let mut s = space::Space::with_nonce(ALICE, [9; 16]);
+    let g = s.genesis.clone();
+    let first = s.first_generation;
+    let bob = s.add(ALICE, BOB, Role::Admin, &[&g]);
+    let dan = s.add(ALICE, DAN, Role::Writer, &[&bob]);
+    let cutoff = s.sequence(DAN);
+    // Alice removes Dan, rotates, re-adds him under the fresh generation
+    // and wraps it to him. Bob removes Dan too: once concurrently, once
+    // after he has seen the re-add.
+    let remove = s.remove(ALICE, DAN, cutoff, &[&dan]);
+    let (rotation, fresh) = s.rotate(ALICE, &[first], &[&remove]);
+    let again = s.add_at(ALICE, DAN, Role::Writer, fresh, &[&rotation]);
+    let to_dan = s.envelope_at(ALICE, DAN, fresh, &[&again]);
+    let concurrent = s.remove(BOB, DAN, cutoff, &[&dan]);
+    let after = s.remove(BOB, DAN, cutoff, &[&again]);
+    let base = [g, bob, dan];
+    let set = |extra: &[&Change]| -> Vec<Change> {
+        let tail = [&remove, &rotation, &again, &to_dan];
+        tail.into_iter().chain(extra.iter().copied()).cloned().collect()
+    };
+
+    let re_granted = in_every_order(s.space, &base, &set(&[]));
+    assert_eq!(re_granted.verdict(again.id()), Some(&Verdict::Accepted));
+    assert_eq!(re_granted.role(space::id(DAN)), Some(Role::Writer));
+
+    let lost = in_every_order(s.space, &base, &set(&[&concurrent]));
+    assert_eq!(lost.verdict(again.id()), Some(&Verdict::Lost));
+    assert_eq!(lost.role(space::id(DAN)), None);
+
+    let removed = in_every_order(s.space, &base, &set(&[&after]));
+    assert_eq!(removed.verdict(again.id()), Some(&Verdict::Lost));
+    assert_eq!(removed.verdict(after.id()), Some(&Verdict::Accepted));
+    assert_eq!(removed.role(space::id(DAN)), None);
 }
