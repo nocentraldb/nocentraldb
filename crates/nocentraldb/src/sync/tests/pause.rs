@@ -33,7 +33,11 @@ async fn a_paused_database_reports_paused_and_pushes_nothing() {
     let status = db.sync().current();
     assert_eq!(status.connection, Connection::Paused);
     assert_eq!(status.unconfirmed, 1);
-    assert_eq!(relay.log(space.id().0).await.len(), 2, "the write reached the relay");
+    assert_eq!(
+        relay.log(space.id().0).await.len(),
+        2,
+        "the write reached the relay"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]
