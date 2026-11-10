@@ -16,8 +16,10 @@
 //! `is_confirmed()`, `confirmed()` and the per-space `status` of RFC 0009
 //! are not built: the relay's refusals are recorded per change in the
 //! log, and [`SyncStatus`] counts them. The relay is reached over plain
-//! WebSocket (`ws://`) only; TLS is a later ticket. A large change, which
-//! the relay hands out as a download link, is not read.
+//! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
+//! relay hands out as a download link, is not read: the page that holds
+//! it ends the session, which backs off and meets the same page again,
+//! until NOC-121 reads the link.
 
 mod apply;
 mod run;

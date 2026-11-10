@@ -1,7 +1,9 @@
 //! The sync thread: one connection at a time, reconnected with
-//! exponential backoff and jitter while the relay is unreachable (RFC
-//! 0007, "Liveness" and "Island mode"). It ends when the database is
-//! dropped.
+//! exponential backoff and jitter while the relay is unreachable or in
+//! trouble (RFC 0007, "Liveness" and "Island mode"). The backoff starts
+//! over only after a session synced every space once, it waits at least
+//! the retry-after of `rate_limited`, and a local write does not cut it
+//! short. The thread ends when the database is dropped.
 
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
