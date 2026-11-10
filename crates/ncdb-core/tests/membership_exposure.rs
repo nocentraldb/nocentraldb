@@ -50,7 +50,10 @@ fn whoever_holds_a_descendant_may_hold_its_previous_generations() {
     let remove = s.remove(ALICE, BOB, cutoff, &[&to_bob]);
     let (answer, three) = s.rotate(ALICE, &[two], &[&remove]);
     let own = s.envelope_at(ALICE, ALICE, three, &[&answer]);
-    let state = resolve(s.space, [&g, &bob, &rotation, &to_bob, &remove, &answer, &own]);
+    let state = resolve(
+        s.space,
+        [&g, &bob, &rotation, &to_bob, &remove, &answer, &own],
+    );
     let holders = |generation| state.generation(generation).unwrap().holders.clone();
     // Bob holds generation 2 through his envelope, and generation 1
     // through the key chain of generation 2.
@@ -114,7 +117,13 @@ fn a_rejected_envelope_counts() {
         state.verdict(to_carol.id()),
         Some(&Verdict::Rejected(Rejection::NotValidWhenWritten))
     );
-    assert!(state.generation(first).unwrap().holders.contains(&id(CAROL)));
+    assert!(
+        state
+            .generation(first)
+            .unwrap()
+            .holders
+            .contains(&id(CAROL))
+    );
     assert!(state.exposed(first));
 }
 
