@@ -321,10 +321,21 @@ impl Space {
         signer: &SigningKey,
         deps: &[&Change],
     ) -> Change {
-        let person_key = self::person(person);
-        let sign_off = SignOff::sign(signer, self.space, person_key, id(author));
+        let sign_off = SignOff::sign(signer, self.space, self::person(person), id(author));
+        self.shred_with(author, person, sign_off, deps)
+    }
+
+    /// `author` shreds the key of simulated person `person` with this
+    /// sign-off.
+    pub fn shred_with(
+        &mut self,
+        author: Who,
+        person: u8,
+        sign_off: SignOff,
+        deps: &[&Change],
+    ) -> Change {
         let entry = ShredEntry {
-            person_key,
+            person_key: self::person(person),
             sign_off,
         };
         self.write(author, Entry::Shred(entry), deps)
