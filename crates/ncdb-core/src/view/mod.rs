@@ -1,4 +1,4 @@
-//! The local view on SQLite, natively (RFC 0006,
+//! The local view on SQLite (RFC 0006,
 //! `docs/rfc/0006-local-view.md`): one database per member, holding the
 //! member's log (RFC 0002, "The log on disk") and the view folded from it.
 //!
@@ -9,8 +9,11 @@
 //! keeps each space's [`Log`] in memory too, read back from the `log` table
 //! when it opens, so the steps of [`crate::receive`] run unchanged.
 //!
-//! Native only for now: the browser's SQLite on OPFS is a later ticket.
+//! The same code runs natively and on wasm32 (RFC 0006, "The same fold
+//! code on every target"): only the SQLite under `rusqlite` differs.
 
+#[cfg(target_arch = "wasm32")]
+pub mod browser;
 mod fold;
 mod from_lock;
 mod log_table;
