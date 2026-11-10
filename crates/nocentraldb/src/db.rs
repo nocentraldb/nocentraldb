@@ -23,6 +23,7 @@ use zeroize::Zeroizing;
 
 use crate::error::{Error, ErrorCode, storage};
 use crate::space::Spaces;
+use crate::subscribe::Watcher;
 
 /// The options of [`Db::open`]: the text of the app's `model.lock.json`.
 #[derive(Clone)]
@@ -99,6 +100,7 @@ pub(crate) struct Inner {
     pub(crate) member: Secrets,
     pub(crate) account: SigningKey,
     pub(crate) spaces: BTreeMap<CoreSpaceId, SpaceState>,
+    pub(crate) watchers: Vec<Watcher>,
 }
 
 /// What the member needs to write into one space: its checks, the space
@@ -138,6 +140,7 @@ impl Db {
             member: Secrets::generate(),
             account: SigningKey::from_bytes(&random()),
             spaces: BTreeMap::new(),
+            watchers: Vec::new(),
         };
         Ok(Db {
             inner: Arc::new(Mutex::new(inner)),

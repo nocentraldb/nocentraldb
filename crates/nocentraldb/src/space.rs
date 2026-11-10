@@ -21,6 +21,7 @@ use crate::db::{Db, Inner, SpaceState, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ChangeId, ObjectId, SpaceId};
 use crate::object::Object;
+use crate::subscribe::touched;
 use crate::tx::Transaction;
 
 /// The spaces of the member, from [`Db::spaces`].
@@ -151,6 +152,8 @@ impl Space {
         let space = self.id.0;
         let member = inner.member.key();
         let (operations, ids) = tx.operations(&inner.view, space, member.id())?;
+        let collections: BTreeSet<String> =
+            operations.iter().map(|op| op.collection.clone()).collect();
         let mut state = inner
             .spaces
             .remove(&space)
@@ -178,6 +181,7 @@ impl Space {
             fold(&mut inner, &mut state, &change)?;
             state.sequence = sequence;
             state.heads = change.id();
+            touched(&mut inner.watchers, space, &collections);
             Ok(Written {
                 change: ChangeId(change.id()),
                 ids,

@@ -36,14 +36,20 @@ fn db_subscribe_yields_the_page_at_once_and_again_after_a_write() {
     let db = open();
     let project = now(db.spaces().create()).unwrap();
     write_task(&project, "first", 2);
-    let query = db.index("tasks", "byStatusPriority").unwrap().equal(["open"]);
+    let query = db
+        .index("tasks", "byStatusPriority")
+        .unwrap()
+        .equal(["open"]);
 
     let mut live = db.subscribe(query);
     assert_eq!(titles(ready(&mut live).unwrap().unwrap()), ["first"]);
     assert!(ready(&mut live).is_none());
 
     write_task(&project, "second", 1);
-    assert_eq!(titles(ready(&mut live).unwrap().unwrap()), ["second", "first"]);
+    assert_eq!(
+        titles(ready(&mut live).unwrap().unwrap()),
+        ["second", "first"]
+    );
     assert!(ready(&mut live).is_none());
 }
 

@@ -27,6 +27,7 @@ mod id;
 mod object;
 mod query;
 mod space;
+mod subscribe;
 mod tx;
 mod value;
 

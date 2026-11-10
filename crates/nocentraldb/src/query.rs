@@ -84,6 +84,10 @@ impl Query {
         self
     }
 
+    pub(crate) fn collection(&self) -> &str {
+        &self.collection
+    }
+
     /// The page of this query in the view: in `space` for an index that
     /// runs in one space, across every space otherwise.
     pub(crate) fn page(&self, inner: &Inner, space: Option<CoreSpaceId>) -> Result<Page, Error> {
