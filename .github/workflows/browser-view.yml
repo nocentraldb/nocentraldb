@@ -1,0 +1,67 @@
+# NOC-174: runs the core's view in a dedicated worker on OPFS
+# (scripts/browser-view/) in Chromium, Firefox and WebKit through
+# Playwright on GitHub's Ubuntu runner, and compares what it reads with the
+# same code run natively. RFC 0006 ("The spike") asks that the Rust port run
+# in Firefox and WebKit before it ships. It is not part of `pnpm gates`,
+# which runs without browsers (NOC-33's decision for browser-storage.yml);
+# it runs on pull requests that touch the core, the test or the pinned
+# dependencies, and by hand. A browser that fails names itself in the
+# failing test.
+name: browser-view
+
+on:
+  pull_request:
+    paths:
+      - "crates/ncdb-core/**"
+      - "scripts/browser-view/**"
+      - ".github/workflows/browser-view.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-view-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  view:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Installs proto, then moon, node and pnpm as pinned in .prototools.
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+
+      - name: Rust toolchain from rust-toolchain.toml
+        run: |
+          rustup toolchain install --no-self-update
+          rustup show active-toolchain
+
+      - name: Cache Cargo registry and target
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-browser-view-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      # The browser builds that the pinned playwright version expects, and
+      # the system libraries they need.
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      # As the root script `gates` does: a CI checkout is shallow, so moon
+      # must not diff against `main` to find what changed.
+      - name: The view in a worker in every engine
+        run: moon exec repo:browser-view --force --base HEAD --head HEAD

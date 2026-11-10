@@ -2,9 +2,6 @@
 //! and ordered pages"): an object by its id, and one lookup through a
 //! declared index, page by page with a cursor, in an order that is the
 //! same on every member. Full queries come with the SDK.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 

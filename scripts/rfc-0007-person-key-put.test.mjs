@@ -2,7 +2,7 @@
 // builds it since #130 (NOC-118): the put names the generation each record
 // replaces and answers `Stored` or `Moved`, the backend rules hold it as one
 // atomic, conditional step, the table says how SQLite, Postgres and DynamoDB
-// keep it, and History records the change (NOC-142). Whether the wording is
+// keep it (NOC-142). Whether the wording is
 // right is the owner's review of the PR.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -80,13 +80,4 @@ test("the AWS backend's person_keys table is written on the generation's conditi
     .find((l) => l.startsWith("| `person_keys` |"));
   assert.ok(row, "the AWS backend has no person_keys table");
   assert.match(row, /condition/i);
-});
-
-test("History names NOC-142 and #130", () => {
-  const entry = section(read(), "History")
-    .split("\n")
-    .find((l) => l.startsWith("- ") && l.includes(" · NOC-142 · "));
-  assert.ok(entry, "History has no line for NOC-142");
-  assert.match(entry, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-142 · /);
-  assert.match(entry, /#130\b/);
 });

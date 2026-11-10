@@ -1,23 +1,14 @@
-// Holds RFC 0003 as one complete text (NOC-100). The owner wants every RFC to
-// state the current design directly (Carsten, 2026-11-10): the rules of its
-// three amendments and of NOC-106's answers stand where they belong, no
-// amendment section, mark or changelog is left, "Decisions" keeps each
-// decision in short form, "Open questions" names what the owner has not
-// decided yet, and a dated "History" names the pull request of each change.
-// This test replaces rfc-0003-owner-answers.test.mjs and the RFC 0003 parts
-// of rfc-0008-alignment and rfc-0009-alignment. Whether the wording is right
-// is the review of the PR.
+// Holds RFC 0003 as one complete text (NOC-100): the rules of its three
+// amendments and of NOC-106's answers stand where they belong, and no
+// amendment section, mark or changelog is left. Its form as a fresh text, with
+// each decision in its section and one History line, is held by
+// rfc-0003-fresh.test.mjs (NOC-165). Whether the wording is right is the
+// review of the PR.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
-import {
-  assertLinksResolve,
-  read,
-  root,
-  section,
-  slug,
-} from "./lib/rfc-text.mjs";
+import { assertLinksResolve, read, root, section } from "./lib/rfc-text.mjs";
 
 const RFC = "docs/rfc/0003-keys-and-cryptography.md";
 
@@ -38,16 +29,6 @@ const line = (text, start) => {
   const found = text.split("\n").find((l) => l.startsWith(start));
   assert.ok(found, `no line starts with "${start}"`);
   return found;
-};
-
-/** The decision under "Decisions" whose heading starts with `prefix`, such as "9.". */
-const decision = (prefix) => {
-  const decisions = part("decisions");
-  const heading = decisions
-    .split("\n")
-    .find((l) => l.startsWith(`### ${prefix}`));
-  assert.ok(heading, `no decision "${prefix}"`);
-  return section(decisions, slug(heading.slice(4)));
 };
 
 /** Every Markdown file a reader can follow a link from. */
@@ -77,127 +58,6 @@ test("no document links an amendment of RFC 0003 or its old decisions heading", 
   assert.doesNotMatch(read(RFC), /\(#decisions-for-the-owner\)/);
 });
 
-test("the status says the RFC is decided and points to Decisions, Open questions and History", () => {
-  const status = line(read(RFC), "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Decided\./);
-  assert.match(status, /#27/);
-  assert.ok(links(status, "#decisions"));
-  assert.ok(links(status, "#open-questions"));
-  assert.ok(links(status, "#history"));
-});
-
-test("decisions 1 to 21 each say what was chosen, by the owner and when, why, and what was not taken", () => {
-  for (let n = 1; n <= 21; n += 1) {
-    const text = decision(`${n}.`);
-    const date = n <= 15 ? "2026-11-08" : "2026-11-10";
-    assert.match(
-      text,
-      new RegExp(`^Decided \\(Carsten, ${date}\\): `, "m"),
-      `decision ${n}: no owner and date`,
-    );
-    assert.match(text, /^Why: /m, `decision ${n}: no reason`);
-    assert.match(text, /^Not taken:$/m, `decision ${n}: no options not taken`);
-    assert.match(text, /^- /m, `decision ${n}: lists no option not taken`);
-    assert.doesNotMatch(
-      text,
-      /Recommendation/,
-      `decision ${n} is not in short form`,
-    );
-  }
-  for (const [n, ticket] of [
-    [16, "NOC-95"],
-    [17, "NOC-95"],
-    [18, "NOC-97"],
-    [19, "NOC-114"],
-    [20, "NOC-110"],
-    [21, "NOC-117"],
-  ]) {
-    assert.ok(
-      decision(`${n}.`).includes(ticket),
-      `decision ${n} names no ${ticket}`,
-    );
-  }
-  assert.match(decision("15."), /model-id subkey/);
-  assert.match(decision("15."), /M26/);
-});
-
-test("the owner's decision on the bytes of a sealed change is recorded, with each option not taken", () => {
-  const text = decision("The bytes of a sealed change");
-  assert.match(text, /^Decided \(Carsten, 2026-11-08\): /m);
-  assert.match(text, /NOC-30/);
-  assert.ok(links(text, "#sealed-payload"));
-  const notTaken = text.split(/^Not taken:$/m)[1] ?? "";
-  assert.ok(
-    (notTaken.match(/^- /gm) ?? []).length >= 10,
-    "the ten options not taken are not all listed",
-  );
-});
-
-test("\"Decisions this RFC follows\" names RFC 0008's and RFC 0009's decisions, each linked", () => {
-  const lines = part("decisions-this-rfc-follows")
-    .split("\n")
-    .filter((l) => l.startsWith("- **"));
-  for (const [id, target] of [
-    ["M3", "0008-membership.md#the-cutoff"],
-    ["M6", "0008-membership.md#generation-ids"],
-    ["M9", "0008-membership.md#roles-and-rights"],
-    ["M15", "0008-membership.md#two-removals-that-rotate-the-key-at-once"],
-    ["M20", "0008-membership.md#effects-that-wait-until-a-change-is-stable"],
-    ["M21", "0008-membership.md#effects-that-wait-until-a-change-is-stable"],
-    ["M26", "0008-membership.md#genesis"],
-    ["conflict 11", "0008-membership.md#person-key-entry"],
-    ["S11", "0009-sdk-api.md#spaces"],
-    ["point 9", "0009-sdk-api.md#sub-agents-and-ad-hoc-spaces"],
-  ]) {
-    const found = lines.find((l) => new RegExp(`\\b${id}\\b`).test(l));
-    assert.ok(found, `no decision followed names ${id}`);
-    assert.match(found, /\(Carsten, 2026-11-0\d\)/, `${id}: no owner and date`);
-    assert.ok(links(found, target), `${id}: no link to ${target}`);
-  }
-});
-
-// The owner decided the last two open questions on 2026-11-10 (NOC-110
-// point 4, NOC-117), so the section says none is left, and the key-chain
-// subkey gives the bytes of its associated data instead of pointing there.
-test('"Open questions" says the owner has decided every question', () => {
-  assert.match(
-    part("open-questions"),
-    /^None\. The owner has decided every question/m,
-  );
-  assert.ok(!links(part("key-chain-subkey"), "#open-questions"));
-});
-
-test('"History" lists each change by date, oldest first, with its pull request', () => {
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.startsWith("- **"));
-  const dates = lines.map(
-    (l) => l.match(/^- \*\*(\d{4}-\d{2}-\d{2})\*\*/)?.[1],
-  );
-  assert.ok(dates.every(Boolean), "a History line has no date");
-  assert.deepEqual([...dates].sort(), dates, "History is not oldest first");
-  for (const l of lines) {
-    assert.match(
-      l,
-      /\]\(https:\/\/github\.com\/nocentraldb\/nocentraldb\/pull\/\d+\)/,
-      `no pull request: ${l.slice(0, 60)}`,
-    );
-  }
-  for (const ticket of [
-    "NOC-7",
-    "NOC-30",
-    "NOC-44",
-    "NOC-75",
-    "NOC-106",
-    "NOC-100",
-  ]) {
-    assert.ok(
-      lines.some((l) => new RegExp(`\\b${ticket}\\b`).test(l)),
-      `History does not name ${ticket}`,
-    );
-  }
-});
-
 test("the sealed payload: content key, nonce, associated data, padding and crates", () => {
   const sealed = part("sealed-payload");
   assert.match(sealed, /"nocentraldb\/content-key"/);
@@ -221,20 +81,17 @@ test("the sealed payload: content key, nonce, associated data, padding and crate
   );
 });
 
-test("NOC-106's answers stand where they belong, linked to their decisions", () => {
+test("NOC-106's answers stand where they belong", () => {
   const member = part("the-member-key");
   assert.match(member, /key_file/);
   assert.match(member, /file permissions/);
-  assert.ok(links(member, "#16-where-the-member-key-lives"));
   const account = part("the-account-key");
   assert.match(account, /each database draws its own account key once/i);
-  assert.ok(links(account, "#17-the-account-key-before-the-accounts-rfc"));
   const subkey = part("key-chain-subkey");
   assert.match(
     subkey,
     /nonce \(24 bytes\) \|\| ciphertext \(32 bytes\) \|\| tag \(16 bytes\)\s+72 bytes/,
   );
-  assert.ok(links(subkey, "#18-the-bytes-of-an-encrypted-previous-key"));
   assert.match(
     line(part("how-the-sdk-hides-keys"), "- **Stores**"),
     /only the file's permissions protect/i,

@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-174 · SQLite is aligned by pinning sqlite-wasm-rs 0.6.3 and libsqlite3-sys 0.39.1, not by building from a shared amalgamation
+
+- Decided by: coding agent (NOC-174)
+- Why: both crates ship the identical `sqlite3.c` of SQLite 3.54.1 (same bytes, source id `2026-10-16 14:45:20 555e07ef…`), so pinning both exactly gives RFC 0006 its one release without a custom build. `tests/sqlite_release.rs` checks `sqlite_version()` and `sqlite_source_id()` on both targets, and the browser test compares the worker's answer with the native one, so an update of either crate that moves the release fails. The compile-time options of the two builds still differ, since each crate sets its own: natively foreign keys default to on and STAT4, FTS3/5, JSON1, R-Tree and SOUNDEX are compiled in; on wasm32 the default page size is 8192 bytes, the default cache 16 MiB, and shared cache and extension loading are left out. The view uses none of these features, and its plan check runs on both targets. RFC 0006 asks for the same release; whether the options must match too is reported to pm as an open question.
+- Instead of: RFC 0006's fallback, building `libsqlite3-sys` natively from the amalgamation `sqlite-wasm-rs` uses, which is needed only when the crates carry different releases.
+- Topics: sqlite, wasm, browser, dependencies, rfc-0006

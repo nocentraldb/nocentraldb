@@ -1,8 +1,9 @@
 // Asserts that the documents follow the owner's rulings on RFC 0007's
-// "Conflicts" section (NOC-47): RFC 0002's list of what the relay sees links RFC 0007's, and so does every
+// former "Conflicts" section (NOC-47): RFC 0002's list of what the relay sees links RFC 0007's, and so does every
 // text that links RFC 0002's list; RFC 0002 states the uploader rule; use
 // case 4 promises only reads at no cost; use case 5 says how peers find each
-// other is still missing; and RFC 0007 marks those conflicts resolved. The
+// other is still missing; and RFC 0007's agreement section links where each
+// is stated (rfc-0007-fresh.test.mjs). The
 // test checks that each claim is there and points to its source; whether the
 // wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
@@ -152,23 +153,6 @@ test("use case 5 says RFC 0007 defines the messages but not how peers find each 
   );
   assert.match(line, /messages/i, "does not say RFC 0007 defines the messages");
   assert.match(line, /peer RFC|RFC on peers/i, "does not name the peer RFC");
-});
-
-test("RFC 0007's Conflicts section says points 1 to 4 are resolved by NOC-47", () => {
-  const conflicts = section(
-    read(RFC_0007),
-    "conflicts-with-genesismd-and-rfc-0001",
-  );
-  assert.ok(conflicts, "no Conflicts section");
-  for (const n of [1, 2, 3, 4]) {
-    const point = conflicts.split("\n").find((l) => l.startsWith(`${n}. `));
-    assert.ok(point, `no conflict ${n}`);
-    assert.match(point, /Resolved/, `conflict ${n} is not marked resolved`);
-  }
-  assert.ok(
-    !/are follow-up ticket NOC-47/.test(conflicts),
-    "the intro still calls the changes a follow-up",
-  );
 });
 
 test("every relative link in the changed documents resolves, anchors included", () => {

@@ -154,6 +154,10 @@ pub(crate) struct SyncState {
     wake: watch::Sender<()>,
     /// Whether the app paused syncing, which the sync thread watches.
     pub(crate) pause: watch::Sender<bool>,
+    /// Set by a pause, cleared only by the sync thread once it dropped the
+    /// connection and the app resumed: a session open when the app paused
+    /// sends and records nothing more, even after an immediate resume.
+    pub(crate) halted: bool,
 }
 
 impl SyncState {
@@ -171,6 +175,7 @@ impl SyncState {
             refused: BTreeMap::new(),
             wake,
             pause,
+            halted: false,
         }
     }
 

@@ -73,7 +73,7 @@ async fn run(
 ) {
     let mut delay = FIRST;
     loop {
-        if !resumed(&mut pause).await {
+        if !resumed(&db, &mut pause).await {
             return;
         }
         let Some(inner) = db.upgrade() else { return };
@@ -81,7 +81,7 @@ async fn run(
         drop(inner);
         let end = tokio::select! {
             end = session(&db, &url, &mut wake) => end,
-            () = paused(&mut pause) => End::Paused,
+            () = halted(&db, &mut pause) => End::Paused,
         };
         let (progress, retry_after) = match end {
             End::Dropped => return,
@@ -101,7 +101,7 @@ async fn run(
             delay = FIRST;
         }
         let wait = jitter(delay).max(retry_after.unwrap_or_default());
-        match sleep(wait, &mut wake, &mut pause).await {
+        match sleep(wait, &db, &mut wake, &mut pause).await {
             Slept::Dropped => return,
             Slept::Paused => {
                 delay = FIRST;
@@ -113,22 +113,41 @@ async fn run(
     }
 }
 
-/// Waits while the app has paused syncing. Returns `false` when the
+/// Waits while the app has paused syncing, then lifts the halt of the
+/// session it dropped, so the next one may sync. Returns `false` when the
 /// database was dropped meanwhile.
-async fn resumed(pause: &mut watch::Receiver<bool>) -> bool {
-    while *pause.borrow_and_update() {
+async fn resumed(db: &Weak<Mutex<Inner>>, pause: &mut watch::Receiver<bool>) -> bool {
+    loop {
+        pause.borrow_and_update();
+        {
+            let Some(inner) = db.upgrade() else {
+                return false;
+            };
+            let mut inner = lock(&inner);
+            let Some(sync) = inner.sync.as_mut() else {
+                return false;
+            };
+            if !sync.paused() {
+                sync.halted = false;
+                return true;
+            }
+        }
         if pause.changed().await.is_err() {
             return false;
         }
     }
-    true
 }
 
-/// Resolves when the app pauses syncing; never, once the database was
-/// dropped, which the session notices on its own.
-async fn paused(pause: &mut watch::Receiver<bool>) {
+/// Resolves when the app has paused syncing since the session opened,
+/// even if it resumed since; never, once the database was dropped, which
+/// the session notices on its own.
+async fn halted(db: &Weak<Mutex<Inner>>, pause: &mut watch::Receiver<bool>) {
     loop {
-        if *pause.borrow_and_update() {
+        pause.borrow_and_update();
+        let halted = db
+            .upgrade()
+            .is_some_and(|inner| lock(&inner).sync.as_ref().is_some_and(|s| s.halted));
+        if halted {
             return;
         }
         if pause.changed().await.is_err() {
@@ -147,6 +166,7 @@ enum Slept {
 /// Sleeps for `wait`; a local write does not cut it short, a pause does.
 async fn sleep(
     wait: Duration,
+    db: &Weak<Mutex<Inner>>,
     wake: &mut watch::Receiver<()>,
     pause: &mut watch::Receiver<bool>,
 ) -> Slept {
@@ -156,7 +176,7 @@ async fn sleep(
         tokio::select! {
             () = &mut sleep => return Slept::Elapsed,
             changed = wake.changed() => if changed.is_err() { return Slept::Dropped },
-            () = paused(pause) => return Slept::Paused,
+            () = halted(db, pause) => return Slept::Paused,
         }
     }
 }
