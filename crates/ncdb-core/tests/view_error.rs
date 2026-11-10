@@ -2,9 +2,6 @@
 //! the owner's decision 4 B on NOC-95): only then does the SDK report
 //! `StorageFull`, which tells an app that freeing space would help; every
 //! other failure of the database is `StorageFailed`.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).

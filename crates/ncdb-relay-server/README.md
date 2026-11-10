@@ -34,7 +34,17 @@ Each connection holds at most 32 outgoing messages. A subscription reads the log
 
 ## A peer that stops in the handshake
 
-Each step of the opening handshake (RFC 0007, "Opening a connection") must finish within 10 seconds of its start: the WebSocket upgrade, `hello`, and `auth` after the challenge. When a step takes longer, the server closes the connection, so a peer that stops halfway holds a task for at most 30 seconds. WebSocket pings do not extend a step. Once `welcome` is sent, the deadline no longer applies; an idle member stays connected. The server does not limit how many connections are open at once, so many peers that each stop in the handshake still hold one task each until their deadline passes.
+Each step of the opening handshake (RFC 0007, "Opening a connection") must finish within 10 seconds of its start: the WebSocket upgrade, `hello`, and `auth` after the challenge. When a step takes longer, the server closes the connection, so a peer that stops halfway holds a task for at most 30 seconds. WebSocket pings do not extend a step. Once `welcome` is sent, the deadline no longer applies; an idle member stays connected.
+
+## How many connections it holds
+
+The server holds at most 512 connections open at once, and at most 64 of them that have not finished the opening handshake. A connection above either limit is closed as soon as the server accepts it, before the WebSocket upgrade and without an error message; RFC 0007 lets a relay close any connection at any time ("Liveness"), and the member reconnects with back-off. A connection gives back its place among the handshakes when it is sent `welcome`, and its place among all connections when it closes. 512 stays below the 1,024 file descriptors many systems give a process by default.
+
+**What this does not do.** Peers that fill the 64 handshake places keep new members from connecting, each for up to 30 seconds, while members already connected stay unaffected: the limits protect the server's resources, not its availability to new members. A member closed for a limit is not told why. Neither limit can be changed from the command line yet.
+
+## When it runs out of file descriptors
+
+When the server cannot accept a connection, for example because the process or the system has no file descriptor left, it writes one line to stderr, such as `ncdb-relay: accept failed, trying again in 10 ms: Too many open files (os error 24)`, and accepts again after the pause. The pause starts at 10 milliseconds and doubles while the error lasts, up to one second. Members already connected are served throughout, and the connections that wait in the meantime are accepted once descriptors are free again. The line names only the operating system's error, never a member or content. The server stops only when the listening socket itself is gone.
 
 ## A member added while it is connected
 

@@ -2,9 +2,6 @@
 //! change"): creates and deletes go into the objects, field operations into
 //! `fs_<collection>` with the read value in `c_<collection>`, with the same
 //! results as the in-memory fold of the same changes.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 
@@ -245,8 +242,11 @@ fn deletes_operations_that_park_and_writes_before_the_create_fold_as_in_memory()
 /// beside the in-memory fold, and every read checks that both agree.
 mod harness {
     use super::*;
+    // The glob import above and the prelude both name `test` on wasm32.
     use proptest::prelude::*;
     use support::convergence::{self, Config, Mergeable, Op, OpId, Outcome, independent};
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
 
     struct Copy(Both);
 

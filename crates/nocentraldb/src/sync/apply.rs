@@ -8,7 +8,7 @@ use ncdb_core::log::Appended;
 use ncdb_core::view::Error as ViewError;
 
 use super::SyncState;
-use super::wire::{Entry, Pushed};
+use super::wire::{self, Entry, Pushed};
 use crate::db::{Inner, SpaceState};
 use crate::subscribe::touched;
 
@@ -156,9 +156,11 @@ pub(super) fn unconfirmed(
         .collect())
 }
 
-/// Records the results of a push of the changes `ids` of `space`. Returns
-/// the transient code that stopped it, after which the rest stays
-/// unconfirmed.
+/// Records the results of a push of the changes `ids` of `space`. A
+/// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
+/// sync status shows it, so the relay's own text never reaches the log
+/// (NOC-188). Returns the transient code that stopped it, after which the
+/// rest stays unconfirmed.
 pub(super) fn pushed(
     inner: &mut Inner,
     space: SpaceId,
@@ -170,10 +172,13 @@ pub(super) fn pushed(
             Pushed::Accepted(position) | Pushed::Duplicate(position) => {
                 inner.view.confirm(space, *id, position)?;
             }
-            Pushed::Rejected(code) if TRANSIENT.contains(&code.as_str()) => {
-                return Ok(Some(code));
+            Pushed::Rejected(code) => {
+                let code = wire::mapped_code(&code);
+                if TRANSIENT.contains(&code.as_str()) {
+                    return Ok(Some(code));
+                }
+                inner.view.refuse(space, *id, &code)?;
             }
-            Pushed::Rejected(code) => inner.view.refuse(space, *id, &code)?,
         }
     }
     Ok(None)
@@ -185,23 +190,27 @@ pub(super) fn pushed(
 pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
     let sync = sync(inner);
     sync.stopped.insert(space);
+    sync.live.remove(&space);
     sync.removed = Some(code);
 }
 
+/// Records that the subscription to `space` caught up with the relay's
+/// head.
+pub(super) fn caught_up(inner: &mut Inner, space: SpaceId) {
+    sync(inner).live.insert(space);
+}
+
 /// This member's changes the relay has not confirmed, and those it
-/// refused, across every space the database holds.
+/// refused, across every space the database holds. The view keeps these
+/// counts as changes are written, received, confirmed and refused, and
+/// reads them back when it opens (NOC-147), so this decodes nothing.
 pub(super) fn own_counts(inner: &Inner) -> (u64, u64) {
     let me = inner.member.key().id();
-    let spaces = inner.spaces.keys();
-    let (mut unconfirmed, mut refused) = (0, 0);
-    for space in spaces {
-        let own = |change: &Change| change.header().author == me;
-        if let Ok(changes) = inner.view.unconfirmed(*space) {
-            unconfirmed += changes.iter().filter(|c| own(c)).count() as u64;
-        }
-        if let Ok(changes) = inner.view.refused(*space) {
-            refused += changes.iter().filter(|(c, _)| own(c)).count() as u64;
-        }
-    }
-    (unconfirmed, refused)
+    inner
+        .spaces
+        .keys()
+        .fold((0, 0), |(unconfirmed, refused), space| {
+            let counts = inner.view.relay_counts(*space, me);
+            (unconfirmed + counts.unconfirmed, refused + counts.refused)
+        })
 }

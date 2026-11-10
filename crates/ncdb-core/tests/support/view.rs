@@ -61,21 +61,23 @@ pub fn lock_without(collection: &str, index: &str) -> ModelLock {
     lock
 }
 
-/// A path for a database file no other test uses. The directory is the
-/// system's temporary one; the file is removed when the value drops.
+/// A path for a database file no other test uses. Natively the directory
+/// is the system's temporary one, and the file is removed when the value
+/// drops. On wasm32 the path names a file of SQLite's in-memory VFS, the
+/// default there (RFC 0006, decision 12), which keeps it for the test
+/// binary's run, across connections, as a file would be kept.
 pub struct TempDb(pub PathBuf);
 
 impl TempDb {
     pub fn new(name: &str) -> TempDb {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let file = format!("ncdb-view-{}-{name}-{n}.sqlite", std::process::id());
-        let path = std::env::temp_dir().join(file);
-        let db = TempDb(path);
+        let db = TempDb(temp_path(&format!("ncdb-view-{name}-{n}.sqlite")));
         db.remove();
         db
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     fn remove(&self) {
         for suffix in ["", "-wal", "-shm", "-journal"] {
             let mut path = self.0.clone().into_os_string();
@@ -83,6 +85,20 @@ impl TempDb {
             let _ = std::fs::remove_file(path);
         }
     }
+
+    /// The in-memory VFS frees a file when the test binary ends.
+    #[cfg(target_arch = "wasm32")]
+    fn remove(&self) {}
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn temp_path(file: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("{}-{file}", std::process::id()))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn temp_path(file: &str) -> PathBuf {
+    PathBuf::from(format!("/{file}"))
 }
 
 impl Drop for TempDb {
@@ -182,21 +198,31 @@ pub fn schema(conn: &rusqlite::Connection) -> BTreeSet<(String, String)> {
 }
 
 /// A database in memory that a second connection of this process can
-/// open: the view's and the test's.
+/// open: the view's and the test's. Natively a shared-cache database in
+/// memory; on wasm32 a file of the in-memory VFS, which every connection
+/// of the test binary shares by name.
 pub struct MemDb(pub PathBuf);
 
 impl MemDb {
     pub fn new() -> MemDb {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        MemDb(PathBuf::from(format!(
-            "file:ncdb-view-{n}?mode=memory&cache=shared"
-        )))
+        MemDb(mem_path(n))
     }
 
     pub fn connect(&self) -> rusqlite::Connection {
         rusqlite::Connection::open(&self.0).unwrap()
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mem_path(n: u64) -> PathBuf {
+    PathBuf::from(format!("file:ncdb-view-{n}?mode=memory&cache=shared"))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn mem_path(n: u64) -> PathBuf {
+    PathBuf::from(format!("/ncdb-view-mem-{n}"))
 }
 
 /// The rows of every view table (`objects`, `c_*`, `fs_*`), in primary-key
