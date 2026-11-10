@@ -40,6 +40,10 @@ pub enum ErrorCode {
     /// The invitation's account is new to this database, and no
     /// fingerprint of it was passed to `members().add`.
     UnknownAccount,
+    /// The member's role does not allow the call.
+    NotAllowed,
+    /// The member is no longer a member of the space.
+    NotMember,
 }
 
 impl Error {

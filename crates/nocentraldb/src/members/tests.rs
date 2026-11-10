@@ -27,8 +27,13 @@ fn database() -> Db {
 /// A database in memory of the member `who` of `account`.
 fn of_account(who: u8, account: &SigningKey) -> Db {
     let options = OpenOptions::new(LOCK).in_memory();
-    now(Db::open_as(options, [who; 32], [who ^ 0x80; 32], account.clone()))
-        .expect("the test lock opens")
+    now(Db::open_as(
+        options,
+        [who; 32],
+        [who ^ 0x80; 32],
+        account.clone(),
+    ))
+    .expect("the test lock opens")
 }
 
 /// A space the admin's database creates.
@@ -130,7 +135,8 @@ fn copy(from: &Db, to: &Db, space: &Space) {
         .entry(space.id().0)
         .or_insert_with(|| crate::db::SpaceState::new(space.id().0, member));
     for bytes in changes {
-        view.receive(&bytes, &mut state.checks).expect("the change is received");
+        view.receive(&bytes, &mut state.checks)
+            .expect("the change is received");
     }
 }
 
@@ -142,7 +148,9 @@ fn remove(admin: &Db, space: &Space, invitation: &super::Invitation) {
     let mut inner = admin.lock();
     let member = inner.member.key();
     let crate::db::Inner { view, spaces, .. } = &mut *inner;
-    let state = spaces.get_mut(&space.id().0).expect("the admin holds the space");
+    let state = spaces
+        .get_mut(&space.id().0)
+        .expect("the admin holds the space");
     let next = crate::next::next(view, space.id().0, &state.checks, member.id());
     let entry = Entry::Membership(MembershipEntry {
         subject: invitation.key.id(),

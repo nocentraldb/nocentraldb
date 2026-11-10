@@ -11,9 +11,11 @@ use std::collections::BTreeSet;
 
 use ncdb_core::change::Kind;
 use ncdb_core::envelope;
-use ncdb_core::ids::{ChangeId, SpaceId};
+use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::log::{Position, State};
-use ncdb_core::membership::{self, Action, ControlBody, Entry, MemberKind, MembershipEntry};
+use ncdb_core::membership::{
+    self, Action, ControlBody, Entry, MemberKind, MembershipEntry, Resolved,
+};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
@@ -71,6 +73,13 @@ impl Members<'_> {
     /// space's control DAG, and folds them, on the device. The new member
     /// reads the whole history of the space once it syncs.
     ///
+    /// Only an admin adds members: another member is refused with
+    /// `NotAllowed`, one that was removed with `NotMember` (RFC 0009,
+    /// "Errors"). The member of the invitation must not be a member, and
+    /// must not have been one, which is refused with `InvalidValue`:
+    /// adding a former member again needs a rotation first (RFC 0008, M5),
+    /// which is not built.
+    ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidValue`: one its account did not sign, one that certifies
     /// another member than the invitation's keys, or a sub-agent's. An account other than this database's own is new to it, since each
@@ -81,6 +90,8 @@ impl Members<'_> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
+        let resolved = inner.spaces[&space.0].checks.resolved();
+        allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         certified(invitation)?;
         known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
@@ -125,6 +136,37 @@ impl Members<'_> {
         }
         crate::sync::wake(&inner);
         Ok(())
+    }
+}
+
+/// Whether `member` may add `subject` in the membership state `resolved`:
+/// it is an admin, and `subject` is not a member and never was one.
+fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<(), Error> {
+    match resolved.role(member) {
+        Some(membership::Role::Admin) => {}
+        Some(_) => {
+            return Err(Error::new(
+                ErrorCode::NotAllowed,
+                "only an admin of the space adds members",
+            ));
+        }
+        None => {
+            return Err(Error::new(
+                ErrorCode::NotMember,
+                "the member is no longer a member of the space",
+            ));
+        }
+    }
+    match resolved.member(subject) {
+        None => Ok(()),
+        Some(state) if state.role.is_some() => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "the invitation's member is a member of the space already",
+        )),
+        Some(_) => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "the invitation's member was removed from the space; adding it again is not built",
+        )),
     }
 }
 
