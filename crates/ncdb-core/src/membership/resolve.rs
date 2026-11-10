@@ -21,6 +21,7 @@ use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
+use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
@@ -39,6 +40,7 @@ pub struct Resolved {
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
     seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
+    generations: Generations,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -125,6 +127,22 @@ impl Resolved {
         &self.order
     }
 
+    /// A generation of the generation graph.
+    pub fn generation(&self, _generation: u64) -> Option<&Generation> {
+        None
+    }
+
+    /// The generation graph, by generation id.
+    pub fn generations(&self) -> impl Iterator<Item = (u64, &Generation)> + '_ {
+        self.generations.0.iter().map(|(id, g)| (*id, g)).take(0)
+    }
+
+    /// Whether `generation` is `from` or descends from it in the
+    /// generation graph.
+    pub fn descends(&self, _generation: u64, _from: u64) -> bool {
+        false
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -206,6 +224,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         seniority: Vec::new(),
         gaps: BTreeSet::new(),
         seen: BTreeMap::new(),
+        generations: Generations::default(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.

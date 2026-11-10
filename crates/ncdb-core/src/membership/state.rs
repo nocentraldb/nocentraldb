@@ -50,6 +50,9 @@ pub enum Rejection {
     NoRight,
     /// The accepted revocation with this change id excludes it.
     Excluded(ChangeId),
+    /// A key chain entry that names the same generation id as another
+    /// accepted one: both are rejected (RFC 0008, decision M23).
+    DuplicateGeneration,
 }
 
 /// One member of the state, current or former.
@@ -226,5 +229,6 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::NotValidWhenWritten => 7,
         Rejection::NoRight => 8,
         Rejection::Excluded(_) => 9,
+        Rejection::DuplicateGeneration => 10,
     }
 }

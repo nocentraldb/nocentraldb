@@ -16,6 +16,7 @@ mod body;
 mod certificate;
 mod fields;
 mod genesis;
+mod generations;
 mod input;
 mod key_chain;
 mod resolve;
@@ -31,6 +32,7 @@ pub use genesis::{
     GENERATION_CONTEXT, Genesis, MODEL_ID_CONTEXT, MODEL_ID_FIELD_LEN, SPACE_ID_CONTEXT,
     generation_id, open_model_id, seal_model_id, seal_model_id_with_nonce, space_id,
 };
+pub use generations::Generation;
 pub use key_chain::{KeyChainEntry, PreviousKey};
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
