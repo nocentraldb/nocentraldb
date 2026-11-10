@@ -5,9 +5,8 @@
 // memory is refused with `invalidValue`; and the TypeScript SDK takes the same
 // options as `path`, `keyFile`, `inMemory` and `agent`, in Node.js only, while
 // the browser has no path and keeps its key as RFC 0006 says. Each answer
-// stands in the text where it belongs; for RFC 0009 with its reason and the
-// options not taken (rfc-0009-fresh.test.mjs), and for RFC 0003 with its
-// decision in short form and a dated History line.
+// stands in the text where it belongs, with its reason and the options not
+// taken (rfc-0009-fresh.test.mjs and rfc-0003-fresh.test.mjs).
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { assertLinksResolve, read, section } from "./lib/rfc-text.mjs";
@@ -21,16 +20,6 @@ const rowsStarting = (text, pattern) =>
     .split("\n")
     .filter((l) => l.startsWith("|"))
     .filter((l) => pattern.test(l.split("|")[1] ?? ""));
-
-/** The decision headed `### <id>. `, up to the next heading of its level. */
-const decision = (path, id) => {
-  const text = section(read(path), "decisions");
-  const found = text.split(new RegExp(`^### ${id}\\. `, "m"))[1];
-  assert.ok(found, `${path} has no decision ${id}`);
-  return found.split(/^### /m)[0];
-};
-
-const NOT_TAKEN = /^Not taken:\n\n- /m;
 
 test("RFC 0009's Open and close names the Node.js options and what a missing one does", () => {
   const open = section(read(RFC_0009), "open-and-close");
@@ -87,22 +76,6 @@ test("RFC 0003's member key says opening fails with keyStoreUnavailable", () => 
   const key = section(read(RFC_0003), "the-member-key");
   assert.match(key, /`keyStoreUnavailable`/);
   assert.match(key, /names the key-file option/);
-  assert.match(key, /#19-opening-without-a-keystore-or-a-key-file/);
-});
-
-test("RFC 0003 records decision 19 as decided on NOC-114, with History and status", () => {
-  const text = decision(RFC_0003, "19");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /Asked on NOC-114\./);
-  assert.match(text, /`keyStoreUnavailable`/);
-  assert.match(text, NOT_TAKEN);
-  const rfc = read(RFC_0003);
-  const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /16 to 21/);
-  assert.match(
-    rfc,
-    /^- \*\*2026-11-10\*\* · NOC-114 · .*\(\[#\d+\]\(https:\/\/github\.com\/nocentraldb\/nocentraldb\/pull\/\d+\)\)\.?$/m,
-  );
 });
 
 test("the new text carries no amendment mark", () => {

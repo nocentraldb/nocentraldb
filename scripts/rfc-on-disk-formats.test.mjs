@@ -4,34 +4,14 @@
 // key file's mode 0600 in RFC 0003, "The member key"; the keystore entry,
 // the one SQLite file in `path(dir)` and the `storageFailed` of an existing
 // database whose keys are gone in RFC 0009, "Where the database lives" and
-// "Errors". RFC 0003 with a decision in short form and a dated History line
-// naming NOC-144, NOC-149 and #134 (NOC-149); RFC 0009, a fresh text
-// (NOC-165), with the reasons and the options not taken in its bullet.
+// "Errors". Both are fresh texts (NOC-165), with the reasons and the options
+// not taken where the format stands.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { read, section, slug } from "./lib/rfc-text.mjs";
+import { read, section } from "./lib/rfc-text.mjs";
 
 const RFC_0003 = "docs/rfc/0003-keys-and-cryptography.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
-
-/** The decision of `path` whose text matches `pattern`. */
-const decisionMatching = (path, pattern) => {
-  const decisions = section(read(path), "decisions");
-  const headings = decisions
-    .split("\n")
-    .filter((l) => l.startsWith("### "))
-    .map((l) => l.slice(4));
-  const found = headings
-    .map((h) => ({ heading: h, text: section(decisions, slug(h)) }))
-    .find(({ text }) => pattern.test(text));
-  assert.ok(found, `${path} has no decision matching ${pattern}`);
-  return found;
-};
-
-const historyLine = (path) =>
-  section(read(path), "history")
-    .split("\n")
-    .find((l) => l.startsWith("- **2026-11-10** · ") && l.includes("NOC-149"));
 
 const rustWhereItLives = () =>
   section(read(RFC_0009), "the-rust-sdk")
@@ -51,23 +31,9 @@ test("RFC 0003's member key gives the 113 bytes of the key record", () => {
   );
   assert.match(key, /the same in the keystore and in a key file/);
   assert.match(key, /mode 0600 on Unix/);
-});
-
-test("RFC 0003 records the key record as a decision of the owner on NOC-144", () => {
-  const { text } = decisionMatching(RFC_0003, /`nocentraldb-keys`/);
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-144/);
-  assert.match(text, /113 bytes/);
-  assert.match(text, /^Not taken:\n\n- /m);
-  assert.match(text, /CBOR/);
-  assert.match(text, /96 bytes/);
-});
-
-test("RFC 0003's History names NOC-144, NOC-149 and #134", () => {
-  const line = historyLine(RFC_0003);
-  assert.ok(line, `${RFC_0003} has no History line for NOC-149`);
-  assert.match(line, /NOC-144/);
-  assert.match(line, /#134/);
+  // NOC-165: the options not taken stand with the format.
+  assert.match(key, /CBOR/);
+  assert.match(key, /96 bytes/);
 });
 
 // RFC 0009, "Where the database lives" and "Errors"

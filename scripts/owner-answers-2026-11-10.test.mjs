@@ -4,9 +4,10 @@
 // bytes a writer signs for a person-key record in RFC 0003; NOC-110 point 4 A,
 // the bytes of the associated data of an encrypted previous key in RFC 0003;
 // and NOC-110 points 1 to 3, the current generation and who may hold a
-// generation, in RFC 0008. Each stands where it belongs; in RFC 0003 and RFC
-// 0008 with a decision in short form and a dated History line. RFC 0009 is a
-// fresh text (NOC-165), whose reasons rfc-0009-fresh.test.mjs holds.
+// generation, in RFC 0008. Each stands where it belongs; in RFC 0008 with a
+// decision in short form and a dated History line. RFC 0003 and RFC 0009 are
+// fresh texts (NOC-165), whose reasons and options not taken
+// rfc-0003-fresh.test.mjs and rfc-0009-fresh.test.mjs hold.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { read, section, slug } from "./lib/rfc-text.mjs";
@@ -76,18 +77,9 @@ test("RFC 0003 gives the bytes a writer signs for a person-key record", () => {
   const record = section(read(RFC_0003), "person-key-record");
   assert.match(record, RECORD_BYTES);
   assert.match(record, /Ed25519/);
-  assert.match(record, /#21-the-bytes-signed-for-a-person-key-record/);
   const person = section(read(RFC_0003), "the-person-key");
   assert.match(person, /\(#person-key-record\)/);
   assert.doesNotMatch(person, /open question/i);
-});
-
-test("RFC 0003 records decision 21 on NOC-117", () => {
-  const text = decision(RFC_0003, "21. ");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-117/);
-  assert.match(text, /^Not taken:\n\n- /m);
-  assert.ok(historyLine(RFC_0003, "NOC-117"), "no History line for NOC-117");
 });
 
 // NOC-110 point 4 A
@@ -99,22 +91,7 @@ test("RFC 0003's key-chain subkey gives the bytes of the associated data", () =>
     /associated data = space id \(16 bytes\) \|\| new generation id \(8 bytes, big-endian\) \|\|\s+previous generation id \(8 bytes, big-endian\)/,
   );
   assert.match(subkey, /no label/);
-  assert.match(subkey, /#20-the-associated-data-of-an-encrypted-previous-key/);
   assert.doesNotMatch(subkey, /open-questions/);
-});
-
-test("RFC 0003 records decision 20 on NOC-110, and has no open question left", () => {
-  const text = decision(RFC_0003, "20. ");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-110/);
-  assert.match(text, /^Not taken:\n\n- /m);
-  assert.ok(historyLine(RFC_0003, "NOC-110"), "no History line for NOC-110");
-  const open = section(read(RFC_0003), "open-questions");
-  assert.match(open, /^None\. The owner has decided every question/m);
-  const status = read(RFC_0003)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /16 to 21/);
 });
 
 // NOC-110 points 1 to 3
