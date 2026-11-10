@@ -109,13 +109,17 @@ test("RFC 0009 says an existing database whose keys are gone fails with storageF
 test("RFC 0009 records S30 to S32 as decided by the owner on NOC-144", () => {
   for (const id of ["S30. ", "S31. ", "S32. "]) {
     const text = decision(RFC_0009, id);
-    assert.match(text, /^Decided \(Carsten, 2026-11-10\), on NOC-144/m, id);
+    assert.match(text, /^Decided \(Carsten, 2026-11-10\),? on NOC-144/m, id);
     assert.match(text, /^Why: /m, id);
     assert.match(text, /^Not taken:\n\n- /m, id);
   }
   assert.match(decision(RFC_0009, "S30. "), /`nocentraldb`/);
   assert.match(decision(RFC_0009, "S31. "), /`nocentraldb\.sqlite`/);
   assert.match(decision(RFC_0009, "S32. "), /`storageFailed`/);
+  assert.match(
+    decision(RFC_0009, "S32. "),
+    /^Decided \(Carsten, 2026-11-10\) on NOC-144, and confirmed on NOC-149 as #134 builds it: /m,
+  );
 });
 
 test("RFC 0009's Status line and History name NOC-144, NOC-149 and #134", () => {
