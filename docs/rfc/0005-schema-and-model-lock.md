@@ -865,7 +865,7 @@ Not taken:
 - **2026-11-09** · NOC-75 · Follows RFC 0009: the index option `scope: "space"` and its lock key `scope`, `nc.Unknown` for an unknown option, and the refusal `noPerson` (#87).
 - **2026-11-09** · NOC-73 · The example lock in canonical key order; D16 (`nc.int` as a `number`) and D17 (deprecating a collection), decided as recommended (#88).
 - **2026-11-10** · NOC-63 · `nc.ref`, a reference into another space, with the decisions D18 to D22, decided as recommended (#92).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#PR).
+- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#104).
 
 ## How this RFC is tested
 
