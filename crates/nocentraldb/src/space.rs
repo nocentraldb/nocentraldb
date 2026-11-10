@@ -164,7 +164,7 @@ impl Space {
         let result = (|| {
             let clock = state.clock.now(wall).map_err(|error| {
                 Error::new(
-                    ErrorCode::StorageFull,
+                    ErrorCode::StorageFailed,
                     format!("the space's clock: {error}"),
                 )
             })?;

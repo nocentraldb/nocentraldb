@@ -19,9 +19,11 @@ pub struct Error {
 pub enum ErrorCode {
     /// The lock cannot be read, or breaks the rules RFC 0005 gives a lock.
     ModelRefused,
-    /// The database could not store or read what a call asked: the disk,
-    /// or SQLite, failed.
+    /// The disk or the quota is full: freeing space may help.
     StorageFull,
+    /// The database could not store or read what a call asked for another
+    /// reason than a full disk, such as SQLite failing or a corrupt file.
+    StorageFailed,
     /// The copy holds no such object, or the model no such collection,
     /// field or index.
     NotFound,
@@ -59,12 +61,15 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-/// A failure of the view, which only the database itself can cause.
+/// A failure of the view, which only the database itself can cause:
+/// `StorageFull` when the disk or the quota is full, `StorageFailed`
+/// otherwise (NOC-95, 4 B).
 pub(crate) fn storage(error: ncdb_core::view::Error) -> Error {
-    Error::new(
-        ErrorCode::StorageFull,
-        format!("the local view failed: {error}"),
-    )
+    let code = match error.is_full() {
+        true => ErrorCode::StorageFull,
+        false => ErrorCode::StorageFailed,
+    };
+    Error::new(code, format!("the local view failed: {error}"))
 }
 
 #[cfg(test)]

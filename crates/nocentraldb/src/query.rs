@@ -108,8 +108,9 @@ impl Query {
             .rows
             .iter()
             .map(|(space, id)| {
-                Object::read(inner, *space, &self.collection, *id)?
-                    .ok_or_else(|| Error::new(ErrorCode::StorageFull, "an index row has no object"))
+                Object::read(inner, *space, &self.collection, *id)?.ok_or_else(|| {
+                    Error::new(ErrorCode::StorageFailed, "an index row has no object")
+                })
             })
             .collect::<Result<_, _>>()?;
         Ok(Page {
