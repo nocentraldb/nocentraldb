@@ -57,7 +57,9 @@ async fn behind_counts_the_positions_heard_of_but_not_folded() {
     {
         let mut inner = crate::db::lock(&db.inner);
         let sync = inner.sync.as_mut().unwrap();
-        let cursor = sync.cursors[&space.id().0];
+        // A space the relay did not hold before its first push may have
+        // no cursor yet: its cursor is 0.
+        let cursor = sync.cursors.get(&space.id().0).copied().unwrap_or(0);
         sync.heads.insert(space.id().0, cursor + 3);
     }
 
