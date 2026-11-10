@@ -212,6 +212,12 @@ impl Session<'_> {
                     if cursor >= head || empty {
                         return Ok(true);
                     }
+                    // A page that does not move the cursor would be asked
+                    // for again and again: the relay is not serving the
+                    // range, so the session ends and backs off.
+                    if cursor == after {
+                        return Err(lost());
+                    }
                 }
                 // A space the relay does not hold yet: the push of its
                 // genesis creates it.
