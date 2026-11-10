@@ -153,7 +153,9 @@ const questions = () =>
 test("every open question has options, one recommended option and a recommendation", () => {
   const found = questions();
   assert.ok(found.length >= 8, `${RFC} lists ${found.length} open questions`);
-  found.forEach(({ id }, i) => assert.equal(id, `Q${i + 1}`, "numbered Q1.."));
+  for (const [i, { id }] of found.entries()) {
+    assert.equal(id, `Q${i + 1}`, "the questions are numbered Q1, Q2, ...");
+  }
   for (const { id, text } of found) {
     assert.match(text, /^- A\. /m, `${id} has no option A`);
     assert.match(text, /^- B\. /m, `${id} has no option B`);
