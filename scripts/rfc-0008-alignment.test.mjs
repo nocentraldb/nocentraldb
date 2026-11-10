@@ -29,7 +29,12 @@ const RFC_0008_FILE = "0008-membership.md";
 const STABLE = `${RFC_0008_FILE}#effects-that-wait-until-a-change-is-stable`;
 const RELAY_RULES = `${RFC_0008_FILE}#how-the-relay-applies-the-rules`;
 
-/** Each amended RFC, the number of its new amendment, and the RFC 0008 decisions it must name. */
+/**
+ * Each amended RFC, the number of its new amendment, and the RFC 0008
+ * decisions it must name. RFC 0006 carries its points (M4, M20) in its text
+ * since NOC-101 folded its amendments in; the test of its control table below
+ * checks them where they stand.
+ */
 const AMENDMENTS = [
   {
     path: RFC_0002,
@@ -37,7 +42,6 @@ const AMENDMENTS = [
     decisions: ["M3", "M6", "M7", "M11", "M18", "M19", "M24"],
   },
   { path: RFC_0003, number: 2, decisions: ["M6", "M9", "M15", "M20", "M26"] },
-  { path: RFC_0006, number: 1, decisions: ["M4", "M20"] },
 ];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0008`;
 
@@ -330,9 +334,11 @@ test("RFC 0008's Conflicts section says which points NOC-44 resolved", () => {
       targets(point).some(
         (t) =>
           /#amendment-\d+-following-rfc-0008$/.test(t) ||
-          t.startsWith("0001-nocentraldb.md#"),
+          t.startsWith("0001-nocentraldb.md#") ||
+          // RFC 0006 states it in its text since NOC-101 folded its amendments in.
+          t.startsWith("0006-local-view.md#"),
       ),
-      `conflict ${n} links no amendment and no section of RFC 0001`,
+      `conflict ${n} links no amendment and no section of RFC 0001 or RFC 0006`,
     );
   }
 });

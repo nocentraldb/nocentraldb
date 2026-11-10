@@ -27,12 +27,12 @@ const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
 
 /**
  * Each amended RFC, the number of its amendment, and the RFC 0009 points it
- * carries out. RFC 0005 carries points 1, 3 and 4 in its text since NOC-101
- * folded its amendments in; the tests below check them where they stand.
+ * carries out. RFC 0005 (points 1, 3 and 4) and RFC 0006 (points 1 and 2)
+ * carry them in their text since NOC-101 folded their amendments in; the
+ * tests below check them where they stand.
  */
 const AMENDMENTS = [
   { path: RFC_0003, number: 3, points: [5, 9] },
-  { path: RFC_0006, number: 6, points: [1, 2] },
   { path: RFC_0008, number: 2, points: [10] },
 ];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0009`;
@@ -187,7 +187,7 @@ test("RFC 0009's point 1 is resolved for RFC 0006 too", () => {
     "conflicts-with-genesismd-and-the-other-rfcs",
   );
   const line = body.split("\n").find((l) => l.startsWith("1. "));
-  assert.ok(links(line, "0006-local-view.md#amendment-6-following-rfc-0009"));
+  assert.ok(links(line, "0006-local-view.md#declared-indexes"));
   assert.ok(!/RFC 0006 follows/.test(line), "point 1 still waits for RFC 0006");
 });
 

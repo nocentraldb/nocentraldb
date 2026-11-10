@@ -123,7 +123,7 @@ impl Checks for SealChecks {
     }
 
     fn add_control(&mut self, change: &Change) {
-        if change.header().space != self.space {
+        if change.header().space != self.space || self.controls.contains_key(&change.id()) {
             return;
         }
         if let Ok(body) = ControlBody::decode(&change.header().payload) {
