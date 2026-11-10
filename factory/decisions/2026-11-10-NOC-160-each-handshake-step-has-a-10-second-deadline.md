@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-160 · Each step of the relay server's opening handshake has a 10-second deadline
+
+- Decided by: coding agent (NOC-160), within RFC 0007's "Opening a connection" and "Liveness"
+- Why: RFC 0007 names no deadline for the handshake, and without one a peer that stops halfway holds a task until it goes away. `HANDSHAKE_TIMEOUT` (10 seconds, configurable for tests with `Server::with_handshake_timeout`) bounds each step from its start: the WebSocket upgrade, `hello`, and `auth` after the challenge. A step that takes longer closes the connection; WebSocket pings do not extend it. A member on a working network finishes each step in well under a second, so 10 seconds leaves room for slow links and a busy server, and "Liveness" lets a relay close any connection at any time, after which the member reconnects with back-off. Once `welcome` is sent, the deadline no longer applies.
+- Instead of: one deadline for the whole handshake, which would let a slow upgrade eat into the time for `auth`; the 60-second write timeout of NOC-103, which would let each stalled peer hold its task six times longer; or an idle timeout that any message or ping resets, which a peer could keep alive forever without authenticating.
+- What this does not do: a stalled peer still holds one task for up to 30 seconds (three steps), and the server does not limit how many connections are open at once, so enough peers opening connections fast can still exhaust it.
+- Topics: relay, rfc-0007, liveness

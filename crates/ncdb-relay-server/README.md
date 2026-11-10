@@ -32,8 +32,11 @@ Members then connect to `wss://relay.example.com`. Any proxy that terminates TLS
 
 Each connection holds at most 32 outgoing messages. A subscription reads the log only as fast as its member takes the entries, so a slow member gets every entry, in order, and the server does not buffer a space for it. A connection that takes no message for 60 seconds is closed; the member reconnects and resubscribes from its cursor (RFC 0007, "Liveness"), and misses nothing.
 
+## A peer that stops in the handshake
+
+Each step of the opening handshake (RFC 0007, "Opening a connection") must finish within 10 seconds of its start: the WebSocket upgrade, `hello`, and `auth` after the challenge. When a step takes longer, the server closes the connection, so a peer that stops halfway holds a task for at most 30 seconds. WebSocket pings do not extend a step. Once `welcome` is sent, the deadline no longer applies; an idle member stays connected. The server does not limit how many connections are open at once, so many peers that each stop in the handshake still hold one task each until their deadline passes.
+
 ## What it does not do yet
 
 - Large changes (RFC 0007, "Large changes"): the largest frame it accepts fits into one message, and `upload` answers `too_large`.
 - Its subscriptions wake only on pushes to this server process, not on another process that writes to the same database.
-- The opening handshake has no timeout.
