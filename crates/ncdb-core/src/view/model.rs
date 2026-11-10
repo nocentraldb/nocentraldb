@@ -15,6 +15,7 @@ use crate::basic::{self, BasicValue, Kind};
 use crate::cbor::{self, Key, Value};
 use crate::link::{Link, Links};
 use crate::model_lock::Refusal;
+pub use crate::model_lock::Scope;
 use crate::set::{self, Set};
 
 /// The model the view folds by: collections by name, each a map of field
@@ -60,8 +61,12 @@ pub struct Index {
     /// The fields it orders by, each with its direction. Each is a field
     /// with a single sortable value: a basic value or a link.
     pub keys: Vec<(String, Direction)>,
-    /// How many leading keys a query fixes with equality.
+    /// How many leading keys a query fixes with equality, after the space
+    /// id when the index runs in one space.
     pub equality: usize,
+    /// Whether the index spans every space of the member, or runs in one
+    /// and puts the space id first (RFC 0006, Amendment 6).
+    pub scope: Scope,
 }
 
 /// The direction of one key of an index.
@@ -183,6 +188,7 @@ impl Model {
                     text(&index.collection),
                     Value::Array(keys),
                     Value::Unsigned(index.equality as u64),
+                    Value::Bool(index.scope == Scope::Space),
                 ])
             })
             .collect();

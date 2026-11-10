@@ -32,7 +32,7 @@ use crate::log::{Appended, Log, State};
 use crate::model_lock::ModelLock;
 use crate::receive::{Checks, ReceiveError};
 
-pub use model::{Direction, Field, FieldState, Index, Invalid, Model};
+pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 

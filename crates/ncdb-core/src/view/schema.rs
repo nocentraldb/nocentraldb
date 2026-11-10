@@ -6,7 +6,7 @@
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
-use super::model::{Direction, Field, Index, Model};
+use super::model::{Direction, Field, Index, Model, Scope};
 use crate::basic::Kind;
 
 /// The tables every view has, whatever its model.
@@ -66,6 +66,35 @@ pub(super) fn column(field: &str) -> String {
 /// `_` (RFC 0005), so no two declared indexes share an SQLite index.
 pub(super) fn index_name(index: &Index) -> String {
     format!("ix_{}_{}", index.collection, index.name)
+}
+
+/// The columns of a declared index's SQLite index, in order, each with
+/// its direction (RFC 0006, "Declared indexes"). Every index ends with the
+/// object id, so its order is total: one that spans every space orders by
+/// its keys, then the space id; one that runs in one space puts the space
+/// id first (Amendment 6).
+pub(super) fn index_columns(index: &Index) -> Vec<(String, Direction)> {
+    let ascending = |name: &str| (name.to_owned(), Direction::Ascending);
+    let keys = index
+        .keys
+        .iter()
+        .map(|(field, direction)| (column(field), *direction));
+    match index.scope {
+        Scope::Member => keys
+            .chain([ascending("space_id"), ascending("object_id")])
+            .collect(),
+        Scope::Space => std::iter::once(ascending("space_id"))
+            .chain(keys)
+            .chain([ascending("object_id")])
+            .collect(),
+    }
+}
+
+/// How many leading columns of an index's SQLite index a lookup fixes with
+/// equality: the space id when the index runs in one space, then the
+/// declared equality prefix.
+pub(super) fn prefix(index: &Index) -> usize {
+    index.equality + usize::from(index.scope == Scope::Space)
 }
 
 /// The SQLite type a field's column holds (RFC 0006: `INTEGER`, `REAL`,
@@ -140,23 +169,18 @@ fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
         ))?;
     }
     for index in &model.indexes {
-        // Every index ends with (space_id, object_id), so its order is
-        // total (RFC 0006, "Declared indexes").
-        let keys: String = index
-            .keys
-            .iter()
-            .map(|(field, direction)| {
-                let direction = match direction {
-                    Direction::Ascending => "ASC",
-                    Direction::Descending => "DESC",
-                };
-                format!("{} {direction}, ", column(field))
+        let keys: Vec<String> = index_columns(index)
+            .into_iter()
+            .map(|(name, direction)| match direction {
+                Direction::Ascending => format!("{name} ASC"),
+                Direction::Descending => format!("{name} DESC"),
             })
             .collect();
         conn.execute_batch(&format!(
-            "CREATE INDEX {} ON {} ({keys}space_id, object_id);",
+            "CREATE INDEX {} ON {} ({});",
             quote(&index_name(index)),
             rows(&index.collection),
+            keys.join(", "),
         ))?;
     }
     Ok(())
