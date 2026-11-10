@@ -8,8 +8,10 @@
 //! (RFC 0008): the authors' public keys from the genesis and the add
 //! entries, the membership from [`membership::resolve`], and the space keys
 //! from the key envelopes to the checks' member, which [`envelope::open`]
-//! unwraps. Each control change that passes therefore checks the log's
-//! rejected changes again (D11).
+//! unwraps, and from the key chain entries, which
+//! [`membership::open_previous_key`] opens back to the first generation
+//! (RFC 0003, "Key-chain subkey"). Each control change that passes
+//! therefore checks the log's rejected changes again (D11).
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -19,7 +21,9 @@ use crate::envelope;
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
 use crate::log::{ParkReason, RejectReason};
-use crate::membership::{self, Action, ControlBody, Entry, MembershipEntry, Resolved};
+use crate::membership::{
+    self, Action, ControlBody, Entry, KeyChainEntry, MembershipEntry, Resolved,
+};
 use crate::receive::{Checks, Stop};
 use crate::seal::{self, OpenError};
 
@@ -33,6 +37,14 @@ use crate::seal::{self, OpenError};
 /// the set [`membership::resolve`] folds, whatever its verdict there, since
 /// the verdict is a function of the whole set; [`SealChecks::resolved`]
 /// gives the verdicts.
+///
+/// **Space keys.** An envelope to the checks' member gives the key of its
+/// generation. A key chain entry that the generation graph holds, valid
+/// when written, gives the keys of its previous generations, once the key
+/// of its own generation is known; the walk repeats until no entry gives a
+/// new key, so a member added after rotations reaches the first
+/// generation. A key chain key fills only a generation the checks hold no
+/// key for; an envelope's key replaces it.
 ///
 /// **What this does not do.** A space key, once unwrapped, stays known,
 /// even if a later control change rejects its envelope. Whether a sealed
@@ -68,7 +80,8 @@ impl SealChecks {
     }
 
     /// The space key of `generation`, when an envelope to the checks'
-    /// member unwrapped it: the key a writer seals under.
+    /// member unwrapped it or the key chain opened it: the key a writer
+    /// seals under, and a reader opens with.
     pub fn space_key(&self, generation: u64) -> Option<&SpaceKey> {
         self.space_keys.get(&generation)
     }
@@ -160,6 +173,61 @@ impl Checks for SealChecks {
         }
         self.controls.insert(change.id(), change.clone());
         self.resolved = membership::resolve(self.space, self.controls.values());
+        self.walk_key_chain();
+    }
+}
+
+impl SealChecks {
+    /// Opens the previous keys of every key chain entry the generation
+    /// graph holds whose own generation's key is known, until no entry
+    /// gives a new key. Entries are taken in the order of their change ids,
+    /// so of two entries that encrypt different keys for one previous
+    /// generation, which only an admin that holds the new key could write,
+    /// the copy keeps the same one each time.
+    fn walk_key_chain(&mut self) {
+        let chains: Vec<(ChangeId, KeyChainEntry)> = self
+            .controls
+            .iter()
+            .filter_map(|(&id, change)| {
+                match ControlBody::decode(&change.header().payload).ok()?.entry {
+                    Entry::KeyChain(chain) => Some((id, chain)),
+                    _ => None,
+                }
+            })
+            .filter(|(id, chain)| {
+                self.resolved
+                    .generation(chain.generation)
+                    .is_some_and(|generation| generation.entries.contains_key(id))
+            })
+            .collect();
+        loop {
+            let mut opened = false;
+            for (_, chain) in &chains {
+                let Some(new_key) = self.space_keys.get(&chain.generation) else {
+                    continue;
+                };
+                let found: Vec<(u64, SpaceKey)> = chain
+                    .previous
+                    .iter()
+                    .filter(|previous| !self.space_keys.contains_key(&previous.generation))
+                    .filter_map(|previous| {
+                        let key = membership::open_previous_key(
+                            new_key,
+                            self.space,
+                            chain.generation,
+                            previous.generation,
+                            &previous.key,
+                        )?;
+                        Some((previous.generation, key))
+                    })
+                    .collect();
+                opened |= !found.is_empty();
+                self.space_keys.extend(found);
+            }
+            if !opened {
+                return;
+            }
+        }
     }
 }
 
