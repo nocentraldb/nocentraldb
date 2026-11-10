@@ -143,3 +143,6 @@ fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
     heads.retain(|id| !covered.contains(id));
     heads
 }
+
+#[cfg(test)]
+mod tests;
