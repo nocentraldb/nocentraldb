@@ -119,11 +119,12 @@ pub(super) fn update(conn: &Connection, log: &Log, id: ChangeId) -> Result<(), E
 }
 
 /// The log of every space the database holds, in local-position order,
-/// with each change's state and the relay's refusal.
+/// with each change's state, whether the relay confirmed it and the
+/// relay's refusal.
 pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
     let mut logs = BTreeMap::new();
     let mut statement = conn.prepare(
-        "SELECT space_id, frame, state, reason, relay_refusal FROM log
+        "SELECT space_id, frame, state, reason, relay_refusal, relay_position IS NOT NULL FROM log
          ORDER BY local_position",
     )?;
     let mut rows = statement.query([])?;
@@ -148,6 +149,9 @@ pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
         log.set_state(id, state);
         if let Some(refusal) = row.get::<_, Option<String>>(4)? {
             log.record_relay_refusal(id, RelayRefusal(refusal));
+        }
+        if row.get::<_, bool>(5)? {
+            log.record_relay_confirmation(id);
         }
     }
     Ok(logs)

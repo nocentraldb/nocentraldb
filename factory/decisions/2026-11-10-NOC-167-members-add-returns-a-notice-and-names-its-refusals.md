@@ -1,0 +1,8 @@
+# 2026-11-10 · NOC-167 · `members().add` returns a `Notice`, refuses with `InvalidCertificate` and `AlreadyMember`, and `UnknownAccount` carries the fingerprint
+
+- Decided by: the owner (Carsten, 2026-11-10, NOC-154 points 1, 2, 4 A and 5); built by the coding agent (NOC-167)
+- Why: RFC 0009 has every call that changes who can read return a notice `{ code, text }`, so `Members::add` returns `Result<Notice, Error>` with `Notice { code: NoticeCode, text: &'static str }` and RFC 0009's text, "The new member reads the whole history of this space." An invitation whose certificate does not hold is refused with `ErrorCode::InvalidCertificate`, since it can mean a forged invitation a person may need to see, and a member of the space with `ErrorCode::AlreadyMember`. A former member stays `InvalidValue` until re-adding it rotates first (RFC 0008, M5; NOC-169). `Error::fingerprint()` gives the account's `Fingerprint` on `UnknownAccount`, as RFC 0009 says the error carries it, and `Fingerprint` shows as RFC 0010's 60 digits in twelve blocks of five, computed over the account key until accounts and their recovery key are built. `role` stays required, also for an agent.
+- Instead of: NOC-140's safe subset, which returned `()` and refused all three cases with `InvalidValue`; hex in groups of four for the fingerprint (NOC-154 point 4 B), which RFC 0010 would have had to change.
+- What this does not do: the database still knows only its own account, so a confirmed fingerprint is passed again on every add of a member of another account, until the owner's NOC-154 point 3 is built. `Invitation` has no text form yet (NOC-141).
+- Topics: sdk-rust, rfc-0009, rfc-0010, errors, public-names
+- Supersedes: 2026-11-10-NOC-140-members-add-is-a-safe-subset.md
