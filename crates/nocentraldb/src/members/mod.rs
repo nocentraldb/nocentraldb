@@ -282,6 +282,8 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 #[cfg(test)]
 mod known_tests;
 #[cfg(test)]
+mod relay_tests;
+#[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
 mod write_tests;
