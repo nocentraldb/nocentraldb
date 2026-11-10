@@ -11,6 +11,7 @@ use crate::keys::MemberPublicKey;
 use super::body::Role;
 use super::certificate::Certificate;
 use super::fields;
+use super::generations::Generations;
 
 /// What `resolve` says about one control change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -50,6 +51,9 @@ pub enum Rejection {
     NoRight,
     /// The accepted revocation with this change id excludes it.
     Excluded(ChangeId),
+    /// A key chain entry that names the same generation id as another
+    /// accepted one: both are rejected (RFC 0008, decision M23).
+    DuplicateGeneration,
 }
 
 /// One member of the state, current or former.
@@ -165,6 +169,7 @@ pub(crate) fn encode(
     members: &Members,
     verdicts: &BTreeMap<ChangeId, Verdict>,
     gaps: &BTreeSet<ChangeId>,
+    generations: &Generations,
 ) -> Vec<u8> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
@@ -192,6 +197,20 @@ pub(crate) fn encode(
             Value::Array(revocations.collect()),
         ])
     });
+    let generations = generations.0.iter().map(|(generation, g)| {
+        let previous = g.previous.iter().map(|p| Value::Unsigned(*p));
+        let entries = g
+            .entries
+            .iter()
+            .map(|(change, author)| Value::Array(vec![id(change), fields::bytes(&author.0)]));
+        let recipients = g.recipients.iter().map(|r| fields::bytes(&r.0));
+        Value::Array(vec![
+            Value::Unsigned(*generation),
+            Value::Array(previous.collect()),
+            Value::Array(entries.collect()),
+            Value::Array(recipients.collect()),
+        ])
+    });
     let verdicts = verdicts.iter().map(|(change, verdict)| {
         let (code, cause) = match verdict {
             Verdict::Accepted => (0, None),
@@ -212,6 +231,7 @@ pub(crate) fn encode(
         (3, Value::Array(members.collect())),
         (4, Value::Array(verdicts.collect())),
         (5, Value::Array(gaps.iter().map(id).collect())),
+        (6, Value::Array(generations.collect())),
     ]))
 }
 
@@ -226,5 +246,6 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::NotValidWhenWritten => 7,
         Rejection::NoRight => 8,
         Rejection::Excluded(_) => 9,
+        Rejection::DuplicateGeneration => 10,
     }
 }
