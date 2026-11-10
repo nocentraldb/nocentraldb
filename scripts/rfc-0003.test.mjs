@@ -56,7 +56,7 @@ test("RFC 0003 has a section for every topic of NOC-7", () => {
     "How the SDK hides keys",
     "Keys never reach logs, errors or telemetry",
     "Group key distribution: options compared",
-    "Decisions for the owner",
+    "Decisions",
     "Agreement with GENESIS.md and RFC 0001",
   ];
   for (const heading of required) {

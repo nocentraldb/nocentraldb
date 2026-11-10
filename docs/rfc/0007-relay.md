@@ -112,7 +112,7 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `hello` lists the protocol versions the member speaks. The relay picks the highest it also speaks, or answers `unsupported_version` and closes.
 - `hello` may carry a client string, such as `ncdb-rs/0.3`, to help debug version problems. It is optional, and the relay sees it (see [What the relay sees](#what-the-relay-sees)).
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
-- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#decisions-for-the-owner): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
+- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
@@ -180,7 +180,7 @@ relay  → member  ok                {req}
 record = {person-key id, generation, writer member id, wrapped, signature}
 ```
 
-The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#decisions-for-the-owner). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
+The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
 
 - **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
@@ -749,7 +749,7 @@ Not taken:
 - Text keys for every field, such as `"space"` and `"frames"`: easier to read in a capture, but larger in every message and unlike the error map.
 - Numbers picked by hand for each message, with gaps for future fields: CBOR maps already grow by adding keys at the end, and hand-picked numbers leave more to review.
 
-The protection of the person-key store and the key that authenticates a connection are decided in [RFC 0003](0003-keys-and-cryptography.md#decisions-for-the-owner) (decisions 14 and 13), because they are key handling.
+The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003, in its [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store) and [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay), because they are key handling.
 
 ## History
 

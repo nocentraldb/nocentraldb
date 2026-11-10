@@ -158,7 +158,9 @@ test('"Open questions" names the bytes of the associated data of an encrypted pr
   assert.match(open, /associated data/);
   assert.match(open, /previous key/);
   assert.ok(
-    links(open, "linear.app/nocentraldb/issue/NOC-110"),
+    targets(open).some((t) =>
+      t.includes("linear.app/nocentraldb/issue/NOC-110/"),
+    ),
     "no link to NOC-110",
   );
   assert.ok(links(part("key-chain-subkey"), "#open-questions"));
