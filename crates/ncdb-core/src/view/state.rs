@@ -190,6 +190,13 @@ impl ObjectState {
         cbor::encode(&Value::Array(items))
     }
 
+    /// Whether one of the creates puts the object into `collection`.
+    pub(super) fn creates_in(&self, collection: &str) -> bool {
+        self.0.values().any(|operation| {
+            matches!(operation, ObjectOperation::Create(create) if create.collection == collection)
+        })
+    }
+
     /// The object these operations make.
     pub(super) fn object(&self) -> Object {
         let mut object = Object::default();

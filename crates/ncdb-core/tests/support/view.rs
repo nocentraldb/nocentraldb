@@ -158,6 +158,15 @@ impl Fold for Reference {
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         self.objects.entry(object).or_default().apply(operation);
     }
+
+    fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str) {
+        self.fields
+            .remove(&(object, collection.to_owned(), field.to_owned()));
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        self.objects.remove(&object);
+    }
 }
 
 /// The names of the tables and indexes of a database file, by kind.
