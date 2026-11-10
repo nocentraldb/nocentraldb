@@ -592,7 +592,7 @@ One line each; the decisions below give the options that remain.
 
 ## Conflicts with GENESIS.md and RFC 0001
 
-This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The owner ruled on each (Carsten, 2026-11-08). NOC-47 made the changes they need in other documents, and RFC 0002 records its part in [Amendment 4](0002-change-and-log-format.md#amendment-4-following-rfc-0007).
+This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The owner ruled on each (Carsten, 2026-11-08). NOC-47 made the changes they need in other documents, and RFC 0002 states its part in [What the relay can see, and what it cannot](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot) and [On the relay](0002-change-and-log-format.md#on-the-relay).
 
 1. **The relay sees more than RFC 0002's list.** RFC 0001, GENESIS.md, use case 2 and the FAQ link to [RFC 0002's list](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot). [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show (RFC 0008, M11), and what the server sees, with the AWS setting each item depends on. Ruled: this RFC separates what the relay learns from what the server sees, as above. Resolved (NOC-47): RFC 0002's list links to this RFC's, and RFC 0001, GENESIS.md, use case 2 and the FAQ link both.
 2. **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Accepted. Resolved (NOC-47): use case 4 says "reads at no cost" and what the writes cost, with a link to [What it costs](#what-it-costs).
