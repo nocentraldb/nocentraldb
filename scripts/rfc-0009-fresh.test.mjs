@@ -299,7 +299,7 @@ test("accounts: RFC 0010's names, and the per-database account key", () => {
     "confirm",
     "invalidCertificate",
     "alreadyMember",
-    "unknownError",
+    "unknown_error",
     "Notice",
     "NoticeCode",
   ]) {
@@ -307,10 +307,10 @@ test("accounts: RFC 0010's names, and the per-database account key", () => {
   }
 });
 
-test("sync: one relay per database, and an unknown relay code is unknownError", () => {
+test("sync: one relay per database, and an unknown relay code is unknown_error", () => {
   // S16; NOC-146
   const sync = part("sync-and-status");
-  holds(sync, [/relay per space/, /`unknownError`/], "Sync and status");
+  holds(sync, [/relay per space/, /`unknown_error`/], "Sync and status");
   assert.match(line(sync, "| `error` |"), /never reaches the app/);
 });
 
@@ -378,5 +378,14 @@ test("modelRefused names an older lock the newest one descends from, as step 3 d
   assert.match(
     line(part("errors"), "| `modelRefused` |"),
     /an older lock the newest one descends from/,
+  );
+});
+
+test("the fixed code for an unlisted relay error is spelled as the protocol spells codes", () => {
+  // NOC-146, as #168 built it
+  assert.doesNotMatch(read(RFC), /unknownError/);
+  assert.match(
+    line(part("the-rust-sdk"), "- **The sync report.**"),
+    /`unknown_error`/,
   );
 });
