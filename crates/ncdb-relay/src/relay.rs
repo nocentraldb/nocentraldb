@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, SHRED, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -210,11 +210,26 @@ impl<S: RelayStore> Relay<S> {
     ) -> Result<Vec<Effect>, ErrorCode> {
         let header = change.header();
         if header.kind == Kind::SEALED {
+            let Some(row) = self.store.member(space, header.author).await? else {
+                return Err(ErrorCode::AuthorNotMember);
+            };
+            let row = record::decode(&row).map_err(|_| ErrorCode::Unavailable)?;
+            seal::verify(change, &row.state.key).map_err(|_| ErrorCode::BadSignature)?;
+            if !row.admits(header) {
+                return Err(ErrorCode::AuthorNotMember);
+            }
             return Ok(Vec::new());
         }
         let body = control_body(change)?;
-        if let Entry::Genesis(_) = body.entry {
-            return Err(ErrorCode::SpaceExists);
+        match body.entry {
+            Entry::Genesis(_) => return Err(ErrorCode::SpaceExists),
+            // The relay cannot yet check a shred entry's sign-off by a
+            // second account, which RFC 0007 requires: it keeps the entry
+            // out until it can.
+            Entry::Other { entry_type, .. } if entry_type == SHRED => {
+                return Err(ErrorCode::UnsupportedSuite);
+            }
+            _ => {}
         }
         let mut controls = self.controls(space).await?;
         controls.push(change.clone());
