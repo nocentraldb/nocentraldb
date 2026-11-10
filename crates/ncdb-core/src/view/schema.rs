@@ -5,9 +5,10 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 
-use super::Error;
 use super::model::{Direction, Field, Index, Model, Scope};
+use super::{Error, stored_lock};
 use crate::basic::Kind;
+use crate::model_lock::ModelLock;
 
 /// The tables every view has, whatever its model.
 const FIXED: &str = "
@@ -110,36 +111,77 @@ fn column_type(field: &Field) -> &'static str {
     }
 }
 
+/// Whether the view's tables match the model the view is opened with.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Fit {
+    /// They do: new tables, or tables folded by this model.
+    Current,
+    /// They were folded by another model, which the lock check accepted:
+    /// the log must be folded again (RFC 0006, "Rebuilding the view").
+    Refold,
+}
+
+/// A value of `meta`, when it holds one.
+pub(super) fn meta(conn: &Connection, key: &str) -> Result<Option<String>, Error> {
+    let value = conn
+        .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
+        .optional()?;
+    Ok(value)
+}
+
 /// Opens the view's tables on `conn`: creates them in a new database, and
-/// otherwise checks that `meta` names this format and this model.
-pub(super) fn open(conn: &Connection, model: &Model) -> Result<(), Error> {
+/// otherwise checks that `meta` names this format, and `lock` against the
+/// lock the database was last opened with (`super::stored_lock`). Says
+/// whether the tables were folded by `model`.
+pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result<Fit, Error> {
     conn.execute_batch(FIXED)?;
     let hash = hex(&model.hash());
-    let meta = |key: &str| -> Result<Option<String>, Error> {
-        let value = conn
-            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |r| r.get(0))
-            .optional()?;
-        Ok(value)
-    };
-    match meta("format")? {
+    match meta(conn, "format")? {
         None => {
             conn.execute(
                 "INSERT INTO meta (key, value) VALUES ('format', ?1), ('model', ?2)",
                 params![super::View::FORMAT.to_string(), hash],
             )?;
-            create(conn, model)
+            stored_lock::store(conn, lock)?;
+            create(conn, model)?;
+            Ok(Fit::Current)
         }
         Some(format) => {
             let found = format.parse().map_err(|_| Error::Corrupt("meta format"))?;
             if found != super::View::FORMAT {
                 return Err(Error::Format { found });
             }
-            if meta("model")?.as_deref() != Some(hash.as_str()) {
-                return Err(Error::Model);
-            }
-            Ok(())
+            let current = meta(conn, "model")?.as_deref() == Some(hash.as_str());
+            stored_lock::check(conn, lock, current)?;
+            Ok(match current {
+                true => Fit::Current,
+                false => Fit::Refold,
+            })
         }
     }
+}
+
+/// Drops the tables of every collection, with their indexes, and the
+/// objects' states, and creates the tables of `model` in their place,
+/// empty: the start of folding the log again. `meta` then names `model`.
+pub(super) fn replace(conn: &Connection, model: &Model) -> Result<(), Error> {
+    let tables: Vec<String> = conn
+        .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table'
+             AND (name LIKE 'c\\_%' ESCAPE '\\' OR name LIKE 'fs\\_%' ESCAPE '\\')",
+        )?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for table in tables {
+        conn.execute_batch(&format!("DROP TABLE {};", quote(&table)))?;
+    }
+    conn.execute("DELETE FROM objects", [])?;
+    create(conn, model)?;
+    conn.execute(
+        "UPDATE meta SET value = ?1 WHERE key = 'model'",
+        [hex(&model.hash())],
+    )?;
+    Ok(())
 }
 
 /// Creates the tables of every collection and the SQLite index of every
