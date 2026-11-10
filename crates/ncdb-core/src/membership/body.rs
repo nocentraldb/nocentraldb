@@ -8,11 +8,11 @@
 //! Key 2 (a clock) and keys 4 to 7 are reserved; keys 8 to 63 are "must
 //! understand", keys from 64 up "may ignore", and kept to be encoded again.
 //! This module reads the genesis (entry type 0), the membership entry
-//! (entry type 1) and the key envelope (entry type 2, [`KeyEnvelope`]). The
-//! bodies of entry types 3 to 6 are other tickets'; it keeps their fields as
-//! they are. A higher entry type, or a key this core
-//! does not understand, makes the body [`BodyError::NotUnderstood`]: the
-//! change is kept, parked.
+//! (entry type 1), the key envelope (entry type 2, [`KeyEnvelope`]) and the
+//! key chain entry (entry type 3, [`KeyChainEntry`]). The bodies of entry
+//! types 4 to 6 are other tickets'; it keeps their fields as they are. A
+//! higher entry type, or a key this core does not understand, makes the
+//! body [`BodyError::NotUnderstood`]: the change is kept, parked.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -27,6 +27,7 @@ use crate::seal;
 use super::certificate::Certificate;
 use super::fields::{self, Fields};
 use super::genesis::Genesis;
+use super::key_chain::KeyChainEntry;
 
 /// The depth of a control body in its change: inside the header's key 6.
 const BODY_DEPTH: usize = 3;
@@ -99,10 +100,12 @@ pub enum Entry {
     Membership(MembershipEntry),
     /// Entry type 2: one generation's space key, wrapped to one member.
     KeyEnvelope(KeyEnvelope),
-    /// Entry types 3 to 6, which this module does not read: their fields
+    /// Entry type 3: a rotation to a new generation.
+    KeyChain(KeyChainEntry),
+    /// Entry types 4 to 6, which this module does not read: their fields
     /// from key 8 up, as they are.
     Other {
-        /// The entry type, 3 to 6.
+        /// The entry type, 4 to 6.
         entry_type: u64,
         /// The fields of the entry type.
         fields: BTreeMap<u64, Value>,
@@ -198,6 +201,7 @@ impl ControlBody {
             Entry::Genesis(_) => GENESIS,
             Entry::Membership(_) => MEMBERSHIP,
             Entry::KeyEnvelope(_) => KEY_ENVELOPE,
+            Entry::KeyChain(_) => KEY_CHAIN,
             Entry::Other { entry_type, .. } => *entry_type,
         }
     }
@@ -236,6 +240,7 @@ impl ControlBody {
                         cbor::Key::Text(_) => None,
                     }),
             ),
+            Entry::KeyChain(chain) => entries.extend(chain.fields()),
             Entry::Other { fields, .. } => entries.extend(fields.clone()),
         }
         entries.extend(self.extensions.clone());

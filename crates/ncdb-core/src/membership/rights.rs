@@ -28,7 +28,7 @@ pub(crate) fn needed(node: &Node) -> Role {
                 Action::Add { .. } => Role::Admin,
             }
         }
-        Entry::Membership(_) | Entry::KeyEnvelope(_) => Role::Admin,
+        Entry::Membership(_) | Entry::KeyEnvelope(_) | Entry::KeyChain(_) => Role::Admin,
         Entry::Other { entry_type, .. } => match *entry_type {
             ACKNOWLEDGEMENT => Role::Reader,
             PERSON_KEY | SHRED => Role::Writer,
