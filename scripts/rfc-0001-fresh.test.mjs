@@ -183,3 +183,11 @@ test("the FAQ says the recovery code makes a new account key under the same acco
   assert.ok(links(sentence, "0010-accounts.md#the-recovery-code"));
   assert.ok(links(sentence, "0003-keys-and-cryptography.md#the-account-key"));
 });
+
+test("the browser bullet has one pair of parentheses for its links", () => {
+  const bullet = line(
+    part("what-it-is-not"),
+    "- **Not a durable store in every browser.**",
+  );
+  assert.doesNotMatch(bullet, /\)\) \(\[/);
+});
