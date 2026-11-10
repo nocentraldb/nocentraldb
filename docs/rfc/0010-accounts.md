@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided. GENESIS.md reserves crypto, key handling, the wire and on-disk formats and public API names for the owner ([What has to come back through me](../../factory/GENESIS.md#what-has-to-come-back-through-me)), and every choice in this RFC falls under one of them. The owner decided every point as proposed, on NOC-115 (Carsten, 2026-11-10), and the text below describes those choices. Some of them change RFC 0003, RFC 0008, RFC 0009 and the FAQ; [Changes to the decided RFCs](#changes-to-the-decided-rfcs) lists what changes, and those texts follow in their own pull requests. Nothing here is built.
+**Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-10).
 
 **Out of scope.** How a work order is claimed and signed off, beyond naming the account key as the key that signs (a later RFC on work orders). Passkeys and how the browser unlocks its keys (RFC 0003 leaves them out). Accounts shared by several people, such as an organisation with many administrators, beyond what one account with several devices gives. Deleting a space. A directory that finds an account by name or address: there is none, and people compare fingerprints.
 
@@ -217,10 +217,7 @@ Some choices change other texts. Each change is written into that text in its ow
 
 ## History
 
-- **2026-11-10** · NOC-107 · Draft 0.1: the account key and its identity, the recovery code, pairing a device or an agent, linking per-database accounts, losing a device, and what a certificate means for RFC 0008, with twelve open questions for the owner (#115).
-- **2026-11-10** · NOC-107 · Follows RFC 0003's and RFC 0009's rewrites: links their decisions by their new headings, and cites RFC 0003's decisions 16 and 17 for the per-database account key and its key file (#115).
-- **2026-11-10** · NOC-115 · Decided: the owner decided every point as proposed (Carsten, 2026-11-10). The changes to RFC 0003, 0008, 0009 and the FAQ are listed (#115).
-- **2026-11-10** · NOC-107 · Reads as one design, as the owner asked on #115 (Carsten, 2026-11-10): each decision, its reasons and the options not taken stand in the section they belong to. No decision changed (#115).
+- **2026-11-10** · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165).
 
 ## How this RFC is tested
 
