@@ -21,39 +21,9 @@ const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
-/** The amendment of each RFC that withdraws groups. */
-// Every RFC that withdrew groups has since folded the withdrawal into its
-// text (NOC-100, NOC-101), so none keeps an amendment that does.
-const AMENDMENTS = [];
-const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
 const WITHDRAWING =
   /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
 const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
-
-/** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
-const slug = (heading) =>
-  heading
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/\s/g, "-");
-
-/** The text under the heading whose anchor is `anchor`, up to the next heading of the same or a higher level. */
-const section = (markdown, anchor) => {
-  const lines = markdown.split("\n");
-  const start = lines.findIndex(
-    (line) =>
-      /^#{1,6} /.test(line) && slug(line.replace(/^#+ /, "")) === anchor,
-  );
-  if (start < 0) return undefined;
-  const level = lines[start].match(/^#+/)[0].length;
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => {
-    const m = line.match(/^(#+) /);
-    return m && m[1].length <= level;
-  });
-  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
-};
 
 /** The text of the decision `id` (such as "M10"), up to the next decision or heading. */
 const decision = (markdown, id) => {
@@ -137,29 +107,6 @@ const units = (markdown) => {
   }
   return result;
 };
-
-for (const { path, number } of AMENDMENTS) {
-  const anchor = anchorOf(number);
-
-  test(`${path} announces Amendment ${number}, which withdraws groups, in a dated NOC-76 changelog line`, () => {
-    const top = read(path).split(/^## /m)[0];
-    assert.match(
-      top,
-      new RegExp(
-        `^- \\*\\*2026-11-09\\*\\* · NOC-76 · .*\\(#${anchor}\\)`,
-        "m",
-      ),
-      `no changelog line for NOC-76 linking to #${anchor} above the first section`,
-    );
-  });
-
-  test(`${path} has Amendment ${number}, which records the owner's decision and that groups may return through a later RFC`, () => {
-    const body = section(read(path), anchor);
-    assert.ok(body, `no section #${anchor}`);
-    assert.match(body, /\(Carsten, 2026-11-09\)/, "no owner and date");
-    assert.match(body, /later RFC/, "does not say groups may come back");
-  });
-}
 
 for (const [path, id] of [
   [RFC_0008, "M10"],

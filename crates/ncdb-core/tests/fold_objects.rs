@@ -1,5 +1,5 @@
 //! The fold of creates and deletes (NOC-39; RFC 0004, "Two creates of one
-//! object id" and Amendment 1, "Creating and deleting an object"): a
+//! object id" and "Creating and deleting an object"): a
 //! received change's create puts the object into the copy with its
 //! collection, a delete sets its deleted flag, and a link to it resolves
 //! from both. Operations that do not decode park with their reason, field

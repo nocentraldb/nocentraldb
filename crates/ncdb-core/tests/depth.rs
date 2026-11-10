@@ -1,7 +1,7 @@
 //! How deeply values may nest in a change: at most `cbor::MAX_DEPTH`,
 //! counted from the frame. Deeper input is an error, never a stack overflow.
 //!
-//! The limit is RFC 0002 Amendment 6's, decided by the owner in NOC-24
+//! The limit is RFC 0002's ("The CBOR profile"), decided by the owner in NOC-24
 //! ("How deeply may a CBOR value nest in a change?").
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
@@ -132,7 +132,7 @@ fn a_frame_100000_deep_is_an_error_not_a_crash() {
     assert!(too_deep(Header::decode(&header_bytes).unwrap_err()));
 }
 
-// RFC 0002 Amendment 6's examples N1 and N2, written by
+// RFC 0002's examples N1 and N2 ("Byte-exact examples"), written by
 // docs/rfc/vectors/0002/generate.py with cbor2, independently of this crate.
 const N1: &str = include_str!("../../../docs/rfc/vectors/0002/N1.hex");
 const N2: &str = include_str!("../../../docs/rfc/vectors/0002/N2.hex");

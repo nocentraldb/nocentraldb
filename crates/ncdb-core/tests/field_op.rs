@@ -1,4 +1,5 @@
-//! Field operations in a change (RFC 0004 Amendment 1): the operations of
+//! Field operations in a change (RFC 0004, "How field operations travel in
+//! a change"): the operations of
 //! basic values, sets and links encode to exactly the bytes of examples E1
 //! to E9 and decode back to the same operations. The lists of operation ids
 //! are written sorted by bytes, without repeats, and `[]` when empty

@@ -1,4 +1,4 @@
-//! A reference into another space, as RFC 0004 Amendment 4 defines it: the
+//! A reference into another space, as RFC 0004 defines it ("References"): the
 //! field type `ncdb/ref`, rule version 1. It is a basic value whose value
 //! is the target's space id and object id, written `[space id, object id]`,
 //! and it merges by the code of basic values. It has no merge rule of its
@@ -55,7 +55,7 @@ pub fn target(value: &Value) -> Option<Target> {
 }
 
 /// What a member's copies hold of a reference's target (RFC 0004,
-/// Amendment 4, "Resolution"). RFC 0005's D20 names the states for the app
+/// "How a reference resolves"). RFC 0005's D20 names the states for the app
 /// `"ok"`, `"notAccessible"` and `"missing"`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {

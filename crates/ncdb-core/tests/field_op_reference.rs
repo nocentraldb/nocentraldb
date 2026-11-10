@@ -1,4 +1,4 @@
-//! A reference in a change (RFC 0004 Amendment 4, "The value and its
+//! A reference in a change (RFC 0004, "The value and its
 //! encoding"): `ncdb/ref` travels as a set (1) whose value is
 //! `[space id, object id]`, and encodes to exactly the bytes of examples
 //! E15 to E17 and decodes back to the same operations. Add, remove and

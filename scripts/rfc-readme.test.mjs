@@ -6,7 +6,7 @@
 // checks that each rule is there and where it points; whether the wording is
 // right is the review of the PR.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -78,4 +78,19 @@ test("CONTRIBUTING.md names the same ends, without amendments", () => {
     contributing,
     /change to an RFC's text|change to the RFC's text/,
   );
+});
+
+test("every RFC is one complete text, so the README no longer says some are being rewritten", () => {
+  const rfcs = readdirSync(join(root, "docs/rfc")).filter((f) =>
+    /^\d{4}-.*\.md$/.test(f),
+  );
+  for (const file of rfcs) {
+    // NOC-105: not even a link text or its History names an amendment.
+    assert.doesNotMatch(
+      read(`docs/rfc/${file}`),
+      /Amendment/,
+      `${file} still names an amendment`,
+    );
+  }
+  assert.doesNotMatch(readme(), /being rewritten/);
 });

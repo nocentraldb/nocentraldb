@@ -1,4 +1,4 @@
-//! Field operations a member does not understand (RFC 0004 Amendment 1,
+//! Field operations a member does not understand (RFC 0004,
 //! "Operations a member does not understand"): an operation number the
 //! field's type does not define parks with "unknown operation" (E10), an
 //! unknown "must understand" argument with "unknown argument", malformed
@@ -243,7 +243,7 @@ fn an_item_that_is_not_a_32_byte_change_id_and_a_position_is_malformed() {
 
 #[test]
 fn a_value_outside_the_fields_kind_is_read_not_parked() {
-    // RFC 0004 Amendment 1, "The value": the field type decides how the
+    // RFC 0004, "The arguments of each operation", "The value": the field type decides how the
     // read shows it.
     let set = args(&[(1, Value::Unsigned(3)), (2, empty())]);
     let read = title().decode(&op("title", 1, Some(set)), origin());

@@ -1,4 +1,4 @@
-//! An index's `scope` in `model.lock.json` (RFC 0005, Amendment 3): written
+//! An index's `scope` in `model.lock.json` (RFC 0005, "Indexes"): written
 //! as `"space"` for an index declared with `scope: "space"`, and left out
 //! for an index that spans every space of the member (NOC-81).
 

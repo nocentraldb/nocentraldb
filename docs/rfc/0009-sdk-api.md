@@ -135,7 +135,7 @@ The calls on `tx`, and the operations they become ([RFC 0004, "Operation numbers
 | --- | --- | --- |
 | `nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf` | The value, such as `{ priority: 3 }`. `null` clears the field. | set (1). `replaces` names the winner and every conflict the copy holds ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). |
 | `nc.link` | The target's object id, or `null`. | set (1), as a basic value. |
-| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it (decision [S24](#s24-how-an-app-writes-a-reference)). | set (1), as a basic value ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). |
+| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it (decision [S24](#s24-how-an-app-writes-a-reference)). | set (1), as a basic value ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). |
 | `nc.set`, `nc.links` | `nc.add(...elements)` or `nc.remove(...elements)`. | add (2) per element, or remove (3) per element with `observed`, the tags of its additions the copy holds ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)). |
 | A plugin's type | What the plugin's write function returns. | The plugin's operations, 64 and up. |
 
@@ -221,7 +221,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 - **Basic values and single links:** `value` and `conflicts`, each conflict with its value, author member id and stamp. Conflicts whose value equals the winner's are left out, as RFC 0004 says.
 - **Sets and many links:** `elements`, and per element its `lostRemovals`, each with author and stamp.
 - **Links:** per target its `status`: `"ok"`, `"deleted"`, `"missing"` or `"wrongCollection"` ([RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution)).
-- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space); [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
+- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references); [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference.
 - **The object:** its collection and whether it is deleted, each a basic value with conflicts ([RFC 0004, "Two creates of one object id"](0004-merge-rules-basic-types.md#two-creates-of-one-object-id)).
 - **A field outside the kind:** `{ raw: value }`.
 
@@ -246,14 +246,14 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 
 There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)).
 
-**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query RFC 0006 allows. RFC 0005 and RFC 0006 are silent on it, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
+**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query such an index allows, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
 
 ```ts
 // in the schema: indexes: { openByPriority: nc.index(["status", "priority"], { equal: 1, scope: "space" }) }
 const mine = await project.find(model.tasks.indexes.openByPriority.equal("open").take(50));
 ```
 
-This needs an amendment to RFC 0005 (the option and its key in the lock) and to RFC 0006 (the index's columns); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs).
+RFC 0005 states the option and its key in the lock ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)), and RFC 0006 the index's columns ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs), point 1.
 
 **What a page does not promise,** as RFC 0006 says: a row that changes its indexed values between two pages may appear twice or not at all; there is no snapshot over many pages. A cursor holds plaintext field values, never leaves the device in the SDK's design, and prints as `[redacted]`; an app that puts it in a URL makes a copy the core cannot erase.
 
@@ -319,7 +319,7 @@ removal.notice; // "The removed member keeps its copy of everything it received 
 const members = await project.members.list(); // [{ id, account, kind, role, self }]
 ```
 
-- **An invitation is the joining member's public identity.** `db.invitation()` returns its member id, its two public keys, its member certificate and its account's fingerprint. Nothing in it is secret, and no key bytes reach the app ([RFC 0003, decision 12](0003-keys-and-cryptography.md#decisions-for-the-owner)). The app carries it to an admin by any channel: a link, a QR code, a message. RFC 0008 leaves this step out ("Invitations and public API names"), and RFC 0003 says only that the SDK takes the identity "from an invitation the new member accepted" (decision [S12](#s12-invitations)).
+- **An invitation is the joining member's public identity.** `db.invitation()` returns its member id, its two public keys, its member certificate and its account's fingerprint. Nothing in it is secret, and no key bytes reach the app ([RFC 0003, decision 12](0003-keys-and-cryptography.md#12-public-api-names)). The app carries it to an admin by any channel: a link, a QR code, a message. RFC 0008 leaves this step out ("Invitations and public API names"), and RFC 0003 says only that the SDK takes the identity "from an invitation the new member accepted" (decision [S12](#s12-invitations)).
 - **`members.add(invitation, { role })`** checks the certificate, writes the membership entry and the new member's key envelope, and returns a notice ([RFC 0003, "Sharing a space key with a new member"](0003-keys-and-cryptography.md#sharing-a-space-key-with-a-new-member)). When the account is new to this device, it fails with `unknownAccount` and the account's fingerprint, until the app passes `{ role, fingerprint }` after a person compared it, the way messaging apps compare safety numbers. `role` may be left out for an agent, which then joins as `"writer"` ([RFC 0008, decision M14](0008-membership.md#m14-the-default-role-of-an-agent)); for a device it is required. `members.add` also takes a list of invitations, which writes one entry and one envelope per member, so that an app adds several members to a space in one call.
 - **`members.setRole(memberId, role)`** raises or lowers a role; **`members.remove(memberId)`** removes a member and rotates the space key, as RFC 0003 requires. Both write a cutoff ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)). Re-granting a right a member lost rotates first ([RFC 0008, decision M5](0008-membership.md#m5-re-granting-a-right-a-member-lost)). Only an admin may call them; others get `notAllowed`.
 - **Roles** are `"reader"`, `"writer"` and `"admin"`, RFC 0008's working names, proposed as the public names (decision [S13](#s13-role-names)).
@@ -340,7 +340,7 @@ const result = await adhoc.get(model.tasks, copyOfTaskA);
 await project.update(model.tasks, taskA.$id, { status: result.status });
 ```
 
-- **`db.spaces.createAdHoc({ copy, personal, local })`** creates a space with a fresh key and copies the given objects into it as new objects ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). Personal fields are not copied unless `personal: true` ([RFC 0003, decision 11](0003-keys-and-cryptography.md#decisions-for-the-owner)), and then the person key is shared into the space. `local: true` keeps the space off the relay, for a sub-agent on the same machine. The notice says that the space limits what the sub-agent can decrypt, not what a process running as the same user can read.
+- **`db.spaces.createAdHoc({ copy, personal, local })`** creates a space with a fresh key and copies the given objects into it as new objects ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). Personal fields are not copied unless `personal: true` ([RFC 0003, decision 11](0003-keys-and-cryptography.md#11-personal-fields-in-an-ad-hoc-space)), and then the person key is shared into the space. `local: true` keeps the space off the relay, for a sub-agent on the same machine. The notice says that the space limits what the sub-agent can decrypt, not what a process running as the same user can read.
 - **A sub-agent** opens its own database with `nc.open({ model, lock, subAgent: true })`; its invitation carries no certificate, and the parent's `members.add` signs one with the parent's member key ([RFC 0008, decision M25](0008-membership.md#m25-who-signs-a-sub-agents-certificate)).
 - **The source of a copy.** RFC 0003 says the copies "keep a reference to their source", and no RFC says where. This RFC proposes that the parent's SDK keeps the mapping locally, which is all the parent needs to write results back; the sub-agent never learns the source's id.
 - **Deleting the ad-hoc space** is a local deletion while it stayed local (`adhoc.discard()`); a synced one waits for the RFC that deletes spaces.
@@ -482,9 +482,9 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `space.get` | Reads one object | [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app) |
-| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#decisions-for-the-owner) |
+| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
 | `space.outcome` | The outcome of one change on one field | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
-| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#decisions-for-the-owner) |
+| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
 | `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` | Link statuses | [RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution) |
 | `"ok"`, `"notAccessible"`, `"missing"` | Reference states | [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states) |
 | `"won"`, `"lost"`, `"replaced"`, `"applied"` | Outcomes | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
@@ -518,14 +518,14 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | `space.id` | The space id | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
 | `space.leave` | Removes this member from the space | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 | `space.discard` | Deletes a local ad-hoc space | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
-| `db.invitation`, `nc.invitation` | This member's invitation; parses one from text | [RFC 0003, decision 12](0003-keys-and-cryptography.md#decisions-for-the-owner) |
+| `db.invitation`, `nc.invitation` | This member's invitation; parses one from text | [RFC 0003, decision 12](0003-keys-and-cryptography.md#12-public-api-names) |
 | `space.members.add` | Adds members by invitation; options `role`, `fingerprint` | Sketched in [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `space.members.remove` | Removes a member and rotates the key | Sketched in [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `space.members.setRole` | Raises or lowers a role | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 | `space.members.list` | The members, with `id`, `account`, `kind`, `role`, `self` | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 | `"reader"`, `"writer"`, `"admin"` | Roles | [RFC 0008, decision M12](0008-membership.md#m12-public-names) |
 | `"device"`, `"agent"`, `"subAgent"` | Kinds of member | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
-| `notice` | What a membership call does not do: `{ code, text }` | [RFC 0003, decision 12](0003-keys-and-cryptography.md#decisions-for-the-owner) |
+| `notice` | What a membership call does not do: `{ code, text }` | [RFC 0003, decision 12](0003-keys-and-cryptography.md#12-public-api-names) |
 | `db.account.pair`, `db.account.removeMember` | Entry points of the accounts RFC | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
 
 **Sync and status:**
@@ -590,11 +590,11 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 2. **RFC 0006, deleted objects in indexes** (S9). RFC 0006 does not say whether a deleted object's row stays in an index. Under S9 A it does not, for example through a partial index. *Resolved in [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes).*
 3. **RFC 0005, `nc.Infer` for choices** (S5). RFC 0005 types a choice as the union of its options; S5 adds `nc.Unknown`. *Resolved in [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app).*
 4. **RFC 0005, personal field without a person.** RFC 0005 is silent on a personal field whose person link is unset. This RFC proposes `noPerson`; RFC 0005's "What the build checks" could say so. *Resolved in [RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks).*
-5. **RFC 0003, "How the SDK hides keys".** Its sketch uses the role `"editor"`, which is not one of RFC 0008's roles, and `db.spaces.create({ name: "Project A" })`, where the name has no place (S11). Use case 3 uses `"editor"` too. *Resolved in [RFC 0003, Amendment 3](0003-keys-and-cryptography.md#amendment-3-following-rfc-0009), and in use case 3 ([use cases](../use-cases.md#3-an-outside-agent-limited-to-one-space)).*
+5. **RFC 0003, "How the SDK hides keys".** Its sketch uses the role `"editor"`, which is not one of RFC 0008's roles, and `db.spaces.create({ name: "Project A" })`, where the name has no place (S11). Use case 3 uses `"editor"` too. *Resolved in [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys), and in use case 3 ([use cases](../use-cases.md#3-an-outside-agent-limited-to-one-space)).*
 6. **RFC 0001 and use case 4, `db.find` on a view.** The name stays, but views are not designed yet; until they are, the examples can only run on indexes. *Resolved in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and in use case 4 ([use cases](../use-cases.md#4-a-thousand-agent-queries-a-minute-reads-at-no-cost)).*
 7. **Use cases 6, 7 and 8.** `db.get(model.proposals, id)` reads through `db` instead of a space (S2); `db.subscribe(model.messages, { where: { to: me, read: false } }, ...)` filters without a declared index, which principle 6 rules out (S7); `db.insert` is `space.create` here; `nc.useLive` is not proposed. Use case 1 marks personal fields with `nc.string({ personal: true })`, which RFC 0005 decided as `.personal({ person })`. *Resolved in [use cases](../use-cases.md#part-2-what-you-keep) 6, 7 and 8, whose rich-text and stream calls stay sketches; use case 1 already used `.personal({ person })`.*
 8. **GENESIS.md, groups.** GENESIS.md says a group is "a list of members that the SDK expands". Under S14 A the SDK expands a list the app passes, but keeps no list of its own, so removing a person from a group is the app's loop over its spaces. *Resolved: groups were withdrawn by the owner (Carsten, 2026-11-09), and GENESIS.md's "Spaces" bullet no longer names them (decision [S14](#s14-groups)).*
-9. **RFC 0003, the source of a copy.** RFC 0003 says copies in an ad-hoc space keep a reference to their source and does not say where; this RFC keeps it on the parent only. *Resolved in [RFC 0003, Amendment 3](0003-keys-and-cryptography.md#amendment-3-following-rfc-0009).*
+9. **RFC 0003, the source of a copy.** RFC 0003 says copies in an ad-hoc space keep a reference to their source and does not say where; this RFC keeps it on the parent only. *Resolved in [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space).*
 10. **RFC 0008, invitations.** RFC 0008 leaves out how a new member's identity reaches an admin; S12 proposes it. RFC 0008's "What this RFC does not cover" could link here once decided. *Resolved in [RFC 0008, "What this RFC does not cover"](0008-membership.md#what-this-rfc-does-not-cover).*
 
 ## Open questions
@@ -697,7 +697,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-09): queries skip deleted objects, and `space.get` returns them with `$deleted: true`; the index does not hold them.
 
-Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#decisions-for-the-owner)), so `get` still finds the object to restore it.
+Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#4-object-deletion)), so `get` still finds the object to restore it.
 
 Not taken:
 
@@ -799,7 +799,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-10), on NOC-95: `path(dir)` for the database, the member key in the platform keystore, `key_file(path)` for a headless agent without one, and `in_memory()` for tests.
 
-Why: it works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one. RFC 0003 records the key file ([decision 16](0003-keys-and-cryptography.md#decisions-for-the-owner)).
+Why: it works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one. RFC 0003 records the key file ([decision 16](0003-keys-and-cryptography.md#16-where-the-member-key-lives)).
 
 Not taken:
 
@@ -810,7 +810,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-10), on NOC-95: each database draws its own account key once and keeps it next to the member key; `agent()` marks the member as an agent.
 
-Why: a person's devices are unrelated accounts until the accounts RFC (NOC-107) links them. RFC 0003 records it ([decision 17](0003-keys-and-cryptography.md#decisions-for-the-owner)).
+Why: a person's devices are unrelated accounts until the accounts RFC (NOC-107) links them. RFC 0003 records it ([decision 17](0003-keys-and-cryptography.md#17-the-account-key-before-the-accounts-rfc)).
 
 Not taken:
 

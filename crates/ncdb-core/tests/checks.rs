@@ -186,7 +186,8 @@ fn a_change_under_another_space_key_is_rejected_at_step_5_as_undecryptable() {
 }
 
 /// What B must do with a tampered frame: stop at the first step the
-/// tampered change fails, as RFC 0002 Amendment 1 orders them.
+/// tampered change fails, as RFC 0002 orders them ("What a member does with a change it
+/// receives").
 fn expected(original: &Header, tampered: &[u8]) -> Result<State, ReceiveError> {
     let change = match Change::decode(tampered) {
         Ok(change) => change,

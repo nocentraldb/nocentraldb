@@ -129,7 +129,7 @@ test("the new text carries no amendment mark, and the status names S19 to S24", 
       assert.doesNotMatch(line, /\(Amendment \d/, line.slice(0, 60));
     }
   }
-  assert.doesNotMatch(rfc, /^## Amendment 5/m);
+  assert.doesNotMatch(rfc, /^## Amendment \d/m);
   const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
   assert.match(status, /S19 to S24.*Carsten, 2026-11-10/);
   assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-106 · .*\(#\d+\)\.?$/m);
