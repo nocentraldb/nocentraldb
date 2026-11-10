@@ -619,7 +619,7 @@ Added on 2026-11-09 for NOC-47. [RFC 0007](0007-relay.md) defines the relay's pr
 
 ## Amendment 5: the writer's model in the payload
 
-Added on 2026-11-09 for NOC-40. [RFC 0005](0005-schema-and-model-lock.md) gives every app a `model.lock.json` with a `model.id`, 128 random bits that name the model's lineage, and a `model.version`, one higher for each build that changes the model. The owner decided two of its decisions as recommended (Carsten, 2026-11-08; [RFC 0005, "Decisions for the owner"](0005-schema-and-model-lock.md#decisions-for-the-owner)):
+Added on 2026-11-09 for NOC-40. [RFC 0005](0005-schema-and-model-lock.md) gives every app a `model.lock.json` with a `model.id`, 128 random bits that name the model's lineage, and a `model.version`, one higher for each build that changes the model. The owner decided two of its decisions as recommended (Carsten, 2026-11-08; [RFC 0005, "Decisions for the owner"](0005-schema-and-model-lock.md#decisions)):
 
 - **RFC 0005's D10 A.** The writer's model version travels in the payload as a "may ignore" key, so that an old client can report which model version it needs to read its parked changes.
 - **RFC 0005's D13 C.** Both of its parts. Part A: a space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model; RFC 0008 carries it out in the genesis's key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)). Part B: each change carries its writer's `model.id` with the model version of D10, in the same "may ignore" key, and a member parks every change of another model, whole. This amendment carries out part B.

@@ -238,3 +238,46 @@ describe("what model build refuses before the lock", () => {
     expect(() => draft(model)).toThrow(/tasks\.title: not a field/);
   });
 });
+
+describe("indexes", () => {
+  const indexes = (
+    collection: Parameters<typeof nc.model>[0][string],
+  ): unknown =>
+    (
+      draft(nc.model({ tasks: collection })) as {
+        collections: { tasks: { indexes: unknown } };
+      }
+    ).collections.tasks.indexes;
+
+  test('scope: "space" is described as the scope, and an index without it has no scope', () => {
+    expect(
+      indexes(
+        nc.collection(
+          { title: nc.string(), rank: nc.int() },
+          {
+            indexes: {
+              inSpace: nc.index(["title", "rank"], {
+                equal: 1,
+                scope: "space",
+              }),
+              everywhere: nc.index(["rank"]),
+            },
+          },
+        ),
+      ),
+    ).toEqual({
+      inSpace: {
+        equal: 1,
+        fields: [
+          { field: "title", direction: "asc" },
+          { field: "rank", direction: "asc" },
+        ],
+        scope: "space",
+      },
+      everywhere: {
+        equal: 0,
+        fields: [{ field: "rank", direction: "asc" }],
+      },
+    });
+  });
+});

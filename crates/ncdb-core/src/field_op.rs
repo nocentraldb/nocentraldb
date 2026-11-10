@@ -1,6 +1,7 @@
-//! How the operations of basic values, sets and links travel in a change,
-//! as RFC 0004 Amendment 1 defines it: the operation number in key 4 of
-//! RFC 0002's operation map, the arguments as a map in key 5.
+//! How the operations of basic values, sets, links and references travel
+//! in a change, as RFC 0004 Amendments 1 and 4 define it: the operation
+//! number in key 4 of RFC 0002's operation map, the arguments as a map in
+//! key 5.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -13,11 +14,12 @@ use crate::ids::{ChangeId, MemberId, ObjectId, OperationId};
 use crate::link::{Link, Links};
 use crate::log::OperationParkReason;
 use crate::object::{Create, ObjectOperation};
+use crate::reference::Reference;
 use crate::set::{Action, Edit, Set};
 
 /// Operation number 0: create the object (RFC 0002).
 pub const CREATE: u64 = Operation::CREATE;
-/// Operation number 1: set, on a basic value or a link.
+/// Operation number 1: set, on a basic value, a link or a reference.
 pub const SET: u64 = 1;
 /// Operation number 2: add, on a set or links.
 pub const ADD: u64 = 2;
@@ -148,6 +150,16 @@ impl Encoding for BasicValue {
 }
 
 impl Encoding for Link {
+    fn arguments(&self, op: &Write) -> (u64, Value) {
+        write_arguments(op)
+    }
+
+    fn decode(&self, operation: &Operation, origin: Origin) -> Result<Write, OperationParkReason> {
+        decode_write(operation, origin)
+    }
+}
+
+impl Encoding for Reference {
     fn arguments(&self, op: &Write) -> (u64, Value) {
         write_arguments(op)
     }

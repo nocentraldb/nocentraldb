@@ -17,8 +17,8 @@ use std::fmt;
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, params_from_iter};
 
-use super::fold::sql_value;
-use super::model::{Direction, Index, Scope};
+use super::fold::{reference_sql, sql_value};
+use super::model::{Direction, Field, Index, Scope};
 use super::schema::{index_columns, index_name, prefix, rows};
 use super::{Error, View};
 use crate::cbor::Value;
@@ -225,7 +225,8 @@ impl View {
 
     /// One page of the declared index `index` of `collection`, which spans
     /// every space: the rows whose equality prefix holds `equal`, after
-    /// `after`, at most `limit`.
+    /// `after`, at most `limit`. Each value of `equal` is written as its
+    /// field holds it: a reference as its `[space id, object id]`.
     pub fn page(
         &self,
         collection: &str,
@@ -277,9 +278,17 @@ impl View {
         if limit == 0 || limit > View::MAX_PAGE {
             return Err(Error::Query(QueryError::PageSize));
         }
+        // Each equality value as its key's column holds it.
+        let key = |(value, (field, _)): (&Value, &(String, Direction))| match self
+            .model
+            .field(&index.collection, field)
+        {
+            Some(Field::Ref(_)) => reference_sql(value),
+            _ => sql_value(value.clone()),
+        };
         let equal: Vec<Sql> = space
             .into_iter()
-            .chain(equal.iter().cloned().map(sql_value))
+            .chain(equal.iter().zip(&index.keys).map(key))
             .collect();
         let hash = self.model.hash();
         let fixed = prefix(index);

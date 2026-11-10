@@ -201,30 +201,20 @@ impl Resolved {
     }
 
     /// RFC 0008's membership verdict for a sealed change ("Sealed
-    /// changes"), from its header alone: whether its author holds an
-    /// accepted grant of a role that writes, whose from generation is the
-    /// change's key generation or one it descends from in the generation
-    /// graph, such that its author sequence is at most the cutoff of every
-    /// accepted revocation of the right to write that the grant did not
-    /// see.
+    /// changes"), from its header alone: [`MemberState::admits`] of its
+    /// author, over this space's generation graph.
     pub fn admits(&self, header: &Header) -> bool {
-        let Some(state) = self.members.0.get(&header.author) else {
-            return false;
-        };
-        let writes = |role: Option<Role>| role >= Some(Role::Writer);
-        state.grants.iter().any(|grant| {
-            let seen = self.seen.get(&grant.change);
-            writes(Some(grant.role))
-                && grant
-                    .from_generation
-                    .is_some_and(|from| self.descends(header.key_generation, from))
-                && state
-                    .revocations
-                    .iter()
-                    .filter(|r| !writes(r.role))
-                    .filter(|r| !seen.is_some_and(|seen| seen.contains(&r.change)))
-                    .all(|r| header.sequence <= r.cutoff)
+        self.members.0.get(&header.author).is_some_and(|state| {
+            state.admits(header, &self.seen, |generation, from| {
+                self.descends(generation, from)
+            })
         })
+    }
+
+    /// For each accepted grant, the accepted revocations of its subject in
+    /// its causal past.
+    pub fn seen(&self) -> &BTreeMap<ChangeId, BTreeSet<ChangeId>> {
+        &self.seen
     }
 
     /// The canonical bytes of the state: equal states, equal bytes.

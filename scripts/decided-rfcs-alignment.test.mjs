@@ -267,7 +267,7 @@ test("every relative link in the changed documents resolves, anchors included", 
 });
 
 // pm's additions to NOC-35 (2026-11-09): use case 1's sample uses RFC 0005's
-// schema, RFC 0005 quotes RFC 0001's new wording (its Amendment 2), and RFC
+// schema, RFC 0005 quotes RFC 0001's new wording on personal fields, and RFC
 // 0004 Amendment 2 parks a create that carries key 5, as the owner decided.
 const RFC_0004 = "docs/rfc/0004-merge-rules-basic-types.md";
 const RFC_0005 = "docs/rfc/0005-schema-and-model-lock.md";
@@ -309,10 +309,9 @@ const amendment = (markdown, n, ticket) => {
   return section(markdown, heading.slice(3));
 };
 
-test("RFC 0005 Amendment 2 quotes RFC 0001's new wording on personal fields and decides nothing", () => {
+// RFC 0005 carries this in its text since NOC-101 folded its amendments in.
+test("RFC 0005 quotes RFC 0001's new wording on personal fields", () => {
   const rfc = read(RFC_0005);
-  const body = amendment(rfc, 2, "NOC-35");
-  assert.match(body, /decides nothing/, "Amendment 2 must decide nothing");
   const personal = section(rfc, "Personal fields");
   assert.ok(
     !/says any field can be marked as personal/.test(personal),

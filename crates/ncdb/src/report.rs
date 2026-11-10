@@ -8,7 +8,7 @@
 
 use std::fmt::Write;
 
-use ncdb_core::model_lock::{Collection, Field, Index, Kind, ModelLock, Person, Refusal};
+use ncdb_core::model_lock::{Collection, Field, Index, ModelLock, Person, Refusal, Scope};
 
 /// The width of the name column in a field's line.
 const NAME: usize = 17;
@@ -147,7 +147,11 @@ fn collection_lines(name: &str, old: &Collection, new: &Collection) -> Vec<Strin
         };
         match old.indexes.get(index_name) {
             None => lines.push((4, index_name.clone(), line('+'))),
-            Some(was) if was.fields != index.fields || was.equal != index.equal => {
+            Some(was)
+                if was.fields != index.fields
+                    || was.equal != index.equal
+                    || was.scope != index.scope =>
+            {
                 lines.push((4, index_name.clone(), line('~')))
             }
             Some(_) => {}
@@ -160,10 +164,11 @@ fn collection_lines(name: &str, old: &Collection, new: &Collection) -> Vec<Strin
     lines.into_iter().map(|(_, _, line)| line).collect()
 }
 
-/// A new field: its type, the collections it links to, whom it is about.
+/// A new field: its type, the collections it links or refers to, whom it
+/// is about.
 fn describe(collection: &str, field: &Field) -> String {
     let mut text = field.kind.describe();
-    if let Kind::Link(targets) | Kind::Links(targets) = &field.kind {
+    if let Some(targets) = field.kind.targets() {
         let _ = write!(text, " -> {}", targets.join(", "));
     }
     match &field.personal {
@@ -176,7 +181,7 @@ fn describe(collection: &str, field: &Field) -> String {
     text
 }
 
-/// `status, priority; equal 1` or `priority desc`.
+/// `status, priority; equal 1`, `priority desc` or `rank; scope space`.
 fn index_summary(index: &Index) -> String {
     let fields: Vec<String> = index
         .fields
@@ -189,6 +194,9 @@ fn index_summary(index: &Index) -> String {
     let mut text = fields.join(", ");
     if index.equal > 0 {
         let _ = write!(text, "; equal {}", index.equal);
+    }
+    if index.scope == Scope::Space {
+        text.push_str("; scope space");
     }
     text
 }

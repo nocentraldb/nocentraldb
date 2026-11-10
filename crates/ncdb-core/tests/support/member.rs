@@ -109,10 +109,12 @@ impl Checks for Control {
 }
 
 /// A fold stub: knows two collections, the first with one field, records
-/// the field operations it folded, and keeps the objects of the copy.
+/// the field operations it folded, each with the field it folded into, and
+/// keeps the objects of the copy.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Recorder {
     pub folded: BTreeSet<OperationId>,
+    pub fields: BTreeMap<OperationId, (ObjectId, String, String)>,
     pub objects: BTreeMap<ObjectId, Object>,
 }
 
@@ -125,13 +127,27 @@ impl Fold for Recorder {
         collection == COLLECTION && field == FIELD
     }
 
-    fn fold(&mut self, origin: Origin, _operation: &Operation) -> Result<(), OperationParkReason> {
+    fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason> {
         self.folded.insert(origin.id);
+        let field = operation.field.clone().expect("a field operation");
+        let target = (operation.object, operation.collection.clone(), field);
+        self.fields.insert(origin.id, target);
         Ok(())
     }
 
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         self.objects.entry(object).or_default().apply(operation);
+    }
+
+    fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str) {
+        let target = (object, collection.to_owned(), field.to_owned());
+        self.fields.retain(|_, folded_into| *folded_into != target);
+        let fields = &self.fields;
+        self.folded.retain(|id| fields.contains_key(id));
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        self.objects.remove(&object);
     }
 }
 

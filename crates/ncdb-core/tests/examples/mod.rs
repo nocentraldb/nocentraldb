@@ -1,5 +1,6 @@
-//! The byte-exact examples of RFC 0004 Amendment 1 ("Byte-exact examples"),
-//! with the ids, members and types they use. The vectors are written by
+//! The byte-exact examples of RFC 0004 Amendment 1 ("Byte-exact examples")
+//! and Amendment 4 (E15 to E17), with the ids, members and types they use.
+//! The vectors are written by
 //! `docs/rfc/vectors/0004/generate.py` with cbor2, independently of this
 //! crate; include_str! puts them into the test binary, so the tests also
 //! run on wasm32, where they cannot read files.
@@ -13,8 +14,9 @@ use ncdb_core::cbor::Value;
 use ncdb_core::change::Operation;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field_op::Origin;
-use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId};
-use ncdb_core::link::{Link, Links};
+use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
+use ncdb_core::link::{Link, Links, Target};
+use ncdb_core::reference::{self, Reference};
 use ncdb_core::set::{Action, Edit, Set};
 
 pub const E1: &str = include_str!("../../../../docs/rfc/vectors/0004/E1.hex");
@@ -31,6 +33,9 @@ pub const E11: &str = include_str!("../../../../docs/rfc/vectors/0004/E11.hex");
 pub const E12: &str = include_str!("../../../../docs/rfc/vectors/0004/E12.hex");
 pub const E13: &str = include_str!("../../../../docs/rfc/vectors/0004/E13.hex");
 pub const E14: &str = include_str!("../../../../docs/rfc/vectors/0004/E14.hex");
+pub const E15: &str = include_str!("../../../../docs/rfc/vectors/0004/E15.hex");
+pub const E16: &str = include_str!("../../../../docs/rfc/vectors/0004/E16.hex");
+pub const E17: &str = include_str!("../../../../docs/rfc/vectors/0004/E17.hex");
 
 pub fn hex(text: &str) -> Vec<u8> {
     let text: String = text.split_whitespace().collect();
@@ -48,6 +53,12 @@ pub fn to_hex(bytes: &[u8]) -> String {
 pub const T1: ObjectId = ObjectId([0x11; 16]);
 /// Link target `T2`: 16 bytes of `22`.
 pub const T2: ObjectId = ObjectId([0x22; 16]);
+/// Space `S` of Amendment 4's examples: 16 bytes of `33`.
+pub const S: SpaceId = SpaceId([0x33; 16]);
+/// Customer `C1`, in `S`: 16 bytes of `44`.
+pub const C1: ObjectId = ObjectId([0x44; 16]);
+/// Customer `C2`, in `S`: 16 bytes of `55`.
+pub const C2: ObjectId = ObjectId([0x55; 16]);
 /// Change id `A`: 32 bytes of `aa`.
 pub const A: ChangeId = ChangeId([0xaa; 32]);
 /// Change id `B`: 32 bytes of `bb`.
@@ -107,6 +118,18 @@ pub fn depends_on() -> Links {
     Links {
         collections: ["tasks".to_owned()].into(),
     }
+}
+
+// The field `customer` of the collection `orders` (Amendment 4).
+pub fn customer() -> Reference {
+    Reference {
+        collections: ["customers".to_owned()].into(),
+    }
+}
+
+/// The reference to `object` in `S`, as a set writes it.
+pub fn reference(object: ObjectId) -> Value {
+    reference::value(Target { space: S, object })
 }
 
 /// A set, from the example's origin.
