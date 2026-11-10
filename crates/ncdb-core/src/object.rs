@@ -6,7 +6,7 @@
 //! Whether an object is deleted is a boolean basic value (RFC 0004, owner
 //! decision 4). Creates (operation 0) and deletes (operation 4) reach it as
 //! [`ObjectOperation`]s, which `field_op` decodes and the fold of
-//! `receive` applies (RFC 0004 Amendment 1, "Creating and deleting an
+//! `receive` applies (RFC 0004, "Creating and deleting an
 //! object"). Who may delete, and what a deleted object shows, belong to a
 //! later RFC.
 
@@ -30,8 +30,8 @@ pub struct Create {
     pub collection: String,
 }
 
-/// An operation on an object rather than on one of its fields (RFC 0004
-/// Amendment 1, "Creating and deleting an object").
+/// An operation on an object rather than on one of its fields (RFC 0004,
+/// "Creating and deleting an object").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ObjectOperation {
     /// Operation 0: a create of the object's id.
@@ -91,6 +91,12 @@ impl Object {
     /// order wins; creates that name another collection are conflicts.
     pub fn collection(&self) -> basic::Read {
         COLLECTION.read(&self.creates)
+    }
+
+    /// The state of the object's deletion, as a basic value of booleans: a
+    /// member that deletes or restores the object replaces what it holds.
+    pub fn deletion(&self) -> &basic::State {
+        &self.deleted
     }
 
     /// Whether the object is deleted: the winning write of its deletion is

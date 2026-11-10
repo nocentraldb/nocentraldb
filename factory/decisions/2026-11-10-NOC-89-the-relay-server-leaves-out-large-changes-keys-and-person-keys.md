@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-89 · The relay server leaves out large changes, keys and the person-key store, and TLS
+
+- Decided by: coding agent (NOC-89), as the ticket allows
+- Why: the ticket lets the server leave out "Large changes" and the person-key store as a safe subset, refused with one of RFC 0007's codes. Large changes: the largest frame the server accepts, announced as limit 3 of `challenge`, is 127 KiB, the largest whose entry still fits into one 128 KiB `entries` message, so every entry travels inline; a larger frame is `too_large`, and so are `upload` and an upload reference in a push. `keys`, `person-keys` and `put-person-keys` answer `unsupported_suite`, whose meaning, "keep it until the relay is upgraded", is what the member should do; NOC-87 refuses shred entries the same way. `keys` is not in the ticket's list either and goes with them. TLS: the binary serves plain `ws://`, by default on 127.0.0.1; RFC 0007's TLS is left to a proxy in front of it.
+- Instead of: `unavailable`, which tells the member to retry with backoff forever; `malformed` or `bad_record`, which tell it the request is a bug; or a `download` link the local server has nowhere to serve from.
+- What this does not do: a change above 127 KiB stays on its member's device until a relay carries large changes; a member cannot find its key envelopes without reading the log, and the relay keeps no person-key records.
+- Topics: relay, rfc-0007, safe-subset

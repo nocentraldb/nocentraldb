@@ -1,7 +1,9 @@
 // Asserts that groups have left the design (NOC-76). The owner decided to
 // keep groups out of every definition for now (Carsten, 2026-11-09); they may
-// return through a later RFC. RFC 0001, RFC 0008 and RFC 0009 each carry an
-// amendment that withdraws them, announced in a dated changelog line; the
+// return through a later RFC. RFC 0001 records the decision under "Groups
+// leave the design" (NOC-100's rfc-0001-complete.test.mjs holds that
+// section), and RFC 0008 and RFC 0009 state it in their text since NOC-101
+// folded their amendments in; the
 // decisions about groups, RFC 0008's M10 and RFC 0009's S14, are marked
 // withdrawn instead of deleted; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
@@ -15,50 +17,22 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
 
-const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
 const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
-/** The amendment of each RFC that withdraws groups. */
-const AMENDMENTS = [
-  { path: RFC_0001, number: 5 },
-  { path: RFC_0008, number: 1 },
-  { path: RFC_0009, number: 1 },
-];
-const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
-const WITHDRAWING = /#amendment-\d+-groups-leave-the-design\)/;
+const WITHDRAWING =
+  /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
 const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
-
-/** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
-const slug = (heading) =>
-  heading
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, "")
-    .replace(/\s/g, "-");
-
-/** The text under the heading whose anchor is `anchor`, up to the next heading of the same or a higher level. */
-const section = (markdown, anchor) => {
-  const lines = markdown.split("\n");
-  const start = lines.findIndex(
-    (line) =>
-      /^#{1,6} /.test(line) && slug(line.replace(/^#+ /, "")) === anchor,
-  );
-  if (start < 0) return undefined;
-  const level = lines[start].match(/^#+/)[0].length;
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => {
-    const m = line.match(/^(#+) /);
-    return m && m[1].length <= level;
-  });
-  return (end < 0 ? rest : rest.slice(0, end)).join("\n");
-};
 
 /** The text of the decision `id` (such as "M10"), up to the next decision or heading. */
 const decision = (markdown, id) => {
   const lines = markdown.split("\n");
-  const start = lines.findIndex((line) => line.startsWith(`**${id}. `));
+  const start = lines.findIndex(
+    (line) =>
+      line.startsWith(`**${id}. `) ||
+      new RegExp(`^#{1,6} ${id}\\. `).test(line),
+  );
   if (start < 0) return undefined;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex(
@@ -108,7 +82,7 @@ const units = (markdown) => {
   for (let i = 0; i < lines.length; ) {
     const line = lines[i];
     const heading = line.match(/^(#{1,6}) (.*)$/);
-    const isDecision = /^\*\*[A-Z]+\d+\. /.test(line);
+    const isDecision = /^(\*\*|#{1,6} )[A-Z]+\d+\. /.test(line);
     const isWhole =
       heading &&
       (heading[2] === "Groups" || /groups leave the design/i.test(heading[2]));
@@ -121,7 +95,7 @@ const units = (markdown) => {
     while (
       j < lines.length &&
       !(
-        (isDecision && /^\*\*[A-Z]+\d+\. /.test(lines[j])) ||
+        (isDecision && /^(\*\*|#{1,6} )[A-Z]+\d+\. /.test(lines[j])) ||
         (/^(#{1,6}) /.test(lines[j]) &&
           (!isWhole || lines[j].match(/^#+/)[0].length <= heading[1].length))
       )
@@ -133,29 +107,6 @@ const units = (markdown) => {
   }
   return result;
 };
-
-for (const { path, number } of AMENDMENTS) {
-  const anchor = anchorOf(number);
-
-  test(`${path} announces Amendment ${number}, which withdraws groups, in a dated NOC-76 changelog line`, () => {
-    const top = read(path).split(/^## /m)[0];
-    assert.match(
-      top,
-      new RegExp(
-        `^- \\*\\*2026-11-09\\*\\* · NOC-76 · .*\\(#${anchor}\\)`,
-        "m",
-      ),
-      `no changelog line for NOC-76 linking to #${anchor} above the first section`,
-    );
-  });
-
-  test(`${path} has Amendment ${number}, which records the owner's decision and that groups may return through a later RFC`, () => {
-    const body = section(read(path), anchor);
-    assert.ok(body, `no section #${anchor}`);
-    assert.match(body, /\(Carsten, 2026-11-09\)/, "no owner and date");
-    assert.match(body, /later RFC/, "does not say groups may come back");
-  });
-}
 
 for (const [path, id] of [
   [RFC_0008, "M10"],

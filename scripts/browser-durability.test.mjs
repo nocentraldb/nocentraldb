@@ -246,13 +246,13 @@ test("every text for users is short, names the app and promises nothing", () => 
   }
 });
 
-// Where the developer meets the proposal: RFC 0006 carries it as Amendment 2,
-// with a decision per layer, and RFC 0001 links the page. The README does not:
+// Where the developer meets the proposal: RFC 0006 carries it in its section
+// "Durability of a browser copy", with a decision per layer under "Decisions"
+// (NOC-101 folded it into the text), and RFC 0001 links the page. The README does not:
 // the owner keeps limits out of it (NOC-61).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0001 = "docs/rfc/0001-nocentraldb.md";
-const AMENDMENT = "Amendment 2: durability of a browser copy";
-const ANCHOR = "amendment-2-durability-of-a-browser-copy";
+const DURABILITY = "Durability of a browser copy";
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
 const slug = (heading) =>
@@ -301,17 +301,6 @@ test("every relative link on the page resolves, to its heading too", () => {
   }
 });
 
-test("RFC 0006 announces Amendment 2 in a dated changelog line at the top", () => {
-  const top = read(RFC_0006).split(/^## /m)[0];
-  assert.match(
-    top,
-    new RegExp(
-      `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · NOC-34 · \\[Amendment 2[^\\]]*\\]\\(#${ANCHOR}\\)`,
-      "m",
-    ),
-  );
-});
-
 test("RFC 0006 says how to give feedback, above its first section", () => {
   const top = read(RFC_0006).split(/^## /m)[0];
   const line = top
@@ -322,27 +311,9 @@ test("RFC 0006 says how to give feedback, above its first section", () => {
   assert.match(line, /discussions\/categories\/rfc-feedback/);
 });
 
-test("Amendment 2 decides each layer with options and a recommendation", () => {
-  const amendment = section(read(RFC_0006), AMENDMENT);
-  assert.ok(amendment, `${RFC_0006}: no "## ${AMENDMENT}"`);
-  const decisions = amendment
-    .split(/^(?=\d+\. \*\*)/m)
-    .filter((part) => /^\d+\. \*\*/.test(part));
-  assert.ok(
-    decisions.length >= 5,
-    `${RFC_0006}: ${decisions.length} decisions`,
-  );
-  for (const decision of decisions) {
-    const name = decision.split("\n")[0];
-    assert.match(decision, /^\s+- A\. /m, `${name}: no option A`);
-    assert.match(decision, /^\s+- B\. /m, `${name}: no option B`);
-    assert.match(decision, /\*\(recommended\)\*/, `${name}: none recommended`);
-    assert.match(
-      decision,
-      /^\s+Recommendation: /m,
-      `${name}: no recommendation`,
-    );
-  }
+test("RFC 0006 states each layer in its durability section", () => {
+  const durability = section(read(RFC_0006), DURABILITY);
+  assert.ok(durability, `${RFC_0006}: no "## ${DURABILITY}"`);
   for (const layer of [
     /db\.durability/,
     /browser-durability\.md/,
@@ -350,9 +321,15 @@ test("Amendment 2 decides each layer with options and a recommendation", () => {
     /warning/i,
     /IndexedDB/,
   ]) {
-    assert.match(amendment, layer, `${RFC_0006}: Amendment 2 lacks ${layer}`);
+    assert.match(durability, layer, `${RFC_0006}: the section lacks ${layer}`);
   }
 });
+
+/** RFC 0006's decisions 10 to 15, one "### N. Title" heading each, under "## Decisions". */
+const durabilityDecisions = () =>
+  (section(read(RFC_0006), "Decisions") ?? "")
+    .split(/^(?=### \d+\. )/m)
+    .filter((part) => /^### 1[0-5]\. /.test(part));
 
 test("RFC 0001 and RFC 0006 link the page", () => {
   for (const path of [RFC_0001, RFC_0006]) {
@@ -363,17 +340,22 @@ test("RFC 0001 and RFC 0006 link the page", () => {
   }
 });
 
-test("each decision of Amendment 2 records the owner's decision", () => {
-  const amendment = section(read(RFC_0006), AMENDMENT) ?? "";
-  const decisions = amendment
-    .split(/^(?=\d+\. \*\*)/m)
-    .filter((part) => /^\d+\. \*\*/.test(part));
+test("each layer's decision records the owner's choice, why, and the options not taken", () => {
+  const decisions = durabilityDecisions();
+  assert.equal(
+    decisions.length,
+    6,
+    `${RFC_0006}: ${decisions.length} decisions`,
+  );
   for (const decision of decisions) {
+    const name = decision.split("\n")[0];
     assert.match(
       decision,
-      /^\s+Decided \(Carsten, \d{4}-\d{2}-\d{2}\): the recommendation, \([A-C]\)\./m,
-      `${decision.split("\n")[0]}: not decided`,
+      /^Decided \(Carsten, \d{4}-\d{2}-\d{2}\): /m,
+      `${name}: not decided`,
     );
+    assert.match(decision, /^Why: /m, `${name}: no reason`);
+    assert.match(decision, /^- /m, `${name}: no option not taken`);
   }
   assert.doesNotMatch(read(RFC_0006), /wait for the owner/);
 });

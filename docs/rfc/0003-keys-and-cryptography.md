@@ -2,15 +2,9 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
-**Changelog.**
-
-- **2026-11-08** · NOC-15, NOC-30 · [Amendment 1: the bytes of a sealed change](#amendment-1-the-bytes-of-a-sealed-change) fixes the content-key derivation, the nonce, the associated data, the padding and the crate versions. The owner decided all five (Carsten, 2026-11-08). The sentence it makes precise elsewhere is marked *(Amendment 1)*.
-- **2026-11-08** · NOC-44 · [Amendment 2: following RFC 0008](#amendment-2-following-rfc-0008) brings this RFC in line with the owner's decisions in [RFC 0008](0008-membership.md): generation ids, exposure and the merge rotation, the narrower sign-off, the person-key entry, the model-id subkey, and the wait before a shredded key is destroyed. It decides nothing new. The sentences it changes elsewhere are marked *(Amendment 2)*.
-- **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) brings the sketch in "How the SDK hides keys" in line with the names the owner decided in [RFC 0009](0009-sdk-api.md), and says where the source of a copy in an ad-hoc space is kept. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
-
 Which keys NoCentralDB uses, who holds them, and which audited primitives use them.
 
-**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), and this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08). The design below describes the decided options. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions for the owner](#decisions-for-the-owner) records the owner's decision on each.
+**Status.** Decided. GENESIS.md reserves crypto and key handling for the owner. The owner decided 1 to 15 when this RFC was merged with the owner's approval in #27 (Carsten, 2026-11-08), the bytes of a sealed change (Carsten, 2026-11-08, NOC-30), and 16 to 18, on where the SDK keeps keys before the accounts RFC and on the bytes of an encrypted previous key (Carsten, 2026-11-10). The design below describes the decided options. [Decisions](#decisions) lists each one, [Open questions](#open-questions) what the owner has not decided yet, and [History](#history) every change since the first version. Signing and sealing a change are built in `ncdb-core` (NOC-15); the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Every choice below names the options we rejected, and [Decisions](#decisions) records the owner's decision on each.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -50,7 +44,7 @@ It does not protect against:
 
 | Key | Kind | Who creates it | Where it lives | What it can do |
 | --- | --- | --- | --- | --- |
-| Member key | Ed25519 signing key and X25519 key-agreement key | The member (device or agent), on itself | The member's platform keystore; never leaves the member | Sign the member's changes; receive wrapped space keys |
+| Member key | Ed25519 signing key and X25519 key-agreement key | The member (device or agent), on itself | The member's platform keystore, or a key file that a headless agent names; never leaves the member | Sign the member's changes; receive wrapped space keys |
 | Account key | Ed25519 signing key | The person's first device, when the account is created | The account's devices, plus a recovery copy the person keeps | Certify and revoke the account's member keys; sign off irreversible work orders |
 | Space key | 256-bit random symmetric key, one per generation | The member that creates the space, then the member that rotates it | Wrapped to each member key in the space's key envelopes; unwrapped only inside each member | Encrypt and decrypt the space's changes |
 | Person key | 256-bit random symmetric key | The member that first writes a personal field for that person in that space | The space's person-key store, wrapped under the current space key; unwrapped only inside each member | Encrypt and decrypt that person's personal fields; destroying it erases them |
@@ -64,6 +58,8 @@ A member is one device or one agent: a laptop, a phone, a browser profile, an ag
 
 Both public halves form the member's public identity. Its **member id** is the SHA-256 hash of the two public keys, with a fixed context string in front (`"nocentraldb/member-id"`), and that id is what the relay, the member list and the SDK show. The private halves never leave the member. A lost or stolen device is handled by removing its member key from every space (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
+The SDK keeps the private halves in the platform keystore (see [How the SDK hides keys](#how-the-sdk-hides-keys)). A headless agent, in a container or on a server, often has no keystore. Such an agent names a key file instead, with the Rust SDK's `key_file` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)), and the SDK keeps the member key there, readable only by the user the agent runs as. Only its file permissions protect it: whoever reads the file, or a backup of it, holds the member key. Where no keystore is reachable and no key file is named, the SDK does not open the database ([decision 16](#16-where-the-member-key-lives)).
+
 The signing key also **authenticates the member to the relay**. The relay sends a fresh random challenge, and the member signs `H("nocentraldb/relay-auth" || relay id || nonce)`, so that one relay cannot replay the answer against another. Every signature a member key makes signs either a canonical CBOR header (RFC 0002), whose first byte marks a CBOR map, or a message that starts with a `"nocentraldb/..."` context string, whose first byte is a letter; one can never be read as the other, so a signed challenge can never pass as a signed change. A separate key just for the relay is the alternative (decision 13).
 
 We use two keys instead of converting the Ed25519 key into an X25519 key. Converting is possible, but it uses one secret in two protocols, and the analyses that show it safe are narrower than the ones for separate keys.
@@ -76,17 +72,19 @@ A person has one account and usually several members: a laptop, a phone, the age
 
 The account key also signs what must come from a person rather than a device, above all the second account's sign-off of an irreversible work order such as an erasure (GENESIS.md, "Work orders for clean-ups").
 
-The account key is created on the person's first device. A second device receives it, wrapped to the new device's member key, after the person confirms the pairing on a device that already holds it, for example by scanning a code. The person keeps a recovery copy, such as a printed recovery code, for the case that every device is lost. Where the account key lives exactly is a decision for the owner (decision 8).
+The account key is created on the person's first device. A second device receives it, wrapped to the new device's member key, after the person confirms the pairing on a device that already holds it, for example by scanning a code. The person keeps a recovery copy, such as a printed recovery code, for the case that every device is lost. Decision 8 chose where the account key lives.
+
+Pairing and the recovery copy belong to the accounts RFC, which is not written yet. Until it is, each database draws its own account key once, on its first open, and keeps it next to the member key, in the same keystore or key file. It certifies its own member as a device, or as an agent when the app opens the database with the Rust SDK's `agent()` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). A person's devices are then unrelated accounts: an admin who adds a second device of the same person compares its fingerprint, as for any account new to it. A genesis carries its creator's certificate for good, so the accounts RFC must accept the members certified this way, for example by letting a later pairing vouch for them ([decision 17](#17-the-account-key-before-the-accounts-rfc)).
 
 An organisation that runs agents does so under an account, so every agent traces back to an account that answers for it.
 
 ### The space key
 
-A space is the unit of sharing, membership and keys (RFC 0001). Each space has a **space key**: 32 random bytes from the operating system's random number generator. It has **generations**. Generation 1 is created with the space, and every rotation creates a new one. A generation is named by an id no member can choose: a 16-bit ordinal, one more than the highest of its previous generations, and a 48-bit tag derived from the space, the rotation's author and its previous generations, so two concurrent rotations never name the same generation ([RFC 0008, "Generation ids"](0008-membership.md#generation-ids)). *(Amendment 2.)*
+A space is the unit of sharing, membership and keys (RFC 0001). Each space has a **space key**: 32 random bytes from the operating system's random number generator. It has **generations**. Generation 1 is created with the space, and every rotation creates a new one. A generation is named by an id no member can choose: a 16-bit ordinal, one more than the highest of its previous generations, and a 48-bit tag derived from the space, the rotation's author and its previous generations, so two concurrent rotations never name the same generation ([RFC 0008, "Generation ids"](0008-membership.md#generation-ids)).
 
 Members never use the space key directly. They derive one subkey per purpose with HKDF-SHA256, with a label for the purpose and the space id, generation and suite in the context. The first purpose is the content key that encrypts changes. Separate subkeys keep one purpose's use from weakening another's.
 
-Each member receives the current generation in a **key envelope**: the generation's key, encrypted with HPKE to that member's X25519 key, and signed by the member who wrote it. Each generation also stores the keys of its previous generations, encrypted under the new generation (a **key chain**), so a member that holds the current generation can read the space's whole history without an envelope for every old generation. After concurrent rotations, a generation can have more than one previous generation. *(Amendment 2.)*
+Each member receives the current generation in a **key envelope**: the generation's key, encrypted with HPKE to that member's X25519 key, and signed by the member who wrote it. Each generation also stores the keys of its previous generations, encrypted under the new generation (a **key chain**), so a member that holds the current generation can read the space's whole history without an envelope for every old generation. After concurrent rotations, a generation can have more than one previous generation.
 
 ### The person key
 
@@ -96,15 +94,15 @@ For each person and each space that holds that person's data, the SDK creates a 
 
 The relay cannot check what a record contains, so the store must not let any one member swap a key or erase one on its own. Three rules hold it together (decision 14):
 
-- **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is), a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`, and the generation and SHA-256 hash of the record it stores, so that the relay accepts a record only with its entry. Every re-wrap of the record writes a further person-key entry that repeats the commitment. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's body ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)). *(Amendment 2.)*
-- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. *(Amendment 2.)* A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
-- **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record once the shred is stable, not when it appends the entry ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). No other request deletes a record. *(Amendment 2.)*
+- **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is), a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`, and the generation and SHA-256 hash of the record it stores, so that the relay accepts a record only with its entry. Every re-wrap of the record writes a further person-key entry that repeats the commitment. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's body ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)).
+- **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key (context `"nocentraldb/person-key-record"`; the bytes it signs are an [open question](#open-questions)). The relay accepts a record only from a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
+- **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record once the shred is stable, not when it appends the entry ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). No other request deletes a record.
 
 So a member cannot swap a person key without every other member noticing, and cannot erase one without a second account. A member that overwrites a record with garbage can make the key unavailable to new members until another member repairs it, and the signature on the record names it. It cannot make the other members delete their copies; only a shred entry does that.
 
 ## Primitives
 
-Each primitive is a published construction, used in widely deployed systems, with a maintained, pure-Rust crate that builds for `wasm32-unknown-unknown`. This RFC names the crates; it pins no version. The implementation ticket pins them, and the pin check in `pnpm gates` keeps them pinned.
+Each primitive is a published construction, used in widely deployed systems, with a maintained, pure-Rust crate that builds for `wasm32-unknown-unknown`. This RFC names the crates. The implementation pins every version, and the pin check in `pnpm gates` keeps them pinned. For content encryption and subkey derivation the owner chose the versions too: `chacha20poly1305 =0.11.0` and `hkdf =0.13.0`, with the same `sha2 =0.11.1` that computes change ids. The ChaCha20-Poly1305 cipher core the 2020 NCC Group review covered has not changed since, and security fixes land only in the current line; the pinned versions themselves have no audit of their own ([The bytes of a sealed change](#the-bytes-of-a-sealed-change)).
 
 | Purpose | Construction | Crate | Audit | `wasm32-unknown-unknown` |
 | --- | --- | --- | --- | --- |
@@ -143,10 +141,10 @@ Each space records a **suite id** that names this set of primitives. RFC 0002 ca
 RFC 0002 defines the bytes: its header carries the suite id, the space key generation, the author's member id and the author sequence, and each personal field carries its person-key id. This RFC defines the order and what each step covers:
 
 1. **Personal fields first.** For each personal field, the SDK encrypts the value with the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field id and the person-key id, so a ciphertext cannot be moved to another field or another person.
-2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted. The exact bytes of the content key, the nonce, the associated data and the padding are in [Amendment 1](#amendment-1-the-bytes-of-a-sealed-change). *(Amendment 1.)*
+2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted. The exact bytes of the content key, the nonce, the associated data and the padding are in [Sealed payload](#sealed-payload).
 3. **Then the signature.** The author signs the header, which contains the ciphertext, with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
 
-A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept, not dropped silently (principle 3): it is rejected, as [RFC 0002 Amendment 1 (D11)](0002-change-and-log-format.md#rejected-changes) defines it, with a reason, and checked again when a control change arrives that could make it valid.
+A member receiving a change checks the signature, checks that the author was a member when the change was written, then decrypts. A change that fails any check is kept, not dropped silently (principle 3): it is rejected, as RFC 0002's D11 defines it ([RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes)), with a reason, and checked again when a control change arrives that could make it valid.
 
 ## Sharing a space key with a new member
 
@@ -166,7 +164,7 @@ By default a new member reads the whole history, because every member holds the 
 
 Removing a member works like this:
 
-1. A member with the right to remove writes a **membership entry**, a control change, that removes the member id. The entry names a cutoff: the highest author sequence of the removed member that the remover held. The relay refuses the removed member's changes above the cutoff and stops serving it the space ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)). *(Amendment 2.)*
+1. A member with the right to remove writes a **membership entry**, a control change, that removes the member id. The entry names a cutoff: the highest author sequence of the removed member that the remover held. The relay refuses the removed member's changes above the cutoff and stops serving it the space ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
 2. The same member creates the next space key generation, writes a key envelope for every remaining member, and adds the **key chain entry** that encrypts the previous generation under the new one; the envelopes and the key chain entry are control changes too. Removing a member costs one envelope per remaining member.
 3. It re-wraps every record in the person-key store under the new generation and deletes the old wraps, so a removed member that kept an old generation and later gets a copy of the relay's data still cannot open the person keys.
 4. Every member that sees the new generation writes with it from then on.
@@ -176,7 +174,7 @@ This is **eager rotation**: the space key rotates as part of the removal. The al
 **What rotation does not do.** A removed member keeps the copy it already holds: every change, every space key generation and every person key it received before the removal. Rotation only keeps it from reading what is written afterwards. If you revoke access to a laptop or an agent that held a copy, assume that copy is still readable by whoever holds the laptop (principle 4). Two more limits follow from island mode:
 
 - A member that has not seen the removal yet, because it is offline or on an island, keeps writing under the old generation. The removed member can read those changes, if it can get them, until that member catches up. Every change names its generation, so the members can see which changes were written under an outdated key.
-- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. RFC 0008 decides which generation members then write with, and how the space leaves a generation that a removed member may hold. Every generation has an id that no member can choose, and every copy picks the same current generation. A generation is **exposed** when anyone who may hold it, through any envelope written for it, is no longer a member. When the current generation is exposed, the SDK of an admin device writes a **merge rotation** that lists every concurrent generation as previous and wraps the new key only to current members ([RFC 0008, "Two removals that rotate the key at once"](0008-membership.md#two-removals-that-rotate-the-key-at-once)). Until that merge rotation lands, members may write under a generation a removed member holds, and the SDK reports it (principle 4). *(Amendment 2.)*
+- Two members can rotate at the same time on two islands. Both new generations are valid, and every remaining member receives envelopes for both when the islands rejoin. RFC 0008 decides which generation members then write with, and how the space leaves a generation that a removed member may hold. Every generation has an id that no member can choose, and every copy picks the same current generation. A generation is **exposed** when anyone who may hold it, through any envelope written for it, is no longer a member. When the current generation is exposed, the SDK of an admin device writes a **merge rotation** that lists every concurrent generation as previous and wraps the new key only to current members ([RFC 0008, "Two removals that rotate the key at once"](0008-membership.md#two-removals-that-rotate-the-key-at-once)). Until that merge rotation lands, members may write under a generation a removed member holds, and the SDK reports it (principle 4).
 
 A lost or stolen device is removed the same way, from every space its member key belongs to; the SDK offers this as one action on the account. In v1 that removal is the revocation: there is no separate signed statement that revokes a member certificate (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
@@ -186,7 +184,7 @@ An agent that hands part of its task to a sub-agent does not share its own membe
 
 1. The parent agent creates an **ad-hoc space** with a fresh space key.
 2. The sub-agent creates its own member key. The parent signs a member certificate for it with the parent's own signing key, marked as a sub-agent of the parent, so the chain of responsibility leads from the sub-agent through the parent to the account. The parent never holds the account key, so it cannot sign as the account.
-3. The parent adds the sub-agent to the ad-hoc space and copies into it only the objects the task needs. The copies are new objects, encrypted under the ad-hoc space's key. The parent's SDK keeps, on the parent only, which object each copy came from, which is all the parent needs to write results back; the sub-agent never learns the source's id ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)). *(Amendment 3.)*
+3. The parent adds the sub-agent to the ad-hoc space and copies into it only the objects the task needs. The copies are new objects, encrypted under the ad-hoc space's key. The parent's SDK keeps, on the parent only, which object each copy came from, which is all the parent needs to write results back; the sub-agent never learns the source's id ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)).
 4. The sub-agent works in the ad-hoc space. The parent, also a member, reads the results and writes what it accepts back into the original space under its own member key.
 5. When the task ends, the parent deletes the ad-hoc space and its key, and the sub-agent's member key is discarded. For a local ad-hoc space this is a local deletion and needs no format. Deleting a space that reached the relay, for every member and at the relay, is not defined yet (see [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive)).
 
@@ -198,11 +196,11 @@ Copying a personal field into an ad-hoc space would put that person's data under
 
 ## Shredding a person's key
 
-An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space, signs it off with its account key, because an erasure cannot be undone. *(Amendment 2.)* Then:
+An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space, signs it off with its account key, because an erasure cannot be undone. Then:
 
 1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
-2. The relay checks the shred entry's signature and the second account's sign-off, and appends it. It deletes the person-key record from its store only once the shred is stable, because until then a concurrent revocation could still reject the shred, and a deleted record cannot come back (see [The person key](#the-person-key) and [RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). *(Amendment 2.)*
-3. Every member that accepts the shred entry writes a "seen" acknowledgement at once, another control change. Once the shred is stable, it deletes its local copy of the key and writes a "deleted" acknowledgement. The "deleted" acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3). RFC 0008 defines both acknowledgements and when a shred is stable ([RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement)). *(Amendment 2.)*
+2. The relay checks the shred entry's signature and the second account's sign-off, and appends it. It deletes the person-key record from its store only once the shred is stable, because until then a concurrent revocation could still reject the shred, and a deleted record cannot come back (see [The person key](#the-person-key) and [RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)).
+3. Every member that accepts the shred entry writes a "seen" acknowledgement at once, another control change. Once the shred is stable, it deletes its local copy of the key and writes a "deleted" acknowledgement. The "deleted" acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back (RFC 0001, "Where we want your advice", point 3). RFC 0008 defines both acknowledgements and when a shred is stable ([RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement)).
 4. From the shred entry on, the fold treats the person's personal fields as erased on every member, whether or not that member still holds the key. Computed fields and views therefore converge (principle 2): a member that has not deleted its copy yet does not compute a different state from the one that has.
 
 The person's fields stay in the log, in the archive and in old snapshots as ciphertext under a key that no longer exists. The signatures on those changes stay valid, because they cover the ciphertext, so the audit trail survives the erasure.
@@ -214,16 +212,27 @@ The person's fields stay in the log, in the archive and in old snapshots as ciph
 - **Copies made outside the database**, such as exports and screenshots, stay readable.
 - **Personal data in unmarked free text** was never encrypted with the person key, so shredding does not touch it.
 - **An agent running as that user on the user's device** can read what the user could read while the key existed.
-- **The key lives on until the shred is stable.** A shred is stable once every admin device of the space has written a control change after seeing it. Every view treats the person's fields as erased at once, but until then the key still exists on the members and the relay keeps the record. One admin device that stays offline delays it for as long as it is away; after 7 days the SDK of every admin raises an alarm that names the blocking devices, and an admin demotes or removes them ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable), decisions M20 and M21). *(Amendment 2.)*
+- **The key lives on until the shred is stable.** A shred is stable once every admin device of the space has written a control change after seeing it. Every view treats the person's fields as erased at once, but until then the key still exists on the members and the relay keeps the record. One admin device that stays offline delays it for as long as it is away; after 7 days the SDK of every admin raises an alarm that names the blocking devices, and an admin demotes or removes them ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable), decisions M20 and M21).
 - **Backups of the relay** keep the wrapped person-key record until they expire. The relay and anyone who steals a backup cannot open it, because they hold no space key. A member of the space who also obtains such a backup could; that member could equally have kept the key while it was a member.
 
 Whether destroying a key counts as erasure is for each data protection officer to decide. This is a design, not legal advice.
 
 ## Formats of what keys sign and derive
 
-[RFC 0002](0002-change-and-log-format.md) defines the bytes of a change, and RFC 0008 (membership, NOC-23) defines the control bodies that carry these structures. This section defines what an account key or a member key signs inside them, and what a space key derives. Every format here is a proposal for the owner (decision 15).
+[RFC 0002](0002-change-and-log-format.md) defines the bytes of a change, and RFC 0008 (membership, NOC-23) defines the control bodies that carry these structures. This section defines what an account key or a member key signs inside them, and what a space key derives and seals. The owner decided these formats in decision 15, and the bytes of a sealed payload separately (NOC-30).
 
 Every hash input below starts with a context string of its own, and every field after it has a fixed length, or is canonical CBOR (RFC 0002), so no two inputs can be read as the same bytes. Ed25519 then signs the 32-byte hash. Ed25519 could sign the input directly; hashing it first keeps every signed message one length and matches RFC 0007's relay challenge.
+
+### Sealed payload
+
+A sealed change's payload, RFC 0002's header key 6, is encrypted under the content key of the header's generation, as [How a member signs and encrypts a change](#how-a-member-signs-and-encrypts-a-change) says. Its bytes:
+
+- **The content key.** Content key = HKDF-SHA256(ikm = the space key of the header's generation, salt = none, info = `"nocentraldb/content-key"` ‖ space id (16 bytes) ‖ key generation (8 bytes, big-endian) ‖ suite id (8 bytes, big-endian)), 32 bytes. It has the same shape as the [key-chain subkey](#key-chain-subkey), and with fixed widths two different contexts never give the same bytes.
+- **The nonce.** Each seal draws a random 24-byte nonce. Header key 6 holds the nonce, then the XChaCha20-Poly1305 ciphertext with its 16-byte tag: nonce ‖ ciphertext ‖ tag, libsodium's layout. A random nonce needs no stored state, which is why XChaCha was chosen.
+- **The associated data.** The canonical CBOR encoding (RFC 0002) of the header map without key 6. Unknown header keys are included, so a header field added later is bound without anyone having to remember it.
+- **The padding.** The canonical encoding of the whole payload map, padding key 5 included, is a multiple of 256 bytes. The sealer picks the length of the zero bytes in key 5 so that it lands on the multiple. A payload already on a multiple gets no key 5. Key 5 costs at least 2 bytes, and one length (26 bytes short) cannot be reached either, so a payload 1 or 26 bytes short of a multiple pads to the multiple after. Readers ignore key 5, so the rule can change without a new format (RFC 0002, D8).
+
+`ncdb-core` implements them in `src/seal.rs`. `crates/ncdb-core/tests/vectors/generate.py` writes a test vector for a signed, sealed change from this description with independent libraries.
 
 ### Member certificate
 
@@ -263,7 +272,15 @@ key-chain subkey = HKDF-SHA256(ikm = new generation's key, salt = none,
                                       new generation id (8 bytes, big-endian))
 ```
 
-Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry.
+Each previous key is encrypted with XChaCha20-Poly1305 under that subkey, with a random nonce. The associated data is the space id, the new generation id and that previous generation id, so an encrypted key cannot be moved to another place in the list or to another entry. Their bytes are not decided yet ([Open questions](#open-questions)).
+
+```text
+encrypted previous key = nonce (24 bytes) || ciphertext (32 bytes) || tag (16 bytes)     72 bytes
+  plaintext            = the previous generation's 32-byte space key
+  AEAD                 = XChaCha20-Poly1305, random nonce
+```
+
+It is the layout of a [sealed payload](#sealed-payload) and of the [model id field](#model-id-subkey): one layout for everything a space key seals. Every key chain entry stores its previous keys this way, a merge rotation's included, which lists every head as previous ([RFC 0008, "Key chain entry"](0008-membership.md#key-chain-entry)) ([decision 18](#18-the-bytes-of-an-encrypted-previous-key)).
 
 ### Model-id subkey
 
@@ -280,7 +297,7 @@ model id field  = nonce (24 bytes) || ciphertext (16 bytes) || tag (16 bytes)   
 
 Every member can open it, because every member holds generation 1's key through the key chain; the relay holds no space key. The associated data binds the field to its space and its creator, so it cannot be copied into another genesis. RFC 0008 places the field in the genesis, as its key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)).
 
-**Why the label cannot collide.** The content key of generation 1 derives from the same key. Its `info` starts with `"nocentraldb/content-key"`, the key-chain subkey's with `"nocentraldb/key-chain"`, and the model-id subkey's with `"nocentraldb/model-id"`. No label is a prefix of another, and each is followed by fields of fixed length, so two different labels never give the same `info` bytes, and HKDF gives unrelated subkeys for different `info`. The label is new, used for nothing else, and the subkey seals only this one field per space. *(Amendment 2.)*
+**Why the label cannot collide.** The content key of generation 1 derives from the same key. Its `info` starts with `"nocentraldb/content-key"`, the key-chain subkey's with `"nocentraldb/key-chain"`, and the model-id subkey's with `"nocentraldb/model-id"`. No label is a prefix of another, and each is followed by fields of fixed length, so two different labels never give the same `info` bytes, and HKDF gives unrelated subkeys for different `info`. The label is new, used for nothing else, and the subkey seals only this one field per space.
 
 ### Key envelope
 
@@ -310,10 +327,10 @@ removal.notice; // "The removed member keeps its copy of everything it received 
 await db.workOrders.erase({ person: customerId });   // shreds the person key after a second account signs off
 ```
 
-The names are [RFC 0009](0009-sdk-api.md)'s, which the owner decided, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). *(Amendment 3.)* What the SDK does underneath:
+The names are [RFC 0009](0009-sdk-api.md)'s, which the owner decided, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). What the SDK does underneath:
 
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
-- **Stores** private keys in the platform's keystore and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB, optionally unlocked by a passkey. Details of passkeys and browser storage are out of scope here.
+- **Stores** private keys in the platform's keystore, or in the key file a headless agent names, and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB, optionally unlocked by a passkey. Only the file's permissions protect a key file. Details of passkeys and browser storage are out of scope here.
 - **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. The one way a private key leaves a device is the account recovery flow, which a person runs, not an app.
 - **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
@@ -346,7 +363,7 @@ The ticket asked to compare existing protocols for distributing a group key and 
 | What the relay must do | Store envelopes and serve each member its own | Relay pairwise messages | Act as the delivery service and order every commit; it still holds no key |
 | Rust crate | Built from the primitives above | Built from the primitives above | `openmls` (audited by SRLabs; one high-severity finding, fixed) |
 
-**Recommendation: the per-member wrapped space key.** It is the only one of the three that gives a new member the full history, which NoCentralDB promises (every member keeps the complete log). It needs no ordering of membership changes, so island mode keeps working. And it costs the relay only storage of opaque envelopes. Its price is no forward secrecy within a generation and a removal cost that grows with the number of members, which is acceptable because spaces are meant to be small and removals rare.
+**The owner chose the per-member wrapped space key** (decision 1). It is the only one of the three that gives a new member the full history, which NoCentralDB promises (every member keeps the complete log). It needs no ordering of membership changes, so island mode keeps working. And it costs the relay only storage of opaque envelopes. Its price is no forward secrecy within a generation and a removal cost that grows with the number of members, which is acceptable because spaces are meant to be small and removals rare.
 
 **Rejected:**
 
@@ -355,63 +372,239 @@ The ticket asked to compare existing protocols for distributing a group key and 
 - **A key server that holds space keys**, such as a cloud KMS shared by all members: the relay's operators or the cloud provider could read content. Principle 1 forbids it.
 - **One key per object**: finer erasure, but the number of envelopes explodes, and person keys already give erasure where it is needed.
 
-## Decisions for the owner
+## Decisions
 
-GENESIS.md reserves crypto, key handling and formats for the owner. Each decision below names the options and a recommendation. Nothing here becomes code until the owner has decided.
+GENESIS.md reserves crypto, key handling and formats for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The design above describes the chosen options.
 
-1. **Group key distribution.** (a) Per-member wrapped space key with generations and a key chain. (b) MLS. (c) Sender keys. **Recommendation: (a)**, see the comparison above.
+### 1. Group key distribution
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-2. **Content encryption.** (a) XChaCha20-Poly1305. (b) AES-256-GCM. **Recommendation: (a)**: random nonces are safe for many writers, and it is fast in WebAssembly.
+Decided (Carsten, 2026-11-08): a per-member wrapped space key with generations and a key chain.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-3. **HPKE implementation and an audit.** (a) The `hpke` crate, with the RFC 9180 test vectors in CI, and a paid audit of our combination before 1.0. (b) The same without the audit. (c) `hpke-rs`. **Recommendation: (a)**. The audit costs money, which GENESIS.md also reserves for the owner.
+Why: it is the only one that gives a new member the full history, needs no order of membership changes, so island mode keeps working, and costs the relay only storage of opaque envelopes, as the comparison of the three options above shows.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-4. **Signature algorithm.** (a) Ed25519 in software keystores. (b) ECDSA P-256, held in hardware where the platform offers it. **Recommendation: (a)**: deterministic signatures, and one behaviour on every platform; the platform keystore still protects the key at rest.
+Not taken:
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-5. **What a new member reads.** (a) The whole history, through the key chain. (b) Only from the generation it joined, optional per space. **Recommendation: (a) as the default, (b) later as an option** for spaces that ask for it.
+- MLS.
+- Sender keys.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-6. **When the space key rotates.** (a) Eagerly, as part of every removal. (b) Lazily, on the next write after a removal. **Recommendation: (a)**: a removed member must not read anything written after its removal, even if nobody writes for a while.
+### 2. Content encryption
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-7. **Scope of the person key.** (a) One key per person id (RFC 0005, D14) per space. (b) One key per person across all spaces, distributed into each space. **Recommendation: (a)**: a space's members never need a key that also opens the person's data in other spaces; an erasure work order finds the person's keys by person id and shreds them in every space the performing account can reach.
+Decided (Carsten, 2026-11-08): XChaCha20-Poly1305.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-8. **Where the account key lives.** (a) On every device of the account, plus a recovery code the person keeps. (b) Only on designated admin devices, plus a recovery code. (c) Derived from a passkey. **Recommendation: (a)** for v1, the simplest for people to use; (b) as an option for organisations.
+Why: random nonces are safe for many writers, and it is fast in WebAssembly.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-9. **Post-quantum key agreement.** X25519 does not resist a future quantum computer, and the relay's operators could keep today's ciphertext until one exists. (a) Ship X25519 in v1 and reserve a suite id for a hybrid suite later. (b) Use a hybrid X25519 + ML-KEM key agreement from v1. **Recommendation: (a)**, because the Rust implementations of ML-KEM are young; we say plainly in the documentation that v1 is not post-quantum.
+Not taken:
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-10. **Person keys at the relay.** (a) The relay holds each person key wrapped under the space key, in a store it can delete from, so a new member can open personal fields while no other member is online. (b) Person keys never reach the relay; members hand them to each other directly. **Recommendation: (a)**: it adds no reader the design does not already have (see the limits of shredding), and it keeps new members, including cloud agents, working when nobody else is online.
+- AES-256-GCM.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-11. **Personal fields in an ad-hoc space.** (a) The person key is shared into the ad-hoc space, so an erasure reaches the copy. (b) Personal fields are not copied unless the parent asks explicitly, and then as in (a). **Recommendation: (b)**: a sub-agent gets the least it needs.
+### 3. HPKE implementation and an audit
 
-   Decided (Carsten, 2026-11-08): the recommendation, (b).
-12. **Public API names** for the key-related calls (`members.add`, `members.remove`, `workOrders.erase`, invitations). **Recommendation:** invitations and member ids instead of public keys in `members.add`, and a returned notice on every call that changes who can read what.
+Decided (Carsten, 2026-11-08): the `hpke` crate, with the RFC 9180 test vectors in CI, and a paid audit of our combination before 1.0.
 
-   Decided (Carsten, 2026-11-08): the recommendation.
-13. **How a member authenticates to the relay.** (a) The member's Ed25519 signing key signs the relay's challenge, separated from change signatures by a context string. (b) A third, separate key per member only for relay authentication, certified by the account key. **Recommendation: (a)**: the context string already keeps the two uses apart, the relay must know the signing key anyway to verify changes, and a third key adds a certificate and a rotation without protecting anything more.
+Why: the crate has no paid audit; the audit costs money, which GENESIS.md also reserves for the owner.
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-14. **Integrity of the person-key store.** (a) A person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred entry with a second account's sign-off, as in [The person key](#the-person-key). (b) Unsigned records that any member may overwrite or delete, as an opaque store. (c) Person keys only inside control changes in the log, wrapped per member. **Recommendation: (a)**. (b) lets one member swap a key or erase it without a sign-off. (c) puts the key into the append-only log, where a shred can no longer destroy it.
+Not taken:
 
-   Decided (Carsten, 2026-11-08): the recommendation, (a).
-15. **Formats of what keys sign and derive**, as [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) proposes them for RFC 0008: the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`. **Recommendation:** accept them, including the change from RFC 0008 draft 0.2 that a parent agent, not the account, signs a sub-agent's certificate.
+- The same without the audit.
+- `hpke-rs`.
 
-   Decided (Carsten, 2026-11-08): the recommendation. RFC 0008's decision M26 B adds the [model-id subkey](#model-id-subkey) to these formats (Carsten, 2026-11-08). *(Amendment 2.)*
+### 4. Signature algorithm
+
+Decided (Carsten, 2026-11-08): Ed25519 in software keystores.
+
+Why: deterministic signatures, and one behaviour on every platform; the platform keystore still protects the key at rest.
+
+Not taken:
+
+- ECDSA P-256, held in hardware where the platform offers it.
+
+### 5. What a new member reads
+
+Decided (Carsten, 2026-11-08): the whole history, through the key chain.
+
+Why: every member holds the full copy; reading only from the generation it joined can come later as an option for spaces that ask for it.
+
+Not taken:
+
+- Only from the generation it joined, optional per space.
+
+### 6. When the space key rotates
+
+Decided (Carsten, 2026-11-08): eagerly, as part of every removal.
+
+Why: a removed member must not read anything written after its removal, even if nobody writes for a while.
+
+Not taken:
+
+- Lazily, on the next write after a removal.
+
+### 7. Scope of the person key
+
+Decided (Carsten, 2026-11-08): one key per person id (RFC 0005, D14) per space.
+
+Why: a space's members never need a key that also opens the person's data in other spaces; an erasure work order finds the person's keys by person id and shreds them in every space the performing account can reach.
+
+Not taken:
+
+- One key per person across all spaces, distributed into each space.
+
+### 8. Where the account key lives
+
+Decided (Carsten, 2026-11-08): on every device of the account, plus a recovery code the person keeps.
+
+Why: the simplest for people to use in v1; designated admin devices can come later as an option for organisations.
+
+Not taken:
+
+- Only on designated admin devices, plus a recovery code.
+- Derived from a passkey.
+
+### 9. Post-quantum key agreement
+
+Decided (Carsten, 2026-11-08): ship X25519 in v1 and reserve a suite id for a hybrid suite later.
+
+Why: the Rust implementations of ML-KEM are young. X25519 does not resist a future quantum computer, and the relay's operators could keep today's ciphertext until one exists, so the documentation says plainly that v1 is not post-quantum.
+
+Not taken:
+
+- A hybrid X25519 + ML-KEM key agreement from v1.
+
+### 10. Person keys at the relay
+
+Decided (Carsten, 2026-11-08): the relay holds each person key wrapped under the space key, in a store it can delete from, so a new member can open personal fields while no other member is online.
+
+Why: it adds no reader the design does not already have (see the limits of shredding), and it keeps new members, including cloud agents, working when nobody else is online.
+
+Not taken:
+
+- Person keys never reach the relay; members hand them to each other directly.
+
+### 11. Personal fields in an ad-hoc space
+
+Decided (Carsten, 2026-11-08): personal fields are not copied unless the parent asks explicitly, and then the person key is shared into the ad-hoc space, so an erasure reaches the copy.
+
+Why: a sub-agent gets the least it needs.
+
+Not taken:
+
+- The person key is always shared into the ad-hoc space.
+
+### 12. Public API names
+
+Decided (Carsten, 2026-11-08): invitations and member ids instead of public keys in `members.add`, and a returned notice on every call that changes who can read what (`members.add`, `members.remove`, `workOrders.erase`, invitations).
+
+Why: a developer never handles key material, and a change of who can read what is never silent.
+
+Not taken:
+
+- Public keys passed to `members.add`.
+
+### 13. How a member authenticates to the relay
+
+Decided (Carsten, 2026-11-08): the member's Ed25519 signing key signs the relay's challenge, separated from change signatures by a context string.
+
+Why: the context string already keeps the two uses apart, the relay must know the signing key anyway to verify changes, and a third key adds a certificate and a rotation without protecting anything more.
+
+Not taken:
+
+- A third, separate key per member only for relay authentication, certified by the account key.
+
+### 14. Integrity of the person-key store
+
+Decided (Carsten, 2026-11-08): a person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred entry with a second account's sign-off, as in [The person key](#the-person-key).
+
+Why: no single member can swap a key or erase one.
+
+Not taken:
+
+- Unsigned records that any member may overwrite or delete, as an opaque store: one member could swap a key or erase it without a sign-off.
+- Person keys only inside control changes in the log, wrapped per member: the key would sit in the append-only log, where a shred can no longer destroy it.
+
+### 15. Formats of what keys sign and derive
+
+Decided (Carsten, 2026-11-08): the formats in [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive): the member certificate, the account sign-off of a shred, the key-chain subkey and the key envelope's `info`, including that a parent agent, not the account, signs a sub-agent's certificate.
+
+RFC 0008's decision M26 B adds the [model-id subkey](#model-id-subkey) to these formats (Carsten, 2026-11-08).
+
+Why: a parent agent does not hold the account key and must not, so RFC 0008 draft 0.2's account-signed sub-agent certificate could not work.
+
+Not taken:
+
+- Every kind of member certificate signed by the account key, as RFC 0008 draft 0.2 had it.
+
+### 16. Where the member key lives
+
+Decided (Carsten, 2026-11-10): the platform keystore, and a key file for an agent that names one; without either, the database does not open. Asked on NOC-95, point 1.
+
+Why: it works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one, with its limit stated.
+
+Not taken:
+
+- The platform's app data directory, found from an app id, with the same keystore: suits apps but rarely servers and agents.
+- In memory only, until a keystore ticket: keeps no native data at all.
+
+### 17. The account key before the accounts RFC
+
+Decided (Carsten, 2026-11-10): each database draws its own account key once and keeps it next to the member key; an option marks the member as an agent. Asked on NOC-95, point 2. The accounts RFC follows (NOC-107).
+
+Why: a person's devices are unrelated accounts until the accounts RFC links them, which that RFC must allow for.
+
+Not taken:
+
+- The app passes the account key: puts a key in the app's hands, which principle 5 rules out.
+- No space can be created until the accounts RFC exists: blocks every space.
+
+### 18. The bytes of an encrypted previous key
+
+Decided (Carsten, 2026-11-10): `nonce (24) || ciphertext (32) || tag (16)`, 72 bytes, with a random nonce, as a sealed payload. Asked on NOC-97.
+
+Why: one layout everywhere.
+
+Not taken:
+
+- A CBOR map `{1: nonce, 2: ciphertext and tag}`, about 76 bytes: a second layout to read, for room it does not need.
+- A deterministic nonce, 48 bytes: it could repeat a nonce under one key when two rotations name the same generation (RFC 0008, M23).
+
+### The bytes of a sealed change
+
+Decided (Carsten, 2026-11-08): the content key, the nonce, the associated data and the padding of a sealed payload as [Sealed payload](#sealed-payload) gives them, and the crate versions in [Primitives](#primitives), each as recommended (NOC-30).
+
+Why: they are part of the wire format, and a wrong choice could only be fixed with a new suite.
+
+Not taken:
+
+- For the content key: the inputs as a canonical CBOR array in `info`, which needs an encoder for the derivation and a second shape of subkey.
+- For the content key: the space id as the HKDF salt, which splits the context over two inputs where every other subkey has none.
+- For the nonce: the nonce in a header key of its own, which costs a key and a rule for the associated data and gains nothing.
+- For the nonce: a nonce derived from author and sequence, which repeats when a device is restored from a backup or reuses a sequence number, and then reveals both plaintexts.
+- For the associated data: a fixed list of fields, which leaves a later field unbound.
+- For the associated data: no associated data, relying on the signature alone, which loses the binding wherever the signature is checked apart from the decryption.
+- For the padding: padding the payload without key 5 to the multiple, which lets the key's own 1 to 3 bytes show the true size again.
+- For the padding: padding outside the CBOR, at the encryption layer, which needs its own length field and goes against D8.
+- For the crates: the older line the review covered, `chacha20poly1305 0.10.1` and `hkdf 0.12`, which is no longer maintained and brings a second `sha2`.
+- For the crates: libsodium through bindings, which [Primitives](#primitives) already rejected for `wasm32-unknown-unknown`.
+
+### Decisions this RFC follows
+
+Each line names a decision of another RFC that changes what this one says, and links where that RFC states it.
+
+- **Generation ids.** A generation is named by a 16-bit ordinal and a 48-bit tag no member can choose, so concurrent rotations never name the same generation: RFC 0008's M6 (Carsten, 2026-11-08), [Generation ids](0008-membership.md#generation-ids).
+- **Exposure and the merge rotation.** When the current generation is exposed, an admin device writes a merge rotation: RFC 0008's M15 (Carsten, 2026-11-08), [Two removals that rotate the key at once](0008-membership.md#two-removals-that-rotate-the-key-at-once).
+- **The cutoff of a removal.** The relay refuses a removed member's changes above the cutoff the removal names: RFC 0008's M3 (Carsten, 2026-11-08), [The cutoff](0008-membership.md#the-cutoff).
+- **Who signs off an erasure.** A second account that holds an admin member in the space, not the performer's: RFC 0008's M9 (Carsten, 2026-11-08), [Roles and rights](0008-membership.md#roles-and-rights).
+- **The person-key entry.** It carries this RFC's commitment and the generation and record hash the relay needs: RFC 0008's conflict 11 (Carsten, 2026-11-08), [Person-key entry](0008-membership.md#person-key-entry).
+- **A shredded key waits until the shred is stable.** Members delete their copy, and the relay its record, only then, with an alarm after 7 days: RFC 0008's M20 and M21 (Carsten, 2026-11-08), [Effects that wait until a change is stable](0008-membership.md#effects-that-wait-until-a-change-is-stable).
+- **The model id in the genesis.** Sealed under the model-id subkey of generation 1's key: RFC 0008's M26 (Carsten, 2026-11-08), [Genesis](0008-membership.md#genesis).
+- **The sketch's names.** A space has no name, the role is `"writer"`, and the database opens with its lock: RFC 0009's S1, S11 and S13 (Carsten, 2026-11-09), [Spaces](0009-sdk-api.md#spaces).
+- **The source of a copy.** The parent's SDK keeps it, on the parent only: RFC 0009's point 9, decided with S1 to S18 (Carsten, 2026-11-09), [Sub-agents and ad-hoc spaces](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces).
 
 ## Agreement with GENESIS.md and RFC 0001
 
 This RFC follows GENESIS.md and RFC 0001: the relay holds no keys and checks only signatures and membership; every reader, a cloud agent included, is a member with its own key; a sub-agent gets an ad-hoc space; work orders that cannot be undone need a second account; shredding leaves signatures intact; the SDK manages keys; and only audited, widely used primitives are combined.
 
-It differs from them, or makes them more precise, in these points. pm flags each to the owner:
+It differs from them, or makes them more precise, in these points:
 
-1. **"One key per person"** (GENESIS.md, "Shred and audit"). This RFC recommends one key per person per space (decision 7). An erasure still destroys every key of that person, but it is more than one key.
+1. **"One key per person"** (GENESIS.md, "Shred and audit"). [Decision 7](#7-scope-of-the-person-key) gives one key per person per space. An erasure still destroys every key of that person, but it is more than one key.
 
    Accepted (Carsten, 2026-11-08).
 2. **The limits of erasure.** GENESIS.md and RFC 0001 name offline devices, exports, unmarked free text and an agent running as the user. This RFC adds two: a modified client that ignores the shred, and a member that obtains a relay backup taken before the shred. Both follow from the fact that a key once held cannot be taken back. RFC 0001 should list them.
@@ -420,7 +613,7 @@ It differs from them, or makes them more precise, in these points. pm flags each
 3. **Use case 3** says a removed agent "receives no new changes". True for the relay. A member that has not yet seen the removal may still write under the old generation, which the removed agent could read if it got hold of those changes (see [Removing a member and rotating the space key](#removing-a-member-and-rotating-the-space-key)).
 
    Accepted (Carsten, 2026-11-08).
-4. **Use case 3** passes `agentPublicKey` to `members.add`. This RFC recommends invitations or member ids, so a developer never handles key material (decision 12).
+4. **Use case 3** passes `agentPublicKey` to `members.add`. [Decision 12](#12-public-api-names) gives invitations or member ids instead, so a developer never handles key material.
 
    Accepted (Carsten, 2026-11-08).
 5. **Use case 1** says that without the key "every copy of those fields is unreadable, on every device". That holds for copies whose device has deleted the key; a device that never comes back keeps it, as the same use case says further down. The sentence should name that limit where it makes the claim.
@@ -430,45 +623,10 @@ It differs from them, or makes them more precise, in these points. pm flags each
 
    Accepted (Carsten, 2026-11-08).
 
-## Amendment 1: the bytes of a sealed change
+## Open questions
 
-Added on 2026-11-08 for NOC-15, after this RFC was merged. [How a member signs and encrypts a change](#how-a-member-signs-and-encrypts-a-change) fixes the primitives and their order, and [RFC 0002](0002-change-and-log-format.md) D8 fixes that payloads are padded to 256 bytes. Five details at byte level were still open. They are part of the wire format, so the owner decided them (NOC-30). A wrong choice could only be fixed with a new suite.
-
-1. **The content key.** Content key = HKDF-SHA256(ikm = the space key of the header's generation, salt = none, info = `"nocentraldb/content-key"` ‖ space id (16 bytes) ‖ key generation (8 bytes, big-endian) ‖ suite id (8 bytes, big-endian)), 32 bytes. It has the same shape as the [key-chain subkey](#key-chain-subkey), and with fixed widths two different contexts never give the same bytes.
-   - Rejected: the inputs as a canonical CBOR array in `info`, which needs an encoder for the derivation and a second shape of subkey.
-   - Rejected: the space id as the HKDF salt, which splits the context over two inputs where every other subkey has none.
-2. **The nonce.** Each seal draws a random 24-byte nonce. Header key 6 holds the nonce, then the XChaCha20-Poly1305 ciphertext with its 16-byte tag: nonce ‖ ciphertext ‖ tag, libsodium's layout. A random nonce needs no stored state, which is why XChaCha was chosen.
-   - Rejected: the nonce in a header key of its own, which costs a key and a rule for the associated data and gains nothing.
-   - Rejected: a nonce derived from author and sequence, which repeats when a device is restored from a backup or reuses a sequence number, and then reveals both plaintexts.
-3. **The associated data.** The canonical CBOR encoding (RFC 0002) of the header map without key 6. Unknown header keys are included, so a header field added later is bound without anyone having to remember it.
-   - Rejected: a fixed list of fields, which leaves a later field unbound.
-   - Rejected: no associated data, relying on the signature alone, which loses the binding wherever the signature is checked apart from the decryption.
-4. **The padding.** The canonical encoding of the whole payload map, padding key 5 included, is a multiple of 256 bytes. The sealer picks the length of the zero bytes in key 5 so that it lands on the multiple. A payload already on a multiple gets no key 5. Key 5 costs at least 2 bytes, and one length (26 bytes short) cannot be reached either, so a payload 1 or 26 bytes short of a multiple pads to the multiple after. Readers ignore key 5, so the rule can change without a new format (RFC 0002, D8).
-   - Rejected: padding the payload without key 5 to the multiple, which lets the key's own 1 to 3 bytes show the true size again.
-   - Rejected: padding outside the CBOR, at the encryption layer, which needs its own length field and goes against D8.
-5. **The crates.** `chacha20poly1305 =0.11.0` and `hkdf =0.13.0`, with the same `sha2 =0.11.1` that computes change ids. The ChaCha20-Poly1305 cipher core the 2020 NCC Group review covered has not changed since, and security fixes land only in the current line. The pinned versions themselves have no audit of their own.
-   - Rejected: the older line the review covered, `chacha20poly1305 0.10.1` and `hkdf 0.12`, which is no longer maintained and brings a second `sha2`.
-   - Rejected: libsodium through bindings, which [Primitives](#primitives) already rejected for `wasm32-unknown-unknown`.
-
-Decided: Carsten, 2026-11-08 (NOC-30), each as recommended. `ncdb-core` implements all five in `src/seal.rs`. `crates/ncdb-core/tests/vectors/generate.py` writes a test vector for a signed, sealed change from this description with independent libraries.
-
-## Amendment 2: following RFC 0008
-
-Added on 2026-11-08 for NOC-44. [RFC 0008](0008-membership.md) defines membership, roles and the control bodies that carry this RFC's formats, and the owner accepted every one of its decisions, M1 to M26 (Carsten, 2026-11-08). Its section [Conflicts with GENESIS.md and the other RFCs](0008-membership.md#conflicts-with-genesismd-and-the-other-rfcs) names where this RFC said something else. This amendment changes those sentences, marked *(Amendment 2)* above. The owner has decided every point, so it adds no decision.
-
-- **Concurrent rotations** (conflict 8, decisions M6 and M15). Generations are named by derived ids, an ordinal and a tag, instead of consecutive numbers, so two islands that rotate at once create two distinct generations. A generation is exposed when anyone who may hold it is no longer a member, and the SDK of an admin device that sees an exposed current generation writes a merge rotation. Picking "the generation whose entry has the lower hash" is gone ([RFC 0008, "Generation ids"](0008-membership.md#generation-ids), and [Two removals that rotate the key at once](0008-membership.md#two-removals-that-rotate-the-key-at-once)).
-- **The sign-off of an erasure** (conflict 9, decision M9). The second account must hold an admin member in the space, in the state of the shred's causal past, and must not be the performer's account. Any account with a certified member no longer suffices, because an erasure cannot be undone and a reader's account should not approve one ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)).
-- **The person-key entry** (conflict 11). It carries both this RFC's commitment and the generation and record hash the relay needs. This RFC points to RFC 0008 for its body, and a record replaces a stored one only for the same or a descendant generation, because generation ids carry a tag and are no longer ordered by size ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)).
-- **The model-id subkey** (conflict 14, decision M26 B). [Formats of what keys sign and derive](#formats-of-what-keys-sign-and-derive) adds the subkey `"nocentraldb/model-id"` of generation 1's key, which seals the model id in the genesis. RFC 0002's list of what the relay cannot see stays true: the relay cannot read the model ([RFC 0008, "Genesis"](0008-membership.md#genesis)).
-- **When a shredded key is destroyed** (decisions M20 and M21). Members delete their copy of a person key, and the relay its record, only once the shred is stable; every view treats the fields as erased at once. The list of what shredding does not reach names the wait and the alarm ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
-- **What a removal refuses** (decision M3). The relay refuses a removed member's changes above the cutoff the removal names, not every change from the moment the removal arrives ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
-
-## Amendment 3: following RFC 0009
-
-Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's API, and the owner accepted every one of its decisions, S1 to S18 (Carsten, 2026-11-09). Its section [Conflicts with GENESIS.md and the other RFCs](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs) names two points where this RFC says something else. This amendment changes those sentences, marked *(Amendment 3)* above, and decides nothing.
-
-- **The sketch in "How the SDK hides keys"** (RFC 0009's [point 5](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs), decisions S1, S11 and S13). The sketch named a space with `db.spaces.create({ name: "Project A" })`, where the name has no place: the genesis holds no name, because a name is content the relay must not read. It now creates the space without a name, adds the member with the role `"writer"`, one of RFC 0008's roles, instead of `"editor"`, and opens the database with its `model.lock.json`. The names are RFC 0009's, except `db.workOrders.erase`, which stays a sketch.
-- **The source of a copy** (RFC 0009's [point 9](0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs)). Step 3 of "Sub-agents get an ad-hoc space" said the copies keep a reference to their source, and not where. The parent's SDK keeps it, on the parent only; the sub-agent never learns the source's id.
+- **The bytes of the associated data of an encrypted previous key.** [Key-chain subkey](#key-chain-subkey) names its three parts, the space id, the new generation id and the previous generation id, but not their bytes, nor whether a label leads them as one leads the key envelope's `info`. The core encodes them as `space id (16) || new generation id (8, big-endian) || previous generation id (8, big-endian)`, with no label, until the owner decides ([NOC-110](https://linear.app/nocentraldb/issue/NOC-110/owner-three-rfc-0008-points-100-decides-inside-the-core-current), point 4).
+- **The bytes a writer signs for a person-key record.** [The person key](#the-person-key) names the context of the signature, `"nocentraldb/person-key-record"`, but not the bytes that follow it. Until the owner decides, #111 (NOC-96) builds the signature over `SHA-256(context || space id (16) || person-key id (16) || generation (8, big-endian) || writer member id (32) || wrapped bytes)` ([NOC-117](https://linear.app/nocentraldb/issue/NOC-117/owner-the-bytes-a-writer-signs-for-a-person-key-record-111)).
 
 ## Sources
 
@@ -478,3 +636,15 @@ Added on 2026-11-09 for NOC-75. [RFC 0009](0009-sdk-api.md) defines the SDK's AP
 - The `hpke` crate's README, on its audit status.
 - SRLabs, audit of OpenMLS, sponsored by the Sovereign Tech Agency.
 - RustSec advisories RUSTSEC-2022-0093 and RUSTSEC-2024-0344.
+
+## History
+
+- **2026-11-08** · NOC-7 · The first version, with decisions 1 to 15, which the owner decided as recommended ([#27](https://github.com/nocentraldb/nocentraldb/pull/27)).
+- **2026-11-08** · NOC-20 · How the SDK hides keys links use case 3, which passes invitations and member ids ([#45](https://github.com/nocentraldb/nocentraldb/pull/45)).
+- **2026-11-08** · NOC-15, NOC-30 · The bytes of a sealed change: the content key, the nonce, the associated data, the padding and the crate versions, as the owner decided ([#47](https://github.com/nocentraldb/nocentraldb/pull/47)).
+- **2026-11-09** · NOC-44 · Follows RFC 0008: generation ids, exposure and the merge rotation, the narrower sign-off, the person-key entry, the model-id subkey, the cutoff, and the wait before a shredded key is destroyed ([#61](https://github.com/nocentraldb/nocentraldb/pull/61)).
+- **2026-11-09** · NOC-55 · How to give feedback ([#72](https://github.com/nocentraldb/nocentraldb/pull/72)).
+- **2026-11-09** · NOC-35 · The header drops its draft number, and the status names the merge ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
+- **2026-11-10** · NOC-75 · Follows RFC 0009: the sketch in "How the SDK hides keys" uses its names, and the source of a copy in an ad-hoc space stays on the parent ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
+- **2026-11-10** · NOC-106 · Where the member key lives, with a key file for a headless agent, the account key each database draws until the accounts RFC, and the 72 bytes of an encrypted previous key; decisions 16 to 18 ([#113](https://github.com/nocentraldb/nocentraldb/pull/113)).
+- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#119](https://github.com/nocentraldb/nocentraldb/pull/119)).

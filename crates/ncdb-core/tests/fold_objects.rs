@@ -1,5 +1,5 @@
 //! The fold of creates and deletes (NOC-39; RFC 0004, "Two creates of one
-//! object id" and Amendment 1, "Creating and deleting an object"): a
+//! object id" and "Creating and deleting an object"): a
 //! received change's create puts the object into the copy with its
 //! collection, a delete sets its deleted flag, and a link to it resolves
 //! from both. Operations that do not decode park with their reason, field
@@ -140,6 +140,32 @@ fn a_delete_sets_the_deleted_flag_and_a_link_to_the_object_reads_deleted() {
 }
 
 #[test]
+fn a_write_of_the_deletion_from_the_objects_state_replaces_the_deletions_the_copy_holds() {
+    let mut m = with_key();
+    m.receive(&at(2, 5, vec![field_op::create(T, COLLECTION)]));
+    let deletion = m.receive(&at(3, 6, vec![delete(true, &[])]));
+
+    // What the SDK writes for a delete or a restore (NOC-88).
+    let deleted = BasicValue {
+        kind: basic::Kind::Boolean,
+    };
+    let id = OperationId {
+        change: ncdb_core::ids::ChangeId([0; 32]),
+        position: 0,
+    };
+    let restore = deleted
+        .set(
+            m.fold.objects[&T].deletion(),
+            id,
+            member(FOUNDER),
+            Hlc(7),
+            Value::Bool(false),
+        )
+        .unwrap();
+    assert_eq!(restore.replaces, BTreeSet::from([deletion.operation_id(0)]));
+}
+
+#[test]
 fn a_delete_before_its_create_is_kept_and_applies_once_the_object_exists() {
     let mut m = with_key();
     m.receive(&at(2, 6, vec![delete(true, &[])]));
@@ -221,6 +247,14 @@ impl Fold for Tasks {
 
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         self.objects.entry(object).or_default().apply(operation);
+    }
+
+    fn clear_field(&mut self, object: ObjectId, _collection: &str, _field: &str) {
+        self.titles.remove(&object);
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        self.objects.remove(&object);
     }
 }
 

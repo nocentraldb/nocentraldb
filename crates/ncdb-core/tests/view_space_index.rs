@@ -1,7 +1,7 @@
-//! An index declared with `scope: "space"` (RFC 0006, Amendment 6, point
-//! 1; NOC-81): the space id comes first and the object id last, a lookup
+//! An index declared with `scope: "space"` (RFC 0006, "Declared
+//! indexes"; NOC-81): the space id comes first and the object id last, a lookup
 //! fixes the space as the start of its equality prefix, and the cursor and
-//! the plan check of Amendment 5 apply unchanged.
+//! the plan check ("The check") apply unchanged.
 //!
 //! Native only: the browser's view (OPFS) is a later ticket.
 #![cfg(not(target_arch = "wasm32"))]

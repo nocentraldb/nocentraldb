@@ -7,15 +7,15 @@
 //! out in order. Persistence to SQLite is a later ticket.
 //!
 //! On a member, each entry also carries its [`State`]: folded, parked or
-//! rejected (RFC 0002 Amendment 1), and the relay's refusal when there is
+//! rejected (RFC 0002, "Rejected changes"), and the relay's refusal when there is
 //! one, beside the frame bytes. [`Log::receive`](crate::receive) sets both.
 //! The relay's log holds no states: an entry appended with [`Log::append`]
 //! has none.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::change::Change;
+use crate::change::{Change, Kind};
 use crate::ids::{ChangeId, SpaceId};
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
@@ -54,14 +54,17 @@ impl fmt::Display for AppendError {
 
 impl std::error::Error for AppendError {}
 
-/// Where a member's check of a change stopped (RFC 0002 Amendment 1, "What
+/// Where a member's check of a change stopped (RFC 0002, "What
 /// a member does with a change it receives"). New states and reasons may
 /// follow, so the enums are open to extension.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum State {
     /// Passed every check and folded. Operations the member's model does
-    /// not know yet are parked on their own (D10), listed here in order.
+    /// not know yet are parked on their own (D10), listed here in order. A
+    /// sealed change moves on to rejected, and is un-folded, when a later
+    /// control change makes its membership check fail (RFC 0006,
+    /// "Un-folding").
     Folded {
         /// The operations of the change that were not folded.
         parked: Vec<ParkedOperation>,
@@ -69,8 +72,9 @@ pub enum State {
     /// Kept and not folded, because this client does not understand it
     /// yet; folded after an upgrade.
     Parked(ParkReason),
-    /// Kept and not folded, because it failed a check; checked again when a
-    /// control change of the space arrives (D11).
+    /// Kept and not folded, because it failed a check, or un-folded,
+    /// because a later control change made it fail; checked again when a
+    /// control change of the space passes (D11).
     Rejected(RejectReason),
 }
 
@@ -113,13 +117,14 @@ pub enum OperationParkReason {
     /// The operation carries an unknown "must understand" key.
     UnknownKey,
     /// The field's type does not define the operation's number (RFC 0004,
-    /// Amendment 1).
+    /// "Operations a member does not understand").
     UnknownOperation,
     /// The operation's arguments carry a "must understand" key, 4 to 63,
-    /// that the operation does not define (RFC 0004, Amendment 1).
+    /// that the operation does not define (RFC 0004, "Operations a member
+    /// does not understand").
     UnknownArgument,
-    /// The operation's arguments are malformed (RFC 0004, Amendment 1,
-    /// decision 12).
+    /// The operation's arguments are malformed (RFC 0004, "The
+    /// arguments of each operation", decision 12).
     MalformedArguments,
 }
 
@@ -163,6 +168,9 @@ pub struct Log {
     space: SpaceId,
     entries: Vec<Entry>,
     positions: BTreeMap<ChangeId, Position>,
+    /// The changes whose state was set since [`Log::take_changed`] last
+    /// ran, for a store that keeps the states.
+    changed: BTreeSet<ChangeId>,
 }
 
 impl fmt::Debug for Log {
@@ -181,6 +189,7 @@ impl Log {
             space,
             entries: Vec::new(),
             positions: BTreeMap::new(),
+            changed: BTreeSet::new(),
         }
     }
 
@@ -256,7 +265,14 @@ impl Log {
     pub(crate) fn set_state(&mut self, id: ChangeId, state: State) {
         if let Some(entry) = self.entry_mut(id) {
             entry.state = Some(state);
+            self.changed.insert(id);
         }
+    }
+
+    /// The changes whose state was set since the last call, which a store
+    /// of the states must write.
+    pub(crate) fn take_changed(&mut self) -> BTreeSet<ChangeId> {
+        std::mem::take(&mut self.changed)
     }
 
     /// The rejected changes, in log order.
@@ -265,6 +281,30 @@ impl Log {
             .iter()
             .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
             .map(|entry| entry.change.clone())
+            .collect()
+    }
+
+    /// The control changes that passed their checks, in log order.
+    pub(crate) fn folded_controls(&self) -> impl Iterator<Item = &Change> {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                entry.change.header().kind == Kind::CONTROL
+                    && matches!(entry.state, Some(State::Folded { .. }))
+            })
+            .map(|entry| &entry.change)
+    }
+
+    /// The folded changes that are not control changes, in log order, with
+    /// their parked operations.
+    pub(crate) fn folded_sealed(&self) -> Vec<(Change, Vec<ParkedOperation>)> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.change.header().kind != Kind::CONTROL)
+            .filter_map(|entry| match &entry.state {
+                Some(State::Folded { parked }) => Some((entry.change.clone(), parked.clone())),
+                _ => None,
+            })
             .collect()
     }
 

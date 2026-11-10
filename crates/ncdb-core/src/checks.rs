@@ -1,5 +1,5 @@
-//! The checks of steps 3 to 5 of RFC 0002 Amendment 1 ("What a member
-//! does with a change it receives") with the real signature and
+//! The checks of steps 3 to 5 of RFC 0002, "What a member does
+//! with a change it receives", with the real signature and
 //! decryption of RFC 0003 ("How a member signs and encrypts a change"):
 //! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
 //! [`seal::open`].
@@ -35,9 +35,10 @@ use crate::seal::{self, OpenError};
 /// gives the verdicts.
 ///
 /// **What this does not do.** A space key, once unwrapped, stays known,
-/// even if a later control change rejects its envelope; and a change that
-/// passed is not checked again when a later control change would reject it
-/// (NOC-49).
+/// even if a later control change rejects its envelope. Whether a sealed
+/// change that passed still passes when a later control change arrives is
+/// asked again through [`Checks::is_member`], and the log un-folds it when
+/// it no longer does (RFC 0006, "Un-folding").
 pub struct SealChecks {
     space: SpaceId,
     member: MemberKey,
@@ -122,7 +123,7 @@ impl Checks for SealChecks {
     }
 
     fn add_control(&mut self, change: &Change) {
-        if change.header().space != self.space {
+        if change.header().space != self.space || self.controls.contains_key(&change.id()) {
             return;
         }
         if let Ok(body) = ControlBody::decode(&change.header().payload) {
@@ -157,7 +158,8 @@ impl fmt::Debug for SealChecks {
 }
 
 /// Where a change stops when [`seal::verify`] or [`seal::open`] fails: the
-/// step of RFC 0002 Amendment 1 and its reason. An unknown author and a
+/// step of RFC 0002, "What a member does with a change it receives", and
+/// its reason. An unknown author and a
 /// missing space key do not come from here, since they depend on the keys
 /// the member holds, not on the change: [`SealChecks`] finds them first.
 ///

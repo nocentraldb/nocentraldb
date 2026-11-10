@@ -3,7 +3,7 @@
 //! member's log (RFC 0002, "The log on disk") and the view folded from it.
 //!
 //! A received change is appended to the log, taken through the checks of
-//! RFC 0002 Amendment 1 by [`Log::receive`], and folded into the tables of
+//! RFC 0002 by [`Log::receive`], and folded into the tables of
 //! its collections, in one SQLite transaction ([`View::receive`]): after a
 //! crash a change is in both the log and the view or in neither. The view
 //! keeps each space's [`Log`] in memory too, read back from the `log` table
@@ -101,6 +101,18 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+impl Error {
+    /// Whether SQLite failed because the disk or the quota is full: the one
+    /// failure that freeing space can mend.
+    pub fn is_full(&self) -> bool {
+        matches!(
+            self,
+            Error::Sqlite(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == rusqlite::ErrorCode::DiskFull
+        )
+    }
+}
+
 impl From<rusqlite::Error> for Error {
     fn from(error: rusqlite::Error) -> Error {
         Error::Sqlite(error)
@@ -144,9 +156,10 @@ impl View {
     }
 
     /// Receives a frame: appends it to the log of its space, takes it
-    /// through the steps and folds it, and checks rejected changes again
-    /// when it is a control change that passes (D11), all in one SQLite
-    /// transaction. A duplicate changes nothing. When anything fails,
+    /// through the steps and folds it, and, when it is a control change
+    /// that passes, checks rejected changes again (D11) and un-folds the
+    /// folded changes it now rejects (RFC 0006, "Un-folding"), all in one
+    /// SQLite transaction. A duplicate changes nothing. When anything fails,
     /// neither the log nor the view changes.
     pub fn receive(&mut self, bytes: &[u8], checks: &mut impl Checks) -> Result<Appended, Error> {
         let change =
@@ -167,8 +180,7 @@ impl View {
     ) -> Result<Appended, Error> {
         let space = change.header().space;
         let log = self.logs.entry(space).or_insert_with(|| Log::new(space));
-        // The changes whose state a passing control change can change.
-        let rejected: Vec<ChangeId> = log.rejected().iter().map(Change::id).collect();
+        log.take_changed();
         let tx = self.conn.transaction()?;
         let mut fold = fold::SqlFold::new(&tx, &self.model, space);
         let appended = log.receive(bytes, checks, &mut fold);
@@ -176,8 +188,11 @@ impl View {
         let appended = appended.map_err(Error::Receive)?;
         if let Appended::New(_) = appended {
             log_table::insert(&tx, log, change.id())?;
-            for id in rejected {
-                log_table::update(&tx, log, id)?;
+            // A passing control change can change the state of others.
+            for id in log.take_changed() {
+                if id != change.id() {
+                    log_table::update(&tx, log, id)?;
+                }
             }
         }
         tx.commit()?;

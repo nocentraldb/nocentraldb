@@ -13,10 +13,14 @@
 // whether it is deprecated, and a collection's carry its fields, which is
 // what `Infer` reads.
 
-/** A field of the model that reads as `T`, deprecated when `D` is true: its type, and the modifiers chained after it. */
-interface Field<T = unknown, D extends boolean = false> {
+/** What every field of the model carries: what it reads as (`T`), and whether it is deprecated (`D`). */
+interface Value<T = unknown, D extends boolean = false> {
   readonly "nc.reads": T;
   readonly "nc.deprecated": D;
+}
+
+/** A field of the model that reads as `T`, deprecated when `D` is true: its type, and the modifiers chained after it. */
+interface Field<T = unknown, D extends boolean = false> extends Value<T, D> {
   /** Marks the field as personal, about `person`: `"self"` or a link field of the same collection. */
   personal(options: { person: string }): Field<T, D>;
   /** Adds a description, which is copied into the lock. */
@@ -25,8 +29,16 @@ interface Field<T = unknown, D extends boolean = false> {
   deprecated(reason: string): Field<T, true>;
 }
 
+/** A reference field, deprecated when `D` is true: it takes `describe` and `deprecated`, and cannot be personal (RFC 0005, D22). */
+interface Ref<D extends boolean = false> extends Value<Target, D> {
+  /** Adds a description, which is copied into the lock. */
+  describe(text: string): Ref<D>;
+  /** Hides the field from the app, and keeps it in the model and the data. */
+  deprecated(reason: string): Ref<true>;
+}
+
 /** The fields of a collection, by name. */
-type Fields = Record<string, Field<unknown, boolean>>;
+type Fields = Record<string, Value<unknown, boolean>>;
 
 /** A collection of the model with the fields `F`, deprecated when `D` is true: its fields, and the places for computed fields, views and indexes. */
 interface Collection<F extends Fields = Fields, D extends boolean = false> {
@@ -48,12 +60,13 @@ export type Unknown = { unknown: string };
  * An object of the collection `C` as the app reads it (RFC 0005, "Types for
  * the app"): every field optional, without the deprecated ones. A choice
  * reads as its options or `Unknown`, an `nc.int` as a `number` (D16), a set
- * as an array, a link as an object id.
+ * as an array, a link as an object id, a reference as `{ space, id }`
+ * (RFC 0009, "Get by id").
  */
 export type Infer<C extends Collection<Fields, boolean>> =
   C extends Collection<infer F, false>
     ? {
-        [K in keyof F as F[K] extends Field<unknown, true>
+        [K in keyof F as F[K] extends Value<unknown, true>
           ? never
           : K]?: F[K]["nc.reads"];
       }
@@ -76,7 +89,11 @@ const DESCRIBE = Symbol.for("nocentraldb.model.describe");
 type Spec =
   | { kind: "basic"; type: string; options?: string[] }
   | { kind: "set"; of: Field<unknown, boolean> }
-  | { kind: "link"; type: "ncdb/link" | "ncdb/links"; targets: string[] }
+  | {
+      kind: "link";
+      type: "ncdb/link" | "ncdb/links" | "ncdb/ref";
+      targets: string[];
+    }
   | { kind: "reserved"; name: string };
 
 /** A field's type with its modifiers. */
@@ -101,8 +118,14 @@ type IndexState = {
   scope?: "space";
 };
 
-/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, Amendment 3). */
+/** An object id, as a link reads: its 16 bytes as 32 lowercase hex digits (RFC 0009, "Get by id"). */
 type ObjectId = string;
+
+/** A space id, in the form `$space` carries it. */
+type SpaceId = string;
+
+/** A reference as the app reads it: the target's space id and object id, without its state (RFC 0009, "Get by id"). */
+type Target = { space: SpaceId; id: ObjectId };
 
 const fieldStates = new WeakMap<object, FieldState>();
 const collectionStates = new WeakMap<object, CollectionState>();
@@ -116,6 +139,16 @@ const field = <T>(state: FieldState): Field<T> => {
     describe: (text: string) => field({ ...state, description: text }),
     deprecated: (reason: string) => field({ ...state, deprecated: reason }),
   } as unknown as Field<T>;
+  fieldStates.set(made, state);
+  return made;
+};
+
+/** The reference with this state: a field without `personal` (D22). */
+const reference = <D extends boolean>(state: FieldState): Ref<D> => {
+  const made = {
+    describe: (text: string) => reference({ ...state, description: text }),
+    deprecated: (reason: string) => reference({ ...state, deprecated: reason }),
+  } as unknown as Ref<D>;
   fieldStates.set(made, state);
   return made;
 };
@@ -196,6 +229,11 @@ export const link = (target: string | readonly string[]): Field<ObjectId> =>
 export const links = (target: string | readonly string[]): Field<ObjectId[]> =>
   field({
     spec: { kind: "link", type: "ncdb/links", targets: targets(target) },
+  });
+/** A reference to one object, which may live in another space, in one collection or in one of several (RFC 0005, "References into another space"). */
+export const ref = (target: string | readonly string[]): Ref =>
+  reference({
+    spec: { kind: "link", type: "ncdb/ref", targets: targets(target) },
   });
 /** Rich text: reserved, its field type belongs to a later RFC. */
 export const richText = (): Field<never> =>
@@ -286,7 +324,7 @@ const describeCollection = (name: string, state: CollectionState) => {
 
 const describeField = (
   path: string,
-  declared: Field<unknown, boolean>,
+  declared: Value<unknown, boolean>,
 ): Record<string, unknown> => {
   const state = fieldStates.get(declared);
   if (state === undefined) {

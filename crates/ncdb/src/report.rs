@@ -8,7 +8,7 @@
 
 use std::fmt::Write;
 
-use ncdb_core::model_lock::{Collection, Field, Index, Kind, ModelLock, Person, Refusal, Scope};
+use ncdb_core::model_lock::{Collection, Field, Index, ModelLock, Person, Refusal, Scope};
 
 /// The width of the name column in a field's line.
 const NAME: usize = 17;
@@ -164,10 +164,11 @@ fn collection_lines(name: &str, old: &Collection, new: &Collection) -> Vec<Strin
     lines.into_iter().map(|(_, _, line)| line).collect()
 }
 
-/// A new field: its type, the collections it links to, whom it is about.
+/// A new field: its type, the collections it links or refers to, whom it
+/// is about.
 fn describe(collection: &str, field: &Field) -> String {
     let mut text = field.kind.describe();
-    if let Kind::Link(targets) | Kind::Links(targets) = &field.kind {
+    if let Some(targets) = field.kind.targets() {
         let _ = write!(text, " -> {}", targets.join(", "));
     }
     match &field.personal {
