@@ -18,6 +18,7 @@ mod members;
 mod pull;
 mod push;
 mod reconnect;
+mod removed;
 mod reopen;
 mod spaces;
 mod support;
