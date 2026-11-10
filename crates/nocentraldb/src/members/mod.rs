@@ -17,7 +17,7 @@ use ncdb_core::membership::{self, Action, ControlBody, Entry, MembershipEntry};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
-use crate::error::Error;
+use crate::error::{Error, ErrorCode};
 use crate::next;
 use crate::space::{Space, fold, writable};
 
@@ -70,10 +70,16 @@ impl Members<'_> {
     /// key envelope of the current generation, after the heads of the
     /// space's control DAG, and folds them, on the device. The new member
     /// reads the whole history of the space once it syncs.
+    ///
+    /// An account other than this database's own is new to it, since each
+    /// database draws its own account key (RFC 0009, S20): its member is
+    /// refused with `UnknownAccount` unless `options` carry the
+    /// invitation's fingerprint.
     pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<(), Error> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
+        known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner { view, spaces, .. } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
@@ -117,6 +123,24 @@ impl Members<'_> {
         crate::sync::wake(&inner);
         Ok(())
     }
+}
+
+/// Whether the account of `invitation` is known: it is the database's
+/// own, or `fingerprint` is its fingerprint, which a person compared.
+fn known(
+    inner: &Inner,
+    invitation: &Invitation,
+    fingerprint: Option<Fingerprint>,
+) -> Result<(), Error> {
+    let account = invitation.fingerprint();
+    if account.0 == inner.account.verifying_key().to_bytes() || fingerprint == Some(account) {
+        return Ok(());
+    }
+    Err(Error::new(
+        ErrorCode::UnknownAccount,
+        "the invitation's account is new to this database: pass its fingerprint \
+         once a person compared it",
+    ))
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control
