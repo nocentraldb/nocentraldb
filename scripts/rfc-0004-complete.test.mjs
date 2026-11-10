@@ -230,7 +230,12 @@ test("the names the app reads are working names, and why", () => {
   // 7
   holds(
     part("late-changes-stay-identifiable"),
-    [/working names/, /API review/, /where an app meets them/],
+    [
+      /working names/,
+      /API review/,
+      /where an app meets them/,
+      /[Dd]eciding the public names in this RFC was not taken/,
+    ],
     "Late changes stay identifiable",
   );
 });
@@ -324,7 +329,12 @@ test("a reference: its type, its encoding and its states, with the options not t
   );
   holds(
     part("how-a-reference-resolves"),
-    [/fourth state/, /current member/, /stored state/],
+    [
+      /fourth state/,
+      /three states the reference was decided with/,
+      /current member/,
+      /stored state/,
+    ],
     "How a reference resolves",
   );
 });
