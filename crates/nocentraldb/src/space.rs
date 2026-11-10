@@ -144,6 +144,20 @@ pub(crate) fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
     }
 }
 
+/// Whether the relay still serves this member the space `id`. Once it
+/// answered `not_member` or `removed_member` (RFC 0007, "The errors"), the
+/// member was removed, and a write or a membership call is `NotMember`
+/// (RFC 0009, "Errors"), even though its copy has not folded the removal.
+pub(crate) fn not_stopped(inner: &Inner, id: SpaceId) -> Result<(), Error> {
+    match crate::sync::stopped(inner, id.0) {
+        true => Err(Error::new(
+            ErrorCode::NotMember,
+            format!("the relay no longer serves this member the space {id}"),
+        )),
+        false => Ok(()),
+    }
+}
+
 /// A model id as 32 lowercase hex digits, as `model.lock.json` writes it.
 fn hex(bytes: &[u8; 16]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -205,15 +219,7 @@ impl Space {
         let collections: BTreeSet<String> =
             operations.iter().map(|op| op.collection.clone()).collect();
         writable(&inner, self.id)?;
-        if crate::sync::stopped(&inner, space) {
-            return Err(Error::new(
-                ErrorCode::NotMember,
-                format!(
-                    "the relay no longer serves this member the space {}",
-                    self.id
-                ),
-            ));
-        }
+        not_stopped(&inner, self.id)?;
         let wall = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));

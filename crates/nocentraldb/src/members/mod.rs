@@ -21,7 +21,7 @@ use ncdb_core::view::View;
 use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode};
 use crate::next;
-use crate::space::{Space, fold, writable};
+use crate::space::{Space, fold, not_stopped, writable};
 
 mod invitation;
 
@@ -85,8 +85,9 @@ impl Members<'_> {
     /// reads the whole history of the space once it syncs.
     ///
     /// Only an admin adds members: another member is refused with
-    /// `NotAllowed`, one that was removed with `NotMember` (RFC 0009,
-    /// "Errors"). The member of the invitation must not be a member, and
+    /// `NotAllowed`, one that was removed, or that the relay answered
+    /// `not_member` or `removed_member` for the space, with `NotMember`
+    /// (RFC 0009, "Errors"). The member of the invitation must not be a member, and
     /// must not have been one, which is refused with `InvalidValue`:
     /// adding a former member again needs a rotation first (RFC 0008, M5),
     /// which is not built.
@@ -101,6 +102,7 @@ impl Members<'_> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
+        not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
         allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         certified(invitation)?;
