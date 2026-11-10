@@ -123,6 +123,10 @@ pub struct Recorder {
 }
 
 impl Fold for Recorder {
+    fn model_id(&self) -> [u8; 16] {
+        MODEL
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         collection == COLLECTION || collection == OTHER
     }

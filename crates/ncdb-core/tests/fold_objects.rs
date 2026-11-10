@@ -230,6 +230,10 @@ struct Tasks {
 }
 
 impl Fold for Tasks {
+    fn model_id(&self) -> [u8; 16] {
+        [0; 16]
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         collection == "tasks"
     }

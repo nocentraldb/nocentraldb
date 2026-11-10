@@ -46,7 +46,11 @@ impl Stop {
                 | ParkReason::UnknownHeaderFormat
                 | ParkReason::UnknownHeaderKey,
             ) => 2,
-            Stop::Parked(ParkReason::UnknownPayloadFormat | ParkReason::UnknownPayloadKey) => 6,
+            Stop::Parked(
+                ParkReason::UnknownPayloadFormat
+                | ParkReason::UnknownPayloadKey
+                | ParkReason::AnotherModel,
+            ) => 6,
             Stop::Rejected(RejectReason::UnknownAuthor | RejectReason::BadSignature) => 3,
             Stop::Rejected(RejectReason::NotMember) => 4,
             Stop::Rejected(RejectReason::NoKey | RejectReason::Undecryptable) => 5,
@@ -106,6 +110,9 @@ pub trait Checks {
 /// The fold of operations (step 7): the member's model, its field types
 /// and the objects of the copy, in memory or in the local view.
 pub trait Fold {
+    /// The `model.id` of the member's lock: a change whose payload key 64
+    /// names another is parked whole (RFC 0002, "The writer's model").
+    fn model_id(&self) -> [u8; 16];
     /// Whether the member's model knows the collection.
     fn knows_collection(&self, collection: &str) -> bool;
     /// Whether the member's model knows the field of the collection.
@@ -248,6 +255,13 @@ fn check(
     };
     if payload.format != Payload::FORMAT {
         return (State::Parked(ParkReason::UnknownPayloadFormat), None);
+    }
+    // Key 64 before unknown "must understand" keys: a change of another
+    // model never folds after an upgrade, so that is its reason (NOC-202).
+    match payload.writer_model() {
+        None => {}
+        Some(Ok(model)) if model.id == fold.model_id() => {}
+        Some(_) => return (State::Parked(ParkReason::AnotherModel), None),
     }
     if payload.extensions().must_understand() {
         return (State::Parked(ParkReason::UnknownPayloadKey), None);

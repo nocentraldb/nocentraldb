@@ -100,6 +100,10 @@ pub enum ParkReason {
     UnknownPayloadFormat,
     /// The payload carries an unknown "must understand" key.
     UnknownPayloadKey,
+    /// Payload key 64 names another model than the member's lock, or has
+    /// the wrong shape: the change is parked whole (RFC 0002, "The
+    /// writer's model").
+    AnotherModel,
 }
 
 /// An operation of a folded change that was parked on its own (D10).
