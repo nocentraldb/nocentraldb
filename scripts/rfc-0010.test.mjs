@@ -1,16 +1,16 @@
 // Asserts the structure of RFC 0010 (NOC-107), accounts, as the owner decided
-// it (NOC-115): the file exists and the RFC index lists it; its header and
-// status say it is decided, by the owner, with the date; it links to
-// GENESIS.md and to every decided RFC it builds on, and every relative link
-// and its anchor resolve; it has a section for every part the ticket names
-// (the account key and where it lives, the recovery code, adding a device,
-// linking per-database accounts, and what a member certificate means for
-// RFC 0008); no question is left open and no recommendation or draft wording
-// is left in the design; "Decisions" holds Q1 to Q12 in short form, each cited
-// where it applies; the decision log records the owner's decision on the RFC
-// as a whole; and "History" names both steps. The test checks the shape of
-// the design document, not whether the design is right; that is the owner's
-// review of the pull request.
+// it (NOC-115) and asked it to read (Carsten, 2026-11-10, on #115): as one
+// design, with each decision worked into the section it belongs to. The file
+// exists and the RFC index lists it; its header and status say it is
+// decided, by the owner, with the date; it links to GENESIS.md and to every
+// decided RFC it builds on, and every relative link and its anchor resolve;
+// it has a section for every part the ticket names; it has no list of
+// decisions, no list of rejected options, no open question and no "Qn"
+// reference, and no recommendation or draft wording; the options not taken
+// still stand in the text; the decision log records the owner's decision on
+// the RFC as a whole; and "History" names each step. The test checks the
+// shape of the design document, not whether the design is right; that is the
+// owner's review of the pull request.
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
@@ -142,10 +142,7 @@ test("RFC 0010 has a section for every part NOC-107 names", () => {
     "losing a device",
     "what the relay learns",
     "what this does not do",
-    "rejected options",
     "agreement with genesis.md and the decided rfcs",
-    "open questions",
-    "decisions",
     "history",
     "how this rfc is tested",
   ]) {
@@ -156,42 +153,48 @@ test("RFC 0010 has a section for every part NOC-107 names", () => {
   }
 });
 
-test("no question is left open", () => {
-  assert.match(section(read(), "Open questions"), /^None\./m);
-});
-
-/** The decisions under "## Decisions", one "### Qn. Title" heading each. */
-const decisions = () =>
-  [
-    ...section(read(), "Decisions").matchAll(
-      /^### (Q\d+)\. ([^\n]+)\n([\s\S]*?)(?=^### |(?![\s\S]))/gm,
-    ),
-  ].map((m) => ({ id: m[1], heading: `${m[1]}. ${m[2]}`, text: m[3] }));
-
-test("Decisions holds Q1 to Q12 in short form, as the owner decided them", () => {
-  const found = decisions();
-  assert.deepEqual(
-    found.map((d) => d.id),
-    Array.from({ length: 12 }, (_, i) => `Q${i + 1}`),
-  );
-  for (const { id, text } of found) {
-    assert.match(
-      text,
-      /^Decided \(Carsten, 2026-11-10\), on NOC-115: /m,
-      `${id} names no decision by the owner`,
-    );
-    assert.match(text, /^Why: /m, `${id} says not why`);
-    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
+test("RFC 0010 reads as one design: no list of decisions, rejected options or questions", () => {
+  const titles = headingLines(read()).map((h) => h.trim().toLowerCase());
+  for (const gone of ["decisions", "rejected options", "open questions"]) {
+    assert.ok(!titles.includes(gone), `${RFC} still has a "${gone}" section`);
   }
+  assert.doesNotMatch(prose(read()), /\bQ\d+\b/, "a Qn reference is left");
 });
 
-test("every decision is cited by its own heading where it applies", () => {
-  const body = prose(read()).split("\n## Decisions\n")[0];
-  for (const { id, heading } of decisions()) {
-    assert.ok(
-      body.includes(`[${id}](#${slug(heading)})`),
-      `${id} is never cited where it applies`,
-    );
+test("the options not taken still stand in the text", () => {
+  const text = prose(read()).split("\n## History\n")[0];
+  for (const [option, pattern] of [
+    ["the account key as the identity", /account key (?:were|as) the identity/],
+    ["24 words of the seed", /twenty-four words|24 words/i],
+    ["base32 characters", /base32/],
+    ["a recovery member", /recovery member/],
+    [
+      "a key backup at the relay",
+      /backup of the space keys|space keys at the relay/,
+    ],
+    ["no shared record", /no shared record/i],
+    ["a relay mailbox", /mailbox/],
+    ["a PAKE", /PAKE|password-authenticated/],
+    ["any channel for a device", /any channel/],
+    ["no automatic adds", /space by space/],
+    ["other admins' SDKs admitting on their own", /without any admin deciding/],
+    ["a keystore entry per device", /shar\w* a keystore entry|share one copy/],
+    ["re-adding linked members", /re-add/],
+    [
+      "a certificate-replacing action",
+      /replaces a member's certificate|replace a certificate/,
+    ],
+    ["a separate link call", /db\.account\.link/],
+    ["an SDK screen", /its own screen/],
+    ["the password manager", /password manager/],
+    ["hex or words for the fingerprint", /hexadecimal/],
+    ["an account at the relay", /account at the relay/],
+    ["a passkey", /passkey/],
+    ["admin-only devices", /admin devices/],
+    ["a short code compared", /short code/],
+    ["social recovery", /social recovery/],
+  ]) {
+    assert.match(text, pattern, `${RFC} no longer names ${option}`);
   }
 });
 
