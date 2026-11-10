@@ -24,6 +24,7 @@ use ncdb_core::clock::Clock;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
 use ncdb_core::keys::MemberKey;
 use ncdb_core::log::{Position, State};
+use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
@@ -43,6 +44,7 @@ pub struct OpenOptions {
     in_memory: bool,
     path: Option<PathBuf>,
     key_file: Option<PathBuf>,
+    agent: bool,
 }
 
 /// The name of the database's SQLite file in the directory of
@@ -62,7 +64,16 @@ impl OpenOptions {
             in_memory: false,
             path: None,
             key_file: None,
+            agent: false,
         }
+    }
+
+    /// Marks the member as an agent in the certificate its account signs,
+    /// so a space adds it as a writer when no role is given (RFC 0009,
+    /// S20; RFC 0008, M14). Without it, the member is a device.
+    pub fn agent(mut self) -> OpenOptions {
+        self.agent = true;
+        self
     }
 
     /// The directory the database lives in, which the SDK owns and creates
@@ -124,6 +135,8 @@ pub(crate) struct Inner {
     pub(crate) model_id: [u8; 16],
     pub(crate) member: Secrets,
     pub(crate) account: SigningKey,
+    /// What the account certifies the member as: a device or an agent.
+    pub(crate) kind: MemberKind,
     /// Each space the member created or was added to.
     pub(crate) spaces: BTreeMap<CoreSpaceId, SpaceState>,
     pub(crate) watchers: Vec<Watcher>,
@@ -322,6 +335,10 @@ impl Db {
             model_id: lock.model.id.0,
             member: keys.member,
             account: keys.account,
+            kind: match options.agent {
+                true => MemberKind::Agent,
+                false => MemberKind::Device,
+            },
             spaces,
             watchers: Vec::new(),
             sync: None,
