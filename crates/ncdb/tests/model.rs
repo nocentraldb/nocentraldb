@@ -585,12 +585,16 @@ fn a_reference_is_written_with_its_targets_listed_like_a_links_and_a_target_come
 additive: clients on model version 2 keep every change written under version 3.
 "
     );
-    let written = read(dir.join("model.lock.json"));
-    assert!(
-        written.contains(
-            r#""customer": { "rule": 1, "since": 3, "targets": ["people"], "type": "ncdb/ref" }"#
+    let lock = ModelLock::from_json(&read(dir.join("model.lock.json"))).unwrap();
+    let customer = &lock.collection("tasks").unwrap().fields["customer"];
+    assert_eq!(
+        (
+            customer.kind.type_id(),
+            customer.kind.targets(),
+            customer.rule,
+            customer.since
         ),
-        "{written}"
+        ("ncdb/ref", Some(&["people".to_owned()][..]), 1, 3)
     );
 
     // Adding a target is accepted and listed, as for a link.
