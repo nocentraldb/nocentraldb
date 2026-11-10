@@ -10,12 +10,14 @@
 //! `session` serves one connection; `apply` changes the database for it,
 //! under the database's lock; `wire` reads and writes RFC 0007's messages.
 //!
-//! **What this does not do yet.** A space this member was added to is
-//! synced and folded, but the SDK has no handle to write into it (no
-//! `spaces().get`). `db.sync().subscribe()`, `pause()`, `resume()`,
-//! `is_confirmed()`, `confirmed()` and the per-space `status` of RFC 0009
-//! are not built: the relay's refusals are recorded per change in the
-//! log, and [`SyncStatus`] counts them. The relay is reached over plain
+//! A space this member was added to is synced and folded, and
+//! [`Spaces::get`](crate::Spaces::get) gives the handle that writes into
+//! it.
+//!
+//! **What this does not do yet.** `db.sync().subscribe()`, `pause()`,
+//! `resume()`, `is_confirmed()`, `confirmed()` and the per-space `status`
+//! of RFC 0009 are not built: the relay's refusals are recorded per change
+//! in the log, and [`SyncStatus`] counts them. The relay is reached over plain
 //! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
 //! relay hands out as a download link, is not read: the page that holds
 //! it ends the session, which backs off and meets the same page again,

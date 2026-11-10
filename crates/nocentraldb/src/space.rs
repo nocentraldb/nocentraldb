@@ -31,7 +31,7 @@ pub struct Spaces<'a> {
     pub(crate) db: &'a Db,
 }
 
-/// The calls of one space, from [`Spaces::create`].
+/// The calls of one space, from [`Spaces::create`] or [`Spaces::get`].
 #[derive(Clone)]
 pub struct Space {
     inner: Arc<Mutex<Inner>>,
@@ -160,8 +160,8 @@ fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(),
 }
 
 impl Space {
-    /// A handle on a space the database holds, as the sync tests read a
-    /// space the member was added to.
+    /// A handle on a space the database holds, without the checks of
+    /// [`Spaces::get`], as the sync tests read a space of another model.
     #[cfg(test)]
     pub(crate) fn handle(inner: Arc<Mutex<Inner>>, id: SpaceId) -> Space {
         Space { inner, id }

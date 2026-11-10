@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-119 · A joined space is `NotFound` until its genesis and its keys arrive
+
+- Decided by: coding agent (NOC-119), the safe subset; told to pm
+- Why: RFC 0009 says `db.spaces.get` throws `notFound` when the copy holds no such space, and `spaceOfAnotherModel` when its genesis names another `model.id`. A space `welcome` lists is known before its changes arrive, and the sealed `model.id` opens only with the key of its first generation. So `spaces().get` answers `NotFound` until the copy holds the genesis, the key of the first generation and the key of the current one, then `SpaceOfAnotherModel` with both model ids as hex when they differ, and a handle otherwise. A write checks the same, so a handle never seals under a key it lacks.
+- Instead of: a handle that fails on its first write, or treating a model id that cannot be opened yet as another model.
+- What this does not do: a member that joined after a rotation and holds only later keys cannot open the model id until key chain entries give it the first generation's key, so the space stays `NotFound`. Writing as a reader or as a removed member is not refused with `notAllowed` or `notMember` yet (RFC 0009, "Field operations per field type"); the relay and every other member reject such a change.
+- Topics: sdk-rust, rfc-0009, errors, safe-subset
