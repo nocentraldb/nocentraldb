@@ -31,9 +31,7 @@ const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
  * RFC 0008 (point 10) carry them in their text since NOC-101 folded their
  * amendments in; the tests below check them where they stand.
  */
-const AMENDMENTS = [
-  { path: RFC_0003, number: 3, points: [5, 9] },
-];
+const AMENDMENTS = [{ path: RFC_0003, number: 3, points: [5, 9] }];
 const anchorOf = (number) => `amendment-${number}-following-rfc-0009`;
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */

@@ -23,9 +23,7 @@ const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
 /** The amendment of each RFC that withdraws groups. */
-const AMENDMENTS = [
-  { path: RFC_0009, number: 1 },
-];
+const AMENDMENTS = [{ path: RFC_0009, number: 1 }];
 const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
 const WITHDRAWING =
   /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
