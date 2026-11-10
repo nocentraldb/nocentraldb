@@ -5,7 +5,7 @@
 //! ```
 //! # use nocentraldb::{Db, OpenOptions, Value};
 //! # async fn example(lock: &str) -> Result<(), nocentraldb::Error> {
-//! let db = Db::open(OpenOptions::new(lock)).await?;
+//! let db = Db::open(OpenOptions::new(lock).in_memory()).await?;
 //! let project = db.spaces().create().await?;
 //! let written = project.write(|tx| {
 //!     tx.create("tasks", [("title", Value::from("Ship the SDK"))])?;

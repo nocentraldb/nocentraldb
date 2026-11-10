@@ -66,7 +66,7 @@ async fn the_status_counts_own_changes_the_relay_has_not_confirmed() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_database_without_a_relay_reports_none_and_counts_every_change() {
-    let db = crate::Db::open(crate::OpenOptions::new(LOCK))
+    let db = crate::Db::open(crate::OpenOptions::new(LOCK).in_memory())
         .await
         .unwrap();
 
@@ -125,7 +125,9 @@ async fn a_write_while_connected_is_pushed_at_once() {
 
 #[tokio::test]
 async fn only_a_plain_websocket_relay_is_accepted() {
-    let options = crate::OpenOptions::new(LOCK).relay("wss://relay.example.com");
+    let options = crate::OpenOptions::new(LOCK)
+        .in_memory()
+        .relay("wss://relay.example.com");
     let opened = crate::Db::open(options).await;
     let error = opened.expect_err("TLS is not built yet");
     assert_eq!(error.code(), crate::ErrorCode::InvalidValue);

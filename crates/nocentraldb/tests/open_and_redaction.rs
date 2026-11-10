@@ -15,7 +15,7 @@ const CANARY: &str = "canary-7f3a";
 #[test]
 fn a_lock_that_does_not_read_is_refused() {
     for lock in ["", "{}", &LOCK.replace("\"format\": 1", "\"format\": 99")] {
-        let error = now(Db::open(OpenOptions::new(lock))).unwrap_err();
+        let error = now(Db::open(OpenOptions::new(lock).in_memory())).unwrap_err();
         assert_eq!(error.code(), ErrorCode::ModelRefused);
     }
 }

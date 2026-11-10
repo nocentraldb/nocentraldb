@@ -33,7 +33,7 @@ pub fn ready<S: Stream + Unpin>(stream: &mut S) -> Option<S::Item> {
     }
 }
 
-/// A database opened from the test model's lock.
+/// A database in memory, opened from the test model's lock.
 pub fn open() -> Db {
-    now(Db::open(OpenOptions::new(LOCK))).expect("the test lock opens")
+    now(Db::open(OpenOptions::new(LOCK).in_memory())).expect("the test lock opens")
 }

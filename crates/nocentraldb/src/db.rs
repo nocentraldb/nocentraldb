@@ -28,21 +28,33 @@ use crate::subscribe::Watcher;
 use crate::sync::{self, SyncState};
 
 /// The options of [`Db::open`]: the text of the app's `model.lock.json`,
-/// and the relay to sync with.
+/// where the database lives, and the relay to sync with.
 #[derive(Clone)]
 pub struct OpenOptions {
     lock: String,
     relay: Option<String>,
+    in_memory: bool,
 }
 
 impl OpenOptions {
     /// Options to open a database from the text of `model.lock.json`.
-    /// Without [`relay`](OpenOptions::relay), the database stays local.
+    /// [`Db::open`] refuses them with `InvalidValue` until they name where
+    /// the database lives, with [`in_memory`](OpenOptions::in_memory)
+    /// (RFC 0009, S27). Without [`relay`](OpenOptions::relay), the database
+    /// stays local.
     pub fn new(lock: &str) -> OpenOptions {
         OpenOptions {
             lock: lock.to_owned(),
             relay: None,
+            in_memory: false,
         }
+    }
+
+    /// Keeps the database and its keys in memory, for tests: they are gone
+    /// when the [`Db`] is dropped (RFC 0009, S19).
+    pub fn in_memory(mut self) -> OpenOptions {
+        self.in_memory = true;
+        self
     }
 
     /// The one relay the database syncs with (RFC 0009, decision S16), by
@@ -176,6 +188,12 @@ impl Db {
     }
 
     fn open_with(options: OpenOptions, member: Secrets, account: SigningKey) -> Result<Db, Error> {
+        if !options.in_memory {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "the options name no place for the database: call path(dir) or in_memory()",
+            ));
+        }
         if let Some(url) = &options.relay
             && !url.starts_with("ws://")
         {
