@@ -398,7 +398,7 @@ async fn push<S: RelayStore + 'static>(
             Frame::Upload(_) => None,
         })
         .collect();
-    let checked = blocking(async move { relay.push(member, space, changes).await }).await;
+    let checked = blocking(async move { relay.push(member, space, changes).await.results }).await;
     let mut checked = checked.into_iter();
     uploads
         .into_iter()

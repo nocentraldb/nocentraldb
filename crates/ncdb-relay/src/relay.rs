@@ -75,6 +75,17 @@ pub enum Pushed {
     Rejected(ErrorCode),
 }
 
+/// The results of a push, and the members its appends made current.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Push {
+    /// One result per frame, in the order of the frames.
+    pub results: Vec<Pushed>,
+    /// The members that an accepted control change made current in the
+    /// space, each once, in the order they became current: the relay tells
+    /// their open connections with `added` (RFC 0007, decision R13).
+    pub added: Vec<MemberId>,
+}
+
 /// A page of a space's log.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pulled {
@@ -129,31 +140,40 @@ impl<S: RelayStore> Relay<S> {
     /// Checks each frame `uploader` pushes to `space`, one by one, and
     /// appends the accepted ones in order. One result per frame: a refused
     /// frame does not stop the frames after it.
-    pub async fn push(
-        &self,
-        uploader: MemberId,
-        space: SpaceId,
-        frames: Vec<Vec<u8>>,
-    ) -> Vec<Pushed> {
-        let mut results = Vec::with_capacity(frames.len());
+    pub async fn push(&self, uploader: MemberId, space: SpaceId, frames: Vec<Vec<u8>>) -> Push {
+        let mut push = Push {
+            results: Vec::with_capacity(frames.len()),
+            added: Vec::new(),
+        };
         for frame in frames {
-            let result = self.push_frame(uploader, space, frame).await;
-            results.push(result.unwrap_or_else(Pushed::Rejected));
+            let result = match self.push_frame(uploader, space, frame).await {
+                Ok((result, added)) => {
+                    for member in added {
+                        if !push.added.contains(&member) {
+                            push.added.push(member);
+                        }
+                    }
+                    result
+                }
+                Err(code) => Pushed::Rejected(code),
+            };
+            push.results.push(result);
         }
-        results
+        push
     }
 
     /// One frame: the checks that need only the frame, then, against the
     /// space as it stands at its head, the checks of the uploader, the
     /// author and the membership rules, and an append conditional on that
     /// head. When another append overtook it, the space has changed, so it
-    /// checks again.
+    /// checks again. With the result come the members the append made
+    /// current.
     async fn push_frame(
         &self,
         uploader: MemberId,
         space: SpaceId,
         frame: Vec<u8>,
-    ) -> Result<Pushed, ErrorCode> {
+    ) -> Result<(Pushed, Vec<MemberId>), ErrorCode> {
         if frame.len() > self.config.max_frame {
             return Err(ErrorCode::TooLarge);
         }
@@ -168,16 +188,17 @@ impl<S: RelayStore> Relay<S> {
             return Err(ErrorCode::UnsupportedSuite);
         }
         for _ in 0..RETRIES {
-            let (expected_head, effects) = match self.store.head(space).await? {
+            let (expected_head, checked) = match self.store.head(space).await? {
                 None => (0, self.check_genesis(uploader, &change)?),
                 Some(head) => {
                     self.check_uploader(uploader, space).await?;
                     if let Some(position) = self.store.find(space, change.id()).await? {
-                        return Ok(Pushed::Duplicate(position));
+                        return Ok((Pushed::Duplicate(position), Vec::new()));
                     }
                     (head, self.check_change(space, &change).await?)
                 }
             };
+            let Checked { effects, added } = checked;
             let entry = NewEntry {
                 change: change.id(),
                 accepted_at: (self.config.clock)(),
@@ -190,9 +211,9 @@ impl<S: RelayStore> Relay<S> {
                 .append(space, expected_head, vec![entry], effects)
                 .await?
             {
-                AppendOutcome::Appended { head } => return Ok(Pushed::Accepted(head)),
+                AppendOutcome::Appended { head } => return Ok((Pushed::Accepted(head), added)),
                 AppendOutcome::Duplicate { position, .. } => {
-                    return Ok(Pushed::Duplicate(position));
+                    return Ok((Pushed::Duplicate(position), Vec::new()));
                 }
                 AppendOutcome::HeadMoved(_) => continue,
             }
@@ -203,7 +224,7 @@ impl<S: RelayStore> Relay<S> {
     /// A change to a space the relay does not hold: only its genesis, pushed
     /// by its creator, a member of an account the relay allows (decision
     /// R6), and valid by RFC 0008's rules for a genesis.
-    fn check_genesis(&self, uploader: MemberId, change: &Change) -> Result<Vec<Effect>, ErrorCode> {
+    fn check_genesis(&self, uploader: MemberId, change: &Change) -> Result<Checked, ErrorCode> {
         let genesis = match control_body(change) {
             Ok(ControlBody {
                 entry: Entry::Genesis(genesis),
@@ -223,7 +244,7 @@ impl<S: RelayStore> Relay<S> {
         }
         let resolved = membership::resolve(change.header().space, [change]);
         verdict(resolved.verdict(change.id()))?;
-        Ok(effects(&resolved))
+        Ok(Checked::new(&resolved, &BTreeSet::new()))
     }
 
     /// The uploader or reader is a current member of the space.
@@ -243,12 +264,9 @@ impl<S: RelayStore> Relay<S> {
     /// author may write it (RFC 0008, "Sealed changes"). A control change:
     /// `resolve` over the space's control changes and this one accepts it,
     /// which for a shred entry includes its second account's sign-off; the
-    /// new membership table is the append's effect.
-    async fn check_change(
-        &self,
-        space: SpaceId,
-        change: &Change,
-    ) -> Result<Vec<Effect>, ErrorCode> {
+    /// new membership table is the append's effect. The members current
+    /// after it and not before were added by it.
+    async fn check_change(&self, space: SpaceId, change: &Change) -> Result<Checked, ErrorCode> {
         let header = change.header();
         if header.kind == Kind::SEALED {
             let Some(row) = self.store.member(space, header.author).await? else {
@@ -259,16 +277,17 @@ impl<S: RelayStore> Relay<S> {
             if !row.admits(header) {
                 return Err(ErrorCode::AuthorNotMember);
             }
-            return Ok(Vec::new());
+            return Ok(Checked::default());
         }
         if let Entry::Genesis(_) = control_body(change)?.entry {
             return Err(ErrorCode::SpaceExists);
         }
         let mut controls = self.controls(space).await?;
+        let before = current(&membership::resolve(space, &controls));
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
-        Ok(effects(&resolved))
+        Ok(Checked::new(&resolved, &before))
     }
 
     /// The space's control changes, in position order.
@@ -315,10 +334,34 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
     }
 }
 
-/// The membership table of a resolved space, as the append's effects.
-fn effects(resolved: &membership::Resolved) -> Vec<Effect> {
+/// What a change that passed its checks writes besides the log, and the
+/// members it makes current.
+#[derive(Default)]
+struct Checked {
+    effects: Vec<Effect>,
+    added: Vec<MemberId>,
+}
+
+impl Checked {
+    /// The membership table of a resolved space, as the append's effects,
+    /// and its current members that were not current `before`.
+    fn new(resolved: &membership::Resolved, before: &BTreeSet<MemberId>) -> Checked {
+        let records = record::records(resolved);
+        let added = records
+            .iter()
+            .filter(|row| row.current && !before.contains(&row.member))
+            .map(|row| row.member)
+            .collect();
+        let effects = records.into_iter().map(Effect::Member).collect();
+        Checked { effects, added }
+    }
+}
+
+/// The current members of a resolved space.
+fn current(resolved: &membership::Resolved) -> BTreeSet<MemberId> {
     record::records(resolved)
         .into_iter()
-        .map(Effect::Member)
+        .filter(|row| row.current)
+        .map(|row| row.member)
         .collect()
 }
