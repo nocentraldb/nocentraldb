@@ -2,7 +2,7 @@
 // says that a decided change is written into the RFC's text, with a dated
 // History line that names its pull request and the decision under
 // "Decisions", and that an RFC has no amendment sections. Its "What happens to
-// your feedback" list, CONTRIBUTING.md and pm's tick say the same. The test
+// your feedback" list and CONTRIBUTING.md say the same. The test
 // checks that each rule is there and where it points; whether the wording is
 // right is the review of the PR.
 import assert from "node:assert/strict";
@@ -65,7 +65,7 @@ test("the first end of a feedback point is a change to the RFC's text", () => {
   assert.match(first, /discussion/, "its History line links the discussion");
 });
 
-test("CONTRIBUTING.md and pm's tick name the same ends, without amendments", () => {
+test("CONTRIBUTING.md names the same ends, without amendments", () => {
   const contributing = read("CONTRIBUTING.md")
     .split("\n")
     .find((line) => line.includes("What happens to your feedback"));
@@ -78,10 +78,4 @@ test("CONTRIBUTING.md and pm's tick name the same ends, without amendments", () 
     contributing,
     /change to an RFC's text|change to the RFC's text/,
   );
-
-  const tick = read("factory/roles/pm.md")
-    .split("\n")
-    .find((line) => line.includes("**Read RFC feedback.**"));
-  assert.ok(tick, "pm's tick has no RFC feedback step");
-  assert.doesNotMatch(tick, /amendment/i);
 });

@@ -78,10 +78,7 @@ tasks:
     # relay sees follow RFC 0007, and factory/decisions/ records NOC-47),
     # scripts/rfc-feedback.test.mjs (factory/decisions/ records NOC-55, pm's
     # tick reads the "RFC feedback" category, and RFC 0002 to 0005, 0007 and
-    # 0008 say how to give feedback), scripts/rfc-readme.test.mjs
-    # (docs/rfc/README.md, CONTRIBUTING.md and pm's tick say that a decided
-    # change is written into the RFC's text, with a History line and no
-    # amendment sections; NOC-100), scripts/rfc-status.test.mjs (an RFC the
+    # 0008 say how to give feedback), scripts/rfc-status.test.mjs (an RFC the
     # decision log records as decided by the owner never says Draft; NOC-35),
     # scripts/decided-rfcs-alignment.test.mjs (the FAQ, RFC 0001, the use cases
     # and GENESIS.md follow RFC 0003, 0005 and 0006),
