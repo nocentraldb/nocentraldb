@@ -7,14 +7,19 @@
 //! order. A generation that two key chain entries name has two keys under
 //! one id (decision M23), so it is never a head, and an entry that names it
 //! lists nothing.
+//!
+//! When the current generation is exposed, an admin writes a merge
+//! rotation ([`MergeRotation`]), step 5 of the same section.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::ids::ChangeId;
+use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::Entry;
 use super::generations::Generations;
+use super::genesis::generation_id;
 use super::input::Node;
+use super::key_chain::{KeyChainEntry, PreviousKey};
 use super::state::Verdict;
 
 /// The ordinal of a generation id: its upper 16 bits (RFC 0008,
@@ -66,4 +71,54 @@ pub(crate) fn current(
         .iter()
         .copied()
         .max_by_key(|g| (ordinal(*g), std::cmp::Reverse(first_in_order(g))))
+}
+
+/// The merge rotation an admin writes when the current generation is
+/// exposed (RFC 0008, "Two removals that rotate the key at once", step 5):
+/// a key chain entry that lists every head as previous, and envelopes for
+/// the current members only.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MergeRotation {
+    /// The new generation id, derived from the space, the admin and the
+    /// heads (RFC 0008, "Generation ids").
+    pub generation: u64,
+    /// Every head, sorted by generation id.
+    pub previous: Vec<u64>,
+    /// The current members, the admin included: one envelope each.
+    pub recipients: BTreeSet<MemberId>,
+}
+
+impl MergeRotation {
+    pub(crate) fn new(
+        space: SpaceId,
+        author: MemberId,
+        heads: &BTreeSet<u64>,
+        recipients: BTreeSet<MemberId>,
+    ) -> MergeRotation {
+        let previous: Vec<u64> = heads.iter().copied().collect();
+        MergeRotation {
+            generation: generation_id(space, author, &previous),
+            previous,
+            recipients,
+        }
+    }
+
+    /// Its key chain entry, with each previous generation's key as
+    /// `encrypt` returns it: encrypted under the new generation's
+    /// key-chain subkey (RFC 0003), which the caller does. A merge rotation
+    /// answers no revocation.
+    pub fn entry(&self, mut encrypt: impl FnMut(u64) -> Vec<u8>) -> KeyChainEntry {
+        KeyChainEntry {
+            generation: self.generation,
+            previous: self
+                .previous
+                .iter()
+                .map(|generation| PreviousKey {
+                    generation: *generation,
+                    key: encrypt(*generation),
+                })
+                .collect(),
+            answers: BTreeSet::new(),
+        }
+    }
 }

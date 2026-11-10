@@ -21,7 +21,7 @@ use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
-use super::current;
+use super::current::{self, MergeRotation};
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::rights;
@@ -31,6 +31,7 @@ use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Ver
 /// output shows ids, roles and verdicts, never content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolved {
+    space: SpaceId,
     genesis: Option<ChangeId>,
     first_generation: Option<u64>,
     members: Members,
@@ -169,6 +170,25 @@ impl Resolved {
             .is_some_and(|g| g.holders.iter().any(|m| self.role(*m).is_none()))
     }
 
+    /// The merge rotation `author` writes, when the current generation is
+    /// exposed and `author` is an admin (RFC 0008, "Two removals that
+    /// rotate the key at once", step 5): every head as previous, and an
+    /// envelope for each current member. When to write it is the SDK's
+    /// (decision M15).
+    pub fn merge_rotation(&self, author: MemberId) -> Option<MergeRotation> {
+        let current = self.current?;
+        if self.role(author) != Some(Role::Admin) || !self.exposed(current) {
+            return None;
+        }
+        let recipients = self.members().map(|(member, _)| member).collect();
+        Some(MergeRotation::new(
+            self.space,
+            author,
+            &self.heads,
+            recipients,
+        ))
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -242,6 +262,7 @@ impl Judged {
 /// all of them.
 fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     let mut resolved = Resolved {
+        space: input.space,
         genesis: None,
         first_generation: None,
         members: Members::default(),

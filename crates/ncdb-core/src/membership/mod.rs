@@ -29,6 +29,7 @@ pub use body::{
     MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
 };
 pub use certificate::{Certificate, MemberKind};
+pub use current::MergeRotation;
 pub use generations::Generation;
 pub use genesis::{
     GENERATION_CONTEXT, Genesis, MODEL_ID_CONTEXT, MODEL_ID_FIELD_LEN, SPACE_ID_CONTEXT,

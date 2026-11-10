@@ -65,18 +65,25 @@ fn heads(changes: &[Change]) -> Vec<&Change> {
         .filter_map(|c| membership::ControlBody::decode(&c.header().payload).ok())
         .flat_map(|body| body.dependencies)
         .collect();
-    changes.iter().filter(|c| !named.contains(&c.id())).collect()
+    changes
+        .iter()
+        .filter(|c| !named.contains(&c.id()))
+        .collect()
 }
 
 /// `author` writes the merge rotation `state` asks of it after every head
 /// of `changes`, and its envelopes: the changes and the new generation.
 fn merge(s: &mut Space, author: Who, state: &Resolved, changes: &[Change]) -> (Vec<Change>, u64) {
-    let rotation = state.merge_rotation(id(author)).expect("an exposed current generation");
+    let rotation = state
+        .merge_rotation(id(author))
+        .expect("an exposed current generation");
     let entry = rotation.entry(|_| vec![0xc4; 72]);
     let chain = s.write(author, Entry::KeyChain(entry), &heads(changes));
     let mut written = vec![chain];
     for recipient in &rotation.recipients {
-        let who = (1..=YVONNE).find(|w| id(*w) == *recipient).expect("a member");
+        let who = (1..=YVONNE)
+            .find(|w| id(*w) == *recipient)
+            .expect("a member");
         let last = written.last().unwrap().clone();
         written.push(s.envelope_at(author, who, rotation.generation, &[&last]));
     }
