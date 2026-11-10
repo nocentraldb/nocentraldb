@@ -494,6 +494,30 @@ fn a_node_older_than_24_is_refused_with_its_version() {
     assert!(!dir.join("model.lock.json").exists());
 }
 
+/// Many threads write a fake node and run it while the others spawn
+/// processes: a forked child must never hold the script open for writing
+/// when it runs (ETXTBSY, NOC-94).
+#[cfg(unix)]
+#[test]
+fn a_fake_node_runs_while_other_threads_spawn() {
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            std::thread::spawn(|| {
+                for _ in 0..25 {
+                    let dir = project();
+                    let bin = fake_node(&dir, "v22.12.0");
+                    let output = Command::new(bin.join("node")).output().unwrap();
+                    assert_eq!(String::from_utf8(output.stdout).unwrap(), "v22.12.0\n");
+                    fs::remove_dir_all(&dir).unwrap();
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
+}
+
 #[test]
 fn usage_errors_exit_2() {
     let dir = project();
