@@ -9,10 +9,10 @@
 use std::collections::BTreeMap;
 
 use ncdb_core::cbor::{self, Key, Value};
-use ncdb_core::ids::SpaceId;
+use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::keys::MemberPublicKey;
-use ncdb_relay::store::{Entry, Epoch, Position};
-use ncdb_relay::{ErrorCode, Pushed};
+use ncdb_relay::store::{Entry, Epoch, PersonKeyId, PersonKeyRecord, Position};
+use ncdb_relay::{ErrorCode, Keys, Pushed};
 
 use crate::{MAX_MESSAGE, MAX_PUSH};
 
@@ -58,11 +58,30 @@ pub enum Request {
         /// The request id.
         req: u64,
     },
-    /// `keys`, `person-keys` or `put-person-keys` (RFC 0007, "Keys and the
-    /// person-key store"), which this server leaves out.
+    /// `keys`: the member's key envelopes and the key chain (RFC 0007,
+    /// "Keys and the person-key store").
     Keys {
         /// The request id.
         req: u64,
+        /// The space.
+        space: SpaceId,
+    },
+    /// `person-keys`: the space's person-key records.
+    PersonKeys {
+        /// The request id.
+        req: u64,
+        /// The space.
+        space: SpaceId,
+    },
+    /// `put-person-keys`: records to store.
+    PutPersonKeys {
+        /// The request id.
+        req: u64,
+        /// The space.
+        space: SpaceId,
+        /// The records, each `{1: person-key id, 2: generation, 3: writer
+        /// member id, 4: wrapped, 5: signature}`.
+        records: Vec<PersonKeyRecord>,
     },
     /// Liveness.
     Ping {
@@ -197,20 +216,45 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             unsigned(fields.take(4)?)?;
             Some(Request::Upload { req: req? })
         }
-        "keys" | "person-keys" => {
-            fields.array::<16>(3)?;
-            Some(Request::Keys { req: req? })
-        }
+        "keys" => Some(Request::Keys {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+        }),
+        "person-keys" => Some(Request::PersonKeys {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+        }),
         "put-person-keys" => {
-            fields.array::<16>(3)?;
-            let Value::Array(_) = fields.take(4)? else {
+            let space = SpaceId(fields.array(3)?);
+            let Value::Array(items) = fields.take(4)? else {
                 return None;
             };
-            Some(Request::Keys { req: req? })
+            let records = items.into_iter().map(read_record).collect::<Option<_>>()?;
+            Some(Request::PutPersonKeys {
+                req: req?,
+                space,
+                records,
+            })
         }
         "ping" => Some(Request::Ping { req: req? }),
         _ => None,
     }
+}
+
+/// A person-key record: its five fields, and no other.
+fn read_record(value: Value) -> Option<PersonKeyRecord> {
+    let Value::Map(map) = value else {
+        return None;
+    };
+    let mut fields = Fields(map);
+    let record = PersonKeyRecord {
+        id: PersonKeyId(fields.array(1)?),
+        generation: unsigned(fields.take(2)?)?,
+        writer: MemberId(fields.array(3)?),
+        wrapped: fields.bytes(4)?,
+        signature: fields.bytes(5)?,
+    };
+    fields.0.is_empty().then_some(record)
 }
 
 fn unsigned(value: Value) -> Option<u64> {
@@ -324,16 +368,7 @@ pub fn entries(
     entries: &[Entry],
     head: Position,
 ) -> (Vec<u8>, usize) {
-    let items: Vec<Value> = entries
-        .iter()
-        .map(|entry| {
-            map(vec![
-                (1, Value::Unsigned(entry.position)),
-                (2, Value::Unsigned(entry.accepted_at)),
-                (3, Value::Bytes(entry.frame.clone())),
-            ])
-        })
-        .collect();
+    let items: Vec<Value> = entries.iter().map(entry).collect();
     let encode = |items: Vec<Value>| {
         message(
             "entries",
@@ -358,6 +393,55 @@ pub fn entries(
     }
     let bytes = encode(items.into_iter().take(fit).collect());
     (bytes, fit)
+}
+
+/// An entry of the log: `{1: position, 2: accepted at, 3: frame}`.
+fn entry(entry: &Entry) -> Value {
+    map(vec![
+        (1, Value::Unsigned(entry.position)),
+        (2, Value::Unsigned(entry.accepted_at)),
+        (3, Value::Bytes(entry.frame.clone())),
+    ])
+}
+
+/// `keys {req, space, envelopes, chain}`, each an array of entries.
+pub fn keys(req: u64, space: SpaceId, keys: &Keys) -> Vec<u8> {
+    let entries = |entries: &[Entry]| Value::Array(entries.iter().map(entry).collect());
+    message(
+        "keys",
+        Some(req),
+        vec![
+            (3, Value::Bytes(space.0.to_vec())),
+            (4, entries(&keys.envelopes)),
+            (5, entries(&keys.chain)),
+        ],
+    )
+}
+
+/// `person-keys {req, space, records}`.
+pub fn person_keys(req: u64, space: SpaceId, records: &[PersonKeyRecord]) -> Vec<u8> {
+    let records = records.iter().map(|record| {
+        map(vec![
+            (1, Value::Bytes(record.id.0.to_vec())),
+            (2, Value::Unsigned(record.generation)),
+            (3, Value::Bytes(record.writer.0.to_vec())),
+            (4, Value::Bytes(record.wrapped.clone())),
+            (5, Value::Bytes(record.signature.clone())),
+        ])
+    });
+    message(
+        "person-keys",
+        Some(req),
+        vec![
+            (3, Value::Bytes(space.0.to_vec())),
+            (4, Value::Array(records.collect())),
+        ],
+    )
+}
+
+/// `ok {req}`.
+pub fn ok(req: u64) -> Vec<u8> {
+    message("ok", Some(req), Vec::new())
 }
 
 /// `pong {req}`.

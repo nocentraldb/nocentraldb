@@ -5,7 +5,7 @@
 
 mod support;
 
-use ncdb_core::cbor::Value;
+use ncdb_core::cbor::{Key, Value};
 use ncdb_core::change::Change;
 use ncdb_core::ids::SpaceId;
 use ncdb_core::membership::{self, Role};
@@ -35,11 +35,8 @@ fn record(space: SpaceId, writer: u8, generation: u64) -> Value {
 }
 
 fn map(fields: &[(u64, Value)]) -> Value {
-    let Value::Map(mut entries) = message("x", None, fields) else {
-        unreachable!("a message is a map")
-    };
-    entries.remove(&ncdb_core::cbor::Key::Unsigned(1));
-    Value::Map(entries)
+    let entries = fields.iter().map(|(k, v)| (Key::Unsigned(*k), v.clone()));
+    Value::Map(entries.collect())
 }
 
 fn put(req: u64, space: SpaceId, records: Vec<Value>) -> Value {
@@ -135,7 +132,7 @@ async fn a_bad_record_is_refused_and_a_malformed_one_is_malformed() {
     let Value::Map(mut short) = record(space.space, WRITER, space.first_generation) else {
         unreachable!()
     };
-    short.insert(ncdb_core::cbor::Key::Unsigned(1), Value::Bytes(vec![1; 15]));
+    short.insert(Key::Unsigned(1), Value::Bytes(vec![1; 15]));
     let malformed = writer
         .ask(&put(3, space.space, vec![Value::Map(short)]))
         .await;
