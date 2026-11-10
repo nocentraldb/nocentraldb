@@ -8,7 +8,9 @@
 //! **What this does not do yet.** It rotates away from the current
 //! generation only, not from every head of the generation graph, as a
 //! merge rotation does (RFC 0008, "Two removals that rotate the key at
-//! once", step 5).
+//! once", step 5). It does not re-wrap person-key records (RFC 0003,
+//! step 3): a space that holds a person key is refused before anything
+//! is written, since the SDK holds no record to re-wrap.
 
 use std::collections::BTreeSet;
 
@@ -21,11 +23,25 @@ use ncdb_core::membership::{
 use ncdb_core::view::View;
 
 use crate::db::SpaceState;
-use crate::error::Error;
+use crate::error::{Error, ErrorCode};
 use crate::next;
 use crate::space::fold;
 
 use super::control_heads;
+
+/// Whether `state`'s space can be rotated by this SDK: it holds no person
+/// key, whose records a rotation re-wraps (RFC 0003, step 3), which is not
+/// built. Checked before anything is written.
+pub(crate) fn rotatable(state: &SpaceState) -> Result<(), Error> {
+    match state.checks.resolved().person_keys().next() {
+        None => Ok(()),
+        Some(_) => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "the space holds a person key, and re-wrapping person-key records \
+             in a rotation is not built",
+        )),
+    }
+}
 
 /// Rotates the key of `space`, which `member`, an admin, holds with the
 /// key of its current generation: writes the key chain entry, answering

@@ -103,7 +103,9 @@ impl Members<'_> {
     /// `AlreadyMember`. A former member is added again after a rotation
     /// (RFC 0008, M5): the space key moves to a fresh generation, with an
     /// envelope for every member, and the member is added from it, so what
-    /// it wrote while it was not a member never counts again.
+    /// it wrote while it was not a member never counts again. A space that
+    /// holds a person key is refused with `InvalidValue` then, since
+    /// re-wrapping its records in a rotation is not built.
     ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
@@ -128,6 +130,7 @@ impl Members<'_> {
         let Inner { view, spaces, .. } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
         if former {
+            rotate::rotatable(state)?;
             rotate::rotate(view, state, &member, space.0, BTreeSet::new())?;
         }
         let next = next::next(view, space.0, &state.checks, member.id());
