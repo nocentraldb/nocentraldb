@@ -57,6 +57,7 @@ fn a_member_of_an_account_new_to_the_database_is_refused_without_its_fingerprint
     let refused = now(project.members().add(&invitation, writer())).unwrap_err();
 
     assert_eq!(refused.code(), ErrorCode::UnknownAccount);
+    assert_eq!(refused.fingerprint(), Some(&invitation.fingerprint()));
     let confirmed = AddMember {
         fingerprint: Some(invitation.fingerprint()),
         ..writer()
@@ -116,6 +117,7 @@ fn an_invitation_whose_certificate_does_not_hold_is_refused() {
         let refused = now(project.members().add(&invitation, options)).unwrap_err();
 
         assert_eq!(refused.code(), ErrorCode::InvalidCertificate);
+        assert_eq!(refused.fingerprint(), None);
     }
 }
 
