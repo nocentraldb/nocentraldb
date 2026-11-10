@@ -84,7 +84,7 @@ Each no-go says why, so you can judge cases this list does not name. When a tick
 
 | We give up                                           | To get                                           | How we soften it                                                                                          |
 | ---------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| Fine-grained rights (row-level, field-level)         | A relay that cannot read                         | Many small spaces, and lists of members the SDK expands                                                   |
+| Fine-grained rights (row-level, field-level)         | A relay that cannot read                         | Many small spaces                                                                                         |
 | Server-side queries, full-text search                | Reads at local-memory speed, island mode         | Declared indexes, computed fields, views                                                                  |
 | One global truth at write time                       | Convergence without a coordinator                | Merge rules per field type                                                                                |
 | A small client footprint                             | A full copy per member                           | Compaction into a signed archive                                                                          |

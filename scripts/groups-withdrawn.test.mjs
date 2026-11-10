@@ -158,3 +158,22 @@ test("the decision log records the owner's decision that groups leave the design
     /^- Supersedes: .*2026-11-07-NOC-23-rfc-0008-defers-groups-as-members\.md/m,
   );
 });
+
+// The owner chose option A on NOC-109 (Carsten, 2026-11-10): GENESIS.md's
+// trade for fine-grained rights is softened by many small spaces alone, since
+// "lists of members the SDK expands" described the withdrawn groups.
+test("GENESIS.md softens the loss of fine-grained rights with many small spaces alone", () => {
+  const row = read("factory/GENESIS.md")
+    .split("\n")
+    .find((line) => line.startsWith("| Fine-grained rights"));
+  assert.ok(row, "GENESIS.md has no row for fine-grained rights");
+  const cells = row
+    .split("|")
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+  assert.deepEqual(cells, [
+    "Fine-grained rights (row-level, field-level)",
+    "A relay that cannot read",
+    "Many small spaces",
+  ]);
+});
