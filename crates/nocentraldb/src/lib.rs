@@ -37,6 +37,9 @@ mod tx;
 mod value;
 
 pub use db::{Db, OpenOptions};
+
+#[cfg(test)]
+mod agent_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use object::Object;
