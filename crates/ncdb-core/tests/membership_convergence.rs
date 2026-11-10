@@ -21,8 +21,8 @@ use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::change::Change;
-use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::envelope;
+use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, KeyChainEntry, MemberKind, MembershipEntry,
     PreviousKey, Resolved, Role, Verdict, resolve,
@@ -320,7 +320,10 @@ fn a_re_grant_and_revocations_end_in_the_same_membership_in_any_order() {
     let base = [g, bob, dan];
     let set = |extra: &[&Change]| -> Vec<Change> {
         let tail = [&remove, &rotation, &again, &to_dan];
-        tail.into_iter().chain(extra.iter().copied()).cloned().collect()
+        tail.into_iter()
+            .chain(extra.iter().copied())
+            .cloned()
+            .collect()
     };
 
     let re_granted = in_every_order(s.space, &base, &set(&[]));

@@ -101,7 +101,10 @@ fn a_key_chain_entry_decodes_to_what_was_encoded() {
     let Entry::KeyChain(chain) = decoded.entry else {
         panic!("entry type 3 reads as a key chain entry");
     };
-    assert_eq!(chain.previous_generations().collect::<Vec<_>>(), [FIRST, OTHER]);
+    assert_eq!(
+        chain.previous_generations().collect::<Vec<_>>(),
+        [FIRST, OTHER]
+    );
 }
 
 #[test]

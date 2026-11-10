@@ -81,15 +81,26 @@ fn a_member_demoted_and_raised_again_counts_only_under_the_fresh_generation() {
     let after_old = s.sealed_under(DAN, first, vec![]);
     let after_concurrent = s.sealed_under(DAN, concurrent, vec![]);
     assert!(admits(&state, &inside), "inside the cutoff");
-    assert!(!admits(&state, &offline), "above the cutoff, before the raise");
+    assert!(
+        !admits(&state, &offline),
+        "above the cutoff, before the raise"
+    );
     assert!(admits(&state, &after_fresh), "under the fresh generation");
-    assert!(!admits(&state, &after_old), "the old generation never counts");
-    assert!(!admits(&state, &after_concurrent), "8' does not descend from 8");
+    assert!(
+        !admits(&state, &after_old),
+        "the old generation never counts"
+    );
+    assert!(
+        !admits(&state, &after_concurrent),
+        "8' does not descend from 8"
+    );
 
     let (merge, merged) = s.rotate(ALICE, &[fresh, concurrent], &[&raise, &by_carol]);
     let state = resolve(
         s.space,
-        [&g, &carol, &dan, &demote, &rotation, &by_carol, &raise, &merge],
+        [
+            &g, &carol, &dan, &demote, &rotation, &by_carol, &raise, &merge,
+        ],
     );
     let after_merge = s.sealed_under(DAN, merged, vec![]);
     assert!(admits(&state, &after_merge), "a descendant of both");

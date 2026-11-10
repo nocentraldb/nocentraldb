@@ -169,7 +169,9 @@ fn an_envelope_goes_to_a_member_for_a_generation_that_exists() {
     let nowhere = s.envelope_at(ALICE, BOB, first ^ 1, &[&bob]);
     let state = resolve(
         s.space,
-        [&g, &bob, &rotation, &to_bob, &to_carol, &too_early, &nowhere],
+        [
+            &g, &bob, &rotation, &to_bob, &to_carol, &too_early, &nowhere,
+        ],
     );
     assert_eq!(state.verdict(to_bob.id()), Some(&Verdict::Accepted));
     assert_eq!(state.verdict(to_carol.id()), not_valid(), "not a member");
