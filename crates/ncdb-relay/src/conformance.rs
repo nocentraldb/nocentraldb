@@ -76,6 +76,8 @@ macro_rules! conformance_suite {
             effects_write_the_membership_table,
             effects_of_a_refused_append_are_not_applied,
             person_key_records_are_stored_replaced_and_deleted,
+            a_person_key_put_on_a_moved_record_stores_nothing,
+            concurrent_person_key_puts_on_one_generation_store_one,
             the_epoch_is_shared_and_a_new_one_differs,
         );
     };
@@ -427,6 +429,79 @@ pub fn person_key_records_are_stored_replaced_and_deleted<B: Backend>(backend: &
         .unwrap();
     assert_eq!(block_on(store.person_keys(a)).unwrap(), [person_key(3, 2)]);
     assert_eq!(block_on(store.person_keys(b)).unwrap(), [person_key(2, 1)]);
+}
+
+/// A person-key put is conditional on the stored generation: a put that
+/// names a generation other than the stored record's, or a record where
+/// none is stored, or none where one is, stores none of its records. The
+/// puts of one call apply in order.
+pub fn a_person_key_put_on_a_moved_record_stores_nothing<B: Backend>(backend: &B) {
+    let store = backend.connect();
+    let space = space(1);
+    let first = [(person_key(1, 1), None), (person_key(3, 1), None)];
+    assert_eq!(put(&store, space, &first), PutOutcome::Stored);
+    let held = [person_key(1, 1), person_key(3, 1)];
+
+    let stale = [(person_key(3, 2), Some(1)), (person_key(1, 3), Some(2))];
+    let moved = |id: u8, stored| PutOutcome::Moved {
+        id: PersonKeyId([id; 16]),
+        stored,
+    };
+    assert_eq!(put(&store, space, &stale), moved(1, Some(1)));
+    assert_eq!(
+        put(&store, space, &[(person_key(1, 2), None)]),
+        moved(1, Some(1))
+    );
+    assert_eq!(
+        put(&store, space, &[(person_key(2, 2), Some(1))]),
+        moved(2, None)
+    );
+    assert_eq!(block_on(store.person_keys(space)).unwrap(), held);
+
+    let chained = [(person_key(2, 1), None), (person_key(2, 2), Some(1))];
+    assert_eq!(put(&store, space, &chained), PutOutcome::Stored);
+    let got = block_on(backend.connect().person_keys(space)).unwrap();
+    assert_eq!(got, [person_key(1, 1), person_key(2, 2), person_key(3, 1)]);
+}
+
+/// Handles that put records of one id at the same time, each replacing the
+/// same stored generation, store exactly one: the others find the record
+/// moved to the winner's generation, which never goes back.
+pub fn concurrent_person_key_puts_on_one_generation_store_one<B: Backend>(backend: &B) {
+    const HANDLES: u64 = 6;
+    let space = space(1);
+    let first = [(person_key(5, 1), None)];
+    assert_eq!(put(&backend.connect(), space, &first), PutOutcome::Stored);
+    let outcomes: Vec<(u64, PutOutcome)> = thread::scope(|scope| {
+        let handles: Vec<_> = (2..2 + HANDLES)
+            .map(|generation| {
+                scope.spawn(move || {
+                    let record = [(person_key(5, generation), Some(1))];
+                    (generation, put(&backend.connect(), space, &record))
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let won: Vec<u64> = outcomes
+        .iter()
+        .filter(|(_, o)| *o == PutOutcome::Stored)
+        .map(|(generation, _)| *generation)
+        .collect();
+    assert_eq!(won.len(), 1, "{outcomes:?}");
+    let winner = person_key(5, won[0]);
+    let moved = PutOutcome::Moved {
+        id: winner.id,
+        stored: Some(won[0]),
+    };
+    assert!(
+        outcomes.iter().all(|(g, o)| *g == won[0] || *o == moved),
+        "{outcomes:?}"
+    );
+    assert_eq!(
+        block_on(backend.connect().person_keys(space)).unwrap(),
+        [winner]
+    );
 }
 
 /// Every handle sees the same epoch; a new epoch differs from the old one
