@@ -12,10 +12,10 @@
 //! The relay's log holds no states: an entry appended with [`Log::append`]
 //! has none.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::change::Change;
+use crate::change::{Change, Kind};
 use crate::ids::{ChangeId, SpaceId};
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
@@ -163,6 +163,9 @@ pub struct Log {
     space: SpaceId,
     entries: Vec<Entry>,
     positions: BTreeMap<ChangeId, Position>,
+    /// The changes whose state was set since [`Log::take_changed`] last
+    /// ran, for a store that keeps the states.
+    changed: BTreeSet<ChangeId>,
 }
 
 impl fmt::Debug for Log {
@@ -181,6 +184,7 @@ impl Log {
             space,
             entries: Vec::new(),
             positions: BTreeMap::new(),
+            changed: BTreeSet::new(),
         }
     }
 
@@ -256,7 +260,14 @@ impl Log {
     pub(crate) fn set_state(&mut self, id: ChangeId, state: State) {
         if let Some(entry) = self.entry_mut(id) {
             entry.state = Some(state);
+            self.changed.insert(id);
         }
+    }
+
+    /// The changes whose state was set since the last call, which a store
+    /// of the states must write.
+    pub(crate) fn take_changed(&mut self) -> BTreeSet<ChangeId> {
+        std::mem::take(&mut self.changed)
     }
 
     /// The rejected changes, in log order.
@@ -265,6 +276,19 @@ impl Log {
             .iter()
             .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
             .map(|entry| entry.change.clone())
+            .collect()
+    }
+
+    /// The folded changes that are not control changes, in log order, with
+    /// their parked operations.
+    pub(crate) fn folded_sealed(&self) -> Vec<(Change, Vec<ParkedOperation>)> {
+        self.entries
+            .iter()
+            .filter(|entry| entry.change.header().kind != Kind::CONTROL)
+            .filter_map(|entry| match &entry.state {
+                Some(State::Folded { parked }) => Some((entry.change.clone(), parked.clone())),
+                _ => None,
+            })
             .collect()
     }
 

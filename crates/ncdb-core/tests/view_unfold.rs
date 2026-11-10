@@ -113,14 +113,14 @@ fn written() -> Written {
     }
 }
 
-/// Carol's view, after these changes in this order.
-fn view(w: &Written, db: &MemDb, changes: &[&Change]) -> View {
+/// Carol's view and her checks, after these changes in this order.
+fn view(w: &Written, db: &MemDb, changes: &[&Change]) -> (View, SealChecks) {
     let mut view = View::open(&db.0, &lock()).unwrap();
     let mut checks = SealChecks::new(w.space.space, key(CAROL));
     for change in changes {
         view.receive(change.bytes(), &mut checks).unwrap();
     }
-    view
+    (view, checks)
 }
 
 #[test]
@@ -128,17 +128,12 @@ fn a_late_revocation_takes_the_changes_it_rejects_out_of_the_tables() {
     let w = written();
     let space = w.space.space;
     let rejected = Some(State::Rejected(RejectReason::NotMember));
-    let mut late: Vec<&Change> = w.before.iter().chain(&w.bob).collect();
+    let late: Vec<&Change> = w.before.iter().chain(&w.bob).collect();
     let late_db = MemDb::new();
-    let mut late_view = view(&w, &late_db, &late);
+    let (mut late_view, mut checks) = view(&w, &late_db, &late);
     for change in &w.bob {
         let state = late_view.state(space, change.id());
         assert_eq!(state, Some(State::Folded { parked: vec![] }), "before");
-    }
-    let mut checks = SealChecks::new(space, key(CAROL));
-    for change in late.drain(..) {
-        // The view holds them; the checks learn the control changes again.
-        late_view.receive(change.bytes(), &mut checks).unwrap();
     }
     late_view.receive(w.removal.bytes(), &mut checks).unwrap();
 
