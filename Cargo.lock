@@ -979,6 +979,7 @@ dependencies = [
  "ncdb-relay",
  "ncdb-relay-server",
  "rusqlite",
+ "sha2 0.11.1",
  "tokio",
  "tokio-tungstenite",
  "windows-native-keyring-store",

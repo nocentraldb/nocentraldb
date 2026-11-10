@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-167 · The fingerprint's digits are the hash mod 10^60, and the notice code is named by the call, `MemberAdded`
+
+- Decided by: the owner (Carsten, 2026-11-10, NOC-171 A on both points)
+- Why: RFC 0010 ("The fingerprint") gives the hash, SHA-256 over `"nocentraldb/account-fingerprint"` and the key, but not how its 32 bytes become 60 digits. The input is the context string's bytes followed by the 32-byte account key, as RFC 0003 puts every context string in front of a fixed-length input. The hash, read as one big-endian integer, is taken mod 10^60 and written as 60 digits with leading zeros, in twelve blocks of five separated by one space; that compares about 199 bits, with a bias near 1e-17. RFC 0009 names notices only by their text, so the notice code is named by the call that returns it, `NoticeCode::MemberAdded` (TypeScript `memberAdded`), in a `#[non_exhaustive]` enum that holds only that code until the other membership calls are built.
+- Instead of: Signal's safety-number blocks, five bytes each mod 100000, which need 60 bytes and SHA-256 gives 32; a code named by what the notice says, such as `ReadsWholeHistory`.
+- Topics: sdk-rust, rfc-0009, rfc-0010, public-names
