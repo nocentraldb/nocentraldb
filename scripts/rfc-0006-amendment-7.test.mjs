@@ -30,8 +30,8 @@ const subsection = (title) => {
   const start = rfc.indexOf(`\n### ${title}\n`);
   assert.ok(start >= 0, `no section "${title}"`);
   const rest = rfc.slice(start + 1);
-  const end = rest.slice(1).search(/^#{2,3} /m);
-  return end < 0 ? rest : rest.slice(0, end + 1);
+  const end = rest.search(/\n#{2,3} /);
+  return end < 0 ? rest : rest.slice(0, end);
 };
 
 test("RFC 0006 announces Amendment 7 in a dated NOC-92 changelog line", () => {
