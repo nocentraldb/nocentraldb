@@ -368,7 +368,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     }
     for state in members.0.values() {
         for grant in &state.grants {
-            if lost(state, grant, &saw) {
+            if lost(state, grant, saw) {
                 resolved.verdicts.insert(grant.change, Verdict::Lost);
             }
         }
