@@ -34,6 +34,9 @@ pub enum ErrorCode {
     SpaceOfAnotherModel,
     /// The cursor was made under another model, index or equality prefix.
     CursorOfAnotherModel,
+    /// No platform keystore is reachable and the app named no key file;
+    /// the message names `key_file` (RFC 0009, S26).
+    KeyStoreUnavailable,
 }
 
 impl Error {

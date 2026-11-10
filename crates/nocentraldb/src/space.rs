@@ -13,7 +13,7 @@ use ncdb_core::envelope;
 use ncdb_core::ids::ObjectId as CoreObjectId;
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
-use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis, MemberKind};
+use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis};
 use ncdb_core::seal;
 use ncdb_core::view::View;
 
@@ -70,7 +70,7 @@ impl Spaces<'_> {
         let genesis = Genesis {
             nonce,
             creator: member.public(),
-            certificate: Certificate::sign(&inner.account, member.id(), MemberKind::Device),
+            certificate: Certificate::sign(&inner.account, member.id(), inner.kind),
             first_generation: generation,
             model_id: membership::seal_model_id(&key, space, member.id(), inner.model_id),
         };

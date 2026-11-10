@@ -38,17 +38,24 @@ pub(super) fn spaces(inner: &Inner) -> Vec<SpaceId> {
 /// every cursor 0 (RFC 0007, "Restores and the relay epoch"). A space the
 /// database does not hold yet is joined: its changes fold as they arrive,
 /// and its keys come with them.
+///
+/// The epoch is kept in memory, so the first `welcome` after the database
+/// opens cannot tell which epoch the relay positions in its log belong to:
+/// a reopened database may have been closed while the relay was restored.
+/// It forgets them too, without reporting a new epoch; pulling from 0
+/// confirms again every change the relay still holds, and the rest is
+/// pushed again.
 pub(super) fn welcome(
     inner: &mut Inner,
     epoch: [u8; 16],
     spaces: &[SpaceId],
 ) -> Result<(), ViewError> {
-    let changed = sync(inner).epoch.is_some_and(|known| known != epoch);
-    if changed {
+    let known = sync(inner).epoch;
+    if known != Some(epoch) {
         inner.view.forget_relay_positions()?;
         let sync = sync(inner);
         sync.cursors.clear();
-        sync.epoch_changed = true;
+        sync.epoch_changed = known.is_some();
     }
     sync(inner).epoch = Some(epoch);
     for space in spaces {

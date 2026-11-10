@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-108 · Opening refuses memory with a path or a key file, and an existing database whose keys are gone
+
+- Decided by: coding agent (NOC-108), the safe subset
+- Why: RFC 0009 decides `InvalidValue` for neither a path nor memory (S27) and `KeyStoreUnavailable` for neither a keystore nor a key file (S26), not what happens when the options say two things or the keys are missing. `in_memory()` with `path(dir)` or with `key_file(path)` is refused with `InvalidValue`, since either reading would surprise the app. A database file that exists while its key file is gone, or while the keystore holds no entry for it, fails with `StorageFailed` and draws no new keys: a new member key would hold none of the space keys of the database's spaces, and every space would turn `NotFound`. A key file or entry that holds no record of this format is `StorageFailed` too. Without a keystore, nothing is created on disk. A database reopened with a lock whose model changed is `ModelRefused`, as the view refuses it.
+- Instead of: one option winning silently; drawing new keys for an existing database.
+- What this does not do: the on-device check of RFC 0005 (D11) between the lock a database was last opened with and the new one is not built, so an additive change of the model refuses an existing database too, and a lock that changes only `model.id` opens it, its spaces then answering `SpaceOfAnotherModel`.
+- Topics: sdk-rust, rfc-0009, errors, safe-subset

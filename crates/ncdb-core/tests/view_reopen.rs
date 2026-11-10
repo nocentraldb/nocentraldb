@@ -97,3 +97,16 @@ fn a_reopened_view_folds_the_members_own_write() {
 
     assert_eq!(view.state(space.space, own.id()), Some(folded()));
 }
+
+/// The SDK learns which spaces a reopened database holds from the view
+/// (NOC-108), since a space it was added to has no state of its own.
+#[test]
+fn a_reopened_view_lists_the_spaces_its_log_holds() {
+    let db = TempDb::new("reopen-spaces");
+    let mut space = Space::new(A);
+    written(&db, &mut space);
+
+    let view = View::open(&db.0, &lock()).unwrap();
+
+    assert_eq!(view.spaces().collect::<Vec<_>>(), vec![space.space]);
+}
