@@ -13,7 +13,7 @@ use ncdb_core::change::Kind;
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::log::{Position, State};
-use ncdb_core::membership::{self, Action, ControlBody, Entry, MembershipEntry};
+use ncdb_core::membership::{self, Action, ControlBody, Entry, MemberKind, MembershipEntry};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
@@ -71,7 +71,9 @@ impl Members<'_> {
     /// space's control DAG, and folds them, on the device. The new member
     /// reads the whole history of the space once it syncs.
     ///
-    /// An account other than this database's own is new to it, since each
+    /// An invitation whose certificate does not hold is refused with
+    /// `InvalidValue`: one its account did not sign, one that certifies
+    /// another member than the invitation's keys, or a sub-agent's. An account other than this database's own is new to it, since each
     /// database draws its own account key (RFC 0009, S20): its member is
     /// refused with `UnknownAccount` unless `options` carry the
     /// invitation's fingerprint.
@@ -79,6 +81,7 @@ impl Members<'_> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
+        certified(invitation)?;
         known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner { view, spaces, .. } = &mut *inner;
@@ -122,6 +125,25 @@ impl Members<'_> {
         }
         crate::sync::wake(&inner);
         Ok(())
+    }
+}
+
+/// Whether the certificate of `invitation` holds, as RFC 0008's fold
+/// checks an add ("Membership entry"): it certifies the member of the
+/// invitation's keys as a device or an agent, and its account signed it.
+/// A sub-agent's certificate is signed by its parent when it is added
+/// (RFC 0008, M25), which is not built.
+fn certified(invitation: &Invitation) -> Result<(), Error> {
+    let certificate = &invitation.certificate;
+    let holds = certificate.member == invitation.key.id()
+        && matches!(certificate.kind, MemberKind::Device | MemberKind::Agent)
+        && certificate.verify(&certificate.account_key);
+    match holds {
+        true => Ok(()),
+        false => Err(Error::new(
+            ErrorCode::InvalidValue,
+            "the invitation's certificate does not hold",
+        )),
     }
 }
 
