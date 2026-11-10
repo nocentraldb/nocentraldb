@@ -1,6 +1,6 @@
 # 2026-11-09 · NOC-78 · The checks keep every space key an envelope to their member opens
 
-- Decided by: coding agent (NOC-78), for pm's and the owner's review (key handling)
+- Decided by: Carsten (2026-11-10), on the coding agent's proposal (NOC-78)
 - Why: RFC 0008 makes decryption local and outside the membership verdict ("Sealed changes"), says only the recipient can tell whether the wrapped key is right, and lets a member keep the key of an envelope that is later rejected, to read what was accepted under it (M17). So `SealChecks` opens every key envelope to its own member in the control changes it holds, with `envelope::open`, and keeps the key under the envelope's generation whatever the envelope's verdict; an envelope to someone else, or one that does not open, gives nothing. The keys only grow, so the re-check after each control change (D11) never turns a folded change into "no key". The membership verdict (step 4) still decides whether the author may write under that generation, and the AEAD decides whether the key is the right one.
 - Instead of: keeping only keys of envelopes `resolve` accepts, which would drop a key when a later revocation rejects its envelope, against M17, and would need un-folding (NOC-49) to stay convergent.
 - Topics: rfc-0003, rfc-0008, keys, envelope
