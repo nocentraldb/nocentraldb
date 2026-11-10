@@ -236,7 +236,8 @@ fn known(
         ErrorCode::UnknownAccount,
         "the invitation's account is new to this database: pass its fingerprint \
          once a person compared it",
-    ))
+    )
+    .with_fingerprint(account))
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control

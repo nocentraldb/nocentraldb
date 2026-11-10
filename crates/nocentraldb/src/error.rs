@@ -1,8 +1,11 @@
 //! The SDK's one error, with a code and the ids it concerns, never content,
-//! a key or a personal field (RFC 0009, "Errors"; RFC 0003, "Keys never
+//! a key or a personal field; `UnknownAccount` also carries the account's
+//! public fingerprint (RFC 0009, "Errors"; RFC 0003, "Keys never
 //! reach logs, errors or telemetry").
 
 use std::fmt;
+
+use crate::members::Fingerprint;
 
 /// What the SDK refused, or why a call failed. Its message names the call
 /// and the ids it concerns, never a value.
@@ -10,6 +13,7 @@ use std::fmt;
 pub struct Error {
     code: ErrorCode,
     message: String,
+    fingerprint: Option<Fingerprint>,
 }
 
 /// The codes of [`Error`], RFC 0009's codes in Rust case. Only the codes
@@ -41,7 +45,8 @@ pub enum ErrorCode {
     /// the message names `key_file` (RFC 0009, S26).
     KeyStoreUnavailable,
     /// The invitation's account is new to this database, and no
-    /// fingerprint of it was passed to `members().add`.
+    /// fingerprint of it was passed to `members().add`. The error's
+    /// [`fingerprint`](Error::fingerprint) is the account's.
     UnknownAccount,
     /// The member's role does not allow the call.
     NotAllowed,
@@ -61,12 +66,28 @@ impl Error {
         Error {
             code,
             message: message.into(),
+            fingerprint: None,
+        }
+    }
+
+    /// The error with the fingerprint of the account it concerns.
+    pub(crate) fn with_fingerprint(self, fingerprint: Fingerprint) -> Error {
+        Error {
+            fingerprint: Some(fingerprint),
+            ..self
         }
     }
 
     /// The error's code.
     pub fn code(&self) -> ErrorCode {
         self.code
+    }
+
+    /// The fingerprint of the account the error concerns: set on
+    /// `UnknownAccount`, for a person to compare before the app passes it
+    /// to `members().add` (RFC 0009, "Invitations and members").
+    pub fn fingerprint(&self) -> Option<&Fingerprint> {
+        self.fingerprint.as_ref()
     }
 }
 
