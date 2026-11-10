@@ -25,12 +25,14 @@ mod person_keys;
 mod resolve;
 mod rights;
 mod state;
+mod statement;
 
 pub use body::{
     ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
     MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
 };
 pub use certificate::{Certificate, MemberKind};
+pub use statement::AccountKeyStatement;
 pub use current::MergeRotation;
 pub use generations::Generation;
 pub use genesis::{
