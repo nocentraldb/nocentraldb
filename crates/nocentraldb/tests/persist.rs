@@ -123,3 +123,31 @@ fn a_key_file_without_a_path_is_invalid_value() {
     assert_eq!(error.code(), ErrorCode::InvalidValue);
     assert!(!dir.join("member.key").exists());
 }
+
+/// A database is reopened only with the model it was folded by (RFC 0009,
+/// "What `nc.open` does", step 3): a lock whose collections changed is
+/// `modelRefused`, and nothing in the database changes. The check that
+/// lets an additive change through is not built yet.
+#[test]
+fn a_database_reopened_with_a_changed_model_is_model_refused() {
+    let dir = TempDir::new("other-model");
+    drop(now(Db::open(options(&dir))).unwrap());
+    let field = r#""name": { "rule": 1, "since": 1, "type": "ncdb/string" }"#;
+    assert!(LOCK.contains(field));
+    let other = LOCK.replacen(
+        field,
+        &format!(r#"{field}, "note": {{ "rule": 1, "since": 1, "type": "ncdb/string" }}"#),
+        1,
+    );
+    now(Db::open(OpenOptions::new(&other).in_memory())).expect("the changed lock is valid");
+    let reopen = |lock: &str| {
+        OpenOptions::new(lock)
+            .path(dir.join("data"))
+            .key_file(dir.join("member.key"))
+    };
+
+    let error = now(Db::open(reopen(&other))).unwrap_err();
+
+    assert_eq!(error.code(), ErrorCode::ModelRefused);
+    now(Db::open(reopen(LOCK))).unwrap();
+}
