@@ -39,9 +39,6 @@ fn two_changes_of_one_author_under_one_sequence_are_listed_in_local_order() {
     let second = m.receive(&sealed(FOUNDER, 2, 0, vec![set_title(2)]));
     let third = m.receive(&sealed(FOUNDER, 2, 0, vec![set_title(4)]));
 
-    assert_eq!(
-        m.log.equivocations(),
-        [first.id(), second.id(), third.id()]
-    );
+    assert_eq!(m.log.equivocations(), [first.id(), second.id(), third.id()]);
     assert!(!m.log.equivocations().contains(&other.id()));
 }

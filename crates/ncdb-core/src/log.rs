@@ -233,6 +233,9 @@ pub struct Log {
     relay_counts: BTreeMap<MemberId, RelayCounts>,
     /// The parked and rejected counts, kept as states are set.
     state_counts: StateCounts,
+    /// The changes of each author and sequence, kept as changes are
+    /// appended; two or more are an equivocation (RFC 0002).
+    sequences: BTreeMap<(MemberId, u64), Vec<ChangeId>>,
 }
 
 impl fmt::Debug for Log {
@@ -255,6 +258,7 @@ impl Log {
             tips: Tips::default(),
             relay_counts: BTreeMap::new(),
             state_counts: StateCounts::default(),
+            sequences: BTreeMap::new(),
         }
     }
 
@@ -274,6 +278,8 @@ impl Log {
         }
         self.tips.appended(&change);
         self.counts_mut(change.header().author).unconfirmed += 1;
+        let key = (change.header().author, change.header().sequence);
+        self.sequences.entry(key).or_default().push(id);
         self.entries.push(Entry {
             change,
             state: None,
@@ -401,6 +407,22 @@ impl Log {
     /// of folded changes are parked, per reason.
     pub fn state_counts(&self) -> &StateCounts {
         &self.state_counts
+    }
+
+    /// The changes of every equivocation in this log, in local order: two
+    /// or more different changes with the same author and sequence (RFC
+    /// 0002, "Author sequence"). Both are kept and folded; the SDK reports
+    /// them.
+    pub fn equivocations(&self) -> Vec<ChangeId> {
+        let mut ids: Vec<ChangeId> = self
+            .sequences
+            .values()
+            .filter(|ids| ids.len() > 1)
+            .flatten()
+            .copied()
+            .collect();
+        ids.sort_by_key(|id| self.position_of(*id));
+        ids
     }
 
     /// The relay counts of `author`'s changes in this log.
