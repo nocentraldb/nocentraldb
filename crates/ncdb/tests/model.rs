@@ -132,14 +132,23 @@ fn ncdb_with(dir: &Path, args: &[&str], setup: impl FnOnce(&mut Command)) -> Run
 }
 
 /// Writes a fake `node` into `dir/bin` that prints `version`, and returns `dir/bin`.
+///
+/// A child `sh` writes the script, never this process: a file this process
+/// held open for writing would leak into every child another test thread
+/// forks meanwhile, and running the script while such a child lives fails
+/// with ETXTBSY (NOC-94). Renaming a finished file into place would not help,
+/// since the leaked descriptor points at the same file.
 #[cfg(unix)]
 fn fake_node(dir: &Path, version: &str) -> PathBuf {
-    use std::os::unix::fs::PermissionsExt;
     let bin = dir.join("bin");
     fs::create_dir_all(&bin).unwrap();
-    let node = bin.join("node");
-    fs::write(&node, format!("#!/bin/sh\necho {version}\n")).unwrap();
-    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let status = Command::new("/bin/sh")
+        .args(["-c", r#"printf '#!/bin/sh\necho %s\n' "$1" > node && chmod 755 node"#, "sh"])
+        .arg(version)
+        .current_dir(&bin)
+        .status()
+        .unwrap();
+    assert!(status.success());
     bin
 }
 
