@@ -139,3 +139,23 @@ fn a_generation_two_key_chain_entries_name_is_never_current() {
     assert_eq!(state.verdict(after.id()), Some(&Verdict::Accepted));
     assert_eq!(state.current_generation(), Some(three));
 }
+
+#[test]
+fn the_states_canonical_bytes_carry_the_current_generation() {
+    use ncdb_core::cbor::{self, Key, Value};
+    let mut s = Space::new(ALICE);
+    let g = s.genesis.clone();
+    let first = s.first_generation;
+    let (rotation, two) = s.rotate(ALICE, &[first], &[&g]);
+    let state = resolve(s.space, [&g, &rotation]);
+    let Ok(Value::Map(map)) = cbor::decode(&state.encode()) else {
+        panic!("the state encodes as a map");
+    };
+    // Key 7, so that the convergence harness compares it (M-C1).
+    assert!(map.get(&Key::Unsigned(7)) == Some(&Value::Unsigned(two)));
+    let empty = resolve(s.space, []);
+    let Ok(Value::Map(map)) = cbor::decode(&empty.encode()) else {
+        panic!("the state encodes as a map");
+    };
+    assert!(map.get(&Key::Unsigned(7)) == Some(&Value::Null));
+}
