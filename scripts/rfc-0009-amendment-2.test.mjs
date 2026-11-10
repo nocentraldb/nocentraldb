@@ -13,8 +13,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0009-sdk-api.md";
 const AMENDMENT = "amendment-2-following-rfc-0005-amendment-4";
-const D16 =
-  "0005-schema-and-model-lock.md#d16-ncint-in-typescript";
+const D16 = "0005-schema-and-model-lock.md#d16-ncint-in-typescript";
 
 const rfc = readFileSync(join(root, RFC), "utf8");
 const MARK = "*(Amendment 2.)*";

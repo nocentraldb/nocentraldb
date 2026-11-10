@@ -166,7 +166,11 @@ test("every decision in RFC 0005 records the owner's decision", () => {
   const found = decisions(read());
   assert.ok(found.length >= 14, `${RFC} lists ${found.length} decisions`);
   for (const { id, text } of found) {
-    assert.match(text, DECIDED, `${RFC}: ${id} does not record the owner's decision`);
+    assert.match(
+      text,
+      DECIDED,
+      `${RFC}: ${id} does not record the owner's decision`,
+    );
   }
 });
 

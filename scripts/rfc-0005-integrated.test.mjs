@@ -61,9 +61,9 @@ const jsonBlocks = (markdown) =>
 /** The decisions under "## Decisions", one "### Dn. Title" heading each. */
 const decisions = () => {
   const body = section(read(), "decisions");
-  return [...body.matchAll(/^### (D\d+)\. [^\n]+\n([\s\S]*?)(?=^### |(?![\s\S]))/gm)].map(
-    (m) => ({ id: m[1], text: m[2] }),
-  );
+  return [
+    ...body.matchAll(/^### (D\d+)\. [^\n]+\n([\s\S]*?)(?=^### |(?![\s\S]))/gm),
+  ].map((m) => ({ id: m[1], text: m[2] }));
 };
 const decision = (id) => {
   const found = decisions().find((d) => d.id === id);
@@ -77,7 +77,11 @@ test("RFC 0005 has no amendment section, mark, in-page link or changelog left", 
     assert.doesNotMatch(heading, /amendment/i, `heading "${heading}"`);
   }
   assert.doesNotMatch(rfc, /\*\(?Amendment \d+\.?\)?\*/, "a mark is left");
-  assert.doesNotMatch(rfc, /\]\(#amendment-/, "an in-page link to an amendment");
+  assert.doesNotMatch(
+    rfc,
+    /\]\(#amendment-/,
+    "an in-page link to an amendment",
+  );
   assert.doesNotMatch(rfc, /^\*\*Changelog\.\*\*/m, "the changelog is left");
   const status = line(rfc, "**Status.**");
   assert.doesNotMatch(status, /Amendment/, "the status names an amendment");
@@ -125,9 +129,17 @@ test("Decisions keeps D1 to D22 in short form: decided, why, and the options not
   for (const { id, text } of found) {
     const n = Number(id.slice(1));
     const date = dates[id] ?? (n >= 18 ? "2026-11-10" : "2026-11-08");
-    assert.match(text, new RegExp(`^Decided \\(Carsten, ${date}\\): `, "m"), id);
+    assert.match(
+      text,
+      new RegExp(`^Decided \\(Carsten, ${date}\\): `, "m"),
+      id,
+    );
     assert.match(text, /^Why: /m, `${id} gives no reason`);
-    assert.match(text, /^Not taken:\n\n?- /m, `${id} lists no option not taken`);
+    assert.match(
+      text,
+      /^Not taken:\n\n?- /m,
+      `${id} lists no option not taken`,
+    );
     assert.doesNotMatch(text, /\*\(recommended\)\*|^Recommendation:/m, id);
   }
 });
@@ -141,7 +153,8 @@ test("the writer's model in payload key 64 stands in the design and in D10 (NOC-
   assert.match(point, /another model/);
   assert.match(point, /apart/);
   assert.match(
-    newer.split("\n").find((l) => l.startsWith("- ") && /model\.id/.test(l)) ?? "",
+    newer.split("\n").find((l) => l.startsWith("- ") && /model\.id/.test(l)) ??
+      "",
     /payload key 64/,
   );
   assert.match(decision("D10"), /payload key 64/);
@@ -214,14 +227,20 @@ test("nc.ref stands in the schema, the lock, the additive-change rule and Public
   assert.match(refs, /nc\.ref\("customers"\)/);
   assert.match(refs, /"type": "ncdb\/ref"/);
   assert.match(refs, /subscri/, "it does not say what a subscription follows");
-  assert.match(refs, /\.personal\(/, "it does not say a reference is not personal");
+  assert.match(
+    refs,
+    /\.personal\(/,
+    "it does not say a reference is not personal",
+  );
   assert.match(line(rfc, "- An index can use"), /`nc\.ref`/);
   assert.match(section(rfc, "types-for-the-app"), /\{ space, id \}/);
   assert.match(
     line(rfc, "| Add a collection to a link's or a reference's `targets`"),
     /missing/,
   );
-  assert.ok(line(rfc, "| Remove a collection from a link's or a reference's `targets`"));
+  assert.ok(
+    line(rfc, "| Remove a collection from a link's or a reference's `targets`"),
+  );
   const names = section(rfc, "public-names");
   assert.match(line(names, "| `nc.ref` |"), /another space/);
   assert.match(line(names, "| The type id namespace"), /`ncdb\/ref`/);

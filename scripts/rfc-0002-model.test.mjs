@@ -71,10 +71,7 @@ test("RFC 0002 announces Amendment 5 in a dated changelog line at the top", () =
 test("the amendment names where RFC 0005 uses the key, by D10 and D13", () => {
   const body = section(read(RFC), AMENDMENT);
   assert.ok(body, `no section #${AMENDMENT}`);
-  assert.match(
-    body,
-    /\(0005-schema-and-model-lock\.md#decisions\)/,
-  );
+  assert.match(body, /\(0005-schema-and-model-lock\.md#decisions\)/);
   assert.match(body, /\bD10\b/);
   assert.match(body, /\bD13\b/);
 });
