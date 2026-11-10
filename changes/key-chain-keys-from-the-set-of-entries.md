@@ -18,4 +18,4 @@ The checks filled a previous generation with the first key the key chain gave fo
 
 ## Fix
 
-The checks derive the key chain keys again from scratch after every control change, from the envelope keys and the set of entries, taken in change id order. Every copy that holds the same entries holds the same keys, and a key from an envelope to the member still wins.
+The checks derive the key chain keys again from scratch after every control change, from the envelope keys and the set of entries, taken in change id order. Every copy that holds the same entries holds the same keys, and a key from an envelope to the member still wins. When a later entry replaces a key, a change folded under the old key that no longer opens is un-folded, so every copy ends in the same states and the same fold.
