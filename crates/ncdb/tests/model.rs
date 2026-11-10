@@ -563,3 +563,60 @@ additive: clients on model version 3 keep every change written under version 4.
     let index = &lock.collection("tasks").unwrap().indexes["byPriorityDesc"];
     assert_eq!((index.scope, index.since), (Scope::Member, 4));
 }
+
+#[test]
+fn a_reference_is_written_with_its_targets_listed_like_a_links_and_a_target_comes_but_does_not_go()
+{
+    let dir = project();
+    let schema = |targets: &str| {
+        SCHEMA_V2.replace(
+            "dependsOn: nc.links(\"tasks\"),",
+            &format!("dependsOn: nc.links(\"tasks\"),\n      customer: nc.ref({targets}),"),
+        )
+    };
+    write_schema(&dir.join("model.ts"), &schema(r#""people""#));
+    fs::write(dir.join("model.lock.json"), EXAMPLE).unwrap();
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 2 -> 3
+  + tasks.customer    ncdb/ref -> people
+additive: clients on model version 2 keep every change written under version 3.
+"
+    );
+    let written = read(dir.join("model.lock.json"));
+    assert!(
+        written.contains(
+            r#""customer": { "rule": 1, "since": 3, "targets": ["people"], "type": "ncdb/ref" }"#
+        ),
+        "{written}"
+    );
+
+    // Adding a target is accepted and listed, as for a link.
+    write_schema(&dir.join("model.ts"), &schema(r#"["people", "tasks"]"#));
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 0, "{}", run.stderr);
+    assert_eq!(
+        run.stdout,
+        "model.lock.json: model version 3 -> 4
+  + tasks.customer    targets tasks
+additive: clients on model version 3 keep every change written under version 4.
+"
+    );
+
+    // Removing one is refused, and the lock stays as it was.
+    let before = read(dir.join("model.lock.json"));
+    write_schema(&dir.join("model.ts"), &schema(r#""tasks""#));
+    let run = ncdb(&dir, &["model", "build"]);
+    assert_eq!(run.code, 1);
+    assert_eq!(
+        run.stderr,
+        "model.lock.json: refused, the change is not additive (model version stays 4)
+  x tasks.customer: target people removed.
+    Existing links into people would read as wrong collection, and references into it as missing, on upgraded clients only.
+    Keep people in the targets.
+"
+    );
+    assert_eq!(read(dir.join("model.lock.json")), before);
+}
