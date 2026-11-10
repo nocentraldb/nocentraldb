@@ -67,9 +67,10 @@ impl From<Stop> for State {
 /// the membership entries, key chain entries and key envelopes the member
 /// holds. Their result must depend only on the change and the set of
 /// control changes added, never on their order or on the time. A change
-/// that passed [`Checks::verify`] and [`Checks::open`] keeps passing them
-/// as control changes are added; only [`Checks::is_member`] may turn from
-/// pass to fail, and the log then un-folds the change.
+/// that passed [`Checks::verify`] keeps passing it as control changes are
+/// added. [`Checks::is_member`] may turn from pass to fail, and so may
+/// [`Checks::open`] when a control change replaces the key of a generation;
+/// [`Checks::still_opens`] says so, and the log then un-folds the change.
 pub trait Checks {
     /// Whether this member knows the suite (step 2).
     fn knows_suite(&self, suite: u64) -> bool;
@@ -82,6 +83,19 @@ pub trait Checks {
     /// payload that decrypts but is no payload map this core can read
     /// stops at step 6.
     fn open(&self, change: &Change) -> Result<Payload, Stop>;
+    /// Whether a sealed change that passed step 5 still passes it, or
+    /// where it stops now. Checks whose keys never change once held keep
+    /// the default, which says it passes without opening the change.
+    fn still_opens(&self, _change: &Change) -> Result<(), Stop> {
+        Ok(())
+    }
+    /// Opens a change that was folded, with the key it was folded under
+    /// even when a control change has replaced that key since, so that
+    /// un-folding finds the operations it folded. The default is
+    /// [`Checks::open`].
+    fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
+        self.open(change)
+    }
     /// Adds a control change that passed steps 1 to 4 to the control state.
     /// Adding a control change the checks already hold changes nothing, so
     /// [`Log::receive`] can hand them every folded control change of the
