@@ -61,6 +61,18 @@ pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 /// working network finishes each step in well under a second.
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// The most connections a server holds open at once, authenticated or
+/// not. A connection above it is closed as soon as it is accepted. It
+/// stays below the 1,024 file descriptors many systems give a process by
+/// default, and bounds the outgoing queues of all connections to 2 GiB.
+pub const MAX_CONNECTIONS: usize = 512;
+
+/// The most connections a server holds open at once that have not
+/// finished the opening handshake. A connection above it is closed as soon
+/// as it is accepted, so peers that stop in the handshake cannot take the
+/// places of authenticated members.
+pub const MAX_HANDSHAKES: usize = 64;
+
 /// The protocol versions this server speaks.
 pub const VERSIONS: [u64; 1] = [1];
 
@@ -76,6 +88,8 @@ pub fn config(allowed_accounts: BTreeSet<[u8; 32]>) -> Config {
 pub struct Server<S> {
     listener: TcpListener,
     shared: Arc<Shared<S>>,
+    max_connections: usize,
+    max_handshakes: usize,
 }
 
 impl<S: RelayStore + 'static> Server<S> {
@@ -109,7 +123,12 @@ impl<S: RelayStore + 'static> Server<S> {
             write_timeout: WRITE_TIMEOUT,
             handshake_timeout: HANDSHAKE_TIMEOUT,
         });
-        Ok(Server { listener, shared })
+        Ok(Server {
+            listener,
+            shared,
+            max_connections: MAX_CONNECTIONS,
+            max_handshakes: MAX_HANDSHAKES,
+        })
     }
 
     /// A connection closes once writing a message to its member makes no
@@ -127,6 +146,20 @@ impl<S: RelayStore + 'static> Server<S> {
         if let Some(shared) = Arc::get_mut(&mut self.shared) {
             shared.handshake_timeout = timeout;
         }
+        self
+    }
+
+    /// The server holds at most `max` connections open at once, instead of
+    /// [`MAX_CONNECTIONS`].
+    pub fn with_max_connections(mut self, max: usize) -> Server<S> {
+        self.max_connections = max;
+        self
+    }
+
+    /// The server holds at most `max` connections open at once that have
+    /// not finished the opening handshake, instead of [`MAX_HANDSHAKES`].
+    pub fn with_max_handshakes(mut self, max: usize) -> Server<S> {
+        self.max_handshakes = max;
         self
     }
 

@@ -83,6 +83,17 @@ pub async fn server_with_handshake_timeout(timeout: Duration) -> (SocketAddr, Te
     server_with(|server| server.with_handshake_timeout(timeout)).await
 }
 
+/// As [`server`], holding at most `max` connections open at once.
+pub async fn server_with_max_connections(max: usize) -> (SocketAddr, TempDir) {
+    server_with(|server| server.with_max_connections(max)).await
+}
+
+/// As [`server`], holding at most `max` connections open at once that
+/// have not finished the opening handshake.
+pub async fn server_with_max_handshakes(max: usize) -> (SocketAddr, TempDir) {
+    server_with(|server| server.with_max_handshakes(max)).await
+}
+
 async fn server_with(
     configure: impl FnOnce(Server<SqliteStore>) -> Server<SqliteStore>,
 ) -> (SocketAddr, TempDir) {
