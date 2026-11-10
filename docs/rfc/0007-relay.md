@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
-**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on every decision in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and the design below describes the decided options. Nothing here is built or deployed. This RFC was merged with the owner's approval in #37 (Carsten, 2026-11-08).
+**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on decisions R1 to R11 in [Decisions for the owner](#decisions-for-the-owner) and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-08), and on R12, the keys of each message, as recommended (Carsten, 2026-11-10); the design below describes the decided options. [History](#history) says when each part was written. Nothing here is built or deployed. This RFC was merged with the owner's approval in #37 (Carsten, 2026-11-08).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -49,11 +49,56 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ### Transport and encoding
 
-A member talks to the relay over one **WebSocket** connection (RFC 6455) with TLS. Every message is one binary WebSocket message holding one CBOR map, encoded with RFC 0002's deterministic profile. A message's key 1 names its type, and key 2 holds a request id that the member chooses, so that answers can arrive out of order. Messages the relay sends on its own, such as new entries for a subscription, carry no request id.
+A member talks to the relay over one **WebSocket** connection (RFC 6455) with TLS. Every message is one binary WebSocket message holding one CBOR map, encoded with RFC 0002's deterministic profile. A message's key 1 names its type, and key 2 holds a request id that the member chooses, so that answers can arrive out of order. Messages the relay sends on its own, such as new entries for a subscription, carry no request id. [The keys of each message](#the-keys-of-each-message) gives every field its key.
 
 WebSockets work in every browser we target, natively on every platform, and through API Gateway on AWS, so the same protocol runs everywhere (principle 7). See decision R1 for the alternatives.
 
 **Limits that hold on every backend.** A message is at most 128 KiB, because that is API Gateway's limit, and a protocol that behaves differently by backend would make backends not interchangeable. A change whose frame is larger travels through an upload (see [Large changes](#large-changes)). A push carries at most 32 changes. These numbers are protocol constants, announced in the `welcome` message, so that a future relay can raise them.
+
+### The keys of each message
+
+The sections below write a message with its field names, such as `push {req, space, frames}`, for reading. On the wire every field has an integer key, by one rule (decision [R12](#decisions-for-the-owner)):
+
+- **Key 1** holds the message's type, as text: `"push"`, `"pushed"`, `"error"`.
+- **Key 2** holds the request id. Key 2 is absent when a message has none: `hello`, `challenge`, `auth`, `welcome`, and `entries` sent live for a subscription.
+- **Every other field** takes the keys 3, 4, … in the order this RFC lists it in the message.
+- **A nested map**, such as a push result or a log entry, numbers its fields from 1, in the order this RFC lists them.
+- **Message types and error codes are text**, never numbers.
+
+| Message | Direction | Keys after key 1 |
+| --- | --- | --- |
+| `hello` | member → relay | 3 versions, 4 client |
+| `challenge` | relay → member | 3 version, 4 relay id, 5 nonce, 6 limits |
+| `auth` | member → relay | 3 signing key, 4 agreement key, 5 signature |
+| `welcome` | relay → member | 3 member id, 4 relay epoch, 5 spaces |
+| `push` | member → relay | 2 req, 3 space, 4 frames |
+| `pushed` | relay → member | 2 req, 3 results |
+| `pull` | member → relay | 2 req, 3 space, 4 epoch, 5 after, 6 limit |
+| `entries` | relay → member | 2 req, 3 space, 4 entries, 5 head |
+| `subscribe` | member → relay | 2 req, 3 space, 4 epoch, 5 after |
+| `unsubscribe` | member → relay | 2 req, 3 space |
+| `keys` | member → relay | 2 req, 3 space |
+| `keys` | relay → member | 2 req, 3 space, 4 envelopes, 5 chain |
+| `person-keys` | member → relay | 2 req, 3 space |
+| `person-keys` | relay → member | 2 req, 3 space, 4 records |
+| `put-person-keys` | member → relay | 2 req, 3 space, 4 records |
+| `ok` | relay → member | 2 req |
+| `upload` | member → relay | 2 req, 3 space, 4 size |
+| `upload` | relay → member | 2 req, 3 id, 4 url |
+| `ping` | member → relay | 2 req |
+| `pong` | relay → member | 2 req |
+| `error` | relay → member | 2 req, 3 code, 4 retry after |
+
+| Map | Keys | Where |
+| --- | --- | --- |
+| `limits` | 1 largest message, 2 changes per push, 3 largest frame | `challenge`, key 6 |
+| `upload reference` | 1 upload id | An element of `push`'s frames, in place of a frame's bytes |
+| `result` | 1 accepted position, 2 duplicate position, 3 rejected code | An element of `pushed`'s results; it holds exactly one of the three keys |
+| `entry` | 1 position, 2 accepted at, 3 frame or download | An element of `entries`' entries, and of `keys`' envelopes and chain |
+| `download` | 1 url, 2 size | An entry's key 3, in place of a frame's bytes |
+| `record` | 1 person-key id, 2 generation, 3 writer member id, 4 wrapped, 5 signature | An element of `person-keys`' and `put-person-keys`' records |
+
+So a push of two frames, the second through an upload, is `{1: "push", 2: 7, 3: space id, 4: [frame bytes, {1: upload id}]}`, and its answer `{1: "pushed", 2: 7, 3: [{1: 41}, {3: "bad_signature"}]}`.
 
 ### Opening a connection
 
@@ -547,7 +592,7 @@ One line each; the decisions below give the options that remain.
 
 ## Decisions for the owner
 
-GENESIS.md reserves the wire format, anything that writes to AWS and anything that raises the bill for the owner. Each decision below names the options and the owner's ruling (Carsten, 2026-11-08); the design above describes them.
+GENESIS.md reserves the wire format, anything that writes to AWS and anything that raises the bill for the owner. Each decision below names the options and the owner's ruling, R1 to R11 on 2026-11-08 and R12 on 2026-11-10; the design above describes them.
 
 **R1. The transport.**
 
@@ -632,6 +677,16 @@ Decided: A (Carsten, 2026-11-08). A restore brings back the membership table and
 
 Decided: A as the default, and the operator may set any longer period (Carsten, 2026-11-08). In every setting, the logs hold ids, sizes, error codes, times and, in access logs, network addresses, never content or key material. Cost: under 1 USD a month for a small team.
 
+**R12. The keys of each message.**
+
+RFC 0007 first fixed only a message's type at key 1, its request id at key 2 and the error map. The keys of every other field were open, and the relay server (NOC-89) needed them (NOC-98).
+
+- A. The error map's example as the rule: the type as text at key 1, the request id at key 2 or absent, then each field at keys 3, 4, … in this RFC's order; a nested map numbers its fields from 1 in this RFC's order; types and error codes stay text. *(recommended)*
+- B. Text keys for every field, such as `"space"` and `"frames"`.
+- C. Numbers picked by hand for each message, with gaps for future fields.
+
+Decided: A (Carsten, 2026-11-10), on NOC-98. One rule a reader derives from the RFC, compact CBOR, and the same shape as the error map. B is easier to read in a capture but larger in every message and unlike the error map; C gives room to grow that CBOR maps already give by adding keys at the end, and leaves more to review. [The keys of each message](#the-keys-of-each-message) applies the rule to every message.
+
 The protection of the person-key store and the key that authenticates a connection are decided in [RFC 0003](0003-keys-and-cryptography.md#decisions-for-the-owner) (decisions 14 and 13), because they are key handling.
 
 ## Conflicts with GENESIS.md and RFC 0001
@@ -657,3 +712,11 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The own
 | What if the relay is down? | Members keep working; on reconnect they pull, then push what the relay has not confirmed. |
 | What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
 | Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, decision 14); only a signed-off shred entry deletes one. |
+
+## History
+
+- **2026-11-08** · NOC-13 · The first version, with the decisions R1 to R11, which the owner ruled on, and the conflicts with GENESIS.md and RFC 0001 (#37).
+- **2026-11-09** · NOC-47 · The conflicts with GENESIS.md and RFC 0001 say where each was resolved (#64).
+- **2026-11-09** · NOC-55 · How to give feedback on this RFC (#72).
+- **2026-11-09** · NOC-35 · The first line drops the draft number of a decided RFC (#76).
+- **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#111).

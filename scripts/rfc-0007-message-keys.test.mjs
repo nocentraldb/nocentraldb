@@ -20,9 +20,8 @@ const TABLE = "the-keys-of-each-message";
 
 /** The rows of the first Markdown table in `text`, as arrays of trimmed cells, header and rule left out. */
 const rows = (text) =>
-  text
+  (text.split("\n\n").find((block) => block.startsWith("|")) ?? "")
     .split("\n")
-    .filter((l) => l.startsWith("|"))
     .slice(2)
     .map((l) =>
       l
