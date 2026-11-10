@@ -4,7 +4,7 @@
 // changelog is left, "Decisions" keeps each decision in short form, and a
 // dated "History" names the pull request of each change. This test replaces
 // rfc-0004-amendment-4.test.mjs, the amendment checks of rfc-0004.test.mjs
-// and RFC 0004's Amendment 2 check in decided-rfcs-alignment;
+// and decided-rfcs-alignment's check that a create carries no arguments;
 // rfc-0004-examples.test.mjs keeps checking the bytes of E1 to E17. Whether
 // the wording is right is the review of the PR.
 import assert from "node:assert/strict";

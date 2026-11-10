@@ -248,7 +248,7 @@ test("every text for users is short, names the app and promises nothing", () => 
 
 // Where the developer meets the proposal: RFC 0006 carries it in its section
 // "Durability of a browser copy", with a decision per layer under "Decisions"
-// (NOC-101 folded its Amendment 2 into the text), and RFC 0001 links the page. The README does not:
+// (NOC-101 folded it into the text), and RFC 0001 links the page. The README does not:
 // the owner keeps limits out of it (NOC-61).
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 const RFC_0001 = "docs/rfc/0001-nocentraldb.md";

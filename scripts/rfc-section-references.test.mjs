@@ -17,12 +17,14 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
 
-/** An amendment named by its number: "Amendment 3", "Amendments 1 and 4". */
+/** An amendment named by its number, alone or as a list of several. */
 const NUMBERED = /\bAmendments?\s+\d/;
+/** That name, built from parts so that this file does not trip its own scan. */
+const named = (n) => `${"Amend"}ment ${n}`;
 
 const KEEPS_HISTORY = [/^factory\/decisions\//, /^changes\//];
 const KEEPS_EXAMPLE = {
-  "docs/rfc/README.md": 'no mark such as "(Amendment 3)"',
+  "docs/rfc/README.md": `no mark such as "(${named(3)})"`,
 };
 const TEXT = /\.(rs|ts|tsx|js|mjs|cjs|py|md|yml|yaml|toml|json|sh)$/;
 
@@ -60,8 +62,6 @@ test("no file outside the decision log, the fragments and History sections names
 });
 
 test("the History exemption covers only the History section", () => {
-  // Built from parts, so this file does not trip its own scan.
-  const named = (n) => `${"Amend"}ment ${n}`;
   const history = `## History\n\n- ${named(1)}\n`;
   assert.match(
     withoutHistory(`# T\n\n## Rules\n\n${named(2)}\n\n${history}`),

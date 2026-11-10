@@ -3,7 +3,7 @@
 //! member's log (RFC 0002, "The log on disk") and the view folded from it.
 //!
 //! A received change is appended to the log, taken through the checks of
-//! RFC 0002 Amendment 1 by [`Log::receive`], and folded into the tables of
+//! RFC 0002 by [`Log::receive`], and folded into the tables of
 //! its collections, in one SQLite transaction ([`View::receive`]): after a
 //! crash a change is in both the log and the view or in neither. The view
 //! keeps each space's [`Log`] in memory too, read back from the `log` table

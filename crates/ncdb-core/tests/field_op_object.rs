@@ -1,4 +1,4 @@
-//! Creating and deleting an object (RFC 0004 Amendment 1, "Creating and
+//! Creating and deleting an object (RFC 0004, "Creating and
 //! deleting an object"): create (operation 0) and delete (operation 4)
 //! encode to exactly the bytes of examples E12 to E14 and decode back to
 //! the same operations; an object operation that does not decode says why
@@ -106,7 +106,7 @@ fn a_number_other_than_create_or_delete_is_an_unknown_operation() {
 
 #[test]
 fn a_create_with_arguments_is_malformed() {
-    // Keys 3 and 5 are absent from a create (RFC 0004 Amendment 1,
+    // Keys 3 and 5 are absent from a create (RFC 0004,
     // "Operation numbers"), so it has exactly one encoding.
     assert_eq!(parks(CREATE, Some(args(&[]))), MalformedArguments);
     assert_eq!(parks(CREATE, Some(Value::Null)), MalformedArguments);
@@ -158,7 +158,7 @@ fn a_delete_reads_an_argument_from_64_up_as_if_it_were_absent() {
 
 #[test]
 fn a_delete_of_the_wrong_kind_is_read_not_parked() {
-    // RFC 0004 Amendment 1: a value other than `true` reads as not
+    // RFC 0004, "Creating and deleting an object": a value other than `true` reads as not
     // deleted; the value is applied, not parked.
     let delete = args(&[(1, text("yes")), (2, empty())]);
     assert_eq!(

@@ -1,5 +1,4 @@
-//! The byte-exact examples of RFC 0004 Amendment 1 ("Byte-exact examples")
-//! and Amendment 4 (E15 to E17), with the ids, members and types they use.
+//! The byte-exact examples E1 to E17 of RFC 0004 ("Byte-exact examples"), with the ids, members and types they use.
 //! The vectors are written by
 //! `docs/rfc/vectors/0004/generate.py` with cbor2, independently of this
 //! crate; include_str! puts them into the test binary, so the tests also
@@ -53,7 +52,7 @@ pub fn to_hex(bytes: &[u8]) -> String {
 pub const T1: ObjectId = ObjectId([0x11; 16]);
 /// Link target `T2`: 16 bytes of `22`.
 pub const T2: ObjectId = ObjectId([0x22; 16]);
-/// Space `S` of Amendment 4's examples: 16 bytes of `33`.
+/// Space `S` of the reference examples E15 to E17: 16 bytes of `33`.
 pub const S: SpaceId = SpaceId([0x33; 16]);
 /// Customer `C1`, in `S`: 16 bytes of `44`.
 pub const C1: ObjectId = ObjectId([0x44; 16]);
@@ -120,7 +119,7 @@ pub fn depends_on() -> Links {
     }
 }
 
-// The field `customer` of the collection `orders` (Amendment 4).
+// The field `customer` of the collection `orders` (RFC 0004, E15 to E17).
 pub fn customer() -> Reference {
     Reference {
         collections: ["customers".to_owned()].into(),

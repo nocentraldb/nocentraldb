@@ -126,7 +126,7 @@ impl<'a> SqlFold<'a> {
 
     /// Records in the object's row of `c_<collection>`, if it has one,
     /// whether the object is deleted: the declared indexes hold only the
-    /// rows of objects that are not (RFC 0006, Amendment 6).
+    /// rows of objects that are not (RFC 0006, "Declared indexes").
     fn mark_deleted(&self, collection: &str, object: ObjectId, deleted: bool) -> Result<(), Error> {
         self.conn.execute(
             &format!(
@@ -333,7 +333,7 @@ fn column_value(winner: Option<Entry>) -> Sql {
 
 /// The column value of a reference's winning write: the target's space id
 /// followed by its object id, 32 bytes, as stored and whatever its state
-/// (RFC 0006, Amendment 7). NULL when no write is live, the reference is
+/// (RFC 0006, "Declared indexes"). NULL when no write is live, the reference is
 /// cleared, or its value does not fit (RFC 0004, decision 17).
 fn reference_column(winner: Option<Entry>) -> Sql {
     winner.map_or(Sql::Null, |entry| reference_sql(&entry.value))

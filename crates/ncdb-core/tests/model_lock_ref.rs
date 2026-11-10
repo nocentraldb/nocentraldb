@@ -1,4 +1,4 @@
-//! `ncdb/ref` in `model.lock.json` (RFC 0005, Amendment 5): a reference
+//! `ncdb/ref` in `model.lock.json` (RFC 0005, "References into another space"): a reference
 //! field carries `targets`, the collections a target may be in, as a link
 //! does. The lock reads and writes it, the checks hold its targets to
 //! collections of the model and refuse removing one, and an index can use
