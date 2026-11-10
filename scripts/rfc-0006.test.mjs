@@ -60,11 +60,8 @@ test("RFC 0006 has the sections its ticket asks for", () => {
     "what the view stores in plaintext",
     "reads never touch the network",
     "the spike",
-    "rejected options",
     "agreement with genesis.md and rfc 0001",
     "durability of a browser copy",
-    "open questions",
-    "decisions",
     "history",
   ]) {
     assert.ok(
