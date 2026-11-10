@@ -54,6 +54,12 @@ pub const QUEUE: usize = 32;
 /// member before it closes the connection (RFC 0007, "Liveness").
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// How long each step of the opening handshake may take (RFC 0007,
+/// "Opening a connection"): the WebSocket upgrade, `hello`, and `auth`
+/// after the challenge. RFC 0007 names no deadline for it; a member on a
+/// working network finishes each step in well under a second.
+pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
+
 /// The protocol versions this server speaks.
 pub const VERSIONS: [u64; 1] = [1];
 
@@ -100,6 +106,7 @@ impl<S: RelayStore + 'static> Server<S> {
             relay_id,
             hub: Hub::default(),
             write_timeout: WRITE_TIMEOUT,
+            handshake_timeout: HANDSHAKE_TIMEOUT,
         });
         Ok(Server { listener, shared })
     }
@@ -109,6 +116,15 @@ impl<S: RelayStore + 'static> Server<S> {
     pub fn with_write_timeout(mut self, timeout: Duration) -> Server<S> {
         if let Some(shared) = Arc::get_mut(&mut self.shared) {
             shared.write_timeout = timeout;
+        }
+        self
+    }
+
+    /// Each step of the opening handshake closes the connection once it
+    /// takes longer than `timeout`, instead of [`HANDSHAKE_TIMEOUT`].
+    pub fn with_handshake_timeout(mut self, timeout: Duration) -> Server<S> {
+        if let Some(shared) = Arc::get_mut(&mut self.shared) {
+            shared.handshake_timeout = timeout;
         }
         self
     }

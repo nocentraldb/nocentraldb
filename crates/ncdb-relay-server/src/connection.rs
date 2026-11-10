@@ -33,6 +33,8 @@ pub(crate) struct Shared<S> {
     pub hub: Hub,
     /// How long writing one message may make no progress.
     pub write_timeout: std::time::Duration,
+    /// How long each step of the opening handshake may take.
+    pub handshake_timeout: std::time::Duration,
 }
 
 /// What the writer task sends: a message, or a close after the messages
