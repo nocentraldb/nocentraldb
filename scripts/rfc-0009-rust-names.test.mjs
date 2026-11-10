@@ -133,9 +133,9 @@ test("RFC 0009 records NOC-135's two parts as decisions after S32", () => {
     ["S33", "S34"],
   );
   const [list, add] = found.map(({ text }) => text);
-  assert.match(list, /`SpaceInfo`/);
+  assert.match(list, /`SpaceInfo \{ id: SpaceId,/);
   assert.match(list, /#139/);
-  assert.match(add, /`AddMember`/);
+  assert.match(add, /`AddMember \{ role: Role,/);
   assert.match(add, /#136/);
   for (const text of [list, add]) {
     assert.match(text, /^Why: /m);

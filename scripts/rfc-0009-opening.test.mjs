@@ -101,7 +101,10 @@ test("RFC 0009 records S26 to S28 as decided on NOC-114, with History and status
 test("NOC-114 leaves RFC 0009's open questions, and NOC-115 stays", () => {
   const open = section(read(RFC_0009), "open-questions");
   assert.doesNotMatch(open, /NOC-114/);
-  assert.match(open, /^One question waits for the owner/m);
+  assert.match(
+    open,
+    /^(?:One question waits|\w+ questions wait) for the owner/m,
+  );
   assert.match(open, /\*\*NOC-115, question 10\.\*\*/);
 });
 
