@@ -1,0 +1,68 @@
+{
+  "collections": {
+    "projects": {
+      "fields": {
+        "name": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "since": 1
+    },
+    "tasks": {
+      "fields": {
+        "estimate": { "rule": 1, "since": 1, "type": "ncdb/float" },
+        "priority": { "rule": 1, "since": 1, "type": "ncdb/int" },
+        "project": {
+          "rule": 1,
+          "since": 1,
+          "targets": ["projects"],
+          "type": "ncdb/link"
+        },
+        "status": {
+          "options": ["open", "done"],
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/choice"
+        },
+        "tags": {
+          "of": { "type": "ncdb/string" },
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/set"
+        },
+        "title": { "rule": 1, "since": 1, "type": "ncdb/string" },
+        "urgent": { "rule": 1, "since": 1, "type": "ncdb/boolean" }
+      },
+      "indexes": {
+        "byPriority": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "priority" }],
+          "since": 1
+        },
+        "byStatusPriority": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "priority" }
+          ],
+          "since": 1
+        },
+        "open": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "priority" }
+          ],
+          "scope": "space",
+          "since": 1
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:7e2a1919724cfe3864eb6bde0d9c9c9be86d7c482c41c5289499a33b63616a47",
+    "id": "bb6d617ea33bb111ed4f7edc2adf3b0f",
+    "version": 1
+  },
+  "plugins": {}
+}

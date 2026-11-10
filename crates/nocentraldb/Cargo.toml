@@ -1,0 +1,18 @@
+[package]
+name = "nocentraldb"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, read, query and subscribe."
+
+# The SDK wraps the core: the change, its signature and seal, membership and
+# the local view on SQLite. The view is native only, so is this crate.
+[dependencies]
+ncdb-core.workspace = true
+# The `Stream` a subscription returns (RFC 0009, "The Rust SDK"). The version
+# Cargo.lock already held.
+futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
+# Signs the member certificate with the account key, as the core does.
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
