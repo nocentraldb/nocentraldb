@@ -73,6 +73,19 @@ fn the_view_model_holds_the_collections_fields_and_indexes_of_the_lock() {
                 &[("title", Ascending), ("rank", Descending)],
                 1,
             ),
+            Index {
+                scope: Scope::Space,
+                ..index("task", "inSpace", &[("rank", Ascending)], 0)
+            },
+            Index {
+                scope: Scope::Space,
+                ..index(
+                    "task",
+                    "inSpaceByTitle",
+                    &[("title", Ascending), ("rank", Descending)],
+                    1,
+                )
+            },
         ],
     };
     assert_eq!(Model::from_lock(&lock()), Ok(expected));
