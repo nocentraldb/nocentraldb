@@ -244,7 +244,7 @@ fn known(
 /// only on control changes (RFC 0008, "Terms"): the relay, which cannot
 /// open sealed changes, checks it over the control DAG, and would take a
 /// sealed dependency for a gap.
-fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
+pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
     let mut heads = BTreeSet::new();
     let Some(log) = view.log(space) else {
         return heads;

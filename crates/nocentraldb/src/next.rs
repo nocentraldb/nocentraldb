@@ -75,3 +75,7 @@ pub(crate) fn next(view: &View, space: SpaceId, checks: &SealChecks, me: MemberI
     next.heads.retain(|id| !covered.contains(id));
     next
 }
+
+#[cfg(test)]
+#[path = "next_tests.rs"]
+mod tests;
