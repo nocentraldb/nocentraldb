@@ -9,10 +9,8 @@
 
 use std::collections::BTreeSet;
 
-use ncdb_core::change::Kind;
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use ncdb_core::log::{Position, State};
 use ncdb_core::membership::{
     self, Action, ControlBody, Entry, MemberKind, MembershipEntry, Resolved,
 };
@@ -244,24 +242,10 @@ fn known(
 /// only on control changes (RFC 0008, "Terms"): the relay, which cannot
 /// open sealed changes, checks it over the control DAG, and would take a
 /// sealed dependency for a gap.
-fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
-    let mut heads = BTreeSet::new();
-    let Some(log) = view.log(space) else {
-        return heads;
-    };
-    let mut covered = BTreeSet::new();
-    for (_, change) in log.after(Position::START) {
-        let folded = matches!(log.state(change.id()), Some(State::Folded { .. }));
-        if change.header().kind != Kind::CONTROL || !folded {
-            continue;
-        }
-        if let Ok(body) = ControlBody::decode(&change.header().payload) {
-            covered.extend(body.dependencies);
-        }
-        heads.insert(change.id());
-    }
-    heads.retain(|id| !covered.contains(id));
-    heads
+pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
+    view.log(space)
+        .map(|log| log.control_heads().clone())
+        .unwrap_or_default()
 }
 
 #[cfg(test)]

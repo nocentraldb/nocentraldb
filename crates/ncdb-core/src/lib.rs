@@ -4,7 +4,8 @@
 //! (`docs/rfc/0002-change-and-log-format.md`) defines them: the canonical
 //! CBOR encoding ([`cbor`]), the ids ([`ids`]), the change with its frame,
 //! header, payload and operations ([`change`]), the hybrid logical clock
-//! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]).
+//! ([`clock`]) and an append-only in-memory log with a cursor ([`log`]),
+//! which keeps what a member's next change takes from it ([`tips`]).
 //! It also holds the member and space keys ([`keys`]) and signing and
 //! sealing a change as RFC 0003 (`docs/rfc/0003-keys-and-cryptography.md`)
 //! defines it ([`seal`]), and the key envelopes that wrap a space key to one
@@ -52,6 +53,7 @@ mod redact;
 pub mod reference;
 pub mod seal;
 pub mod set;
+pub mod tips;
 mod unfold;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod view;
