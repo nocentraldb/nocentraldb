@@ -2,8 +2,8 @@
 // (Carsten, 2026-11-10), as NOC-106 writes them into its text: where a
 // database and its member key live, the account key and `agent()`, the Rust
 // names, the error codes, the space id in TypeScript, and how an app writes
-// a reference. Each stands where it belongs, without an amendment mark, with
-// its decision S19 to S24 and a dated line naming the pull request.
+// a reference. Each stands where it belongs, without an amendment mark; its
+// reason and the options not taken are held by rfc-0009-fresh.test.mjs.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { assertLinksResolve, read, section } from "./lib/rfc-text.mjs";
@@ -16,14 +16,6 @@ const rowsStarting = (text, pattern) =>
     .split("\n")
     .filter((l) => l.startsWith("|"))
     .filter((l) => pattern.test(l.split("|")[1] ?? ""));
-
-// Since NOC-101, "Decisions" keeps each decision in short form under its own heading.
-const decision = (id) => {
-  const text = section(read(RFC), "decisions");
-  const found = text.split(new RegExp(`^### ${id}\\. `, "m"))[1];
-  assert.ok(found, `${RFC} has no decision ${id}`);
-  return found.split(/^### S\d+\. /m)[0];
-};
 
 test("the Rust SDK opens a database at a path, in memory, with a key file, or as an agent", () => {
   const rust = section(read(RFC), "the-rust-sdk");
@@ -113,16 +105,7 @@ test("an app writes a reference as the { space, id } it reads, or null", () => {
   assert.match(ref, /set \(1\)/);
 });
 
-test("decisions S19 to S24 record the owner's choice, on NOC-95", () => {
-  for (const id of ["S19", "S20", "S21", "S22", "S23", "S24"]) {
-    const text = decision(id);
-    assert.match(text, /^Decided \(Carsten, 2026-11-10\), on NOC-95: /m, id);
-    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
-  }
-  assert.match(decision("S22"), /`storageFailed`/);
-});
-
-test("the new text carries no amendment mark, and the status names S19 to S24", () => {
+test("the new text carries no amendment mark", () => {
   const rfc = read(RFC);
   for (const line of rfc.split("\n")) {
     if (/storageFailed|`in_memory\(\)`|`nc\.ref` \|/.test(line)) {
@@ -130,9 +113,6 @@ test("the new text carries no amendment mark, and the status names S19 to S24", 
     }
   }
   assert.doesNotMatch(rfc, /^## Amendment \d/m);
-  const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /S19 to S24.*Carsten, 2026-11-10/);
-  assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-106 · .*\(#\d+\)\.?$/m);
 });
 
 test("every relative link in RFC 0009 resolves, anchors included", () => {
