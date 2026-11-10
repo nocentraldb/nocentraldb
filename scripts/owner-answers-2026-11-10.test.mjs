@@ -4,27 +4,16 @@
 // bytes a writer signs for a person-key record in RFC 0003; NOC-110 point 4 A,
 // the bytes of the associated data of an encrypted previous key in RFC 0003;
 // and NOC-110 points 1 to 3, the current generation and who may hold a
-// generation, in RFC 0008. Each stands where it belongs; in RFC 0008 with a
-// decision in short form and a dated History line. RFC 0003 and RFC 0009 are
-// fresh texts (NOC-165), whose reasons and options not taken
-// rfc-0003-fresh.test.mjs and rfc-0009-fresh.test.mjs hold.
+// generation, in RFC 0008. Each stands where it belongs. RFC 0003, RFC 0008
+// and RFC 0009 are fresh texts (NOC-165), whose reasons and options not taken
+// rfc-0003-fresh, rfc-0008-fresh and rfc-0009-fresh hold.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { read, section, slug } from "./lib/rfc-text.mjs";
+import { read, section } from "./lib/rfc-text.mjs";
 
 const RFC_0003 = "docs/rfc/0003-keys-and-cryptography.md";
 const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
-
-/** The decision of `path` whose heading starts with `### <prefix>`. */
-const decision = (path, prefix) => {
-  const decisions = section(read(path), "decisions");
-  const heading = decisions
-    .split("\n")
-    .find((l) => l.startsWith(`### ${prefix}`));
-  assert.ok(heading, `${path} has no decision "${prefix}"`);
-  return section(decisions, slug(heading.slice(4)));
-};
 
 /** The rows of every Markdown table in `text` whose first cell matches `pattern`. */
 const rowsStarting = (text, pattern) =>
@@ -32,11 +21,6 @@ const rowsStarting = (text, pattern) =>
     .split("\n")
     .filter((l) => l.startsWith("|"))
     .filter((l) => pattern.test(l.split("|")[1] ?? ""));
-
-const historyLine = (path, ticket) =>
-  section(read(path), "history")
-    .split("\n")
-    .find((l) => l.startsWith("- **2026-11-10** · ") && l.includes(ticket));
 
 // NOC-116 A
 
@@ -102,9 +86,7 @@ test("RFC 0008's current generation says which heads two entries or a later reje
     "two-removals-that-rotate-the-key-at-once",
   );
   assert.match(steps, /two key chain entries name is never a head/);
-  assert.match(steps, /#m27-a-generation-that-two-key-chain-entries-name/);
   assert.match(steps, /rejected later.*is still a head and can be current/);
-  assert.match(steps, /#m28-a-rejected-rotation-can-be-current/);
 });
 
 test("RFC 0008 says who may hold a generation, whatever the later verdict", () => {
@@ -116,18 +98,4 @@ test("RFC 0008 says who may hold a generation, whatever the later verdict", () =
   assert.match(steps, /valid when written, whatever its final verdict/);
   assert.match(steps, /never valid when written/);
   assert.match(steps, /author of an envelope is not counted for it/);
-  assert.match(steps, /#m29-who-may-hold-a-generation/);
-});
-
-test("RFC 0008 records M27 to M29 on NOC-110, with status and History", () => {
-  for (const id of ["M27", "M28", "M29"]) {
-    const text = decision(RFC_0008, `${id}. `);
-    assert.match(text, /^Decided \(Carsten, 2026-11-10\), on NOC-110: /m, id);
-    assert.match(text, /^Not taken:\n\n- /m, id);
-  }
-  const status = read(RFC_0008)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /M27 to M29/);
-  assert.match(historyLine(RFC_0008, "NOC-110") ?? "", /\(#\d+\)\.?$/);
 });

@@ -82,9 +82,6 @@ test("RFC 0008 has a section for every topic of NOC-23", () => {
     "How the convergence harness checks it",
     "How the relay applies the rules",
     "Groups",
-    "Rejected options",
-    "Open questions",
-    "Decisions",
     "History",
   ];
   for (const heading of required) {
