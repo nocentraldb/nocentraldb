@@ -42,6 +42,10 @@ The server holds at most 512 connections open at once, and at most 64 of them th
 
 **What this does not do.** Peers that fill the 64 handshake places keep new members from connecting, each for up to 30 seconds, while members already connected stay unaffected: the limits protect the server's resources, not its availability to new members. A member closed for a limit is not told why. Neither limit can be changed from the command line yet.
 
+## When it runs out of file descriptors
+
+When the server cannot accept a connection, for example because the process or the system has no file descriptor left, it writes one line to stderr, such as `ncdb-relay: accept failed, trying again in 10 ms: Too many open files (os error 24)`, and accepts again after the pause. The pause starts at 10 milliseconds and doubles while the error lasts, up to one second. Members already connected are served throughout, and the connections that wait in the meantime are accepted once descriptors are free again. The line names only the operating system's error, never a member or content. The server stops only when the listening socket itself is gone.
+
 ## A member added while it is connected
 
 When a push makes a member current in a space, such as a membership entry that adds it, the server sends `added {space}` to each of that member's open connections (RFC 0007, "Subscribe", decision R13), and the member pulls and subscribes to the space. The connection whose own push made its member current, the creator's with a genesis, gets `added` too, right after `pushed`; a member that already follows the space has nothing to do. Delivery is best-effort: a connection that closes before the message is written loses it, and its member learns of the space from `welcome` when it connects again.
