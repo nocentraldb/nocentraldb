@@ -17,9 +17,11 @@ mod log_table;
 pub mod model;
 mod query;
 mod read;
+mod refold;
 mod relay;
 mod schema;
 mod state;
+mod stored_lock;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -28,9 +30,10 @@ use std::path::Path;
 use rusqlite::Connection;
 
 use crate::change::Change;
+use crate::checks::SealChecks;
 use crate::ids::{ChangeId, SpaceId};
 use crate::log::{Appended, Log, State};
-use crate::model_lock::ModelLock;
+use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
@@ -67,8 +70,14 @@ pub enum Error {
         /// The version the database holds.
         found: u64,
     },
-    /// The database holds a view folded by another model.
+    /// The database holds a view folded by another model, which this call
+    /// cannot fold again: [`View::open`] has no checks to fold with, or
+    /// the database holds no lock to check the new one against.
     Model,
+    /// The lock is not a successor of the lock the database was last
+    /// opened with, nor that lock one of it (RFC 0005, D11): each refused
+    /// change.
+    Refused(Vec<Refusal>),
     /// The model cannot be folded into a view.
     Invalid(Invalid),
     /// The database holds something this core did not write.
@@ -92,6 +101,15 @@ impl fmt::Display for Error {
                 View::FORMAT
             ),
             Error::Model => f.write_str("the view was folded by another model"),
+            Error::Refused(refused) => {
+                f.write_str(
+                    "the lock is refused against the lock the database was last opened with:",
+                )?;
+                for line in refused.iter().flat_map(Refusal::lines) {
+                    write!(f, "\n  {line}")?;
+                }
+                Ok(())
+            }
             Error::Invalid(invalid) => write!(f, "the model cannot be folded: {invalid:?}"),
             Error::Corrupt(what) => write!(f, "the database holds an unreadable {what}"),
             Error::Query(error) => write!(f, "the lookup was refused: {error:?}"),
@@ -128,23 +146,57 @@ impl View {
     /// Opens the view in the database file at `path`, creating it when it
     /// does not exist: WAL mode, `synchronous = FULL` and `secure_delete`
     /// on (RFC 0006, decisions 7 and 9). The view folds by the model of
-    /// `lock`, the member's `model.lock.json` (RFC 0005).
+    /// `lock`, the member's `model.lock.json` (RFC 0005), which is checked
+    /// against the lock the database was last opened with (RFC 0005, D11):
+    /// a lock that is not a successor of it, nor it a successor of the
+    /// lock, is [`Error::Refused`], and nothing is written. A change the
+    /// check accepts that changes the view's model is [`Error::Model`]
+    /// here, since folding the log again needs the member's checks: see
+    /// [`View::open_with`].
     pub fn open(path: &Path, lock: &ModelLock) -> Result<View, Error> {
-        View::with(Connection::open(path)?, lock)
+        View::with(
+            Connection::open(path)?,
+            lock,
+            None::<fn(SpaceId) -> SealChecks>,
+        )
+    }
+
+    /// Opens the view as [`View::open`] does, and when the lock check
+    /// accepts a change of the view's model, folds the whole log again by
+    /// the new model, with the checks `checks` gives for each space, before
+    /// it returns (RFC 0006, "Rebuilding the view"). If anything fails, the
+    /// database stays as it was.
+    pub fn open_with<C: Checks>(
+        path: &Path,
+        lock: &ModelLock,
+        checks: impl FnMut(SpaceId) -> C,
+    ) -> Result<View, Error> {
+        View::with(Connection::open(path)?, lock, Some(checks))
     }
 
     /// Opens a view in a new database in memory, which nothing keeps.
     pub fn open_in_memory(lock: &ModelLock) -> Result<View, Error> {
-        View::with(Connection::open_in_memory()?, lock)
+        View::with(
+            Connection::open_in_memory()?,
+            lock,
+            None::<fn(SpaceId) -> SealChecks>,
+        )
     }
 
-    fn with(conn: Connection, lock: &ModelLock) -> Result<View, Error> {
+    fn with<C: Checks>(
+        conn: Connection,
+        lock: &ModelLock,
+        checks: Option<impl FnMut(SpaceId) -> C>,
+    ) -> Result<View, Error> {
         let model = Model::from_lock(lock).map_err(Error::Invalid)?;
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
-        schema::open(&tx, &model)?;
+        if schema::open(&tx, &model, lock)? == schema::Fit::Refold {
+            let checks = checks.ok_or(Error::Model)?;
+            refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+        }
         query::check(&tx, &model.indexes)?;
         let logs = log_table::load(&tx)?;
         tx.commit()?;
