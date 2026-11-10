@@ -53,7 +53,7 @@ test("RFC 0001 names no decision by its id", () => {
   for (const pattern of [
     /\bM\d+\b/,
     /\bD\d+\b/,
-    /\bS\d+\b/,
+    /\bS(?!3\b)\d+\b/, // S3 is the AWS service
     /\bR\d+\b/,
     /\bdecisions? \d/i,
     /\bconflict \d/i,
