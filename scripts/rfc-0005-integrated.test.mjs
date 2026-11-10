@@ -1,9 +1,8 @@
 // Asserts RFC 0005 as one complete text (NOC-101): every amendment is folded
 // into the design where its rule belongs, so no "Amendment" section, mark or
-// in-page link is left; "Decisions" keeps each decision in short form, with
-// the owner's name and date, why, and the options not taken; "History" lists
-// dated lines that name their ticket and pull request; and every link other
-// files use into RFC 0005 still resolves. The rules the amendments made are
+// in-page link is left, and every link other files use into RFC 0005 still
+// resolves. Its form as a fresh text, with each decision in its section, is
+// held by rfc-0005-fresh.test.mjs (NOC-165). The rules the amendments made are
 // checked where they now stand: the writer's model in payload key 64
 // (NOC-54), RFC 0001's wording on personal fields (NOC-35), the index option
 // `scope`, `nc.Unknown` and `noPerson` (NOC-75), the lock example's key order,
@@ -58,19 +57,6 @@ const line = (markdown, start) =>
 const jsonBlocks = (markdown) =>
   [...markdown.matchAll(/^```json\n([\s\S]*?)^```$/gm)].map((m) => m[1]);
 
-/** The decisions under "## Decisions", one "### Dn. Title" heading each. */
-const decisions = () => {
-  const body = section(read(), "decisions");
-  return [
-    ...body.matchAll(/^### (D\d+)\. [^\n]+\n([\s\S]*?)(?=^### |(?![\s\S]))/gm),
-  ].map((m) => ({ id: m[1], text: m[2] }));
-};
-const decision = (id) => {
-  const found = decisions().find((d) => d.id === id);
-  assert.ok(found, `${RFC} has no decision ${id}`);
-  return found.text;
-};
-
 test("RFC 0005 has no amendment section, mark, in-page link or changelog left", () => {
   const rfc = read();
   for (const heading of headings(rfc)) {
@@ -87,64 +73,7 @@ test("RFC 0005 has no amendment section, mark, in-page link or changelog left", 
   assert.doesNotMatch(status, /Amendment/, "the status names an amendment");
 });
 
-test("the status names every date the owner decided", () => {
-  const status = line(read(), "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Decided\. /);
-  for (const date of ["2026-11-08", "2026-11-09", "2026-11-10"]) {
-    assert.ok(status.includes(`(Carsten, ${date})`), `no decision of ${date}`);
-  }
-});
-
-test("History lists dated lines, each with its ticket and pull request", () => {
-  const history = section(read(), "history");
-  const entries = history.split("\n").filter((l) => l.startsWith("- "));
-  for (const [ticket, pr] of [
-    ["NOC-11", 35],
-    ["NOC-54", 70],
-    ["NOC-35", 76],
-    ["NOC-75", 87],
-    ["NOC-73", 88],
-    ["NOC-63", 92],
-    ["NOC-101", null],
-  ]) {
-    const entry = entries.find((l) => l.includes(` · ${ticket} · `));
-    assert.ok(entry, `History has no line for ${ticket}`);
-    assert.match(entry, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-\d+ · /);
-    if (pr) assert.ok(entry.includes(`(#${pr})`), `${ticket} names no #${pr}`);
-    else assert.match(entry, /\(#\d+\)/, `${ticket} names no pull request`);
-  }
-});
-
-test("Open questions says whether the owner still has one", () => {
-  assert.match(section(read(), "open-questions"), /\S/);
-});
-
-test("Decisions keeps D1 to D23 in short form: decided, why, and the options not taken", () => {
-  const found = decisions();
-  assert.deepEqual(
-    found.map((d) => d.id),
-    Array.from({ length: 23 }, (_, i) => `D${i + 1}`),
-  );
-  const dates = { D16: "2026-11-09", D17: "2026-11-09" };
-  for (const { id, text } of found) {
-    const n = Number(id.slice(1));
-    const date = dates[id] ?? (n >= 18 ? "2026-11-10" : "2026-11-08");
-    assert.match(
-      text,
-      new RegExp(`^Decided \\(Carsten, ${date}\\): `, "m"),
-      id,
-    );
-    assert.match(text, /^Why: /m, `${id} gives no reason`);
-    assert.match(
-      text,
-      /^Not taken:\n\n?- /m,
-      `${id} lists no option not taken`,
-    );
-    assert.doesNotMatch(text, /\*\(recommended\)\*|^Recommendation:/m, id);
-  }
-});
-
-test("the writer's model in payload key 64 stands in the design and in D10 (NOC-54)", () => {
+test("the writer's model in payload key 64 stands in the design (NOC-54)", () => {
   const rfc = read();
   assert.doesNotMatch(rfc, /Nothing in a change says which model wrote it/);
   assert.doesNotMatch(rfc, /falls back to B/);
@@ -157,8 +86,6 @@ test("the writer's model in payload key 64 stands in the design and in D10 (NOC-
       "",
     /payload key 64/,
   );
-  assert.match(decision("D10"), /payload key 64/);
-  assert.match(decision("D13"), /payload key 64/);
 });
 
 test("Personal fields quotes RFC 0001's wording: basic values only (NOC-35)", () => {
@@ -201,7 +128,7 @@ test("the lock example is canonical and the bytes ncdb model build writes (NOC-7
   }
 });
 
-test("nc.int reads as a number, and a collection can be deprecated (NOC-73, D16, D17)", () => {
+test("nc.int reads as a number, and a collection can be deprecated (NOC-73)", () => {
   const rfc = read();
   const types = section(rfc, "types-for-the-app");
   assert.match(types, /`nc\.int` field as a `number`/);
@@ -211,9 +138,6 @@ test("nc.int reads as a number, and a collection can be deprecated (NOC-73, D16,
   assert.match(line(rfc, "Per collection:"), /`deprecatedReason`/);
   assert.match(line(rfc, "| `.deprecated(`"), /collection/);
   assert.match(line(rfc, "| Collection keys "), /`deprecatedReason`/);
-  assert.match(decision("D16"), /`number`/);
-  assert.match(decision("D16"), /`bigint`/);
-  assert.match(decision("D17"), /\.deprecated\(/);
 });
 
 test("nc.ref stands in the schema, the lock, the additive-change rule and Public names (NOC-63)", () => {
@@ -244,11 +168,6 @@ test("nc.ref stands in the schema, the lock, the additive-change rule and Public
   const names = section(rfc, "public-names");
   assert.match(line(names, "| `nc.ref` |"), /another space/);
   assert.match(line(names, "| The type id namespace"), /`ncdb\/ref`/);
-  assert.match(decision("D18"), /`targets`/);
-  assert.match(decision("D19"), /index/);
-  assert.match(decision("D20"), /`"notAccessible"`/);
-  assert.match(decision("D21"), /subscription/);
-  assert.match(decision("D22"), /\.personal\(/);
 });
 
 test("every in-page link of RFC 0005 resolves to a heading", () => {

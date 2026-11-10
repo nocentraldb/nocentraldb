@@ -4,10 +4,11 @@
 // `added {space}` to that member's open connections, best-effort like live
 // entries; the member pulls and subscribes as for a space named in `welcome`,
 // and a lost message is recovered at the next reconnect. On the wire the
-// message follows decision R12: type at key 1, no request id, the space at
-// key 3. The AWS backend finds a member's connections through a secondary
-// index on member id in `connections`. The decision stands under "Decisions"
-// as R13, and a dated History line names NOC-143 and NOC-152.
+// message follows the rule of "The keys of each message": type at key 1, no
+// request id, the space at key 3. The AWS backend finds a member's
+// connections through a secondary index on member id in `connections`. RFC
+// 0007 is a fresh text (NOC-165): rfc-0007-fresh.test.mjs holds the options
+// not taken in Subscribe.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { read, section } from "./lib/rfc-text.mjs";
@@ -50,10 +51,6 @@ test("Subscribe says when the relay sends `added` and what the member does", () 
   assert.match(passage, /`welcome`/);
   assert.match(passage, /best-effort/i);
   assert.match(passage, /next reconnect/);
-  assert.match(
-    passage,
-    /\[R13\]\(#r13-telling-a-connected-member-it-was-added\)/,
-  );
 });
 
 test("Opening a connection points from `welcome` to `added`", () => {
@@ -88,29 +85,4 @@ test("What it costs accounts for the index on member id and for `added`", () => 
   const costs = section(read(RFC), "what-it-costs");
   assert.match(costs, /index on member id/);
   assert.match(costs, /`added`/);
-});
-
-test("decision R13 records the owner's choice on NOC-143, with the options not taken", () => {
-  const r13 = section(read(RFC), "r13-telling-a-connected-member-it-was-added");
-  assert.match(r13, /^Decided \(Carsten, 2026-11-10\), on NOC-143: /m);
-  assert.match(r13, /^Why: /m);
-  assert.match(r13, /^Not taken:\n\n- /m);
-  assert.match(r13, /`spaces` request/);
-  assert.match(r13, /next reconnect/);
-});
-
-test("RFC 0007's status names R13", () => {
-  const status = read(RFC)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /R13/);
-});
-
-test("History has a line for NOC-152 that names NOC-143", () => {
-  const entry = section(read(RFC), "history")
-    .split("\n")
-    .find((l) => l.startsWith("- ") && l.includes(" · NOC-152 · "));
-  assert.ok(entry, "History has no line for NOC-152");
-  assert.match(entry, /^- \*\*2026-11-10\*\* · NOC-152 · /);
-  assert.match(entry, /NOC-143/);
 });

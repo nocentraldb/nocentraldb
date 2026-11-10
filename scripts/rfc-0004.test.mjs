@@ -55,8 +55,6 @@ test("RFC 0004 has the sections its ticket asks for", () => {
     "sets",
     "links",
     "the plugin contract",
-    "rejected options",
-    "decisions",
     "agreement with genesis.md and rfc 0001",
   ]) {
     assert.ok(

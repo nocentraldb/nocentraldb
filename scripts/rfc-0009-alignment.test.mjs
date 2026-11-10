@@ -21,7 +21,7 @@ const RFC_0008 = "docs/rfc/0008-membership.md";
 const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const USE_CASES = "docs/use-cases.md";
 
-const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
+const NOT_COVERED = "0009-sdk-api.md#what-this-rfc-does-not-cover";
 
 /**
  * Each amended RFC, the number of its amendment, and the RFC 0009 points it
@@ -136,16 +136,6 @@ test("RFC 0006 puts the space id first in an index with scope space, and keeps d
   assert.match(text, /deleted object/i, "says nothing about deleted objects");
 });
 
-test("RFC 0009's point 1 is resolved for RFC 0006 too", () => {
-  const body = section(
-    read(RFC_0009),
-    "conflicts-with-genesismd-and-the-other-rfcs",
-  );
-  const line = body.split("\n").find((l) => l.startsWith("1. "));
-  assert.ok(links(line, "0006-local-view.md#declared-indexes"));
-  assert.ok(!/RFC 0006 follows/.test(line), "point 1 still waits for RFC 0006");
-});
-
 test("RFC 0001's example queries a declared index, not a view", () => {
   const example = code(section(read(RFC_0001), "the-design-in-one-page"));
   assert.ok(!/views\.ready/.test(example), "the example still queries a view");
@@ -160,7 +150,7 @@ test("RFC 0008 links RFC 0009 for invitations and public names", () => {
   assert.ok(links(bullet, "0009-sdk-api.md#invitations-and-members"));
 });
 
-test("the use cases use only calls RFC 0009 defines, and link its Conflicts", () => {
+test("the use cases use only calls RFC 0009 defines, and link what it does not cover", () => {
   const text = read(USE_CASES);
   const calls = code(text);
   for (const old of [
@@ -174,19 +164,10 @@ test("the use cases use only calls RFC 0009 defines, and link its Conflicts", ()
   ]) {
     assert.ok(!old.test(calls), `the use cases still use ${old}`);
   }
-  assert.ok(links(text, CONFLICTS), "no link to RFC 0009's Conflicts");
-});
-
-test("RFC 0009 marks each point it carried out resolved", () => {
-  const body = section(
-    read(RFC_0009),
-    "conflicts-with-genesismd-and-the-other-rfcs",
+  assert.ok(
+    links(text, NOT_COVERED),
+    "no link to RFC 0009's What this RFC does not cover",
   );
-  for (const point of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
-    const line = body.split("\n").find((l) => l.startsWith(`${point}. `));
-    assert.ok(line, `no point ${point}`);
-    assert.match(line, /\*Resolved\b/, `point ${point} is not marked resolved`);
-  }
 });
 
 test("every relative link in the amended texts resolves, anchors included", () => {

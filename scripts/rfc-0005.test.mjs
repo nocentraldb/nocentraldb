@@ -99,9 +99,6 @@ test("RFC 0005 has the sections its ticket asks for", () => {
     "personal fields",
     "where this differs from rfc 0001",
     "public names",
-    "rejected options",
-    "open questions",
-    "decisions",
     "history",
   ]) {
     assert.ok(
@@ -148,44 +145,9 @@ test("every JSON example in RFC 0005 parses", () => {
   }
 });
 
-// The owner's review (Carsten, 2026-11-08): every decision is recorded where
-// it is asked, the proposed reading of GENESIS.md is accepted, personal data
-// in free text gets its own section, and a CRM example shows a person who is
-// not a member.
-const DECIDED = /^Decided \(Carsten, \d{4}-\d{2}-\d{2}\): /m;
-
-/** The text of each decision under "## Decisions", from its "### Dn." heading to the next. */
-const decisions = (markdown) =>
-  [
-    ...section(markdown, "Decisions\n").matchAll(
-      /^### (D\d+)\.[\s\S]*?(?=^### |(?![\s\S]))/gm,
-    ),
-  ].map((match) => ({ id: match[1], text: match[0] }));
-
-test("every decision in RFC 0005 records the owner's decision", () => {
-  const found = decisions(read());
-  assert.ok(found.length >= 14, `${RFC} lists ${found.length} decisions`);
-  for (const { id, text } of found) {
-    assert.match(
-      text,
-      DECIDED,
-      `${RFC}: ${id} does not record the owner's decision`,
-    );
-  }
-});
-
-test("the proposed reading of GENESIS.md in RFC 0005 is marked accepted", () => {
-  const agreement = section(read(), "Agreement with GENESIS.md");
-  const reading = agreement
-    .split("\n")
-    .find((line) => line.startsWith("A point for the owner"));
-  assert.ok(reading, `${RFC} has no proposed reading of GENESIS.md`);
-  assert.ok(
-    reading.includes("Accepted (Carsten, 2026-11-08)"),
-    `${RFC}: the proposed reading of GENESIS.md is not marked accepted`,
-  );
-});
-
+// The owner's review (Carsten, 2026-11-08): personal data in free text gets
+// its own section, and a CRM example shows a person who is not a member. The
+// decisions and the reading of GENESIS.md are held by rfc-0005-fresh.test.mjs.
 test("RFC 0005 has a section on personal data in free text", () => {
   const found = headingLines(read()).map((heading) => heading.toLowerCase());
   assert.ok(

@@ -19,10 +19,11 @@ const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
 
 const PLAINTEXT = "0006-local-view.md#what-the-view-stores-in-plaintext";
-const RFC_0006_DECISION_6 =
-  "0006-local-view.md#6-encryption-at-rest-on-the-device";
-const RFC_0006_DECISION_8 =
-  "0006-local-view.md#8-persistent-storage-in-the-browser";
+// NOC-165: RFC 0006 is a fresh text; encryption at rest stands in "What the
+// view stores in plaintext", asking for persistent storage in "What the SDK
+// reports".
+const RFC_0006_AT_REST = PLAINTEXT;
+const RFC_0006_PERSISTENT = "0006-local-view.md#what-the-sdk-reports";
 const RFC_0006_BROWSER = "0006-local-view.md#the-browser";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
@@ -92,15 +93,15 @@ test("the FAQ says a lost device holds every space in plaintext, with RFC 0006's
   );
 });
 
-test("the FAQ says v1 relies on the device's disk encryption, with RFC 0006's decision 6", () => {
+test("the FAQ says v1 relies on the device's disk encryption, with RFC 0006's section", () => {
   const answer = section(read(FAQ), LOST_DEVICE);
   linkingSentence(
     answer,
-    RFC_0006_DECISION_6,
+    RFC_0006_AT_REST,
     /disk encryption/i,
-    "decision 6",
+    "encryption at rest",
   );
-  assert.match(answer, /decision 6/, "the FAQ does not name decision 6");
+  assert.doesNotMatch(answer, /decision 6/, "the FAQ names a decision id");
 });
 
 test("the FAQ says removing the member does not delete the lost device's copy, with RFC 0003's section", () => {
@@ -133,15 +134,15 @@ test("the FAQ says a browser may evict its copy, Safari after seven days, with R
   linkingSentence(answer, "browser-storage.md", /./, "the measurements");
 });
 
-test("the FAQ says the SDK asks for persistent storage, with RFC 0006's decision 8", () => {
+test("the FAQ says the SDK asks for persistent storage, with RFC 0006's section", () => {
   const answer = section(read(FAQ), STORAGE);
   linkingSentence(
     answer,
-    RFC_0006_DECISION_8,
+    RFC_0006_PERSISTENT,
     /persistent storage/i,
-    "decision 8",
+    "persistent storage",
   );
-  assert.match(answer, /decision 8/, "the FAQ does not name decision 8");
+  assert.doesNotMatch(answer, /decision 8/, "the FAQ names a decision id");
 });
 
 test("RFC 0001 says only basic values can be personal, and only when the field is added", () => {

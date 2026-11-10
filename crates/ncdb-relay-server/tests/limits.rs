@@ -21,9 +21,6 @@ use tokio::net::TcpStream;
 /// How soon a connection above a limit is closed.
 const AT_ONCE: Duration = Duration::from_secs(2);
 
-/// How long a test retries a connection that a freed place should admit.
-const WAIT: Duration = Duration::from_secs(20);
-
 /// The server ends the TCP connection within [`AT_ONCE`]: a read returns
 /// end of file or an error.
 async fn closed_at_once(stream: &mut TcpStream) {
@@ -49,22 +46,6 @@ async fn held(addr: SocketAddr) -> TcpStream {
     stream
 }
 
-/// A member authenticates, retrying while the server closes it, as a
-/// member that reconnects with back-off does.
-async fn member_eventually(addr: SocketAddr, who: space::Who) -> Client {
-    let started = std::time::Instant::now();
-    loop {
-        assert!(started.elapsed() < WAIT, "a place frees in time");
-        if let Ok((ws, _)) = tokio_tungstenite::connect_async(format!("ws://{addr}")).await {
-            let mut client = Client::from(ws);
-            if client.try_authenticate(who).await {
-                return client;
-            }
-        }
-        tokio::time::sleep(Duration::from_millis(50)).await;
-    }
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn a_connection_above_the_limit_is_closed_at_once() {
     let (addr, _dir) = server_with_max_connections(2).await;
@@ -88,7 +69,7 @@ async fn a_closed_connection_frees_its_place() {
     let (addr, _dir) = server_with_max_connections(1).await;
     let (first, _) = Client::member(addr, 0).await;
     drop(first);
-    let mut second = member_eventually(addr, 1).await;
+    let mut second = Client::member_eventually(addr, 1).await;
     let pong = second.ask(&message("ping", Some(7), &[])).await;
     assert_eq!(kind(&pong), "pong", "{pong:?}");
 }
@@ -116,7 +97,7 @@ async fn a_peer_that_leaves_the_handshake_frees_its_place() {
     let (addr, _dir) = server_with_max_handshakes(1).await;
     let stalled = held(addr).await;
     drop(stalled);
-    let mut member = member_eventually(addr, 0).await;
+    let mut member = Client::member_eventually(addr, 0).await;
     let pong = member.ask(&message("ping", Some(7), &[])).await;
     assert_eq!(kind(&pong), "pong", "{pong:?}");
 }

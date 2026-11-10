@@ -43,24 +43,6 @@ const section = (path, anchor) => {
   return (end < 0 ? rest : rest.slice(0, end)).join("\n");
 };
 
-/** The decision under "## Decisions" whose heading starts with `prefix`, such as "D23." or "17.". */
-const decision = (path, prefix) => {
-  const body = section(path, "decisions");
-  const parts = body.split(/^### /m).slice(1);
-  const found = parts.find((p) => p.startsWith(`${prefix} `));
-  assert.ok(found, `${path} has no decision ${prefix}`);
-  return found;
-};
-
-/** The History line of `ticket`. */
-const history = (path, ticket) => {
-  const found = section(path, "history")
-    .split("\n")
-    .find((l) => l.startsWith("- ") && l.includes(` · ${ticket} · `));
-  assert.ok(found, `${path} has no History line for ${ticket}`);
-  return found;
-};
-
 /** The key the core stores the lock under in `meta`, as the code names it. */
 const lockKey = () => {
   const m = read(STORED_LOCK).match(/const KEY: &str = "([^"]+)";/);
@@ -109,22 +91,6 @@ test("RFC 0005: a rolled-back app opens as an old client and leaves the stored l
 test("RFC 0005: no passage says the SDK checks against the lock it last opened", () => {
   const rfc = read(RFC_0005);
   assert.doesNotMatch(rfc, /last opened/);
-  assert.match(decision(RFC_0005, "D11."), /\[D23\]\(#d23-/);
-});
-
-test("RFC 0005: D23 records the owner's choice of the newest lock, with the options not taken", () => {
-  const text = decision(RFC_0005, "D23.");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-155/);
-  assert.match(text, /^Why: /m);
-  assert.match(text, /^Not taken:\n\n- [^\n]*last[^\n]*\n- [^\n]*both/m);
-});
-
-test("RFC 0005: History names NOC-155, NOC-162 and #137", () => {
-  const entry = history(RFC_0005, "NOC-162");
-  assert.match(entry, /^- \*\*2026-11-10\*\* · NOC-162 · /);
-  assert.match(entry, /NOC-155/);
-  assert.match(entry, /#137/);
 });
 
 test("RFC 0006: meta holds the lock under the code's key, as canonical JSON, and the view format stays the code's", () => {
@@ -152,26 +118,4 @@ test("RFC 0006: a database without a stored lock opens only with an unchanged vi
   assert.match(meta, /model hash/);
   assert.match(meta, /keeps that lock from then on/);
   assert.match(meta, /`modelRefused`/);
-});
-
-test("RFC 0006: decision 17 records where the lock is kept, decided by the owner", () => {
-  const text = decision(RFC_0006, "17.");
-  assert.match(text, /^Decided \(Carsten, 2026-11-10\): /m);
-  assert.match(text, /NOC-155/);
-  assert.match(text, /^Why: /m);
-  assert.match(
-    text,
-    /^Not taken:\n\n- [^\n]*table[^\n]*\n- [^\n]*format version/m,
-  );
-  const status = read(RFC_0006)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /decision 17[^.]*\(Carsten, 2026-11-10\)/);
-});
-
-test("RFC 0006: History names NOC-155, NOC-162 and #137", () => {
-  const entry = history(RFC_0006, "NOC-162");
-  assert.match(entry, /^- \*\*2026-11-10\*\* · NOC-162 · /);
-  assert.match(entry, /NOC-155/);
-  assert.match(entry, /#137/);
 });

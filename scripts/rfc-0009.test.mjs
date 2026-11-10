@@ -107,10 +107,6 @@ test("RFC 0009 has a section for every part NOC-64 names", () => {
     "the rust sdk",
     "errors",
     "public names",
-    "rejected options",
-    "conflicts with genesis.md and the other rfcs",
-    "open questions",
-    "decisions",
     "history",
     "how this rfc is tested",
   ]) {
@@ -119,35 +115,6 @@ test("RFC 0009 has a section for every part NOC-64 names", () => {
       `${RFC} has no section starting with "${wanted}"`,
     );
   }
-});
-
-/**
- * Each decision, from its "### Sn." heading to the next one. Since NOC-101
- * "Decisions" keeps each in short form: decided, why, and the options not
- * taken.
- */
-const decisions = (markdown) =>
-  [
-    ...section(markdown, "Decisions").matchAll(
-      /^### (S\d+)\.[\s\S]*?(?=^### S\d+\.|(?![\s\S]))/gm,
-    ),
-  ].map((match) => ({ id: match[1], text: match[0] }));
-
-test("every decision names why and the options not taken", () => {
-  const found = decisions(read());
-  assert.ok(found.length >= 6, `${RFC} lists ${found.length} decisions`);
-  for (const { id, text } of found) {
-    assert.match(text, /^Why: /m, `${id} gives no reason`);
-    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
-  }
-});
-
-test("the Conflicts section lists numbered points", () => {
-  const body = section(
-    read(),
-    "Conflicts with GENESIS\\.md and the other RFCs",
-  );
-  assert.match(body, /^1\. \*\*/m, `${RFC} lists no conflict`);
 });
 
 /** The SDK names a TypeScript example uses, in the form Public names lists. */
@@ -213,36 +180,6 @@ test("RFC 0009 shows the Rust SDK", () => {
 
 test("the RFC index lists RFC 0009", () => {
   assert.match(read(INDEX), /^\| \[0009\]\(0009-sdk-api\.md\) \| .+ \|$/m);
-});
-
-// The owner's decisions: every recommendation of S1 to S18 is accepted
-// (Carsten, 2026-11-09, in chat with pm, on #78), recorded at each decision,
-// in the Status line and History, and in the decision log; S19 to S24
-// followed on NOC-95 (Carsten, 2026-11-10, written in by NOC-106).
-const DECIDED = (id) =>
-  `Decided (Carsten, ${Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10"})`;
-
-test("every decision records the owner's decision", () => {
-  for (const { id, text } of decisions(read())) {
-    assert.ok(
-      text.includes(DECIDED(id)),
-      `${id} does not record "${DECIDED(id)}"`,
-    );
-  }
-});
-
-test("the Status line and History say the owner decided", () => {
-  const markdown = read();
-  assert.match(
-    markdown,
-    /^\*\*Status\.\*\* Decided\..*Carsten, 2026-11-09/m,
-    `${RFC}: the Status line does not say the owner decided`,
-  );
-  assert.match(
-    markdown,
-    /^- \*\*2026-11-09\*\* · NOC-64 · .*S1 to S18.*as recommended/m,
-    `${RFC} has no History line for the owner's decision`,
-  );
 });
 
 test("the decision log records the owner's decision on RFC 0009", () => {
