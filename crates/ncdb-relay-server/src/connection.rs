@@ -19,7 +19,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
 use crate::hub::Hub;
 use crate::subscription;
-use crate::wire::{self, Cursor, Malformed, Request};
+use crate::wire::{self, Cursor, Frame, Malformed, Request};
 use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, VERSIONS};
 
 /// The most entries the server reads for one page of a pull; a page holds
@@ -180,8 +180,7 @@ impl<S: RelayStore + 'static> Connection<S> {
         let relay = self.shared.relay.clone();
         match request {
             Request::Push { req, space, frames } => {
-                let results =
-                    blocking(async move { relay.push(member, space, frames).await }).await;
+                let results = push(relay, member, space, frames).await;
                 self.send(wire::pushed(req, &results));
                 let appended = results.iter().filter_map(|result| match result {
                     Pushed::Accepted(position) => Some(*position),
@@ -228,6 +227,12 @@ impl<S: RelayStore + 'static> Connection<S> {
                 }
                 true
             }
+            // Large changes are left out: this server's largest frame fits
+            // into one message, so it accepts no upload.
+            Request::Upload { req } => self.fail(Some(req), ErrorCode::TooLarge),
+            // The relay core does not serve keys or the person-key store
+            // yet; the member keeps its records until a relay does.
+            Request::Keys { req } => self.fail(Some(req), ErrorCode::UnsupportedSuite),
             Request::Ping { req } => {
                 self.send(wire::pong(req));
                 true
@@ -264,9 +269,44 @@ impl Request {
             | Request::Pull(Cursor { req, .. })
             | Request::Subscribe(Cursor { req, .. })
             | Request::Unsubscribe { req, .. }
+            | Request::Upload { req }
+            | Request::Keys { req }
             | Request::Ping { req } => Some(*req),
         }
     }
+}
+
+/// The results of a push: the relay core checks and appends the frames, in
+/// order; a reference to an upload is `too_large`, since this server
+/// accepts no upload.
+async fn push<S: RelayStore + 'static>(
+    relay: Arc<Relay<S>>,
+    member: MemberId,
+    space: SpaceId,
+    frames: Vec<Frame>,
+) -> Vec<Pushed> {
+    let uploads: Vec<bool> = frames
+        .iter()
+        .map(|f| matches!(f, Frame::Upload(_)))
+        .collect();
+    let changes = frames
+        .into_iter()
+        .filter_map(|frame| match frame {
+            Frame::Change(bytes) => Some(bytes),
+            Frame::Upload(_) => None,
+        })
+        .collect();
+    let checked = blocking(async move { relay.push(member, space, changes).await }).await;
+    let mut checked = checked.into_iter();
+    uploads
+        .into_iter()
+        .map(|upload| match upload {
+            true => Pushed::Rejected(ErrorCode::TooLarge),
+            false => checked
+                .next()
+                .unwrap_or(Pushed::Rejected(ErrorCode::Unavailable)),
+        })
+        .collect()
 }
 
 /// Runs a future of the relay core on a thread that may block: the SQLite

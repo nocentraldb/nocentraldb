@@ -39,7 +39,7 @@ pub enum Request {
         /// The space.
         space: SpaceId,
         /// The frames, at most [`MAX_PUSH`].
-        frames: Vec<Vec<u8>>,
+        frames: Vec<Frame>,
     },
     /// A page of a space's log after a cursor.
     Pull(Cursor),
@@ -52,11 +52,32 @@ pub enum Request {
         /// The space.
         space: SpaceId,
     },
+    /// An upload URL for a large change (RFC 0007, "Large changes"),
+    /// which this server leaves out.
+    Upload {
+        /// The request id.
+        req: u64,
+    },
+    /// `keys`, `person-keys` or `put-person-keys` (RFC 0007, "Keys and the
+    /// person-key store"), which this server leaves out.
+    Keys {
+        /// The request id.
+        req: u64,
+    },
     /// Liveness.
     Ping {
         /// The request id.
         req: u64,
     },
+}
+
+/// One frame of a push.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Frame {
+    /// The frame's bytes.
+    Change(Vec<u8>),
+    /// `{1: upload id}`: a large change uploaded before.
+    Upload(Vec<u8>),
 }
 
 /// Where a pull reads from.
@@ -138,7 +159,12 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             let frames = items
                 .into_iter()
                 .map(|item| match item {
-                    Value::Bytes(frame) => Some(frame),
+                    Value::Bytes(frame) => Some(Frame::Change(frame)),
+                    Value::Map(map) => {
+                        let mut upload = Fields(map);
+                        let id = upload.bytes(1)?;
+                        upload.0.is_empty().then_some(Frame::Upload(id))
+                    }
                     _ => None,
                 })
                 .collect::<Option<_>>()?;
@@ -166,6 +192,22 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             req: req?,
             space: SpaceId(fields.array(3)?),
         }),
+        "upload" => {
+            fields.array::<16>(3)?;
+            unsigned(fields.take(4)?)?;
+            Some(Request::Upload { req: req? })
+        }
+        "keys" | "person-keys" => {
+            fields.array::<16>(3)?;
+            Some(Request::Keys { req: req? })
+        }
+        "put-person-keys" => {
+            fields.array::<16>(3)?;
+            let Value::Array(_) = fields.take(4)? else {
+                return None;
+            };
+            Some(Request::Keys { req: req? })
+        }
         "ping" => Some(Request::Ping { req: req? }),
         _ => None,
     }
