@@ -878,4 +878,4 @@ Not taken:
 - **2026-11-10** · NOC-80 · In TypeScript an `nc.int` is a safe integer, as RFC 0005's D16 decided, and an object id is 32 lowercase hex digits, which the owner decided on the pull request (S25) (#91).
 - **2026-11-10** · NOC-92 · A reference reads `{ space, id }`, `space.inspect` gives its state, and a subscription does not follow its target, as RFC 0005's D20 and D21 decided (#98).
 - **2026-11-10** · NOC-106 · S19 to S24, which the owner decided as recommended on NOC-95, written into the text where each belongs (#113).
-- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#PR).
+- **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#118).
