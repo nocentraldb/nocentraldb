@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 620" width="880" height="620" role="img" aria-labelledby="rfc-0007-opening-a-connection-title rfc-0007-opening-a-connection-desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <title id="rfc-0007-opening-a-connection-title">Opening a connection to the relay</title>
+  <desc id="rfc-0007-opening-a-connection-desc">The member sends hello, the relay answers with a challenge carrying its relay id and a nonce, the member answers with auth, signing the nonce with its member signing key, and the relay answers welcome with the member id, the relay epoch and the member's spaces; the member pulls and subscribes to each, and when an admin later adds it to a space, the relay sends added and the member pulls and subscribes to that space.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #1f2328; }
+    .m { fill: #59636e; }
+    .ac { fill: #0969da; }
+    .box { fill: #f6f8fa; stroke: #d1d9e0; }
+    .plain { fill: #ffffff; stroke: #d1d9e0; }
+    .focal { fill: #ddf4ff; stroke: #0969da; }
+    .zone { fill: none; stroke: #d1d9e0; }
+    .zonea { fill: #0969da; fill-opacity: 0.05; stroke: #0969da; }
+    .frame { fill: #f6f8fa; stroke: #d1d9e0; }
+    .life { stroke: #d1d9e0; }
+    .ln { stroke: #59636e; fill: none; }
+    .lna { stroke: #0969da; fill: none; }
+    .mk { fill: #59636e; }
+    .mka { fill: #0969da; }
+    .mask { fill: #ffffff; }
+    .num { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .ac { fill: #4493f8; }
+      .box { fill: #161b22; stroke: #3d444d; }
+      .plain { fill: #0d1117; stroke: #3d444d; }
+      .focal { fill: #0c2d4a; stroke: #4493f8; }
+      .zone { stroke: #3d444d; }
+      .zonea { fill: #4493f8; fill-opacity: 0.08; stroke: #4493f8; }
+      .frame { fill: #161b22; stroke: #3d444d; }
+      .life { stroke: #3d444d; }
+      .ln { stroke: #9198a1; }
+      .lna { stroke: #4493f8; }
+      .mk { fill: #9198a1; }
+      .mka { fill: #4493f8; }
+      .mask { fill: #0d1117; }
+      .num { fill: #0d1117; }
+    }
+  </style>
+  <defs>
+    <marker id="rfc-0007-opening-a-connection-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mk"/></marker>
+    <marker id="rfc-0007-opening-a-connection-ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mka"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="880" height="620"/>
+  <line x1="300" y1="76" x2="300" y2="572" class="life" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="660" y1="76" x2="660" y2="572" class="life" stroke-width="1" stroke-dasharray="3,3"/>
+  <rect class="frame" x="276" y="424" width="408" height="140" rx="4"/>
+  <rect class="plain" x="276" y="424" width="56" height="18" rx="2"/>
+  <text x="304" y="437" class="m" font-size="10" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">LATER</text>
+  <text x="288" y="460" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">[an admin's membership entry adds this member to a space]</text>
+  <path d="M300,112 L658,112" class="ln" stroke-width="1.3" marker-end="url(#rfc-0007-opening-a-connection-m)"/>
+  <rect class="mask" x="394.8" y="90" width="170.39999999999998" height="18"/>
+  <text x="480" y="102" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">hello {versions, client}</text>
+  <path d="M660,160 L302,160" class="ln" stroke-width="1.3" marker-end="url(#rfc-0007-opening-a-connection-m)"/>
+  <rect class="mask" x="328.8" y="138" width="302.4" height="18"/>
+  <text x="480" y="150" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">challenge {version, relay id, nonce, limits}</text>
+  <path d="M300,248 L658,248" class="ln" stroke-width="1.3" marker-end="url(#rfc-0007-opening-a-connection-m)"/>
+  <rect class="mask" x="328.8" y="226" width="302.4" height="18"/>
+  <text x="480" y="238" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">auth {signing key, agreement key, signature}</text>
+  <path d="M660,336 L302,336" class="lna" stroke-width="1.6" marker-end="url(#rfc-0007-opening-a-connection-ma)"/>
+  <rect class="mask" x="342" y="314" width="276" height="18"/>
+  <text x="480" y="326" class="ac" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">welcome {member id, relay epoch, spaces}</text>
+  <path d="M300,384 L658,384" class="ln" stroke-width="1.3" marker-end="url(#rfc-0007-opening-a-connection-m)"/>
+  <rect class="mask" x="355.2" y="362" width="249.6" height="18"/>
+  <text x="480" y="374" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">pull, then subscribe, for each space</text>
+  <path d="M660,496 L302,496" class="lna" stroke-width="1.6" marker-end="url(#rfc-0007-opening-a-connection-ma)"/>
+  <rect class="mask" x="431.1" y="474" width="97.8" height="18"/>
+  <text x="480" y="486" class="ac" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">added {space}</text>
+  <path d="M300,540 L658,540" class="ln" stroke-width="1.3" marker-end="url(#rfc-0007-opening-a-connection-m)"/>
+  <rect class="mask" x="355.2" y="518" width="249.6" height="18"/>
+  <text x="480" y="530" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">pull, then subscribe, for that space</text>
+  <rect class="plain" x="200" y="20" width="200" height="56" rx="6"/>
+  <text x="300" y="42" class="t" font-size="14" font-weight="600" text-anchor="middle">Member</text>
+  <text x="300" y="62" class="m" font-size="12.5" text-anchor="middle">a device or an agent</text>
+  <rect class="plain" x="560" y="20" width="200" height="56" rx="6"/>
+  <text x="660" y="42" class="t" font-size="14" font-weight="600" text-anchor="middle">Relay</text>
+  <text x="660" y="62" class="m" font-size="12.5" text-anchor="middle">holds no keys</text>
+  <rect class="box" x="16" y="180" width="268" height="56" rx="6"/>
+  <text x="28" y="200" class="m" font-size="12" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">signs H(&quot;nocentraldb/relay-auth&quot;</text>
+  <text x="28" y="215" class="m" font-size="12" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">‖ relay id ‖ nonce) with its</text>
+  <text x="28" y="230" class="m" font-size="12" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace">member signing key</text>
+  <rect class="box" x="676" y="260" width="188" height="72" rx="6"/>
+  <text x="688" y="280" class="m" font-size="12.5">computes the member id</text>
+  <text x="688" y="297" class="m" font-size="12.5">from the two keys and</text>
+  <text x="688" y="314" class="m" font-size="12.5">verifies the signature</text>
+  <text x="440" y="604" class="m" font-size="12.5" text-anchor="middle">The connection proves a member key, nothing more: every request is checked against the space's membership.</text>
+</svg>

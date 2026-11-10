@@ -65,13 +65,21 @@ Computed fields and views, such as the ready tasks that nothing blocks, in rank 
 
 ## Architecture
 
-The first diagram shows the components. Every member, whether a browser, a phone, a laptop, an agent or a cloud function, runs the same core with a full copy of the spaces it belongs to. The relay stores and forwards encrypted changes and holds no keys. Field types are plugins of the core. Adapters connect a space's change stream to other systems, such as EventBridge on AWS.
+The first two diagrams show the components. Every member, whether a browser, a phone, a laptop, an agent or a cloud function, runs the same core with a full copy of the spaces it belongs to. Field types are plugins of the core.
 
-![Components: your app or agent on top of the TypeScript or Rust SDK, the core on every member with schema, keys, encrypted log, local SQLite view, subscriptions and field types as plugins; in the cloud the relay that holds no keys, adapters such as the AWS adapter, and servers that must read joining as regular members](0001-architecture.svg)
+![One member: your app or agent on top of the TypeScript or Rust SDK, on top of the core, ncdb-core, which folds the encrypted log of every space the member belongs to into a local SQLite view that queries read through declared indexes; field types are plugins of the core, and the core reads model.lock.json, built by ncdb model build](0001-one-member.svg)
 
-The second diagram follows one change through two spaces. Bob writes in the space "Project A". Every member of Project A receives the change and reads it: Alice's laptop, an agent and a cloud function. Carol is only a member of the space "HR", so she receives nothing from Project A and has no key to read it.
+The relay stores and forwards encrypted changes and holds no keys. Adapters connect a space's change stream to other systems, such as EventBridge on AWS.
 
-![How one change travels: Bob signs and encrypts a change in Project A; the relay checks his signature and membership and appends the ciphertext; Alice, Agent X and a cloud function, all members of Project A, decrypt and fold it; Carol, a member of HR only, receives nothing](0001-change-flow.svg)
+![The relay in the middle: a person's device, an agent, a cloud function that reads content and an adapter are all members with their own keys; they push encrypted changes to the relay and receive them from it; the relay holds no keys, checks signatures, membership and the right to write, appends to each space's log and hands changes out from a cursor](0001-relay-in-the-middle.svg)
+
+The next two diagrams follow one change through two spaces. Bob writes in the space "Project A".
+
+![One change: Bob's phone encrypts the change with the content key of Project A's current key generation, signs it with its member key, appends and folds it, and pushes it; the relay checks the signature and that Bob may write, appends it and answers with its position, and sends it live to subscribed members; Alice's laptop checks the signature and that Bob was a member, then decrypts and folds it](0001-one-change.svg)
+
+Every member of Project A receives the change and reads it: Alice's laptop, an agent and a cloud function. Carol is only a member of the space "HR", so she receives nothing from Project A and has no key to read it.
+
+![Two spaces: the relay appends Bob's change to Project A's log and sends it to Agent X, a cloud function and Alice's laptop, the members of Project A; HR's log is unchanged, and Carol, a member of HR only, receives nothing](0001-two-spaces.svg)
 
 ## Field types we ship
 
@@ -205,3 +213,4 @@ Each line names a decision of another RFC that this text follows, and links wher
 - **2026-11-09** · NOC-35 · Personal fields follow RFC 0005: only basic values, the app's duty for free text, and removing a member is not erasure ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
 - **2026-11-10** · NOC-76, NOC-75 · Groups leave the design, withdrawn by the owner (Carsten, 2026-11-09), and the example queries a declared index, following RFC 0009 ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
 - **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, "Decisions" records the decisions in short form, and this History replaces the changelog ([#109](https://github.com/nocentraldb/nocentraldb/pull/109)).
+- **2026-11-10** · NOC-157 · The two diagrams in "Architecture" become four simple ones, each next to the text it explains, and draw what the later RFCs decided ([#143](https://github.com/nocentraldb/nocentraldb/pull/143)).

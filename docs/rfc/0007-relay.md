@@ -120,6 +120,8 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
 
+![Opening a connection: the member sends hello with its versions and client string; the relay answers challenge with its version, relay id, a nonce and the limits; the member signs the relay id and the nonce with its member signing key and sends auth with its two public keys and the signature; the relay computes the member id, verifies the signature and answers welcome with the member id, the relay epoch and the member's spaces; the member pulls and then subscribes to each space; later, when an admin's membership entry adds the member to a space, the relay sends added and the member pulls and subscribes to that space](0007-opening-a-connection.svg)
+
 The member key is the only authentication the protocol requires, and the only one our AWS backend uses (decision R2). A relay backend is an adapter, and a developer who builds their own adapter on top of ours can put an authentication step of their own in front of the connection, for example Cognito or their company's single sign-on. That step decides who may open a connection at all; the challenge above still decides which member the connection acts as, and the membership checks still decide what it may do. Such a step adds a party that learns who connects, which the developer then names in their own list of what their server sees.
 
 ### Push: append signed, encrypted changes
@@ -815,3 +817,4 @@ The protection of the person-key store and the key that authenticates a connecti
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: the decisions in short form, an Open questions section, and a status that says what is built (#117).
 - **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118) (#132).
 - **2026-11-10** · NOC-152 · The `added` message, with decision R13, which the owner decided on NOC-143: [Subscribe](#subscribe-follow-a-space-live) says when the relay sends it and what the member does, and the AWS backend finds a member's connections through a global secondary index on member id (#138).
+- **2026-11-10** · NOC-157 · A diagram in [Opening a connection](#opening-a-connection) shows the handshake, the first pull and subscribe, and `added` (#143).
