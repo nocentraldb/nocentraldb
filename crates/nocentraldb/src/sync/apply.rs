@@ -189,19 +189,16 @@ pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
 }
 
 /// This member's changes the relay has not confirmed, and those it
-/// refused, across every space the database holds.
+/// refused, across every space the database holds. The view keeps these
+/// counts as changes are written, received, confirmed and refused, and
+/// reads them back when it opens (NOC-147), so this decodes nothing.
 pub(super) fn own_counts(inner: &Inner) -> (u64, u64) {
     let me = inner.member.key().id();
-    let spaces = inner.spaces.keys();
-    let (mut unconfirmed, mut refused) = (0, 0);
-    for space in spaces {
-        let own = |change: &Change| change.header().author == me;
-        if let Ok(changes) = inner.view.unconfirmed(*space) {
-            unconfirmed += changes.iter().filter(|c| own(c)).count() as u64;
-        }
-        if let Ok(changes) = inner.view.refused(*space) {
-            refused += changes.iter().filter(|(c, _)| own(c)).count() as u64;
-        }
-    }
-    (unconfirmed, refused)
+    inner
+        .spaces
+        .keys()
+        .fold((0, 0), |(unconfirmed, refused), space| {
+            let counts = inner.view.relay_counts(*space, me);
+            (unconfirmed + counts.unconfirmed, refused + counts.refused)
+        })
 }
