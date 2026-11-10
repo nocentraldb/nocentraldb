@@ -1,0 +1,34 @@
+[package]
+name = "ncdb-relay-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The NoCentralDB relay server: RFC 0007's WebSocket protocol over the relay core, on the SQLite backend."
+
+[[bin]]
+name = "ncdb-relay"
+path = "src/main.rs"
+
+# The server runs natively only. It checks nothing itself: every request
+# goes through the relay core of ncdb-relay. Every dependency is pinned to
+# one exact version.
+[dependencies]
+ncdb-core.workspace = true
+ncdb-relay.workspace = true
+# The asynchronous runtime: one task per connection and per subscription;
+# the SQLite backend's blocking calls run on its blocking threads.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "net", "sync", "macros"] }
+# WebSocket (RFC 6455) over tokio's TCP streams, RFC 0007's transport.
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+# The challenge's nonce and a new relay id: the platform's secure generator.
+getrandom = { version = "=0.4.3", default-features = false }
+
+# The tests talk to the server as a member would: a WebSocket client that
+# signs the challenge, and the core's simulated space for real changes.
+[dev-dependencies]
+tokio = { version = "=1.54.1", default-features = false, features = ["time"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect"] }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }

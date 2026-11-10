@@ -27,7 +27,6 @@ const RFC_0006_BROWSER = "0006-local-view.md#the-browser";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
 const ACCOUNT_KEY = "0003-keys-and-cryptography.md#the-account-key";
-const PERSONAL = "0005-schema-and-model-lock.md#personal-fields";
 const BUILD_CHECKS = "0005-schema-and-model-lock.md#what-the-build-checks";
 const FREE_TEXT = "0005-schema-and-model-lock.md#personal-data-in-free-text";
 const NOT_ERASURE = "0005-schema-and-model-lock.md#about-whom-not-by-whom";
@@ -218,29 +217,6 @@ test("GENESIS.md's Shred and audit names the app's duty for free text", () => {
 test("GENESIS.md links no RFC", () => {
   const link = read(GENESIS).match(/\]\([^)]*docs\/rfc\/[^)]*\)/);
   assert.ok(!link, `GENESIS.md links an RFC: ${link?.[0]}`);
-});
-
-test("RFC 0001 announces Amendment 4 in a dated NOC-35 changelog line, and its section decides nothing", () => {
-  const rfc = read(RFC_0001);
-  const top = rfc.split(/^## /m)[0];
-  assert.match(
-    top,
-    /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-35 · \[Amendment 4: [^\]]+\]\(#amendment-4-[^)]+\)/m,
-    "no changelog line for Amendment 4",
-  );
-  const heading = rfc.split("\n").find((l) => l.startsWith("## Amendment 4: "));
-  assert.ok(heading, "no section Amendment 4");
-  const body = section(rfc, heading.slice(3));
-  assert.match(body, /decides nothing new/, "Amendment 4 must decide nothing");
-  assert.ok(
-    sentencesLinking(body, PERSONAL).length +
-      sentencesLinking(body, FREE_TEXT).length >
-      0,
-  );
-  assert.ok(
-    (rfc.match(/\*\(Amendment 4\.\)\*/g) ?? []).length >= 3,
-    "the changed sentences are not marked",
-  );
 });
 
 test("every relative link in the changed documents resolves, anchors included", () => {

@@ -108,8 +108,10 @@ test("RFC 0009 has a section for every part NOC-64 names", () => {
     "errors",
     "public names",
     "rejected options",
-    "decisions for the owner",
     "conflicts with genesis.md and the other rfcs",
+    "open questions",
+    "decisions",
+    "history",
     "how this rfc is tested",
   ]) {
     assert.ok(
@@ -119,22 +121,24 @@ test("RFC 0009 has a section for every part NOC-64 names", () => {
   }
 });
 
-/** Each decision of the owner, from its "**Sn." line to the next one. */
+/**
+ * Each decision, from its "### Sn." heading to the next one. Since NOC-101
+ * "Decisions" keeps each in short form: decided, why, and the options not
+ * taken.
+ */
 const decisions = (markdown) =>
   [
-    ...section(markdown, "Decisions for the owner").matchAll(
-      /^\*\*(S\d+)\.[\s\S]*?(?=^\*\*S\d+\.|(?![\s\S]))/gm,
+    ...section(markdown, "Decisions").matchAll(
+      /^### (S\d+)\.[\s\S]*?(?=^### S\d+\.|(?![\s\S]))/gm,
     ),
   ].map((match) => ({ id: match[1], text: match[0] }));
 
-test("every decision for the owner has options and a recommendation", () => {
+test("every decision names why and the options not taken", () => {
   const found = decisions(read());
   assert.ok(found.length >= 6, `${RFC} lists ${found.length} decisions`);
   for (const { id, text } of found) {
-    assert.match(text, /^- A\. /m, `${id} has no option A`);
-    assert.match(text, /^- B\. /m, `${id} has no option B`);
-    assert.match(text, /\(recommended\)/, `${id} marks no option recommended`);
-    assert.match(text, /^Recommendation: /m, `${id} gives no recommendation`);
+    assert.match(text, /^Why: /m, `${id} gives no reason`);
+    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
   }
 });
 
@@ -211,23 +215,23 @@ test("the RFC index lists RFC 0009", () => {
   assert.match(read(INDEX), /^\| \[0009\]\(0009-sdk-api\.md\) \| .+ \|$/m);
 });
 
-// The owner's decision (Carsten, 2026-11-09, in chat with pm, on #78): every
-// recommendation of S1 to S18 is accepted, recorded at each decision, in the
-// Status line and the changelog, and in the decision log.
-const DECIDED = "Decided (Carsten, 2026-11-09): the recommendation";
+// The owner's decisions: every recommendation of S1 to S18 is accepted
+// (Carsten, 2026-11-09, in chat with pm, on #78), recorded at each decision,
+// in the Status line and History, and in the decision log; S19 to S24
+// followed on NOC-95 (Carsten, 2026-11-10, written in by NOC-106).
+const DECIDED = (id) =>
+  `Decided (Carsten, ${Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10"})`;
 
-test("every decision records the owner's decision for its recommended option", () => {
+test("every decision records the owner's decision", () => {
   for (const { id, text } of decisions(read())) {
-    const recommended = text.match(/^- ([A-Z])\. .*\(recommended\)/m);
-    assert.ok(recommended, `${id} marks no option recommended`);
     assert.ok(
-      text.includes(`${DECIDED}, (${recommended[1]}).`),
-      `${id} does not record "${DECIDED}, (${recommended[1]})."`,
+      text.includes(DECIDED(id)),
+      `${id} does not record "${DECIDED(id)}"`,
     );
   }
 });
 
-test("the Status line and the changelog say the owner decided", () => {
+test("the Status line and History say the owner decided", () => {
   const markdown = read();
   assert.match(
     markdown,
@@ -237,7 +241,7 @@ test("the Status line and the changelog say the owner decided", () => {
   assert.match(
     markdown,
     /^- \*\*2026-11-09\*\* · NOC-64 · .*S1 to S18.*as recommended/m,
-    `${RFC} has no changelog line for the owner's decision`,
+    `${RFC} has no History line for the owner's decision`,
   );
 });
 

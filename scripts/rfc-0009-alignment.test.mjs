@@ -1,7 +1,7 @@
 // Asserts that the texts RFC 0009's "Conflicts" section names follow it
-// (NOC-75): each point is carried out in the text it names, as a marked
-// amendment that decides nothing and links the point; the use cases use only
-// calls RFC 0009 defines; and RFC 0009 marks each point resolved. The test
+// (NOC-75): each point is carried out in the text it names (the RFCs state
+// them in their text since NOC-100 and NOC-101, which their own tests hold);
+// the use cases use only calls RFC 0009 defines; and RFC 0009 marks each point resolved. The test
 // checks that each change is there and points to its source; whether the
 // wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
@@ -25,16 +25,10 @@ const CONFLICTS = "0009-sdk-api.md#conflicts-with-genesismd-and-the-other-rfcs";
 
 /**
  * Each amended RFC, the number of its amendment, and the RFC 0009 points it
- * carries out. RFC 0005 (points 1, 3 and 4) and RFC 0006 (points 1 and 2)
- * carry them in their text since NOC-101 folded their amendments in; the
- * tests below check them where they stand.
+ * carries out. RFC 0005 (points 1, 3 and 4), RFC 0006 (points 1 and 2) and
+ * RFC 0008 (point 10) carry them in their text since NOC-101 folded their
+ * amendments in; the tests below check them where they stand.
  */
-const AMENDMENTS = [
-  { path: RFC_0001, number: 6, points: [6] },
-  { path: RFC_0003, number: 3, points: [5, 9] },
-  { path: RFC_0008, number: 2, points: [10] },
-];
-const anchorOf = (number) => `amendment-${number}-following-rfc-0009`;
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
 const slug = (heading) =>
@@ -88,44 +82,6 @@ const relativeLinks = (path) =>
       const resolved = file ? normalize(join(dirname(path), file)) : path;
       return { target, resolved, anchor };
     });
-
-for (const { path, number, points } of AMENDMENTS) {
-  const anchor = anchorOf(number);
-
-  test(`${path} announces Amendment ${number} in a dated NOC-75 changelog line at the top`, () => {
-    const top = read(path).split(/^## /m)[0];
-    assert.match(
-      top,
-      new RegExp(
-        `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · NOC-75 · .*\\(#${anchor}\\)`,
-        "m",
-      ),
-      `no changelog line for NOC-75 linking to #${anchor} above the first section`,
-    );
-  });
-
-  test(`${path} has Amendment ${number}, which decides nothing, and every point links RFC 0009's point`, () => {
-    const body = section(read(path), anchor);
-    assert.ok(body, `no section #${anchor}`);
-    assert.match(
-      body,
-      /decides nothing/,
-      "the amendment does not say it decides nothing",
-    );
-    const bullets = body.split("\n").filter((line) => line.startsWith("- **"));
-    assert.equal(bullets.length, points.length, "one bullet per point");
-    for (const point of points) {
-      const bullet = bullets.find((b) =>
-        new RegExp(`\\bpoint ${point}\\b`).test(b),
-      );
-      assert.ok(bullet, `no bullet names RFC 0009's point ${point}`);
-      assert.ok(
-        links(bullet, CONFLICTS),
-        `point ${point} does not link RFC 0009's Conflicts`,
-      );
-    }
-  });
-}
 
 test("RFC 0003's sketch uses RFC 0009's names: no name for a space, the role writer, and a lock", () => {
   const sketch = code(section(read(RFC_0003), "how-the-sdk-hides-keys"));

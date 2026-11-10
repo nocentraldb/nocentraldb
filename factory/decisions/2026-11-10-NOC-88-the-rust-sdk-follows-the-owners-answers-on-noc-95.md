@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-88 · The Rust SDK follows the owner's answers on NOC-95, and stays in memory until NOC-108
+
+- Decided by: Carsten (NOC-95, 2026-11-10: every recommendation accepted)
+- Why: #97 builds the local Rust SDK where RFC 0009 left choices open that developers see. The owner answered them on NOC-95. #97 carries out these answers. 3 A: the Rust names it adds stand (`Space`, `Spaces`, `Transaction`, `Query`, `Page`, `Cursor`, `Object` with `id()`, `space()`, `deleted()` and `get::<T>(name)`, `Written`, `ObjectId`, `SpaceId`, `ChangeId`, `Page::has_more`). 4 A and B: an unknown collection, field or index is `NotFound`; a query with the wrong number of equality values, a bad page size or an index of the other scope is `InvalidValue`; an unreadable or invalid lock is `ModelRefused`; only a full disk or quota is `StorageFull`, and every other failure of the database is the new `StorageFailed`. 5 A: a space id shows as 32 lowercase hex digits, like an object id. The answers to 1 and 2 (a path, the keystore or a key file, a per-database account key, `agent()`) are NOC-108, so #97 keeps everything in memory as its safe subset; 6 (writing an `nc.ref`) is outside NOC-88. NOC-106 writes all of it into RFC 0009.
+- Instead of: the other options NOC-95 lists for each question.
+- Topics: sdk-rust, rfc-0009, errors, ids, public-names

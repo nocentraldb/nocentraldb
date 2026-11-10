@@ -159,7 +159,7 @@ test("Amendment 1's decisions 8 to 14 are decided by the owner, none left open",
 // which RFC 0002 Amendment 6 records (#86), so RFC 0004's depth paragraph no
 // longer says it is pending and links that amendment instead, through an
 // amendment of its own that decides nothing.
-test("RFC 0004 links RFC 0002 Amendment 6 for the nesting limit, not a pending decision", () => {
+test("RFC 0004 links RFC 0002's CBOR profile for the nesting limit, not a pending decision", () => {
   const text = read();
   assert.ok(
     !/pending the owner in NOC-24/.test(text),
@@ -168,10 +168,8 @@ test("RFC 0004 links RFC 0002 Amendment 6 for the nesting limit, not a pending d
   const depth = text.split("\n").find((l) => l.startsWith("**Depth.**"));
   assert.ok(depth, "no paragraph Depth");
   assert.ok(
-    depth.includes(
-      "](0002-change-and-log-format.md#amendment-6-a-nesting-limit-and-a-clock-that-never-waits)",
-    ),
-    "the depth paragraph does not link RFC 0002 Amendment 6",
+    depth.includes("](0002-change-and-log-format.md#the-cbor-profile)"),
+    "the depth paragraph does not link RFC 0002's CBOR profile",
   );
   assert.match(depth, /\*\(Amendment 3\.\)\*/);
   assert.match(
