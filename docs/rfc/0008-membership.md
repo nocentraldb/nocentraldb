@@ -222,7 +222,7 @@ key chain entry (entry type 3)
 └── 10 answers            array of change ids: the revocations this rotation answers
 ```
 
-Each encrypted previous key is 72 bytes, `nonce (24) || ciphertext (32) || tag (16)` with a random nonce, the layout of everything a space key seals ([RFC 0003, "Key-chain subkey"](0003-keys-and-cryptography.md#key-chain-subkey), [decision 18](0003-keys-and-cryptography.md#18-the-bytes-of-an-encrypted-previous-key), as the owner decided on NOC-97, Carsten, 2026-11-10).
+Each encrypted previous key is 72 bytes, `nonce (24) || ciphertext (32) || tag (16)` with a random nonce, the layout of everything a space key seals ([RFC 0003, "Key-chain subkey"](0003-keys-and-cryptography.md#key-chain-subkey), as the owner decided on NOC-97, Carsten, 2026-11-10).
 
 The author must be an admin, and every listed previous generation must exist in the state of the entry's causal past. After a key chain entry, the author writes a key envelope for every member of the state, itself included, and none for anyone else. It also re-wraps the person-key records under the new generation (RFC 0003, step 3). Whether the encrypted previous keys are correct only a holder of the new key can tell. That is a local check.
 
@@ -257,7 +257,7 @@ person-key entry (entry type 4)
 
 The first accepted entry for a person-key id creates the person key. Every later one announces a re-wrapped record and must repeat the same commitment, or it is rejected. Whether the record's key matches the commitment only a member that unwraps it can tell. That is a local check, as RFC 0003 already has it.
 
-[RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) gives a person a person id that spans spaces. The person-key id stays per space, as RFC 0003 decided (decision 7), and never derives from the person. The erasure work order finds the person-key ids of a person through the person id inside sealed data. The relay never sees the person id.
+[RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) gives a person a person id that spans spaces. The person-key id stays per space, as RFC 0003 decided ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), and never derives from the person. The erasure work order finds the person-key ids of a person through the person id inside sealed data. The relay never sees the person id.
 
 ### Shred entry
 
@@ -534,7 +534,7 @@ Groups are not part of this design: they were withdrawn by the owner (Carsten, 2
 Such an RFC has to answer what makes a group that is a member of many spaces hard to design:
 
 - **A group's membership lives outside the space.** If a space's control state depended on a group's membership, which changes in another log, then folding one space would depend on another space's changes. RFC 0002 keeps every change, and every fold, inside one space. Crossing spaces needs its own convergence argument.
-- **Removing someone from a group rotates every space of the group.** With per-member envelopes (RFC 0003, decision 1), that is one rotation per space and one envelope per remaining member in each. A group key would reduce the envelopes, but it adds a second layer of keys and rotations to design.
+- **Removing someone from a group rotates every space of the group.** With per-member envelopes ([RFC 0003, "Group key distribution: options compared"](0003-keys-and-cryptography.md#group-key-distribution-options-compared)), that is one rotation per space and one envelope per remaining member in each. A group key would reduce the envelopes, but it adds a second layer of keys and rotations to design.
 - **The relay would have to check membership through the group**, which needs the group's control state on every relay that holds any of its spaces.
 
 ## Rejected options
@@ -860,7 +860,7 @@ Not taken:
 
 ### M25. Who signs a sub-agent's certificate
 
-Decided (Carsten, 2026-11-08): the parent agent's member signing key, under its own context string; key 1 carries the parent's account key, and members check the chain through the parent's certificate, as RFC 0003's decision 15 has it.
+Decided (Carsten, 2026-11-08): the parent agent's member signing key, under its own context string; key 1 carries the parent's account key, and members check the chain through the parent's certificate, as RFC 0003's member certificate has it.
 
 Why: a parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space"). The chain check reads only the space's control changes, because the parent's certificate is in the genesis or add entry that made the parent a member.
 
@@ -910,7 +910,7 @@ Not taken:
 - Counting only accepted envelopes: a rejected envelope may still have been delivered.
 - Counting the authors of entries that were never valid when written: a removed member could then force rotations by naming the current generation.
 
-The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's decision 15, not this RFC's.
+The formats of the member certificate, the account sign-off and the key-chain subkey are RFC 0003's ([Formats of what keys sign and derive](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)), not this RFC's.
 
 ## History
 

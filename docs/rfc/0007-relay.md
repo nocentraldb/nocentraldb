@@ -113,7 +113,7 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `hello` lists the protocol versions the member speaks. The relay picks the highest it also speaks, or answers `unsupported_version` and closes.
 - `hello` may carry a client string, such as `ncdb-rs/0.3`, to help debug version problems. It is optional, and the relay sees it (see [What the relay sees](#what-the-relay-sees)).
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
-- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
+- `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
 - `welcome` lists the spaces the member belongs to when it connects, and the member pulls and subscribes to each. A space the member is added to while it is connected reaches it through `added` (see [Subscribe](#subscribe-follow-a-space-live)).
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
@@ -187,7 +187,7 @@ relay  → member  ok                {req}
 record = {person-key id, generation, writer member id, wrapped, signature}
 ```
 
-The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
+The store follows [RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key). The relay cannot see inside a wrapped person key, so it relies on what sits outside the wrapping and on the log:
 
 - **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
@@ -256,7 +256,7 @@ The relay runs every check below in its core, the same on every backend, before 
 | The signature is valid. | The author's public signing key, from the membership table, and the signed header bytes (RFC 0003, Ed25519, strict verification). | Encrypt-then-sign: the signature covers the ciphertext, so it verifies without decrypting (RFC 0003). |
 | A sealed change's author may write it. | The header's author, author sequence and generation, against the membership table: the author's grants with their from generations, the revocations with their cutoffs, and the generation graph ([RFC 0008](0008-membership.md#sealed-changes)). | Numbers in signed headers and control bodies; nothing is decrypted. |
 | A control change obeys the membership rules. | `resolve` of [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) over the relay's log plus the change, the same code the members run; the control body, which RFC 0002 makes readable to the relay. | Control bodies carry ids, public keys, wrapped keys and shred ids, never content. A key envelope is HPKE ciphertext to one member; the relay stores it and cannot open it. |
-| A person-key record is acceptable (RFC 0003, decision 14). | The writer's signature over the record's clear fields and wrapped bytes; the person-key entries and shred entries in the log; the generation of the stored record. | Signature verification and ids only. The relay never unwraps the record; the commitment is checked by members. |
+| A person-key record is acceptable (RFC 0003, "The person key"). | The writer's signature over the record's clear fields and wrapped bytes; the person-key entries and shred entries in the log; the generation of the stored record. | Signature verification and ids only. The relay never unwraps the record; the commitment is checked by members. |
 | A shred entry is signed by a current member and signed off by a second account. | The member's signature, and the account key signature, against the member certificates in the membership table (RFC 0003). | Signature verification uses only public keys. |
 | The change is not already in the log. | The change id, which the relay computes from the frame (RFC 0002). | A hash of the bytes. |
 | The reader may read the space. | The membership table, on every pull, subscribe, keys and person-keys request. | As above. |
@@ -476,7 +476,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
-| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only when its shred entry is stable (RFC 0008, M20). |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, "The person key"; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only when its shred entry is stable (RFC 0008, M20). |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers, and a global secondary index on member id finds a member's connections, to send `added`. TTL removes what a missed `$disconnect` leaves behind. An operator who sets decision R9 to B keeps the records after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -607,9 +607,9 @@ Pulling first lets the member see a membership entry that removed it before it p
 | A key envelope names the member id it is for and its generation, readable by the relay, so that `keys` can return a member's own envelopes. | RFC 0003 | Met: RFC 0003 lists both as clear metadata. |
 | The first change of a space is a control change that names the creator as its first member, with its public keys, so the relay can accept a new space. | [RFC 0008](0008-membership.md#the-first-change-of-a-space) | Met: the genesis. |
 | The membership rules the relay applies, the person-key entry, the cutoff and when an irreversible effect may happen. | [RFC 0008](0008-membership.md#how-the-relay-applies-the-rules) | Met; this RFC follows its Conflicts points 11 and 12. |
-| The member's signing key signs the relay challenge, with its own context string. | RFC 0003 | Met: RFC 0003, decision 13. |
-| Person-key entries with a commitment, signed person-key records, and shred entries with a second account's sign-off that the relay can verify. | RFC 0003 | Met: RFC 0003, decision 14. |
-| Person-key records carry their person-key id, generation and writer member id outside the wrapping. | RFC 0003 | Met: RFC 0003, decision 14. |
+| The member's signing key signs the relay challenge, with its own context string. | RFC 0003 | Met: RFC 0003, "The member key". |
+| Person-key entries with a commitment, signed person-key records, and shred entries with a second account's sign-off that the relay can verify. | RFC 0003 | Met: RFC 0003, "The person key". |
+| Person-key records carry their person-key id, generation and writer member id outside the wrapping. | RFC 0003 | Met: RFC 0003, "The person key". |
 
 ## Rejected options
 
@@ -631,7 +631,7 @@ One line each; the decisions below give the options that remain.
 | A long-running server on EC2 | Costs money while idle, and needs patching; Fargate is the long-running option if one is needed (decision R3). |
 | The relay folds membership into its own format, independent of the log | The membership table must be rebuildable from the log; a second source of truth could disagree with the members' fold. |
 | The relay refuses equivocating changes | Refusing one of two signed changes makes the relay choose a winner; members detect equivocation themselves (RFC 0002). |
-| Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (RFC 0003, decision 14). |
+| Unsigned person-key records that any member may overwrite or delete | One member could erase a person's data without the second account's sign-off, or swap a key unnoticed (RFC 0003, "The person key"). |
 | Restoring a backup under the same epoch | Positions would be reused for different changes, and members past them would skip changes silently. |
 | The relay judges a removed member's change by when it arrived, or by its generation | The relay's order is not the order members see on an island, and the relay cannot see when a change was written; the cutoff decides instead (decision R7, RFC 0008's M3). |
 
@@ -657,7 +657,7 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The own
 | What does it cost? | About 10 USD a month for a small team; about 800 USD for 1,000 agents writing once a minute; nothing for local reads. |
 | What if the relay is down? | Members keep working; on reconnect they pull, then push what the relay has not confirmed. |
 | What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
-| Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, decision 14); only a signed-off shred entry deletes one. |
+| Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, "The person key"); only a signed-off shred entry deletes one. |
 
 ## Open questions
 
@@ -805,7 +805,7 @@ Not taken:
 - A `spaces` request that the SDK sends on a timer, such as every 5 minutes: a delay of up to the timer, and every idle member pays the requests.
 - Keeping it as it is: a new member sees the space at its next reconnect, within 2 hours, unless the app forces a reconnect.
 
-The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003, in its [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store) and [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay), because they are key handling.
+The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003, in [The person key](0003-keys-and-cryptography.md#the-person-key) and [The member key](0003-keys-and-cryptography.md#the-member-key), because they are key handling.
 
 ## History
 
