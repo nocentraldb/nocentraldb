@@ -16,6 +16,9 @@ mod space;
 #[path = "support/view.rs"]
 mod view_support;
 
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ncdb_core::change::Change;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::field_op;
