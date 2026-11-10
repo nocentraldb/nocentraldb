@@ -211,18 +211,20 @@ test("the RFC index lists RFC 0009", () => {
   assert.match(read(INDEX), /^\| \[0009\]\(0009-sdk-api\.md\) \| .+ \|$/m);
 });
 
-// The owner's decision (Carsten, 2026-11-09, in chat with pm, on #78): every
-// recommendation of S1 to S18 is accepted, recorded at each decision, in the
-// Status line and the changelog, and in the decision log.
-const DECIDED = "Decided (Carsten, 2026-11-09): the recommendation";
+// The owner's decisions: every recommendation of S1 to S18 is accepted
+// (Carsten, 2026-11-09, in chat with pm, on #78), recorded at each decision,
+// in the Status line and the changelog, and in the decision log; S19 to S24
+// followed on NOC-95 (Carsten, 2026-11-10, written in by NOC-106).
+const DECIDED = (id) =>
+  `Decided (Carsten, ${Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10"}): the recommendation`;
 
 test("every decision records the owner's decision for its recommended option", () => {
   for (const { id, text } of decisions(read())) {
     const recommended = text.match(/^- ([A-Z])\. .*\(recommended\)/m);
     assert.ok(recommended, `${id} marks no option recommended`);
     assert.ok(
-      text.includes(`${DECIDED}, (${recommended[1]}).`),
-      `${id} does not record "${DECIDED}, (${recommended[1]})."`,
+      text.includes(`${DECIDED(id)}, (${recommended[1]}).`),
+      `${id} does not record "${DECIDED(id)}, (${recommended[1]})."`,
     );
   }
 });
