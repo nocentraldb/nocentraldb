@@ -4,7 +4,8 @@
 // and encoding in Amendment 1's tables and style; its byte-exact examples
 // sit beside E1 to E14 and are checked by rfc-0004-examples.test.mjs. Every
 // point beyond NOC-29's decision goes to the owner as a numbered decision
-// with options and a recommendation, still open.
+// with options and a recommendation. The owner accepted every recommendation
+// (Carsten, 2026-11-10), so each records that decision and nothing stays open.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -70,7 +71,9 @@ test("RFC 0004 announces Amendment 4 in a dated NOC-63 changelog line and its st
     status.includes(`(#${AMENDMENT})`),
     "the status does not link Amendment 4",
   );
-  assert.match(status, /Amendment 4[^.]*decisions 15 to 20[^.]*open/);
+  assert.match(status, /decisions 15 to 20[^.]*\(Carsten, 2026-11-10\)/);
+  assert.match(ours, /\(Carsten, 2026-11-10\)/);
+  assert.doesNotMatch(top, /are open and wait for the owner/);
 });
 
 test("Amendment 4 records what the owner decided in NOC-29, with name and date", () => {
@@ -151,7 +154,7 @@ test("Amendment 4's encoding names the type id, the operation and the value", ()
   assert.match(body, /decision 1[5-9]|decision 20/);
 });
 
-test("decisions 15 to 20 each have options and one recommendation, and stay open", () => {
+test("decisions 15 to 20 each have options and one recommendation, and record the owner's decision", () => {
   const body = section(amendment(), "decisions-for-the-owner-15-to-20", 3);
   assert.ok(body, "no section Decisions for the owner (15 to 20)");
   const found = decisions(body);
@@ -172,9 +175,10 @@ test("decisions 15 to 20 each have options and one recommendation, and stay open
     );
     assert.match(
       text,
-      /Open: waits for the owner\./,
-      `decision ${number} does not say it is open`,
+      /^ {4}Decided: A \(Carsten, 2026-11-10\)\.$/m,
+      `decision ${number} does not record the owner's decision`,
     );
+    assert.doesNotMatch(text, /Open: waits for the owner/, `${number} is open`);
   }
   const topics = found.map((d) => d.text);
   assert.match(topics[0], /`ncdb\/ref`/);
@@ -196,4 +200,20 @@ test("every in-page link of RFC 0004 resolves to a heading", () => {
   for (const [, anchor] of rfc.matchAll(/\]\(#([^)\s]+)\)/g)) {
     assert.ok(anchors.has(anchor), `${RFC} links to missing #${anchor}`);
   }
+});
+
+test("Amendment 4 no longer calls any of its points open", () => {
+  const body = amendment();
+  for (const open of [
+    /None is decided yet/,
+    /What it needs beyond them is open/,
+    /before the owner decides/,
+    /once the owner decides/,
+    /if the owner chooses another/,
+    /which are open/,
+    /proposes the public names/,
+  ]) {
+    assert.doesNotMatch(read(), open, `RFC 0004 still says ${open}`);
+  }
+  assert.match(body, /\(Carsten, 2026-11-10\)/);
 });

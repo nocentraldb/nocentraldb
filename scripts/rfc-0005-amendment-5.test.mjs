@@ -4,7 +4,8 @@
 // names", marked where it changes the RFC. Every point beyond NOC-29's
 // decision (the schema form, the index, how a read and a view show the three
 // states, subscriptions, modifiers) goes to the owner as a decision with
-// options and a recommendation, still open. RFC 0004's Amendment 4 defines
+// options and a recommendation; the owner accepted every recommendation
+// (Carsten, 2026-11-10). RFC 0004's Amendment 4 defines
 // the type's state, merge and encoding.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -66,7 +67,9 @@ test("RFC 0005 announces Amendment 5 in a dated NOC-63 changelog line and its st
   assert.match(entry, /NOC-29/);
   const status = line(rfc, "**Status.**");
   assert.ok(status.includes(`(#${AMENDMENT})`), "the status omits Amendment 5");
-  assert.match(status, /D18 to D22[^.]*open/);
+  assert.match(status, /D18 to D22[^.]*\(Carsten, 2026-11-10\)/);
+  assert.match(entry, /\(Carsten, 2026-11-10\)/);
+  assert.doesNotMatch(top, /are open and wait for the owner/);
 });
 
 test("Amendment 5 records NOC-29's decision and links RFC 0004's Amendment 4", () => {
@@ -117,7 +120,7 @@ test("Public names lists nc.ref and the type id ncdb/ref", () => {
   assert.match(line(names, "| The type id namespace"), /`ncdb\/ref`/);
 });
 
-test("D18 to D22 each have options and one recommendation, and stay open", () => {
+test("D18 to D22 each have options and one recommendation, and record the owner's decision", () => {
   const found = decisions(amendment());
   assert.deepEqual(
     found.map((d) => d.id),
@@ -136,7 +139,11 @@ test("D18 to D22 each have options and one recommendation, and stay open", () =>
       /^Recommendation: [A-Z]\b/m,
       `${id} has no recommendation`,
     );
-    assert.match(text, /^Open: waits for the owner\./m, `${id} is not open`);
+    assert.ok(
+      text.includes("Decided (Carsten, 2026-11-10): the recommendation, (A)."),
+      `${id} does not record the owner's decision`,
+    );
+    assert.doesNotMatch(text, /Open: waits for the owner/, `${id} is open`);
   }
   const [schema, index, read_, subscribe, modifiers] = found.map((d) => d.text);
   assert.match(schema, /`targets`/);
@@ -157,5 +164,17 @@ test("every in-page link of RFC 0005 resolves to a heading", () => {
   );
   for (const [, anchor] of rfc.matchAll(/\]\(#([^)\s]+)\)/g)) {
     assert.ok(anchors.has(anchor), `${RFC} links to missing #${anchor}`);
+  }
+});
+
+test("Amendment 5 no longer calls any of its points open", () => {
+  const rfc = read();
+  for (const open of [
+    /Everything beyond NOC-29's decision is open/,
+    /before the owner decides/,
+    /once the owner decides/,
+    /as \[D19\]\([^)]*\) proposes/,
+  ]) {
+    assert.doesNotMatch(rfc, open, `RFC 0005 still says ${open}`);
   }
 });
