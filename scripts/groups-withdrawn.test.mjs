@@ -1,9 +1,10 @@
 // Asserts that groups have left the design (NOC-76). The owner decided to
 // keep groups out of every definition for now (Carsten, 2026-11-09); they may
-// return through a later RFC. RFC 0008 and RFC 0009 each carry an amendment
-// that withdraws them, announced in a dated changelog line, and RFC 0001
-// records the decision under "Groups leave the design" (NOC-100's
-// rfc-0001-complete.test.mjs holds that section); the
+// return through a later RFC. RFC 0009 carries an amendment that withdraws
+// them, announced in a dated changelog line; RFC 0001 records the decision
+// under "Groups leave the design" (NOC-100's rfc-0001-complete.test.mjs holds
+// that section), and RFC 0008 states it in "Groups" since NOC-101 folded its
+// amendments in; the
 // decisions about groups, RFC 0008's M10 and RFC 0009's S14, are marked
 // withdrawn instead of deleted; the decision log records the owner's call;
 // and no RFC or doc presents groups as part of the design outside the text
@@ -22,12 +23,10 @@ const RFC_0009 = "docs/rfc/0009-sdk-api.md";
 const DECISIONS = "factory/decisions";
 
 /** The amendment of each RFC that withdraws groups. */
-const AMENDMENTS = [
-  { path: RFC_0008, number: 1 },
-  { path: RFC_0009, number: 1 },
-];
+const AMENDMENTS = [{ path: RFC_0009, number: 1 }];
 const anchorOf = (number) => `amendment-${number}-groups-leave-the-design`;
-const WITHDRAWING = /#(amendment-\d+-)?groups-leave-the-design\)/;
+const WITHDRAWING =
+  /#(amendment-\d+-)?groups-leave-the-design\)|(0008-membership\.md)?#groups\)/;
 const WITHDRAWN = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
@@ -58,7 +57,11 @@ const section = (markdown, anchor) => {
 /** The text of the decision `id` (such as "M10"), up to the next decision or heading. */
 const decision = (markdown, id) => {
   const lines = markdown.split("\n");
-  const start = lines.findIndex((line) => line.startsWith(`**${id}. `));
+  const start = lines.findIndex(
+    (line) =>
+      line.startsWith(`**${id}. `) ||
+      new RegExp(`^#{1,6} ${id}\\. `).test(line),
+  );
   if (start < 0) return undefined;
   const rest = lines.slice(start + 1);
   const end = rest.findIndex(
@@ -108,7 +111,7 @@ const units = (markdown) => {
   for (let i = 0; i < lines.length; ) {
     const line = lines[i];
     const heading = line.match(/^(#{1,6}) (.*)$/);
-    const isDecision = /^\*\*[A-Z]+\d+\. /.test(line);
+    const isDecision = /^(\*\*|#{1,6} )[A-Z]+\d+\. /.test(line);
     const isWhole =
       heading &&
       (heading[2] === "Groups" || /groups leave the design/i.test(heading[2]));
@@ -121,7 +124,7 @@ const units = (markdown) => {
     while (
       j < lines.length &&
       !(
-        (isDecision && /^\*\*[A-Z]+\d+\. /.test(lines[j])) ||
+        (isDecision && /^(\*\*|#{1,6} )[A-Z]+\d+\. /.test(lines[j])) ||
         (/^(#{1,6}) /.test(lines[j]) &&
           (!isWhole || lines[j].match(/^#+/)[0].length <= heading[1].length))
       )

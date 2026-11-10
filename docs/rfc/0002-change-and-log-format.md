@@ -552,7 +552,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-07): 128 random bits from a secure generator.
 
-Superseded for space ids by RFC 0008's decision M7 (Carsten, 2026-11-08): a space id is derived from its creator's member id and a random nonce, because a random space id does not bind the space to its creator ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). Object ids keep D3.
+Superseded for space ids by RFC 0008's decision [M7](0008-membership.md#m7-revisit-rfc-0002s-d3-for-space-ids) (Carsten, 2026-11-08): a space id is derived from its creator's member id and a random nonce, because a random space id does not bind the space to its creator ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). Object ids keep D3.
 
 Why: it leaks nothing about when an object was made into links, URLs and exports.
 
@@ -701,13 +701,13 @@ Not taken:
 
 Each line names a decision of another RFC that changes what this one says, and links where that RFC states it.
 
-- **Space ids are derived.** A space id is the first 16 bytes of a hash over the creator's member id and a random nonce in the genesis: RFC 0008's M7 (Carsten, 2026-11-08), [What it names](0008-membership.md#what-it-names).
-- **The key generation has a structure.** Its upper 16 bits are an ordinal and its lower 48 bits a tag derived from the rotation, so concurrent rotations name different generations: RFC 0008's M6 (Carsten, 2026-11-08), [Generation ids](0008-membership.md#generation-ids).
-- **The control body.** Key 1 is the entry type, key 3 the control dependencies, and the clock is absent: RFC 0008's M18 and M22 (Carsten, 2026-11-08), [The control bodies](0008-membership.md#the-control-bodies).
-- **Equivocations of the genesis.** Both stay in the log, and the one with the lower change id is the genesis: RFC 0008's M24 (Carsten, 2026-11-08), [How the relay and members recognise it](0008-membership.md#how-the-relay-and-members-recognise-it).
-- **A revoked member's changes.** Changes at or below the cutoff its revocation names are accepted, those above it refused, whenever they arrive: RFC 0008's M3 (Carsten, 2026-11-08), [The cutoff](0008-membership.md#the-cutoff).
-- **What the relay reads of control changes.** The relay applies the membership rules, so it reads the control bodies and their control dependencies: RFC 0008's M11 (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
-- **Pushing a refused change again.** A member pushes a refused change once more when its own fold newly accepts it: RFC 0008's M19 (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
+- **Space ids are derived.** A space id is the first 16 bytes of a hash over the creator's member id and a random nonce in the genesis: RFC 0008's [M7](0008-membership.md#m7-revisit-rfc-0002s-d3-for-space-ids) (Carsten, 2026-11-08), [What it names](0008-membership.md#what-it-names).
+- **The key generation has a structure.** Its upper 16 bits are an ordinal and its lower 48 bits a tag derived from the rotation, so concurrent rotations name different generations: RFC 0008's [M6](0008-membership.md#m6-generation-ids) (Carsten, 2026-11-08), [Generation ids](0008-membership.md#generation-ids).
+- **The control body.** Key 1 is the entry type, key 3 the control dependencies, and the clock is absent: RFC 0008's [M18](0008-membership.md#m18-no-clock-in-control-bodies) and [M22](0008-membership.md#m22-the-wire-layout-of-the-control-bodies) (Carsten, 2026-11-08), [The control bodies](0008-membership.md#the-control-bodies).
+- **Equivocations of the genesis.** Both stay in the log, and the one with the lower change id is the genesis: RFC 0008's [M24](0008-membership.md#m24-a-creator-that-writes-two-geneses) (Carsten, 2026-11-08), [How the relay and members recognise it](0008-membership.md#how-the-relay-and-members-recognise-it).
+- **A revoked member's changes.** Changes at or below the cutoff its revocation names are accepted, those above it refused, whenever they arrive: RFC 0008's [M3](0008-membership.md#m3-which-changes-of-a-revoked-member-count) (Carsten, 2026-11-08), [The cutoff](0008-membership.md#the-cutoff).
+- **What the relay reads of control changes.** The relay applies the membership rules, so it reads the control bodies and their control dependencies: RFC 0008's [M11](0008-membership.md#m11-what-the-relay-sees) (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
+- **Pushing a refused change again.** A member pushes a refused change once more when its own fold newly accepts it: RFC 0008's [M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused) (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
 - **The relay learns more than the log shows.** The list of what the relay sees links RFC 0007's list of what it learns from its protocol: RFC 0007's conflict 1, ruled by the owner (Carsten, 2026-11-08), [What the relay sees](0007-relay.md#what-the-relay-sees).
 - **Who uploads.** The uploader of a change must be an authenticated current member of the space; the author may be any member whose change the rules accept: RFC 0007's conflict 4, ruled by the owner (Carsten, 2026-11-08), [What the relay checks](0007-relay.md#what-the-relay-checks).
 
