@@ -12,6 +12,7 @@ mod relay_support;
 
 mod added;
 mod backoff;
+mod counts;
 mod fake;
 mod list;
 mod live;
