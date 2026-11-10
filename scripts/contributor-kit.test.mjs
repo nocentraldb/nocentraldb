@@ -409,3 +409,44 @@ test("the uncached gate commands in docs/repository.md cover every gate task of 
     }
   }
 });
+
+test("agents read the decision index at start, and in full only what touches their ticket (NOC-83)", () => {
+  for (const file of [
+    "factory/roles/coder.md",
+    "factory/roles/pm.md",
+    "AGENTS.md",
+    "factory/FACTORY.md",
+  ]) {
+    const text = read(file);
+    assert.match(text, /pnpm decisions --index/, `${file} names the index`);
+    assert.match(text, /--ticket/, `${file} names --ticket`);
+    assert.match(text, /--topic/, `${file} names --topic`);
+  }
+});
+
+test("pm may also merge a PR that carries out a decision, and dev tooling (NOC-83)", () => {
+  const boxes = ["Agent, carries out a decision", "Agent, tooling"];
+  const template = read(PR_TEMPLATE);
+  const policy = read(".github/AI_POLICY.md");
+  const config = read("factory/CONFIG.md");
+  const pm = read("factory/roles/pm.md");
+  for (const box of boxes) {
+    assert.ok(template.includes(box), `template box ${box}`);
+    assert.ok(policy.includes(box), `policy names ${box}`);
+    assert.ok(pm.includes(box), `pm.md names ${box}`);
+  }
+  assert.match(policy, /third exception/i);
+  assert.match(policy, /fourth exception/i);
+  assert.match(config, /carries out a decision/);
+  assert.match(config, /tooling/);
+});
+
+test("a decided-design PR may build a safe subset, and a departure goes to the owner as its own ticket (NOC-83)", () => {
+  const pm = read("factory/roles/pm.md");
+  const coder = read("factory/roles/coder.md");
+  const policy = read(".github/AI_POLICY.md");
+  assert.match(pm, /safe subset/);
+  assert.match(policy, /safe subset/);
+  assert.match(coder, /never decide a departure/i);
+  assert.match(pm, /needs-owner ticket/);
+});
