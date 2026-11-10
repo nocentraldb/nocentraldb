@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::change::Change;
+use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
@@ -36,6 +36,9 @@ pub struct Resolved {
     order: Vec<ChangeId>,
     seniority: Vec<MemberId>,
     gaps: BTreeSet<ChangeId>,
+    /// For each accepted grant, the accepted revocations of its subject in
+    /// its causal past.
+    seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -55,9 +58,28 @@ pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>
     }
     let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
     let mut resolved = fold(&input, &judged, &all);
+    resolved.seen = seen(&input, &resolved.members);
     resolved.verdicts.extend(input.verdicts);
     resolved.gaps = input.gaps;
     resolved
+}
+
+/// For each accepted grant, the accepted revocations of its subject that it
+/// saw.
+fn seen(input: &Input, members: &Members) -> BTreeMap<ChangeId, BTreeSet<ChangeId>> {
+    let mut seen = BTreeMap::new();
+    for state in members.0.values() {
+        for grant in &state.grants {
+            let past = input.nodes.get(&grant.change).map(|node| &node.past);
+            let revocations = state
+                .revocations
+                .iter()
+                .map(|r| r.change)
+                .filter(|r| past.is_some_and(|past| past.contains(r)));
+            seen.insert(grant.change, revocations.collect());
+        }
+    }
+    seen
 }
 
 impl Resolved {
@@ -114,6 +136,34 @@ impl Resolved {
         &self.gaps
     }
 
+    /// RFC 0008's membership verdict for a sealed change ("Sealed
+    /// changes"), from its header alone: whether its author holds an
+    /// accepted grant of a role that writes, whose from generation is the
+    /// change's key generation, such that its author sequence is at most
+    /// the cutoff of every accepted revocation of the right to write that
+    /// the grant did not see.
+    ///
+    /// **What this does not do.** The generation graph is not folded yet
+    /// (NOC-71), so a key generation counts only when it is the grant's
+    /// from generation, not when it descends from it.
+    pub fn admits(&self, header: &Header) -> bool {
+        let Some(state) = self.members.0.get(&header.author) else {
+            return false;
+        };
+        let writes = |role: Option<Role>| role >= Some(Role::Writer);
+        state.grants.iter().any(|grant| {
+            let seen = self.seen.get(&grant.change);
+            writes(Some(grant.role))
+                && grant.from_generation == Some(header.key_generation)
+                && state
+                    .revocations
+                    .iter()
+                    .filter(|r| !writes(r.role))
+                    .filter(|r| !seen.is_some_and(|seen| seen.contains(&r.change)))
+                    .all(|r| header.sequence <= r.cutoff)
+        })
+    }
+
     /// The canonical bytes of the state: equal states, equal bytes.
     pub fn encode(&self) -> Vec<u8> {
         state::encode(
@@ -155,6 +205,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         order: Vec::new(),
         seniority: Vec::new(),
         gaps: BTreeSet::new(),
+        seen: BTreeMap::new(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.

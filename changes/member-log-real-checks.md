@@ -9,12 +9,10 @@ components: [core]
 
 ## Use
 
-`checks::SealChecks` implements `Checks` with the real signature and decryption: it verifies with `seal::verify` and decrypts with `seal::open`, and every `seal::OpenError` maps to the step and reason of RFC 0002 Amendment 1. Give it the member keys and space keys the member knows, and the membership behind step 4:
+`checks::SealChecks` implements `Checks` with the real signature and decryption: it verifies with `seal::verify` and decrypts with `seal::open`, and every `seal::OpenError` maps to the step and reason of RFC 0002 Amendment 1. It learns the member keys, the membership and the space keys from the space's control changes (NOC-78):
 
 ```rust
-let mut checks = SealChecks::new(membership); // impl checks::Membership
-checks.add_member(author.public());
-checks.add_space_key(generation, space_key);
+let mut checks = SealChecks::new(space, member_key);
 log.receive(&frame, &mut checks, &mut fold)?;
 ```
 

@@ -18,12 +18,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::cbor::{self, Key, Value};
 use ncdb_core::change::{Change, Header, Kind, Operation, Payload};
-use ncdb_core::checks::{Membership, SealChecks};
+use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Hlc;
+use ncdb_core::envelope;
 use ncdb_core::field_op::Origin;
 use ncdb_core::ids::{MemberId, ObjectId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::log::{Log, OperationParkReason};
+use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis, MemberKind};
 use ncdb_core::object::ObjectOperation;
 use ncdb_core::receive::{Fold, Stop};
 use ncdb_core::seal;
@@ -260,15 +262,27 @@ fn keys_and_sealing_errors_do_not_show_keys_or_content() {
     }
 }
 
-/// A membership in which every author is a member.
-struct Everyone;
-
-impl Membership for Everyone {
-    fn is_member(&self, _change: &Change) -> bool {
-        true
-    }
-
-    fn add_control(&mut self, _change: &Change) {}
+/// A space `author` creates, and the envelope that wraps `key`, the space
+/// key of its first generation, to `author`: the space, its first
+/// generation and the two control changes.
+fn founded_by(author: &MemberKey, key: &SpaceKey) -> (SpaceId, u64, [Change; 2]) {
+    let nonce = [7; 16];
+    let space = membership::space_id(author.id(), &nonce);
+    let first = membership::generation_id(space, author.id(), &[]);
+    let account = ed25519_dalek::SigningKey::from_bytes(&[0xAC; 32]);
+    let genesis = Genesis {
+        nonce,
+        creator: author.public(),
+        certificate: Certificate::sign(&account, author.id(), MemberKind::Agent),
+        first_generation: first,
+        model_id: membership::seal_model_id(key, space, author.id(), [1; 16]),
+    };
+    let body = ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis));
+    let genesis = membership::write(author, space, 1, first, &body);
+    let sealed = envelope::seal(key, space, first, &author.public()).unwrap();
+    let body = ControlBody::new([genesis.id()].into(), Entry::KeyEnvelope(sealed));
+    let to_author = membership::write(author, space, 2, first, &body);
+    (space, first, [genesis, to_author])
 }
 
 /// A model that knows no collection, so every operation is parked.
@@ -298,26 +312,28 @@ fn the_seal_checks_do_not_show_keys_or_content() {
     // change stops, folded or not, leaves no key and no plaintext in a
     // reason, an error or `Debug` output.
     let author = MemberKey::from_secrets(secret_key_bytes(), secret_key_bytes());
-    let space = SpaceId([1; 16]);
-    let mut checks = SealChecks::new(Everyone);
-    checks.add_member(author.public());
-    checks.add_space_key(1, SpaceKey::from_bytes(secret_key_bytes()));
-    checks.add_space_key(2, SpaceKey::from_bytes([9; 32]));
+    let key = SpaceKey::from_bytes(secret_key_bytes());
+    let (space, first, controls) = founded_by(&author, &key);
+    // The author receives its own changes: the envelope is to it.
+    let same_author = MemberKey::from_secrets(secret_key_bytes(), secret_key_bytes());
+    let mut checks = SealChecks::new(space, same_author);
     assert_debug_hides("SealChecks", &checks);
 
-    let key = SpaceKey::from_bytes(secret_key_bytes());
-    let folded = seal::seal(&author, &key, space, 1, 1, &secret_payload());
-    let undecryptable = seal::seal(&author, &key, space, 2, 2, &secret_payload());
-    let no_key = seal::seal(&author, &key, space, 3, 3, &secret_payload());
+    let folded = seal::seal(&author, &key, space, 3, first, &secret_payload());
+    let other_key = SpaceKey::from_bytes([9; 32]);
+    let undecryptable = seal::seal(&author, &other_key, space, 4, first, &secret_payload());
+    let not_member = seal::seal(&author, &key, space, 5, first ^ 1, &secret_payload());
     let mut bad_signature = folded.bytes().to_vec();
     let last = bad_signature.len() - 1;
     bad_signature[last] ^= 1;
 
     let mut log = Log::new(space);
     for bytes in [
+        controls[0].bytes(),
+        controls[1].bytes(),
         folded.bytes(),
         undecryptable.bytes(),
-        no_key.bytes(),
+        not_member.bytes(),
         &bad_signature,
     ] {
         let appended = log.receive(bytes, &mut checks, &mut NoModel);
@@ -325,6 +341,11 @@ fn the_seal_checks_do_not_show_keys_or_content() {
         let change = Change::decode(bytes).unwrap();
         assert_debug_hides("State", &log.state(change.id()));
     }
+    assert!(matches!(
+        log.state(folded.id()),
+        Some(ncdb_core::log::State::Folded { .. })
+    ));
+    assert_debug_hides("SealChecks", &checks);
     assert_debug_hides("member Log", &log);
 
     let mut garbled = folded.bytes().to_vec();
