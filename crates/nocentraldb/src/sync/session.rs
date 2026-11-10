@@ -297,7 +297,7 @@ impl Session<'_> {
                 code, retry_after, ..
             } => match code.as_str() {
                 "not_member" | "removed_member" => {
-                    with(self.db, |inner| apply::stop(inner, space))?;
+                    with(self.db, |inner| apply::stop(inner, space, code))?;
                     Ok(())
                 }
                 // No subscription while the relay does not hold the space.

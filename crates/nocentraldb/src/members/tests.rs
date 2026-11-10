@@ -141,8 +141,13 @@ fn copy(from: &Db, to: &Db, space: &Space) {
 }
 
 /// The admin removes the member of `invitation` from `space`, through the
-/// crate's internals, since `members().remove` is not built.
-fn remove(admin: &Db, space: &Space, invitation: &super::Invitation) {
+/// crate's internals, since `members().remove` is not built. Returns the
+/// removal, which the admin's database holds folded.
+pub(crate) fn remove(
+    admin: &Db,
+    space: &Space,
+    invitation: &super::Invitation,
+) -> ncdb_core::change::Change {
     use ncdb_core::membership::{self, Action, ControlBody, Entry, MembershipEntry};
 
     let mut inner = admin.lock();
@@ -164,6 +169,8 @@ fn remove(admin: &Db, space: &Space, invitation: &super::Invitation) {
         &ControlBody::new(super::control_heads(view, space.id().0), entry),
     );
     crate::space::fold(view, &mut state.checks, &removal).unwrap();
+    crate::sync::wake(&inner);
+    removal
 }
 
 /// A space of the admin's, with the member `who` of the same account added

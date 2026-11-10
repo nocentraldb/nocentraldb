@@ -159,10 +159,13 @@ pub(super) fn pushed(
     Ok(None)
 }
 
-/// Stops syncing `space`: the relay said this member may not read it. The
-/// member keeps its copy (RFC 0007, `removed_member`).
-pub(super) fn stop(inner: &mut Inner, space: SpaceId) {
-    sync(inner).stopped.insert(space);
+/// Stops syncing `space`: the relay said, with `code`, that this member
+/// may not read it. The member keeps its copy (RFC 0007, `removed_member`),
+/// and the sync status reports the code.
+pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
+    let sync = sync(inner);
+    sync.stopped.insert(space);
+    sync.removed = Some(code);
 }
 
 /// This member's changes the relay has not confirmed, and those it

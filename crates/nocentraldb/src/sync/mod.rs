@@ -69,7 +69,10 @@ pub struct SyncStatus {
     /// lost (RFC 0007, "Restores and the relay epoch").
     pub epoch_changed: bool,
     /// The last error that stops syncing, by its RFC 0007 code, such as
-    /// `unsupported_version`; never content.
+    /// `unsupported_version`; never content. Once the relay answered
+    /// `not_member` or `removed_member` for a space, that code stays here
+    /// while no error of the connection replaces it, since the space is
+    /// no longer synced.
     pub error: Option<String>,
 }
 
@@ -97,7 +100,7 @@ impl SyncReport<'_> {
             unconfirmed,
             refused,
             epoch_changed: sync.is_some_and(|s| s.epoch_changed),
-            error: sync.and_then(|s| s.error.clone()),
+            error: sync.and_then(|s| s.error.clone().or_else(|| s.removed.clone())),
         }
     }
 }
@@ -114,6 +117,9 @@ pub(crate) struct SyncState {
     pub(crate) cursors: BTreeMap<CoreSpaceId, u64>,
     /// The spaces the relay said this member may no longer read.
     pub(crate) stopped: BTreeSet<CoreSpaceId>,
+    /// The code the relay last stopped a space with, `not_member` or
+    /// `removed_member`.
+    pub(crate) removed: Option<String>,
     /// How many changes syncing folded that the log did not hold.
     pub(crate) folds: u64,
     /// Tells the sync thread that the database wrote; dropped with the
@@ -130,10 +136,22 @@ impl SyncState {
             epoch: None,
             cursors: BTreeMap::new(),
             stopped: BTreeSet::new(),
+            removed: None,
             folds: 0,
             wake,
         }
     }
+}
+
+/// Whether the relay said this member may no longer read `space` (RFC
+/// 0007, `not_member` and `removed_member`): the member was removed, even
+/// where its copy has not folded the removal, which the relay does not
+/// serve it.
+pub(crate) fn stopped(inner: &Inner, space: CoreSpaceId) -> bool {
+    inner
+        .sync
+        .as_ref()
+        .is_some_and(|sync| sync.stopped.contains(&space))
 }
 
 /// Tells the sync thread, if there is one, that the database wrote.
