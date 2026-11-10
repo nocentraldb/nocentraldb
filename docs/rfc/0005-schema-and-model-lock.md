@@ -8,13 +8,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 - **2026-11-09** · NOC-35 · [Amendment 2: following RFC 0001 Amendment 4](#amendment-2-following-rfc-0001-amendment-4) quotes RFC 0001's new wording on personal fields, which follows this RFC's D9. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
 - **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) follows [RFC 0009](0009-sdk-api.md), which the owner decided: `nc.index` takes the option `scope: "space"`, which the lock writes as the index key `scope`; `nc.Infer` types an unknown option of a choice as `nc.Unknown`, and the SDK refuses a write to a personal field whose person link is unset with `noPerson`. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-73 · [Amendment 4: follow-ups from building the lock](#amendment-4-follow-ups-from-building-the-lock) puts [the example lock](#an-example)'s keys in the canonical order this RFC defines, which decides nothing, and adds two decisions that building `ncdb model build` (NOC-70) found open: `nc.Infer` types an `nc.int` field as a `number` (D16), and `.deprecated(reason)` deprecates a collection, with the lock key `deprecatedReason` (D17). The owner decided both as recommended (Carsten, 2026-11-09). The sentences it changes are marked *(Amendment 4)*.
-- **2026-11-09** · NOC-63 · [Amendment 5: a reference into another space](#amendment-5-a-reference-into-another-space) adds `nc.ref("collection")`, the field type `ncdb/ref`, to the schema language, the lock and [Public names](#public-names), as the owner decided in NOC-29 (Carsten, 2026-11-09); [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its merge and encoding. Its decisions D18 to D22 are open and wait for the owner. The sentences it changes are marked *(Amendment 5)*.
+- **2026-11-09** · NOC-63 · [Amendment 5: a reference into another space](#amendment-5-a-reference-into-another-space) adds `nc.ref("collection")`, the field type `ncdb/ref`, to the schema language, the lock and [Public names](#public-names), as the owner decided in NOC-29 (Carsten, 2026-11-09); [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its merge and encoding. The owner accepted the recommendation of each of its decisions D18 to D22 (Carsten, 2026-11-10). The sentences it changes are marked *(Amendment 5)*.
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
-**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54). [Amendment 4](#amendment-4-follow-ups-from-building-the-lock) adds the decisions D16 and D17, which the owner decided as recommended (Carsten, 2026-11-09). [Amendment 5](#amendment-5-a-reference-into-another-space) adds `nc.ref`, as the owner decided in NOC-29 (Carsten, 2026-11-09); its decisions D18 to D22 are open and wait for the owner.
+**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54). [Amendment 4](#amendment-4-follow-ups-from-building-the-lock) adds the decisions D16 and D17, which the owner decided as recommended (Carsten, 2026-11-09). [Amendment 5](#amendment-5-a-reference-into-another-space) adds `nc.ref`, as the owner decided in NOC-29 (Carsten, 2026-11-09), and the owner decided its D18 to D22 as recommended (Carsten, 2026-11-10).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -155,7 +155,7 @@ GENESIS.md's principle 6 says queries run only through declared indexes. The sch
 - `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
 - The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
 - The option `scope: "space"` puts the space id before the index's fields, so that a query on it runs in one space, through `space.find` ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes), decision S8). Without it, an index spans every space of the member. *(Amendment 3.)*
-- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`), single links (`nc.link`) and references (`nc.ref`, as [D19](#amendment-5-a-reference-into-another-space) proposes; *Amendment 5*). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
+- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`), single links (`nc.link`) and references (`nc.ref`, [D19](#amendment-5-a-reference-into-another-space); *Amendment 5*). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
 - A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
 
 Everything else about an index is [RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages): every index ends with the space id and the object id so its order is total, how values compare (text by its UTF-8 bytes, unset first in ascending order), the one query shape, the check that every query uses its index, and keyset cursors.
@@ -797,7 +797,7 @@ Decided (Carsten, 2026-11-09): the recommendation, (A).
 
 Added on 2026-11-09 for NOC-63. The owner decided NOC-29 as pm recommended (Carsten, 2026-11-09): NoCentralDB gets a field type `nc.ref("collection")` for a reference into another space. It stores the target's space id and object id, merges like a basic value (the last writer wins), resolves on read from the member's own copy to one of three states (readable, not accessible, missing), can be indexed, and is never followed by computed fields and views, so every member of the space computes the same state (principle 2). It gives no access to the target's space. [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its state, merge, resolution and encoding, as the field type `ncdb/ref`, and states what it does not do.
 
-This amendment adds the reference to the schema language, the lock and [Public names](#public-names). The sentences it changes are marked *(Amendment 5)*: [Field types](#field-types), [Indexes](#indexes), [The keys](#the-keys), [How a field type is referenced](#how-a-field-type-is-referenced), [Accepted](#accepted), [Refused](#refused) and [Public names](#public-names). Everything beyond NOC-29's decision is open, in D18 to D22 below, each with options and a recommendation; the text above describes the recommended options. GENESIS.md reserves public API names and on-disk formats for the owner, so nothing of it is built before the owner decides.
+This amendment adds the reference to the schema language, the lock and [Public names](#public-names). The sentences it changes are marked *(Amendment 5)*: [Field types](#field-types), [Indexes](#indexes), [The keys](#the-keys), [How a field type is referenced](#how-a-field-type-is-referenced), [Accepted](#accepted), [Refused](#refused) and [Public names](#public-names). GENESIS.md reserves public API names and on-disk formats for the owner, so everything beyond NOC-29's decision went to the owner as D18 to D22 below, each with options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-10), and the text above describes the decided options.
 
 An app keeps its customers in one space and their orders in another, so that a member who handles orders does not read the customers:
 
@@ -836,7 +836,7 @@ What the reference does not do (no access, no referential integrity, a state tha
 
 Recommendation: A. A reference reads like a link in the schema and in the lock, and the one thing a developer has to learn is that the target may live in another space.
 
-Open: waits for the owner.
+Decided (Carsten, 2026-11-10): the recommendation, (A).
 
 **D19. How a reference is indexed.**
 
@@ -844,9 +844,9 @@ Open: waits for the owner.
 - B. Two columns, the space id and the object id. An index with `equal: 1` could then list the orders whose customers live in one space; but one field becomes two columns, which no other type does in RFC 0006.
 - C. The object id only. Smaller; but an object id is unique only in its space ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)), so a hostile member could make an order match a customer of another space.
 
-Recommendation: A. It answers the question NOC-29 named, one customer's orders, with the index shape RFC 0006 already has, and the column holds only what every member of the space holds. RFC 0006 records the column in an amendment of its own once the owner decides.
+Recommendation: A. It answers the question NOC-29 named, one customer's orders, with the index shape RFC 0006 already has, and the column holds only what every member of the space holds. RFC 0006 records the column in an amendment of its own.
 
-Open: waits for the owner.
+Decided (Carsten, 2026-11-10): the recommendation, (A).
 
 **D20. How a read and a view show the three states.**
 
@@ -854,9 +854,9 @@ Open: waits for the owner.
 - B. The read object carries the state, `{ space, id, status }`, worked out on every read. It saves a call to `space.inspect`; but two members with the same copy of the space would read different objects, and a view could not hold them.
 - C. The SDK reads the target along with the reference, `{ space, id, status, target }`. One call for the app; but every read of an order reads a second space, and the read object then depends on two spaces.
 
-Recommendation: A. A read object stays a function of its own space, as RFC 0009 has it, and the state appears where a link's status already does. RFC 0009 records the names in an amendment of its own once the owner decides.
+Recommendation: A. A read object stays a function of its own space, as RFC 0009 has it, and the state appears where a link's status already does. RFC 0009 records the names in an amendment of its own.
 
-Open: waits for the owner.
+Decided (Carsten, 2026-11-10): the recommendation, (A).
 
 **D21. Whether a subscription follows a reference's state.**
 
@@ -865,7 +865,7 @@ Open: waits for the owner.
 
 Recommendation: A. RFC 0006's notifications carry the objects a fold touched, in the space it folded; A keeps them so, and the app already holds the target's id to subscribe to it.
 
-Open: waits for the owner.
+Decided (Carsten, 2026-11-10): the recommendation, (A).
 
 **D22. Modifiers, and many references.**
 
@@ -874,4 +874,4 @@ Open: waits for the owner.
 
 Recommendation: A. NOC-29 decided a single reference. Many references can come later as a field type of their own, without changing `ncdb/ref`.
 
-Open: waits for the owner.
+Decided (Carsten, 2026-11-10): the recommendation, (A).
