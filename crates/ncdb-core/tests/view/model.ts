@@ -1,7 +1,8 @@
 // The model of the view's tests (NOC-77). `ncdb model build` writes
 // model.lock.json from it; `crates/ncdb/tests/fixtures.rs` checks that the
 // lock is still what the build writes. Both collections have an index named
-// byName: index names are scoped per collection (RFC 0005).
+// byName: index names are scoped per collection (RFC 0005). inSpace and
+// inSpaceByTitle run in one space at a time (RFC 0005, Amendment 3).
 import { nc } from "../../../../packages/sdk/src/index.ts";
 
 export const model = nc.model({
@@ -17,6 +18,11 @@ export const model = nc.model({
         byRank: nc.index(["rank"]),
         byTitle: nc.index(["title", { field: "rank", direction: "desc" }], { equal: 1 }),
         byName: nc.index(["title"]),
+        inSpace: nc.index(["rank"], { scope: "space" }),
+        inSpaceByTitle: nc.index(["title", { field: "rank", direction: "desc" }], {
+          equal: 1,
+          scope: "space",
+        }),
       },
     },
   ),

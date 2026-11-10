@@ -1,5 +1,6 @@
 // Checks the byte-exact examples of RFC 0004 Amendment 1 (NOC-37), which
-// NOC-16 and NOC-17 build their encoders from: every example's hex in the
+// NOC-16 and NOC-17 build their encoders from, and those of Amendment 4
+// (NOC-63, E15 to E17, the reference): every example's hex in the
 // RFC decodes as canonical CBOR under RFC 0002's profile (read strictly and
 // re-encoded to the same bytes), and equals the committed vector that
 // docs/rfc/vectors/0004/generate.py writes with Python's cbor2, independently
@@ -29,11 +30,14 @@ const OPERATION_DEPTH = 5;
 /** The examples of the RFC, by name: { E1: "a501…", … }. */
 const examples = () => {
   const text = readFileSync(join(root, RFC), "utf8");
-  const section = (text.split(/^### Byte-exact examples$/m)[1] ?? "").split(
-    /^### /m,
-  )[0];
+  const sections = text
+    .split(/^### Byte-exact examples\b.*$/m)
+    .slice(1)
+    .map((rest) => rest.split(/^#{1,3} /m)[0]);
   const found = {};
-  for (const part of section.split(/^\*\*(?=E\d+\.)/m).slice(1)) {
+  for (const part of sections.flatMap((section) =>
+    section.split(/^\*\*(?=E\d+\.)/m).slice(1),
+  )) {
     const name = part.match(/^(E\d+)\./)[1];
     const hex = [...part.matchAll(/```text\n((?:[0-9a-f]+\n)+)```/g)];
     assert.equal(
@@ -47,10 +51,10 @@ const examples = () => {
   return found;
 };
 
-test("the RFC has the examples E1 to E14", () => {
+test("the RFC has the examples E1 to E17", () => {
   assert.deepEqual(
     Object.keys(examples()),
-    Array.from({ length: 14 }, (_, i) => `E${i + 1}`),
+    Array.from({ length: 17 }, (_, i) => `E${i + 1}`),
   );
 });
 

@@ -8,12 +8,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 - **2026-11-09** · NOC-35 · [Amendment 2: following RFC 0001 Amendment 4](#amendment-2-following-rfc-0001-amendment-4) quotes RFC 0001's new wording on personal fields, which follows this RFC's D9. It decides nothing. The sentence it changes is marked *(Amendment 2)*.
 - **2026-11-09** · NOC-75 · [Amendment 3: following RFC 0009](#amendment-3-following-rfc-0009) follows [RFC 0009](0009-sdk-api.md), which the owner decided: `nc.index` takes the option `scope: "space"`, which the lock writes as the index key `scope`; `nc.Infer` types an unknown option of a choice as `nc.Unknown`, and the SDK refuses a write to a personal field whose person link is unset with `noPerson`. It decides nothing. The sentences it changes are marked *(Amendment 3)*.
 - **2026-11-09** · NOC-73 · [Amendment 4: follow-ups from building the lock](#amendment-4-follow-ups-from-building-the-lock) puts [the example lock](#an-example)'s keys in the canonical order this RFC defines, which decides nothing, and adds two decisions that building `ncdb model build` (NOC-70) found open: `nc.Infer` types an `nc.int` field as a `number` (D16), and `.deprecated(reason)` deprecates a collection, with the lock key `deprecatedReason` (D17). The owner decided both as recommended (Carsten, 2026-11-09). The sentences it changes are marked *(Amendment 4)*.
+- **2026-11-09** · NOC-63 · [Amendment 5: a reference into another space](#amendment-5-a-reference-into-another-space) adds `nc.ref("collection")`, the field type `ncdb/ref`, to the schema language, the lock and [Public names](#public-names), as the owner decided in NOC-29 (Carsten, 2026-11-09); [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its merge and encoding. The owner accepted the recommendation of each of its decisions D18 to D22 (Carsten, 2026-11-10). The sentences it changes are marked *(Amendment 5)*.
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format) and on two RFCs written in parallel: RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules for basic values, sets and links, NOC-8). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
-**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54). [Amendment 4](#amendment-4-follow-ups-from-building-the-lock) adds the decisions D16 and D17, which the owner decided as recommended (Carsten, 2026-11-09).
+**Status.** Decided. GENESIS.md reserves public API names and on-disk formats for the owner, and the schema functions are the first thing a developer sees. The owner reviewed this RFC and accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner) (Carsten, 2026-11-08), and the design below describes those choices. Every name this RFC introduces is listed in [Public names](#public-names). [Amendment 1](#amendment-1-following-rfc-0002-amendment-5) decides nothing: it follows [RFC 0002, Amendment 5](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) (NOC-54). [Amendment 4](#amendment-4-follow-ups-from-building-the-lock) adds the decisions D16 and D17, which the owner decided as recommended (Carsten, 2026-11-09). [Amendment 5](#amendment-5-a-reference-into-another-space) adds `nc.ref`, as the owner decided in NOC-29 (Carsten, 2026-11-09), and the owner decided its D18 to D22 as recommended (Carsten, 2026-11-10).
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -109,12 +110,15 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.set(element)` | `ncdb/set` | Set: add wins, lost removals stay readable | The elements, in the order of their canonical bytes |
 | `nc.link("collection")` | `ncdb/link` | Basic value whose value is an object id | The target, with its resolution status |
 | `nc.links("collection")` | `ncdb/links` | Set of object ids | The targets, each with its resolution status |
+| `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)) | The target's space id and object id, with its state: ok, not accessible or missing *(Amendment 5)* |
 | `nc.richText()` | reserved | Later RFC (Yjs and Yrs) | Later RFC |
 | `nc.stream()` | reserved | Later RFC | Later RFC |
 
 `nc.set` takes one of the basic value functions as its element: `nc.set(nc.string())`, `nc.set(nc.oneOf(["bug", "feature"]))`. A set of links is `nc.links`, not `nc.set(nc.link(...))`.
 
 `nc.link` and `nc.links` take one collection name, or a list of them when a link may point into several collections: `nc.links(["tasks", "milestones"])`. A link always points into the object's own space (RFC 0004).
+
+`nc.ref` takes one collection name, or a list of them, as `nc.link` does ([D18](#amendment-5-a-reference-into-another-space)), and points to one object that may live in another space: it stores the target's space id and object id, and merges as a basic value ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). On read, the SDK resolves it from the member's own copies to one of three states: ok, not accessible (the member is not in the target's space) or missing (not arrived, or deleted). The state differs from member to member, so computed fields and views never follow a reference, and nothing stored depends on its state (principle 2). A reference gives no access to the target's space. *(Amendment 5.)*
 
 A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones.
 
@@ -151,7 +155,7 @@ GENESIS.md's principle 6 says queries run only through declared indexes. The sch
 - `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
 - The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
 - The option `scope: "space"` puts the space id before the index's fields, so that a query on it runs in one space, through `space.find` ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes), decision S8). Without it, an index spans every space of the member. *(Amendment 3.)*
-- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`) and single links (`nc.link`). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
+- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`), single links (`nc.link`) and references (`nc.ref`, [D19](#amendment-5-a-reference-into-another-space); *Amendment 5*). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
 - A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
 
 Everything else about an index is [RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages): every index ends with the space id and the object id so its order is total, how values compare (text by its UTF-8 bytes, unset first in ascending order), the one query shape, the check that every query uses its index, and keyset cursors.
@@ -300,7 +304,7 @@ Per field:
 | `since` | The model version that added the field. |
 | `options` | For `ncdb/choice`: the options, in the order the schema lists them. |
 | `of` | For `ncdb/set`: the element's type, with `options` when the element is a choice. |
-| `targets` | For `ncdb/link` and `ncdb/links`: the collections a target may be in. |
+| `targets` | For `ncdb/link`, `ncdb/links` and `ncdb/ref` *(Amendment 5)*: the collections a target may be in. |
 | `personal` | For a personal field: `{ "person": "self" }` or `{ "person": "<link field>" }`. |
 | `description` | The text of `.describe()`. |
 | `deprecated` | The model version that deprecated the field, and `deprecatedReason`, the text of `.deprecated()`. |
@@ -314,7 +318,7 @@ Per field:
 
 A field type is referenced by its **type id** and its **rule version**:
 
-- **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`. Rule version 1 is RFC 0004's rule for each.
+- **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref` *(Amendment 5)*. Rule version 1 is RFC 0004's rule for each.
 - **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so every SDK knows what to load:
 
 ```json
@@ -341,7 +345,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Add a field to a collection | The same. Objects written before read the new field as unset. |
 | Add a personal field | As adding a field. |
 | Append an option to a choice, or to a set of choices | Old clients keep the new option as written and read it as an unknown option (RFC 0004). |
-| Add a collection to a link's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004) until they upgrade. |
+| Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)), until they upgrade. *(Amendment 5)* |
 | Add a computed field or a view (name only, for now) | Computed values are derived locally; they are not in the changes. |
 | Add, change or remove an index | Indexes are built locally from the view (RFC 0006) and never travel in a change. A page cursor names its index and the model hash (RFC 0006), so a cursor from before the change is refused, not misread. |
 | Add, change or remove a description | Descriptions change no data. The model version stays. |
@@ -356,7 +360,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Change a field's type | Two clients would merge the same changes by different rules and diverge (principle 2). |
 | Move a field to a new rule version of its type | RFC 0004 allows a new rule version only with a migration that every member runs before the schema uses it. Migrations are a later RFC; until it exists, the build refuses (decision D12). A new field can use the new rule version at once. |
 | Remove, rename or reorder an option of a choice | Stored values name options; order may become sort order in views. |
-| Remove a collection from a link's `targets` | Existing links would turn from **ok** to **wrong collection** on upgraded clients only. |
+| Remove a collection from a link's or a reference's `targets` | Existing links would turn from **ok** to **wrong collection**, and references from **ok** to **missing**, on upgraded clients only. *(Amendment 5)* |
 | Mark an existing field as personal | The field's earlier values are already in the log in plain form, under the space key only. Destroying a person key would not erase them, and a reader would believe it did (principle 4). Add a new personal field instead. |
 | Unmark a personal field, or change its `person` | Old values stay sealed under person keys; new ones would not be. The field would be half erasable. |
 | Undeprecate a field | Old clients that stopped writing it would not write it again. Add a new field instead. (Decision D7.) |
@@ -537,6 +541,7 @@ Every public name this RFC introduces or keeps, for the owner to approve in one 
 | `nc.set` | A set of basic values | new |
 | `nc.link` | A link to one object | new |
 | `nc.links` | Links to many objects | RFC 0001 |
+| `nc.ref` | A reference to one object, which may live in another space *(Amendment 5)* | new |
 | `nc.richText` | Rich text | reserved |
 | `nc.stream` | A stream | reserved |
 | `nc.reach` | A computed function | RFC 0001, reserved |
@@ -567,7 +572,7 @@ Every public name this RFC introduces or keeps, for the owner to approve in one 
 | Index keys `fields` (`field`, `direction`), `equal`, `scope` (*Amendment 3*), `since` | new |
 | Field keys `type`, `rule`, `since`, `options`, `of`, `targets`, `personal` (`person`), `description`, `deprecated`, `deprecatedReason`, `config` | new |
 | Plugin keys `npm`, `crate` | new |
-| The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links` | new |
+| The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref` *(Amendment 5)* | new |
 
 ## Rejected options
 
@@ -787,3 +792,86 @@ Decided (Carsten, 2026-11-09): the recommendation, (A).
 Recommendation: A. One name for one idea: a developer who knows `.deprecated()` on a field finds it on a collection, and the lock reads the same in both places. B spells the same thing a second way. C leaves a collection the app has given up in every type, and lets new objects keep appearing in it.
 
 Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+## Amendment 5: a reference into another space
+
+Added on 2026-11-09 for NOC-63. The owner decided NOC-29 as pm recommended (Carsten, 2026-11-09): NoCentralDB gets a field type `nc.ref("collection")` for a reference into another space. It stores the target's space id and object id, merges like a basic value (the last writer wins), resolves on read from the member's own copy to one of three states (readable, not accessible, missing), can be indexed, and is never followed by computed fields and views, so every member of the space computes the same state (principle 2). It gives no access to the target's space. [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its state, merge, resolution and encoding, as the field type `ncdb/ref`, and states what it does not do.
+
+This amendment adds the reference to the schema language, the lock and [Public names](#public-names). The sentences it changes are marked *(Amendment 5)*: [Field types](#field-types), [Indexes](#indexes), [The keys](#the-keys), [How a field type is referenced](#how-a-field-type-is-referenced), [Accepted](#accepted), [Refused](#refused) and [Public names](#public-names). GENESIS.md reserves public API names and on-disk formats for the owner, so everything beyond NOC-29's decision went to the owner as D18 to D22 below, each with options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-10), and the text above describes the decided options.
+
+An app keeps its customers in one space and their orders in another, so that a member who handles orders does not read the customers:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+
+export const model = nc.model({
+  customers: nc.collection({
+    name: nc.string().personal({ person: "self" }),
+  }),
+  orders: nc.collection(
+    {
+      customer: nc.ref("customers"),
+      total: nc.float(),
+    },
+    { indexes: { byCustomer: nc.index(["customer"], { equal: 1 }) } },
+  ),
+});
+```
+
+`byCustomer` finds all orders of one customer in one equality lookup ([D19](#decisions-for-the-owner-d18-to-d22)). The lock writes the field as a link's, with its own type id ([D18](#decisions-for-the-owner-d18-to-d22)):
+
+```json
+{ "customer": { "rule": 1, "since": 1, "targets": ["customers"], "type": "ncdb/ref" } }
+```
+
+What the reference does not do (no access, no referential integrity, a state that differs from member to member, no computed field that follows it) is stated in [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#what-this-does-not-do).
+
+### Decisions for the owner (D18 to D22)
+
+**D18. How the schema declares a reference.**
+
+- A. `nc.ref("collection")`, or a list of collections, `nc.ref(["customers", "leads"])`, as `nc.link` takes them. The lock writes `{ "type": "ncdb/ref", "rule": 1, "targets": [...] }`, with the field key `targets` that links already use. Adding a collection to `targets` is accepted and removing one is refused, as for links. *(recommended)*
+- B. One collection only. Simpler; a field that may point to a customer or a lead needs two fields.
+- C. No collection: `nc.ref()` points to any object. The SDK can neither type the target nor check its collection.
+
+Recommendation: A. A reference reads like a link in the schema and in the lock, and the one thing a developer has to learn is that the target may live in another space.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A).
+
+**D19. How a reference is indexed.**
+
+- A. One column per reference: the space id followed by the object id, 32 bytes, an SQLite `BLOB` compared by its bytes. The index holds the reference as stored, whatever its state, so it is the same on every member of the space, and "all orders of customer X" is one equality lookup. An unset reference, and a value that does not fit ([RFC 0004, decision 17](0004-merge-rules-basic-types.md#decisions-for-the-owner-15-to-20)), index as unset, which sorts first ([RFC 0006](0006-local-view.md#declared-indexes-and-ordered-pages)). *(recommended)*
+- B. Two columns, the space id and the object id. An index with `equal: 1` could then list the orders whose customers live in one space; but one field becomes two columns, which no other type does in RFC 0006.
+- C. The object id only. Smaller; but an object id is unique only in its space ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)), so a hostile member could make an order match a customer of another space.
+
+Recommendation: A. It answers the question NOC-29 named, one customer's orders, with the index shape RFC 0006 already has, and the column holds only what every member of the space holds. RFC 0006 records the column in an amendment of its own.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A).
+
+**D20. How a read and a view show the three states.**
+
+- A. `nc.Infer` types a reference as `{ space, id }`, the target's space id and object id, in the form `$space` and `$id` carry them ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)). The state is not part of the read object. `space.inspect` gives it per reference as `status`: `"ok"`, `"notAccessible"` or `"missing"`, next to the reference's conflicts, as it gives a link's status. `$conflicts` names the field for its conflicts only, never for its state, because a state is not a conflict and differs from member to member. No view, index or computed field holds the state; an app that wants the target reads it with `space.get` on the target's space. *(recommended)*
+- B. The read object carries the state, `{ space, id, status }`, worked out on every read. It saves a call to `space.inspect`; but two members with the same copy of the space would read different objects, and a view could not hold them.
+- C. The SDK reads the target along with the reference, `{ space, id, status, target }`. One call for the app; but every read of an order reads a second space, and the read object then depends on two spaces.
+
+Recommendation: A. A read object stays a function of its own space, as RFC 0009 has it, and the state appears where a link's status already does. RFC 0009 records the names in an amendment of its own.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A).
+
+**D21. Whether a subscription follows a reference's state.**
+
+- A. No. A subscription re-runs when the referencing object changes, not when the target arrives, changes or is deleted, and not when the member joins or leaves the target's space. An app that shows the target subscribes to it in the target's space. *(recommended)*
+- B. Yes. The core keeps, per member, which references point at which targets, and re-runs every query that read one of them when the target or the membership changes. Always current; but a fold in one space then notifies the queries of another, and the core needs a reverse map across spaces.
+
+Recommendation: A. RFC 0006's notifications carry the objects a fold touched, in the space it folded; A keeps them so, and the app already holds the target's id to subscribe to it.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A).
+
+**D22. Modifiers, and many references.**
+
+- A. A reference takes `.describe(` and `.deprecated(`. It cannot be `.personal(`, and cannot be the `person` of a personal field: a personal field is sealed under its person's key in its own space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), and a person who lives in another space has no key there that a shred could destroy. There is no field of many references in v1: `nc.set` takes basic values only, and there is no `nc.refs`. *(recommended)*
+- B. As A, plus `nc.refs("collection")`, a set of references that merges as RFC 0004's sets do. It covers an order shared by several customers; but it is a second type, and a field with many values cannot be indexed in v1 ([Indexes](#indexes)).
+
+Recommendation: A. NOC-29 decided a single reference. Many references can come later as a field type of their own, without changing `ncdb/ref`.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A).
