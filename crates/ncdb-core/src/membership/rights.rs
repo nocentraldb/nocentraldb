@@ -11,6 +11,7 @@ use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
 use super::certificate::MemberKind;
 use super::genesis::generation_id;
 use super::input::Node;
+use super::person_key::ShredEntry;
 use super::resolve::{Judged, Resolved};
 
 /// The right a change's author needs. A membership entry needs admin,
@@ -39,7 +40,9 @@ pub(crate) fn needed(node: &Node) -> Role {
 /// A change's own rules in the state of its causal past (step 1): a key
 /// chain entry's previous generations exist and its generation id derives
 /// from its space, author and previous generations; an envelope's recipient
-/// is a member and its generation exists; an add's subject is not a member
+/// is a member and its generation exists; a person-key entry repeats the
+/// commitment of its id; a shred names a person key and carries a valid
+/// sign-off ([`signed_off`]); an add's subject is not a member
 /// and its certificate holds; a set role's or a remove's subject is a
 /// member. A re-grant, an add of a former member or a set role that gives
 /// the right to write to a member without it, names a fresh generation as
@@ -57,6 +60,12 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
             return past.role(envelope.recipient).is_some()
                 && past.generation(envelope.generation).is_some();
         }
+        Entry::PersonKey(entry) => {
+            return past
+                .person_key(entry.person_key)
+                .is_none_or(|key| key.commitment == entry.commitment);
+        }
+        Entry::Shred(shred) => return signed_off(space, node, shred, past),
         _ => return true,
     };
     let MembershipEntry { subject, action } = entry;
@@ -97,6 +106,26 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
         }
         Action::Remove { .. } => past.role(*subject).is_some(),
     }
+}
+
+/// Whether a shred names a person key of its causal past and carries a
+/// valid sign-off: it verifies for the space, the person key and the
+/// performer, its account holds an admin in the causal past, and it is not
+/// the account of the performer's certificate (RFC 0008, "Shred entry"). A
+/// sub-agent's certificate carries its parent's account key, so a sub-agent
+/// counts as its parent's account.
+fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) -> bool {
+    let account = shred.sign_off.account_key;
+    let performer = past.member(node.author);
+    past.person_key(shred.person_key).is_some()
+        && shred.sign_off.verify(space, shred.person_key, node.author)
+        && performer.is_some_and(|p| p.certificate.account_key != account)
+        && past.members().any(|(member, role)| {
+            role == Role::Admin
+                && past
+                    .member(member)
+                    .is_some_and(|m| m.certificate.account_key == account)
+        })
 }
 
 /// Whether `generation` is fresh for a re-grant of `subject` by `author`

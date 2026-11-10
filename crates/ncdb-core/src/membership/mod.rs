@@ -20,6 +20,7 @@ mod genesis;
 mod input;
 mod key_chain;
 mod person_key;
+mod person_keys;
 mod resolve;
 mod rights;
 mod state;
@@ -39,5 +40,6 @@ pub use person_key::{
     PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, record_hash,
     sign_record, verify_record,
 };
+pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};

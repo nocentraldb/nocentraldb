@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, SHRED, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -261,7 +261,7 @@ impl<S: RelayStore> Relay<S> {
             // The relay cannot yet check a shred entry's sign-off by a
             // second account, which RFC 0007 requires: it keeps the entry
             // out until it can.
-            Entry::Other { entry_type, .. } if entry_type == SHRED => {
+            Entry::Shred(_) => {
                 return Err(ErrorCode::UnsupportedSuite);
             }
             _ => {}

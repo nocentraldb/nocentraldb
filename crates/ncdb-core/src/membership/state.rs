@@ -13,6 +13,7 @@ use super::body::Role;
 use super::certificate::Certificate;
 use super::fields;
 use super::generations::Generations;
+use super::person_keys::PersonKeys;
 
 /// What `resolve` says about one control change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,6 +56,12 @@ pub enum Rejection {
     /// A key chain entry that names the same generation id as another
     /// accepted one: both are rejected (RFC 0008, decision M23).
     DuplicateGeneration,
+    /// A person-key entry whose commitment is not the one of its id's first
+    /// accepted entry before it in the order (RFC 0008, "Person-key entry").
+    Commitment,
+    /// A person-key entry that the accepted shred with this change id, of
+    /// the same person key, did not see (RFC 0008, step 5).
+    Shredded(ChangeId),
 }
 
 /// One member of the state, current or former.
@@ -206,6 +213,7 @@ pub(crate) fn encode(
     verdicts: &BTreeMap<ChangeId, Verdict>,
     gaps: &BTreeSet<ChangeId>,
     generations: &Generations,
+    person_keys: &PersonKeys,
 ) -> Vec<u8> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
@@ -256,6 +264,10 @@ pub(crate) fn encode(
         };
         let cause = match cause {
             Some(Rejection::Excluded(by)) => id(&by),
+            Some(Rejection::Shredded(by)) => Value::Array(vec![
+                Value::Unsigned(rejection_code(Rejection::Shredded(by))),
+                id(&by),
+            ]),
             Some(other) => Value::Unsigned(rejection_code(other)),
             None => Value::Null,
         };
@@ -268,6 +280,7 @@ pub(crate) fn encode(
         (4, Value::Array(verdicts.collect())),
         (5, Value::Array(gaps.iter().map(id).collect())),
         (6, Value::Array(generations.collect())),
+        (7, person_keys.to_value()),
     ]))
 }
 
@@ -283,5 +296,7 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::NoRight => 8,
         Rejection::Excluded(_) => 9,
         Rejection::DuplicateGeneration => 10,
+        Rejection::Commitment => 11,
+        Rejection::Shredded(_) => 12,
     }
 }
