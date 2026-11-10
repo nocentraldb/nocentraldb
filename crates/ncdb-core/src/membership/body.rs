@@ -70,7 +70,8 @@ impl Role {
         }
     }
 
-    fn from_number(number: u64) -> Option<Role> {
+    /// The role of this number in a membership entry, if any.
+    pub fn from_number(number: u64) -> Option<Role> {
         match number {
             1 => Some(Role::Reader),
             2 => Some(Role::Writer),

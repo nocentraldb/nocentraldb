@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-87 · The membership table holds `resolve`'s state per member, and the relay rebuilds it on every control change
+
+- Decided by: coding agent (NOC-87)
+- Why: RFC 0007 makes the membership table `resolve` of RFC 0008 over the space's control changes, written only through an append's effects. On each control change the core reads the space's control changes from its log, runs `ncdb_core::membership::resolve` over them and the new change, and writes every member's row in the same append. A row is the member's `MemberState` (keys, certificate, role, grants with their from generations, revocations with their cutoffs), per grant the revocations it saw, and per from generation the generations of the space's generation graph that descend from it (NOC-71), encoded by the core (`record`) as one canonical CBOR array, so a backend stores opaque bytes and a flag for current members. A sealed change is judged on its author's row by `MemberState::admits`, which `Resolved::admits` now calls too with the graph as a predicate, so the relay and the members run the same verdict. Since every control change rewrites every row, the row's generations follow the graph. The row is derived: it can always be rebuilt from the log.
+- Instead of: a typed membership table each backend maps to its own columns, which every backend would have to keep in step with `resolve`; or running `resolve` over the whole log for every sealed change.
+- What this does not do: a control change costs a read of the space's whole log.
+- Topics: relay, rfc-0007, rfc-0008, membership
