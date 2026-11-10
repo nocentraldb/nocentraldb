@@ -157,13 +157,10 @@ impl Resolved {
     /// RFC 0008's membership verdict for a sealed change ("Sealed
     /// changes"), from its header alone: whether its author holds an
     /// accepted grant of a role that writes, whose from generation is the
-    /// change's key generation, such that its author sequence is at most
-    /// the cutoff of every accepted revocation of the right to write that
-    /// the grant did not see.
-    ///
-    /// **What this does not do.** The generation graph is not folded yet
-    /// (NOC-71), so a key generation counts only when it is the grant's
-    /// from generation, not when it descends from it.
+    /// change's key generation or one it descends from in the generation
+    /// graph, such that its author sequence is at most the cutoff of every
+    /// accepted revocation of the right to write that the grant did not
+    /// see.
     pub fn admits(&self, header: &Header) -> bool {
         let Some(state) = self.members.0.get(&header.author) else {
             return false;
@@ -172,7 +169,9 @@ impl Resolved {
         state.grants.iter().any(|grant| {
             let seen = self.seen.get(&grant.change);
             writes(Some(grant.role))
-                && grant.from_generation == Some(header.key_generation)
+                && grant
+                    .from_generation
+                    .is_some_and(|from| self.descends(header.key_generation, from))
                 && state
                     .revocations
                     .iter()
