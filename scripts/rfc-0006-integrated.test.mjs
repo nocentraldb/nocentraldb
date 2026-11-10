@@ -89,7 +89,7 @@ test("RFC 0006 has no amendment section, mark, in-page link or changelog left", 
 test("the status names the owner's decisions with their dates", () => {
   const status = line(read(), "**Status.**");
   assert.match(status, /^\*\*Status\.\*\* Decided\. /);
-  for (const date of ["2026-11-08", "2026-11-09"]) {
+  for (const date of ["2026-11-08", "2026-11-09", "2026-11-10"]) {
     assert.ok(status.includes(`(Carsten, ${date})`), `no decision of ${date}`);
   }
   assert.doesNotMatch(status, /not built yet/);
@@ -122,14 +122,15 @@ test("Open questions says whether the owner still has one", () => {
   assert.match(section(read(), "open-questions"), /\S/);
 });
 
-test("Decisions keeps 1 to 16 in short form: decided, why, and the options not taken", () => {
+test("Decisions keeps 1 to 17 in short form: decided, why, and the options not taken", () => {
   const found = decisions();
   assert.deepEqual(
     found.map((d) => d.id),
-    Array.from({ length: 16 }, (_, i) => i + 1),
+    Array.from({ length: 17 }, (_, i) => i + 1),
   );
   for (const { id, text } of found) {
-    const date = id <= 9 ? "2026-11-08" : "2026-11-09";
+    const date =
+      id <= 9 ? "2026-11-08" : id <= 16 ? "2026-11-09" : "2026-11-10";
     assert.match(
       text,
       new RegExp(`^Decided \\(Carsten, ${date}[^)]*\\): `, "m"),
