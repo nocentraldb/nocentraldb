@@ -289,6 +289,8 @@ mod known_tests;
 #[cfg(test)]
 mod relay_tests;
 #[cfg(test)]
+mod rotate_tests;
+#[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
 mod write_tests;
