@@ -977,4 +977,4 @@ It names these conflicts and limits for the owner and pm:
 - **2026-11-09** · NOC-35 · A create that carries arguments is malformed ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
 - **2026-11-10** · NOC-75 · The depth count links RFC 0002's nesting limit, which the owner decided ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
 - **2026-11-10** · NOC-63 · References into another space: the field type `ncdb/ref`, its resolution to three states, its encoding and the examples E15 to E17; decisions 15 to 20 ([#92](https://github.com/nocentraldb/nocentraldb/pull/92)).
-- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#0](https://github.com/nocentraldb/nocentraldb/pull/0)).
+- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#121](https://github.com/nocentraldb/nocentraldb/pull/121)).
