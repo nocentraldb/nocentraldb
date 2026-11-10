@@ -333,3 +333,12 @@ test("where this RFC makes the others more precise, each linked where the other 
   }
   assert.doesNotMatch(agreement, /\*Resolved/);
 });
+
+test("the entry that carries a newer account key statement is named, still to be designed", () => {
+  // NOC-132, and pm's call on NOC-187: no new wire format in this rewrite
+  holds(
+    part("what-this-rfc-uses-from-rfc-0003"),
+    [/NOC-187/, /still to be designed/, /older account key/],
+    "What this RFC uses from RFC 0003",
+  );
+});
