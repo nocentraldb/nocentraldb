@@ -78,7 +78,11 @@ fn in_space(space: SpaceId, target: Target) -> Result<ObjectId, OtherSpace> {
 /// The status of the target `value` names, in a field that allows
 /// `collections`. A value that is no object id names no object the copy can
 /// hold. A deleted target reads deleted whatever its collection.
-fn status(collections: &BTreeSet<String>, value: &Value, objects: &impl Objects) -> Status {
+pub(crate) fn status(
+    collections: &BTreeSet<String>,
+    value: &Value,
+    objects: &impl Objects,
+) -> Status {
     let object = match value {
         Value::Bytes(bytes) => <[u8; 16]>::try_from(bytes.as_slice())
             .ok()

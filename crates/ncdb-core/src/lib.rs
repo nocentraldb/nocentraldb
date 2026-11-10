@@ -10,7 +10,8 @@
 //! defines it ([`seal`]), and the key envelopes that wrap a space key to one
 //! member with HPKE ([`envelope`]). A member takes each change it receives through the
 //! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
-//! ([`receive`]); the signature, membership and decryption checks plug in
+//! ([`receive`]), and un-folds a folded change that a later control change
+//! rejects; the signature, membership and decryption checks plug in
 //! through [`receive::Checks`], and [`checks`] implements them with the real
 //! signature and decryption.
 //!
@@ -18,6 +19,7 @@
 //! (`docs/rfc/0004-merge-rules-basic-types.md`): what a field type defines
 //! ([`field`]), basic values ([`basic`]), sets ([`set`]), links ([`link`])
 //! and what links resolve against, the objects of a copy ([`object`]).
+//! A reference into another space, RFC 0004 Amendment 4, is [`reference`].
 //! How their operations, and the creates and deletes of objects, travel in
 //! a change, RFC 0004 Amendment 1, is [`field_op`].
 //!
@@ -45,8 +47,10 @@ pub mod model_lock;
 pub mod object;
 pub mod receive;
 mod redact;
+pub mod reference;
 pub mod seal;
 pub mod set;
+mod unfold;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod view;
 

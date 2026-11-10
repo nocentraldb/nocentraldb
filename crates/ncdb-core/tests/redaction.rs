@@ -304,6 +304,10 @@ impl Fold for NoModel {
     fn fold_object(&mut self, _object: ObjectId, _operation: &ObjectOperation) {
         unreachable!("a model without collections folds no object")
     }
+
+    fn clear_field(&mut self, _object: ObjectId, _collection: &str, _field: &str) {}
+
+    fn clear_object(&mut self, _object: ObjectId) {}
 }
 
 #[test]

@@ -706,7 +706,7 @@ Added on 2026-11-09 for NOC-75, at pm's request. [Amendment 1](#amendment-1-how-
 
 ## Amendment 4: a reference into another space
 
-Added on 2026-11-09 for NOC-63. Rights come from many small spaces (GENESIS.md), so related data often lives in different spaces: customers in one space, the orders that name them in another. A link points only into its own space ([Links](#links)). The owner decided NOC-29 as pm recommended (Carsten, 2026-11-09): NoCentralDB gets a field type for a reference into another space, written `nc.ref("collection")` in the schema ([RFC 0005, Amendment 5](0005-schema-and-model-lock.md#amendment-5-a-reference-into-another-space)). The owner decided these points:
+Added on 2026-11-09 for NOC-63. Rights come from many small spaces (GENESIS.md), so related data often lives in different spaces: customers in one space, the orders that name them in another. A link points only into its own space ([Links](#links)). The owner decided NOC-29 as pm recommended (Carsten, 2026-11-09): NoCentralDB gets a field type for a reference into another space, written `nc.ref("collection")` in the schema ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). The owner decided these points:
 
 - A reference stores the target's space id and its object id, and merges like a basic value: the last writer wins, and losing writes stay as conflicts.
 - On read, the SDK resolves it from the member's own copy, to one of three states: readable, not accessible (the member is not in the target's space), or missing (not arrived, or deleted).

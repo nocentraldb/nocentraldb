@@ -25,15 +25,18 @@ pub enum Kind {
     Choice(BTreeSet<String>),
 }
 
-/// What a field lets a member write: the values of a [`Kind`], or object
-/// ids, which links hold (RFC 0004, "Links"). Internal to the core, so the
-/// public `Kind` keeps its variants.
+/// What a field lets a member write: the values of a [`Kind`], object ids,
+/// which links hold (RFC 0004, "Links"), or references, a space id and an
+/// object id (RFC 0004, Amendment 4). Internal to the core, so the public
+/// `Kind` keeps its variants.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Values<'a> {
     /// The values of a kind.
     Of(&'a Kind),
     /// Object ids, as 16 bytes.
     ObjectIds,
+    /// References, `[space id, object id]`, each 16 bytes.
+    References,
 }
 
 /// The basic value field type: a field of one [`Kind`].
@@ -148,6 +151,7 @@ impl Values<'_> {
         match self {
             Values::Of(kind) => kind.allows(value),
             Values::ObjectIds => matches!(value, Value::Bytes(id) if id.len() == 16),
+            Values::References => crate::reference::target(value).is_some(),
         }
     }
 
