@@ -6,8 +6,9 @@
 
 use crate::basic::{self, Values, Write};
 use crate::cbor::Value;
+use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
-use crate::ids::{ObjectId, OperationId, SpaceId};
+use crate::ids::{MemberId, ObjectId, OperationId, SpaceId};
 pub use crate::link::Target;
 
 use std::collections::BTreeSet;
@@ -45,6 +46,25 @@ pub fn target(value: &Value) -> Option<Target> {
             object: ObjectId(id(object)?),
         }),
         _ => None,
+    }
+}
+
+impl Reference {
+    /// A new write of the reference to `target`, in any space, the
+    /// writer's own included (decision 19), or a clear with `None`. It
+    /// replaces what `state` holds: the winner and every conflict.
+    pub fn set(
+        &self,
+        state: &basic::State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        target: Option<Target>,
+    ) -> Write {
+        let value = target.map_or(Value::Null, value);
+        Values::References
+            .set(state, id, author, stamp, value)
+            .expect("a reference or the empty value is a reference's value")
     }
 }
 
