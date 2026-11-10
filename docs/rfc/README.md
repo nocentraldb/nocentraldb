@@ -1,6 +1,6 @@
 # RFCs
 
-NoCentralDB is designed in the open. Each RFC here describes one part of the design. It says at its top whether it is a draft or decided, and it states the current design as one complete text. Its "History" section lists by date what changed and in which pull request. RFCs from before this rule are being rewritten this way; until then, they carry their later changes as numbered sections after the main text.
+NoCentralDB is designed in the open. Each RFC here describes one part of the design. It says at its top whether it is a draft or decided, and it states the current design as one complete text. Its "History" section lists by date what changed and in which pull request.
 
 | RFC | Title |
 | --- | --- |
