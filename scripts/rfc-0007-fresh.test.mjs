@@ -67,7 +67,7 @@ test("RFC 0007 names no decision by its id, its own or another RFC's", () => {
     /\bR\d+\b/,
     /\bM\d+\b/,
     /\bD\d+\b/,
-    /\bS\d+\b/,
+    /\bS(?!3\b)\d+\b/, // S3 is the AWS service
     /\bdecisions? \d/i,
     /\bConflicts points?\b/,
   ]) {
