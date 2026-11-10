@@ -16,6 +16,7 @@ use ncdb_core::clock::Hlc;
 use ncdb_core::field::{FieldType, Outcome as CoreOutcome};
 use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use ncdb_core::link::{self, Link};
+use ncdb_core::reference::{self, Reference};
 use proptest::prelude::*;
 
 use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome};
@@ -24,7 +25,7 @@ use super::convergence::{Author, Generator, Member, Mergeable, Op, OpId, Outcome
 /// with, and the values members write.
 pub trait Schema: core::fmt::Debug + 'static {
     /// The field type the copies apply and read with: a basic value, or a
-    /// type that merges as one (a link).
+    /// type that merges as one (a link, a reference).
     type Field: FieldType<State = State, Operation = Write, Read = Read>;
     /// The field as the copies' schema declares it.
     fn field() -> Self::Field;
@@ -128,6 +129,42 @@ impl Schema for Target {
     fn values() -> Vec<Value> {
         (1..=3)
             .map(|n| link::value(ObjectId([n; 16])))
+            .chain([Value::Null])
+            .collect()
+    }
+}
+
+/// The space other than [`SPACE`] that references point into.
+pub const OTHER_SPACE: SpaceId = SpaceId([2; 16]);
+
+/// A reference to one of three objects, one in the writer's own space and
+/// two in another, or cleared.
+#[derive(Debug)]
+pub struct Ref;
+
+impl Schema for Ref {
+    type Field = Reference;
+
+    fn field() -> Reference {
+        Reference {
+            collections: ["customers".to_owned()].into(),
+        }
+    }
+
+    /// Writes with `Reference::set`.
+    fn set(state: &State, id: OperationId, author: MemberId, stamp: Hlc, value: Value) -> Write {
+        Self::field().set(state, id, author, stamp, reference::target(&value))
+    }
+
+    fn values() -> Vec<Value> {
+        [(SPACE, 1), (OTHER_SPACE, 2), (OTHER_SPACE, 3)]
+            .map(|(space, n)| {
+                reference::value(link::Target {
+                    space,
+                    object: ObjectId([n; 16]),
+                })
+            })
+            .into_iter()
             .chain([Value::Null])
             .collect()
     }
