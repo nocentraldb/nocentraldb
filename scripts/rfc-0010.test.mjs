@@ -1,16 +1,18 @@
-// Asserts the structure of RFC 0010 (NOC-107), the draft of accounts: the file
-// exists and the RFC index lists it; it says plainly that it is a draft and
-// that nothing in it is decided; it links to GENESIS.md and to every decided
-// RFC it builds on, and every relative link and its anchor resolve; it has a
-// section for every part the ticket names (the account key and where it
-// lives, the recovery code, adding a device, linking per-database accounts,
-// and what a member certificate means for RFC 0008); every open question has
-// options, exactly one recommended option and a recommendation; and its
-// "Decisions" section records no decision. The test checks the shape of the
-// design document, not whether the design is right; that is the owner's
+// Asserts the structure of RFC 0010 (NOC-107), accounts, as the owner decided
+// it (NOC-115): the file exists and the RFC index lists it; its header and
+// status say it is decided, by the owner, with the date; it links to
+// GENESIS.md and to every decided RFC it builds on, and every relative link
+// and its anchor resolve; it has a section for every part the ticket names
+// (the account key and where it lives, the recovery code, adding a device,
+// linking per-database accounts, and what a member certificate means for
+// RFC 0008); no question is left open and no recommendation or draft wording
+// is left in the design; "Decisions" holds Q1 to Q12 in short form, each cited
+// where it applies; the decision log records the owner's decision on the RFC
+// as a whole; and "History" names both steps. The test checks the shape of
+// the design document, not whether the design is right; that is the owner's
 // review of the pull request.
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -64,16 +66,28 @@ const line = (markdown, start) =>
 test("RFC 0010 exists and the RFC index lists it", () => {
   assert.ok(existsSync(join(root, RFC)), `${RFC} is missing`);
   assert.match(read(INDEX), /^\| \[0010\]\(0010-accounts\.md\) \| .+ \|$/m);
+  const row = read(INDEX)
+    .split("\n")
+    .find((l) => l.startsWith("| [0010]"));
+  assert.doesNotMatch(row, /draft/i, "the index still calls it a draft");
 });
 
-test("RFC 0010 says it is a draft, and that nothing in it is decided", () => {
+test("RFC 0010 says it is decided, by the owner, with the date", () => {
   const rfc = read();
   assert.match(rfc.split("\n")[0], /^# RFC 0010: Accounts/);
-  assert.match(rfc.split("\n")[2], /DRAFT/, "the header line names the draft");
+  assert.doesNotMatch(rfc.split("\n")[2], /draft/i, "the header names a draft");
   const status = line(rfc, "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Draft\b/);
-  assert.match(status, /owner/, "the status names who decides");
-  assert.match(status, /nothing .*decided|decides nothing/i);
+  assert.match(status, /^\*\*Status\.\*\* Decided\. /);
+  assert.match(status, /\(Carsten, 2026-11-10\)/);
+  assert.match(status, /NOC-115/, "the status names where the owner decided");
+});
+
+test("the design reads as decided: no recommendation or draft wording outside History", () => {
+  const text = prose(read()).split("\n## History\n")[0];
+  assert.doesNotMatch(text, /\*\(recommended\)\*/);
+  assert.doesNotMatch(text, /\brecommend/i, "a recommendation is left");
+  assert.doesNotMatch(text, /\bdraft\b/i, "draft wording is left");
+  assert.doesNotMatch(text, /#open-questions\)/, "a link to an open question");
 });
 
 test("RFC 0010 says how to give feedback", () => {
@@ -142,52 +156,59 @@ test("RFC 0010 has a section for every part NOC-107 names", () => {
   }
 });
 
-/** Each open question, from its "**Qn." line to the next one. */
-const questions = () =>
+test("no question is left open", () => {
+  assert.match(section(read(), "Open questions"), /^None\./m);
+});
+
+/** The decisions under "## Decisions", one "### Qn. Title" heading each. */
+const decisions = () =>
   [
-    ...section(read(), "Open questions").matchAll(
-      /^\*\*(Q\d+)\.[\s\S]*?(?=^\*\*Q\d+\.|(?![\s\S]))/gm,
+    ...section(read(), "Decisions").matchAll(
+      /^### (Q\d+)\. ([^\n]+)\n([\s\S]*?)(?=^### |(?![\s\S]))/gm,
     ),
-  ].map((match) => ({ id: match[1], text: match[0] }));
+  ].map((m) => ({ id: m[1], heading: `${m[1]}. ${m[2]}`, text: m[3] }));
 
-test("every open question has options, one recommended option and a recommendation", () => {
-  const found = questions();
-  assert.ok(found.length >= 8, `${RFC} lists ${found.length} open questions`);
-  for (const [i, { id }] of found.entries()) {
-    assert.equal(id, `Q${i + 1}`, "the questions are numbered Q1, Q2, ...");
-  }
-  for (const { id, text } of found) {
-    assert.match(text, /^- A\. /m, `${id} has no option A`);
-    assert.match(text, /^- B\. /m, `${id} has no option B`);
-    assert.equal(
-      text.match(/\*\(recommended\)\*/g)?.length,
-      1,
-      `${id} needs exactly one recommended option`,
-    );
-    assert.match(text, /^Recommendation: /m, `${id} gives no recommendation`);
-    assert.doesNotMatch(text, /^Decided/m, `${id} is decided in a draft`);
-  }
-});
-
-test("every open question is cited in the text above it", () => {
-  const body = prose(read()).split("\n## Open questions\n")[0];
-  for (const { id } of questions()) {
-    assert.ok(
-      body.includes(`[${id}](#open-questions)`),
-      `${id} is never cited where its question arises`,
-    );
-  }
-});
-
-test("the Decisions section records no decision yet", () => {
-  const decisions = section(read(), "Decisions");
-  assert.match(decisions, /^None yet\./m);
-  assert.doesNotMatch(decisions, /Decided \(/);
-});
-
-test("the History section has a dated line that names the ticket", () => {
-  assert.match(
-    section(read(), "History"),
-    /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-107 · /m,
+test("Decisions holds Q1 to Q12 in short form, as the owner decided them", () => {
+  const found = decisions();
+  assert.deepEqual(
+    found.map((d) => d.id),
+    Array.from({ length: 12 }, (_, i) => `Q${i + 1}`),
   );
+  for (const { id, text } of found) {
+    assert.match(
+      text,
+      /^Decided \(Carsten, 2026-11-10\), on NOC-115: /m,
+      `${id} names no decision by the owner`,
+    );
+    assert.match(text, /^Why: /m, `${id} says not why`);
+    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
+  }
+});
+
+test("every decision is cited by its own heading where it applies", () => {
+  const body = prose(read()).split("\n## Decisions\n")[0];
+  for (const { id, heading } of decisions()) {
+    assert.ok(
+      body.includes(`[${id}](#${slug(heading)})`),
+      `${id} is never cited where it applies`,
+    );
+  }
+});
+
+test("the decision log records the owner's decision on RFC 0010", () => {
+  const files = readdirSync(join(root, "factory/decisions")).filter((f) =>
+    /^2026-11-10-NOC-107-/.test(f),
+  );
+  const entry = files
+    .map((f) => read(`factory/decisions/${f}`))
+    .find((t) => /^# [^\n]*· The owner decides RFC 0010, /m.test(t));
+  assert.ok(entry, "no NOC-107 decision file names RFC 0010 as decided");
+  assert.match(entry, /^- Decided by: Carsten, 2026-11-10, on NOC-115/m);
+  assert.match(entry, /^- Topics: .*rfc-0010/m);
+});
+
+test("History names the draft and the owner's decision", () => {
+  const history = section(read(), "History");
+  assert.match(history, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-107 · Draft 0\.1/m);
+  assert.match(history, /^- \*\*2026-11-10\*\* · NOC-115 · .*Carsten/m);
 });
