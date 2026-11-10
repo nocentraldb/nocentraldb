@@ -81,6 +81,9 @@ pub trait Checks {
     /// stops at step 6.
     fn open(&self, change: &Change) -> Result<Payload, Stop>;
     /// Adds a control change that passed steps 1 to 4 to the control state.
+    /// Adding a control change the checks already hold changes nothing, so
+    /// [`Log::receive`] can hand them every folded control change of the
+    /// log first.
     fn add_control(&mut self, change: &Change);
 }
 
@@ -131,6 +134,11 @@ impl Log {
     /// Receives a frame: appends it, takes it through the steps and
     /// records its state, all in this call. A duplicate changes nothing.
     ///
+    /// First the checks learn every control change the log holds folded,
+    /// so checks that know nothing yet, such as those of a view reopened on
+    /// an existing database, check against the control state of the log
+    /// (RFC 0006, "Control changes and changes that wait for them").
+    ///
     /// When the frame is a control change that passes, the rejected changes
     /// of the space are checked again in the same call (D11), until no
     /// further control change passes. Then every folded sealed change whose
@@ -147,6 +155,9 @@ impl Log {
         fold: &mut impl Fold,
     ) -> Result<Appended, ReceiveError> {
         let change = Change::decode(bytes).map_err(ReceiveError::Decode)?;
+        for control in self.folded_controls() {
+            checks.add_control(control);
+        }
         let appended = self.append(change.clone()).map_err(|error| match error {
             AppendError::WrongSpace => ReceiveError::WrongSpace,
         })?;

@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-104 · `Log::receive` hands the checks every folded control change of the log first
+
+- Decided by: coding agent (NOC-104)
+- Why: the view does not own the checks; the caller passes them to each `View::receive`, so the view cannot tell fresh checks from checks that hold its log's control state. Handing the checks every control change the log holds folded, at the start of each `Log::receive`, rebuilds their state wherever they come from (a reopened view, an in-memory log, a duplicate as the first frame), and since `resolve` is a function of the set, the order and repetition do not matter. `Checks::add_control` must therefore change nothing for a control change the checks already hold; `SealChecks` returns at once for one, so `resolve` runs only on a new one. Only folded control changes are handed over, as only those passed step 4 when they were received, and the log's states are a function of its set of changes. The cost is a walk over the space's in-memory log on every receive.
+- Instead of: a separate call such as `View::restore(space, &mut checks)` that the SDK must remember after every open, which leaves the bug one forgotten call away; or keeping RFC 0006's `control` table in SQLite, which moves the control state out of `SealChecks` and is a larger change than the ticket.
+- Topics: rfc-0002, rfc-0006, rfc-0008, view, log, membership

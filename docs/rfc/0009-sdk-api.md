@@ -13,7 +13,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
-The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([Amendment 2](0006-local-view.md#amendment-2-durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
+The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
 **Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and the design above describes those choices; the owner later withdrew S14 ([Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)* Every name is collected in [Public names](#public-names). The points in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) change other RFCs and documents, which their own amendments carry out. Nothing here is built.
 
@@ -33,12 +33,12 @@ The decided RFCs define what lies under these calls, and this RFC names the call
 
 | Term | Meaning in this RFC |
 | --- | --- |
-| Database, `db` | What `nc.open` returns: one member's copy of all its spaces on one device ([RFC 0006, decision 1](0006-local-view.md#decisions-for-the-owner)). |
+| Database, `db` | What `nc.open` returns: one member's copy of all its spaces on one device ([RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member)). |
 | Space handle | What `db.spaces.get` and `db.spaces.create` return: the calls of one space. The examples name it `project`. |
 | Transaction | The writes an app collects in one `space.write` call. It becomes exactly one change ([RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit)). |
 | Query | A declared index, the values of its equality prefix, a page size and an optional cursor ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). |
 | Page | At most N objects of a query in index order, and the cursor after the last one ([RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages)). |
-| Report | A value the SDK keeps current and an app can read or follow, with `current()` and `subscribe(listener)`, in the shape [RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy) gives `db.durability`. |
+| Report | A value the SDK keeps current and an app can read or follow, with `current()` and `subscribe(listener)`, in the shape [RFC 0006, decision 10](0006-local-view.md#10-how-the-sdk-reports-durability) gives `db.durability`. |
 
 ## The API in one page
 
@@ -89,15 +89,15 @@ await db.close();
 
 **What `nc.open` does,** in this order:
 
-1. **Opens the member's database** on this device, and creates the member key on first open ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). In a browser it starts the worker, and if another tab owns the database, it reaches that tab instead ([RFC 0006, decision 4](0006-local-view.md#decisions-for-the-owner)).
+1. **Opens the member's database** on this device, and creates the member key on first open ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). In a browser it starts the worker, and if another tab owns the database, it reaches that tab instead ([RFC 0006, decision 4](0006-local-view.md#4-several-tabs-of-the-same-app-in-one-browser)).
 2. **Checks the model against the lock.** The core folds only by the lock ([RFC 0005](0005-schema-and-model-lock.md), "The core and both SDKs read only the lock"). The TypeScript model gives the app its types and its handles, such as `model.tasks`. `nc.open` checks that every collection, field and index the model names is in the lock with the same type and options, and fails with `lockOutOfDate` otherwise, because a developer who changed the schema and did not run `ncdb model build` would write fields no lock knows (decision [S1](#decisions-for-the-owner)).
 3. **Checks the lock on the device.** It runs the additive check between the lock the database was last opened with and this one, and refuses with `modelRefused`, naming each refused change, if the `model.id` differs or the change is not additive. It deletes and rewrites nothing ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device), D11).
 4. **Brings the view up to date.** It adds columns, tables and indexes for an additive change, folds parked operations that are now known, and starts a full rebuild where RFC 0006 asks for one ([RFC 0006, "Rebuilding the view"](0006-local-view.md#rebuilding-the-view)). `nc.open` resolves before a rebuild ends; the app reads the old view meanwhile, and `db.view` reports the rebuild's progress.
-5. **Starts syncing** in the background when a relay is given ([Sync and status](#sync-and-status)), and asks the browser for persistent storage unless the app opened with `persistentStorage: "on-request"` ([RFC 0006, decision 11](0006-local-view.md#amendment-2-durability-of-a-browser-copy)).
+5. **Starts syncing** in the background when a relay is given ([Sync and status](#sync-and-status)), and asks the browser for persistent storage unless the app opened with `persistentStorage: "on-request"` ([RFC 0006, decision 11](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage)).
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
-**No persistent storage** is not an error. A browser copy opens as `best-effort` or, where OPFS is missing, as `temporary` in memory, and `db.durability` reports it ([RFC 0006, decisions 10 and 12](0006-local-view.md#amendment-2-durability-of-a-browser-copy)). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
+**No persistent storage** is not an error. A browser copy opens as `best-effort` or, where OPFS is missing, as `temporary` in memory, and `db.durability` reports it ([RFC 0006, decisions 10 and 12](0006-local-view.md#10-how-the-sdk-reports-durability)). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
 
 **`db.close()`** ends the relay connection, the subscriptions and, in a browser, the tab's ownership of the database, so another tab can take it over. Every write that resolved is already committed, so closing loses nothing; unconfirmed changes stay in the log and are pushed on the next open ([RFC 0007, "Island mode"](0007-relay.md#island-mode)). Every call on a closed database fails with `closed`.
 
@@ -251,7 +251,7 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 - `.equal(...values)` fixes the index's leading fields, as many as its `equal` declares, no more and no fewer; TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)).
 - `.take(n)` sets the page size, 50 by default, up to the maximum RFC 0006 leaves to the implementation.
 - `.after(cursor)` starts after a page's cursor. A cursor from another model, or another index, fails with `cursorOfAnotherModel`, and the app starts from the first page ([RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages)).
-- `db.find(query)` returns `items` in index order, the `cursor` after the last item, and `hasMore`. Every item carries `$space`, because an index spans every space of the member ([RFC 0006, decision 1](0006-local-view.md#decisions-for-the-owner)).
+- `db.find(query)` returns `items` in index order, the `cursor` after the last item, and `hasMore`. Every item carries `$space`, because an index spans every space of the member ([RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member)).
 - A view, once the computed-fields RFC designs it, is queried the same way: `model.tasks.views.ready.take(50)`, as RFC 0001 shows.
 
 There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)).
@@ -293,7 +293,7 @@ stop();
 - **`space.subscribe(collection, id, listener)`** follows one object: the listener gets it as `space.get` returns it, or `undefined`.
 - **A subscription does not follow a reference's target.** It re-runs when the referencing object changes, not when the target arrives, changes or is deleted, and not when the member joins or leaves the target's space, so a fold in one space never calls the listeners of another. An app that shows the target subscribes to it in the target's space ([RFC 0005, D21](0005-schema-and-model-lock.md#d21-whether-a-subscription-follows-a-references-state)). *(Amendment 4.)*
 - **`db.changes.subscribe(listener)`** is the change event: after each fold, the space, collection and ids it touched, and whether the change was this member's own write. It carries ids, never values, as RFC 0006's notification does, so an adapter or an agent's wake-up logic reads the objects itself.
-- Every `subscribe` returns a function that stops it, like `db.durability.subscribe` ([RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy)).
+- Every `subscribe` returns a function that stops it, like `db.durability.subscribe` ([RFC 0006, decision 10](0006-local-view.md#10-how-the-sdk-reports-durability)).
 - **Un-folding is a change too.** When a late control change rejects a change that was folded, the fields it touched are folded again ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)), and the listeners of those objects are called like after any fold. The app sees a value go back; `space.status` says why.
 
 ## Spaces and members
@@ -334,7 +334,7 @@ const members = await project.members.list(); // [{ id, account, kind, role, sel
 - **`members.setRole(memberId, role)`** raises or lowers a role; **`members.remove(memberId)`** removes a member and rotates the space key, as RFC 0003 requires. Both write a cutoff ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)). Re-granting a right a member lost rotates first ([RFC 0008, decision M5](0008-membership.md#decisions-for-the-owner)). Only an admin may call them; others get `notAllowed`.
 - **Roles** are `"reader"`, `"writer"` and `"admin"`, RFC 0008's working names, proposed as the public names (decision [S13](#decisions-for-the-owner)).
 - **`members.list()`** returns each member's id, its account fingerprint, its `kind` (`"device"`, `"agent"` or `"subAgent"`, from its certificate), its role, and whether it is this member. Every member is visible, an agent included ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)).
-- **Notices.** Every call that changes who can read or write returns a `notice`: `{ code, text }`, the text in plain English for the developer, saying what the change does not do ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). The SDK ships no text for end users ([RFC 0006, decision 14](0006-local-view.md#amendment-2-durability-of-a-browser-copy)).
+- **Notices.** Every call that changes who can read or write returns a `notice`: `{ code, text }`, the text in plain English for the developer, saying what the change does not do ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). The SDK ships no text for end users ([RFC 0006, decision 14](0006-local-view.md#14-text-for-end-users)).
 
 **What membership calls do not do,** stated as their notices state it: a removed member keeps its copy; a revocation does not take back what a member read; a member that has not seen a removal treats the removed member as it was until the removal reaches it; and until a merge rotation lands, members may write under a key generation a removed member holds ([RFC 0008, "Two removals that rotate the key at once"](0008-membership.md#two-removals-that-rotate-the-key-at-once)).
 
@@ -383,7 +383,7 @@ await db.sync.resume();
 | Value | Meaning |
 | --- | --- |
 | `connection` | `"connected"`, `"connecting"`, `"offline"` (no relay reachable, the SDK retries), `"paused"` or `"none"` (opened without a relay). |
-| `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy)). |
+| `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, decision 10](0006-local-view.md#10-how-the-sdk-reports-durability)). |
 | `refused` | Changes of this member the relay refused ([RFC 0002, D12](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). |
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
 | `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. |
@@ -402,7 +402,7 @@ await db.sync.resume();
 | `exposed`, `waitingForKey` | Whether members write under a generation a removed member may hold, and whether this member waits for an envelope ([RFC 0008, "Two removals that rotate the key at once"](0008-membership.md#two-removals-that-rotate-the-key-at-once)). |
 | `shredsWaiting` | Shreds that are not stable yet, with their age and, on an admin device after 7 days, the admin devices that block them ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable), M21). |
 
-**Durability** is RFC 0006's `db.durability`, unchanged: `current()`, `subscribe(listener)` and `requestPersistent()`, with `storage`, `unconfirmed`, `oldestUnconfirmedAt` and `atRisk` ([RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy)). It is on every target; natively `storage` is `"persistent"`.
+**Durability** is RFC 0006's `db.durability`, unchanged: `current()`, `subscribe(listener)` and `requestPersistent()`, with `storage`, `unconfirmed`, `oldestUnconfirmedAt` and `atRisk` ([RFC 0006, decision 10](0006-local-view.md#10-how-the-sdk-reports-durability)). It is on every target; natively `storage` is `"persistent"`.
 
 **`db.view`**, a report of the view itself: whether a rebuild runs and how far it is ([RFC 0006, "What a rebuild costs"](0006-local-view.md#what-a-rebuild-costs)).
 
@@ -470,7 +470,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 
 | Name | What it is | Builds on |
 | --- | --- | --- |
-| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#amendment-2-durability-of-a-browser-copy); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
+| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `db.close` | Closes the database | [RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers) |
 | `nc.Error` | The one error class, with `code` | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
 
@@ -523,7 +523,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `db.spaces.create` | Creates a space: its genesis | [RFC 0008, "The first change of a space"](0008-membership.md#the-first-change-of-a-space); sketched in [RFC 0003](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
-| `db.spaces.get`, `db.spaces.list` | A space handle; every space of the member | [RFC 0006, decision 1](0006-local-view.md#decisions-for-the-owner) |
+| `db.spaces.get`, `db.spaces.list` | A space handle; every space of the member | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
 | `db.spaces.createAdHoc` | An ad-hoc space for a sub-agent; options `copy`, `personal`, `local` | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `space.id` | The space id | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
 | `space.leave` | Removes this member from the space | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
@@ -546,7 +546,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | `db.sync.pause`, `db.sync.resume` | Stop and restart syncing | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
 | `db.sync.isConfirmed`, `db.sync.confirmed` | Whether, and when, the relay holds a change | [RFC 0007, "Push: append signed, encrypted changes"](0007-relay.md#push-append-signed-encrypted-changes) |
 | `space.status.current`, `space.status.subscribe` | What a space holds and a read does not show | [RFC 0002, "Rejected changes"](0002-change-and-log-format.md#rejected-changes); [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
-| `db.durability.current`, `db.durability.subscribe`, `db.durability.requestPersistent` | Durability of the copy | Decided: [RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy) |
+| `db.durability.current`, `db.durability.subscribe`, `db.durability.requestPersistent` | Durability of the copy | Decided: [RFC 0006, decision 10](0006-local-view.md#10-how-the-sdk-reports-durability) |
 | `db.view.current`, `db.view.subscribe` | Progress of a rebuild | [RFC 0006, "What a rebuild costs"](0006-local-view.md#what-a-rebuild-costs) |
 
 **Errors:**
@@ -563,7 +563,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `Db::open`, `OpenOptions` | Opens the database from the lock's text | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
-| `OpenOptions::path`, `OpenOptions::in_memory` | Where the database lives: a directory, or memory for tests | [RFC 0006, decision 1](0006-local-view.md#decisions-for-the-owner) |
+| `OpenOptions::path`, `OpenOptions::in_memory` | Where the database lives: a directory, or memory for tests | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
 | `OpenOptions::key_file` | A key file for a headless agent without a keystore | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `OpenOptions::agent` | Certifies the member as an agent | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
 | `Space`, `Spaces` | A space handle; what `db.spaces()` returns | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
@@ -826,8 +826,8 @@ Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
 
 This RFC follows GENESIS.md's principles: reads never touch the network, queries run only through declared indexes, developers never handle a key, every permission change returns a notice, and the API is the same on every target. It changes no other RFC. These points need a change elsewhere, which this RFC does not make; pm routes each one to the ticket that edits that file. Each point says where it was resolved.
 
-1. **RFC 0005 and RFC 0006, queries in one space** (S8). An index ends with the space id, so no query can fix a space. `scope: "space"` needs an option in `nc.index` and a key in the lock (RFC 0005, "Indexes" and "Public names") and a column order in RFC 0006, "Declared indexes". *Resolved in [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) and [RFC 0006, Amendment 6](0006-local-view.md#amendment-6-following-rfc-0009).*
-2. **RFC 0006, deleted objects in indexes** (S9). RFC 0006 does not say whether a deleted object's row stays in an index. Under S9 A it does not, for example through a partial index. *Resolved in [RFC 0006, Amendment 6](0006-local-view.md#amendment-6-following-rfc-0009).*
+1. **RFC 0005 and RFC 0006, queries in one space** (S8). An index ends with the space id, so no query can fix a space. `scope: "space"` needs an option in `nc.index` and a key in the lock (RFC 0005, "Indexes" and "Public names") and a column order in RFC 0006, "Declared indexes". *Resolved in [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) and [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes).*
+2. **RFC 0006, deleted objects in indexes** (S9). RFC 0006 does not say whether a deleted object's row stays in an index. Under S9 A it does not, for example through a partial index. *Resolved in [RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes).*
 3. **RFC 0005, `nc.Infer` for choices** (S5). RFC 0005 types a choice as the union of its options; S5 adds `nc.Unknown`. *Resolved in [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app).*
 4. **RFC 0005, personal field without a person.** RFC 0005 is silent on a personal field whose person link is unset. This RFC proposes `noPerson`; RFC 0005's "What the build checks" could say so. *Resolved in [RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks).*
 5. **RFC 0003, "How the SDK hides keys".** Its sketch uses the role `"editor"`, which is not one of RFC 0008's roles, and `db.spaces.create({ name: "Project A" })`, where the name has no place (S11). Use case 3 uses `"editor"` too. *Resolved in [RFC 0003, Amendment 3](0003-keys-and-cryptography.md#amendment-3-following-rfc-0009), and in use case 3 ([use cases](../use-cases.md#3-an-outside-agent-limited-to-one-space)).*
