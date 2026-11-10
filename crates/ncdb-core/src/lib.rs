@@ -52,6 +52,7 @@ mod redact;
 pub mod reference;
 pub mod seal;
 pub mod set;
+pub mod tips;
 mod unfold;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod view;
