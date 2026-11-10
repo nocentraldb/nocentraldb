@@ -107,7 +107,10 @@ impl Spaces<'_> {
     /// The handle of the space `id`, which the member created or was added
     /// to. A space is held once the copy holds its genesis and the space
     /// key of its first and of its current generation; until then it is
-    /// `NotFound`. A space whose genesis names another `model.id` than the
+    /// `NotFound`. A member added after a key rotation holds an envelope
+    /// for the current generation only, and reaches the first through the
+    /// key chain (RFC 0003, "Key-chain subkey"). A space whose genesis
+    /// names another `model.id` than the
     /// lock's is `SpaceOfAnotherModel` (RFC 0009, "Spaces of another
     /// model").
     pub async fn get(&self, id: SpaceId) -> Result<Space, Error> {

@@ -1,17 +1,19 @@
 //! Un-folding (RFC 0006, "Un-folding"; RFC 0008, "What a new change can
 //! change"): a control change that arrives late can make a sealed change
 //! the member already folded fail its membership check, for example a
-//! revocation whose cutoff lies below the change. The change then moves
-//! from folded to rejected, and the fold folds every field and object it
-//! touched again from the operations of the changes still folded. A
-//! field's state is a function of its set of operations (RFC 0004), so the
-//! fold then equals the fold of a member that never folded the change.
+//! revocation whose cutoff lies below the change, or its decryption, when
+//! a key chain entry with a lower change id replaces the key of its
+//! generation (NOC-183). The change then moves from folded to rejected,
+//! and the fold folds every field and object it touched again from the
+//! operations of the changes still folded. A field's state is a function
+//! of its set of operations (RFC 0004), so the fold then equals the fold
+//! of a member that never folded the change.
 //!
-//! Only step 4 is checked again. The authors' keys and the space keys the
-//! checks hold only grow as control changes arrive (D11; NOC-78), so a
-//! change that passed steps 3 and 5 still passes them. Control changes are
-//! never un-folded: their verdicts are `resolve`'s, recomputed over every
-//! control change held.
+//! Steps 4 and 5 are checked again, step 5 through
+//! [`Checks::still_opens`]. The authors' keys the checks hold only grow as
+//! control changes arrive (D11; NOC-78), so a change that passed step 3
+//! still passes it. Control changes are never un-folded: their verdicts are
+//! `resolve`'s, recomputed over every control change held.
 //!
 //! The changes still folded are opened again and scanned for the fields
 //! they touch. RFC 0006 allows a bookkeeping table from object and field to
@@ -48,20 +50,27 @@ impl Target {
 }
 
 /// Un-folds every folded sealed change of the log whose author the
-/// control state no longer admits, and folds what they touched again from
-/// the changes still folded.
+/// control state no longer admits, or that no longer opens, and folds what
+/// they touched again from the changes still folded.
 pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) {
     let failing: Vec<_> = log
         .folded_sealed()
         .into_iter()
-        .filter(|(change, _)| !checks.is_member(change))
+        .filter_map(|(change, parked)| {
+            let state = if !checks.is_member(&change) {
+                State::Rejected(RejectReason::NotMember)
+            } else {
+                checks.still_opens(&change).err()?.into()
+            };
+            Some((change, parked, state))
+        })
         .collect();
     if failing.is_empty() {
         return;
     }
     let mut touched = BTreeSet::new();
-    for (change, parked) in &failing {
-        log.set_state(change.id(), State::Rejected(RejectReason::NotMember));
+    for (change, parked, state) in &failing {
+        log.set_state(change.id(), state.clone());
         touched.extend(
             folded_operations(change, parked, checks)
                 .iter()
@@ -89,14 +98,14 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
 }
 
 /// The operations of a folded change that were folded, not parked, each
-/// with its origin. The change opened when it was folded, and the keys the
-/// checks hold only grow, so it opens again.
+/// with its origin. The change opened when it was folded, and
+/// [`Checks::open_folded`] opens it again with that key.
 fn folded_operations(
     change: &Change,
     parked: &[ParkedOperation],
     checks: &impl Checks,
 ) -> Vec<(Origin, Operation)> {
-    let Ok(payload) = checks.open(change) else {
+    let Ok(payload) = checks.open_folded(change) else {
         return Vec::new();
     };
     let parked: BTreeSet<u64> = parked.iter().map(|p| p.position).collect();
