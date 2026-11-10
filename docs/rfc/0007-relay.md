@@ -719,4 +719,4 @@ This RFC agrees with GENESIS.md and RFC 0001 except in the points below. The own
 - **2026-11-09** · NOC-47 · The conflicts with GENESIS.md and RFC 0001 say where each was resolved (#64).
 - **2026-11-09** · NOC-55 · How to give feedback on this RFC (#72).
 - **2026-11-09** · NOC-35 · The first line drops the draft number of a decided RFC (#76).
-- **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#111).
+- **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#113).
