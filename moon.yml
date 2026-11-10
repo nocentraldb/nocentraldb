@@ -213,6 +213,23 @@ tasks:
       - "/pnpm-lock.yaml"
     options:
       cache: false
+  browser-view:
+    # NOC-174: the core's view in a dedicated worker on OPFS, in Chromium,
+    # Firefox and WebKit through Playwright, compared with the same code run
+    # natively (scripts/browser-view/). Not part of `gates`, for the reasons
+    # of browser-storage above; the workflow browser-view.yml runs it in CI.
+    # Never cached: its result depends on the installed browsers.
+    command: "node --test 'scripts/browser-view/*.test.mjs'"
+    deps: ["~:wasm-runner"]
+    inputs:
+      - "/scripts/browser-view/**/*"
+      - "/crates/ncdb-core/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      cache: false
   gates:
     deps:
       - "~:format-check"

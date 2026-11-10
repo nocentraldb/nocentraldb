@@ -8,8 +8,9 @@ use rusqlite::{OptionalExtension, params};
 
 use super::{Error, View};
 use crate::change::Change;
+use crate::ids::MemberId;
 use crate::ids::{ChangeId, SpaceId};
-use crate::log::RelayRefusal;
+use crate::log::{RelayCounts, RelayRefusal};
 
 impl View {
     /// The changes of `space` the relay has neither confirmed nor refused,
@@ -61,6 +62,18 @@ impl View {
         self.logs.get(&space)?.relay_refusal(id).cloned()
     }
 
+    /// How many of `author`'s changes in `space` the relay has neither
+    /// confirmed nor refused, and how many it refused (NOC-147): what
+    /// [`View::unconfirmed`] and [`View::refused`] hold of that author,
+    /// kept as changes are received, confirmed and refused, so reading
+    /// them decodes nothing.
+    pub fn relay_counts(&self, space: SpaceId, author: MemberId) -> RelayCounts {
+        self.logs
+            .get(&space)
+            .map(|log| log.relay_counts(author))
+            .unwrap_or_default()
+    }
+
     /// Records the relay position of a change the log holds: the relay
     /// accepted it there, or already held it there.
     pub fn confirm(&mut self, space: SpaceId, id: ChangeId, position: u64) -> Result<(), Error> {
@@ -69,6 +82,9 @@ impl View {
             "UPDATE log SET relay_position = ?3 WHERE space_id = ?1 AND change_id = ?2",
             params![space.0, id.0, position],
         )?;
+        if let Some(log) = self.logs.get_mut(&space) {
+            log.record_relay_confirmation(id);
+        }
         Ok(())
     }
 
@@ -91,6 +107,9 @@ impl View {
     pub fn forget_relay_positions(&mut self) -> Result<(), Error> {
         self.conn
             .execute("UPDATE log SET relay_position = NULL", [])?;
+        for log in self.logs.values_mut() {
+            log.forget_relay_confirmations();
+        }
         Ok(())
     }
 

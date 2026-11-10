@@ -3,9 +3,6 @@
 //! changes and changes that wait for them"; RFC 0002 D11): the checks the
 //! member opens it with know nothing yet, and learn the membership, the
 //! keys and the generation graph from the log.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 

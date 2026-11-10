@@ -17,7 +17,10 @@
 //! **What this does not do yet.** `db.sync().subscribe()`, `pause()`,
 //! `resume()`, `is_confirmed()`, `confirmed()` and the per-space `status`
 //! of RFC 0009 are not built: the relay's refusals are recorded per change
-//! in the log, and [`SyncStatus`] counts them. The relay is reached over plain
+//! in the log, by the same code `SyncStatus::error` would show (NOC-188),
+//! and [`SyncStatus`] counts them. A log written before NOC-188 may hold a
+//! relay's own text there, so the API that first shows a refusal's code
+//! must read it through `wire::mapped_code`. The relay is reached over plain
 //! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
 //! relay hands out as a download link, is not read: the page that holds
 //! it ends the session, which backs off and meets the same page again,
@@ -69,7 +72,9 @@ pub struct SyncStatus {
     /// lost (RFC 0007, "Restores and the relay epoch").
     pub epoch_changed: bool,
     /// The last error that stops syncing, by its RFC 0007 code, such as
-    /// `unsupported_version`; never content. Once the relay answered
+    /// `unsupported_version`; never content. A code the relay sent that
+    /// RFC 0007 does not list shows as `unknown_error`, so the relay's own
+    /// text never reaches the app (NOC-146). Once the relay answered
     /// `not_member` or `removed_member` for a space, that code stays here,
     /// since the space is no longer synced, while no error of the
     /// connection replaces it and until the relay says, with `added`, that
@@ -122,6 +127,11 @@ pub(crate) struct SyncState {
     /// The code the relay last stopped a space with, `not_member` or
     /// `removed_member`.
     pub(crate) removed: Option<String>,
+    /// The spaces whose subscription in this connection caught up with
+    /// the relay's head. From then on the relay answers a removal from
+    /// the space with `removed_member`; before, with `not_member` (RFC
+    /// 0007, "Subscribe").
+    pub(crate) live: BTreeSet<CoreSpaceId>,
     /// How many changes syncing folded that the log did not hold.
     pub(crate) folds: u64,
     /// Tells the sync thread that the database wrote; dropped with the
@@ -139,6 +149,7 @@ impl SyncState {
             cursors: BTreeMap::new(),
             stopped: BTreeSet::new(),
             removed: None,
+            live: BTreeSet::new(),
             folds: 0,
             wake,
         }
@@ -168,6 +179,11 @@ impl Inner {
     /// How many changes syncing folded that the log did not hold.
     pub(crate) fn sync_folds(&self) -> u64 {
         self.sync.as_ref().map_or(0, |s| s.folds)
+    }
+
+    /// Whether the subscription to `space` caught up in this connection.
+    pub(crate) fn sync_live(&self, space: CoreSpaceId) -> bool {
+        self.sync.as_ref().is_some_and(|s| s.live.contains(&space))
     }
 }
 
