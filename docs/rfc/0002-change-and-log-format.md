@@ -4,19 +4,19 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-6
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). It also answers what the parallel RFC 0003 (keys) and RFC 0004 (merge rules) need from it. Where this RFC disagrees with any of them, the conflict is named in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it; [What RFC 0003 and RFC 0004 need from this RFC](#what-rfc-0003-and-rfc-0004-need-from-this-rfc) lists what they rely on. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections below link them where they do.
 
-**Status.** Decided. The wire and on-disk formats are reserved for the owner. The owner accepted D1 to D9 and the readings in [Conflicts with GENESIS.md and RFC 0001](#conflicts-with-genesismd-and-rfc-0001) (Carsten, 2026-11-07), and this RFC was merged with the owner's approval in #28 (Carsten, 2026-11-08). The owner decided D10 to D13 as recommended (Carsten, 2026-11-08), signed off payload key 64 for the writer's model (Carsten, 2026-11-09), and decided the nesting limit and the clock's carry (Carsten, 2026-11-09). [Decisions](#decisions) lists each one, and [History](#history) every change since the first version.
+**Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+**How to give feedback.** Reply in this RFC's discussion, [RFC 0002: The change and the log format](https://github.com/nocentraldb/nocentraldb/discussions/125), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 ## What this RFC does not cover
 
 - **Cryptography and keys.** The signature scheme, the AEAD, the hash function, member ids, person-key ids, space key generations, the suite id and key rotation belong to RFC 0003 (NOC-7). This RFC says only where a "signature", an "AEAD ciphertext" and a "hash" sit in the format, and what each must cover.
 - **Merge rules.** How each field type merges concurrent changes belongs to RFC 0004 (NOC-8). This RFC defines the ordering metadata those rules can use, and nothing about the rules themselves.
 - **The payloads of rich text and streams.** This RFC leaves room for a Yrs update and for a stream chunk as the value of an operation. It does not design either type.
-- **Compaction and the archive, membership changes and work orders.** This RFC reserves their place in the log and in the header. Their formats follow in later RFCs.
-- **Code.** Nothing in `crates/` or `packages/` changes. The implementation is NOC-14.
+- **Compaction and the archive, and work orders.** This RFC reserves their place in the log and in the header. Their formats follow in later RFCs. The bodies of membership changes are [RFC 0008](0008-membership.md)'s.
+- **Code.** This RFC describes the format; `crates/ncdb-core` implements it (NOC-14).
 
 ## Terms
 
@@ -26,7 +26,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Member | A device, agent or server that holds a key in a space and a full copy of its log. |
 | Author | The member whose key signed a change. |
 | Change | One signed, encrypted unit that a member appends to a space's log: one local write transaction. |
-| Header | The part of a change the relay can read: enough to route, check and store the change. RFC 0003 uses the same word. Not to be confused with RFC 0003's *key envelope*, a space key wrapped for one member. |
+| Header | The part of a change the relay can read: enough to route, check and store the change. RFC 0003 uses the same word. Not to be confused with RFC 0003's *key envelope*, a space key wrapped for one member. RFC 0001 says the relay sees a work order as "an opaque envelope"; this RFC uses "envelope" only for key envelopes, so that the word means one thing. |
 | Payload | The part of a change only members can read: what was changed, and the ordering metadata. |
 | Operation | One edit inside a payload: one operation on one field of one object. |
 | Log | The append-only sequence of changes of one space, on one member or on the relay. |
@@ -78,7 +78,7 @@ The rest of this RFC explains each part and why it looks this way.
 
 ### Space
 
-Every change names its space in the header (key 1). The relay needs it to route the change, check membership and append it to the right log. A space id is 16 bytes. It is derived from its creator's member id and a random nonce in the space's first change, the genesis, so nobody else can write a first change for it ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). A space's id never changes.
+Every change names its space in the header (key 1). The relay needs it to route the change, check membership and append it to the right log. A space id is 16 bytes. It is derived from its creator's member id and a random nonce in the space's first change, the genesis, so nobody else can write a first change for it ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). A space id drawn at random, as an object id is, was not taken, because it does not bind the space to its creator. A space's id never changes.
 
 ### Author and author sequence
 
@@ -110,6 +110,12 @@ The payload (header key 6) is the AEAD ciphertext of the canonical encoding of t
 
 Inside the payload, the ordering metadata comes first (see [Ordering metadata](#ordering-metadata)), then the operations, and last the model that wrote them (key 64, see [The writer's model](#the-writers-model)).
 
+### Padding
+
+Every payload is padded to a multiple of 256 bytes before it is encrypted: payload key 5 holds as many zero bytes as the canonical encoding of the whole payload map needs to land on the multiple ([RFC 0003, "Sealed payload"](0003-keys-and-cryptography.md#sealed-payload) gives the exact rule). Padding hides the exact length of short values, such as "yes" against "no", at a cost of 128 bytes per change on average. Readers ignore key 5, so the rule can change later without a new format.
+
+Two rules were not taken. No padding hides nothing of a write's length. Padding to the next power of two hides more, but doubles the size of large changes such as rich-text pastes.
+
 ### Operations: object, field and value
 
 A change carries one or more operations, applied in the order of the array. A change is atomic in its checks: a member accepts all of its operations or none of them, because the signature, the membership check and the decryption cover the change as a whole. The fold has one exception: an operation the member's `model.lock.json` does not know is parked on its own, and the other operations of the change are folded (see [The atomic unit](#the-atomic-unit)). A change never spans two spaces, so a write transaction cannot span two spaces either, as RFC 0001 says in [What it is not](0001-nocentraldb.md#what-it-is-not).
@@ -117,7 +123,7 @@ A change carries one or more operations, applied in the order of the array. A ch
 Each operation names:
 
 - **The object** (key 1), by its 16-byte id. Its space is the change's space.
-- **The collection and the field** (keys 2 and 3), by their names in `model.lock.json`. Names are stable, because schema changes are additive and a field is never renamed. Names also let a client that does not know the field yet keep the operation and fold it after an upgrade.
+- **The collection and the field** (keys 2 and 3), by their names in `model.lock.json`. Names are stable, because schema changes are additive and a field is never renamed. Names need no id registry that two developers could fill differently, and they let a client that does not know the field yet tell which field an operation is for, keep the operation and fold it after an upgrade. They cost a few bytes per operation, inside the ciphertext. Numeric ids that `ncdb model build` assigns were not taken: they would save those bytes, but need that registry.
 - **The operation** (key 4), a small integer whose meaning the field type defines. RFC 0004 defines it for basic values, sets and links. Value 0 is reserved for "create the object", which takes no field (key 3 is absent) and puts the object into the collection.
 - **The value** (key 5), any CBOR value of the profile below. The field type defines its shape.
 
@@ -125,12 +131,12 @@ The format leaves room for the field types that are not designed yet:
 
 - **Rich text.** The value is a byte string holding a Yrs update. A focused edit is a small update, so the change stays small too.
 - **Streams.** The value carries one chunk and its index in the stream. Each chunk is its own change, or several chunks share one change, as the stream type will decide.
-- **Personal fields.** The value is a sealed personal value: a map of the person-key id (key 1) and the AEAD ciphertext of the field's value under that person key (key 2), inside the payload. RFC 0003 defines the encryption and its associated data (space, object, field and person-key id); the field is named by collection and field name (D5). Destroying the person's key makes that value unreadable, while the signature over the whole change stays valid, because the signature covers the bytes and not the plaintext. This is what [shred and audit](0001-nocentraldb.md#the-design-in-one-page) needs.
+- **Personal fields.** The value is a sealed personal value: a map of the person-key id (key 1) and the AEAD ciphertext of the field's value under that person key (key 2), inside the payload. RFC 0003 defines the encryption and its associated data (space, object, field and person-key id); the field is named by collection and field name, as every operation names it. Destroying the person's key makes that value unreadable, while the signature over the whole change stays valid, because the signature covers the bytes and not the plaintext. This is what [shred and audit](0001-nocentraldb.md#the-design-in-one-page) needs.
 - **Custom field types.** A plugin defines its own operation numbers and value shapes, inside the same container.
 
 ### The writer's model
 
-Every sealed payload names the model that wrote it, as [RFC 0005](0005-schema-and-model-lock.md)'s [D10](0005-schema-and-model-lock.md#d10-the-model-version-in-changes) and [D13](0005-schema-and-model-lock.md#d13-two-models-in-one-space) decided: the `model.id` of the writer's `model.lock.json`, 128 random bits that name the model's lineage, and its `model.version`, one higher for each build that changes the model. A member parks every change of another model, whole, and an old client can say which model version it needs to read the changes it parked. The space's own model is in the genesis's key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)), and the SDK refuses to write into a space of another model.
+Every sealed payload names the model that wrote it, as [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) needs: the `model.id` of the writer's `model.lock.json`, 128 random bits that name the model's lineage, and its `model.version`, one higher for each build that changes the model. A member parks every change of another model, whole, and an old client can say which model version it needs to read the changes it parked. So a change of another lineage parks the same way on every member instead of folding by the wrong rule. The space's own model is in the genesis's key 13 ([RFC 0008, "Genesis"](0008-membership.md#genesis)), and the SDK refuses to write into a space of another model.
 
 Payload key 64 holds the writer's model:
 
@@ -140,11 +146,11 @@ model (CBOR map, payload key 64)
 └── 2 model version            uint: the writer's model.version, 1 and up
 ```
 
-- **Number 64.** It is the first key of the "may ignore" range, as RFC 0005's D10 asks: a core that does not know it folds the change as if it were absent ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)), so no client written before key 64 existed parks anything because of it.
-- **One map, not two payload keys.** The model id and the model version name one thing, the lock that wrote the change, so they are present or absent together. The map has the shape of every other map of the format, such as the sealed personal value, and a later field of the model can be a new key of it.
+- **Number 64.** It is the first key of the "may ignore" range, as RFC 0005 asks of the model version: a core that does not know it folds the change as if it were absent ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)), so no client written before key 64 existed parks anything because of it.
+- **One map, not two payload keys.** The model id and the model version name one thing, the lock that wrote the change, so they are present or absent together. Two payload keys, one for each, were not taken for that reason. The map has the shape of every other map of the format, such as the sealed personal value, and a later field of the model can be a new key of it.
 - **Encoding.** The map follows [the CBOR profile](#the-cbor-profile). The model id is the 16 raw bytes of `model.id`, as the plaintext of the genesis's key 13 is. The version is an unsigned integer. Key 64 sorts after keys 1 to 5 of the payload, because its encoding `0x1840` sorts after `0x01` to `0x05`.
 - **Who writes it.** The core writes key 64 into every sealed payload, from the `model.lock.json` it opened the database with. A control body carries none: it holds no content, and the space's model is in the genesis.
-- **Size.** Key 64 adds 23 bytes to the payload before padding, inside the ciphertext. Padding to a multiple of 256 bytes (D8) keeps most changes in the same size class.
+- **Size.** Key 64 adds 23 bytes to the payload before padding, inside the ciphertext. [Padding](#padding) to a multiple of 256 bytes keeps most changes in the same size class.
 
 **What a member does with it.** A member reads key 64 at step 6 of [the step table](#what-a-member-does-with-a-change-it-receives), "Understand the payload", after the payload decoded at step 5a:
 
@@ -154,9 +160,9 @@ model (CBOR map, payload key 64)
 
 Steps 2 to 6, step 5a included, decide for the change as a whole, and step 7 per operation. A change that fails an earlier step never reaches key 64: a rejected change stays rejected for the reason it has, and a payload that does not decode stays parked as "unknown payload format", because a member reads key 64 only from a payload map that decoded. A control change stops after step 4 and has no key 64.
 
-**Why the member's own lock.** A member folds every operation by the rules of its own `model.lock.json`. RFC 0005's D13 B parks a change of another model so that no member folds it by the wrong rule, and the wrong rule is the rule of the lock the member folds with. Every member that may write into the space runs a lock whose `model.id` is the one the genesis records, because the SDK refuses to write into a space of another model (D13 A). So every one of them parks the same changes, and the state of a change stays a function of its bytes and the member's lock, as step 7's state already is.
+**Why the member's own lock.** A member folds every operation by the rules of its own `model.lock.json`. A change of another model is parked so that no member folds it by the wrong rule, and the wrong rule is the rule of the lock the member folds with. Every member that may write into the space runs a lock whose `model.id` is the one the genesis records, because the SDK refuses to write into a space of another model. So every one of them parks the same changes, and the state of a change stays a function of its bytes and the member's lock, as step 7's state already is.
 
-**Why the whole change.** RFC 0005's D13 B parks every change of another model whole, as the owner decided. A field name of another model may name a field of another type. Folding the operations whose names the member knows would fold them by the wrong rule, and parking only the others would split one write transaction by a rule the member cannot know.
+**Why the whole change.** A change of another model is parked whole. A field name of another model may name a field of another type. Folding the operations whose names the member knows would fold them by the wrong rule, and parking only the others would split one write transaction by a rule the member cannot know.
 
 **What the model version is for.** The model version never parks a change by itself. A change of the member's own model with a higher model version goes on to step 7, where an operation on a field the member's lock does not know yet is parked on its own. The SDK reports, per space, the highest model version among its parked changes and operations of the member's own model, so that an app can say "needs model version 7" ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 6). It counts the changes parked as "another model" under that reason, apart from them: their model version belongs to another lineage, and no upgrade of this app reaches it.
 
@@ -169,7 +175,7 @@ Steps 2 to 6, step 5a included, decide for the change as a whole, and step 7 per
 
 ### What the change does not carry
 
-- **No wall-clock time in the header.** The relay learns when it receives a change, but not when it was written. The clock sits inside the payload.
+- **No wall-clock time in the header.** The relay learns when it receives a change, but not when it was written. The clock sits inside the payload. A clock in the header would show the relay when every change was written, offline work included. It was not taken, although it would let the relay refuse changes whose clock is far ahead of its own: that would protect only changes that pass through the relay, not those exchanged in island mode.
 - **No dependencies in the header.** For a sealed change, the relay cannot see which changes it builds on, so it cannot tell which members saw which changes, or which changes are concurrent. A control change lists the control changes it builds on in its readable body, so for those the relay can tell ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)).
 - **No object, collection or field names in the header.** The relay cannot tell which objects or fields a change touches, or whether two changes touch the same one.
 
@@ -179,7 +185,7 @@ No member asks anyone for an id. Every id is generated locally, offline, and sti
 
 ### Object ids
 
-An object id is 16 bytes (128 bits) from the platform's cryptographically secure random generator: `getrandom` natively, `crypto.getRandomValues` in the browser. Space ids are derived instead, as [Space](#space) says (D3, revised for space ids by RFC 0008's decision M7).
+An object id is 16 bytes (128 bits) from the platform's cryptographically secure random generator: `getrandom` natively, `crypto.getRandomValues` in the browser. Random ids leak nothing about when an object was made into the links, URLs and exports they travel into. Space ids are derived instead, as [Space](#space) says.
 
 **Why two members cannot collide.** A collision needs two members to draw the same 128 random bits. Even after 2⁴⁸ (about 280 trillion) objects in one space, the chance that any two of them collide is about one in 8 billion (the birthday bound, n²/2¹²⁹ = 2⁻³³). An id is generated from a secure generator, so no member can predict another's ids, and no member's clock or counter is involved.
 
@@ -204,7 +210,12 @@ H is SHA-256, with 32 bytes of output, as RFC 0003 names it. Change ids use SHA-
 
 **Why two members cannot collide.** Two different changes have different header bytes, because their author, sequence, payload ciphertext or space differs. Two equal ids then need a collision of the hash function, which a 32-byte cryptographic hash makes infeasible. The id is computed from the bytes, so every member and the relay compute the same id for the same change, without being told. A member that receives a change twice, from the relay and from a peer in island mode, recognises it as the same change.
 
-The id does not change when a member forwards a change, and it identifies the exact bytes: a member can check that the change it holds is the change another member refers to.
+The id does not change when a member forwards a change, and it identifies the exact bytes: a member can check that the change it holds is the change another member refers to. It is unique without a coordinator, every party computes it on its own, and a backup restore cannot make two changes share it.
+
+| Rejected | Why |
+| --- | --- |
+| Author member id plus author sequence | Two changes share it when a device is restored from a backup and writes again under a sequence number it already used. |
+| A random id chosen by the author | Does not bind the id to the content, so a member cannot check a reference by recomputing it. |
 
 ### Operation ids
 
@@ -218,13 +229,13 @@ An operation is identified by its change's id and its position in the change's o
 
 ## Ordering metadata
 
-The merge rules of RFC 0004 need two things from every change: a total order that every member computes the same way, for "the last writer wins", and the causal order, to tell an edit that saw another edit from an edit made at the same time without it. The payload carries both.
+The merge rules of RFC 0004 need two things from every change: a total order that every member computes the same way, for "the last writer wins", and the causal order, to tell an edit that saw another edit from an edit made at the same time without it. The payload carries both: a hybrid logical clock and a list of dependencies. With the clock, "the last writer wins" matches what users expect in time; the dependencies give the causal order at a size that does not grow with the number of keys. Lamport clocks and version vectors were not taken ([below](#a-late-change-stays-identifiable)).
 
 ### The clock
 
 Every sealed payload carries a **hybrid logical clock** (key 2): one unsigned 64-bit integer. The upper 48 bits hold milliseconds since the Unix epoch, which lasts until the year 10889. The lower 16 bits hold a counter. A control body carries no clock (see [Key generation, suite and kind](#key-generation-suite-and-kind)).
 
-When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter is full, the clock carries into the next millisecond with counter 0, whatever the wall clock says, so a member never waits: a change from a member whose clock runs far ahead, with its counter full, cannot stop anyone from writing. Only the largest value a clock holds, in the year 10889, has no next one, and there the core refuses to write rather than wrap around.
+When a member writes, it sets the clock to the larger of its own wall clock and one more than the highest clock it has seen in the space. When it receives a change, it raises its "highest seen" to that change's clock. The clock therefore never runs backwards, and a change always has a higher clock than every change its author had seen. When the counter is full, the clock carries into the next millisecond with counter 0, whatever the wall clock says, so a member never waits: a change from a member whose clock runs far ahead, with its counter full, cannot stop anyone from writing. Refusing to write until the wall clock catches up, or a capped wait, were not taken: a member that waited for its wall clock could be stopped from writing, possibly for years, by one change with a far-future clock and a full counter, since such clocks are never refused. Only the largest value a clock holds, in the year 10889, has no next one, and there the core refuses to write rather than wrap around.
 
 The clock is the **stamp** that RFC 0004 orders writes by. RFC 0004 defines the full order and its tie-breaks (on equal clocks, the author member id and then the operation id, as bytes). This RFC guarantees what that order needs: every operation has an id no other operation shares, every member reads the same clock, author member id and operation id from the same change, and a change's clock is higher than the clock of every change its author had seen.
 
@@ -264,7 +275,7 @@ Every part of a change has exactly one byte representation. Two members that enc
 
 ### The CBOR profile
 
-Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) with the core deterministic encoding of §4.2.1, restricted further:
+Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)) with the core deterministic encoding of §4.2.1, restricted further. CBOR is deterministic in this profile, self-describing, so old clients can keep what they do not understand, and has maintained libraries in Rust and TypeScript. The formats not taken are in the table below.
 
 - **Lengths are definite and minimal.** No indefinite-length items. Every integer and every length uses its shortest form.
 - **Maps have unsigned integer keys only**, sorted by the bytes of their encoding, each key at most once. Values of a field type may use text keys, sorted the same way.
@@ -274,6 +285,8 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
 - **Nesting** stops at 32 levels, counted from the frame: the frame is level 1, and every item of an array or map is one level deeper than the array or map. The header, which the frame carries as a byte string, is level 2, and the payload, which the header carries as a byte string, is level 3, so an operation's value starts at level 6. Every other byte string is one item, whatever it holds: the contents of a Yrs update of rich text or of a stream chunk do not count. Every decoder, on a member and on the relay, refuses a deeper value before it recurses into it, so a deep value cannot overflow its stack.
+
+Without a limit, a value nested in about 1 to 10 KB of bytes overflowed the stack of every member and relay that decoded it. 32 levels leave an operation's value 27 and need little stack in the browser. A limit of 128 levels was not taken, because it needs more stack in the browser; nor was no limit with iterative decoders in every language.
 
 A decoder accepts only canonical bytes. After decoding, the core encodes the value again and compares the bytes. A change that is not canonical is rejected, and never "repaired", because a repaired change would have another id and an invalid signature. A payload that is not canonical is never repaired either; the member keeps the frame and parks the change (step 5a of [What a member does with a change it receives](#what-a-member-does-with-a-change-it-receives)). The core keeps the exact bytes it received and never re-encodes a stored change.
 
@@ -297,7 +310,9 @@ The format changes only by adding. Each layer carries its own version, and an ol
 - **An operation on a collection or field the client's `model.lock.json` does not know** is stored with the change, and the rest of the change is folded. When the client upgrades and the field becomes known, the core folds the stored operations, in the total order, as if they had just arrived. This is the one exception to the atomic change (see [Operations](#operations-object-field-and-value)).
 - **A change of another model** is stored, not folded, with the reason "another model": its payload key 64 names a `model.id` other than the one of the member's `model.lock.json`. A change without key 64 is folded as before, because the key is "may ignore" ([The writer's model](#the-writers-model)).
 
-A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). Parked waits for an upgrade of the client; a change of another model stays parked after every upgrade, because a client's `model.id` never changes. A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)).
+A change that a client keeps without folding is **parked**, and so is a single operation it keeps without folding. Parked changes stay in the log, are forwarded and are counted. The SDK reports how many changes and operations are parked and why, so that "keep data you do not understand" never turns into "silently ignore it" (principle 3). This is what GENESIS.md asks: old clients keep data they do not understand yet. Refusing to sync a space until the client is upgraded was not taken.
+
+**Parked changes and convergence.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change holds the same changes as an upgraded client but shows a different state. This RFC therefore reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. Parked waits for an upgrade of the client; a change of another model stays parked after every upgrade, because a client's `model.id` never changes. A change that failed a check is not parked but **rejected**, and waits for a control change instead (see [Rejected changes](#rejected-changes)).
 
 ## The log on disk
 
@@ -319,7 +334,7 @@ log
 └── frame            the exact bytes of the change, as received or written
 ```
 
-Appending a change and folding it happen in one SQLite transaction, so after a crash the log and the view always agree: a change is in both or in neither. A parked or rejected change is appended in the same way, without a fold. Every other table, such as an index from author and sequence to change id, the list of gaps, or the list of parked operations of a folded change, can be rebuilt from the frames. The frame is the only source of truth.
+The log is a table in the SQLite database of the local view, so appending a change and folding it happen in one SQLite transaction, and the storage is the same natively and in the browser. After a crash the log and the view always agree: a change is in both or in neither. A parked or rejected change is appended in the same way, without a fold. Every other table, such as an index from author and sequence to change id, the list of gaps, or the list of parked operations of a folded change, can be rebuilt from the frames. The frame is the only source of truth.
 
 The state of an entry is local and may change: parked becomes folded after an upgrade, and rejected becomes folded when the control change it lacked arrives (see [Rejected changes](#rejected-changes)). The state and the reason follow from the frames the member holds and its `model.lock.json`, never from the relay's answer. The frame never changes.
 
@@ -372,11 +387,18 @@ Steps 2 to 6, step 5a included, decide for the change as a whole. Step 7 decides
 
 The change is the atomic unit of everything that checks it: the signature, the membership and the decryption cover the change as a whole, so a member accepts all of its operations or none of them. The one exception is the fold of an operation the member's model does not know yet: that operation is parked on its own, the others are folded, and the parked one is folded after an upgrade, in the total order, as if it had just arrived.
 
-**What this does not do.** An old client can show part of one write transaction. When a newer app sets `title` and a new field `dueDate` in one transaction, an old client shows the new title without the due date, because it does not know the field. An invariant of the app that spans a known and an unknown field does not hold on the old client until it upgrades. After the upgrade it reaches the same state as every other client, because each field's state is a function of the set of its operations (RFC 0004). This is the reading of principle 2 the owner already accepted for parked changes ([Conflicts](#conflicts-with-genesismd-and-rfc-0001), point 1).
+A change that is atomic for everything, where one unknown operation parks the whole change, was not taken. Every change a newer app writes to a new field together with known ones would then hide the known edits from old clients too, so old clients would fall further behind with every schema addition; RFC 0005 relies on this to keep old clients working for weeks. The exception cannot weaken a check, because no check can pass for part of a change.
+
+**What this does not do.** An old client can show part of one write transaction. When a newer app sets `title` and a new field `dueDate` in one transaction, an old client shows the new title without the due date, because it does not know the field. An invariant of the app that spans a known and an unknown field does not hold on the old client until it upgrades. After the upgrade it reaches the same state as every other client, because each field's state is a function of the set of its operations (RFC 0004). This is the reading of principle 2 that holds for every parked change ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)).
 
 ### Rejected changes
 
-A change is **rejected** when it failed step 3, 4 or 5: it is kept in the log, with its reason, and not folded. Rejected is distinct from parked. A parked change waits for an upgrade of the client, which teaches it what the change means. A rejected change waits for a control change of its space, which gives it the author's keys, the membership or the key it lacked, or it waits forever.
+A change is **rejected** when it failed step 3, 4 or 5: it is kept in the log, with its reason, and not folded. Rejected is distinct from parked. A parked change waits for an upgrade of the client, which teaches it what the change means. A rejected change waits for a control change of its space, which gives it the author's keys, the membership or the key it lacked, or it waits forever. Each state then has one trigger: an upgrade for parked, a control change for rejected.
+
+Two options were not taken:
+
+- **Rejected only for checks that can never pass**, and parked as "waiting" for a missing membership entry or key envelope. A member cannot tell "not yet" from "never", because an author whose membership entry has not arrived looks exactly like a stranger.
+- **No new state**, a failed change dropped and reported. It loses changes that arrive before their key envelope, common in island mode, and two members would end in different states depending on the order of arrival (principles 2 and 3).
 
 **When a rejected change is checked again.** Whenever a member appends a control change of a space (a membership entry, a key envelope or a key chain entry, RFC 0003), it checks the rejected changes of that space again, from step 3, in the same transaction. A change that now passes is folded as if it had just arrived. The result of each check depends only on the change and the control changes the member holds, never on the order in which they arrived or on the time. So a change that arrives before its author's membership entry or before its key envelope is folded as soon as that entry arrives, and two members that hold the same changes hold the same rejected changes and the same view (principle 2). A bad signature or an undecryptable payload under a key the member holds never passes later; the core may skip those when it checks again.
 
@@ -388,13 +410,18 @@ A change is **rejected** when it failed step 3, 4 or 5: it is kept in the log, w
 
 A member folds its own change before it sends it (see [On a member](#on-a-member)). The relay may then refuse it (RFC 0007): most often because the author was removed from the space while it worked offline, or because a control change breaks the membership rules.
 
-The relay's refusal does not change the member's log state. The member records the relay's error code in the entry's `relay refusal`, keeps the change folded, and the SDK reports it to the app as refused by the relay. The member does not push that change to that relay again, with one exception: when a control change arrives and the member's own fold newly accepts the change, it pushes it to that relay once more, because a concurrent change may have made the revocation behind the refusal ineffective (RFC 0008, decision M19, in [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules)). It then checks the change again from step 3 with the control changes it holds: if its own check fails, for example because it now holds the membership entry that removed its author, the change becomes rejected like any other change; otherwise it stays folded.
+The relay's refusal does not change the member's log state, because the state must not depend on the relay's answer, which no other member sees. The member records the relay's error code in the entry's `relay refusal`, keeps the change folded, and the SDK reports it to the app as refused by the relay. The member does not push that change to that relay again, with one exception: when a control change arrives and the member's own fold newly accepts the change, it pushes it to that relay once more, because a concurrent change may have made the revocation behind the refusal ineffective ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). Without that, such a change would never reach the members that sync only through the relay; it cannot loop. It then checks the change again from step 3 with the control changes it holds: if its own check fails, for example because it now holds the membership entry that removed its author, the change becomes rejected like any other change; otherwise it stays folded.
+
+Two options were not taken:
+
+- **The change becomes rejected**, and the member recomputes its view without it. A peer that received the change directly keeps it folded, so two members holding the same changes would differ (principle 2), and the relay could make a member drop any of its own changes by refusing it.
+- **The member keeps pushing it until the relay accepts it.** That never ends for a removed author.
 
 **What this does not do.** Members that sync only through the relay never receive a refused change. Its author sees the write in its view, and they do not. A member that receives it directly from a peer, in island mode, folds it if its own checks pass. The SDK tells the author's app, which is the only place that can tell its user. The core never undoes the write on its own; the app can write a new change that reverts it.
 
 ### A payload that decrypts but does not decode
 
-The payload decrypts, so the signature and the AEAD show that a member of the space wrote it, but the plaintext does not decode as a payload map. The member parks the change with the reason "unknown payload format", whatever the cause ([D13](#d13-a-payload-that-decrypts-but-does-not-decode)).
+The payload decrypts, so the signature and the AEAD show that a member of the space wrote it, but the plaintext does not decode as a payload map. The member parks the change with the reason "unknown payload format", whatever the cause.
 
 A plaintext that decrypts can fail to decode for four causes:
 
@@ -407,7 +434,12 @@ The first three are malformed: a buggy or hostile author wrote them. The fourth 
 
 What every member agrees on is the plaintext. The header is canonical, so the change has a stable id and a valid signature. The AEAD gives every member that holds the key the same plaintext, or fails for all of them. Decoding is a function of those bytes and of the core's version. So two members on the same core version that hold the same changes give the change the same state.
 
-Parking keeps convergence across core versions too. The state is a function of the plaintext bytes and the core version, like every parked state. A member that has not upgraded yet shows a different view from one that has, which is the reading of principle 2 the owner accepted for parked changes ([Conflicts](#conflicts-with-genesismd-and-rfc-0001), point 1). It puts no constraint on future formats: a raised depth limit, an allowed tag or a new payload format is one more thing an upgrade can fold.
+Parking keeps convergence across core versions too. The state is a function of the plaintext bytes and the core version, like every parked state. A member that has not upgraded yet shows a different view from one that has, which is the reading of principle 2 that holds for every parked change ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)). It puts no constraint on future formats: a raised depth limit, an allowed tag or a new payload format is one more thing an upgrade can fold. Parking is the only option that keeps convergence without freezing the payload profile and the depth limit, and it needs no new state and no new reason.
+
+Two options were not taken:
+
+- **Rejected, with a new reason "undecodable payload".** No control change makes bytes decode, so after an upgrade two members holding the same changes could differ, unless such changes are checked again after every upgrade, which makes them parked in all but name.
+- **Split by cause**, a newer format parked and a malformed payload rejected. It names malformed payloads truthfully, but a member cannot read the format number of a payload that does not decode, so every relaxation of the payload profile or the depth limit would need a new header format.
 
 **What an upgrade does.** After an upgrade, the core takes every parked change through the steps again, as it does for every parked change ([Versioning](#versioning-old-clients-keep-what-they-do-not-understand)). The log keeps only the frame, so the core decrypts the payload again. A payload the new core reads is folded, in the total order, as if it had just arrived, and its operations go through step 7. A payload that no version reads stays parked, with the same reason, on every member.
 
@@ -433,7 +465,7 @@ The relay **can see**:
 - **Which members are in which space**, from the control changes it checks, and when the membership and the key generations change.
 - **The key distribution.** That a key envelope exists for each member id and generation, and the key chain entries. It cannot open them.
 - **Erasures.** When a shred entry destroys a person key, and that person key's id, but not whose key it is or what it protected. The acknowledgements show which members confirmed it.
-- **Who writes, when and how much.** For each change: the space, the author member id, the author's sequence number, the suite id, the key generation, the time the relay received it, and the size of the ciphertext. The size reveals roughly how much was written. Padding ([D8](#d8-padding-the-payload)) blurs it but does not hide it.
+- **Who writes, when and how much.** For each change: the space, the author member id, the author's sequence number, the suite id, the key generation, the time the relay received it, and the size of the ciphertext. The size reveals roughly how much was written. [Padding](#padding) blurs it but does not hide it.
 - **The rhythm of work.** A burst of small changes looks like typing; one large change after days of silence looks like a member coming back from offline work.
 - **Who reads what, and from where.** Which connection asks for which space from which cursor, and the network addresses of members, unless they connect through something that hides them.
 - **The ids of changes**, and that a change was uploaded by a member other than its author, when that happens.
@@ -456,7 +488,7 @@ What the relay **can do** despite holding no keys, and what limits it:
 
 ## What RFC 0003 and RFC 0004 need from this RFC
 
-RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are written in parallel and depend on this RFC. This section answers each of their requests.
+RFC 0003 (keys and cryptography) and RFC 0004 (merge rules) build on this RFC. This section answers what each of them needs from it; O1 to O5 are the requests as [RFC 0004, "What this RFC needs from RFC 0002"](0004-merge-rules-basic-types.md#what-this-rfc-needs-from-rfc-0002) numbers them.
 
 ### RFC 0004: merge rules
 
@@ -467,8 +499,8 @@ RFC 0003 (keys and cryptography, NOC-7) and RFC 0004 (merge rules, NOC-8) are wr
 | **O3.** If the author of change b had seen change a, a's stamp is lower than b's. | Met. A member's clock is always higher than the clock of every change it has seen ([The clock](#the-clock)). |
 | **O4.** The stamp carries wall-clock time. | Met. The upper 48 bits are milliseconds since the Unix epoch. |
 | **O5.** One canonical encoding per value, NaN and negative zero included. | Met. Every NaN is `0xf97e00`; negative zero is encoded as negative zero, positive zero as positive zero, each in its one shortest form ([The CBOR profile](#the-cbor-profile)). RFC 0004 asks for one encoding each, not for the two to be equal, so a set may hold both 0.0 and −0.0. |
-| Are stamps far in the future refused? | No. Neither the writing member nor a receiving member nor the relay refuses them; members warn. Refusing on some members and not on others would break convergence, and the relay cannot see the clock (D6). |
-| Causal delivery is not guaranteed (RFC 0004, decision 6). | Confirmed. Members fold changes as they arrive, in any order, and report missing dependencies as gaps ([Dependencies](#dependencies)). The dependencies give the causal order for diagnostics and for field types that want it; no field type may rely on them having arrived. |
+| Are stamps far in the future refused? | No. Neither the writing member nor a receiving member nor the relay refuses them; members warn. Refusing on some members and not on others would break convergence, and the relay cannot see the clock ([What the change does not carry](#what-the-change-does-not-carry)). |
+| Causal delivery is not guaranteed, and no field type of RFC 0004 assumes it. | Confirmed. Members fold changes as they arrive, in any order, and report missing dependencies as gaps ([Dependencies](#dependencies)). The dependencies give the causal order for diagnostics and for field types that want it; no field type may rely on them having arrived. |
 
 ### RFC 0003: keys and cryptography
 
@@ -522,203 +554,6 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
 8a5f0b1d2c3e4f5a0202
 ```
 
-## Decisions
-
-GENESIS.md reserves the wire and on-disk formats for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The design above describes the chosen options. The owner accepted D1 to D9 together with the readings in [Conflicts](#conflicts-with-genesismd-and-rfc-0001), and decided D10 to D12 by merging #38 and D13 by merging #54.
-
-### D1. Ordering metadata
-
-Decided (Carsten, 2026-11-07): a hybrid logical clock plus a list of dependencies.
-
-Why: "the last writer wins" matches what users expect in time, and the dependencies give the causal order at a size that does not grow with the number of keys.
-
-Not taken:
-
-- A Lamport clock plus a list of dependencies.
-- A hybrid logical clock plus a version vector.
-
-### D2. Change ids
-
-Decided (Carsten, 2026-11-07): the hash of the signed header bytes.
-
-Why: it is unique without a coordinator, every party computes it independently, and a backup restore cannot make two changes share it.
-
-Not taken:
-
-- Author member id plus author sequence.
-- A random id.
-
-### D3. Object and space ids
-
-Decided (Carsten, 2026-11-07): 128 random bits from a secure generator.
-
-Superseded for space ids by RFC 0008's decision [M7](0008-membership.md#m7-revisit-rfc-0002s-d3-for-space-ids) (Carsten, 2026-11-08): a space id is derived from its creator's member id and a random nonce, because a random space id does not bind the space to its creator ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). Object ids keep D3.
-
-Why: it leaks nothing about when an object was made into links, URLs and exports.
-
-Not taken:
-
-- UUIDv7: 48 bits of creation time and 74 random bits.
-
-### D4. Encoding
-
-Decided (Carsten, 2026-11-07): CBOR with the deterministic profile of [The CBOR profile](#the-cbor-profile).
-
-Why: it is deterministic, self-describing (so old clients can keep what they do not understand), and has maintained libraries in Rust and TypeScript.
-
-Not taken:
-
-- postcard.
-- A hand-written format.
-
-### D5. How an operation names its field
-
-Decided (Carsten, 2026-11-07): the collection's and field's names from `model.lock.json`.
-
-Why: names never change, need no id registry that two developers could fill differently, and an old client can tell which unknown field an operation is for. They cost a few bytes per operation, inside the ciphertext.
-
-Not taken:
-
-- Numeric ids that `ncdb model build` assigns.
-
-### D6. Where the clock sits
-
-Decided (Carsten, 2026-11-07): inside the payload, invisible to the relay.
-
-Why: a clock in the header would show the relay when every change was written, offline work included, and would protect only changes that pass through the relay, not those exchanged in island mode.
-
-Not taken:
-
-- In the header, so that the relay can refuse changes whose clock is far ahead of its own.
-
-### D7. Where a member stores its log
-
-Decided (Carsten, 2026-11-07): a table in the SQLite database of the local view.
-
-Why: append and fold happen in one transaction, and the storage is the same natively and in the browser.
-
-Not taken:
-
-- Separate append-only segment files.
-
-### D8. Padding the payload
-
-Decided (Carsten, 2026-11-07): pad every payload to a multiple of 256 bytes.
-
-Why: it hides the exact length of short values, such as "yes" against "no", at a cost of 128 bytes per change on average. The format allows changing the rule later, because padding is a payload field the reader ignores.
-
-Not taken:
-
-- No padding: it hides nothing of a write's length.
-- Pad to the next power of two: it hides more but doubles the size of large changes such as rich-text pastes.
-
-### D9. Changes whose meaning a client does not know
-
-Decided (Carsten, 2026-11-07): store them as parked, report them in the SDK, and fold them after an upgrade.
-
-Why: it is what GENESIS.md asks: old clients keep data they do not understand yet. It needs the reading in [Conflicts](#conflicts-with-genesismd-and-rfc-0001), point 1.
-
-Not taken:
-
-- Refuse to sync a space until the client is upgraded.
-
-### D10. The atomic unit
-
-Decided (Carsten, 2026-11-08): the change is atomic for every check; an operation the client's model does not know is parked on its own and the rest of the change is folded ([The atomic unit](#the-atomic-unit)).
-
-Why: if one unknown operation parked the whole change, every change a newer app writes to a new field together with known ones would hide the known edits from old clients too, so old clients would fall further behind with every schema addition. RFC 0005 relies on this to keep old clients working for weeks. It cannot weaken a check, because no check can pass for part of a change.
-
-Not taken:
-
-- The change is atomic for everything: one unknown operation parks the whole change.
-
-### D11. A state for changes that fail a check
-
-Decided (Carsten, 2026-11-08): a third log state, rejected, with a reason. A change that lacks a membership entry or a key envelope is rejected too, and every rejected change is checked again when a control change of its space arrives ([Rejected changes](#rejected-changes)).
-
-Why: each state then has one trigger: an upgrade for parked, a control change for rejected.
-
-Not taken:
-
-- Rejected only for checks that can never pass, and parked as "waiting" for a missing membership entry or key envelope: a member cannot tell "not yet" from "never", because an author whose membership entry has not arrived looks exactly like a stranger.
-- No new state, a failed change dropped and reported: it loses changes that arrive before their key envelope, common in island mode, and two members would end in different states depending on the order of arrival (principles 2 and 3).
-
-### D12. A folded change the relay refuses
-
-Decided (Carsten, 2026-11-08): it stays folded; the member records and reports the refusal, and only the member's own check can make it rejected ([A change the relay refuses after the member folded it](#a-change-the-relay-refuses-after-the-member-folded-it)). RFC 0008's M19 adds one exception: the member pushes it again once its own fold newly accepts it.
-
-Why: the state must not depend on the relay's answer, which no other member sees.
-
-Not taken:
-
-- It becomes rejected, and the member recomputes its view without it: a peer that received the change directly keeps it folded, so two members holding the same changes would differ (principle 2), and the relay could make a member drop any of its own changes by refusing it.
-- The member keeps pushing it until the relay accepts it: that never ends for a removed author.
-
-### D13. A payload that decrypts but does not decode
-
-Decided (Carsten, 2026-11-08): parked, with the reason "unknown payload format", whatever the cause ([A payload that decrypts but does not decode](#a-payload-that-decrypts-but-does-not-decode)).
-
-Why: it is the only option that keeps convergence without freezing the payload profile and the depth limit. It needs no new state and no new reason.
-
-Not taken:
-
-- Rejected, with a new reason "undecodable payload": no control change makes bytes decode, so after an upgrade two members holding the same changes could differ, unless such changes are checked again after every upgrade, which makes them parked in all but name.
-- Split by cause, a newer format parked and a malformed payload rejected: it names malformed payloads truthfully, but a member cannot read the format number of a payload that does not decode, so every relaxation of the payload profile or the depth limit would need a new header format.
-
-### The writer's model in payload key 64
-
-Decided (Carsten, 2026-11-08), in RFC 0005's D10 and D13: every sealed change carries its writer's `model.id` and model version in one "may ignore" payload key, and a member parks every change of another model, whole. The key's number, 64, and its encoding ([The writer's model](#the-writers-model)) are a wire format, which the owner signed off by merging #67 (Carsten, 2026-11-09).
-
-Why: an old client can say which model version it needs, and a change of another lineage parks the same way on every member instead of folding by the wrong rule. One map keeps the model id and the version together, as they name one thing.
-
-Not taken:
-
-- Two payload keys, one for the model id and one for the version.
-
-### The nesting limit
-
-Decided (Carsten, 2026-11-09): a change nests at most 32 levels, counted from the frame, and every decoder, on a member and on the relay, refuses a deeper value before it recurses into it ([The CBOR profile](#the-cbor-profile)). NOC-24.
-
-Why: without a limit, a value nested in about 1 to 10 KB of bytes overflowed the stack of every member and relay that decoded it. 32 levels leave an operation's value 27 and need little stack in the browser.
-
-Not taken:
-
-- A limit of 128 levels: it needs more stack in the browser.
-- No limit, with iterative decoders in every language.
-
-### A full clock counter
-
-Decided (Carsten, 2026-11-09): when the counter is full, the clock carries into the next millisecond with counter 0, whatever the wall clock says, so a member never waits ([The clock](#the-clock)). NOC-25.
-
-Why: a member that waited for its wall clock could be stopped from writing, possibly for years, by one change with a far-future clock and a full counter, since such clocks are never refused.
-
-Not taken:
-
-- Refuse to write until the wall clock catches up.
-- A capped wait.
-
-### Decisions this RFC follows
-
-Each line names a decision of another RFC that changes what this one says, and links where that RFC states it.
-
-- **Space ids are derived.** A space id is the first 16 bytes of a hash over the creator's member id and a random nonce in the genesis: RFC 0008's [M7](0008-membership.md#m7-revisit-rfc-0002s-d3-for-space-ids) (Carsten, 2026-11-08), [What it names](0008-membership.md#what-it-names).
-- **The key generation has a structure.** Its upper 16 bits are an ordinal and its lower 48 bits a tag derived from the rotation, so concurrent rotations name different generations: RFC 0008's [M6](0008-membership.md#m6-generation-ids) (Carsten, 2026-11-08), [Generation ids](0008-membership.md#generation-ids).
-- **The control body.** Key 1 is the entry type, key 3 the control dependencies, and the clock is absent: RFC 0008's [M18](0008-membership.md#m18-no-clock-in-control-bodies) and [M22](0008-membership.md#m22-the-wire-layout-of-the-control-bodies) (Carsten, 2026-11-08), [The control bodies](0008-membership.md#the-control-bodies).
-- **Equivocations of the genesis.** Both stay in the log, and the one with the lower change id is the genesis: RFC 0008's [M24](0008-membership.md#m24-a-creator-that-writes-two-geneses) (Carsten, 2026-11-08), [How the relay and members recognise it](0008-membership.md#how-the-relay-and-members-recognise-it).
-- **A revoked member's changes.** Changes at or below the cutoff its revocation names are accepted, those above it refused, whenever they arrive: RFC 0008's [M3](0008-membership.md#m3-which-changes-of-a-revoked-member-count) (Carsten, 2026-11-08), [The cutoff](0008-membership.md#the-cutoff).
-- **What the relay reads of control changes.** The relay applies the membership rules, so it reads the control bodies and their control dependencies: RFC 0008's [M11](0008-membership.md#m11-what-the-relay-sees) (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
-- **Pushing a refused change again.** A member pushes a refused change once more when its own fold newly accepts it: RFC 0008's [M19](0008-membership.md#m19-pushing-again-a-change-the-relay-refused) (Carsten, 2026-11-08), [How the relay applies the rules](0008-membership.md#how-the-relay-applies-the-rules).
-- **The relay learns more than the log shows.** The list of what the relay sees links RFC 0007's list of what it learns from its protocol: RFC 0007's conflict 1, ruled by the owner (Carsten, 2026-11-08), [What the relay sees](0007-relay.md#what-the-relay-sees).
-- **Who uploads.** The uploader of a change must be an authenticated current member of the space; the author may be any member whose change the rules accept: RFC 0007's conflict 4, ruled by the owner (Carsten, 2026-11-08), [What the relay checks](0007-relay.md#what-the-relay-checks).
-
-## Conflicts with GENESIS.md and RFC 0001
-
-This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the points below. The owner accepted the reading or proposal of each (Carsten, 2026-11-07). RFC 0003 and RFC 0004 have adopted this RFC's terms, the whole-header associated data and SHA-256, and RFC 0004 defines two creates of one object id, so no conflict with either remains.
-
-1. **Convergence and parked changes.** GENESIS.md's principle 2 says the same set of changes yields the same state on every member. A client that parks a change it does not understand (D9) holds the same changes as an upgraded client but shows a different state. This RFC reads principle 2 as "every member that understands all the changes it holds ends in the same state", and makes the parked changes visible. The owner confirmed this reading together with D9 A (Carsten, 2026-11-07).
-2. **What the relay sees is more than RFC 0001 lists.** RFC 0001, GENESIS.md and the FAQ say the relay sees "which key is in which space, and when and how much each key writes". [What the relay can see](#what-the-relay-can-see-and-what-it-cannot) adds the change sizes, the key generations and their timing, the rhythm of work, who reads which space from where, and that the relay can withhold changes or show members different subsets. None of it contradicts RFC 0001, but a reader of RFC 0001 alone could infer more than the design delivers, which principle 4 forbids. We proposed that RFC 0001 and the FAQ link to that section, and the owner agreed (Carsten, 2026-11-07); both now do.
-3. **"Envelope" means two things.** RFC 0001 says the relay sees a work order as "an opaque envelope", and RFC 0003 calls a wrapped space key a "key envelope". This RFC therefore calls the relay-readable part of a change its **header**, as RFC 0003 does, and uses "envelope" only for RFC 0003's key envelopes.
-
 ## Summary of the choices
 
 | Question | This RFC's answer |
@@ -738,13 +573,4 @@ This RFC agrees with GENESIS.md, RFC 0001, RFC 0003 and RFC 0004 except in the p
 
 ## History
 
-- **2026-11-08** · NOC-6 · The first version, with D1 to D9 and the readings in Conflicts, which the owner decided as recommended ([#28](https://github.com/nocentraldb/nocentraldb/pull/28)).
-- **2026-11-08** · NOC-22 · The atomic unit, the log state rejected, and a change the relay refuses after the member folded it; D10 to D12 ([#38](https://github.com/nocentraldb/nocentraldb/pull/38)).
-- **2026-11-09** · NOC-38 · Step 5a: a payload that decrypts but does not decode is parked as "unknown payload format"; D13 ([#54](https://github.com/nocentraldb/nocentraldb/pull/54)).
-- **2026-11-09** · NOC-44 · Follows RFC 0008: derived space ids, the structure of the key generation, the control body, equivocations of the genesis and of revoked members, what the relay reads of control changes, and pushing a refused change again ([#61](https://github.com/nocentraldb/nocentraldb/pull/61)).
-- **2026-11-09** · NOC-47 · Follows RFC 0007: the list of what the relay sees links RFC 0007's, and the uploader must be an authenticated current member ([#64](https://github.com/nocentraldb/nocentraldb/pull/64)).
-- **2026-11-09** · NOC-40 · The writer's model in payload key 64, with the examples M1 and M2 ([#67](https://github.com/nocentraldb/nocentraldb/pull/67)).
-- **2026-11-09** · NOC-55 · How to give feedback ([#72](https://github.com/nocentraldb/nocentraldb/pull/72)).
-- **2026-11-09** · NOC-35 · The header drops its draft number ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
-- **2026-11-10** · NOC-62 · A change nests at most 32 levels, and a full clock counter carries into the next millisecond, with the examples N1 and N2 ([#86](https://github.com/nocentraldb/nocentraldb/pull/86)).
-- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#116](https://github.com/nocentraldb/nocentraldb/pull/116)).
+- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
