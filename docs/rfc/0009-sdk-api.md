@@ -6,7 +6,7 @@ This RFC proposes the API an app or an agent uses to work with NoCentralDB: how 
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S28, on opening a database (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S29, on opening a database and the Rust names of the sync report (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -380,6 +380,8 @@ await db.sync.resume();
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
 | `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. |
 
+In Rust the report is a `SyncReport`, and its values are a `SyncStatus` ([The Rust SDK](#the-rust-sdk), decision [S29](#s29-the-rust-names-of-the-sync-report)).
+
 **`space.status`**, a report per space, with everything a space can hold that an app does not see in a read:
 
 | Value | Meaning |
@@ -452,7 +454,8 @@ while let Some(page) = live.next().await { /* ... */ }
 - **The account key and the member's kind** (decision [S20](#s20-the-account-key-that-signs-the-member-certificate)). Until the accounts RFC exists, each database draws its own account key once and keeps it next to the member key ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate, so a space adds it as a writer when no role is given ([RFC 0008, decision M14](0008-membership.md#m14-the-default-role-of-an-agent)); without it, the member is a device.
 - **The Rust names** (decision [S21](#s21-rust-names-this-rfc-did-not-list)). Besides `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`, which follow [Terms](#terms), the SDK has `ObjectId`, `SpaceId` and `ChangeId`, which print and parse as lowercase hex; `Object`, a read object, whose `id()`, `space()` and `deleted()` stand for `$id`, `$space` and `$deleted`, and whose `get::<T>(name)` reads a field; `Written`, what `write` returns, with `change` and `ids`; and `page.has_more` for `hasMore`.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
-- `subscribe` returns a `Stream`; dropping it stops it. Reports are `db.sync().current()` and `db.sync().subscribe()`.
+- `subscribe` returns a `Stream`; dropping it stops it.
+- **The sync report** (decision [S29](#s29-the-rust-names-of-the-sync-report)). `db.sync()` returns a `SyncReport`, whose `current()` gives a `SyncStatus` with `connection`, `unconfirmed`, `refused`, `epoch_changed` and `error`, and whose `subscribe()` follows it. `connection` is one of `Connection::Connected`, `Connecting`, `Offline`, `Paused` or `None`, the values of [Sync and status](#sync-and-status). The report is not named `Sync`, which would shadow Rust's `Sync` marker trait.
 - Errors are `nocentraldb::Error` with an `ErrorCode` enum whose variants are the codes above in Rust case, such as `ErrorCode::LockOutOfDate`. `Debug` of every type that holds content or a cursor prints `[redacted]` ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
 
 ## Public names
@@ -559,6 +562,9 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | `Db::open`, `OpenOptions` | Opens the database from the lock's text | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `OpenOptions::path`, `OpenOptions::in_memory` | Where the database lives: a directory, or memory for tests | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
 | `OpenOptions::key_file` | A key file for a headless agent without a keystore | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `Db::sync`, `SyncReport` | The relay connection, as a report: `current()` and `subscribe()` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
+| `SyncStatus` | What `current()` gives: `connection`, `unconfirmed`, `refused`, `epoch_changed`, `error` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
+| `Connection` | `Connected`, `Connecting`, `Offline`, `Paused`, `None` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
 | `OpenOptions::agent` | Certifies the member as an agent | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
 | `Space`, `Spaces` | A space handle; what `db.spaces()` returns | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
 | `Transaction` | What a write's closure records on | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
@@ -603,9 +609,8 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 
 ## Open questions
 
-Two questions wait for the owner, each in its own ticket:
+One question waits for the owner, in its own ticket:
 
-- **NOC-116.** The Rust names of the sync status that [Sync and status](#sync-and-status) reports.
 - **NOC-115, question 10.** The public names for pairing a device, linking an account and recovery, which the accounts RFC (RFC 0010) designs behind the entry points of [S15](#s15-accounts).
 
 ## Decisions
@@ -904,6 +909,16 @@ Not taken:
 
 - Leaving the TypeScript names open until the Node.js SDK is built.
 
+### S29. The Rust names of the sync report
+
+Decided (Carsten, 2026-11-10), on NOC-116: `Db::sync() -> SyncReport`; `SyncReport::current() -> SyncStatus { connection, unconfirmed, refused, epoch_changed, error }`; `Connection::{Connected, Connecting, Offline, Paused, None}`.
+
+Why: the names follow [Sync and status](#sync-and-status) in Rust case. `SyncReport` instead of `Sync`, because `Sync` would shadow Rust's built-in marker trait.
+
+Not taken:
+
+- Other names.
+
 ## How this RFC is tested
 
 `scripts/rfc-0009.test.mjs` and `scripts/rfc-0009-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file exists, links to RFC 0001 to 0008 and GENESIS.md, that every relative link and its anchor resolve, links from other files included, that it has a section for every part NOC-64 names, that every decision records the owner's choice, why and the options not taken, that every SDK name its TypeScript examples use is listed under [Public names](#public-names) and every row there links the RFC it builds on, that it shows the Rust SDK, and that the [RFC index](README.md) lists it. The design itself is tested where it is built: the Rust SDK's calls in `crates/nocentraldb`, and each call against the convergence harness and the view, natively and in the browser, as it is built.
@@ -919,3 +934,4 @@ Not taken:
 - **2026-11-10** · NOC-106 · S19 to S24, which the owner decided as recommended on NOC-95, written into the text where each belongs (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#118).
 - **2026-11-10** · NOC-114 · Opening a database: `keyStoreUnavailable` without a keystore or a key file, `invalidValue` without a path or memory, and the Node.js names `path`, `keyFile`, `inMemory` and `agent`, which the owner decided as recommended (S26 to S28) (#124).
+- **2026-11-10** · NOC-116 · The Rust names of the sync report, `SyncReport`, `SyncStatus` and `Connection`, which the owner decided as recommended (S29) (#124).

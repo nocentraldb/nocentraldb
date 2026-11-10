@@ -94,7 +94,7 @@ test("RFC 0009 records S26 to S28 as decided on NOC-114, with History and status
   assert.match(decision(RFC_0009, "S28"), /`keyFile`/);
   const rfc = read(RFC_0009);
   const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /S26 to S28/);
+  assert.match(status, /S26 to S29/);
   assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-114 · .*\(#\d+\)\.?$/m);
 });
 
@@ -120,7 +120,7 @@ test("RFC 0003 records decision 19 as decided on NOC-114, with History and statu
   assert.match(text, NOT_TAKEN);
   const rfc = read(RFC_0003);
   const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /16 to 19/);
+  assert.match(status, /16 to 21/);
   assert.match(
     rfc,
     /^- \*\*2026-11-10\*\* · NOC-114 · .*\(\[#\d+\]\(https:\/\/github\.com\/nocentraldb\/nocentraldb\/pull\/\d+\)\)\.?$/m,
