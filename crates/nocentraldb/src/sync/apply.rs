@@ -67,6 +67,26 @@ pub(super) fn welcome(
     Ok(())
 }
 
+/// What `added` says: this member was added to `space` while connected
+/// (RFC 0007, decision R13). A space the database does not hold yet is
+/// joined, as from `welcome`; a space the relay had stopped is synced
+/// again, and once no space stays stopped the sync status no longer
+/// reports the removal. Returns whether the session must pull, push and
+/// subscribe to the space; a space it already follows needs nothing.
+pub(super) fn added(inner: &mut Inner, space: SpaceId) -> bool {
+    let joined = !inner.spaces.contains_key(&space);
+    if joined {
+        let state = SpaceState::new(space, inner.member.key());
+        inner.spaces.insert(space, state);
+    }
+    let sync = sync(inner);
+    let restarted = sync.stopped.remove(&space);
+    if sync.stopped.is_empty() {
+        sync.removed = None;
+    }
+    joined || restarted
+}
+
 /// The cursor of `space`.
 pub(super) fn cursor(inner: &Inner, space: SpaceId) -> u64 {
     let sync = inner.sync.as_ref().expect("a database that syncs");

@@ -318,8 +318,27 @@ impl Client {
         self.recv().await
     }
 
-    /// Pushes changes to `space`; the results.
+    /// Pushes changes to `space`; the results. An accepted genesis makes
+    /// this connection's member current in the space, so its `added`
+    /// (RFC 0007, decision R13) must come right after `pushed`, and is
+    /// read here.
     pub async fn push(&mut self, req: u64, space: SpaceId, changes: &[&Change]) -> Vec<Value> {
+        let results = self.push_only(req, space, changes).await;
+        let created = changes
+            .iter()
+            .zip(&results)
+            .any(|(change, result)| is_genesis(change) && get(result, 1).is_some());
+        if created {
+            let added = self.recv().await;
+            assert_eq!(kind(&added), "added", "{added:?}");
+            assert_eq!(bytes(field(&added, 3)), space.0);
+        }
+        results
+    }
+
+    /// Pushes changes to `space`; the results, and nothing read after
+    /// `pushed`.
+    pub async fn push_only(&mut self, req: u64, space: SpaceId, changes: &[&Change]) -> Vec<Value> {
         let frames = changes.iter().map(|c| Value::Bytes(c.bytes().to_vec()));
         let push = message(
             "push",
@@ -334,6 +353,15 @@ impl Client {
         assert_eq!(uint(field(&pushed, 2)), req);
         array(field(&pushed, 3)).to_vec()
     }
+}
+
+/// Whether `change` is a space's genesis.
+pub fn is_genesis(change: &Change) -> bool {
+    use ncdb_core::change::Kind;
+    use ncdb_core::membership::{ControlBody, Entry};
+    change.header().kind == Kind::CONTROL
+        && ControlBody::decode(&change.header().payload)
+            .is_ok_and(|body| matches!(body.entry, Entry::Genesis(_)))
 }
 
 /// The `auth` message of `who` for this relay id and nonce.

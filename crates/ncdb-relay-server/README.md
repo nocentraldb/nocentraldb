@@ -36,7 +36,11 @@ Each connection holds at most 32 outgoing messages. A subscription reads the log
 
 Each step of the opening handshake (RFC 0007, "Opening a connection") must finish within 10 seconds of its start: the WebSocket upgrade, `hello`, and `auth` after the challenge. When a step takes longer, the server closes the connection, so a peer that stops halfway holds a task for at most 30 seconds. WebSocket pings do not extend a step. Once `welcome` is sent, the deadline no longer applies; an idle member stays connected. The server does not limit how many connections are open at once, so many peers that each stop in the handshake still hold one task each until their deadline passes.
 
+## A member added while it is connected
+
+When a push makes a member current in a space, such as a membership entry that adds it, the server sends `added {space}` to each of that member's open connections (RFC 0007, "Subscribe", decision R13), and the member pulls and subscribes to the space. The connection whose own push made its member current, the creator's with a genesis, gets `added` too, right after `pushed`; a member that already follows the space has nothing to do. Delivery is best-effort: a connection that closes before the message is written loses it, and its member learns of the space from `welcome` when it connects again.
+
 ## What it does not do yet
 
 - Large changes (RFC 0007, "Large changes"): the largest frame it accepts fits into one message, and `upload` answers `too_large`.
-- Its subscriptions wake only on pushes to this server process, not on another process that writes to the same database.
+- Its subscriptions wake, and its `added` messages go out, only on pushes to this server process, not on another process that writes to the same database.
