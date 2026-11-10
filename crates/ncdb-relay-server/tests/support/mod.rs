@@ -68,6 +68,18 @@ pub fn hex(bytes: &[u8]) -> String {
 /// A server on a fresh SQLite database on a free local port, on which the
 /// simulated account may create spaces.
 pub async fn server() -> (SocketAddr, TempDir) {
+    server_with(|server| server).await
+}
+
+/// As [`server`], with a connection that gives up on a member after
+/// `timeout` without progress in writing to it.
+pub async fn server_with_write_timeout(timeout: Duration) -> (SocketAddr, TempDir) {
+    server_with(|server| server.with_write_timeout(timeout)).await
+}
+
+async fn server_with(
+    configure: impl FnOnce(Server<SqliteStore>) -> Server<SqliteStore>,
+) -> (SocketAddr, TempDir) {
     let dir = TempDir::new();
     let store = SqliteStore::open(&dir.database()).expect("the database opens");
     let allowed = BTreeSet::from([account().verifying_key().to_bytes()]);
@@ -75,6 +87,7 @@ pub async fn server() -> (SocketAddr, TempDir) {
     let server = Server::bind("127.0.0.1:0", relay, RELAY_ID)
         .await
         .expect("the server binds");
+    let server = configure(server);
     let addr = server.local_addr().expect("an address");
     tokio::spawn(server.run());
     (addr, dir)
@@ -249,6 +262,24 @@ impl Client {
                 None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return,
                 Some(Ok(Message::Ping(_) | Message::Pong(_))) => continue,
                 Some(Ok(other)) => panic!("a message after the error: {other:?}"),
+            }
+        }
+    }
+
+    /// Every message until the server ends the connection, which it must
+    /// do in time. A message cut off by the end is not among them.
+    pub async fn until_closed(&mut self) -> Vec<Value> {
+        let mut messages = Vec::new();
+        loop {
+            let next = tokio::time::timeout(WAIT, self.ws.next())
+                .await
+                .expect("the server ends the connection in time");
+            match next {
+                None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return messages,
+                Some(Ok(Message::Binary(bytes))) => {
+                    messages.push(cbor::decode(&bytes).expect("canonical CBOR"));
+                }
+                Some(Ok(_)) => continue,
             }
         }
     }
