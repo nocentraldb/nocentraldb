@@ -164,7 +164,7 @@ impl Session<'_> {
     fn failed(&self, code: String) -> End {
         let _ = with(self.db, |inner| {
             if let Some(sync) = inner.sync.as_mut() {
-                sync.error = Some(code.clone());
+                sync.error = Some(wire::shown_code(&code));
             }
         });
         lost()
