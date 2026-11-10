@@ -12,6 +12,7 @@ use crate::keys::MemberPublicKey;
 use super::body::Role;
 use super::certificate::Certificate;
 use super::fields;
+use super::generations::Generations;
 
 /// What `resolve` says about one control change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +52,9 @@ pub enum Rejection {
     NoRight,
     /// The accepted revocation with this change id excludes it.
     Excluded(ChangeId),
+    /// A key chain entry that names the same generation id as another
+    /// accepted one: both are rejected (RFC 0008, decision M23).
+    DuplicateGeneration,
 }
 
 /// One member of the state, current or former.
@@ -72,21 +76,27 @@ impl MemberState {
     /// RFC 0008's membership verdict for a sealed change of this member
     /// ("Sealed changes"), from its header alone: whether the member holds
     /// an accepted grant of a role that writes, whose from generation is
-    /// the change's key generation, such that its author sequence is at
-    /// most the cutoff of every accepted revocation of the right to write
-    /// that the grant did not see. `seen` holds, for each accepted grant,
-    /// the accepted revocations it saw ([`super::Resolved::seen`]). The
-    /// header's author is the caller's to match with this member.
-    ///
-    /// **What this does not do.** The generation graph is not folded yet
-    /// (NOC-71), so a key generation counts only when it is the grant's
-    /// from generation, not when it descends from it.
-    pub fn admits(&self, header: &Header, seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>) -> bool {
+    /// the change's key generation or one it descends from in the
+    /// generation graph, such that its author sequence is at most the
+    /// cutoff of every accepted revocation of the right to write that the
+    /// grant did not see. `seen` holds, for each accepted grant, the
+    /// accepted revocations it saw ([`super::Resolved::seen`]);
+    /// `descends(generation, from)` is the space's generation graph
+    /// ([`super::Resolved::descends`]). The header's author is the
+    /// caller's to match with this member.
+    pub fn admits(
+        &self,
+        header: &Header,
+        seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>,
+        descends: impl Fn(u64, u64) -> bool,
+    ) -> bool {
         let writes = |role: Option<Role>| role >= Some(Role::Writer);
         self.grants.iter().any(|grant| {
             let seen = seen.get(&grant.change);
             writes(Some(grant.role))
-                && grant.from_generation == Some(header.key_generation)
+                && grant
+                    .from_generation
+                    .is_some_and(|from| descends(header.key_generation, from))
                 && self
                     .revocations
                     .iter()
@@ -195,6 +205,7 @@ pub(crate) fn encode(
     members: &Members,
     verdicts: &BTreeMap<ChangeId, Verdict>,
     gaps: &BTreeSet<ChangeId>,
+    generations: &Generations,
 ) -> Vec<u8> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
@@ -222,6 +233,20 @@ pub(crate) fn encode(
             Value::Array(revocations.collect()),
         ])
     });
+    let generations = generations.0.iter().map(|(generation, g)| {
+        let previous = g.previous.iter().map(|p| Value::Unsigned(*p));
+        let entries = g
+            .entries
+            .iter()
+            .map(|(change, author)| Value::Array(vec![id(change), fields::bytes(&author.0)]));
+        let recipients = g.recipients.iter().map(|r| fields::bytes(&r.0));
+        Value::Array(vec![
+            Value::Unsigned(*generation),
+            Value::Array(previous.collect()),
+            Value::Array(entries.collect()),
+            Value::Array(recipients.collect()),
+        ])
+    });
     let verdicts = verdicts.iter().map(|(change, verdict)| {
         let (code, cause) = match verdict {
             Verdict::Accepted => (0, None),
@@ -242,6 +267,7 @@ pub(crate) fn encode(
         (3, Value::Array(members.collect())),
         (4, Value::Array(verdicts.collect())),
         (5, Value::Array(gaps.iter().map(id).collect())),
+        (6, Value::Array(generations.collect())),
     ]))
 }
 
@@ -256,5 +282,6 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::NotValidWhenWritten => 7,
         Rejection::NoRight => 8,
         Rejection::Excluded(_) => 9,
+        Rejection::DuplicateGeneration => 10,
     }
 }

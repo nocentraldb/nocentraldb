@@ -13,14 +13,20 @@ use ncdb_core::membership::{Certificate, Grant, MemberState, Resolved, Revocatio
 
 use crate::store::MemberRecord;
 
-/// A member's row, decoded: its state and, for each of its accepted
-/// grants, the accepted revocations the grant saw.
+/// A member's row, decoded: its state, for each of its accepted grants the
+/// accepted revocations the grant saw, and for each from generation of its
+/// grants the generations of the space's generation graph that descend from
+/// it. Every control change rewrites every row, so the generations are
+/// those of the graph at the row's last write.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MemberRow {
     /// Its keys, certificate, role, grants and revocations.
     pub state: MemberState,
     /// For each of its accepted grants, the accepted revocations it saw.
     pub seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
+    /// For each from generation of its grants, the generations that are it
+    /// or descend from it.
+    pub descendants: BTreeMap<u64, BTreeSet<u64>>,
 }
 
 /// Why a stored row does not decode.
@@ -40,10 +46,20 @@ pub fn records(resolved: &Resolved) -> Vec<MemberRecord> {
                 .iter()
                 .filter_map(|g| Some((g.change, resolved.seen().get(&g.change)?.clone())))
                 .collect();
+            let descendants = state
+                .grants
+                .iter()
+                .filter_map(|g| g.from_generation)
+                .map(|from| {
+                    let generations = resolved.generations().map(|(id, _)| id);
+                    let below = generations.filter(|id| resolved.descends(*id, from));
+                    (from, below.collect())
+                })
+                .collect();
             Some(MemberRecord {
                 member,
                 current: state.role.is_some(),
-                state: encode(state, &seen),
+                state: encode(state, &seen, &descendants),
             })
         })
         .collect()
@@ -60,6 +76,7 @@ pub fn decode(record: &MemberRecord) -> Result<MemberRow, RecordError> {
         grants,
         revocations,
         seen,
+        descendants,
     ] = items(value)?;
     let certificate = Certificate::decode(&bytes(certificate)?).map_err(|_| RecordError)?;
     let grants = list(grants)?
@@ -93,6 +110,14 @@ pub fn decode(record: &MemberRecord) -> Result<MemberRow, RecordError> {
             Ok((change_id(grant)?, revocations.collect::<Result<_, _>>()?))
         })
         .collect::<Result<_, RecordError>>()?;
+    let descendants = list(descendants)?
+        .into_iter()
+        .map(|entry| {
+            let [from, generations] = items(entry)?;
+            let generations = list(generations)?.into_iter().map(unsigned);
+            Ok((unsigned(from)?, generations.collect::<Result<_, _>>()?))
+        })
+        .collect::<Result<_, RecordError>>()?;
     let state = MemberState {
         key: MemberPublicKey {
             signing: array(signing)?,
@@ -106,13 +131,22 @@ pub fn decode(record: &MemberRecord) -> Result<MemberRow, RecordError> {
     if state.key.id() != record.member {
         return Err(RecordError);
     }
-    Ok(MemberRow { state, seen })
+    Ok(MemberRow {
+        state,
+        seen,
+        descendants,
+    })
 }
 
 /// The canonical bytes of a member's state and its grants' seen
 /// revocations: one array of the keys, the certificate, the role, the
-/// grants, the revocations and the seen sets. A role is 0 for none.
-fn encode(state: &MemberState, seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>) -> Vec<u8> {
+/// grants, the revocations, the seen sets and the descendants of each from
+/// generation. A role is 0 for none.
+fn encode(
+    state: &MemberState,
+    seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>,
+    descendants: &BTreeMap<u64, BTreeSet<u64>>,
+) -> Vec<u8> {
     let id = |id: &ChangeId| Value::Bytes(id.0.to_vec());
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
     let grants = state.grants.iter().map(|g| {
@@ -141,6 +175,18 @@ fn encode(state: &MemberState, seen: &BTreeMap<ChangeId, BTreeSet<ChangeId>>) ->
         Value::Array(grants.collect()),
         Value::Array(revocations.collect()),
         Value::Array(seen.collect()),
+        Value::Array(
+            descendants
+                .iter()
+                .map(|(from, generations)| {
+                    let generations = generations.iter().map(|g| Value::Unsigned(*g));
+                    Value::Array(vec![
+                        Value::Unsigned(*from),
+                        Value::Array(generations.collect()),
+                    ])
+                })
+                .collect(),
+        ),
     ]))
 }
 
@@ -193,8 +239,13 @@ fn role(value: Value) -> Result<Option<Role>, RecordError> {
 
 impl MemberRow {
     /// RFC 0008's membership verdict for a sealed change of this member:
-    /// the core's [`MemberState::admits`].
+    /// the core's [`MemberState::admits`], over the generation graph the
+    /// row holds.
     pub fn admits(&self, header: &Header) -> bool {
-        self.state.admits(header, &self.seen)
+        self.state.admits(header, &self.seen, |generation, from| {
+            self.descendants
+                .get(&from)
+                .is_some_and(|below| below.contains(&generation))
+        })
     }
 }

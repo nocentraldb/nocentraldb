@@ -26,7 +26,6 @@ use ncdb_core::change::{Header, Kind as ChangeKind, Operation, Payload};
 use ncdb_core::clock::Hlc;
 use ncdb_core::field_op;
 use ncdb_core::ids::{ChangeId, ObjectId, OperationId, SpaceId};
-use ncdb_core::model_lock::{Direction, Index, IndexField, ModelLock, Scope};
 use ncdb_core::view::{Error, QueryError, View};
 
 use member::*;
@@ -34,39 +33,10 @@ use view_support::*;
 
 /// A second space of the member.
 const OTHER_SPACE: SpaceId = SpaceId([2; 16]);
-/// Tasks of one space by rank.
+/// Tasks of one space by rank (declared in `tests/view/model.ts`).
 const IN_SPACE: &str = "inSpace";
 /// Tasks of one space with a title, by rank, descending.
 const IN_SPACE_BY_TITLE: &str = "inSpaceByTitle";
-
-/// The tests' lock with two space-scoped indexes of tasks.
-fn scoped_lock() -> ModelLock {
-    let mut lock = lock();
-    let key = |field: &str, direction| IndexField {
-        field: field.into(),
-        direction,
-    };
-    let indexes = &mut lock.collections.get_mut(TASK).unwrap().indexes;
-    indexes.insert(
-        IN_SPACE.into(),
-        Index {
-            fields: vec![key(RANK, Direction::Asc)],
-            equal: 0,
-            scope: Scope::Space,
-            since: 1,
-        },
-    );
-    indexes.insert(
-        IN_SPACE_BY_TITLE.into(),
-        Index {
-            fields: vec![key(TITLE, Direction::Asc), key(RANK, Direction::Desc)],
-            equal: 1,
-            scope: Scope::Space,
-            since: 1,
-        },
-    );
-    lock
-}
 
 fn write(value: Value) -> Write {
     Write {
@@ -99,7 +69,7 @@ fn task(n: u8, title: Option<&str>, rank: u64) -> Vec<Operation> {
 
 /// A view of the scoped lock that received one change in each space.
 fn view_with(spaces: [(SpaceId, Vec<Operation>); 2]) -> View {
-    let mut view = View::open_in_memory(&scoped_lock()).unwrap();
+    let mut view = View::open_in_memory(&lock()).unwrap();
     let mut control = Control::default();
     view.receive(&envelope(FOUNDER, 1, 0), &mut control)
         .unwrap();
@@ -157,7 +127,7 @@ fn columns(view_db: &MemDb, index: &str) -> Vec<String> {
 #[test]
 fn a_space_scoped_index_puts_the_space_id_first_and_the_object_id_last() {
     let db = MemDb::new();
-    let _view = View::open(&db.0, &scoped_lock()).unwrap();
+    let _view = View::open(&db.0, &lock()).unwrap();
     assert_eq!(
         columns(&db, "ix_task_inSpace"),
         ["space_id", "f_rank", "object_id"]
@@ -249,7 +219,7 @@ fn a_lookup_names_a_space_exactly_when_its_index_is_scoped_to_one() {
 
 #[test]
 fn the_lookup_of_a_space_scoped_index_seeks_its_space_without_a_temporary_sort() {
-    let view = View::open_in_memory(&scoped_lock()).unwrap();
+    let view = View::open_in_memory(&lock()).unwrap();
     for index in [IN_SPACE, IN_SPACE_BY_TITLE] {
         let plans = view.plans(TASK, index).unwrap();
         assert_eq!(plans.len(), 2, "the first page and a page after a cursor");
