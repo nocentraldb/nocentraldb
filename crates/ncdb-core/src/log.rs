@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::change::Change;
+use crate::change::{Change, Kind};
 use crate::ids::{ChangeId, SpaceId};
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
@@ -266,6 +266,17 @@ impl Log {
             .filter(|entry| matches!(entry.state, Some(State::Rejected(_))))
             .map(|entry| entry.change.clone())
             .collect()
+    }
+
+    /// The control changes that passed their checks, in log order.
+    pub(crate) fn folded_controls(&self) -> impl Iterator<Item = &Change> {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                entry.change.header().kind == Kind::CONTROL
+                    && matches!(entry.state, Some(State::Folded { .. }))
+            })
+            .map(|entry| &entry.change)
     }
 
     fn entry(&self, id: ChangeId) -> Option<&Entry> {
