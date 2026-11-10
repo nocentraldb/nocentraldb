@@ -194,8 +194,11 @@ pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
 /// reads them back when it opens (NOC-147), so this decodes nothing.
 pub(super) fn own_counts(inner: &Inner) -> (u64, u64) {
     let me = inner.member.key().id();
-    inner.spaces.keys().fold((0, 0), |(unconfirmed, refused), space| {
-        let counts = inner.view.relay_counts(*space, me);
-        (unconfirmed + counts.unconfirmed, refused + counts.refused)
-    })
+    inner
+        .spaces
+        .keys()
+        .fold((0, 0), |(unconfirmed, refused), space| {
+            let counts = inner.view.relay_counts(*space, me);
+            (unconfirmed + counts.unconfirmed, refused + counts.refused)
+        })
 }

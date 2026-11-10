@@ -22,7 +22,10 @@ fn recount(db: &Db) -> (u64, u64) {
         let changes = inner.view.unconfirmed(space).unwrap();
         unconfirmed += changes.iter().filter(|c| c.header().author == me).count() as u64;
         let changes = inner.view.refused(space).unwrap();
-        refused += changes.iter().filter(|(c, _)| c.header().author == me).count() as u64;
+        refused += changes
+            .iter()
+            .filter(|(c, _)| c.header().author == me)
+            .count() as u64;
     }
     (unconfirmed, refused)
 }
