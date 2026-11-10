@@ -26,6 +26,7 @@ mod db;
 mod encode;
 mod error;
 mod id;
+mod next;
 mod object;
 mod query;
 mod space;

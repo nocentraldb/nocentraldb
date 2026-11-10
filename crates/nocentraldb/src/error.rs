@@ -29,6 +29,9 @@ pub enum ErrorCode {
     NotFound,
     /// A value does not fit the field's kind.
     InvalidValue,
+    /// The space's genesis names another `model.id` than the lock's; the
+    /// message names both.
+    SpaceOfAnotherModel,
     /// The cursor was made under another model, index or equality prefix.
     CursorOfAnotherModel,
 }

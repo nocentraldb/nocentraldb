@@ -200,6 +200,11 @@ impl View {
         Ok(appended)
     }
 
+    /// The log of `space`, when the view holds one.
+    pub fn log(&self, space: SpaceId) -> Option<&Log> {
+        self.logs.get(&space)
+    }
+
     /// The state of a change the log of `space` holds.
     pub fn state(&self, space: SpaceId, id: ChangeId) -> Option<State> {
         self.logs.get(&space)?.state(id).cloned()
