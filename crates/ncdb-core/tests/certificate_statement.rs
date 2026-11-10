@@ -70,7 +70,7 @@ fn the_vector_decodes_encodes_and_verifies_with_its_statement() {
     let bytes = hex(WITH_STATEMENT);
     let certificate = Certificate::decode(&bytes).unwrap();
     assert_eq!(certificate.encode(), bytes);
-    assert_eq!(certificate.statement, Some(statement()));
+    assert_eq!(certificate.statement.as_deref(), Some(&statement()));
     assert_eq!(
         certificate.statement.as_ref().unwrap().recovery_key,
         recovery().public()
@@ -98,7 +98,7 @@ fn a_certificate_without_key_6_still_decodes_and_verifies() {
 fn a_sub_agents_certificate_carries_its_parents_account_statement() {
     let parent = Certificate::decode(&hex(WITH_STATEMENT)).unwrap();
     let signed = Certificate::sign_sub_agent(&creator(), parent.account_key, sub_agent().id())
-        .with_statement(parent.statement.clone().unwrap());
+        .with_statement(*parent.statement.clone().unwrap());
     let bytes = hex(SUB_AGENT_WITH_STATEMENT);
     assert_eq!(signed.encode(), bytes);
 

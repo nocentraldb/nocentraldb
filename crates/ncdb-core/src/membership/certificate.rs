@@ -73,7 +73,8 @@ pub struct Certificate {
     pub signature: [u8; 64],
     /// Key 6: the account key statement that names key 1, when the
     /// certificate carries one.
-    pub statement: Option<AccountKeyStatement>,
+    /// It is boxed, so that a certificate stays small inside a genesis.
+    pub statement: Option<Box<AccountKeyStatement>>,
 }
 
 impl Certificate {
@@ -124,7 +125,7 @@ impl Certificate {
     /// The certificate with `statement` as its key 6. Key 5 does not cover
     /// it, so the signature stays as it is.
     pub fn with_statement(mut self, statement: AccountKeyStatement) -> Certificate {
-        self.statement = Some(statement);
+        self.statement = Some(Box::new(statement));
         self
     }
 
@@ -211,7 +212,9 @@ impl Certificate {
         let statement = map
             .optional(6)
             .map(|(_, value)| {
-                AccountKeyStatement::from_value(value).map_err(|_| ChangeError::InvalidValue(6))
+                AccountKeyStatement::from_value(value)
+                    .map(Box::new)
+                    .map_err(|_| ChangeError::InvalidValue(6))
             })
             .transpose()?;
         if let Some(key) = map.0.keys().next() {
