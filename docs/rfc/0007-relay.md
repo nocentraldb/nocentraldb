@@ -545,7 +545,7 @@ So a restore always ends with a **new relay epoch**, before the relay serves any
 
 ## What it costs
 
-These are rough monthly costs, from AWS's us-east-1 list prices as we know them in November 2026. eu-central-1 (Frankfurt) is about 10 to 20 percent more expensive. Before the owner decides, the numbers must be checked in the AWS pricing calculator for the chosen region. Free tiers are left out.
+These are rough monthly costs, from AWS's us-east-1 list prices as we know them in November 2026. eu-central-1 (Frankfurt) is about 10 to 20 percent more expensive. The numbers are not yet checked in the AWS pricing calculator for eu-central-1, so they are estimates, not quotes. Free tiers are left out.
 
 Prices used: API Gateway WebSockets 1.00 USD per million messages (each up to 32 KB) and 0.25 USD per million connection minutes; Lambda on arm64 0.20 USD per million requests and 0.0000133 USD per GB-second; DynamoDB on demand 0.625 USD per million write request units and 0.125 USD per million read request units (a transactional write costs two units per KB), storage 0.25 USD per GB-month; S3 0.005 USD per thousand PUTs, 0.0004 USD per thousand GETs, 0.023 USD per GB-month; data transfer out 0.09 USD per GB after the first 100 GB; CloudWatch Logs 0.50 USD per GB.
 
