@@ -1,8 +1,9 @@
 //! RFC 0007, "Subscribe" and decision R13, over a real socket: when the
 //! relay accepts a control change that makes a member current in a space,
 //! it sends `added {space}` to each of that member's open connections,
-//! without a request id. The connection whose own push made it current, the
-//! creator's with a genesis, already knows.
+//! without a request id. That includes the connection whose own push made
+//! its member current, the creator's with a genesis: it gets `added` right
+//! after `pushed`, which the support's `push` reads and checks.
 
 mod support;
 
@@ -36,6 +37,8 @@ async fn every_connection_of_a_member_learns_that_it_was_added() {
         assert_eq!(added(&connection.recv().await), space.space.0);
     }
     stranger.quiet(200).await;
+    // The creator's `added` for its genesis was read by `push`; the add of
+    // member 1 sends it nothing.
     creator.quiet(200).await;
 
     // The member pulls the space, as for a space named in `welcome`.
@@ -55,13 +58,14 @@ async fn every_connection_of_a_member_learns_that_it_was_added() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn another_connection_of_the_creator_learns_of_its_new_space() {
+async fn every_connection_of_the_creator_learns_of_its_new_space() {
     let (addr, _dir) = server().await;
     let (mut other, _) = Client::member(addr, 0).await;
     let (mut creator, _) = Client::member(addr, 0).await;
     let space = Space::new(0);
-    let results = creator.push(1, space.space, &[&space.genesis]).await;
+    let results = creator.push_only(1, space.space, &[&space.genesis]).await;
     assert_eq!(results, [accepted(1)]);
+    assert_eq!(added(&creator.recv().await), space.space.0);
     assert_eq!(added(&other.recv().await), space.space.0);
     creator.quiet(200).await;
 }
