@@ -90,7 +90,10 @@ async fn a_former_member_is_added_again_from_a_fresh_generation() {
     let subject = resolved.member(invitation.key.id()).unwrap();
     assert_eq!(subject.role, Some(Role::Writer.into()));
     assert_eq!(
-        subject.grants.last().and_then(|grant| grant.from_generation),
+        subject
+            .grants
+            .last()
+            .and_then(|grant| grant.from_generation),
         Some(after)
     );
     drop(inner);
