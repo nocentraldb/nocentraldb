@@ -3,8 +3,15 @@
 // and the opfs-sahpool VFS of sqlite-wasm-vfs, in Chromium, Firefox and
 // WebKit through Playwright. It folds changes, closes, reopens, survives a
 // new page load, and reads back exactly what the same code reads natively.
-// In a private window of Firefox, which has no OPFS, it runs on SQLite's
-// in-memory VFS (RFC 0006, decision 12).
+// In a private window of Firefox or WebKit, which have no OPFS, it runs on
+// SQLite's in-memory VFS (RFC 0006, decision 12).
+//
+// Windows are opened as NOC-33's probe opens them
+// (scripts/browser-storage/measure.mjs): a normal window is a persistent
+// context on a profile directory, since WebKit's non-persistent context is
+// an ephemeral data store, its private window. Firefox's private window is
+// its private browsing mode, `browser.privatebrowsing.autostart`, which
+// takes effect from a profile's second launch.
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
 // `repo:browser-view` and the workflow browser-view.yml run it. A missing
@@ -49,6 +56,18 @@ const call = (page, name, ...args) =>
 
 const read = async (page) => JSON.parse(await call(page, "read"));
 
+/** A normal window of `type` on a fresh profile; `run` gets its page. */
+const inNormalWindow = async (type, run) => {
+  const dir = await mkdtemp(join(tmpdir(), "ncdb-browser-view-"));
+  const context = await type.launchPersistentContext(dir);
+  try {
+    await run(await load(context.pages()[0] ?? (await context.newPage())));
+  } finally {
+    await context.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+};
+
 /** A new page load: the old worker ends, a new one starts on first call. */
 const reload = async (page) => {
   await page.evaluate(() => window.endWorker());
@@ -64,9 +83,7 @@ test("the native harness reads the tasks back from a file in WAL mode", () => {
 
 for (const [engine, type] of Object.entries(ENGINES)) {
   test(`${engine}: the view on OPFS folds, reopens, survives a new page load and reads what the native view reads`, async () => {
-    const browser = await type.launch();
-    try {
-      const page = await load(await (await browser.newContext()).newPage());
+    await inNormalWindow(type, async (page) => {
       const opened = await call(page, "open", PATH);
       assert.equal(opened, "opfs", `${engine}: the view is not on OPFS`);
       assert.equal(await call(page, "fold"), FRAMES);
@@ -90,26 +107,18 @@ for (const [engine, type] of Object.entries(ENGINES)) {
 
       const mode = await call(page, "journalMode", PATH);
       assert.ok(ROLLBACK.includes(mode), `${engine}: journal mode ${mode}`);
-    } finally {
-      await browser.close();
-    }
+    });
   });
 
   test(`${engine}: the worker's SQLite is the release the native core builds`, async () => {
-    const browser = await type.launch();
-    try {
-      const page = await load(await browser.newPage());
+    await inNormalWindow(type, async (page) => {
       const sqlite = JSON.parse(await call(page, "sqlite"));
       assert.deepEqual(sqlite, native.sqlite, `${engine}: SQLite differs`);
-    } finally {
-      await browser.close();
-    }
+    });
   });
 
   test(`${engine}: on the page's main thread the view refuses to open`, async () => {
-    const browser = await type.launch();
-    try {
-      const page = await load(await browser.newPage());
+    await inNormalWindow(type, async (page) => {
       const refused = await page.evaluate(
         (path) =>
           window.onMain("open", path).then(
@@ -119,34 +128,52 @@ for (const [engine, type] of Object.entries(ENGINES)) {
         PATH,
       );
       assert.match(refused ?? "opened", /dedicated Web Worker/, engine);
-    } finally {
-      await browser.close();
-    }
+    });
   });
 }
 
+/** The view in a private window without OPFS: in memory, gone on reload. */
+const inMemoryUntilReload = async (page, engine) => {
+  assert.equal(await call(page, "open", PATH), "memory", `${engine}: OPFS`);
+  assert.equal(await call(page, "fold"), FRAMES);
+  assert.deepEqual(await read(page), native.read, `${engine}: in memory`);
+  await call(page, "close");
+
+  assert.equal(await call(page, "open", PATH), "memory");
+  assert.deepEqual(await read(page), native.read, `${engine}: reopened`);
+  await call(page, "close");
+
+  await reload(page);
+  assert.equal(await call(page, "open", PATH), "memory");
+  const empty = { spaces: [], tasks: [] };
+  assert.deepEqual(await read(page), empty, `${engine}: after a reload`);
+  await call(page, "close");
+};
+
 test("firefox: in a private window without OPFS the view runs in memory and is gone after a new page load", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ncdb-browser-view-"));
-  const context = await firefox.launchPersistentContext(dir, {
+  const options = {
     firefoxUserPrefs: { "browser.privatebrowsing.autostart": true },
-  });
+  };
+  // A fresh profile's first launch ignores the autostart pref, as NOC-33's
+  // probe found, so one launch sets the profile up first.
+  await (await firefox.launchPersistentContext(dir, options)).close();
+  const context = await firefox.launchPersistentContext(dir, options);
   try {
     const page = await load(context.pages()[0] ?? (await context.newPage()));
-    assert.equal(await call(page, "open", PATH), "memory");
-    assert.equal(await call(page, "fold"), FRAMES);
-    assert.deepEqual(await read(page), native.read, "folded in memory");
-    await call(page, "close");
-
-    assert.equal(await call(page, "open", PATH), "memory");
-    assert.deepEqual(await read(page), native.read, "reopened in the worker");
-    await call(page, "close");
-
-    await reload(page);
-    assert.equal(await call(page, "open", PATH), "memory");
-    assert.deepEqual(await read(page), { spaces: [], tasks: [] });
-    await call(page, "close");
+    await inMemoryUntilReload(page, "firefox");
   } finally {
     await context.close();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("webkit: in a private window (an ephemeral context) without OPFS the view runs in memory and is gone after a new page load", async () => {
+  const browser = await webkit.launch();
+  try {
+    const page = await load(await (await browser.newContext()).newPage());
+    await inMemoryUntilReload(page, "webkit");
+  } finally {
+    await browser.close();
   }
 });
