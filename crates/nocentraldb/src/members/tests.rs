@@ -115,7 +115,7 @@ fn an_invitation_whose_certificate_does_not_hold_is_refused() {
         };
         let refused = now(project.members().add(&invitation, options)).unwrap_err();
 
-        assert_eq!(refused.code(), ErrorCode::InvalidValue);
+        assert_eq!(refused.code(), ErrorCode::InvalidCertificate);
     }
 }
 
@@ -215,6 +215,8 @@ fn a_member_that_was_removed_may_not_add_one() {
     assert_eq!(refused.code(), ErrorCode::NotMember);
 }
 
+/// A former member stays `InvalidValue` until re-adding it with a
+/// rotation is built (RFC 0008, M5; NOC-169).
 #[test]
 fn a_member_or_a_former_member_is_not_added_again() {
     let account = SigningKey::from_bytes(&[9; 32]);
@@ -224,6 +226,6 @@ fn a_member_or_a_former_member_is_not_added_again() {
     remove(&admin, &project, &invitation);
     let re_grant = now(project.members().add(&invitation, writer())).unwrap_err();
 
-    assert_eq!(again.code(), ErrorCode::InvalidValue);
+    assert_eq!(again.code(), ErrorCode::AlreadyMember);
     assert_eq!(re_grant.code(), ErrorCode::InvalidValue);
 }
