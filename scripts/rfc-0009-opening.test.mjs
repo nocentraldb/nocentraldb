@@ -5,8 +5,9 @@
 // memory is refused with `invalidValue`; and the TypeScript SDK takes the same
 // options as `path`, `keyFile`, `inMemory` and `agent`, in Node.js only, while
 // the browser has no path and keeps its key as RFC 0006 says. Each answer
-// stands in the text where it belongs, with its decision in short form and a
-// dated History line, and NOC-114 leaves RFC 0009's open questions.
+// stands in the text where it belongs; for RFC 0009 with its reason and the
+// options not taken (rfc-0009-fresh.test.mjs), and for RFC 0003 with its
+// decision in short form and a dated History line.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { assertLinksResolve, read, section } from "./lib/rfc-text.mjs";
@@ -29,7 +30,6 @@ const decision = (path, id) => {
   return found.split(/^### /m)[0];
 };
 
-const DECIDED = /^Decided \(Carsten, 2026-11-10\), on NOC-114: /m;
 const NOT_TAKEN = /^Not taken:\n\n- /m;
 
 test("RFC 0009's Open and close names the Node.js options and what a missing one does", () => {
@@ -81,31 +81,6 @@ test("RFC 0009's Public names lists the Node.js options and keyStoreUnavailable"
   const [keystore] = rowsStarting(names, /`keyStoreUnavailable`/);
   assert.ok(keystore, "Public names has no row for keyStoreUnavailable");
   assert.match(keystore, /0003-keys-and-cryptography\.md#the-member-key/);
-});
-
-test("RFC 0009 records S26 to S28 as decided on NOC-114, with History and status", () => {
-  for (const id of ["S26", "S27", "S28"]) {
-    const text = decision(RFC_0009, id);
-    assert.match(text, DECIDED, id);
-    assert.match(text, NOT_TAKEN, `${id} lists no option not taken`);
-  }
-  assert.match(decision(RFC_0009, "S26"), /`keyStoreUnavailable`/);
-  assert.match(decision(RFC_0009, "S27"), /`invalidValue`/);
-  assert.match(decision(RFC_0009, "S28"), /`keyFile`/);
-  const rfc = read(RFC_0009);
-  const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /S26 to S29/);
-  assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-114 · .*\(#\d+\)\.?$/m);
-});
-
-test("NOC-114 leaves RFC 0009's open questions, and NOC-115 stays", () => {
-  const open = section(read(RFC_0009), "open-questions");
-  assert.doesNotMatch(open, /NOC-114/);
-  assert.match(
-    open,
-    /^(?:One question waits|\w+ questions wait) for the owner/m,
-  );
-  assert.match(open, /\*\*NOC-115, question 10\.\*\*/);
 });
 
 test("RFC 0003's member key says opening fails with keyStoreUnavailable", () => {

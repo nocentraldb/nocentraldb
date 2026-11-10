@@ -588,7 +588,7 @@ Not taken:
 
 ### 19. Opening without a keystore or a key file
 
-Decided (Carsten, 2026-11-10): opening fails with a new error code, `keyStoreUnavailable`, whose message names the key-file option ([RFC 0009, S26](0009-sdk-api.md#s26-opening-without-a-keystore-or-a-key-file)). Asked on NOC-114.
+Decided (Carsten, 2026-11-10): opening fails with a new error code, `keyStoreUnavailable`, whose message names the key-file option ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)). Asked on NOC-114.
 
 Why: the developer learns what to do, and a key reaches disk only in a file the app chose.
 
