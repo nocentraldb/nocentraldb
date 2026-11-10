@@ -14,8 +14,11 @@ use ncdb_relay::{Config, Relay};
 use tokio::net::{TcpListener, ToSocketAddrs};
 
 use connection::Shared;
+use hub::Hub;
 
 mod connection;
+mod hub;
+mod subscription;
 pub mod wire;
 
 /// The largest message, in bytes, on every backend (RFC 0007, decision R4).
@@ -56,6 +59,7 @@ impl<S: RelayStore + 'static> Server<S> {
         let shared = Arc::new(Shared {
             relay: Arc::new(relay),
             relay_id,
+            hub: Hub::default(),
         });
         Ok(Server { listener, shared })
     }

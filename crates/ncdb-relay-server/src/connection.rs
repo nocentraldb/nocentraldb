@@ -3,29 +3,34 @@
 //! check goes through the relay core; this module only reads and writes
 //! messages.
 
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
-use ncdb_core::ids::MemberId;
+use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_relay::store::RelayStore;
-use ncdb_relay::{ErrorCode, Relay, auth};
+use ncdb_relay::{ErrorCode, Pushed, Relay, auth};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
+use crate::hub::Hub;
+use crate::subscription;
 use crate::wire::{self, Cursor, Malformed, Request};
 use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, VERSIONS};
 
 /// The most entries the server reads for one page of a pull; a page holds
 /// fewer when they do not fit into one message.
-const PAGE: u64 = 256;
+pub(crate) const PAGE: u64 = 256;
 
 /// What every connection of one server shares.
 pub(crate) struct Shared<S> {
     pub relay: Arc<Relay<S>>,
     pub relay_id: [u8; 16],
+    pub hub: Hub,
 }
 
 /// What the writer task sends: a message, or a close after the messages
@@ -74,6 +79,7 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         shared,
         out,
         state: State::Hello,
+        subscriptions: HashMap::new(),
     };
     while let Some(Ok(message)) = incoming.next().await {
         let open = match message {
@@ -95,6 +101,15 @@ struct Connection<S> {
     shared: Arc<Shared<S>>,
     out: mpsc::UnboundedSender<Out>,
     state: State,
+    /// The running subscription of each space: a subscription lives as
+    /// long as its connection.
+    subscriptions: HashMap<SpaceId, JoinHandle<()>>,
+}
+
+impl<S> Drop for Connection<S> {
+    fn drop(&mut self) {
+        self.subscriptions.values().for_each(JoinHandle::abort);
+    }
 }
 
 impl<S: RelayStore + 'static> Connection<S> {
@@ -168,6 +183,13 @@ impl<S: RelayStore + 'static> Connection<S> {
                 let results =
                     blocking(async move { relay.push(member, space, frames).await }).await;
                 self.send(wire::pushed(req, &results));
+                let appended = results.iter().filter_map(|result| match result {
+                    Pushed::Accepted(position) => Some(*position),
+                    _ => None,
+                });
+                if let Some(head) = appended.max() {
+                    self.shared.hub.appended(space, head);
+                }
                 true
             }
             Request::Pull(cursor) => {
@@ -190,6 +212,21 @@ impl<S: RelayStore + 'static> Connection<S> {
                     }
                     Err(code) => self.fail(Some(req), code),
                 }
+            }
+            Request::Subscribe(cursor) => {
+                let space = cursor.space;
+                let head = self.shared.hub.watch(space);
+                let running = subscription::spawn(relay, member, cursor, head, self.out.clone());
+                if let Some(previous) = self.subscriptions.insert(space, running) {
+                    previous.abort();
+                }
+                true
+            }
+            Request::Unsubscribe { space, .. } => {
+                if let Some(running) = self.subscriptions.remove(&space) {
+                    running.abort();
+                }
+                true
             }
             Request::Ping { req } => {
                 self.send(wire::pong(req));
@@ -225,6 +262,8 @@ impl Request {
             Request::Hello { .. } | Request::Auth { .. } => None,
             Request::Push { req, .. }
             | Request::Pull(Cursor { req, .. })
+            | Request::Subscribe(Cursor { req, .. })
+            | Request::Unsubscribe { req, .. }
             | Request::Ping { req } => Some(*req),
         }
     }

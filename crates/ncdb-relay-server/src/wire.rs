@@ -43,6 +43,15 @@ pub enum Request {
     },
     /// A page of a space's log after a cursor.
     Pull(Cursor),
+    /// Follow a space from a cursor; its `limit` is unused.
+    Subscribe(Cursor),
+    /// Stop following a space.
+    Unsubscribe {
+        /// The request id.
+        req: u64,
+        /// The space.
+        space: SpaceId,
+    },
     /// Liveness.
     Ping {
         /// The request id.
@@ -146,6 +155,17 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             after: unsigned(fields.take(5)?)?,
             limit: unsigned(fields.take(6)?)?,
         })),
+        "subscribe" => Some(Request::Subscribe(Cursor {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+            epoch: Epoch(fields.array(4)?),
+            after: unsigned(fields.take(5)?)?,
+            limit: 0,
+        })),
+        "unsubscribe" => Some(Request::Unsubscribe {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+        }),
         "ping" => Some(Request::Ping { req: req? }),
         _ => None,
     }

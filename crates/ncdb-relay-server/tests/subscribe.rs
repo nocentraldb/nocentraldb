@@ -22,8 +22,11 @@ fn subscribe(req: u64, space: SpaceId, epoch: &[u8], after: u64) -> Value {
     )
 }
 
+/// The positions and frames of a page.
+type Entries = Vec<(u64, Vec<u8>)>;
+
 /// The request id, positions, frames and head of an `entries` message.
-fn page(message: &Value) -> (Option<u64>, Vec<(u64, Vec<u8>)>, u64) {
+fn page(message: &Value) -> (Option<u64>, Entries, u64) {
     assert_eq!(kind(message), "entries", "{message:?}");
     let entries = array(field(message, 4))
         .iter()
