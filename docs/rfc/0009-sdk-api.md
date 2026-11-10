@@ -6,7 +6,7 @@ This RFC proposes the API an app or an agent uses to work with NoCentralDB: how 
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S29, on opening a database and the Rust names of the sync report (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S29, on opening a database and the Rust names of the sync report (Carsten, 2026-11-10), and S30 to S32, on the keystore entry, the database file and an existing database whose keys are gone (Carsten, 2026-11-10, NOC-144), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -412,7 +412,7 @@ The SDK throws one error class, `nc.Error`, with a string `code` and the ids it 
 | `modelRefused` | `nc.open` | The lock cannot be read or breaks RFC 0005's rules, has another `model.id` than the stored one, or is not an additive successor; lists each refused change ([RFC 0005, D11](0005-schema-and-model-lock.md#d11-the-check-on-the-device)). |
 | `spaceOfAnotherModel` | `db.spaces.get`, writes | The space's genesis names another `model.id`; names both ids. |
 | `storageFull` | writes, `nc.open` | The disk or the browser's quota is full. |
-| `storageFailed` | writes, reads, `nc.open` | Any other storage failure, such as a damaged database file. Freeing space would not help, so it is not `storageFull` (decision [S22](#s22-error-codes-for-cases-this-rfc-named-no-code-for)). |
+| `storageFailed` | writes, reads, `nc.open`, `Db::open` | Any other storage failure, such as a damaged database file, or an existing database whose key file or keystore entry is gone or does not read as a key record (decision [S32](#s32-an-existing-database-whose-keys-are-gone)). Freeing space would not help, so it is not `storageFull` (decision [S22](#s22-error-codes-for-cases-this-rfc-named-no-code-for)). |
 | `keyStoreUnavailable` | `nc.open` in Node.js, `Db::open` | No platform keystore is reachable and the app named no key file. The message names the key-file option, `keyFile` or `key_file` (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). |
 | `closed` | every call | The database was closed. |
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
@@ -450,7 +450,7 @@ while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
-- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns, which holds the database, and the SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped. `Db::open` with neither `path(dir)` nor `in_memory()` is refused with `invalidValue` (decision [S27](#s27-opening-without-a-path-or-memory)); with no platform keystore reachable and no `key_file` given, it fails with `keyStoreUnavailable`, whose message names `key_file` (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)).
+- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns: the SDK creates it, and it holds one SQLite file, `nocentraldb.sqlite`, which leaves room for more files later (decision [S31](#s31-the-files-in-a-databases-directory)). The SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)), in one entry per database: the service `nocentraldb`, whose user is the canonical absolute path of the database directory, so a directory that is moved or renamed loses the link to its entry (decision [S30](#s30-the-keystore-entry-of-a-database)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped. `Db::open` with neither `path(dir)` nor `in_memory()` is refused with `invalidValue` (decision [S27](#s27-opening-without-a-path-or-memory)); with no platform keystore reachable and no `key_file` given, it fails with `keyStoreUnavailable`, whose message names `key_file`, and creates nothing on disk (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). An existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys: new keys would hold none of its spaces' keys (decision [S32](#s32-an-existing-database-whose-keys-are-gone)).
 - **The account key and the member's kind** (decision [S20](#s20-the-account-key-that-signs-the-member-certificate)). Until the accounts RFC exists, each database draws its own account key once and keeps it next to the member key ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate, so a space adds it as a writer when no role is given ([RFC 0008, decision M14](0008-membership.md#m14-the-default-role-of-an-agent)); without it, the member is a device.
 - **The Rust names** (decision [S21](#s21-rust-names-this-rfc-did-not-list)). Besides `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`, which follow [Terms](#terms), the SDK has `ObjectId`, `SpaceId` and `ChangeId`, which print and parse as lowercase hex; `Object`, a read object, whose `id()`, `space()` and `deleted()` stand for `$id`, `$space` and `$deleted`, and whose `get::<T>(name)` reads a field; `Written`, what `write` returns, with `change` and `ids`; and `page.has_more` for `hasMore`.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
@@ -919,6 +919,37 @@ Not taken:
 
 - Other names.
 
+### S30. The keystore entry of a database
+
+Decided (Carsten, 2026-11-10), on NOC-144, point 2, as #134 builds it: one entry per database, with the service `nocentraldb` and, as its user, the canonical absolute path of the database directory. It holds the key record of [RFC 0003, decision 22](0003-keys-and-cryptography.md#22-the-bytes-of-the-key-record).
+
+Why: one entry per database, with nothing to keep in step. A directory that is moved or renamed loses the link to its entry, and opening it then fails ([S32](#s32-an-existing-database-whose-keys-are-gone)); it never draws a new member key silently.
+
+Not taken:
+
+- A random id stored in the database as the user: survives a move, but a copied database then shares the keystore entry with its original.
+
+### S31. The files in a database's directory
+
+Decided (Carsten, 2026-11-10), on NOC-144, point 3, as #134 builds it: the SDK creates `dir`, and `path(dir)` holds one SQLite file, `nocentraldb.sqlite`.
+
+Why: a directory the SDK owns leaves room for more files later.
+
+Not taken:
+
+- `path` names the SQLite file itself.
+
+### S32. An existing database whose keys are gone
+
+Decided (Carsten, 2026-11-10), on NOC-144, as #134 builds it: `Db::open` of an existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys. `keyStoreUnavailable` stays the error for no reachable keystore and no key file ([S26](#s26-opening-without-a-keystore-or-a-key-file)).
+
+Why: new keys would hold none of the space keys of the database's spaces, and every space would turn `notFound`. A keystore that is reachable but holds no entry is a failure of what is stored, not a missing keystore.
+
+Not taken:
+
+- Drawing new keys for the existing database: it opens, but none of its spaces can be read.
+- `keyStoreUnavailable` when the keystore holds no entry: its message names a key file, which does not help a database whose keys were in the keystore.
+
 ## How this RFC is tested
 
 `scripts/rfc-0009.test.mjs` and `scripts/rfc-0009-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file exists, links to RFC 0001 to 0008 and GENESIS.md, that every relative link and its anchor resolve, links from other files included, that it has a section for every part NOC-64 names, that every decision records the owner's choice, why and the options not taken, that every SDK name its TypeScript examples use is listed under [Public names](#public-names) and every row there links the RFC it builds on, that it shows the Rust SDK, and that the [RFC index](README.md) lists it. The design itself is tested where it is built: the Rust SDK's calls in `crates/nocentraldb`, and each call against the convergence harness and the view, natively and in the browser, as it is built.
@@ -935,3 +966,4 @@ Not taken:
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#118).
 - **2026-11-10** · NOC-114 · Opening a database: `keyStoreUnavailable` without a keystore or a key file, `invalidValue` without a path or memory, and the Node.js names `path`, `keyFile`, `inMemory` and `agent`, which the owner decided as recommended (S26 to S28) (#124).
 - **2026-11-10** · NOC-116 · The Rust names of the sync report, `SyncReport`, `SyncStatus` and `Connection`, which the owner decided as recommended (S29) (#124).
+- **2026-11-10** · NOC-149 · Where the database lives: the keystore entry, service `nocentraldb` with the database directory's canonical path, the one SQLite file `nocentraldb.sqlite`, and `storageFailed` for an existing database whose keys are gone, which the owner decided on NOC-144 and #134 builds (S30 to S32) (#135).
