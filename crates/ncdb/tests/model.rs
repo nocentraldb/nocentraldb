@@ -131,6 +131,31 @@ fn ncdb_with(dir: &Path, args: &[&str], setup: impl FnOnce(&mut Command)) -> Run
     }
 }
 
+/// Writes a fake `node` into `dir/bin` that prints `version`, and returns `dir/bin`.
+///
+/// A child `sh` writes the script, never this process: a file this process
+/// held open for writing would leak into every child another test thread
+/// forks meanwhile, and running the script while such a child lives fails
+/// with ETXTBSY (NOC-94). Renaming a finished file into place would not help,
+/// since the leaked descriptor points at the same file.
+#[cfg(unix)]
+fn fake_node(dir: &Path, version: &str) -> PathBuf {
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let status = Command::new("/bin/sh")
+        .args([
+            "-c",
+            r#"printf '#!/bin/sh\necho %s\n' "$1" > node && chmod 755 node"#,
+            "sh",
+        ])
+        .arg(version)
+        .current_dir(&bin)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    bin
+}
+
 fn read(path: PathBuf) -> String {
     fs::read_to_string(path).unwrap()
 }
@@ -467,14 +492,9 @@ fn without_node_it_says_what_it_needs() {
 #[cfg(unix)]
 #[test]
 fn a_node_older_than_24_is_refused_with_its_version() {
-    use std::os::unix::fs::PermissionsExt;
     let dir = project();
     write_schema(&dir.join("model.ts"), SCHEMA_V1);
-    let bin = dir.join("bin");
-    fs::create_dir_all(&bin).unwrap();
-    let node = bin.join("node");
-    fs::write(&node, "#!/bin/sh\necho v22.12.0\n").unwrap();
-    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    let bin = fake_node(&dir, "v22.12.0");
     let run = ncdb_with(&dir, &["model", "build"], |c| {
         c.env("PATH", &bin);
     });
@@ -485,6 +505,30 @@ fn a_node_older_than_24_is_refused_with_its_version() {
         run.stderr
     );
     assert!(!dir.join("model.lock.json").exists());
+}
+
+/// Many threads write a fake node and run it while the others spawn
+/// processes: a forked child must never hold the script open for writing
+/// when it runs (ETXTBSY, NOC-94).
+#[cfg(unix)]
+#[test]
+fn a_fake_node_runs_while_other_threads_spawn() {
+    let threads: Vec<_> = (0..16)
+        .map(|_| {
+            std::thread::spawn(|| {
+                for _ in 0..25 {
+                    let dir = project();
+                    let bin = fake_node(&dir, "v22.12.0");
+                    let output = Command::new(bin.join("node")).output().unwrap();
+                    assert_eq!(String::from_utf8(output.stdout).unwrap(), "v22.12.0\n");
+                    fs::remove_dir_all(&dir).unwrap();
+                }
+            })
+        })
+        .collect();
+    for thread in threads {
+        thread.join().unwrap();
+    }
 }
 
 #[test]
