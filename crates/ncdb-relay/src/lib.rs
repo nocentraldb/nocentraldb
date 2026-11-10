@@ -7,6 +7,11 @@
 //! SQLite, is [`sqlite`].
 
 pub mod conformance;
+mod error;
 pub mod record;
+mod relay;
 pub mod sqlite;
 pub mod store;
+
+pub use error::ErrorCode;
+pub use relay::{Config, MAX_FRAME, Pushed, Relay};
