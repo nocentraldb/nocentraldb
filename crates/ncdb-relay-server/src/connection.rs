@@ -15,8 +15,12 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-use crate::wire::{self, Malformed, Request};
+use crate::wire::{self, Cursor, Malformed, Request};
 use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, VERSIONS};
+
+/// The most entries the server reads for one page of a pull; a page holds
+/// fewer when they do not fit into one message.
+const PAGE: u64 = 256;
 
 /// What every connection of one server shares.
 pub(crate) struct Shared<S> {
@@ -124,39 +128,74 @@ impl<S: RelayStore + 'static> Connection<S> {
             Err(malformed) => return self.malformed(malformed),
         };
         match (&self.state, request) {
-            (State::Hello, Request::Hello { versions }) => {
-                let Some(version) = VERSIONS.into_iter().rev().find(|v| versions.contains(v))
-                else {
-                    return self.refuse(None, ErrorCode::UnsupportedVersion);
-                };
-                let mut nonce = [0u8; 32];
-                if getrandom::fill(&mut nonce).is_err() {
-                    return self.refuse(None, ErrorCode::Unavailable);
-                }
-                let limits = [MAX_MESSAGE, MAX_PUSH, MAX_FRAME];
-                self.send(wire::challenge(
-                    version,
-                    &self.shared.relay_id,
-                    &nonce,
-                    limits,
-                ));
-                self.state = State::Auth { nonce };
-                true
-            }
+            (State::Hello, Request::Hello { versions }) => self.hello(&versions),
             (State::Auth { nonce }, Request::Auth { key, signature }) => {
                 match auth::verify(&self.shared.relay_id, nonce, &key, &signature) {
                     Ok(member) => self.welcome(member).await,
                     Err(code) => self.refuse(None, code),
                 }
             }
-            (State::Member(_), Request::Ping { req }) => {
+            (State::Member(member), request) => {
+                let member = *member;
+                self.request(member, request).await
+            }
+            (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated),
+        }
+    }
+
+    /// Answers `hello` with a challenge, or refuses a member that speaks
+    /// none of this server's versions.
+    fn hello(&mut self, versions: &[u64]) -> bool {
+        let Some(version) = VERSIONS.into_iter().rev().find(|v| versions.contains(v)) else {
+            return self.refuse(None, ErrorCode::UnsupportedVersion);
+        };
+        let mut nonce = [0u8; 32];
+        if getrandom::fill(&mut nonce).is_err() {
+            return self.refuse(None, ErrorCode::Unavailable);
+        }
+        let limits = [MAX_MESSAGE, MAX_PUSH, MAX_FRAME];
+        let relay_id = &self.shared.relay_id;
+        self.send(wire::challenge(version, relay_id, &nonce, limits));
+        self.state = State::Auth { nonce };
+        true
+    }
+
+    /// A request of an authenticated member.
+    async fn request(&mut self, member: MemberId, request: Request) -> bool {
+        let relay = self.shared.relay.clone();
+        match request {
+            Request::Push { req, space, frames } => {
+                let results =
+                    blocking(async move { relay.push(member, space, frames).await }).await;
+                self.send(wire::pushed(req, &results));
+                true
+            }
+            Request::Pull(cursor) => {
+                let limit = u32::try_from(cursor.limit.min(PAGE)).unwrap_or(u32::MAX);
+                let Cursor {
+                    req,
+                    space,
+                    epoch,
+                    after,
+                    ..
+                } = cursor;
+                let pulled =
+                    blocking(async move { relay.pull(member, space, epoch, after, limit).await })
+                        .await;
+                match pulled {
+                    Ok(page) => {
+                        let (bytes, _) = wire::entries(Some(req), space, &page.entries, page.head);
+                        self.send(bytes);
+                        true
+                    }
+                    Err(code) => self.fail(Some(req), code),
+                }
+            }
+            Request::Ping { req } => {
                 self.send(wire::pong(req));
                 true
             }
-            (State::Member(_), Request::Hello { .. } | Request::Auth { .. }) => {
-                self.fail(None, ErrorCode::Malformed)
-            }
-            (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated),
+            Request::Hello { .. } | Request::Auth { .. } => self.fail(None, ErrorCode::Malformed),
         }
     }
 
@@ -184,7 +223,9 @@ impl Request {
     fn req(&self) -> Option<u64> {
         match self {
             Request::Hello { .. } | Request::Auth { .. } => None,
-            Request::Ping { req } => Some(*req),
+            Request::Push { req, .. }
+            | Request::Pull(Cursor { req, .. })
+            | Request::Ping { req } => Some(*req),
         }
     }
 }

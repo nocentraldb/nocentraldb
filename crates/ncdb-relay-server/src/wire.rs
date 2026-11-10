@@ -9,8 +9,12 @@
 use std::collections::BTreeMap;
 
 use ncdb_core::cbor::{self, Key, Value};
+use ncdb_core::ids::SpaceId;
 use ncdb_core::keys::MemberPublicKey;
-use ncdb_relay::ErrorCode;
+use ncdb_relay::store::{Entry, Epoch, Position};
+use ncdb_relay::{ErrorCode, Pushed};
+
+use crate::{MAX_MESSAGE, MAX_PUSH};
 
 /// A request a member sends.
 #[derive(Debug, PartialEq, Eq)]
@@ -28,11 +32,37 @@ pub enum Request {
         /// The Ed25519 signature.
         signature: Vec<u8>,
     },
+    /// Frames to append to a space.
+    Push {
+        /// The request id.
+        req: u64,
+        /// The space.
+        space: SpaceId,
+        /// The frames, at most [`MAX_PUSH`].
+        frames: Vec<Vec<u8>>,
+    },
+    /// A page of a space's log after a cursor.
+    Pull(Cursor),
     /// Liveness.
     Ping {
         /// The request id.
         req: u64,
     },
+}
+
+/// Where a pull reads from.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Cursor {
+    /// The request id.
+    pub req: u64,
+    /// The space.
+    pub space: SpaceId,
+    /// The epoch the cursor was taken in.
+    pub epoch: Epoch,
+    /// The cursor.
+    pub after: Position,
+    /// The most entries the member wants.
+    pub limit: u64,
 }
 
 /// A message the server cannot read: not canonical CBOR, not a map, an
@@ -88,6 +118,34 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             },
             signature: fields.bytes(5)?,
         }),
+        "push" => {
+            let space = SpaceId(fields.array(3)?);
+            let Value::Array(items) = fields.take(4)? else {
+                return None;
+            };
+            if items.len() > MAX_PUSH {
+                return None;
+            }
+            let frames = items
+                .into_iter()
+                .map(|item| match item {
+                    Value::Bytes(frame) => Some(frame),
+                    _ => None,
+                })
+                .collect::<Option<_>>()?;
+            Some(Request::Push {
+                req: req?,
+                space,
+                frames,
+            })
+        }
+        "pull" => Some(Request::Pull(Cursor {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+            epoch: Epoch(fields.array(4)?),
+            after: unsigned(fields.take(5)?)?,
+            limit: unsigned(fields.take(6)?)?,
+        })),
         "ping" => Some(Request::Ping { req: req? }),
         _ => None,
     }
@@ -177,6 +235,67 @@ pub fn welcome(member: &[u8; 32], epoch: &[u8; 16], spaces: &[[u8; 16]]) -> Vec<
             (5, Value::Array(spaces)),
         ],
     )
+}
+
+/// `pushed {req, results}`: per frame `{1: position}` when accepted,
+/// `{2: position}` when the relay already held it, `{3: code}` when refused.
+pub fn pushed(req: u64, results: &[Pushed]) -> Vec<u8> {
+    let results = results
+        .iter()
+        .map(|result| match result {
+            Pushed::Accepted(position) => map(vec![(1, Value::Unsigned(*position))]),
+            Pushed::Duplicate(position) => map(vec![(2, Value::Unsigned(*position))]),
+            Pushed::Rejected(code) => map(vec![(3, Value::Text(code.code().to_owned()))]),
+        })
+        .collect();
+    message("pushed", Some(req), vec![(3, Value::Array(results))])
+}
+
+/// `entries {req, space, entries, head}`, without a request id for a live
+/// subscription, with as many of `entries` as fit into one message, and how
+/// many that is. Each entry is `{1: position, 2: accepted at, 3: frame}`.
+/// The first entry always fits: the server accepts no frame larger than
+/// [`crate::MAX_FRAME`].
+pub fn entries(
+    req: Option<u64>,
+    space: SpaceId,
+    entries: &[Entry],
+    head: Position,
+) -> (Vec<u8>, usize) {
+    let items: Vec<Value> = entries
+        .iter()
+        .map(|entry| {
+            map(vec![
+                (1, Value::Unsigned(entry.position)),
+                (2, Value::Unsigned(entry.accepted_at)),
+                (3, Value::Bytes(entry.frame.clone())),
+            ])
+        })
+        .collect();
+    let encode = |items: Vec<Value>| {
+        message(
+            "entries",
+            req,
+            vec![
+                (3, Value::Bytes(space.0.to_vec())),
+                (4, Value::Array(items)),
+                (5, Value::Unsigned(head)),
+            ],
+        )
+    };
+    // The empty page, plus the longest an array's length can grow (9
+    // bytes), plus each entry's encoding.
+    let mut size = encode(Vec::new()).len() + 8;
+    let mut fit = 0;
+    for item in &items {
+        size += cbor::encode(item).len();
+        if fit > 0 && size > MAX_MESSAGE {
+            break;
+        }
+        fit += 1;
+    }
+    let bytes = encode(items.into_iter().take(fit).collect());
+    (bytes, fit)
 }
 
 /// `pong {req}`.
