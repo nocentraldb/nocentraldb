@@ -1,7 +1,7 @@
 // Asserts RFC 0007 as one complete text (NOC-101), as docs/rfc/README.md's
 // "How a decided RFC changes" asks. RFC 0007 never had amendment sections, so
 // what is checked is the rest of the rule: no amendment section or mark;
-// "Open questions" says whether one is left; "Decisions" keeps R1 to R12 in
+// "Open questions" says whether one is left; "Decisions" keeps R1 to R13 in
 // short form, with the owner's name and date, why, and the options not taken;
 // "History" names this rewrite's pull request; the status says what is built;
 // and every link other files use into RFC 0007 still resolves.
@@ -103,14 +103,14 @@ test("Open questions says whether the owner still has one", () => {
   assert.match(section(read(), "open-questions"), /\S/);
 });
 
-test("Decisions keeps R1 to R12 in short form: decided, why, and the options not taken", () => {
+test("Decisions keeps R1 to R13 in short form: decided, why, and the options not taken", () => {
   const found = decisions();
   assert.deepEqual(
     found.map((d) => d.id),
-    Array.from({ length: 12 }, (_, i) => `R${i + 1}`),
+    Array.from({ length: 13 }, (_, i) => `R${i + 1}`),
   );
   for (const { id, text } of found) {
-    const date = id === "R12" ? "2026-11-10" : "2026-11-08";
+    const date = ["R12", "R13"].includes(id) ? "2026-11-10" : "2026-11-08";
     assert.match(text, new RegExp(`^Decided \\(Carsten, ${date}\\)`, "m"), id);
     assert.match(text, /^Why: /m, `${id} gives no reason`);
     assert.match(
@@ -122,6 +122,7 @@ test("Decisions keeps R1 to R12 in short form: decided, why, and the options not
   }
   assert.match(decision("R7"), /M3/);
   assert.match(decision("R12"), /NOC-98/);
+  assert.match(decision("R13"), /NOC-143/);
 });
 
 test("every in-page link of RFC 0007 resolves to a heading", () => {
