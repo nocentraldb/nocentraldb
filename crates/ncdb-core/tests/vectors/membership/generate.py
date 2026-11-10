@@ -3,7 +3,9 @@
 independently of the Rust core: with cbor2 (6.2.1, canonical mode) for the
 bytes, hashlib for the hashes, cryptography's Ed25519 and HKDF, and PyNaCl's
 XChaCha20-Poly1305 (libsodium) for the sealed model id and the encrypted
-previous key of a key chain entry. RFC 0008 gives no
+previous key of a key chain entry. It also writes RFC 0003's recovery key,
+account key statement and the certificates that carry one as key 6. RFC
+0008 gives no
 byte-exact examples, so these follow its text and RFC 0003's "Formats of
 what keys sign and derive". The gates do not run this script;
 tests/membership_body.rs checks the committed files, natively and in wasm32.
@@ -184,6 +186,35 @@ PREVIOUS_FIELD = CHAIN_NONCE + crypto_aead_xchacha20poly1305_ietf_encrypt(
 assert len(PREVIOUS_FIELD) == 72
 key_chain = {1: 3, 3: [ADD_ID], 8: SECOND_GENERATION, 9: [{1: FIRST_GENERATION, 2: PREVIOUS_FIELD}], 10: []}
 
+# RFC 0003, "Recovery key": the seed is HKDF-SHA256 of the recovery code's
+# 128 bits, with no salt and the info "nocentraldb/recovery-key", 32 bytes,
+# used as the recovery key's Ed25519 secret.
+RECOVERY_CODE = bytes(0xA0 + i for i in range(16))
+RECOVERY_SEED = HKDF(
+    algorithm=hashes.SHA256(), length=32, salt=None, info=b"nocentraldb/recovery-key"
+).derive(RECOVERY_CODE)
+RECOVERY = Ed25519PrivateKey.from_private_bytes(RECOVERY_SEED)
+RECOVERY_PUBLIC = raw(RECOVERY.public_key())
+
+# RFC 0003, "Account key statement": the recovery key signs the SHA-256
+# hash of the context string and the canonical map of keys 1 to 3. This
+# one names the account key above as the account's first.
+statement_fields = {1: RECOVERY_PUBLIC, 2: ACCOUNT_PUBLIC, 3: 1}
+STATEMENT = {
+    **statement_fields,
+    4: RECOVERY.sign(sha256(b"nocentraldb/account-key-statement" + enc(statement_fields))),
+}
+
+# RFC 0003, "Member certificate": key 6 carries the statement, as a map,
+# outside key 5's signature, so the signature is the one without key 6. A
+# sub-agent's certificate carries its parent's account's statement.
+CREATOR_CERT_WITH_STATEMENT = {**CREATOR_CERT, 6: STATEMENT}
+SUB_AGENT_CERT_WITH_STATEMENT = {**SUB_AGENT_CERT, 6: STATEMENT}
+
+write("recovery-public", RECOVERY_PUBLIC)
+write("statement", enc(STATEMENT))
+write("certificate-with-statement", enc(CREATOR_CERT_WITH_STATEMENT))
+write("sub-agent-certificate-with-statement", enc(SUB_AGENT_CERT_WITH_STATEMENT))
 write("certificate", enc(CREATOR_CERT))
 write("sub-agent-certificate", enc(SUB_AGENT_CERT))
 write("space-id", SPACE)
