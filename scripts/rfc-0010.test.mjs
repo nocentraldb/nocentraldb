@@ -220,6 +220,10 @@ test("History holds one line: the first publication as a fresh text", () => {
     .split("\n")
     .filter((l) => l.startsWith("- "));
   assert.deepEqual(lines, [
-    "- **2026-11-10** · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165).",
+    "- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)",
   ]);
+  // NOC-165: the intro names no decision of another RFC by its id.
+  const rfc = read();
+  assert.doesNotMatch(rfc, /decision S15/);
+  assert.doesNotMatch(rfc, /decisions? (16 and )?17/);
 });
