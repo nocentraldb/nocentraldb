@@ -83,7 +83,9 @@ test("RFC 0008 has a section for every topic of NOC-23", () => {
     "How the relay applies the rules",
     "Groups",
     "Rejected options",
-    "Decisions for the owner",
+    "Open questions",
+    "Decisions",
+    "History",
   ];
   for (const heading of required) {
     assert.ok(found.includes(heading), `missing section: ## ${heading}`);
