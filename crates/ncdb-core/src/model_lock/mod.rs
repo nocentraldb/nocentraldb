@@ -221,6 +221,9 @@ pub enum Kind {
     Link(Vec<String>),
     /// `ncdb/links`, with the collections a target may be in.
     Links(Vec<String>),
+    /// `ncdb/ref`, a reference into any space, with the collections a
+    /// target may be in (RFC 0005, Amendment 5).
+    Ref(Vec<String>),
     /// A plugin's field type: its id `<namespace>/<name>` and its options.
     Plugin {
         /// The type id.
@@ -276,6 +279,7 @@ impl Kind {
             Kind::Set(_) => "ncdb/set",
             Kind::Link(_) => "ncdb/link",
             Kind::Links(_) => "ncdb/links",
+            Kind::Ref(_) => "ncdb/ref",
             Kind::Plugin { type_id, .. } => type_id,
         }
     }
@@ -289,9 +293,10 @@ impl Kind {
         )
     }
 
-    /// Whether an index can use the type: a basic value or a single link.
+    /// Whether an index can use the type: a basic value, a single link or
+    /// a reference.
     pub fn is_indexable(&self) -> bool {
-        self.is_basic() || matches!(self, Kind::Link(_))
+        self.is_basic() || matches!(self, Kind::Link(_) | Kind::Ref(_))
     }
 
     /// The type as a person reads it: the id, and for a set its element's
@@ -311,10 +316,10 @@ impl Kind {
         }
     }
 
-    /// The target collections of a link or links.
+    /// The target collections of a link, links or a reference.
     pub fn targets(&self) -> Option<&[String]> {
         match self {
-            Kind::Link(targets) | Kind::Links(targets) => Some(targets),
+            Kind::Link(targets) | Kind::Links(targets) | Kind::Ref(targets) => Some(targets),
             _ => None,
         }
     }

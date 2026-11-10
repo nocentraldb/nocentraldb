@@ -14,6 +14,7 @@ use super::model::{Direction, Field, Index, Invalid, Model};
 use crate::basic::{BasicValue, Kind};
 use crate::link::{Link, Links};
 use crate::model_lock::{self, Element, ModelLock, check};
+use crate::reference::Reference;
 use crate::set::Set;
 
 impl Model {
@@ -70,6 +71,9 @@ fn field_type(kind: &model_lock::Kind) -> Option<Field> {
             collections: targets(t),
         })),
         model_lock::Kind::Links(t) => Some(Field::Links(Links {
+            collections: targets(t),
+        })),
+        model_lock::Kind::Ref(t) => Some(Field::Ref(Reference {
             collections: targets(t),
         })),
         model_lock::Kind::Plugin { .. } => None,

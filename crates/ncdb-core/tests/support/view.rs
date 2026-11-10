@@ -11,7 +11,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ncdb_core::basic;
 use ncdb_core::change::Operation;
 use ncdb_core::field_op::{Encoding, Origin};
 use ncdb_core::ids::ObjectId;
@@ -19,7 +18,6 @@ use ncdb_core::log::OperationParkReason;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::object::{Object, ObjectOperation};
 use ncdb_core::receive::Fold;
-use ncdb_core::set;
 use ncdb_core::view::{Field, FieldState, Model};
 
 /// The tasks, with fields of each kind, as `member.rs` names them.
@@ -144,14 +142,11 @@ impl Fold for Reference {
             .expect("a known field")
             .clone();
         let key = (operation.object, operation.collection.clone(), name);
-        let empty = match field {
-            Field::Basic(_) | Field::Link(_) => FieldState::Basic(basic::State::default()),
-            Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
-        };
-        let mut state = self.fields.get(&key).cloned().unwrap_or(empty);
+        let mut state = self.fields.get(&key).cloned().unwrap_or(field.empty());
         match (&field, &mut state) {
             (Field::Basic(t), FieldState::Basic(s)) => apply(t, s, operation, origin)?,
             (Field::Link(t), FieldState::Basic(s)) => apply(t, s, operation, origin)?,
+            (Field::Ref(t), FieldState::Basic(s)) => apply(t, s, operation, origin)?,
             (Field::Set(t), FieldState::Set(s)) => apply(t, s, operation, origin)?,
             (Field::Links(t), FieldState::Set(s)) => apply(t, s, operation, origin)?,
             _ => unreachable!("the state matches the field type"),
@@ -162,6 +157,15 @@ impl Fold for Reference {
 
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         self.objects.entry(object).or_default().apply(operation);
+    }
+
+    fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str) {
+        self.fields
+            .remove(&(object, collection.to_owned(), field.to_owned()));
+    }
+
+    fn clear_object(&mut self, object: ObjectId) {
+        self.objects.remove(&object);
     }
 }
 
