@@ -5,8 +5,8 @@
 //! ```
 //!
 //! It serves plain WebSocket (`ws://`) on `--listen`, by default
-//! `127.0.0.1:7700`; TLS, which RFC 0007 requires on the network, is left
-//! to a proxy in front of it. `--allow-account` names, as 64 hex digits,
+//! `127.0.0.1:7700`, which must be a loopback address; TLS, which RFC 0007
+//! requires on the network, is left to a proxy on the same host. `--allow-account` names, as 64 hex digits,
 //! an account key whose members may create spaces (RFC 0007, decision R6).
 //! The relay id lives next to the database, in `<path>.relay-id`, and is
 //! drawn on the first start. It prints one line, the address it listens on.

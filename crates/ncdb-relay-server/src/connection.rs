@@ -20,7 +20,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use crate::hub::Hub;
 use crate::subscription;
 use crate::wire::{self, Cursor, Frame, Malformed, Request};
-use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, VERSIONS};
+use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, QUEUE, VERSIONS};
 
 /// The most entries the server reads for one page of a pull; a page holds
 /// fewer when they do not fit into one message.
@@ -31,6 +31,8 @@ pub(crate) struct Shared<S> {
     pub relay: Arc<Relay<S>>,
     pub relay_id: [u8; 16],
     pub hub: Hub,
+    /// How long writing one message may make no progress.
+    pub write_timeout: std::time::Duration,
 }
 
 /// What the writer task sends: a message, or a close after the messages
@@ -51,6 +53,13 @@ enum State {
 }
 
 /// Serves one TCP connection until it closes.
+///
+/// Its outgoing queue holds at most [`QUEUE`] messages: whoever produces a
+/// message waits for room, so a subscription reads the log only as fast as
+/// the member takes its entries. When writing one message makes no
+/// progress for the server's write timeout, the writer gives up and the
+/// connection closes (RFC 0007, "Liveness"); the member resumes from its
+/// cursors.
 pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Arc<Shared<S>>) {
     let config = WebSocketConfig::default()
         .max_message_size(Some(MAX_MESSAGE))
@@ -59,17 +68,19 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         return;
     };
     let (mut sink, mut incoming) = ws.split();
-    let (out, mut outgoing) = mpsc::unbounded_channel::<Out>();
-    let writer = tokio::spawn(async move {
+    let (out, mut outgoing) = mpsc::channel::<Out>(QUEUE);
+    let timeout = shared.write_timeout;
+    let mut writer = tokio::spawn(async move {
         while let Some(next) = outgoing.recv().await {
             match next {
                 Out::Message(bytes) => {
-                    if sink.send(Message::Binary(bytes.into())).await.is_err() {
+                    let sent = sink.send(Message::Binary(bytes.into()));
+                    if !matches!(tokio::time::timeout(timeout, sent).await, Ok(Ok(()))) {
                         return;
                     }
                 }
                 Out::Close => {
-                    let _ = sink.close().await;
+                    let _ = tokio::time::timeout(timeout, sink.close()).await;
                     return;
                 }
             }
@@ -81,25 +92,37 @@ pub(crate) async fn serve<S: RelayStore + 'static>(stream: TcpStream, shared: Ar
         state: State::Hello,
         subscriptions: HashMap::new(),
     };
-    while let Some(Ok(message)) = incoming.next().await {
+    let mut writing = true;
+    loop {
+        let message = tokio::select! {
+            message = incoming.next() => message,
+            _ = &mut writer => {
+                writing = false;
+                break;
+            }
+        };
         let open = match message {
-            Message::Binary(bytes) => connection.receive(&bytes).await,
-            Message::Text(_) => connection.malformed(Malformed { req: None }),
-            Message::Close(_) => false,
-            _ => true,
+            Some(Ok(Message::Binary(bytes))) => connection.receive(&bytes).await,
+            Some(Ok(Message::Text(_))) => connection.malformed(Malformed { req: None }).await,
+            Some(Ok(Message::Close(_))) | Some(Err(_)) | None => false,
+            Some(Ok(_)) => true,
         };
         if !open {
             break;
         }
     }
-    let _ = connection.out.send(Out::Close);
+    let out = connection.out.clone();
     drop(connection);
-    let _ = writer.await;
+    if writing {
+        let _ = out.send(Out::Close).await;
+        drop(out);
+        let _ = writer.await;
+    }
 }
 
 struct Connection<S> {
     shared: Arc<Shared<S>>,
-    out: mpsc::UnboundedSender<Out>,
+    out: mpsc::Sender<Out>,
     state: State,
     /// The running subscription of each space: a subscription lives as
     /// long as its connection.
@@ -113,40 +136,41 @@ impl<S> Drop for Connection<S> {
 }
 
 impl<S: RelayStore + 'static> Connection<S> {
-    fn send(&self, bytes: Vec<u8>) {
-        let _ = self.out.send(Out::Message(bytes));
+    /// Queues a message, waiting for room in the queue.
+    async fn send(&self, bytes: Vec<u8>) {
+        let _ = self.out.send(Out::Message(bytes)).await;
     }
 
     /// Answers an error and keeps the connection open.
-    fn fail(&self, req: Option<u64>, code: ErrorCode) -> bool {
-        self.send(wire::error(req, code));
+    async fn fail(&self, req: Option<u64>, code: ErrorCode) -> bool {
+        self.send(wire::error(req, code)).await;
         true
     }
 
     /// Answers an error and closes the connection.
-    fn refuse(&self, req: Option<u64>, code: ErrorCode) -> bool {
-        self.send(wire::error(req, code));
+    async fn refuse(&self, req: Option<u64>, code: ErrorCode) -> bool {
+        self.send(wire::error(req, code)).await;
         false
     }
 
     /// Sends an answer, or the error of the relay core. An answer that does
     /// not fit into one message is `too_large`: RFC 0007 pages none of
     /// these answers.
-    fn answer(&self, req: u64, answer: Result<Vec<u8>, ErrorCode>) -> bool {
+    async fn answer(&self, req: u64, answer: Result<Vec<u8>, ErrorCode>) -> bool {
         match answer {
             Ok(bytes) if bytes.len() <= MAX_MESSAGE => {
-                self.send(bytes);
+                self.send(bytes).await;
                 true
             }
-            Ok(_) => self.fail(Some(req), ErrorCode::TooLarge),
-            Err(code) => self.fail(Some(req), code),
+            Ok(_) => self.fail(Some(req), ErrorCode::TooLarge).await,
+            Err(code) => self.fail(Some(req), code).await,
         }
     }
 
-    fn malformed(&self, malformed: Malformed) -> bool {
+    async fn malformed(&self, malformed: Malformed) -> bool {
         match self.state {
-            State::Member(_) => self.fail(malformed.req, ErrorCode::Malformed),
-            _ => self.refuse(malformed.req, ErrorCode::Unauthenticated),
+            State::Member(_) => self.fail(malformed.req, ErrorCode::Malformed).await,
+            _ => self.refuse(malformed.req, ErrorCode::Unauthenticated).await,
         }
     }
 
@@ -154,37 +178,38 @@ impl<S: RelayStore + 'static> Connection<S> {
     async fn receive(&mut self, bytes: &[u8]) -> bool {
         let request = match wire::decode(bytes) {
             Ok(request) => request,
-            Err(malformed) => return self.malformed(malformed),
+            Err(malformed) => return self.malformed(malformed).await,
         };
         match (&self.state, request) {
-            (State::Hello, Request::Hello { versions }) => self.hello(&versions),
+            (State::Hello, Request::Hello { versions }) => self.hello(&versions).await,
             (State::Auth { nonce }, Request::Auth { key, signature }) => {
                 match auth::verify(&self.shared.relay_id, nonce, &key, &signature) {
                     Ok(member) => self.welcome(member).await,
-                    Err(code) => self.refuse(None, code),
+                    Err(code) => self.refuse(None, code).await,
                 }
             }
             (State::Member(member), request) => {
                 let member = *member;
                 self.request(member, request).await
             }
-            (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated),
+            (_, request) => self.refuse(request.req(), ErrorCode::Unauthenticated).await,
         }
     }
 
     /// Answers `hello` with a challenge, or refuses a member that speaks
     /// none of this server's versions.
-    fn hello(&mut self, versions: &[u64]) -> bool {
+    async fn hello(&mut self, versions: &[u64]) -> bool {
         let Some(version) = VERSIONS.into_iter().rev().find(|v| versions.contains(v)) else {
-            return self.refuse(None, ErrorCode::UnsupportedVersion);
+            return self.refuse(None, ErrorCode::UnsupportedVersion).await;
         };
         let mut nonce = [0u8; 32];
         if getrandom::fill(&mut nonce).is_err() {
-            return self.refuse(None, ErrorCode::Unavailable);
+            return self.refuse(None, ErrorCode::Unavailable).await;
         }
         let limits = [MAX_MESSAGE, MAX_PUSH, MAX_FRAME];
         let relay_id = &self.shared.relay_id;
-        self.send(wire::challenge(version, relay_id, &nonce, limits));
+        self.send(wire::challenge(version, relay_id, &nonce, limits))
+            .await;
         self.state = State::Auth { nonce };
         true
     }
@@ -195,7 +220,7 @@ impl<S: RelayStore + 'static> Connection<S> {
         match request {
             Request::Push { req, space, frames } => {
                 let results = push(relay, member, space, frames).await;
-                self.send(wire::pushed(req, &results));
+                self.send(wire::pushed(req, &results)).await;
                 let appended = results.iter().filter_map(|result| match result {
                     Pushed::Accepted(position) => Some(*position),
                     _ => None,
@@ -220,10 +245,10 @@ impl<S: RelayStore + 'static> Connection<S> {
                 match pulled {
                     Ok(page) => {
                         let (bytes, _) = wire::entries(Some(req), space, &page.entries, page.head);
-                        self.send(bytes);
+                        self.send(bytes).await;
                         true
                     }
-                    Err(code) => self.fail(Some(req), code),
+                    Err(code) => self.fail(Some(req), code).await,
                 }
             }
             Request::Subscribe(cursor) => {
@@ -243,16 +268,16 @@ impl<S: RelayStore + 'static> Connection<S> {
             }
             // Large changes are left out: this server's largest frame fits
             // into one message, so it accepts no upload.
-            Request::Upload { req } => self.fail(Some(req), ErrorCode::TooLarge),
+            Request::Upload { req } => self.fail(Some(req), ErrorCode::TooLarge).await,
             Request::Keys { req, space } => {
                 let keys = blocking(async move { relay.keys(member, space).await }).await;
                 let answer = keys.map(|keys| wire::keys(req, space, &keys));
-                self.answer(req, answer)
+                self.answer(req, answer).await
             }
             Request::PersonKeys { req, space } => {
                 let records = blocking(async move { relay.person_keys(member, space).await }).await;
                 let answer = records.map(|records| wire::person_keys(req, space, &records));
-                self.answer(req, answer)
+                self.answer(req, answer).await
             }
             Request::PutPersonKeys {
                 req,
@@ -262,13 +287,15 @@ impl<S: RelayStore + 'static> Connection<S> {
                 let put =
                     blocking(async move { relay.put_person_keys(member, space, records).await })
                         .await;
-                self.answer(req, put.map(|()| wire::ok(req)))
+                self.answer(req, put.map(|()| wire::ok(req))).await
             }
             Request::Ping { req } => {
-                self.send(wire::pong(req));
+                self.send(wire::pong(req)).await;
                 true
             }
-            Request::Hello { .. } | Request::Auth { .. } => self.fail(None, ErrorCode::Malformed),
+            Request::Hello { .. } | Request::Auth { .. } => {
+                self.fail(None, ErrorCode::Malformed).await
+            }
         }
     }
 
@@ -282,10 +309,10 @@ impl<S: RelayStore + 'static> Connection<S> {
         })
         .await;
         let Ok((epoch, spaces)) = read else {
-            return self.refuse(None, ErrorCode::Unavailable);
+            return self.refuse(None, ErrorCode::Unavailable).await;
         };
         let spaces: Vec<[u8; 16]> = spaces.iter().map(|s| s.0).collect();
-        self.send(wire::welcome(&member.0, &epoch.0, &spaces));
+        self.send(wire::welcome(&member.0, &epoch.0, &spaces)).await;
         self.state = State::Member(member);
         true
     }

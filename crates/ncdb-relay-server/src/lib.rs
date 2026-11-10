@@ -14,17 +14,19 @@
 //! accepts, [`MAX_FRAME`], fits into one message, so `upload` and an upload
 //! reference answer `too_large`. A `keys` or `person-keys` answer that does
 //! not fit into one message answers `too_large` too. It serves plain
-//! WebSocket: TLS is left to a proxy in front of it. Its subscriptions wake
+//! WebSocket, so it binds only a loopback address: TLS is left to a proxy
+//! on the same host (see the crate's README). Its subscriptions wake
 //! only on pushes to this server process.
 
 use std::collections::BTreeSet;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
-use tokio::net::{TcpListener, ToSocketAddrs};
+use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
 
 use connection::Shared;
 use hub::Hub;
@@ -44,6 +46,13 @@ pub const MAX_PUSH: usize = 32;
 /// fits into one `entries` message, since this server carries no large
 /// changes (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = MAX_MESSAGE - 1024;
+
+/// The most messages a connection's outgoing queue holds, at most 4 MiB.
+pub const QUEUE: usize = 32;
+
+/// How long a connection waits for progress in writing a message to its
+/// member before it closes the connection (RFC 0007, "Liveness").
+pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// The protocol versions this server speaks.
 pub const VERSIONS: [u64; 1] = [1];
@@ -65,18 +74,43 @@ pub struct Server<S> {
 impl<S: RelayStore + 'static> Server<S> {
     /// A server on `addr` over the relay core `relay`, whose deployment has
     /// the stable id `relay_id`.
+    ///
+    /// `addr` must name only loopback addresses: this server serves plain
+    /// WebSocket, and RFC 0007 requires TLS on the network, which a proxy
+    /// on the same host adds. Any other address is `InvalidInput`, and
+    /// nothing is bound.
     pub async fn bind(
         addr: impl ToSocketAddrs,
         relay: Relay<S>,
         relay_id: [u8; 16],
     ) -> io::Result<Server<S>> {
-        let listener = TcpListener::bind(addr).await?;
+        let addrs: Vec<SocketAddr> = lookup_host(addr).await?.collect();
+        if let Some(beyond) = addrs.iter().find(|a| !a.ip().is_loopback()) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "{beyond} is not a loopback address: this server serves plain ws://, \
+                     so it listens only on the loopback, behind a TLS proxy on the same host"
+                ),
+            ));
+        }
+        let listener = TcpListener::bind(addrs.as_slice()).await?;
         let shared = Arc::new(Shared {
             relay: Arc::new(relay),
             relay_id,
             hub: Hub::default(),
+            write_timeout: WRITE_TIMEOUT,
         });
         Ok(Server { listener, shared })
+    }
+
+    /// A connection closes once writing a message to its member makes no
+    /// progress for `timeout`, instead of [`WRITE_TIMEOUT`].
+    pub fn with_write_timeout(mut self, timeout: Duration) -> Server<S> {
+        if let Some(shared) = Arc::get_mut(&mut self.shared) {
+            shared.write_timeout = timeout;
+        }
+        self
     }
 
     /// The address the server listens on.
