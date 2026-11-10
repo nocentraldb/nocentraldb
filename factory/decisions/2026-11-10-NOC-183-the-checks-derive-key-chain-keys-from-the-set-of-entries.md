@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-183 · The checks derive key chain keys from the set of entries, so every copy keeps the same key
+
+- Decided by: coding agent (NOC-183)
+- Why: RFC 0003 and RFC 0008 leave open, inside the core, which key chain entries a member opens and what wins when two give a key for one generation. `SealChecks` opens the previous keys only of entries the generation graph holds (valid when written), so a member that held a key without the admin role cannot plant keys. After every control change it drops its key chain keys and derives them again from the envelope keys to the member and the set of entries: in passes over the entries in change id order until a pass gives no new key, a generation keeps the first key a pass opens for it, and an envelope's key always wins. The keys so depend on the set of entries, never on their arrival order, and every copy converges on the same key.
+- Instead of: keeping the first key the chain gave across arrivals (NOC-139), under which two copies that received two disagreeing entries from a misbehaving admin in different orders held different keys; or opening every key chain entry that decrypts, which would let a writer that once held a generation's key hand members a wrong key for an older generation.
+- Topics: keys, membership, convergence, rfc-0003, rfc-0008
+- Supersedes: 2026-11-10-NOC-139-the-checks-take-key-chain-keys-only-from-the-generation-graph.md
