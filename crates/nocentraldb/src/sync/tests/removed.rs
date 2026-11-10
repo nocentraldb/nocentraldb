@@ -64,6 +64,14 @@ async fn shared(relay: &LocalRelay) -> Shared {
     })
     .await;
     synced(&member).await;
+    // The task may come from the member's pull, before its subscription
+    // caught up; a removal the relay appends until then is `not_member`,
+    // not `removed_member` (NOC-184).
+    let space = on_admin.id().0;
+    eventually("the member's subscription caught up", || {
+        crate::db::lock(&member.inner).sync_live(space)
+    })
+    .await;
     Shared {
         admin,
         member,

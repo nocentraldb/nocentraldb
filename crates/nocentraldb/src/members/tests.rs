@@ -3,7 +3,7 @@
 
 use ed25519_dalek::SigningKey;
 
-use super::{AddMember, Role};
+use super::{AddMember, NoticeCode, Role};
 use crate::db::{Db, OpenOptions};
 use crate::error::ErrorCode;
 use crate::space::Space;
@@ -57,6 +57,7 @@ fn a_member_of_an_account_new_to_the_database_is_refused_without_its_fingerprint
     let refused = now(project.members().add(&invitation, writer())).unwrap_err();
 
     assert_eq!(refused.code(), ErrorCode::UnknownAccount);
+    assert_eq!(refused.fingerprint(), Some(&invitation.fingerprint()));
     let confirmed = AddMember {
         fingerprint: Some(invitation.fingerprint()),
         ..writer()
@@ -78,6 +79,24 @@ fn a_fingerprint_of_another_account_does_not_confirm_the_invitations() {
     let refused = now(project.members().add(&invitation, options)).unwrap_err();
 
     assert_eq!(refused.code(), ErrorCode::UnknownAccount);
+}
+
+/// `add` returns RFC 0009's notice, which says what adding a member does
+/// (RFC 0009, "Invitations and members", "Notices").
+#[test]
+fn adding_a_member_returns_the_notice_that_it_reads_the_whole_history() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let admin = of_account(1, &account);
+    let project = space(&admin);
+    let invitation = now(of_account(2, &account).invitation());
+
+    let notice = now(project.members().add(&invitation, writer())).unwrap();
+
+    assert_eq!(notice.code, NoticeCode::MemberAdded);
+    assert_eq!(
+        notice.text,
+        "The new member reads the whole history of this space."
+    );
 }
 
 #[test]
@@ -115,7 +134,8 @@ fn an_invitation_whose_certificate_does_not_hold_is_refused() {
         };
         let refused = now(project.members().add(&invitation, options)).unwrap_err();
 
-        assert_eq!(refused.code(), ErrorCode::InvalidValue);
+        assert_eq!(refused.code(), ErrorCode::InvalidCertificate);
+        assert_eq!(refused.fingerprint(), None);
     }
 }
 
@@ -274,6 +294,8 @@ fn a_member_that_was_removed_may_not_add_one() {
     assert_eq!(refused.code(), ErrorCode::NotMember);
 }
 
+/// A former member stays `InvalidValue` until re-adding it with a
+/// rotation is built (RFC 0008, M5; NOC-169).
 #[test]
 fn a_member_or_a_former_member_is_not_added_again() {
     let account = SigningKey::from_bytes(&[9; 32]);
@@ -283,6 +305,26 @@ fn a_member_or_a_former_member_is_not_added_again() {
     remove(&admin, &project, &invitation);
     let re_grant = now(project.members().add(&invitation, writer())).unwrap_err();
 
-    assert_eq!(again.code(), ErrorCode::InvalidValue);
+    assert_eq!(again.code(), ErrorCode::AlreadyMember);
     assert_eq!(re_grant.code(), ErrorCode::InvalidValue);
+}
+
+/// A fingerprint shows as RFC 0010 gives it ("The fingerprint"): SHA-256
+/// over `"nocentraldb/account-fingerprint"` and the account key, read as a
+/// big-endian integer mod 10^60, in twelve blocks of five digits. The
+/// vectors were computed with Python's `hashlib` and `cryptography`.
+#[test]
+fn a_fingerprint_shows_as_sixty_digits_in_twelve_blocks_of_five() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let invitation = now(of_account(1, &account).invitation());
+    let zero_padded = super::Fingerprint([7; 32]);
+
+    assert_eq!(
+        invitation.fingerprint().to_string(),
+        "16133 87624 73902 00999 15789 51045 80380 30084 28047 86277 74087 14820"
+    );
+    assert_eq!(
+        zero_padded.to_string(),
+        "58051 77504 08017 25286 35258 70213 78592 50688 13941 12806 64710 13483"
+    );
 }
