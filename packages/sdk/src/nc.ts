@@ -64,6 +64,7 @@ type CollectionState = {
 type IndexState = {
   fields: { field: string; direction: "asc" | "desc" }[];
   equal: number;
+  scope?: "space";
 };
 
 const fieldStates = new WeakMap<object, FieldState>();
@@ -164,10 +165,10 @@ export const reach = (..._args: unknown[]): Named => name();
 /** A view: named now, its arguments belong to the computed-fields RFC. */
 export const view = (..._args: unknown[]): Named => name();
 
-/** Declares an index: fields in index order, each ascending unless it says otherwise, and how many leading fields a query fixes with equality (`equal`, 0 by default). */
+/** Declares an index: fields in index order, each ascending unless it says otherwise, how many leading fields a query fixes with equality (`equal`, 0 by default), and with `scope: "space"` an index that runs in one space at a time instead of across every space of the member. */
 export const index = (
   fields: readonly (string | { field: string; direction: "asc" | "desc" })[],
-  options: { equal?: number } = {},
+  options: { equal?: number; scope?: "space" } = {},
 ): Index => {
   const made = {} as Index;
   indexStates.set(made, {
@@ -177,6 +178,7 @@ export const index = (
         : { field: entry.field, direction: entry.direction },
     ),
     equal: options.equal ?? 0,
+    ...(options.scope === undefined ? {} : { scope: options.scope }),
   });
   return made;
 };

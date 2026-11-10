@@ -41,5 +41,6 @@ export declare const index: (fields: readonly (string | {
     direction: "asc" | "desc";
 })[], options?: {
     equal?: number;
+    scope?: "space";
 }) => Index;
 export {};
