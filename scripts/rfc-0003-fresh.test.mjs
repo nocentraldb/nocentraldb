@@ -311,7 +311,12 @@ test("the formats of RFC 0010 join the formats: statement, recovery key, pairing
   );
   holds(
     part("account-fingerprint"),
-    [/"nocentraldb\/account-fingerprint"/, /60 digits/],
+    [
+      /"nocentraldb\/account-fingerprint"/,
+      /60 digits/,
+      /[Uu]ntil RFC 0010 is built/,
+      /own account key/,
+    ],
     "Account fingerprint",
   );
 });

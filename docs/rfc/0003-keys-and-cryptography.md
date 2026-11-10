@@ -299,7 +299,7 @@ When a device joins an account, the answer carries the account key sealed with H
 account fingerprint = SHA-256("nocentraldb/account-fingerprint" || recovery key (32 bytes))
 ```
 
-People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes.
+People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes. Until RFC 0010 is built, the SDKs compute it the same way over the database's own account key in place of the recovery key, so both SDKs hash the same input today.
 
 ### Account sign-off of a shred
 
