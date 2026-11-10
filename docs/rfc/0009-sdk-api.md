@@ -9,12 +9,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 - **2026-11-09** · NOC-80 · [Amendment 2: following RFC 0005 Amendment 4](#amendment-2-following-rfc-0005-amendment-4) follows RFC 0005's D16, which the owner decided: the TypeScript SDK reads and writes an `nc.int` as a `number`, so a write must be a safe integer, and a stored int beyond that range reads `undefined` and is named in `$raw`. It decides nothing. The sentences it changes are marked *(Amendment 2)*.
 - **2026-11-10** · NOC-80 · [Amendment 3: the object id in TypeScript](#amendment-3-the-object-id-in-typescript) records the owner's decision (Carsten, 2026-11-10) on PR #91: in TypeScript an object id is a `string`, its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id`. The sentence it changes is marked *(Amendment 3)*.
 - **2026-11-10** · NOC-92 · [Amendment 4: following RFC 0005's references](#amendment-4-following-rfc-0005s-references) follows [RFC 0005's D20 and D21](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states), which the owner decided: `nc.Infer` types a reference as `{ space, id }`, `space.inspect` gives its state as `status`, `"ok"`, `"notAccessible"` or `"missing"`, `$conflicts` never names a field for its state, and a subscription does not follow a reference's target. It decides nothing. The sentences it changes are marked *(Amendment 4)*.
+- **2026-11-10** · NOC-106 · The owner decided S19 to S24 as recommended (Carsten, 2026-11-10), on NOC-95: where a database and its member key live, the account key and `agent()`, the Rust names, `storageFailed` and the codes of the Rust SDK's errors, the space id in TypeScript, and how an app writes a reference. Each is written into the text where it belongs (#113).
 
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), S1 to S18 (Carsten, 2026-11-09), and the design above describes those choices; the owner later withdrew S14 ([Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)* Every name is collected in [Public names](#public-names). The points in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) change other RFCs and documents, which their own amendments carry out. Nothing here is built.
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision in [Decisions for the owner](#decisions-for-the-owner), S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and the design above describes those choices; the owner later withdrew S14 ([Amendment 1](#amendment-1-groups-leave-the-design)). *(Amendment 1.)* Every name is collected in [Public names](#public-names). The points in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) change other RFCs and documents, which their own amendments carry out. Nothing here is built.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -144,6 +145,7 @@ The calls on `tx`, and the operations they become ([RFC 0004, "Operation numbers
 | --- | --- | --- |
 | `nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf` | The value, such as `{ priority: 3 }`. `null` clears the field. | set (1). `replaces` names the winner and every conflict the copy holds ([RFC 0004, "Basic values"](0004-merge-rules-basic-types.md#basic-values)). |
 | `nc.link` | The target's object id, or `null`. | set (1), as a basic value. |
+| `nc.ref` | The `{ space, id }` a read gives, the target's space id and object id, or `null` to clear it (decision [S24](#decisions-for-the-owner)). | set (1), as a basic value ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). |
 | `nc.set`, `nc.links` | `nc.add(...elements)` or `nc.remove(...elements)`. | add (2) per element, or remove (3) per element with `observed`, the tags of its additions the copy holds ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)). |
 | A plugin's type | What the plugin's write function returns. | The plugin's operations, 64 and up. |
 
@@ -199,6 +201,8 @@ const task = await project.get(model.tasks, taskId);
 - a reference as `{ space, id }`, the target's space id and object id, in the form `$space` and `$id` carry them. Its state is not part of the read object, so the object reads the same on every member of its space, and the SDK does not read the target: an app that wants it reads it with `space.get` in the target's space ([RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states)). *(Amendment 4.)*
 
 In TypeScript an object id is a `string`: its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id` ([RFC 0005, "The keys"](0005-schema-and-model-lock.md#the-keys)). An id can then be a map key, compared with `===`, and logged as it is. *(Amendment 3.)*
+
+A space id has the same form in TypeScript: a `string` of 32 lowercase hex digits, its 16 bytes in order. `$space`, `space.id` and a reference's `space` read this way, and a write takes a space id this way (decision [S23](#decisions-for-the-owner)).
 
 An object id is unique in its space, not across spaces: a hostile member can create an id that exists in another space ([RFC 0002, "Object ids"](0002-change-and-log-format.md#object-ids)). So a single object is read through its space, and an object read from a query carries its space.
 
@@ -355,6 +359,8 @@ await project.update(model.tasks, taskA.$id, { status: result.status });
 
 RFC 0003 defines the account key and pairing in steps, and leaves the flow to a person confirming on a device. This RFC only names the entry points, so the rest of the API can refer to them (decision [S15](#decisions-for-the-owner)): `db.account.pair({ kind })` on a device that holds the account key starts pairing a new device or agent, and `nc.open({ model, lock, pairing })` on the new one completes it. `db.account.removeMember(memberId)` removes a lost device or an agent from every space the account administers, as RFC 0003 asks ("the SDK offers this as one action on the account"). The accounts RFC designs what happens behind these calls ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)).
 
+Until it exists, each database draws its own account key once, on its first open, keeps it next to the member key, and certifies its own member with it: as a device, or as an agent when the Rust SDK opens it with `agent()` ([The Rust SDK](#the-rust-sdk)). A person's devices are unrelated accounts until then, so `members.add` asks for the fingerprint of each, as for any account new to the device (decision [S20](#decisions-for-the-owner)).
+
 ## Sync and status
 
 ```ts
@@ -409,12 +415,13 @@ The SDK throws one error class, `nc.Error`, with a string `code` and the ids it 
 | Code | Thrown by | When |
 | --- | --- | --- |
 | `lockOutOfDate` | `nc.open` | The model names a collection, field or index the lock does not have, or with another type. Run `ncdb model build`. |
-| `modelRefused` | `nc.open` | The lock has another `model.id` than the stored one, or is not an additive successor; lists each refused change ([RFC 0005, D11](0005-schema-and-model-lock.md#d11-the-check-on-the-device)). |
+| `modelRefused` | `nc.open` | The lock cannot be read or breaks RFC 0005's rules, has another `model.id` than the stored one, or is not an additive successor; lists each refused change ([RFC 0005, D11](0005-schema-and-model-lock.md#d11-the-check-on-the-device)). |
 | `spaceOfAnotherModel` | `db.spaces.get`, writes | The space's genesis names another `model.id`; names both ids. |
 | `storageFull` | writes, `nc.open` | The disk or the browser's quota is full. |
+| `storageFailed` | writes, reads, `nc.open` | Any other storage failure, such as a damaged database file. Freeing space would not help, so it is not `storageFull` (decision [S22](#decisions-for-the-owner)). |
 | `closed` | every call | The database was closed. |
-| `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get` | The copy holds no such object or space. |
-| `invalidValue`, `deprecated`, `noPerson` | writes | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). |
+| `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
+| `invalidValue`, `deprecated`, `noPerson` | writes, queries | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. |
 | `notAllowed`, `notMember`, `lastAdmin` | writes, membership calls | The member's role does not allow it, it is no longer a member, or it is the last admin. |
 | `unknownAccount` | `members.add` | The invitation's account is new to this device; carries its fingerprint. |
 | `cursorOfAnotherModel` | `db.find` | The cursor was made under another model or index. |
@@ -429,6 +436,7 @@ The Rust SDK, crate `nocentraldb`, has the same calls in snake case, async, and 
 use nocentraldb::{Db, OpenOptions, Value};
 
 let db = Db::open(OpenOptions::new(include_str!("../model.lock.json"))
+    .path("./data")
     .relay("wss://relay.example.com")).await?;
 let project = db.spaces().create().await?;
 
@@ -447,6 +455,9 @@ while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
+- **Where the database lives** (decision [S19](#decisions-for-the-owner)). `path(dir)` names a directory the SDK owns, which holds the database, and the SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped.
+- **The account key and the member's kind** (decision [S20](#decisions-for-the-owner)). Until the accounts RFC exists, each database draws its own account key once and keeps it next to the member key ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate, so a space adds it as a writer when no role is given ([RFC 0008, decision M14](0008-membership.md#decisions-for-the-owner)); without it, the member is a device.
+- **The Rust names** (decision [S21](#decisions-for-the-owner)). Besides `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`, which follow [Terms](#terms), the SDK has `ObjectId`, `SpaceId` and `ChangeId`, which print and parse as lowercase hex; `Object`, a read object, whose `id()`, `space()` and `deleted()` stand for `$id`, `$space` and `$deleted`, and whose `get::<T>(name)` reads a field; `Written`, what `write` returns, with `change` and `ids`; and `page.has_more` for `hasMore`.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
 - `subscribe` returns a `Stream`; dropping it stops it. Reports are `db.sync().current()` and `db.sync().subscribe()`.
 - Errors are `nocentraldb::Error` with an `ErrorCode` enum whose variants are the codes above in Rust case, such as `ErrorCode::LockOutOfDate`. `Debug` of every type that holds content or a cursor prints `[redacted]` ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
@@ -543,7 +554,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `lockOutOfDate`, `modelRefused`, `spaceOfAnotherModel` | Model errors | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
-| `storageFull`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
+| `storageFull`, `storageFailed`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
 | `invalidValue`, `deprecated`, `noPerson` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 
@@ -552,6 +563,15 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `Db::open`, `OpenOptions` | Opens the database from the lock's text | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
+| `OpenOptions::path`, `OpenOptions::in_memory` | Where the database lives: a directory, or memory for tests | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
+| `OpenOptions::key_file` | A key file for a headless agent without a keystore | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `OpenOptions::agent` | Certifies the member as an agent | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
+| `Space`, `Spaces` | A space handle; what `db.spaces()` returns | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
+| `Transaction` | What a write's closure records on | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
+| `Query`, `Page`, `Cursor`, `page.has_more` | A query, a page, its cursor, and whether more follow | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
+| `ObjectId`, `SpaceId`, `ChangeId` | The ids, printed and parsed as lowercase hex | [RFC 0002, "Object ids"](0002-change-and-log-format.md#object-ids) |
+| `Object` | A read object: `id()`, `space()`, `deleted()`, `get::<T>(name)` | [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app) |
+| `Written` | What `space.write` returns: `change` and `ids` | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
 | `Value`, `Value::add`, `Value::remove` | A field value, and set operations | [RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation) |
 | `db.index` | The handle of a declared index, by collection and name | [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) |
 | `Error`, `ErrorCode` | The error and its codes | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
@@ -574,7 +594,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 
 ## Decisions for the owner
 
-GENESIS.md reserves public API names for the owner. Each decision names the options and a recommendation, and ends with the owner's decision. The owner accepted every recommendation (Carsten, 2026-11-09), and the design above describes them.
+GENESIS.md reserves public API names for the owner. Each decision names the options and a recommendation, and ends with the owner's decision. The owner accepted every recommendation, S1 to S18 on 2026-11-09 and S19 to S24 on 2026-11-10 (Carsten), and the design above describes them.
 
 **S1. Where the SDK gets the model.**
 
@@ -745,6 +765,62 @@ Decided (Carsten, 2026-11-09): the recommendation, (A).
 Recommendation: A. RFC 0005 leaves code generation for later; A works for every lock today, and B can be added without changing A.
 
 Decided (Carsten, 2026-11-09): the recommendation, (A).
+
+**S19. Where a database and its member key live.**
+
+- A. `path(dir)` for the database, the member key in the platform keystore, `key_file(path)` for a headless agent without one, and `in_memory()` for tests. *(recommended)*
+- B. The platform's app data directory, found from an app id.
+- C. In memory only, until a keystore ticket.
+
+Recommendation: A. It works the same for a desktop app, a server and an agent in a container, and only an app that asks for a key file gets one. B suits apps but rarely servers and agents, and can come later on top of A; C keeps no native data. RFC 0003 records the key file ([decision 16](0003-keys-and-cryptography.md#decisions-for-the-owner)).
+
+Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
+
+**S20. The account key that signs the member certificate.**
+
+- A. Each database draws its own account key once and keeps it next to the member key; `agent()` marks the member as an agent. *(recommended)*
+- B. The app passes the account key.
+- C. No space can be created until an accounts RFC exists.
+
+Recommendation: A. A person's devices are unrelated accounts until the accounts RFC (NOC-107) links them. B puts a key in the app's hands, which principle 5 rules out; C blocks every space. RFC 0003 records it ([decision 17](0003-keys-and-cryptography.md#decisions-for-the-owner)).
+
+Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
+
+**S21. Rust names this RFC did not list.**
+
+- A. `ObjectId`, `SpaceId`, `ChangeId`, `Object` with `id()`, `space()`, `deleted()` and `get::<T>(name)`, `Written` with `change` and `ids`, and `page.has_more`, next to `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`. *(recommended)*
+- B. Other names.
+
+Recommendation: A. The names follow [Terms](#terms) and the TypeScript names in snake case; `$` cannot start a Rust name, so `$id`, `$space` and `$deleted` become methods.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
+
+**S22. Error codes for cases this RFC named no code for.**
+
+- A. An unknown collection, field or index is `notFound`; every storage failure is `storageFull`; a wrong number of equality values, a bad page size or an index of the other scope is `invalidValue`; a lock that cannot be read or is invalid is `modelRefused`.
+- B. As A, but only a full disk is `storageFull`, and any other storage failure is `storageFailed`. *(recommended)*
+
+Recommendation: B. `storageFull` tells the app to free space, which does not help when a file is damaged. It costs one more code.
+
+Decided (Carsten, 2026-11-10): the recommendation, (B). Asked on NOC-95.
+
+**S23. A space id in TypeScript.**
+
+- A. 32 lowercase hex digits, as an object id. *(recommended)*
+- B. Another form.
+
+Recommendation: A. One rule for both ids, and a reference reads `{ space, id }` in one form.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
+
+**S24. How an app writes a reference.**
+
+- A. The `{ space, id }` it reads, or `null` to clear it. *(recommended)*
+- B. A read object of the target, from which the SDK takes `$space` and `$id`.
+
+Recommendation: A. A write takes what a read gives. B is shorter for an app that holds the target, but makes a write depend on a read of another space.
+
+Decided (Carsten, 2026-11-10): the recommendation, (A). Asked on NOC-95.
 
 ## Conflicts with GENESIS.md and the other RFCs
 

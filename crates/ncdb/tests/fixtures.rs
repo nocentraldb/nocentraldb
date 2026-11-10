@@ -29,3 +29,11 @@ fn the_lock_of_the_view_tests_is_what_the_build_writes_from_its_schema() {
         "crates/ncdb-core/tests/view/model.lock.json",
     );
 }
+
+#[test]
+fn the_lock_of_the_rust_sdk_tests_is_what_the_build_writes_from_its_schema() {
+    check(
+        "crates/nocentraldb/tests/model/model.ts",
+        "crates/nocentraldb/tests/model/model.lock.json",
+    );
+}

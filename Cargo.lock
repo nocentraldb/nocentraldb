@@ -507,6 +507,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nocentraldb"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "futures-core",
+ "getrandom",
+ "ncdb-core",
+ "zeroize",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
