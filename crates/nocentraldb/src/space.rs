@@ -20,6 +20,7 @@ use ncdb_core::view::View;
 use crate::db::{Db, Inner, SpaceState, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ChangeId, ObjectId, SpaceId};
+use crate::members::Members;
 use crate::next;
 use crate::object::Object;
 use crate::subscribe::touched;
@@ -121,7 +122,7 @@ impl Spaces<'_> {
 /// Whether the member can write into the space `id`: the copy holds it, it
 /// is of the lock's model, and the member holds the key of its current
 /// generation.
-fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
+pub(crate) fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
     let not_found = || Error::new(ErrorCode::NotFound, format!("the copy holds no space {id}"));
     let state = inner.spaces.get(&id.0).ok_or_else(not_found)?;
     let model_id = state.checks.model_id().ok_or_else(not_found)?;
@@ -150,7 +151,7 @@ fn hex(bytes: &[u8; 16]) -> String {
 /// Appends the member's own change to the log and folds it. Every check
 /// passes on a change the member wrote itself, so a change that does not
 /// fold is a bug of the SDK.
-fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(), Error> {
+pub(crate) fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(), Error> {
     let space = change.header().space;
     view.receive(change.bytes(), checks).map_err(storage)?;
     match view.state(space, change.id()) {
@@ -174,6 +175,11 @@ impl Space {
 
     pub(crate) fn inner(&self) -> &Arc<Mutex<Inner>> {
         &self.inner
+    }
+
+    /// The members of this space.
+    pub fn members(&self) -> Members<'_> {
+        Members { space: self }
     }
 
     /// Records a transaction with `record` and writes it as one change of

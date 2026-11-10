@@ -37,6 +37,13 @@ pub enum ErrorCode {
     /// No platform keystore is reachable and the app named no key file;
     /// the message names `key_file` (RFC 0009, S26).
     KeyStoreUnavailable,
+    /// The invitation's account is new to this database, and no
+    /// fingerprint of it was passed to `members().add`.
+    UnknownAccount,
+    /// The member's role does not allow the call.
+    NotAllowed,
+    /// The member is no longer a member of the space.
+    NotMember,
 }
 
 impl Error {

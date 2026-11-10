@@ -13,6 +13,7 @@ mod relay_support;
 mod backoff;
 mod fake;
 mod live;
+mod members;
 mod pull;
 mod push;
 mod reconnect;

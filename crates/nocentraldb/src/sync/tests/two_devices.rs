@@ -6,25 +6,16 @@
 //! while the network is cut; both sync (RFC 0007), and their reads through
 //! the SDK compare equal (GENESIS.md, "Convergence").
 //!
-//! Adding B bypasses the SDK: RFC 0009's `db.invitation()` and
-//! `space.members.add` are not built yet. [`add`] writes the membership
-//! entry and the envelope as A's database would, through the crate's
-//! internals. NOC-140 builds `members().add`, and replaces [`add`] with it.
+//! A adds B with `space.members().add` and B's invitation (RFC 0009,
+//! "Invitations and members"). Both devices are of the simulated account,
+//! so A adds B without a fingerprint.
 
-use std::collections::BTreeSet;
-
-use ncdb_core::change::Kind;
-use ncdb_core::envelope;
 use ncdb_core::ids::ChangeId;
-use ncdb_core::log::{Position, State};
-use ncdb_core::membership::{
-    self, Action, Certificate, ControlBody, Entry, MemberKind, MembershipEntry, Role,
-};
-use ncdb_core::view::View;
 
 use super::support::*;
-use crate::db::{Db, Inner, lock};
+use crate::db::{Db, lock};
 use crate::id::{ObjectId, SpaceId};
+use crate::members::{AddMember, Role};
 use crate::object::Object;
 use crate::query::Page;
 use crate::space::Space;
@@ -34,82 +25,6 @@ use crate::value::Value;
 const A: Who = 1;
 /// Device B, which A adds.
 const B: Who = 2;
-
-/// Device A adds device `who` to `space` as a writer: a membership entry
-/// with `who`'s public key and certificate, then a key envelope of the
-/// current generation's space key to `who`, both signed by A after the
-/// heads of the space's control DAG, appended and folded as A's own
-/// changes.
-///
-/// This bypasses the SDK, which has no `members().add` yet (RFC 0009,
-/// "Invitations and members"); NOC-140 builds it and replaces this step.
-/// Both devices are of the simulated account, so `who`'s certificate is
-/// signed by it, as `db.invitation()` would carry it.
-fn add(db: &Db, space: SpaceId, who: Who) {
-    let mut inner = lock(&db.inner);
-    let member = inner.member.key();
-    let Inner { view, spaces, .. } = &mut *inner;
-    let state = spaces.get_mut(&space.0).expect("A holds the space");
-    let next = crate::next::next(view, space.0, &state.checks, member.id());
-    let generation = next.generation.expect("the space has a generation");
-    let action = Action::Add {
-        role: Role::Writer,
-        key: space::key(who).public(),
-        certificate: Box::new(Certificate::sign(
-            &account(),
-            space::id(who),
-            MemberKind::Device,
-        )),
-        from_generation: generation,
-    };
-    let entry = Entry::Membership(MembershipEntry {
-        subject: space::id(who),
-        action,
-    });
-    let added = membership::write(
-        &member,
-        space.0,
-        next.sequence,
-        generation,
-        &ControlBody::new(control_heads(view, space), entry),
-    );
-    let key = state.checks.space_key(generation).expect("A holds the key");
-    let sealed = envelope::seal(key, space.0, generation, &space::key(who).public())
-        .expect("a member's key takes an envelope");
-    let envelope = membership::write(
-        &member,
-        space.0,
-        next.sequence + 1,
-        generation,
-        &ControlBody::new([added.id()].into(), Entry::KeyEnvelope(sealed)),
-    );
-    for change in [&added, &envelope] {
-        view.receive(change.bytes(), &mut state.checks)
-            .expect("A's own change folds");
-    }
-    crate::sync::wake(&inner);
-}
-
-/// The heads of the control DAG of `space` in `view`: the folded control
-/// changes no other control change depends on. A control change depends
-/// only on control changes (RFC 0008, "Terms"), since the relay, which
-/// cannot open sealed changes, checks it over the control DAG.
-fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
-    let log = view.log(space.0).expect("A holds the space's log");
-    let mut heads = BTreeSet::new();
-    let mut covered = BTreeSet::new();
-    for (_, change) in log.after(Position::START) {
-        let folded = matches!(log.state(change.id()), Some(State::Folded { .. }));
-        if change.header().kind != Kind::CONTROL || !folded {
-            continue;
-        }
-        let body = ControlBody::decode(&change.header().payload).expect("a control body");
-        covered.extend(body.dependencies);
-        heads.insert(change.id());
-    }
-    heads.retain(|id| !covered.contains(id));
-    heads
-}
 
 /// Whether the database's copy of `space` holds every change of the
 /// relay's log of it, `log`.
@@ -151,7 +66,12 @@ async fn two_devices_share_a_space_through_the_relay_and_see_the_same_view() {
     }))
     .unwrap()
     .ids[0];
-    add(&a, on_a.id(), B);
+    let invitation = now(b.invitation());
+    let writer = AddMember {
+        role: Role::Writer,
+        fingerprint: None,
+    };
+    now(on_a.members().add(&invitation, writer)).unwrap();
     synced(&a).await;
 
     // A member learns which spaces it belongs to from `welcome` only (RFC

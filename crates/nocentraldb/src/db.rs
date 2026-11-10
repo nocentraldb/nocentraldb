@@ -362,6 +362,13 @@ impl Db {
         Spaces { db: self }
     }
 
+    /// The invitation of this database's member: its public identity,
+    /// which an admin of a space adds with [`Members::add`](crate::Members::add)
+    /// (RFC 0009, "Invitations and members").
+    pub async fn invitation(&self) -> crate::Invitation {
+        crate::Invitation::of(&self.lock())
+    }
+
     pub(crate) fn lock(&self) -> MutexGuard<'_, Inner> {
         lock(&self.inner)
     }
