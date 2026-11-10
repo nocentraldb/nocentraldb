@@ -188,11 +188,11 @@ pub(crate) fn regrant(
         self, Action, ControlBody, Entry, KeyChainEntry, MembershipEntry, PreviousKey,
     };
 
-    let inner = admin.lock();
+    let mut inner = admin.lock();
     let member = inner.member.key();
     let id = space.id().0;
-    let state = &inner.spaces[&id];
-    let next = crate::next::next(&inner.view, id, &state.checks, member.id());
+    let crate::db::Inner { view, spaces, .. } = &mut *inner;
+    let next = crate::next::next(view, id, &spaces[&id].checks, member.id());
     let generation = next.generation.expect("a generation");
     let fresh = membership::generation_id(id, member.id(), &[generation]);
     let chain = KeyChainEntry {
