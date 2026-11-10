@@ -323,7 +323,7 @@ None yet. The owner's answers to the open questions go here, in short form, as [
 
 ## History
 
-- **2026-11-10** · NOC-107 · Draft 0.1: the account key and its identity, the recovery code, pairing a device or an agent, linking per-database accounts, losing a device, and what a certificate means for RFC 0008, with open questions Q1 to Q12.
+- **2026-11-10** · NOC-107 · Draft 0.1: the account key and its identity, the recovery code, pairing a device or an agent, linking per-database accounts, losing a device, and what a certificate means for RFC 0008, with open questions Q1 to Q12 (#115).
 
 ## How this RFC is tested
 
