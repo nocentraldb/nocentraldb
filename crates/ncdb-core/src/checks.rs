@@ -1,93 +1,115 @@
-//! The checks of steps 3 and 5 of RFC 0002 Amendment 1 ("What a member
+//! The checks of steps 3 to 5 of RFC 0002 Amendment 1 ("What a member
 //! does with a change it receives") with the real signature and
 //! decryption of RFC 0003 ("How a member signs and encrypts a change"):
 //! [`SealChecks`] verifies with [`seal::verify`] and decrypts with
-//! [`seal::open`], given the member keys and space keys the member knows.
+//! [`seal::open`].
 //!
-//! Membership (step 4) and what a control change adds to the control state
-//! come in through [`Membership`]; the membership rules of RFC 0008 and key
-//! distribution are later tickets.
+//! Everything the checks know comes from the control changes of the space
+//! (RFC 0008): the authors' public keys from the genesis and the add
+//! entries, the membership from [`membership::resolve`], and the space keys
+//! from the key envelopes to the checks' member, which [`envelope::open`]
+//! unwraps. Each control change that passes therefore checks the log's
+//! rejected changes again (D11).
 
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::change::{Change, Payload};
-use crate::ids::MemberId;
-use crate::keys::{MemberPublicKey, SpaceKey};
+use crate::change::{Change, Kind, Payload};
+use crate::envelope;
+use crate::ids::{ChangeId, MemberId, SpaceId};
+use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
 use crate::log::{ParkReason, RejectReason};
+use crate::membership::{self, Action, ControlBody, Entry, MembershipEntry, Resolved};
 use crate::receive::{Checks, Stop};
 use crate::seal::{self, OpenError};
 
-/// Step 4 and the control state behind it: whether the author is a member
-/// at the change's key generation, and what a control change that passed
-/// steps 1 to 4 adds.
-pub trait Membership {
-    /// Whether the author is a member at the change's key generation.
-    fn is_member(&self, change: &Change) -> bool;
-    /// Adds a control change that passed steps 1 to 4.
-    fn add_control(&mut self, change: &Change);
-}
-
-/// The checks of one space's log, with suite 1's real signature and
-/// decryption. Its `Debug` output names member ids and key generations,
-/// never a key.
+/// The checks of one space's log, as one member holds them, with suite 1's
+/// real signature and decryption. Its `Debug` output names member ids and
+/// key generations, never a key.
 ///
-/// **What this does not do.** Keys learned with [`SealChecks::add_member`]
-/// and [`SealChecks::add_space_key`] do not check the log's rejected changes
-/// again: only a control change that passes does (D11). Until member keys
-/// and space keys arrive through control changes (key distribution, a later
-/// ticket), give the checks every key before the changes that need it.
-pub struct SealChecks<M> {
-    members: BTreeMap<MemberId, MemberPublicKey>,
+/// **Control changes.** A control change passes once its signature verifies
+/// with keys that a control change the checks hold names, or that it names
+/// itself, as a genesis does. Every control change that passes goes into
+/// the set [`membership::resolve`] folds, whatever its verdict there, since
+/// the verdict is a function of the whole set; [`SealChecks::resolved`]
+/// gives the verdicts.
+///
+/// **What this does not do.** A space key, once unwrapped, stays known,
+/// even if a later control change rejects its envelope; and a change that
+/// passed is not checked again when a later control change would reject it
+/// (NOC-49).
+pub struct SealChecks {
+    space: SpaceId,
+    member: MemberKey,
+    controls: BTreeMap<ChangeId, Change>,
+    keys: BTreeMap<MemberId, MemberPublicKey>,
     space_keys: BTreeMap<u64, SpaceKey>,
-    membership: M,
+    resolved: Resolved,
 }
 
-impl<M> SealChecks<M> {
-    /// Checks that know no member key and no space key yet.
-    pub fn new(membership: M) -> SealChecks<M> {
+impl SealChecks {
+    /// The checks of `space` for `member`, which hold no control change
+    /// yet.
+    pub fn new(space: SpaceId, member: MemberKey) -> SealChecks {
         SealChecks {
-            members: BTreeMap::new(),
+            space,
+            member,
+            controls: BTreeMap::new(),
+            keys: BTreeMap::new(),
             space_keys: BTreeMap::new(),
-            membership,
+            resolved: membership::resolve(space, []),
         }
     }
 
-    /// Learns a member's public keys, under the member id they hash to.
-    pub fn add_member(&mut self, key: MemberPublicKey) {
-        self.members.insert(key.id(), key);
-    }
-
-    /// Learns the space key of a key generation.
-    pub fn add_space_key(&mut self, generation: u64, key: SpaceKey) {
-        self.space_keys.insert(generation, key);
+    /// The control state of the control changes that passed.
+    pub fn resolved(&self) -> &Resolved {
+        &self.resolved
     }
 
     /// The author's public keys; without them, the change stops at step 3
-    /// as "unknown author".
-    fn author(&self, change: &Change) -> Result<&MemberPublicKey, Stop> {
-        self.members
-            .get(&change.header().author)
+    /// as "unknown author". A control change may name its own author's keys.
+    fn author(&self, change: &Change) -> Result<MemberPublicKey, Stop> {
+        let author = change.header().author;
+        let own = match change.header().kind {
+            Kind::CONTROL => ControlBody::decode(&change.header().payload)
+                .ok()
+                .and_then(|body| named_key(&body)),
+            _ => None,
+        };
+        self.keys
+            .get(&author)
+            .copied()
+            .or(own.filter(|key| key.id() == author))
             .ok_or(Stop::Rejected(RejectReason::UnknownAuthor))
-    }
-
-    /// The membership behind step 4.
-    pub fn membership(&self) -> &M {
-        &self.membership
     }
 }
 
-impl<M: Membership> Checks for SealChecks<M> {
+/// The public keys a control body names: a genesis its creator's, an add
+/// its subject's. They hash to the member id.
+fn named_key(body: &ControlBody) -> Option<MemberPublicKey> {
+    match &body.entry {
+        Entry::Genesis(genesis) => Some(genesis.creator),
+        Entry::Membership(MembershipEntry {
+            action: Action::Add { key, .. },
+            ..
+        }) => Some(*key),
+        _ => None,
+    }
+}
+
+impl Checks for SealChecks {
     fn knows_suite(&self, suite: u64) -> bool {
         suite == seal::SUITE
     }
 
     fn verify(&self, change: &Change) -> Result<(), Stop> {
-        Ok(seal::verify(change, self.author(change)?)?)
+        Ok(seal::verify(change, &self.author(change)?)?)
     }
 
+    /// A control change's verdict is `resolve`'s; a sealed change's is
+    /// RFC 0008's membership verdict.
     fn is_member(&self, change: &Change) -> bool {
-        self.membership.is_member(change)
+        change.header().kind == Kind::CONTROL || self.resolved.admits(change.header())
     }
 
     fn open(&self, change: &Change) -> Result<Payload, Stop> {
@@ -96,22 +118,40 @@ impl<M: Membership> Checks for SealChecks<M> {
             .space_keys
             .get(&change.header().key_generation)
             .ok_or(Stop::Rejected(RejectReason::NoKey))?;
-        Ok(seal::open(change, author, key)?)
+        Ok(seal::open(change, &author, key)?)
     }
 
     fn add_control(&mut self, change: &Change) {
-        self.membership.add_control(change);
+        if change.header().space != self.space {
+            return;
+        }
+        if let Ok(body) = ControlBody::decode(&change.header().payload) {
+            if let Some(key) = named_key(&body) {
+                self.keys.insert(key.id(), key);
+            }
+            // An envelope to another member, or one that does not open,
+            // gives no key.
+            if let Entry::KeyEnvelope(sealed) = &body.entry
+                && let Ok(key) = envelope::open(sealed, self.space, &self.member)
+            {
+                self.space_keys.insert(sealed.generation, key);
+            }
+        }
+        self.controls.insert(change.id(), change.clone());
+        self.resolved = membership::resolve(self.space, self.controls.values());
     }
 }
 
-impl<M> fmt::Debug for SealChecks<M> {
-    /// The member ids whose keys the checks know and the key generations of
-    /// the space keys they hold; the membership is left out, since it need
-    /// not be `Debug`.
+impl fmt::Debug for SealChecks {
+    /// The checks' member, the member ids whose keys they know, the key
+    /// generations of the space keys they hold and how many control changes
+    /// they hold.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SealChecks")
-            .field("members", &self.members.keys())
+            .field("member", &self.member.id())
+            .field("members", &self.keys.keys())
             .field("key_generations", &self.space_keys.keys())
+            .field("controls", &self.controls.len())
             .finish_non_exhaustive()
     }
 }

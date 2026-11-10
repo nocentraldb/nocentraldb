@@ -438,7 +438,7 @@ test("the roles, AGENTS.md and docs/repository.md point to the folder", () => {
     const text = read(path);
     assert.doesNotMatch(text, /DECISIONS\.md/, path);
     assert.match(text, /`factory\/decisions\/`/, path);
-    assert.match(text, /`pnpm decisions`/, path);
+    assert.match(text, /`pnpm decisions --index`/, path);
   }
   const tree = read("docs/repository.md")
     .split("\n")

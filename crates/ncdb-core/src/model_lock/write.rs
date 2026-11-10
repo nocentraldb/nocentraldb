@@ -16,7 +16,7 @@
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
-use super::{Collection, Element, FORMAT, Field, Kind, ModelLock};
+use super::{Collection, Element, FORMAT, Field, Kind, ModelLock, Scope};
 
 /// The widest line on which an object or array is put on one line.
 const WIDTH: usize = 80;
@@ -80,8 +80,9 @@ impl ModelLock {
 fn collection(collection: &Collection, descriptions: bool) -> Value {
     let mut entry = Map::new();
     entry.insert("since".into(), collection.since.into());
-    if let Some(version) = collection.deprecated {
-        entry.insert("deprecated".into(), version.into());
+    if let Some(deprecation) = &collection.deprecated {
+        entry.insert("deprecated".into(), deprecation.since.into());
+        entry.insert("deprecatedReason".into(), deprecation.reason.clone().into());
     }
     let fields = collection
         .fields
@@ -119,6 +120,9 @@ fn collection(collection: &Collection, descriptions: bool) -> Value {
                 let mut entry = Map::new();
                 entry.insert("equal".into(), index.equal.into());
                 entry.insert("fields".into(), Value::Array(fields));
+                if index.scope == Scope::Space {
+                    entry.insert("scope".into(), "space".into());
+                }
                 entry.insert("since".into(), index.since.into());
                 (name.clone(), Value::Object(entry))
             })

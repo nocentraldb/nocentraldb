@@ -105,8 +105,8 @@ pub struct Plugin {
 pub struct Collection {
     /// The model version that added the collection.
     pub since: u64,
-    /// The model version that deprecated the collection, if it is.
-    pub deprecated: Option<u64>,
+    /// When and why the collection was deprecated.
+    pub deprecated: Option<Deprecation>,
     /// The stored fields, by name.
     pub fields: BTreeMap<String, Field>,
     /// The computed fields, by name only (a later RFC designs them).
@@ -132,8 +132,20 @@ pub struct Index {
     pub fields: Vec<IndexField>,
     /// How many leading fields a query fixes with equality.
     pub equal: u64,
+    /// Whether the index spans every space of the member or runs in one.
+    pub scope: Scope,
     /// The model version that added the index in this form.
     pub since: u64,
+}
+
+/// Which rows an index orders (RFC 0005, Amendment 3).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Scope {
+    /// Every space of the member: the lock leaves `scope` out.
+    #[default]
+    Member,
+    /// One space at a time: the lock writes `"scope": "space"`.
+    Space,
 }
 
 /// One field of an index, with its direction.
@@ -181,10 +193,10 @@ pub struct Field {
     pub deprecated: Option<Deprecation>,
 }
 
-/// A field's deprecation.
+/// The deprecation of a field or a collection.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Deprecation {
-    /// The model version that deprecated the field (`deprecated`).
+    /// The model version that deprecated it (`deprecated`).
     pub since: u64,
     /// The text of `.deprecated()` (`deprecatedReason`).
     pub reason: String,

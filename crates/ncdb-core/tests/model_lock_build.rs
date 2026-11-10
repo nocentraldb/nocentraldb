@@ -193,12 +193,51 @@ fn a_changed_index_takes_the_new_version_and_an_unchanged_one_keeps_its_own() {
 }
 
 #[test]
-fn a_deprecated_collection_stays_deprecated() {
-    let mut v2 = ModelLock::from_json(EXAMPLE).unwrap();
-    v2.collections.get_mut("people").unwrap().deprecated = Some(2);
-    v2.model.hash = v2.compute_hash();
-    let lock = build(&draft(V2), Some(&v2), no_new_id).unwrap().lock;
-    assert_eq!(lock, v2);
+fn a_collection_deprecation_records_the_version_that_made_it_and_keeps_it() {
+    let v2 = ModelLock::from_json(EXAMPLE).unwrap();
+    let text = V2.replace(
+        r#""people": {"#,
+        r#""people": { "deprecated": "Use members.","#,
+    );
+    let v3 = build(&draft(&text), Some(&v2), no_new_id).unwrap().lock;
+    assert_eq!(v3.model.version, 3);
+    let deprecation = v3.collection("people").unwrap().deprecated.clone().unwrap();
+    assert_eq!(
+        (deprecation.since, deprecation.reason.as_str()),
+        (3, "Use members.")
+    );
+    let text = text.replace(
+        r#""estimate": {"#,
+        r#""rank": { "rule": 1, "type": "ncdb/int" }, "estimate": {"#,
+    );
+    let v4 = build(&draft(&text), Some(&v3), no_new_id).unwrap().lock;
+    assert_eq!(v4.model.version, 4);
+    assert_eq!(
+        v4.collection("people")
+            .unwrap()
+            .deprecated
+            .as_ref()
+            .unwrap()
+            .since,
+        3
+    );
+}
+
+#[test]
+fn a_collection_the_schema_no_longer_deprecates_is_refused() {
+    let v2 = ModelLock::from_json(EXAMPLE).unwrap();
+    let text = V2.replace(
+        r#""people": {"#,
+        r#""people": { "deprecated": "Use members.","#,
+    );
+    let v3 = build(&draft(&text), Some(&v2), no_new_id).unwrap().lock;
+    let refusals = build(&draft(V2), Some(&v3), no_new_id).unwrap_err();
+    assert_eq!(
+        refusals,
+        vec![Refusal::CollectionUndeprecated {
+            collection: "people".into()
+        }]
+    );
 }
 
 #[test]

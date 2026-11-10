@@ -8,7 +8,7 @@ Run `git status` first. A new cloud session can start with an old tree staged ov
 
 The session start hook also runs `pnpm install --frozen-lockfile` when `pnpm-lock.yaml` changed since node_modules was installed (NOC-65), and says so if that fails. If a test still fails with a missing module, run `pnpm install` once and run the test again.
 
-Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/CONFIG.md`, `factory/GENESIS.md`, and the decision log in `factory/decisions/` with `pnpm decisions` (`--current` leaves out what was superseded). Then read your ticket in the tracker, with its comments and the tickets it depends on.
+Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/CONFIG.md`, `factory/GENESIS.md`, and the decision log's index with `pnpm decisions --index`. Read in full only the decisions that touch your work: `pnpm decisions --ticket <id>` for your ticket and the tickets it depends on, and `pnpm decisions --topic <tag>` for the topics it touches, chosen from the index (NOC-83). Reading the whole log costs every session tens of thousands of tokens. Then read your ticket in the tracker, with its comments and the tickets it depends on.
 
 ## Doing the ticket
 
@@ -21,7 +21,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
    Every acceptance criterion gets at least one test that failed before its code existed. A bug fix starts with a test that reproduces the bug. Never change a test to make it pass unless the test itself was wrong, and say so in the commit message.
 4. Run the gate command from CONFIG.md until it passes. Commit with the ticket id in every message. Add a change fragment when CONFIG.md says the change needs one.
-5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. When the ticket implements a decided RFC, name in the summary the RFC sections the PR implements, and say where it departs from them, if anywhere. Leave every authorship checkbox unticked.
+5. Open a draft PR with the ticket id in its title, following the repository's PR template. Under "How it was tested", list each acceptance criterion with its test and the failure you saw in the red step. When the ticket implements a decided RFC, name in the summary the RFC sections the PR implements. Never decide a departure from the RFC in the PR: when the RFC cannot be followed, or leaves open a choice developers would see, tell pm, who opens a needs-owner ticket, and build the rest as a safe subset (the case is refused or parked safely, and named in the PR). A choice the RFC leaves open inside the core, below the SDK, is yours: record it in the decision log. When the PR only carries out decisions (documentation that records the owner's decisions or follows merged RFC text) or changes only tooling, say so in your message to pm, which may then merge it without the owner. Leave every authorship checkbox unticked.
 6. Subscribe to your PR, so CI results and review comments wake you.
 7. Send pm a message: the ticket id, the PR link, and one line on what you built.
 

@@ -3,9 +3,9 @@
 //! indexes, each with its collection, its ordered fields with a direction
 //! each, and how many leading fields a query fixes with equality.
 //!
-//! The core has no `model.lock.json` reader yet (RFC 0005); until it has,
-//! a caller builds this value itself. It is a working name of the core,
-//! not the SDK's API.
+//! The view reads it only from the member's `model.lock.json` (RFC 0005),
+//! through [`Model::from_lock`]. It is a working name of the core, not the
+//! SDK's API.
 
 use std::collections::BTreeMap;
 
@@ -14,6 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::basic::{self, BasicValue, Kind};
 use crate::cbor::{self, Key, Value};
 use crate::link::{Link, Links};
+use crate::model_lock::Refusal;
+pub use crate::model_lock::Scope;
 use crate::set::{self, Set};
 
 /// The model the view folds by: collections by name, each a map of field
@@ -51,15 +53,20 @@ pub enum FieldState {
 /// A declared index (RFC 0006, "Declared indexes").
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Index {
-    /// The index's name, unique in the model.
+    /// The index's name, unique in its collection: two collections may
+    /// each have an index of the same name, as the lock scopes them.
     pub name: String,
     /// The collection it orders.
     pub collection: String,
     /// The fields it orders by, each with its direction. Each is a field
     /// with a single sortable value: a basic value or a link.
     pub keys: Vec<(String, Direction)>,
-    /// How many leading keys a query fixes with equality.
+    /// How many leading keys a query fixes with equality, after the space
+    /// id when the index runs in one space.
     pub equality: usize,
+    /// Whether the index spans every space of the member, or runs in one
+    /// and puts the space id first (RFC 0006, Amendment 6).
+    pub scope: Scope,
 }
 
 /// The direction of one key of an index.
@@ -74,8 +81,15 @@ pub enum Direction {
 /// Why a model cannot be folded into a view.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Invalid {
-    /// Two indexes share this name.
-    DuplicateIndex(String),
+    /// The lock breaks the rules RFC 0005 gives a lock on its own.
+    Lock(Vec<Refusal>),
+    /// Two indexes of one collection share a name.
+    DuplicateIndex {
+        /// The collection.
+        collection: String,
+        /// The index's name.
+        index: String,
+    },
     /// The index names a collection the model does not have.
     UnknownCollection(String),
     /// The index orders by a field the collection does not have, or by one
@@ -107,18 +121,25 @@ impl Model {
         self.collections.get(collection)?.get(field)
     }
 
-    /// The declared index with this name.
-    pub fn index(&self, name: &str) -> Option<&Index> {
-        self.indexes.iter().find(|index| index.name == name)
+    /// The declared index of `collection` with this name.
+    pub fn index(&self, collection: &str, name: &str) -> Option<&Index> {
+        self.indexes
+            .iter()
+            .find(|index| index.collection == collection && index.name == name)
     }
 
-    /// Checks that every index names a collection, orders by fields with a
-    /// column, and fixes at most its keys with equality.
+    /// Checks that every index has a name no other index of its collection
+    /// has, names a collection, orders by fields with a column, and fixes
+    /// at most its keys with equality.
     pub fn validate(&self) -> Result<(), Invalid> {
         for (n, index) in self.indexes.iter().enumerate() {
             let name = || index.name.clone();
-            if self.indexes[..n].iter().any(|i| i.name == index.name) {
-                return Err(Invalid::DuplicateIndex(name()));
+            let twin = |i: &Index| i.collection == index.collection && i.name == index.name;
+            if self.indexes[..n].iter().any(twin) {
+                return Err(Invalid::DuplicateIndex {
+                    collection: index.collection.clone(),
+                    index: name(),
+                });
             }
             let Some(fields) = self.collections.get(&index.collection) else {
                 return Err(Invalid::UnknownCollection(name()));
@@ -167,6 +188,7 @@ impl Model {
                     text(&index.collection),
                     Value::Array(keys),
                     Value::Unsigned(index.equality as u64),
+                    Value::Bool(index.scope == Scope::Space),
                 ])
             })
             .collect();

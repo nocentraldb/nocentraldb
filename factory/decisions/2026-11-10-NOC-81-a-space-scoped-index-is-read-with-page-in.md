@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-81 · A space-scoped index is read with `View::page_in`, and the core's lock carries `scope`
+
+- Decided by: coding agent (NOC-81)
+- Why: RFC 0006 Amendment 6 puts the space id first in an index declared with `scope: "space"`, as the start of its equality prefix. The core's lookup takes the space as its own argument: `View::page_in(space, collection, index, equal, after, limit)` reads such an index, with `equal` holding only the declared equality prefix, and `View::page` reads an index that spans every space. Each refuses the other kind of index with `QueryError::Space`, so a lookup can never silently read every space or none. The cursor carries the space id as part of its key, so a cursor of one space is refused in another. The view reads the scope from the lock, so the core's `model_lock::Index` gains `scope` (`Scope::Member`, left out of the lock, or `Scope::Space`, written `"scope": "space"`), as RFC 0005 Amendment 3 defines it; a build gives an index whose scope changed the new model version, like any other change to an index.
+- Instead of: one `page` whose `equal` starts with the space id as a byte value for a scoped index, which a caller could get wrong without a type to stop it.
+- Topics: rfc-0005, rfc-0006, view, model-lock, indexes, query

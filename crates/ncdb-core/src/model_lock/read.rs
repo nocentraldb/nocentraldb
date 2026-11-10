@@ -14,7 +14,7 @@ use serde_json::{Map, Value};
 
 use super::{
     Collection, Deprecation, Direction, Element, FORMAT, Field, Index, IndexField, Kind, ModelId,
-    ModelInfo, ModelLock, Named, Person, Plugin,
+    ModelInfo, ModelLock, Named, Person, Plugin, Scope,
 };
 
 /// Why a lock (or a schema's description) could not be read: the JSON
@@ -194,9 +194,7 @@ fn collection(map: &Map<String, Value>, path: &str) -> Result<Collection, LockEr
     };
     Ok(Collection {
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
-        deprecated: optional(map, "deprecated")
-            .map(|v| whole(v, &join(path, "deprecated")))
-            .transpose()?,
+        deprecated: deprecation(map, path)?,
         fields: match optional(map, "fields") {
             None => BTreeMap::new(),
             Some(value) => entries(value, &join(path, "fields"), field)?,
@@ -211,21 +209,25 @@ fn collection(map: &Map<String, Value>, path: &str) -> Result<Collection, LockEr
 }
 
 fn field(map: &Map<String, Value>, path: &str) -> Result<Field, LockError> {
-    let deprecated = match optional(map, "deprecated") {
-        None => None,
-        Some(value) => Some(Deprecation {
-            since: whole(value, &join(path, "deprecated"))?,
-            reason: optional(map, "deprecatedReason")
-                .map(|v| string(v, &join(path, "deprecatedReason")))
-                .transpose()?
-                .unwrap_or_default(),
-        }),
-    };
     Ok(Field {
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
-        deprecated,
+        deprecated: deprecation(map, path)?,
         ..field_core(map, path)?
     })
+}
+
+/// The keys `deprecated` and `deprecatedReason` of a field or a collection.
+fn deprecation(map: &Map<String, Value>, path: &str) -> Result<Option<Deprecation>, LockError> {
+    let Some(value) = optional(map, "deprecated") else {
+        return Ok(None);
+    };
+    Ok(Some(Deprecation {
+        since: whole(value, &join(path, "deprecated"))?,
+        reason: optional(map, "deprecatedReason")
+            .map(|v| string(v, &join(path, "deprecatedReason")))
+            .transpose()?
+            .unwrap_or_default(),
+    }))
 }
 
 /// What a field is, apart from its history: its type, rule, person and
@@ -334,8 +336,21 @@ fn index(map: &Map<String, Value>, path: &str) -> Result<Index, LockError> {
     Ok(Index {
         fields,
         equal: whole(required(map, path, "equal")?, &join(path, "equal"))?,
+        scope: scope(map, path)?,
         since: whole(required(map, path, "since")?, &join(path, "since"))?,
     })
+}
+
+/// An index's `scope`: `"space"`, or left out for every space.
+pub(super) fn scope(map: &Map<String, Value>, path: &str) -> Result<Scope, LockError> {
+    match optional(map, "scope") {
+        None => Ok(Scope::Member),
+        Some(value) if value.as_str() == Some("space") => Ok(Scope::Space),
+        Some(_) => Err(error(
+            &join(path, "scope"),
+            "expected \"space\" or no scope",
+        )),
+    }
 }
 
 pub(super) fn direction(value: &Value, path: &str) -> Result<Direction, LockError> {

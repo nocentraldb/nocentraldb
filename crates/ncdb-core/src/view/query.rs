@@ -7,8 +7,10 @@
 //! key comes after it in the index's order, written out key by key so that
 //! an unset value and a descending key compare as the index orders them
 //! (SQLite's row values compare all keys one way, and with an unset value
-//! they compare to nothing). Every index ends with `(space_id, object_id)`,
-//! so the order is total and a page boundary is exact.
+//! they compare to nothing). Every index ends with the object id after the
+//! space id, so the order is total and a page boundary is exact. An index
+//! that runs in one space puts the space id first, as the start of its
+//! equality prefix (RFC 0006, Amendment 6).
 
 use std::fmt;
 
@@ -16,8 +18,8 @@ use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, params_from_iter};
 
 use super::fold::sql_value;
-use super::model::{Direction, Index};
-use super::schema::{column, index_name, rows};
+use super::model::{Direction, Index, Scope};
+use super::schema::{index_columns, index_name, prefix, rows};
 use super::{Error, View};
 use crate::cbor::Value;
 use crate::ids::{ObjectId, SpaceId};
@@ -25,33 +27,38 @@ use crate::ids::{ObjectId, SpaceId};
 /// Why a lookup was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum QueryError {
-    /// The model declares no index of this name.
+    /// The model declares no index of this name in this collection.
     UnknownIndex,
     /// The lookup does not give one value per key of the index's equality
     /// prefix.
     Equality,
     /// The page size is 0 or above [`View::MAX_PAGE`].
     PageSize,
+    /// The lookup names a space and the index spans every space, or the
+    /// index runs in one space and the lookup names none.
+    Space,
     /// The cursor belongs to another index, another equality prefix or
     /// another model: start again from the first page.
     Cursor,
 }
 
 /// The position after the last row of a page: the row's index key, with
-/// the index's name and the model's hash. It holds plaintext field values,
+/// the index's collection and name and the model's hash. It holds plaintext field values,
 /// so its `Debug` output shows only the index and the number of values.
 #[derive(Clone, PartialEq)]
 pub struct Cursor {
+    collection: String,
     index: String,
     model: [u8; 32],
-    /// The values of every key of the index, then the space id and the
-    /// object id.
+    /// The values of every column of the index's SQLite index, in order:
+    /// its keys, the space id and the object id.
     key: Vec<Sql>,
 }
 
 impl fmt::Debug for Cursor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Cursor")
+            .field("collection", &self.collection)
             .field("index", &self.index)
             .field("values", &self.key.len())
             .finish()
@@ -68,14 +75,9 @@ pub struct Page {
     pub next: Option<Cursor>,
 }
 
-/// The keys after the equality prefix, then the space and object ids, each
-/// with its direction.
+/// The columns after the equality prefix, each with its direction.
 fn tail(index: &Index) -> Vec<(String, Direction)> {
-    index.keys[index.equality..]
-        .iter()
-        .map(|(field, direction)| (column(field), *direction))
-        .chain(["space_id", "object_id"].map(|c| (c.to_owned(), Direction::Ascending)))
-        .collect()
+    index_columns(index).split_off(prefix(index))
 }
 
 /// The rows whose key `tail` comes after `after`, key by key, nested so
@@ -109,19 +111,25 @@ fn after_key(tail: &[(String, Direction)], after: &[Sql]) -> (String, Vec<Sql>) 
     (condition, values)
 }
 
-/// The SQL of a page, and its parameters: the equality values, the
-/// cursor's values that are set, and the page size.
+/// The SQL of a page, and its parameters: the equality values (the space
+/// id first, when the index runs in one space), the cursor's values that
+/// are set, and the page size.
 fn statement(
     index: &Index,
     equal: &[Sql],
     after: Option<&[Sql]>,
     limit: usize,
 ) -> (String, Vec<Sql>) {
+    let columns = index_columns(index);
     let tail = tail(index);
     let mut parameters: Vec<Sql> = equal.to_vec();
-    let mut conditions: Vec<String> = index.keys[..index.equality]
-        .iter()
-        .map(|(field, _)| format!("{} IS ?", column(field)))
+    // The condition of the partial index: no deleted object.
+    let mut conditions: Vec<String> = std::iter::once("deleted = 0".to_owned())
+        .chain(
+            columns[..prefix(index)]
+                .iter()
+                .map(|(name, _)| format!("{name} IS ?")),
+        )
         .collect();
     if let Some(after) = after {
         // A bound on the first key lets SQLite seek to the cursor; the
@@ -140,25 +148,19 @@ fn statement(
         conditions.push(condition);
         parameters.extend(values);
     }
-    let order: Vec<String> = index
-        .keys
+    let order: Vec<String> = columns
         .iter()
-        .map(|(field, direction)| (column(field), *direction))
-        .chain(["space_id", "object_id"].map(|c| (c.to_owned(), Direction::Ascending)))
         .map(|(name, direction)| match direction {
             Direction::Ascending => format!("{name} ASC"),
             Direction::Descending => format!("{name} DESC"),
         })
         .collect();
-    let keys: Vec<String> = index.keys.iter().map(|(field, _)| column(field)).collect();
-    let filter = match conditions.is_empty() {
-        true => String::new(),
-        false => format!(" WHERE {}", conditions.join(" AND ")),
-    };
+    let names: Vec<&str> = columns.iter().map(|(name, _)| name.as_str()).collect();
     let sql = format!(
-        "SELECT {}space_id, object_id FROM {}{filter} ORDER BY {} LIMIT ?",
-        keys.iter().map(|k| format!("{k}, ")).collect::<String>(),
+        "SELECT {} FROM {} WHERE {} ORDER BY {} LIMIT ?",
+        names.join(", "),
         rows(&index.collection),
+        conditions.join(" AND "),
         order.join(", "),
     );
     parameters.push(Sql::Integer(i64::try_from(limit).unwrap_or(i64::MAX)));
@@ -168,8 +170,8 @@ fn statement(
 /// The query plans of an index's first page and of a page after a
 /// cursor, one line each.
 pub(super) fn plans(conn: &Connection, index: &Index) -> Result<Vec<String>, Error> {
-    let equal = vec![Sql::Null; index.equality];
-    let after = vec![Sql::Integer(0); index.keys.len() - index.equality + 2];
+    let equal = vec![Sql::Null; prefix(index)];
+    let after = vec![Sql::Integer(0); tail(index).len()];
     [None, Some(after.as_slice())]
         .into_iter()
         .map(|after| {
@@ -189,7 +191,7 @@ pub(super) fn check(conn: &Connection, indexes: &[Index]) -> Result<(), Error> {
     for index in indexes {
         for plan in plans(conn, index)? {
             if !fits(&plan, &index_name(index)) {
-                return Err(Error::Plan(index.name.clone()));
+                return Err(Error::Plan(format!("{}.{}", index.collection, index.name)));
             }
         }
     }
@@ -221,10 +223,40 @@ impl View {
     /// The largest page, so that one read holds the database briefly.
     pub const MAX_PAGE: usize = 500;
 
-    /// One page of the declared index `index`: the rows whose equality
-    /// prefix holds `equal`, after `after`, at most `limit`.
+    /// One page of the declared index `index` of `collection`, which spans
+    /// every space: the rows whose equality prefix holds `equal`, after
+    /// `after`, at most `limit`.
     pub fn page(
         &self,
+        collection: &str,
+        index: &str,
+        equal: &[Value],
+        after: Option<&Cursor>,
+        limit: usize,
+    ) -> Result<Page, Error> {
+        self.lookup(None, collection, index, equal, after, limit)
+    }
+
+    /// One page of the declared index `index` of `collection`, which runs
+    /// in one space, in `space`: the space id starts the equality prefix,
+    /// and `equal` holds the values of the declared equality prefix after
+    /// it (RFC 0006, Amendment 6).
+    pub fn page_in(
+        &self,
+        space: SpaceId,
+        collection: &str,
+        index: &str,
+        equal: &[Value],
+        after: Option<&Cursor>,
+        limit: usize,
+    ) -> Result<Page, Error> {
+        self.lookup(Some(space), collection, index, equal, after, limit)
+    }
+
+    fn lookup(
+        &self,
+        space: Option<SpaceId>,
+        collection: &str,
         index: &str,
         equal: &[Value],
         after: Option<&Cursor>,
@@ -232,31 +264,44 @@ impl View {
     ) -> Result<Page, Error> {
         let index = self
             .model
-            .index(index)
+            .index(collection, index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
+        let space = match (index.scope, space) {
+            (Scope::Member, None) => None,
+            (Scope::Space, Some(space)) => Some(Sql::Blob(space.0.to_vec())),
+            _ => return Err(Error::Query(QueryError::Space)),
+        };
         if equal.len() != index.equality {
             return Err(Error::Query(QueryError::Equality));
         }
         if limit == 0 || limit > View::MAX_PAGE {
             return Err(Error::Query(QueryError::PageSize));
         }
-        let equal: Vec<Sql> = equal.iter().cloned().map(sql_value).collect();
+        let equal: Vec<Sql> = space
+            .into_iter()
+            .chain(equal.iter().cloned().map(sql_value))
+            .collect();
         let hash = self.model.hash();
+        let fixed = prefix(index);
         let after = match after {
             None => None,
             Some(cursor) => {
-                let fits = cursor.index == index.name
+                let fits = cursor.collection == index.collection
+                    && cursor.index == index.name
                     && cursor.model == hash
-                    && cursor.key[..index.equality] == equal[..];
+                    && cursor.key[..fixed] == equal[..];
                 if !fits {
                     return Err(Error::Query(QueryError::Cursor));
                 }
-                Some(&cursor.key[index.equality..])
+                Some(&cursor.key[fixed..])
             }
         };
         let (sql, parameters) = statement(index, &equal, after, limit);
         let mut statement = self.conn.prepare(&sql)?;
-        let width = index.keys.len() + 2;
+        let columns = index_columns(index);
+        let width = columns.len();
+        let at = |name: &str| columns.iter().position(|(c, _)| c == name);
+        let (space_at, object_at) = (at("space_id"), at("object_id"));
         let keys: Vec<Vec<Sql>> = statement
             .query_map(params_from_iter(parameters), |row| {
                 (0..width).map(|i| row.get::<_, Sql>(i)).collect()
@@ -264,16 +309,17 @@ impl View {
             .collect::<Result<_, _>>()?;
         let mut rows = Vec::with_capacity(keys.len());
         for key in &keys {
-            let id = |value: &Sql| match value {
-                Sql::Blob(bytes) => <[u8; 16]>::try_from(bytes.as_slice()).ok(),
+            let id = |at: Option<usize>| match at.map(|i| &key[i]) {
+                Some(Sql::Blob(bytes)) => <[u8; 16]>::try_from(bytes.as_slice()).ok(),
                 _ => None,
             };
-            let space = id(&key[width - 2]).ok_or(Error::Corrupt("space id"))?;
-            let object = id(&key[width - 1]).ok_or(Error::Corrupt("object id"))?;
+            let space = id(space_at).ok_or(Error::Corrupt("space id"))?;
+            let object = id(object_at).ok_or(Error::Corrupt("object id"))?;
             rows.push((SpaceId(space), ObjectId(object)));
         }
         let next = match keys.last() {
             Some(key) if keys.len() == limit => Some(Cursor {
+                collection: index.collection.clone(),
                 index: index.name.clone(),
                 model: hash,
                 key: key.clone(),
@@ -283,12 +329,13 @@ impl View {
         Ok(Page { rows, next })
     }
 
-    /// The query plans of the declared index `index`: its first page and a
-    /// page after a cursor, as SQLite's `EXPLAIN QUERY PLAN` gives them.
-    pub fn plans(&self, index: &str) -> Result<Vec<String>, Error> {
+    /// The query plans of the declared index `index` of `collection`: its
+    /// first page and a page after a cursor, as SQLite's `EXPLAIN QUERY
+    /// PLAN` gives them.
+    pub fn plans(&self, collection: &str, index: &str) -> Result<Vec<String>, Error> {
         let index = self
             .model
-            .index(index)
+            .index(collection, index)
             .ok_or(Error::Query(QueryError::UnknownIndex))?;
         plans(&self.conn, index)
     }

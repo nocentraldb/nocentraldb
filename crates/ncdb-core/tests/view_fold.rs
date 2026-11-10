@@ -124,7 +124,7 @@ impl Both {
         control.members = (1..4).map(|n| (member(n), 0)).collect();
         let db = MemDb::new();
         Both {
-            view: View::open(&db.0, model()).unwrap(),
+            view: View::open(&db.0, &lock()).unwrap(),
             db,
             view_control: control.clone(),
             log: Log::new(SPACE),
