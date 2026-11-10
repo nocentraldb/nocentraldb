@@ -164,7 +164,7 @@ impl Session<'_> {
     fn failed(&self, code: String) -> End {
         let _ = with(self.db, |inner| {
             if let Some(sync) = inner.sync.as_mut() {
-                sync.error = Some(code.clone());
+                sync.error = Some(wire::shown_code(&code));
             }
         });
         lost()
@@ -290,6 +290,8 @@ impl Session<'_> {
                 let cursor = with(self.db, |inner| apply::cursor(inner, space))?;
                 if cursor < head {
                     self.gaps.insert(space);
+                } else {
+                    with(self.db, |inner| apply::caught_up(inner, space))?;
                 }
                 Ok(())
             }

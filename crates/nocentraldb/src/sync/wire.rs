@@ -21,6 +21,45 @@ pub(crate) const MAX_PUSH: usize = 32;
 /// space id and CBOR's own bytes, with room to spare.
 const OVERHEAD: usize = 1024;
 
+/// The error codes RFC 0007 lists ("The errors").
+const CODES: [&str; 19] = [
+    "unsupported_version",
+    "unauthenticated",
+    "not_member",
+    "removed_member",
+    "unknown_space",
+    "space_exists",
+    "not_allowed",
+    "malformed",
+    "too_large",
+    "unsupported_suite",
+    "bad_signature",
+    "author_not_member",
+    "membership_rule",
+    "epoch_changed",
+    "bad_record",
+    "compacted",
+    "bad_cursor",
+    "rate_limited",
+    "unavailable",
+];
+
+/// What the sync status shows for a code the relay sent that RFC 0007
+/// does not list (NOC-146).
+const UNKNOWN_ERROR: &str = "unknown_error";
+
+/// The code the sync status shows for `code`, which the relay sent: the
+/// code itself when RFC 0007 lists it, else [`UNKNOWN_ERROR`], so the
+/// relay's own text never reaches the app.
+pub(crate) fn shown_code(code: &str) -> String {
+    let shown = if CODES.contains(&code) {
+        code
+    } else {
+        UNKNOWN_ERROR
+    };
+    shown.to_owned()
+}
+
 /// The client string `hello` carries (RFC 0007, "Opening a connection").
 const CLIENT: &str = concat!("ncdb-rs/", env!("CARGO_PKG_VERSION"));
 
