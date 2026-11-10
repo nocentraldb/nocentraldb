@@ -52,7 +52,7 @@ fn the_first_person_key_entry_creates_the_person_key() {
     let state = resolve(s.space, held.iter().chain([&entry]));
     assert_eq!(state.verdict(entry.id()), ACCEPTED);
     let key = state.person_key(person(1)).expect("the person key exists");
-    assert_eq!(key.commitment, [0xc1; 32]);
+    assert_eq!(key.commitment, Some([0xc1; 32]));
     assert_eq!(key.records, BTreeSet::from([record(&s, 1)]));
     assert_eq!(key.shred, None);
     assert_eq!(state.person_key(person(2)), None);
@@ -88,7 +88,10 @@ fn of_two_concurrent_first_entries_with_other_commitments_the_first_in_the_order
         state.verdict(one.id()),
         Some(&Verdict::Rejected(Rejection::Commitment))
     );
-    assert_eq!(state.person_key(person(1)).unwrap().commitment, [0xc2; 32]);
+    assert_eq!(
+        state.person_key(person(1)).unwrap().commitment,
+        Some([0xc2; 32])
+    );
 }
 
 #[test]

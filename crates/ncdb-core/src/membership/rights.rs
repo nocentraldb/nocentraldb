@@ -63,7 +63,8 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
         Entry::PersonKey(entry) => {
             return past
                 .person_key(entry.person_key)
-                .is_none_or(|key| key.commitment == entry.commitment);
+                .and_then(|key| key.commitment)
+                .is_none_or(|commitment| commitment == entry.commitment);
         }
         Entry::Shred(shred) => return signed_off(space, node, shred, past),
         _ => return true,

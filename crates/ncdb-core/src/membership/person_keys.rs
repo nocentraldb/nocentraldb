@@ -14,11 +14,15 @@ use super::input::Node;
 use super::person_key::PersonKeyEntry;
 use super::state::{Rejection, Verdict};
 
-/// One person key of a space.
+/// One person key of a space: created by its first accepted person-key
+/// entry, or named by an accepted shred alone.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PersonKey {
-    /// The commitment of the first accepted person-key entry of its id.
-    pub commitment: [u8; 32],
+    /// The commitment of the first accepted person-key entry of its id;
+    /// none when no accepted entry of its id is left, which happens only to
+    /// a person key an accepted shred destroyed (its entries lost to a
+    /// concurrent first entry, which the shred then rejected).
+    pub commitment: Option<[u8; 32]>,
     /// The records the accepted person-key entries of its id announce: the
     /// generation each is wrapped under, and its record hash.
     pub records: BTreeSet<(u64, [u8; 32])>,
@@ -44,26 +48,32 @@ impl PersonKeys {
     pub(crate) fn repeats(&self, entry: &PersonKeyEntry) -> bool {
         self.0
             .get(&entry.person_key)
-            .is_none_or(|key| key.commitment == entry.commitment)
+            .and_then(|key| key.commitment)
+            .is_none_or(|commitment| commitment == entry.commitment)
     }
 
     /// What an accepted change does to the person keys: the first entry of
     /// an id creates it, every entry adds its record, and the first shred
-    /// destroys it.
+    /// destroys it, and keeps its id in the state even when no accepted entry
+    /// of the id is left.
     pub(crate) fn apply(&mut self, node: &Node) {
         match &node.body.entry {
             Entry::PersonKey(entry) => {
                 let key = self.0.entry(entry.person_key).or_insert(PersonKey {
-                    commitment: entry.commitment,
+                    commitment: None,
                     records: BTreeSet::new(),
                     shred: None,
                 });
+                key.commitment.get_or_insert(entry.commitment);
                 key.records.insert((entry.generation, entry.record_hash));
             }
             Entry::Shred(shred) => {
-                if let Some(key) = self.0.get_mut(&shred.person_key) {
-                    key.shred.get_or_insert(node.id);
-                }
+                let key = self.0.entry(shred.person_key).or_insert(PersonKey {
+                    commitment: None,
+                    records: BTreeSet::new(),
+                    shred: None,
+                });
+                key.shred.get_or_insert(node.id);
             }
             _ => {}
         }
@@ -77,7 +87,7 @@ impl PersonKeys {
             });
             Value::Array(vec![
                 fields::bytes(id),
-                fields::bytes(&key.commitment),
+                key.commitment.map_or(Value::Null, |c| fields::bytes(&c)),
                 Value::Array(records.collect()),
                 key.shred.map_or(Value::Null, |s| fields::bytes(&s.0)),
             ])
