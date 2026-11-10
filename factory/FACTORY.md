@@ -104,7 +104,7 @@ Each file is named `YYYY-MM-DD-<ticket>-<slug>.md`, with `no-ticket` when there 
 
 `Topics:` is required: lowercase tags, so a reader finds every decision on a subject. The gate checks every file's name, heading and fields. No generated overview is committed, since it would change in every PR; the reading command in CONFIG.md prints the whole log in date order, an index, only the current decisions, or the decisions of one ticket, topic or period.
 
-A decision the owner made carries the owner's name and the date. Agents read the log with the reading command before they start, so they do not reopen settled questions.
+A decision the owner made carries the owner's name and the date. Agents read the log's index before they start (`pnpm decisions --index`), and in full the decisions of their ticket, the tickets it depends on and the topics it touches (`--ticket`, `--topic`), so they do not reopen settled questions without reading the whole log every time.
 
 ## How the owner hears back
 
