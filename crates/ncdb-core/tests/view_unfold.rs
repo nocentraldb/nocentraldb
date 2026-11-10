@@ -93,10 +93,7 @@ fn written() -> Written {
     let bob = space.add(ALICE, BOB, Role::Writer, &[&genesis]);
     let carol = space.add(ALICE, CAROL, Role::Reader, &[&bob]);
     let to_carol = space.envelope(ALICE, CAROL, &[&carol]);
-    let alice = space.sealed(
-        ALICE,
-        vec![field_op::create(T, TASK), title(T, "Alice's")],
-    );
+    let alice = space.sealed(ALICE, vec![field_op::create(T, TASK), title(T, "Alice's")]);
     space.skip(BOB, 100);
     let overwrite = space.sealed(BOB, vec![title(T, "Bob's")]);
     let deletion = space.sealed(BOB, vec![delete(T)]);
