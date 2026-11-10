@@ -17,12 +17,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::cbor;
 use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
+use super::current::{self, MergeRotation};
+use super::fields;
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
+use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 
@@ -30,6 +34,7 @@ use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Ver
 /// output shows ids, roles and verdicts, never content.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Resolved {
+    space: SpaceId,
     genesis: Option<ChangeId>,
     first_generation: Option<u64>,
     members: Members,
@@ -41,6 +46,9 @@ pub struct Resolved {
     /// its causal past.
     seen: BTreeMap<ChangeId, BTreeSet<ChangeId>>,
     generations: Generations,
+    heads: BTreeSet<u64>,
+    current: Option<u64>,
+    person_keys: PersonKeys,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -143,6 +151,48 @@ impl Resolved {
         self.generations.descends(generation, from)
     }
 
+    /// The heads of the generation graph: the generations no accepted key
+    /// chain entry lists as previous, leaving out a generation that two
+    /// entries name (decision M23).
+    pub fn heads(&self) -> BTreeSet<u64> {
+        self.heads.clone()
+    }
+
+    /// The current generation, which a writer seals under (RFC 0008, "Two
+    /// removals that rotate the key at once"): the head with the highest
+    /// ordinal, then the one whose key chain entry comes first in the
+    /// order. None without a genesis.
+    pub fn current_generation(&self) -> Option<u64> {
+        self.current
+    }
+
+    /// Whether a generation of the graph is exposed: someone who may hold
+    /// it is not a member of the state (RFC 0008, "Two removals that
+    /// rotate the key at once", step 4).
+    pub fn exposed(&self, generation: u64) -> bool {
+        self.generation(generation)
+            .is_some_and(|g| g.holders.iter().any(|m| self.role(*m).is_none()))
+    }
+
+    /// The merge rotation `author` writes, when the current generation is
+    /// exposed and `author` is an admin (RFC 0008, "Two removals that
+    /// rotate the key at once", step 5): every head as previous, and an
+    /// envelope for each current member. When to write it is the SDK's
+    /// (decision M15).
+    pub fn merge_rotation(&self, author: MemberId) -> Option<MergeRotation> {
+        let current = self.current?;
+        if self.role(author) != Some(Role::Admin) || !self.exposed(current) {
+            return None;
+        }
+        let recipients = self.members().map(|(member, _)| member).collect();
+        Some(MergeRotation::new(
+            self.space,
+            author,
+            &self.heads,
+            recipients,
+        ))
+    }
+
     /// The seniority of step 2, most senior first.
     pub fn seniority(&self) -> &[MemberId] {
         &self.seniority
@@ -165,6 +215,17 @@ impl Resolved {
         })
     }
 
+    /// A person key of the space: its commitment, its records and the shred
+    /// that destroyed it.
+    pub fn person_key(&self, id: [u8; 16]) -> Option<&PersonKey> {
+        self.person_keys.0.get(&id)
+    }
+
+    /// The person keys of the space, by person-key id.
+    pub fn person_keys(&self) -> impl Iterator<Item = ([u8; 16], &PersonKey)> + '_ {
+        self.person_keys.0.iter().map(|(id, key)| (*id, key))
+    }
+
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
     pub fn seen(&self) -> &BTreeMap<ChangeId, BTreeSet<ChangeId>> {
@@ -173,14 +234,17 @@ impl Resolved {
 
     /// The canonical bytes of the state: equal states, equal bytes.
     pub fn encode(&self) -> Vec<u8> {
-        state::encode(
+        let mut entries = state::fields(
             self.genesis,
             self.first_generation,
             &self.members,
             &self.verdicts,
             &self.gaps,
             &self.generations,
-        )
+            self.current,
+        );
+        entries.push((8, self.person_keys.to_value()));
+        cbor::encode(&fields::map(entries))
     }
 }
 
@@ -206,6 +270,7 @@ impl Judged {
 /// all of them.
 fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     let mut resolved = Resolved {
+        space: input.space,
         genesis: None,
         first_generation: None,
         members: Members::default(),
@@ -215,6 +280,9 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         gaps: BTreeSet::new(),
         seen: BTreeMap::new(),
         generations: Generations::default(),
+        heads: BTreeSet::new(),
+        current: None,
+        person_keys: PersonKeys::default(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -240,8 +308,12 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         .into_iter()
         .filter(|(id, node)| !node.is_genesis() || *id == genesis.id)
         .collect();
-    resolved.generations =
-        Generations::build(body.first_generation, folded.values().copied(), judged);
+    resolved.generations = Generations::build(
+        body.first_generation,
+        genesis.author,
+        folded.values().copied(),
+        judged,
+    );
     resolved.seniority = rights::seniority(genesis, &folded, judged);
     let rank: BTreeMap<MemberId, usize> = resolved
         .seniority
@@ -268,6 +340,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     members.settle(saw);
     resolved.verdicts.insert(genesis.id, Verdict::Accepted);
     let mut accepted_revocations: Vec<ChangeId> = Vec::new();
+    let mut keys = PersonKeys::default();
     for id in resolved.order.iter().filter(|id| **id != genesis.id) {
         let node = folded[id];
         let verdict = if !judged.valid(node.id) {
@@ -280,8 +353,11 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
             Verdict::Rejected(Rejection::Excluded(*by))
         } else if members.role(node.author) < Some(rights::needed(node)) {
             Verdict::Rejected(Rejection::NoRight)
+        } else if !keys.admits(node) {
+            Verdict::Rejected(Rejection::Commitment)
         } else {
             apply(members, node);
+            keys.apply(node);
             members.settle(saw);
             if node.membership().is_some_and(|m| m.cutoff().is_some()) {
                 accepted_revocations.push(node.id);
@@ -298,6 +374,10 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         }
     }
     reject_duplicate_generations(&mut resolved.verdicts, &folded);
+    resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
+    resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
+    resolved.person_keys =
+        person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
     resolved
 }
 

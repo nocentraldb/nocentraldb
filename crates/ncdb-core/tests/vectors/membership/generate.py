@@ -2,7 +2,8 @@
 (docs/rfc/0008-membership.md, "The control bodies") in this directory,
 independently of the Rust core: with cbor2 (6.2.1, canonical mode) for the
 bytes, hashlib for the hashes, cryptography's Ed25519 and HKDF, and PyNaCl's
-XChaCha20-Poly1305 (libsodium) for the sealed model id. RFC 0008 gives no
+XChaCha20-Poly1305 (libsodium) for the sealed model id and the encrypted
+previous key of a key chain entry. RFC 0008 gives no
 byte-exact examples, so these follow its text and RFC 0003's "Formats of
 what keys sign and derive". The gates do not run this script;
 tests/membership_body.rs checks the committed files, natively and in wasm32.
@@ -159,6 +160,30 @@ set_reader = {1: 1, 3: [ADD_ID], 8: 2, 9: SUBJECT.id, 10: 1, 15: 0}
 # Remove, with cutoff 7.
 remove = {1: 1, 3: [ADD_ID], 8: 3, 9: SUBJECT.id, 15: 7}
 
+# A key chain entry (entry type 3) by the creator after the add: generation
+# 2 after the first, with generation 1's key encrypted as the owner decided
+# in NOC-97 (Carsten, 2026-11-10): nonce (24) || ciphertext (32) || tag (16),
+# XChaCha20-Poly1305 under RFC 0003's key-chain subkey of generation 2's key,
+# with the space id, the new generation id and the previous generation id
+# as associated data (each id 8 bytes, big-endian). It answers nothing, as
+# a merge rotation after a member left does.
+GENERATION_2_KEY = bytes([0x42] * 32)
+CHAIN_NONCE = bytes(0x81 + i for i in range(24))
+tag = sha256(b"nocentraldb/generation" + SPACE + CREATOR.id + enc([FIRST_GENERATION]))[:6]
+SECOND_GENERATION = (2 << 48) | int.from_bytes(tag, "big")
+chain_key = HKDF(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=None,
+    info=b"nocentraldb/key-chain" + SPACE + SECOND_GENERATION.to_bytes(8, "big"),
+).derive(GENERATION_2_KEY)
+chain_ad = SPACE + SECOND_GENERATION.to_bytes(8, "big") + FIRST_GENERATION.to_bytes(8, "big")
+PREVIOUS_FIELD = CHAIN_NONCE + crypto_aead_xchacha20poly1305_ietf_encrypt(
+    GENERATION_1_KEY, chain_ad, CHAIN_NONCE, chain_key
+)
+assert len(PREVIOUS_FIELD) == 72
+key_chain = {1: 3, 3: [ADD_ID], 8: SECOND_GENERATION, 9: [{1: FIRST_GENERATION, 2: PREVIOUS_FIELD}], 10: []}
+
 write("certificate", enc(CREATOR_CERT))
 write("sub-agent-certificate", enc(SUB_AGENT_CERT))
 write("space-id", SPACE)
@@ -173,3 +198,6 @@ write("add.id", ADD_ID)
 write("set-role-admin.body", enc(set_role))
 write("set-role-reader.body", enc(set_reader))
 write("remove.body", enc(remove))
+write("second-generation", SECOND_GENERATION.to_bytes(8, "big"))
+write("key-chain-previous", PREVIOUS_FIELD)
+write("key-chain.body", enc(key_chain))

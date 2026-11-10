@@ -6,7 +6,7 @@ This RFC proposes the API an app or an agent uses to work with NoCentralDB: how 
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. This RFC changes none of them. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so.
 
-**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
+**Status.** Decided. GENESIS.md reserves public API names for the owner ("Anything a user sees first"), and RFC 0004 (decision 7), RFC 0005 (D2) and RFC 0008 (M12) left the names of reads and roles to "the SDK's API review", which this RFC is. The owner accepted the recommendation of every decision S1 to S18 (Carsten, 2026-11-09) and S19 to S24, which building the Rust SDK raised (Carsten, 2026-11-10), and S26 to S29, on opening a database and the Rust names of the sync report (Carsten, 2026-11-10), and S30 to S32, on the keystore entry, the database file and an existing database whose keys are gone (Carsten, 2026-11-10, NOC-144), and S33 and S34, the Rust names of the list of spaces and of adding a member (Carsten, 2026-11-10, NOC-135), decided S25, the object id in TypeScript, on #91 (Carsten, 2026-11-10), and S14 on groups was withdrawn by the owner (Carsten, 2026-11-09). The design below describes those choices, and [Decisions](#decisions) records each one. Every name is collected in [Public names](#public-names). Each point in [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs) says where the other text follows this RFC. The Rust SDK's local calls are built in `crates/nocentraldb` (NOC-88), and the TypeScript SDK's schema functions in `packages/sdk`; sync, the browser and the rest of the TypeScript SDK are not built yet. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -84,6 +84,8 @@ await db.close();
 3. **Checks the lock on the device.** It runs the additive check between the lock the database was last opened with and this one, and refuses with `modelRefused`, naming each refused change, if the `model.id` differs or the change is not additive. It deletes and rewrites nothing ([RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device), D11).
 4. **Brings the view up to date.** It adds columns, tables and indexes for an additive change, folds parked operations that are now known, and starts a full rebuild where RFC 0006 asks for one ([RFC 0006, "Rebuilding the view"](0006-local-view.md#rebuilding-the-view)). `nc.open` resolves before a rebuild ends; the app reads the old view meanwhile, and `db.view` reports the rebuild's progress.
 5. **Starts syncing** in the background when a relay is given ([Sync and status](#sync-and-status)), and asks the browser for persistent storage unless the app opened with `persistentStorage: "on-request"` ([RFC 0006, decision 11](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage)).
+
+**Where the database lives.** In Node.js, `nc.open` takes the options of the Rust SDK under the names `path`, `keyFile`, `inMemory` and `agent`, with the same meaning (decision [S28](#s28-the-typescript-names-of-the-open-options)): `path` names a directory the SDK owns, `keyFile` keeps the keys in that file for a headless agent with no keystore, `inMemory` keeps the database and its keys in memory for tests, and `agent` certifies the member as an agent ([The Rust SDK](#the-rust-sdk)). Opened with neither `path` nor `inMemory`, it is refused with `invalidValue`, so no data lands where the app did not say (decision [S27](#s27-opening-without-a-path-or-memory)). With no platform keystore reachable and no `keyFile` given, it fails with `keyStoreUnavailable`, whose message names the `keyFile` option (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). These options exist in Node.js only: the browser has no path, and keeps its key as [RFC 0006, "What the view stores in plaintext"](0006-local-view.md#what-the-view-stores-in-plaintext) says.
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
@@ -378,6 +380,8 @@ await db.sync.resume();
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
 | `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. |
 
+In Rust the report is a `SyncReport`, and its values are a `SyncStatus` ([The Rust SDK](#the-rust-sdk), decision [S29](#s29-the-rust-names-of-the-sync-report)).
+
 **`space.status`**, a report per space, with everything a space can hold that an app does not see in a read:
 
 | Value | Meaning |
@@ -408,10 +412,11 @@ The SDK throws one error class, `nc.Error`, with a string `code` and the ids it 
 | `modelRefused` | `nc.open` | The lock cannot be read or breaks RFC 0005's rules, has another `model.id` than the stored one, or is not an additive successor; lists each refused change ([RFC 0005, D11](0005-schema-and-model-lock.md#d11-the-check-on-the-device)). |
 | `spaceOfAnotherModel` | `db.spaces.get`, writes | The space's genesis names another `model.id`; names both ids. |
 | `storageFull` | writes, `nc.open` | The disk or the browser's quota is full. |
-| `storageFailed` | writes, reads, `nc.open` | Any other storage failure, such as a damaged database file. Freeing space would not help, so it is not `storageFull` (decision [S22](#s22-error-codes-for-cases-this-rfc-named-no-code-for)). |
+| `storageFailed` | writes, reads, `nc.open`, `Db::open` | Any other storage failure, such as a damaged database file, or an existing database whose key file or keystore entry is gone or does not read as a key record (decision [S32](#s32-an-existing-database-whose-keys-are-gone)). Freeing space would not help, so it is not `storageFull` (decision [S22](#s22-error-codes-for-cases-this-rfc-named-no-code-for)). |
+| `keyStoreUnavailable` | `nc.open` in Node.js, `Db::open` | No platform keystore is reachable and the app named no key file. The message names the key-file option, `keyFile` or `key_file` (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). |
 | `closed` | every call | The database was closed. |
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
-| `invalidValue`, `deprecated`, `noPerson` | writes, queries | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. |
+| `invalidValue`, `deprecated`, `noPerson` | writes, queries; `invalidValue` also `nc.open` in Node.js and `Db::open` | See [Field operations per field type](#field-operations-per-field-type) and [Personal fields](#personal-fields). A query is `invalidValue` when it fixes another number of equality values than its index declares, asks for a page size of 0 or above the maximum, or uses an index of the other scope: `space.find` on an index without `scope: "space"`, or `db.find` on one with it. Opening is `invalidValue` when it names neither a path nor memory to keep the database in (decision [S27](#s27-opening-without-a-path-or-memory)). |
 | `notAllowed`, `notMember`, `lastAdmin` | writes, membership calls | The member's role does not allow it, it is no longer a member, or it is the last admin. |
 | `unknownAccount` | `members.add` | The invitation's account is new to this device; carries its fingerprint. |
 | `cursorOfAnotherModel` | `db.find` | The cursor was made under another model or index. |
@@ -445,11 +450,15 @@ while let Some(page) = live.next().await { /* ... */ }
 ```
 
 - `Db::open(options)` takes the lock's text; there is no TypeScript model, so the `lockOutOfDate` check does not apply.
-- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns, which holds the database, and the SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped.
+- **Where the database lives** (decision [S19](#s19-where-a-database-and-its-member-key-live)). `path(dir)` names a directory the SDK owns: the SDK creates it, and it holds one SQLite file, `nocentraldb.sqlite`, which leaves room for more files later (decision [S31](#s31-the-files-in-a-databases-directory)). The SDK keeps the member key in the platform keystore ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)), in one entry per database: the service `nocentraldb`, whose user is the canonical absolute path of the database directory, so a directory that is moved or renamed loses the link to its entry (decision [S30](#s30-the-keystore-entry-of-a-database)). `key_file(path)` keeps the keys in that file instead, for a headless agent that has no keystore; only the file's permissions protect it. `in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped. `Db::open` with neither `path(dir)` nor `in_memory()` is refused with `invalidValue` (decision [S27](#s27-opening-without-a-path-or-memory)); with no platform keystore reachable and no `key_file` given, it fails with `keyStoreUnavailable`, whose message names `key_file`, and creates nothing on disk (decision [S26](#s26-opening-without-a-keystore-or-a-key-file)). An existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys: new keys would hold none of its spaces' keys (decision [S32](#s32-an-existing-database-whose-keys-are-gone)).
 - **The account key and the member's kind** (decision [S20](#s20-the-account-key-that-signs-the-member-certificate)). Until the accounts RFC exists, each database draws its own account key once and keeps it next to the member key ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). `agent()` marks the member as an agent in its certificate, so a space adds it as a writer when no role is given ([RFC 0008, decision M14](0008-membership.md#m14-the-default-role-of-an-agent)); without it, the member is a device.
 - **The Rust names** (decision [S21](#s21-rust-names-this-rfc-did-not-list)). Besides `Db`, `Space`, `Spaces`, `Transaction`, `Query`, `Page` and `Cursor`, which follow [Terms](#terms), the SDK has `ObjectId`, `SpaceId` and `ChangeId`, which print and parse as lowercase hex; `Object`, a read object, whose `id()`, `space()` and `deleted()` stand for `$id`, `$space` and `$deleted`, and whose `get::<T>(name)` reads a field; `Written`, what `write` returns, with `change` and `ids`; and `page.has_more` for `hasMore`.
+- **Spaces and their list** (decision [S33](#s33-the-rust-names-of-the-list-of-spaces)). `db.spaces().list()` returns `Vec<SpaceInfo>`, one per space of the member. `SpaceInfo { id: SpaceId, role: Option<Role>, model: SpaceModel }` gives the member's role in the space, `None` once the member was removed or while no membership of it has been folded yet, and whether the space is of the lock's model ([Spaces](#spaces)). Roles are `Role::{Reader, Writer, Admin}`, the roles of [S13](#s13-role-names), and the model is `SpaceModel::{Ours, Another}`, for `"ours"` and `"another"`.
+- **Invitations and members** (decision [S34](#s34-the-rust-names-of-adding-a-member)). `db.invitation()` returns an `Invitation`, which holds the member id, its two public keys, its certificate and its account's fingerprint, a `Fingerprint`, which `invitation.fingerprint()` gives; no key bytes reach the app ([Invitations and members](#invitations-and-members)). `space.members()` returns `Members`, a handle like `db.spaces()`. `Members::add(&Invitation, AddMember) -> Result<(), Error>` adds a member, and `AddMember { role: Role, fingerprint: Option<Fingerprint> }` is a plain struct: without the fingerprint, a member of an account new to the database fails with `ErrorCode::UnknownAccount`.
+- **Open for `members().add`** ([Open questions](#open-questions)). Five points wait for the owner in NOC-154: whether `add` returns a notice, as in TypeScript, instead of `()`; the error codes for an invitation whose certificate does not hold and for a member that is or was one already; which accounts a database knows, so that it does not ask for a confirmed fingerprint again; the text form of a `Fingerprint`, and whether `UnknownAccount` carries it; and whether `role` may be left out for an agent, which in Rust is required for every member.
 - `space.write(|tx| ...)` takes a closure that records; it is synchronous for the same reason as in TypeScript.
-- `subscribe` returns a `Stream`; dropping it stops it. Reports are `db.sync().current()` and `db.sync().subscribe()`.
+- `subscribe` returns a `Stream`; dropping it stops it.
+- **The sync report** (decision [S29](#s29-the-rust-names-of-the-sync-report)). `db.sync()` returns a `SyncReport`, whose `current()` gives a `SyncStatus` with `connection`, `unconfirmed`, `refused`, `epoch_changed` and `error`, and whose `subscribe()` follows it. `connection` is one of `Connection::Connected`, `Connecting`, `Offline`, `Paused` or `None`, the values of [Sync and status](#sync-and-status). The report is not named `Sync`, which would shadow Rust's `Sync` marker trait.
 - Errors are `nocentraldb::Error` with an `ErrorCode` enum whose variants are the codes above in Rust case, such as `ErrorCode::LockOutOfDate`. `Debug` of every type that holds content or a cursor prints `[redacted]` ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
 
 ## Public names
@@ -460,7 +469,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 
 | Name | What it is | Builds on |
 | --- | --- | --- |
-| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
+| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing`, and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Decided with `model`, `persistentStorage`, `warnings`: [RFC 0006, decisions 11 and 15](0006-local-view.md#11-when-the-sdk-asks-for-persistent-storage); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `db.close` | Closes the database | [RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers) |
 | `nc.Error` | The one error class, with `code` | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
 
@@ -545,6 +554,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | --- | --- | --- |
 | `lockOutOfDate`, `modelRefused`, `spaceOfAnotherModel` | Model errors | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `storageFull`, `storageFailed`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
+| `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `invalidValue`, `deprecated`, `noPerson` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 
@@ -555,8 +565,16 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | `Db::open`, `OpenOptions` | Opens the database from the lock's text | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `OpenOptions::path`, `OpenOptions::in_memory` | Where the database lives: a directory, or memory for tests | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
 | `OpenOptions::key_file` | A key file for a headless agent without a keystore | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `Db::sync`, `SyncReport` | The relay connection, as a report: `current()` and `subscribe()` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
+| `SyncStatus` | What `current()` gives: `connection`, `unconfirmed`, `refused`, `epoch_changed`, `error` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
+| `Connection` | `Connected`, `Connecting`, `Offline`, `Paused`, `None` | [RFC 0007, "Island mode"](0007-relay.md#island-mode) |
 | `OpenOptions::agent` | Certifies the member as an agent | [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) |
 | `Space`, `Spaces` | A space handle; what `db.spaces()` returns | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
+| `Spaces::list`, `SpaceInfo` | Every space of the member: `id`, `role`, `model` | [RFC 0006, decision 1](0006-local-view.md#1-how-many-databases-per-member) |
+| `SpaceModel` | `Ours`, `Another`: whether a space is of the lock's model | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
+| `Role` | `Reader`, `Writer`, `Admin` | [RFC 0008, decision M12](0008-membership.md#m12-public-names) |
+| `Db::invitation`, `Invitation`, `Fingerprint` | This member's invitation, and its account's fingerprint | [RFC 0003, decision 12](0003-keys-and-cryptography.md#12-public-api-names) |
+| `Space::members`, `Members`, `Members::add`, `AddMember` | The members of a space; adds one by invitation, with `role` and `fingerprint` | [RFC 0003, "Sharing a space key with a new member"](0003-keys-and-cryptography.md#sharing-a-space-key-with-a-new-member) |
 | `Transaction` | What a write's closure records on | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
 | `Query`, `Page`, `Cursor`, `page.has_more` | A query, a page, its cursor, and whether more follow | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
 | `ObjectId`, `SpaceId`, `ChangeId` | The ids, printed and parsed as lowercase hex | [RFC 0002, "Object ids"](0002-change-and-log-format.md#object-ids) |
@@ -599,11 +617,10 @@ This RFC follows GENESIS.md's principles: reads never touch the network, queries
 
 ## Open questions
 
-Three questions wait for the owner, each in its own ticket:
+Two questions wait for the owner, each in its own ticket:
 
-- **NOC-114.** Opening a database on a device with no keystore, `Db::open` with neither a path nor `in_memory()`, and the TypeScript names for `path`, `keyFile`, `inMemory` and `agent`.
-- **NOC-116.** The Rust names of the sync status that [Sync and status](#sync-and-status) reports.
 - **NOC-115, question 10.** The public names for pairing a device, linking an account and recovery, which the accounts RFC (RFC 0010) designs behind the entry points of [S15](#s15-accounts).
+- **NOC-154.** Five open points of `members().add` in the Rust SDK: the notice it returns, the error codes for a certificate that does not hold and for a member added twice, which accounts a database knows, how a person sees a fingerprint, and whether an agent's role may be left out ([The Rust SDK](#the-rust-sdk)).
 
 ## Decisions
 
@@ -869,6 +886,99 @@ Not taken:
 - A `Uint8Array`.
 - A branded string type.
 
+### S26. Opening without a keystore or a key file
+
+Decided (Carsten, 2026-11-10), on NOC-114: `nc.open` in Node.js and `Db::open` fail with a new error code, `keyStoreUnavailable`, whose message names the key-file option.
+
+Why: a headless machine often has no keystore, and the code tells the developer what to do, while a key reaches disk only in a file the app chose. RFC 0003 records it ([decision 19](0003-keys-and-cryptography.md#19-opening-without-a-keystore-or-a-key-file)). It costs one more code.
+
+Not taken:
+
+- A key file in the database's directory, without being asked: convenient, but a key on disk that nobody chose is the risk RFC 0003 avoids.
+- `storageFailed`: no new code, but it does not tell the developer what to do.
+
+### S27. Opening without a path or memory
+
+Decided (Carsten, 2026-11-10), on NOC-114: opening with neither `path(dir)` nor `in_memory()`, in Node.js with neither `path` nor `inMemory`, is refused with `invalidValue`.
+
+Why: the app must say where its data lives, so no data lands somewhere unexpected.
+
+Not taken:
+
+- In memory by default: safe for tests, but an app that forgets its path loses its data silently.
+- The platform's app data directory by default: convenient, but the owner did not choose it for [S19](#s19-where-a-database-and-its-member-key-live).
+
+### S28. The TypeScript names of the open options
+
+Decided (Carsten, 2026-11-10), on NOC-114: in Node.js, `nc.open` takes `path`, `keyFile`, `inMemory` and `agent`, the Rust SDK's options in camel case. The browser has no path and keeps its key as RFC 0006 says.
+
+Why: both SDKs name the same options the same way, and a browser keeps its copy where RFC 0006 decides, so a path means nothing there.
+
+Not taken:
+
+- Leaving the TypeScript names open until the Node.js SDK is built.
+
+### S29. The Rust names of the sync report
+
+Decided (Carsten, 2026-11-10), on NOC-116: `Db::sync() -> SyncReport`; `SyncReport::current() -> SyncStatus { connection, unconfirmed, refused, epoch_changed, error }`; `Connection::{Connected, Connecting, Offline, Paused, None}`.
+
+Why: the names follow [Sync and status](#sync-and-status) in Rust case. `SyncReport` instead of `Sync`, because `Sync` would shadow Rust's built-in marker trait.
+
+Not taken:
+
+- Other names.
+
+### S30. The keystore entry of a database
+
+Decided (Carsten, 2026-11-10), on NOC-144, point 2, as #134 builds it: one entry per database, with the service `nocentraldb` and, as its user, the canonical absolute path of the database directory. It holds the key record of [RFC 0003, decision 22](0003-keys-and-cryptography.md#22-the-bytes-of-the-key-record).
+
+Why: one entry per database, with nothing to keep in step. A directory that is moved or renamed loses the link to its entry, and opening it then fails ([S32](#s32-an-existing-database-whose-keys-are-gone)); it never draws a new member key silently.
+
+Not taken:
+
+- A random id stored in the database as the user: survives a move, but a copied database then shares the keystore entry with its original.
+
+### S31. The files in a database's directory
+
+Decided (Carsten, 2026-11-10), on NOC-144, point 3, as #134 builds it: the SDK creates `dir`, and `path(dir)` holds one SQLite file, `nocentraldb.sqlite`.
+
+Why: a directory the SDK owns leaves room for more files later.
+
+Not taken:
+
+- `path` names the SQLite file itself.
+
+### S32. An existing database whose keys are gone
+
+Decided (Carsten, 2026-11-10) on NOC-144, and confirmed on NOC-149 as #134 builds it: `Db::open` of an existing database whose key file or keystore entry is gone, or does not read as a key record, fails with `storageFailed` and draws no new keys. `keyStoreUnavailable` stays the error for no reachable keystore and no key file ([S26](#s26-opening-without-a-keystore-or-a-key-file)).
+
+Why: new keys would hold none of the space keys of the database's spaces, and every space would turn `notFound`. A keystore that is reachable but holds no entry is a failure of what is stored, not a missing keystore.
+
+Not taken:
+
+- Drawing new keys for the existing database: it opens, but none of its spaces can be read.
+- `keyStoreUnavailable` when the keystore holds no entry: its message names a key file, which does not help a database whose keys were in the keystore.
+
+### S33. The Rust names of the list of spaces
+
+Decided (Carsten, 2026-11-10), on NOC-135, as #139 builds it: `spaces().list()` returns `Vec<SpaceInfo>`; `SpaceInfo { id: SpaceId, role: Option<Role>, model: SpaceModel }`, where `None` means the member was removed or no membership of it has been folded yet; `Role::{Reader, Writer, Admin}`; `SpaceModel::{Ours, Another}`.
+
+Why: the names follow `db.spaces.list()`'s `{ id, role, model: "ours" | "another" }` in Rust case, and the roles of [S13](#s13-role-names).
+
+Not taken:
+
+- Other names, such as `SpaceSummary` or `ListedSpace` for `SpaceInfo`, or `ModelOf` for `SpaceModel`.
+
+### S34. The Rust names of adding a member
+
+Decided (Carsten, 2026-11-10), on NOC-135, as #136 builds it: `db.invitation() -> Invitation`, which holds the member id, the two public keys, the certificate and the account's `Fingerprint`; `space.members() -> Members`, a handle like `db.spaces()`; `Members::add(&Invitation, AddMember) -> Result<(), Error>`; `AddMember { role: Role, fingerprint: Option<Fingerprint> }`, a plain struct, where a member of an account new to the database fails with `ErrorCode::UnknownAccount` without the fingerprint; and the `Role` of [S33](#s33-the-rust-names-of-the-list-of-spaces).
+
+Why: the names follow `db.invitation()` and `members.add(invitation, { role, fingerprint })` in Rust case. What `add` returns, and four other points the build raised, wait for the owner in NOC-154.
+
+Not taken:
+
+- A builder, such as `members().add(&invitation).role(Role::Writer).fingerprint(fingerprint)`, instead of the struct.
+
 ## How this RFC is tested
 
 `scripts/rfc-0009.test.mjs` and `scripts/rfc-0009-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file exists, links to RFC 0001 to 0008 and GENESIS.md, that every relative link and its anchor resolve, links from other files included, that it has a section for every part NOC-64 names, that every decision records the owner's choice, why and the options not taken, that every SDK name its TypeScript examples use is listed under [Public names](#public-names) and every row there links the RFC it builds on, that it shows the Rust SDK, and that the [RFC index](README.md) lists it. The design itself is tested where it is built: the Rust SDK's calls in `crates/nocentraldb`, and each call against the convergence harness and the view, natively and in the browser, as it is built.
@@ -883,3 +993,7 @@ Not taken:
 - **2026-11-10** · NOC-92 · A reference reads `{ space, id }`, `space.inspect` gives its state, and a subscription does not follow its target, as RFC 0005's D20 and D21 decided (#98).
 - **2026-11-10** · NOC-106 · S19 to S24, which the owner decided as recommended on NOC-95, written into the text where each belongs (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: every amendment folded into the design, and the decisions in short form (#118).
+- **2026-11-10** · NOC-114 · Opening a database: `keyStoreUnavailable` without a keystore or a key file, `invalidValue` without a path or memory, and the Node.js names `path`, `keyFile`, `inMemory` and `agent`, which the owner decided as recommended (S26 to S28) (#124).
+- **2026-11-10** · NOC-116 · The Rust names of the sync report, `SyncReport`, `SyncStatus` and `Connection`, which the owner decided as recommended (S29) (#124).
+- **2026-11-10** · NOC-149 · Where the database lives: the keystore entry, service `nocentraldb` with the database directory's canonical path, the one SQLite file `nocentraldb.sqlite`, and `storageFailed` for an existing database whose keys are gone, which the owner decided on NOC-144 and #134 builds (S30 to S32) (#135).
+- **2026-11-10** · NOC-150 · The Rust names of the list of spaces and of adding a member, `SpaceInfo`, `Role`, `SpaceModel`, `Invitation`, `Fingerprint`, `Members` and `AddMember`, which the owner decided as recommended on NOC-135 and #136 and #139 build (S33, S34); NOC-154's five open points of `members().add` named as open (#142).

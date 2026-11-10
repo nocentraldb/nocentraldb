@@ -29,8 +29,21 @@ pub enum ErrorCode {
     NotFound,
     /// A value does not fit the field's kind.
     InvalidValue,
+    /// The space's genesis names another `model.id` than the lock's; the
+    /// message names both.
+    SpaceOfAnotherModel,
     /// The cursor was made under another model, index or equality prefix.
     CursorOfAnotherModel,
+    /// No platform keystore is reachable and the app named no key file;
+    /// the message names `key_file` (RFC 0009, S26).
+    KeyStoreUnavailable,
+    /// The invitation's account is new to this database, and no
+    /// fingerprint of it was passed to `members().add`.
+    UnknownAccount,
+    /// The member's role does not allow the call.
+    NotAllowed,
+    /// The member is no longer a member of the space.
+    NotMember,
 }
 
 impl Error {

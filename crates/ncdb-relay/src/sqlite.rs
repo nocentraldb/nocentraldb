@@ -2,7 +2,8 @@
 //! backend table says for SQLite: a conditional append is one write
 //! transaction on the head, a row in `spaces`; "one change id, one
 //! position" is a unique index on (space, change id); frames are kept
-//! inline.
+//! inline; a person-key put is one write transaction that reads each
+//! stored generation before it writes.
 //!
 //! Several handles, also in several processes, may open one database: each
 //! write transaction takes SQLite's write lock first (`BEGIN IMMEDIATE`) and
@@ -14,15 +15,18 @@
 
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{
+    Connection, ErrorCode, OptionalExtension, Transaction, TransactionBehavior, params,
+};
 
 use crate::store::{
-    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyRecord,
-    Position, RelayStore, StoreError,
+    AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
 };
 
 /// How long a write waits for another handle's write lock.
@@ -87,9 +91,7 @@ impl SqliteStore {
         connection
             .busy_timeout(BUSY_TIMEOUT)
             .map_err(failed("busy timeout"))?;
-        connection
-            .pragma_update(None, "journal_mode", "WAL")
-            .map_err(failed("journal mode"))?;
+        wal(&connection)?;
         let tx = immediate(&mut connection)?;
         tx.execute_batch(SCHEMA).map_err(failed("schema"))?;
         tx.execute(
@@ -109,6 +111,23 @@ impl SqliteStore {
         self.connection
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+}
+
+/// Switches the database to WAL. When several handles open a new database
+/// at once, SQLite can answer SQLITE_BUSY here without calling the busy
+/// handler (NOC-137), so this retries until `BUSY_TIMEOUT` itself.
+fn wal(connection: &Connection) -> Result<(), StoreError> {
+    let deadline = Instant::now() + BUSY_TIMEOUT;
+    loop {
+        match connection.pragma_update(None, "journal_mode", "WAL") {
+            Err(rusqlite::Error::SqliteFailure(error, _))
+                if error.code == ErrorCode::DatabaseBusy && Instant::now() < deadline =>
+            {
+                thread::sleep(Duration::from_millis(10));
+            }
+            result => return result.map_err(failed("journal mode")),
+        }
     }
 }
 
@@ -355,11 +374,27 @@ impl RelayStore for SqliteStore {
     async fn put_person_keys(
         &self,
         space: SpaceId,
-        records: Vec<PersonKeyRecord>,
-    ) -> Result<(), StoreError> {
+        puts: Vec<PersonKeyPut>,
+    ) -> Result<PutOutcome, StoreError> {
         let mut connection = self.connection();
         let tx = immediate(&mut connection)?;
-        for record in records {
+        for PersonKeyPut { record, replaces } in puts {
+            let stored = tx
+                .query_row(
+                    "SELECT generation FROM person_keys WHERE space = ?1 AND id = ?2",
+                    params![space.0, record.id.0],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(failed("put person keys"))?
+                .map(unsigned);
+            if stored != replaces {
+                // Dropping the transaction rolls back the puts before it.
+                return Ok(PutOutcome::Moved {
+                    id: record.id,
+                    stored,
+                });
+            }
             tx.execute(
                 "INSERT INTO person_keys (space, id, generation, writer, wrapped, signature)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
@@ -377,7 +412,8 @@ impl RelayStore for SqliteStore {
             )
             .map_err(failed("put person keys"))?;
         }
-        tx.commit().map_err(failed("put person keys"))
+        tx.commit().map_err(failed("put person keys"))?;
+        Ok(PutOutcome::Stored)
     }
 
     async fn delete_person_keys(

@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-150 · RFC 0009 records NOC-135's Rust names as #136 and #139 build them, and names NOC-154's points as open
+
+- Decided by: coding agent (NOC-150), carrying out the owner's answer on NOC-135 (Carsten, 2026-11-10, option A for both parts)
+- Why: RFC 0009 records what the owner decided and the code builds. S33 holds `spaces().list() -> Vec<SpaceInfo>`, `SpaceInfo { id, role, model }`, `Role` and `SpaceModel`; S34 holds `db.invitation() -> Invitation`, `Fingerprint`, `space.members() -> Members`, `Members::add(&Invitation, AddMember) -> Result<(), Error>` and `AddMember { role, fingerprint }`. NOC-150's ticket wrote `Result<…>` for `add`; NOC-135 and #136 have `Result<()>` (`Result<(), Error>` in the code), so the RFC writes that. What `add` returns beyond that, and NOC-154's four other points (error codes, known accounts, fingerprint display, an agent's role), are named as open in "The Rust SDK" and "Open questions", pointing to NOC-154, and no decision states them.
+- Instead of: writing NOC-154's recommendations (a `Notice`, `invalidCertificate`, `alreadyMember`) into the RFC before the owner answers; or leaving the Rust section silent on how it differs from the TypeScript `members.add`.
+- Topics: rfc-0009, sdk-rust, public-names

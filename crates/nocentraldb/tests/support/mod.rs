@@ -33,7 +33,39 @@ pub fn ready<S: Stream + Unpin>(stream: &mut S) -> Option<S::Item> {
     }
 }
 
-/// A database opened from the test model's lock.
+/// A database in memory, opened from the test model's lock.
 pub fn open() -> Db {
-    now(Db::open(OpenOptions::new(LOCK))).expect("the test lock opens")
+    now(Db::open(OpenOptions::new(LOCK).in_memory())).expect("the test lock opens")
+}
+
+/// A directory of its own under the system's temporary directory, removed
+/// with everything in it when dropped.
+pub struct TempDir(pub std::path::PathBuf);
+
+impl TempDir {
+    pub fn new(name: &str) -> TempDir {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let unique = format!(
+            "nocentraldb-{name}-{}-{nanos}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).expect("a temporary directory");
+        TempDir(dir)
+    }
+
+    pub fn join(&self, name: &str) -> std::path::PathBuf {
+        self.0.join(name)
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
 }

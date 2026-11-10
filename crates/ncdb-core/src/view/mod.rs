@@ -17,6 +17,7 @@ mod log_table;
 pub mod model;
 mod query;
 mod read;
+mod relay;
 mod schema;
 mod state;
 
@@ -197,6 +198,16 @@ impl View {
         }
         tx.commit()?;
         Ok(appended)
+    }
+
+    /// The spaces whose log the view holds, in id order.
+    pub fn spaces(&self) -> impl Iterator<Item = SpaceId> + '_ {
+        self.logs.keys().copied()
+    }
+
+    /// The log of `space`, when the view holds one.
+    pub fn log(&self, space: SpaceId) -> Option<&Log> {
+        self.logs.get(&space)
     }
 
     /// The state of a change the log of `space` holds.

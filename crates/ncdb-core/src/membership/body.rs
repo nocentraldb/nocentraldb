@@ -9,8 +9,10 @@
 //! understand", keys from 64 up "may ignore", and kept to be encoded again.
 //! This module reads the genesis (entry type 0), the membership entry
 //! (entry type 1), the key envelope (entry type 2, [`KeyEnvelope`]) and the
-//! key chain entry (entry type 3, [`KeyChainEntry`]). The bodies of entry
-//! types 4 to 6 are other tickets'; it keeps their fields as they are. A
+//! key chain entry (entry type 3, [`KeyChainEntry`]), the person-key entry
+//! (entry type 4, [`PersonKeyEntry`]) and the shred entry (entry type 5,
+//! [`ShredEntry`]). It keeps the fields of an acknowledgement (entry type
+//! 6) as they are. A
 //! higher entry type, or a key this core does not understand, makes the
 //! body [`BodyError::NotUnderstood`]: the change is kept, parked.
 
@@ -28,6 +30,7 @@ use super::certificate::Certificate;
 use super::fields::{self, Fields};
 use super::genesis::Genesis;
 use super::key_chain::KeyChainEntry;
+use super::person_key::{PersonKeyEntry, ShredEntry};
 
 /// The depth of a control body in its change: inside the header's key 6.
 const BODY_DEPTH: usize = 3;
@@ -103,10 +106,14 @@ pub enum Entry {
     KeyEnvelope(KeyEnvelope),
     /// Entry type 3: a rotation to a new generation.
     KeyChain(KeyChainEntry),
-    /// Entry types 4 to 6, which this module does not read: their fields
-    /// from key 8 up, as they are.
+    /// Entry type 4: a person key, and one record of it.
+    PersonKey(PersonKeyEntry),
+    /// Entry type 5: the destruction of a person key.
+    Shred(ShredEntry),
+    /// Entry type 6, which this module does not read: its fields from key
+    /// 8 up, as they are.
     Other {
-        /// The entry type, 4 to 6.
+        /// The entry type, 6.
         entry_type: u64,
         /// The fields of the entry type.
         fields: BTreeMap<u64, Value>,
@@ -203,6 +210,8 @@ impl ControlBody {
             Entry::Membership(_) => MEMBERSHIP,
             Entry::KeyEnvelope(_) => KEY_ENVELOPE,
             Entry::KeyChain(_) => KEY_CHAIN,
+            Entry::PersonKey(_) => PERSON_KEY,
+            Entry::Shred(_) => SHRED,
             Entry::Other { entry_type, .. } => *entry_type,
         }
     }
@@ -242,6 +251,8 @@ impl ControlBody {
                     }),
             ),
             Entry::KeyChain(chain) => entries.extend(chain.fields()),
+            Entry::PersonKey(entry) => entries.extend(entry.fields()),
+            Entry::Shred(shred) => entries.extend(shred.fields()),
             Entry::Other { fields, .. } => entries.extend(fields.clone()),
         }
         entries.extend(self.extensions.clone());
@@ -260,7 +271,9 @@ impl ControlBody {
             MEMBERSHIP => Entry::Membership(MembershipEntry::take(&mut map)?),
             KEY_ENVELOPE => Entry::KeyEnvelope(take_envelope(&mut map)?),
             KEY_CHAIN => Entry::KeyChain(KeyChainEntry::take(&mut map)?),
-            PERSON_KEY..=ACKNOWLEDGEMENT => Entry::Other {
+            PERSON_KEY => Entry::PersonKey(PersonKeyEntry::take(&mut map)?),
+            SHRED => Entry::Shred(ShredEntry::take(&mut map)?),
+            ACKNOWLEDGEMENT => Entry::Other {
                 entry_type,
                 fields: map.0.split_off(&8),
             },

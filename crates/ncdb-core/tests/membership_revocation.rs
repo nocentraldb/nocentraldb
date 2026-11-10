@@ -70,7 +70,7 @@ fn a_demotion_keeps_the_rights_below_the_role_it_sets() {
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Admin, &[&g]);
     let demote = s.set_role(ALICE, BOB, Role::Writer, 0, &[&bob]);
-    let person_key = s.other(BOB, membership::PERSON_KEY, &[&bob]);
+    let person_key = s.person_key(BOB, 1, 1, &[&bob]);
     let carol = s.add(BOB, CAROL, Role::Reader, &[&person_key]);
     let state = resolve(s.space, [&g, &bob, &demote, &person_key, &carol]);
     assert_eq!(state.verdict(person_key.id()), Some(&Verdict::Accepted));

@@ -2,7 +2,9 @@
 //! request id, as for a pull, until the head; then, each time the space's
 //! head moves, the new entries without a request id. Every read goes
 //! through the relay core's pull, so a member that is no longer a current
-//! member reads nothing: its subscription ends with `removed_member`.
+//! member reads nothing: its subscription ends with `removed_member`. Each
+//! page waits for room in the connection's bounded queue before the next
+//! is read, so a subscription reads only as fast as its member takes.
 
 use std::sync::Arc;
 
@@ -21,7 +23,7 @@ pub(crate) fn spawn<S: RelayStore + 'static>(
     member: ncdb_core::ids::MemberId,
     cursor: Cursor,
     head: watch::Receiver<u64>,
-    out: mpsc::UnboundedSender<Out>,
+    out: mpsc::Sender<Out>,
 ) -> JoinHandle<()> {
     tokio::spawn(run(relay, member, cursor, head, out))
 }
@@ -31,7 +33,7 @@ async fn run<S: RelayStore + 'static>(
     member: ncdb_core::ids::MemberId,
     cursor: Cursor,
     mut head: watch::Receiver<u64>,
-    out: mpsc::UnboundedSender<Out>,
+    out: mpsc::Sender<Out>,
 ) {
     let Cursor {
         req, space, epoch, ..
@@ -51,7 +53,7 @@ async fn run<S: RelayStore + 'static>(
                         ErrorCode::NotMember if !catching_up => ErrorCode::RemovedMember,
                         code => code,
                     };
-                    let _ = out.send(Out::Message(wire::error(Some(req), code)));
+                    let _ = out.send(Out::Message(wire::error(Some(req), code))).await;
                     return;
                 }
             };
@@ -59,12 +61,16 @@ async fn run<S: RelayStore + 'static>(
             if page.entries.is_empty() {
                 if catching_up {
                     let (bytes, _) = wire::entries(tag, space, &[], page.head);
-                    let _ = out.send(Out::Message(bytes));
+                    if out.send(Out::Message(bytes)).await.is_err() {
+                        return;
+                    }
                 }
                 break;
             }
             let (bytes, sent) = wire::entries(tag, space, &page.entries, page.head);
-            let _ = out.send(Out::Message(bytes));
+            if out.send(Out::Message(bytes)).await.is_err() {
+                return;
+            }
             after = page.entries[sent - 1].position;
             if after >= page.head {
                 break;

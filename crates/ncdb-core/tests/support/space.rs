@@ -1,6 +1,6 @@
 //! A space of simulated members that write real, signed control changes
-//! (RFC 0008): a genesis, membership entries and opaque entries of the
-//! other types. Each member is a small number; its key derives from it.
+//! (RFC 0008): a genesis, membership entries, key envelopes, rotations,
+//! person-key entries, shreds and opaque entries of the other types. Each member is a small number; its key derives from it.
 //!
 //! Each test file includes this module with `#[path]`; not every file uses
 //! every helper.
@@ -17,7 +17,7 @@ use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, Genesis, KeyChainEntry, MemberKind,
-    MembershipEntry, PreviousKey, Role,
+    MembershipEntry, PersonKeyEntry, PreviousKey, Role, ShredEntry, SignOff,
 };
 use ncdb_core::seal;
 
@@ -44,6 +44,23 @@ pub fn account() -> SigningKey {
     SigningKey::from_bytes(&[0xAC; 32])
 }
 
+/// A second account, `n`, for members of another person or organisation.
+pub fn other_account(n: u8) -> SigningKey {
+    SigningKey::from_bytes(&[0xB0 ^ n; 32])
+}
+
+/// The person-key id of simulated person `person`.
+pub fn person(person: u8) -> [u8; 16] {
+    [person; 16]
+}
+
+/// The wrapped record bytes of simulated person `person` under `generation`.
+pub fn wrapped(person: u8, generation: u64) -> Vec<u8> {
+    let mut bytes = vec![person; 8];
+    bytes.extend(generation.to_be_bytes());
+    bytes
+}
+
 /// A space whose members write control changes. It counts each member's
 /// author sequence, so that a change gets the next one.
 pub struct Space {
@@ -52,6 +69,7 @@ pub struct Space {
     pub genesis: Change,
     sequences: BTreeMap<Who, u64>,
     kinds: BTreeMap<Who, MemberKind>,
+    accounts: BTreeMap<Who, SigningKey>,
 }
 
 impl Space {
@@ -63,13 +81,19 @@ impl Space {
     /// A space from this nonce; two calls with the same creator and nonce
     /// give the same space id.
     pub fn with_nonce(creator: Who, nonce: [u8; 16]) -> Space {
-        let (genesis, space, first_generation) = genesis(creator, nonce, [1; 16]);
+        Space::with_model(creator, nonce, [1; 16])
+    }
+
+    /// A space from this nonce whose genesis names this `model.id`.
+    pub fn with_model(creator: Who, nonce: [u8; 16], model_id: [u8; 16]) -> Space {
+        let (genesis, space, first_generation) = genesis(creator, nonce, model_id);
         Space {
             space,
             first_generation,
             genesis,
             sequences: BTreeMap::from([(creator, 1)]),
             kinds: BTreeMap::from([(creator, MemberKind::Agent)]),
+            accounts: BTreeMap::new(),
         }
     }
 
@@ -121,7 +145,8 @@ impl Space {
         deps: &[&Change],
     ) -> Change {
         let kind = *self.kinds.entry(subject).or_insert(MemberKind::Device);
-        let certificate = Certificate::sign(&account(), id(subject), kind);
+        let signer = self.accounts.get(&subject).cloned().unwrap_or_else(account);
+        let certificate = Certificate::sign(&signer, id(subject), kind);
         let action = Action::Add {
             role,
             key: key(subject).public(),
@@ -147,6 +172,11 @@ impl Space {
             from_generation: self.first_generation,
         };
         self.membership(author, subject, action, deps)
+    }
+
+    /// Certifies `who` by `account` instead of [`account`], from its add on.
+    pub fn certify_by(&mut self, who: Who, account: SigningKey) {
+        self.accounts.insert(who, account);
     }
 
     /// Marks `who` as an agent, for its certificate.
@@ -247,12 +277,73 @@ impl Space {
                 .into_iter()
                 .map(|generation| PreviousKey {
                     generation,
-                    key: vec![0xc4; 72],
+                    key: [0xc4; 72],
                 })
                 .collect(),
             answers: BTreeSet::new(),
         };
         (self.write(author, Entry::KeyChain(chain), deps), generation)
+    }
+
+    /// `author` announces the record of simulated person `person` under the
+    /// first generation, with the commitment `[commitment; 32]`.
+    pub fn person_key(
+        &mut self,
+        author: Who,
+        person: u8,
+        commitment: u8,
+        deps: &[&Change],
+    ) -> Change {
+        let generation = self.first_generation;
+        self.person_key_at(author, person, commitment, generation, deps)
+    }
+
+    /// `author` announces the record of simulated person `person` under
+    /// `generation`, whose wrapped bytes are [`wrapped`].
+    pub fn person_key_at(
+        &mut self,
+        author: Who,
+        person: u8,
+        commitment: u8,
+        generation: u64,
+        deps: &[&Change],
+    ) -> Change {
+        let entry = PersonKeyEntry {
+            person_key: self::person(person),
+            commitment: [commitment; 32],
+            generation,
+            record_hash: membership::record_hash(&wrapped(person, generation)),
+        };
+        self.write(author, Entry::PersonKey(entry), deps)
+    }
+
+    /// `author` shreds the key of simulated person `person`, signed off by
+    /// `signer`'s account.
+    pub fn shred(
+        &mut self,
+        author: Who,
+        person: u8,
+        signer: &SigningKey,
+        deps: &[&Change],
+    ) -> Change {
+        let sign_off = SignOff::sign(signer, self.space, self::person(person), id(author));
+        self.shred_with(author, person, sign_off, deps)
+    }
+
+    /// `author` shreds the key of simulated person `person` with this
+    /// sign-off.
+    pub fn shred_with(
+        &mut self,
+        author: Who,
+        person: u8,
+        sign_off: SignOff,
+        deps: &[&Change],
+    ) -> Change {
+        let entry = ShredEntry {
+            person_key: self::person(person),
+            sign_off,
+        };
+        self.write(author, Entry::Shred(entry), deps)
     }
 
     /// A sealed change by `author` under `generation`, with these

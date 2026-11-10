@@ -2,6 +2,12 @@
 //! generation, and every generation a key chain entry that is valid when
 //! written names, accepted or later rejected (decision M17), each linked to
 //! its previous generations. "Descends from" follows those links.
+//!
+//! Each generation also records who may hold it ("Two removals that rotate
+//! the key at once", step 4): the author of its key chain entry, the
+//! creator for the first generation, every recipient of an envelope for
+//! it, and everyone who may hold a generation that descends from it, since
+//! the key chain of that generation opens it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,6 +29,10 @@ pub struct Generation {
     /// The recipients of every key envelope for it in the set, whatever its
     /// verdict, since a rejected envelope may still have been delivered.
     pub recipients: BTreeSet<MemberId>,
+    /// Who may hold its key: the authors of its entries (the creator for
+    /// the first generation), its recipients, and whoever may hold a
+    /// generation that descends from it.
+    pub holders: BTreeSet<MemberId>,
 }
 
 /// The generation graph, by generation id.
@@ -31,15 +41,18 @@ pub(crate) struct Generations(pub(crate) BTreeMap<u64, Generation>);
 
 impl Generations {
     /// The graph over `nodes`, a set of control changes closed under their
-    /// dependencies: the first generation, then the generation of every
-    /// key chain entry that is valid when written, then the recipient of
-    /// every key envelope for a generation the graph holds.
+    /// dependencies: the first generation, which `creator` holds, then the
+    /// generation of every key chain entry that is valid when written,
+    /// then the recipient of every key envelope for a generation the graph
+    /// holds, and last who may hold each generation.
     pub(crate) fn build<'a>(
         first: u64,
+        creator: MemberId,
         nodes: impl Iterator<Item = &'a Node> + Clone,
         judged: &Judged,
     ) -> Generations {
         let mut graph = BTreeMap::from([(first, Generation::default())]);
+        graph.entry(first).or_default().holders.insert(creator);
         for node in nodes.clone().filter(|n| judged.valid(n.id)) {
             if let Entry::KeyChain(chain) = &node.body.entry {
                 let generation = graph.entry(chain.generation).or_default();
@@ -52,6 +65,23 @@ impl Generations {
                 && let Some(generation) = graph.get_mut(&envelope.generation)
             {
                 generation.recipients.insert(envelope.recipient);
+            }
+        }
+        // A generation's ordinal is one more than its previous ones', and
+        // its id starts with the ordinal, so in descending order of ids
+        // every generation has its holders before it hands them back.
+        let ids: Vec<u64> = graph.keys().rev().copied().collect();
+        for id in ids {
+            let generation = graph.get_mut(&id).expect("a generation of the graph");
+            let own = generation.entries.values().chain(&generation.recipients);
+            let own: Vec<MemberId> = own.copied().collect();
+            generation.holders.extend(own);
+            let holders = generation.holders.clone();
+            let previous = generation.previous.clone();
+            for p in previous {
+                if let Some(earlier) = graph.get_mut(&p) {
+                    earlier.holders.extend(holders.iter().copied());
+                }
             }
         }
         Generations(graph)

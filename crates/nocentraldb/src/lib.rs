@@ -5,7 +5,7 @@
 //! ```
 //! # use nocentraldb::{Db, OpenOptions, Value};
 //! # async fn example(lock: &str) -> Result<(), nocentraldb::Error> {
-//! let db = Db::open(OpenOptions::new(lock)).await?;
+//! let db = Db::open(OpenOptions::new(lock).in_memory()).await?;
 //! let project = db.spaces().create().await?;
 //! let written = project.write(|tx| {
 //!     tx.create("tasks", [("title", Value::from("Ship the SDK"))])?;
@@ -16,26 +16,44 @@
 //! # }
 //! ```
 //!
+//! A database lives in the directory [`OpenOptions::path`] names, with its
+//! keys in the platform keystore or the file [`OpenOptions::key_file`]
+//! names, and is found again when it is reopened; [`OpenOptions::in_memory`]
+//! keeps both in memory, for tests (RFC 0009, S19).
+//!
 //! Every call runs on the device and never waits for the network (RFC
-//! 0006, "Reads never touch the network"). This SDK has no relay and no
-//! sync yet; see [`Db`] for what else it leaves out.
+//! 0006, "Reads never touch the network"). A database opened with
+//! [`OpenOptions::relay`] syncs with that relay in the background (RFC
+//! 0007), and [`Db::sync`] reports how far; see [`Db`] for what the SDK
+//! leaves out.
 
 mod db;
 mod encode;
 mod error;
 mod id;
+mod keys;
+mod list;
+mod members;
+mod next;
 mod object;
 mod query;
 mod space;
 mod subscribe;
+mod sync;
 mod tx;
 mod value;
 
 pub use db::{Db, OpenOptions};
+
+#[cfg(test)]
+mod agent_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
+pub use list::{SpaceInfo, SpaceModel};
+pub use members::{AddMember, Fingerprint, Invitation, Members, Role};
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
+pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Transaction;
 pub use value::Value;

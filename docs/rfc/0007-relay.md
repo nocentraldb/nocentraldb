@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
-**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on decisions R1 to R11 and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001), and this RFC was merged with the owner's approval in #37 (Carsten, 2026-11-08); the owner decided R12, the keys of each message, as recommended (Carsten, 2026-11-10). The design below describes the decided options, and [Decisions](#decisions) records each one. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay` (NOC-87); the AWS backend is not built or deployed. [History](#history) says when each part was written.
+**Status.** Decided. GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill. The owner ruled on decisions R1 to R11 and on every point in [Conflicts](#conflicts-with-genesismd-and-rfc-0001), and this RFC was merged with the owner's approval in #37 (Carsten, 2026-11-08); the owner decided R12, the keys of each message, as recommended, and R13, the `added` message that tells a connected member it was added to a space, on NOC-143 (Carsten, 2026-11-10). The design below describes the decided options, and [Decisions](#decisions) records each one. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay` (NOC-87); the AWS backend is not built or deployed. [History](#history) says when each part was written.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -41,7 +41,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **The relay is a transport, not the truth.** Every member holds the full log. The relay appends changes in the order it accepts them, numbers them densely, and hands them out after a cursor. Members decide what a space contains; the relay decides nothing about content.
 - **One connection, three things to do.** A member opens one connection, proves which member key it holds, and then pushes changes, pulls from a cursor and subscribes to spaces, all over the same connection.
 - **Every check uses public data.** The relay checks that a frame is well-formed, that its signature is valid for the author's public key, and that the author and the uploader are members. Public keys and membership come from control changes in the log, which are signed but not encrypted. No check needs a key that decrypts anything.
-- **Backends are interchangeable.** All checks live in one relay core. A backend only stores: it appends at the next position if nobody else did, reads a range, and keeps the membership table and the person-key store. SQLite, Postgres and DynamoDB with S3 all implement the same interface and pass the same test suite.
+- **Backends are interchangeable.** All checks live in one relay core. A backend only stores: it appends at the next position if nobody else did, reads a range, keeps the membership table, and puts a person-key record only if the stored record is still the one the core checked it against. SQLite, Postgres and DynamoDB with S3 all implement the same interface and pass the same test suite.
 - **On AWS, it costs nothing while nobody writes.** API Gateway WebSockets, Lambda, DynamoDB and S3. A small team pays about 10 dollars a month. 1,000 agents that each read 1,000 times a minute pay nothing for the reads, because reads are local; their writes cost about 800 dollars a month at one write per agent per minute.
 - **Without the relay, members keep working.** Writes go into the local log at once. On reconnect, a member pulls what it missed and pushes what the relay has not confirmed. The relay recognises changes it already holds by their ids. A relay restored from a backup announces a new epoch, so no member trusts a position the restore undid.
 
@@ -60,7 +60,7 @@ WebSockets work in every browser we target, natively on every platform, and thro
 The sections below write a message with its field names, such as `push {req, space, frames}`, for reading. On the wire every field has an integer key, by one rule (decision [R12](#r12-the-keys-of-each-message)):
 
 - **Key 1** holds the message's type, as text: `"push"`, `"pushed"`, `"error"`.
-- **Key 2** holds the request id. Key 2 is absent when a message has none: `hello`, `challenge`, `auth`, `welcome`, and `entries` sent live for a subscription.
+- **Key 2** holds the request id. Key 2 is absent when a message has none: `hello`, `challenge`, `auth`, `welcome`, `added`, and `entries` sent live for a subscription.
 - **Every other field** takes the keys 3, 4, … in the order this RFC lists it in the message.
 - **A nested map**, such as a push result or a log entry, numbers its fields from 1, in the order this RFC lists them.
 - **Message types and error codes are text**, never numbers.
@@ -77,6 +77,7 @@ The sections below write a message with its field names, such as `push {req, spa
 | `entries` | relay → member | 2 req, 3 space, 4 entries, 5 head |
 | `subscribe` | member → relay | 2 req, 3 space, 4 epoch, 5 after |
 | `unsubscribe` | member → relay | 2 req, 3 space |
+| `added` | relay → member | 3 space |
 | `keys` | member → relay | 2 req, 3 space |
 | `keys` | relay → member | 2 req, 3 space, 4 envelopes, 5 chain |
 | `person-keys` | member → relay | 2 req, 3 space |
@@ -114,6 +115,7 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 - `challenge` carries the relay id (a stable random id of this relay deployment), a fresh nonce and the limits above.
 - `auth` carries the member's two public keys and an Ed25519 signature, with its member signing key, over `H("nocentraldb/relay-auth" || relay id || nonce)`. This is RFC 0003's relay authentication, its [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay): the context string keeps this signature from ever being mistaken for the signature of a change, and binding the relay id keeps one relay from replaying a member's answer against another. A separate authentication key is the alternative RFC 0003 names there.
 - The relay computes the member id from the two public keys, as RFC 0003 defines it, and verifies the signature. From then on the connection acts as that member id, and only as it.
+- `welcome` lists the spaces the member belongs to when it connects, and the member pulls and subscribes to each. A space the member is added to while it is connected reaches it through `added` (see [Subscribe](#subscribe-follow-a-space-live)).
 - `welcome` carries the relay epoch. A member that stored positions under another epoch of this relay treats them all as unconfirmed (see [Restores and the relay epoch](#restores-and-the-relay-epoch)).
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
@@ -156,12 +158,15 @@ A cursor is valid only in the epoch it was taken in. A `pull` or `subscribe` tha
 member → relay   subscribe    {req, space, epoch, after: position}
 relay  → member  entries      {req, space, entries, head}        catch-up pages, as for a pull
 relay  → member  entries      {space, entries, head}             later, whenever changes are appended
+relay  → member  added        {space}                            when a control change makes this member current in a space
 member → relay   unsubscribe  {req, space}
 ```
 
 A subscription first catches the member up from its cursor, like a pull, and then sends every newly appended entry as it is appended. Live entries carry the frame when it fits in one message and a download link otherwise. Each live message carries the space's head, so a member that missed a message, for example because the relay dropped it, sees the gap and pulls the missing range. Nothing polls (use case 7).
 
 A subscription lives as long as its connection. When the relay appends a membership entry that removes a member, it ends that member's subscriptions to the space with `removed_member`.
+
+**A member added while it is connected.** When the relay accepts a control change that makes a member current in a space, such as a membership entry that adds it, it sends `added {space}` to each of that member's open connections (decision [R13](#r13-telling-a-connected-member-it-was-added)). The member then pulls the space and subscribes to it, as it does for a space named in `welcome`; a member that already follows the space has nothing to do. Delivery is best-effort, like live entries: a lost `added` is recovered at the next reconnect, when `welcome` names the space.
 
 ### Keys and the person-key store
 
@@ -184,7 +189,7 @@ The store follows RFC 0003's [decision 14](0003-keys-and-cryptography.md#14-inte
 
 - **The log names every person key.** A member that creates or re-wraps a person-key record appends a **person-key entry**, a control change. It holds the person-key id, the commitment to the key (RFC 0003), the generation the record is wrapped under and the SHA-256 hash of the record. [RFC 0008](0008-membership.md#person-key-entry) defines the entry.
 - **Every record is signed.** A record carries the person-key id, the generation it is wrapped under and the member id of its writer in the clear. The writer signs it with its member key, with the context string `"nocentraldb/person-key-record"`.
-- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`.
+- **The relay accepts a record only under four conditions.** It comes from a current member. Its signature verifies against the writer's key. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`. The check and the write are one step: the backend stores the records only if the stored records are still the ones they were checked against, so two members that put a record of one person key at the same time cannot both replace the generation each of them checked against ([The backend interface](#the-backend-interface)).
 - **Members check the commitment.** A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A relay that swaps records is caught, and the signature names who wrote each record.
 - **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only after it appended a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003, narrowed by RFC 0008). The relay deletes the record when the shred entry becomes stable, by the same rule as on a member, not in the transaction that appends it ([RFC 0008, M20](0008-membership.md#effects-that-wait-until-a-change-is-stable)). Until then a shred that a concurrent revocation rejects can still be undone.
 
@@ -345,11 +350,20 @@ pub trait RelayStore {
 
     /// The person-key store (RFC 0003): opaque wrapped records.
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError>;
-    /// Stores records the core has matched to their person-key entries.
-    /// There is no delete request: a record goes only through the effect of
-    /// a shred entry once that entry is stable (RFC 0008, M20).
-    async fn put_person_keys(&self, space: SpaceId, records: Vec<PersonKeyRecord>)
-        -> Result<(), StoreError>;
+    /// Stores records the core has matched to their person-key entries,
+    /// each replacing the record of its person-key id, if and only if every
+    /// put still replaces the generation it names, and nothing otherwise:
+    /// one atomic step, the way an append is conditional on the head. The
+    /// puts apply in order, so a later put of one id replaces the generation
+    /// of the earlier. Returns `Moved` when another put got there first; the
+    /// core then re-checks and retries. There is no delete request: a record
+    /// goes only through `delete_person_keys` once its shred entry is stable
+    /// (RFC 0008, M20).
+    async fn put_person_keys(
+        &self,
+        space: SpaceId,
+        puts: Vec<PersonKeyPut>,
+    ) -> Result<PutOutcome, StoreError>;
 
     /// The relay epoch, and setting a new one, which a restore must do
     /// before the relay serves any request.
@@ -365,14 +379,36 @@ pub trait RelayStore {
     async fn take_upload(&self, id: UploadId) -> Result<Vec<u8>, StoreError>;
 }
 
-/// Delivers appended entries to subscribed connections. In-process for a
-/// WebSocket server; through API Gateway's connection API on AWS.
+/// A person-key record to store, and the generation of the stored record it
+/// replaces, which the core checked it against: None when no record of its
+/// person-key id is stored.
+pub struct PersonKeyPut {
+    pub record: PersonKeyRecord,
+    pub replaces: Option<u64>,
+}
+
+/// What a put of person-key records did.
+pub enum PutOutcome {
+    /// Every record is stored.
+    Stored,
+    /// The stored record of `id` is not the one a put replaces: its
+    /// generation is `stored`. Nothing was stored.
+    Moved { id: PersonKeyId, stored: Option<u64> },
+}
+
+/// Delivers appended entries to subscribed connections, and `added` to a
+/// member's open connections. In-process for a WebSocket server; through
+/// API Gateway's connection API on AWS.
 #[async_trait]
 pub trait Notifier {
     async fn subscribe(&self, conn: ConnectionId, space: SpaceId) -> Result<(), StoreError>;
     async fn unsubscribe(&self, conn: ConnectionId, space: SpaceId) -> Result<(), StoreError>;
     async fn publish(&self, space: SpaceId, entries: &[Entry], head: Position)
         -> Result<(), StoreError>;
+    /// Tells every open connection of `member` that it was added to `space`,
+    /// after an append made it a current member there. Best-effort, like
+    /// `publish`.
+    async fn added(&self, member: MemberId, space: SpaceId) -> Result<(), StoreError>;
 }
 ```
 
@@ -381,6 +417,7 @@ The rules every backend must keep:
 - **Dense positions, without a gap and without a position used twice.** The append is conditional on the head, so two relay processes appending to one space at the same time cannot both win. The loser gets `HeadMoved` and the core retries.
 - **One change id, one position.** The check for a duplicate and the append are one atomic step.
 - **An append and its effects are atomic.** A control change and the membership table change together or not at all. The deletion of a person-key record is not such an effect: it waits until its shred entry is stable, and the core requests it then (RFC 0008, M20).
+- **A person-key put is conditional on the stored generation.** Each put names the generation of the stored record it replaces, none when no record of its person-key id is stored. The backend stores the request's records only if every one still replaces that generation, in one atomic step, and otherwise stores none and answers `Moved`. The core then reads the log and the records again, checks again and retries, up to the append's 64 tries before it answers `unavailable`. The condition is on the generation alone, because whether a record is acceptable depends on nothing else of the stored record: a re-wrap under the same generation stays acceptable whichever record of that generation is stored.
 - **Exact bytes.** A backend returns the frame byte for byte as it was appended.
 - **Read your writes.** A read after a successful append sees the appended entries.
 - **A new epoch after any loss.** A backend restored from a backup, or one that may have lost appends for any other reason, draws a new epoch before it serves a request.
@@ -391,6 +428,7 @@ One conformance test suite, run against every backend, holds these rules, so a n
 | --- | --- | --- | --- |
 | Conditional append | One write transaction; the head is a row in `spaces`. | `UPDATE spaces SET head = head + n WHERE id = $1 AND head = $2`, then the inserts, in one transaction. | `TransactWriteItems`: a condition on the head item, plus the entry and change-id items (see [The AWS backend](#the-aws-backend)). |
 | One change id, one position | A unique index on (space, change id). | A unique index on (space, change id). | A change-id item per change, put with `attribute_not_exists`, in the same transaction. |
+| Conditional person-key put | One write transaction that reads each stored generation before it writes. | In one transaction, `UPDATE person_keys SET ... WHERE space = $1 AND id = $2 AND generation = $3`, or an insert where none is stored; a row count of zero rolls back and answers `Moved`. | `TransactWriteItems` with a condition expression on each item's generation in `person_keys`, or `attribute_not_exists` where none is stored. |
 | Large frames | Kept inline. | Kept inline. | Frames above 8 KiB in S3, the entry points to them. |
 | Notifier | In process. | In process, plus `LISTEN`/`NOTIFY` across relay processes. | API Gateway's connection API. |
 
@@ -410,7 +448,8 @@ member ──WebSocket──▶ API Gateway (WebSocket API)
                        members, person keys,     uploads)
                        connections)
                           │
-                          └──▶ API Gateway connection API: live entries to subscribers
+                          └──▶ API Gateway connection API: live entries to subscribers,
+                               `added` to a member's connections
 ```
 
 ### Services
@@ -435,8 +474,8 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
-| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008); deleted only when its shred entry is stable (RFC 0008, M20). |
-| `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers. TTL removes what a missed `$disconnect` leaves behind. An operator who sets decision R9 to B keeps the records after the connection ends, for the period it chose. |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, decision 14; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only when its shred entry is stable (RFC 0008, M20). |
+| `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers, and a global secondary index on member id finds a member's connections, to send `added`. TTL removes what a missed `$disconnect` leaves behind. An operator who sets decision R9 to B keeps the records after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
 
@@ -458,6 +497,8 @@ Different spaces spread across partitions by their random ids, so spaces never c
 
 After a successful append, the same Lambda invocation looks up the space's subscribers in `connections` and posts the new entries to each, through API Gateway's connection API. Delivery is best-effort: a post that fails is not retried. A member that misses an entry sees the gap at the next entry it receives, because entries carry dense positions and the head, and pulls the range. If no further entry comes, it catches up when it reconnects, which happens at the latest after 2 hours, when API Gateway closes every connection. Decision R3 compares this with fan-out through DynamoDB Streams.
 
+When the append holds a control change that makes a member current in a space, the same invocation finds that member's connections through the global secondary index on member id in `connections` and posts `added` to each. It is as best-effort as live entries: a member that misses it learns of the space from `welcome` at its next reconnect, at the latest after 2 hours.
+
 ### Restores and the relay epoch
 
 A restore from a backup, such as DynamoDB point-in-time recovery, brings back the relay as it was at the restore point. Every append after that point is gone from the relay, but not from the members. Without care, this breaks RFC 0002's dense positions:
@@ -477,7 +518,7 @@ So a restore always ends with a **new relay epoch**, before the relay serves any
 
 ### What it does not do
 
-- **No delivery guarantee faster than the next entry or the next reconnect.** A missed live entry is recovered then, not sooner.
+- **No delivery guarantee faster than the next entry or the next reconnect.** A missed live entry is recovered then, not sooner, and a missed `added` at the next reconnect.
 - **One region.** If the region fails, the relay is down, and members work in island mode until it is back (see [Island mode](#island-mode)). A second region would double the bill.
 - **No relay-side compaction yet.** Without compaction, storage grows with every change. The compaction RFC will move old ranges to an archive.
 
@@ -488,6 +529,8 @@ These are rough monthly costs, from AWS's us-east-1 list prices as we know them 
 Prices used: API Gateway WebSockets 1.00 USD per million messages (each up to 32 KB) and 0.25 USD per million connection minutes; Lambda on arm64 0.20 USD per million requests and 0.0000133 USD per GB-second; DynamoDB on demand 0.625 USD per million write request units and 0.125 USD per million read request units (a transactional write costs two units per KB), storage 0.25 USD per GB-month; S3 0.005 USD per thousand PUTs, 0.0004 USD per thousand GETs, 0.023 USD per GB-month; data transfer out 0.09 USD per GB after the first 100 GB; CloudWatch Logs 0.50 USD per GB.
 
 One change of about 1 KiB, appended alone, costs 8 write units: 2 for the `log` item (frame and attributes are just over 1 KB), 1 for the `changes` item and 1 for the head update, doubled because it is a transaction. Batching several changes into one push shares the head update.
+
+Telling a connected member that it was added (decision R13) changes neither table below by more than its rounding. The global secondary index on member id in `connections` adds one write unit to each connection item written: cents a month for a small team, and about 5 USD for 1,000 agents that reconnect 1 million times a month with three subscriptions each. An `added` message is one API Gateway message per open connection of the added member, as rare as members being added.
 
 ### A small team
 
@@ -749,6 +792,17 @@ Not taken:
 - Text keys for every field, such as `"space"` and `"frames"`: easier to read in a capture, but larger in every message and unlike the error map.
 - Numbers picked by hand for each message, with gaps for future fields: CBOR maps already grow by adding keys at the end, and hand-picked numbers leave more to review.
 
+### R13. Telling a connected member it was added
+
+Decided (Carsten, 2026-11-10), on NOC-143: the relay pushes `added {space}` to the open connections of a member that a control change makes current in a space, and the member pulls and subscribes to the space as it does for a space named in `welcome`. Delivery is best-effort, like live entries; a lost message is recovered at the next reconnect. The end-to-end test (NOC-91) found that a member added while it was connected learned of the space only at its next reconnect, up to 2 hours later on AWS.
+
+Why: an invitation takes effect at once in a live app, for one new message and one index on `connections`; the relay already resolves the membership on each control change, so it knows who was added.
+
+Not taken:
+
+- A `spaces` request that the SDK sends on a timer, such as every 5 minutes: a delay of up to the timer, and every idle member pays the requests.
+- Keeping it as it is: a new member sees the space at its next reconnect, within 2 hours, unless the app forces a reconnect.
+
 The protection of the person-key store and the key that authenticates a connection are decided in RFC 0003, in its [decision 14](0003-keys-and-cryptography.md#14-integrity-of-the-person-key-store) and [decision 13](0003-keys-and-cryptography.md#13-how-a-member-authenticates-to-the-relay), because they are key handling.
 
 ## History
@@ -759,3 +813,5 @@ The protection of the person-key store and the key that authenticates a connecti
 - **2026-11-09** · NOC-35 · The first line drops the draft number of a decided RFC (#76).
 - **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: the decisions in short form, an Open questions section, and a status that says what is built (#117).
+- **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118) (#132).
+- **2026-11-10** · NOC-152 · The `added` message, with decision R13, which the owner decided on NOC-143: [Subscribe](#subscribe-follow-a-space-live) says when the relay sends it and what the member does, and the AWS backend finds a member's connections through a global secondary index on member id (#138).

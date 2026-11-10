@@ -24,11 +24,11 @@ fn entry() -> KeyChainEntry {
         previous: vec![
             PreviousKey {
                 generation: FIRST,
-                key: vec![0xa1; 72],
+                key: [0xa1; 72],
             },
             PreviousKey {
                 generation: OTHER,
-                key: vec![0xa2; 72],
+                key: [0xa2; 72],
             },
         ],
         answers: BTreeSet::from([ChangeId([5; 32])]),
@@ -194,4 +194,18 @@ fn the_debug_output_shows_generations_but_no_encrypted_key() {
     let shown = format!("{:?}", entry());
     assert!(shown.contains(&NEW.to_string()), "{shown}");
     assert!(!shown.contains("161, 161"), "{shown}");
+}
+
+#[test]
+fn an_encrypted_previous_key_is_exactly_72_bytes() {
+    // NOC-97 (Carsten, 2026-11-10): nonce (24), ciphertext (32), tag (16).
+    for length in [0, 48, 71, 73, 76] {
+        let bytes = changed(|m| {
+            m.insert(
+                Key::Unsigned(9),
+                previous(&[(FIRST, Value::Bytes(vec![0xa1; length]))]),
+            );
+        });
+        assert!(malformed(&bytes), "{length} bytes");
+    }
 }
