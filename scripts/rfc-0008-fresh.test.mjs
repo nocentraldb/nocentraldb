@@ -342,3 +342,30 @@ test("the entry that carries a newer account key statement is named, still to be
     "What this RFC uses from RFC 0003",
   );
 });
+
+test("the first accepted person-key entry chooses the key, and what that does not protect", () => {
+  // NOC-133 point 1
+  const entry = part("person-key-entry");
+  assert.match(
+    entry,
+    /first accepted person-key entry in the order creates the person key/,
+  );
+  assert.match(entry, /choose the key/);
+  assert.match(entry, /rejected as "commitment"/);
+  assert.match(
+    entry,
+    /a shred never protects against a member who copied the data/,
+  );
+});
+
+test("the model id in every change's payload is named as RFC 0002's and RFC 0005's", () => {
+  // the former conflict 14's scope note
+  assert.match(
+    part("agreement-with-genesismd-and-the-other-rfcs"),
+    /model id in every change's payload is RFC 0002's and RFC 0005's to carry out/,
+  );
+});
+
+test("the key chain entry states its rule without the owner's attribution", () => {
+  assert.doesNotMatch(part("key-chain-entry"), /as the owner decided/);
+});
