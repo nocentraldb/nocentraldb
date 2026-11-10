@@ -84,7 +84,7 @@ pub enum State {
 }
 
 /// Why a change is parked: steps 2 and 6.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ParkReason {
     /// The suite id is unknown.
@@ -112,7 +112,7 @@ pub struct ParkedOperation {
 }
 
 /// Why an operation is parked on its own: step 7.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum OperationParkReason {
     /// The member's model does not know the collection.
@@ -134,7 +134,7 @@ pub enum OperationParkReason {
 }
 
 /// Why a change is rejected: steps 3 to 5.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RejectReason {
     /// Step 3: no membership entry the member holds names the author.
@@ -168,6 +168,45 @@ pub struct RelayCounts {
     pub refused: u64,
 }
 
+/// How many changes of a log are parked and rejected, per reason, and how
+/// many operations of its folded changes are parked, per reason: what a
+/// member reports per space (RFC 0009, "Sync and status"). The log keeps
+/// them as states are set, so reading them costs no pass over the log.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StateCounts {
+    /// The parked changes, per reason.
+    pub parked: BTreeMap<ParkReason, u64>,
+    /// The parked operations of folded changes, per reason.
+    pub parked_operations: BTreeMap<OperationParkReason, u64>,
+    /// The rejected changes, per reason.
+    pub rejected: BTreeMap<RejectReason, u64>,
+}
+
+impl StateCounts {
+    /// Adds `state` to the counts, or takes it away.
+    fn count(&mut self, state: &State, add: bool) {
+        fn step<K: Ord>(map: &mut BTreeMap<K, u64>, key: K, add: bool) {
+            if add {
+                *map.entry(key).or_default() += 1;
+            } else if let Some(count) = map.get_mut(&key) {
+                *count -= 1;
+                if *count == 0 {
+                    map.remove(&key);
+                }
+            }
+        }
+        match state {
+            State::Folded { parked } => {
+                for operation in parked {
+                    step(&mut self.parked_operations, operation.reason, add);
+                }
+            }
+            State::Parked(reason) => step(&mut self.parked, *reason, add),
+            State::Rejected(reason) => step(&mut self.rejected, *reason, add),
+        }
+    }
+}
+
 /// One entry: the change, and on a member its state, whether the relay
 /// confirmed it and the relay's refusal.
 #[derive(Clone)]
@@ -192,6 +231,8 @@ pub struct Log {
     /// The relay counts of each author, kept as changes are appended,
     /// confirmed and refused, so reading them costs no pass over the log.
     relay_counts: BTreeMap<MemberId, RelayCounts>,
+    /// The parked and rejected counts, kept as states are set.
+    state_counts: StateCounts,
 }
 
 impl fmt::Debug for Log {
@@ -213,6 +254,7 @@ impl Log {
             changed: BTreeSet::new(),
             tips: Tips::default(),
             relay_counts: BTreeMap::new(),
+            state_counts: StateCounts::default(),
         }
     }
 
@@ -343,6 +385,12 @@ impl Log {
         }
     }
 
+    /// How many changes are parked and rejected, and how many operations
+    /// of folded changes are parked, per reason.
+    pub fn state_counts(&self) -> &StateCounts {
+        &self.state_counts
+    }
+
     /// The relay counts of `author`'s changes in this log.
     pub fn relay_counts(&self, author: MemberId) -> RelayCounts {
         self.relay_counts.get(&author).copied().unwrap_or_default()
@@ -368,6 +416,10 @@ impl Log {
         if folded(&entry.state) {
             self.tips.unfolded(id);
         }
+        if let Some(old) = &entry.state {
+            self.state_counts.count(old, false);
+        }
+        self.state_counts.count(&state, true);
         entry.state = Some(state);
         if folded(&entry.state) {
             self.tips.folded(&entry.change, opened);

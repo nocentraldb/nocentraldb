@@ -50,6 +50,7 @@ fn parked_and_rejected_changes_count_per_reason() {
         sealed_header(FOUNDER, 5, 0, payload(vec![set_title(1)])),
         BAD,
     ));
+    // No membership entry names author 5: unknown author (step 3).
     m.receive(&frame(sealed_header(5, 1, 0, GARBLED.to_vec()), GOOD));
     m.receive(&sealed(FOUNDER, 6, 0, vec![set_title(3)]));
 
@@ -61,7 +62,10 @@ fn parked_and_rejected_changes_count_per_reason() {
     );
     assert_eq!(
         counts.rejected,
-        BTreeMap::from([(RejectReason::BadSignature, 1), (RejectReason::NotMember, 1)])
+        BTreeMap::from([
+            (RejectReason::UnknownAuthor, 1),
+            (RejectReason::BadSignature, 1)
+        ])
     );
     assert!(counts.parked_operations.is_empty());
 }
