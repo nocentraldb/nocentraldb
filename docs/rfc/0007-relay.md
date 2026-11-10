@@ -817,3 +817,4 @@ The protection of the person-key store and the key that authenticates a connecti
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: the decisions in short form, an Open questions section, and a status that says what is built (#117).
 - **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118) (#132).
 - **2026-11-10** · NOC-152 · The `added` message, with decision R13, which the owner decided on NOC-143: [Subscribe](#subscribe-follow-a-space-live) says when the relay sends it and what the member does, and the AWS backend finds a member's connections through a global secondary index on member id (#138).
+- **2026-11-10** · NOC-157 · A diagram in [Opening a connection](#opening-a-connection) shows the handshake, the first pull and subscribe, and `added` (#143).

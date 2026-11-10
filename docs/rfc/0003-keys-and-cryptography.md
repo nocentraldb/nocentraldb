@@ -700,3 +700,4 @@ None. The owner has decided every question this RFC asked.
 - **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#119](https://github.com/nocentraldb/nocentraldb/pull/119)).
 - **2026-11-10** · NOC-114 · Opening without a keystore or a key file fails with `keyStoreUnavailable`, which names the key-file option; decision 19 ([#124](https://github.com/nocentraldb/nocentraldb/pull/124)).
 - **2026-11-10** · NOC-110, NOC-117 · The bytes of the associated data of an encrypted previous key, and the bytes a writer signs for a person-key record; decisions 20 and 21, and no open question is left ([#124](https://github.com/nocentraldb/nocentraldb/pull/124)).
+- **2026-11-10** · NOC-157 · A diagram after the keys table shows which key protects which ([#143](https://github.com/nocentraldb/nocentraldb/pull/143)).
