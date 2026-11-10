@@ -181,7 +181,7 @@ const keyOrders = (value, path = "$") => {
 };
 
 test("the lock example is canonical and the bytes ncdb model build writes (NOC-73)", () => {
-  const example = jsonBlocks(read())[0];
+  const example = jsonBlocks(section(read(), "an-example"))[0];
   assert.equal(example, read(FIXTURE));
   for (const { path, keys } of keyOrders(JSON.parse(example))) {
     assert.deepEqual(keys, sorted(keys), `keys of ${path} not sorted`);

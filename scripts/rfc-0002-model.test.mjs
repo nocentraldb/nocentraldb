@@ -73,7 +73,7 @@ test("the amendment names where RFC 0005 uses the key, by D10 and D13", () => {
   assert.ok(body, `no section #${AMENDMENT}`);
   assert.match(
     body,
-    /\(0005-schema-and-model-lock\.md#decisions-for-the-owner\)/,
+    /\(0005-schema-and-model-lock\.md#decisions\)/,
   );
   assert.match(body, /\bD10\b/);
   assert.match(body, /\bD13\b/);
