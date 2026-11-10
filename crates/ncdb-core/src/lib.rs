@@ -10,7 +10,8 @@
 //! defines it ([`seal`]), and the key envelopes that wrap a space key to one
 //! member with HPKE ([`envelope`]). A member takes each change it receives through the
 //! checks of RFC 0002 Amendment 1 and keeps it folded, parked or rejected
-//! ([`receive`]); the signature, membership and decryption checks plug in
+//! ([`receive`]), and un-folds a folded change that a later control change
+//! rejects; the signature, membership and decryption checks plug in
 //! through [`receive::Checks`], and [`checks`] implements them with the real
 //! signature and decryption.
 //!
@@ -49,6 +50,7 @@ mod redact;
 pub mod reference;
 pub mod seal;
 pub mod set;
+mod unfold;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod view;
 

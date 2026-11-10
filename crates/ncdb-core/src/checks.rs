@@ -35,9 +35,10 @@ use crate::seal::{self, OpenError};
 /// gives the verdicts.
 ///
 /// **What this does not do.** A space key, once unwrapped, stays known,
-/// even if a later control change rejects its envelope; and a change that
-/// passed is not checked again when a later control change would reject it
-/// (NOC-49).
+/// even if a later control change rejects its envelope. Whether a sealed
+/// change that passed still passes when a later control change arrives is
+/// asked again through [`Checks::is_member`], and the log un-folds it when
+/// it no longer does (RFC 0006, "Un-folding").
 pub struct SealChecks {
     space: SpaceId,
     member: MemberKey,
