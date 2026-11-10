@@ -15,7 +15,8 @@
 //! it.
 //!
 //! `status` follows the report and the confirmation of one write; `pause`
-//! stops and restarts syncing.
+//! stops and restarts syncing; `again` pushes a refused change once more
+//! when the member's own fold newly accepts it (RFC 0008, M19).
 //!
 //! **What this does not do yet.** The per-space `status` of RFC 0009 is
 //! not built: the relay's refusals are recorded per change in the log, by
@@ -28,6 +29,7 @@
 //! it ends the session, which backs off and meets the same page again,
 //! until NOC-121 reads the link.
 
+mod again;
 mod apply;
 mod pause;
 mod run;
@@ -37,7 +39,7 @@ mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ncdb_core::ids::SpaceId as CoreSpaceId;
+use ncdb_core::ids::{ChangeId as CoreChangeId, SpaceId as CoreSpaceId};
 use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
@@ -143,6 +145,10 @@ pub(crate) struct SyncState {
     pub(crate) live: BTreeSet<CoreSpaceId>,
     /// How many changes syncing folded that the log did not hold.
     pub(crate) folds: u64,
+    /// The changes the relay refused, per space, each with whether the
+    /// member's fold rejected it since: one folded again is pushed once
+    /// more (RFC 0008, M19).
+    pub(crate) refused: BTreeMap<CoreSpaceId, BTreeMap<CoreChangeId, bool>>,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -162,6 +168,7 @@ impl SyncState {
             removed: None,
             live: BTreeSet::new(),
             folds: 0,
+            refused: BTreeMap::new(),
             wake,
             pause,
         }

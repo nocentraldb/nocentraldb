@@ -57,14 +57,20 @@ fn a_cleared_refusal_makes_the_change_unconfirmed_again() {
     for (position, change) in changes[..3].iter().enumerate() {
         view.confirm(at, change.id(), position as u64 + 1).unwrap();
     }
-    view.refuse(at, changes[3].id(), "author_not_member").unwrap();
+    view.refuse(at, changes[3].id(), "author_not_member")
+        .unwrap();
     let state = view.state(at, changes[3].id());
 
     view.clear_refusal(at, changes[3].id()).unwrap();
 
     assert_eq!(view.relay_refusal(at, changes[3].id()), None);
     assert!(view.refused(at).unwrap().is_empty());
-    let unconfirmed: Vec<_> = view.unconfirmed(at).unwrap().iter().map(Change::id).collect();
+    let unconfirmed: Vec<_> = view
+        .unconfirmed(at)
+        .unwrap()
+        .iter()
+        .map(Change::id)
+        .collect();
     assert_eq!(unconfirmed, [changes[3].id(), changes[4].id()]);
     assert_eq!(
         view.relay_counts(at, space::id(B)),
@@ -82,12 +88,18 @@ fn clearing_a_refusal_of_a_confirmed_change_leaves_it_confirmed() {
     let mut space = Space::new(A);
     let changes = received(&mut view, &mut space);
     let at = space.space;
-    view.refuse(at, changes[3].id(), "author_not_member").unwrap();
+    view.refuse(at, changes[3].id(), "author_not_member")
+        .unwrap();
     view.confirm(at, changes[3].id(), 4).unwrap();
 
     view.clear_refusal(at, changes[3].id()).unwrap();
 
-    assert!(view.unconfirmed(at).unwrap().iter().all(|c| c.id() != changes[3].id()));
+    assert!(
+        view.unconfirmed(at)
+            .unwrap()
+            .iter()
+            .all(|c| c.id() != changes[3].id())
+    );
     assert_eq!(view.relay_counts(at, space::id(B)).refused, 0);
     assert_eq!(view.relay_counts(at, space::id(B)).unconfirmed, 1);
 }
@@ -98,7 +110,8 @@ fn clearing_twice_or_a_change_never_refused_changes_nothing() {
     let mut space = Space::new(A);
     let changes = received(&mut view, &mut space);
     let at = space.space;
-    view.refuse(at, changes[3].id(), "author_not_member").unwrap();
+    view.refuse(at, changes[3].id(), "author_not_member")
+        .unwrap();
     view.clear_refusal(at, changes[3].id()).unwrap();
     let counts = view.relay_counts(at, space::id(B));
 
