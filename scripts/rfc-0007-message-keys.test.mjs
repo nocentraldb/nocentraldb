@@ -3,9 +3,9 @@
 // its type as text at key 1, its request id at key 2 (absent when there is
 // none), then each field at keys 3, 4, ... in the order the RFC lists it;
 // a nested map numbers its fields from 1 in the RFC's order; message types
-// and error codes are text. The full table stands in the protocol section,
-// the decision under "Decisions" as R12, and a dated History
-// line names the pull request.
+// and error codes are text. The full table stands in the protocol section;
+// RFC 0007 is a fresh text (NOC-165), whose rfc-0007-fresh.test.mjs holds the
+// options not taken.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -98,28 +98,6 @@ test("RFC 0007 states the rule: type at 1, req at 2 or absent, types and codes a
   assert.match(text, /in the order this RFC lists/i);
   assert.match(text, /number[s]? (its|their) fields from 1/i);
   assert.match(text, /types and error codes are text/i);
-  assert.match(text, /\[R12\]\(#r12-the-keys-of-each-message\)/);
-});
-
-// RFC 0007's "Decisions" keeps each decision in short form since NOC-101.
-test("decision R12 records the owner's choice, with the options not taken", () => {
-  const r12 = section(read(RFC), "r12-the-keys-of-each-message");
-  assert.ok(r12, `${RFC} has no decision R12`);
-  assert.match(r12, /^Decided \(Carsten, 2026-11-10\), on NOC-98: /m);
-  assert.match(r12, /^Not taken:\n\n- Text keys/m);
-  assert.match(r12, /^- Numbers picked by hand/m);
-});
-
-test("RFC 0007's status names R12 and its date", () => {
-  const status = read(RFC)
-    .split("\n")
-    .find((l) => l.startsWith("**Status.**"));
-  assert.match(status, /R12.*Carsten, 2026-11-10/);
-});
-
-test("RFC 0007 has a History line for NOC-106 that names its pull request", () => {
-  const history = section(read(RFC), "history");
-  assert.match(history, /^- \*\*2026-11-10\*\* · NOC-106 · .*\(#\d+\)\.?$/m);
 });
 
 test("RFC 0007 has no amendment section or mark", () => {
