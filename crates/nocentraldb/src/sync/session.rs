@@ -97,9 +97,10 @@ fn with<R>(db: &Weak<Mutex<Inner>>, f: impl FnOnce(&mut Inner) -> R) -> Result<R
     Ok(result)
 }
 
-/// Whether the session may go on: the app has not paused syncing.
+/// Whether the session may go on: the app has not paused syncing since
+/// it opened.
 fn running(inner: &Inner) -> Result<(), End> {
-    match inner.sync.as_ref().is_some_and(|sync| sync.paused()) {
+    match inner.sync.as_ref().is_some_and(|sync| sync.halted) {
         true => Err(End::Paused),
         false => Ok(()),
     }

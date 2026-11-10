@@ -3,6 +3,8 @@
 //! where the sync thread checks it before it sends and before it records
 //! anything, so from the moment `pause` returns the SDK sends the relay
 //! nothing; the thread then drops the connection and waits for `resume`.
+//! A session stays halted until the thread has dropped it, even when the
+//! app resumes before the thread noticed the pause.
 //! A pause lasts while the database is open: a reopened database syncs.
 
 use super::{Connection, SyncReport};
@@ -17,6 +19,7 @@ impl SyncReport<'_> {
         let Some(sync) = inner.sync.as_mut() else {
             return;
         };
+        sync.halted = true;
         sync.pause.send_replace(true);
         sync.connection = Connection::Paused;
         sync.live.clear();
