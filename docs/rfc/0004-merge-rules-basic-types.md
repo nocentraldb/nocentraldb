@@ -106,7 +106,7 @@ The app can read, per field (working names, see below):
 
 What "late" means here: the converged state cannot record **when** a change arrived, because arrival differs per member and recording it would make copies diverge. What every copy records the same way is that a write **lost to a write its author had not seen**. That is the late change of principle 3 in a form that converges. A member may additionally show, as local information that is not part of the converged state, that a change arrived after it had already shown a different value; see [Agreement with GENESIS.md and RFC 0001](#agreement-with-genesismd-and-rfc-0001).
 
-`value`, `conflicts` and `outcome`, and below `lostRemovals` and the link statuses **ok**, **deleted**, **missing** and **wrong collection**, are working names: the SDK's API review gives the public names, because public names belong to the SDK, where an app meets them ([RFC 0009](0009-sdk-api.md)).
+`value`, `conflicts` and `outcome`, and below `lostRemovals` and the link statuses **ok**, **deleted**, **missing** and **wrong collection**, are working names: the SDK's API review gives the public names, because public names belong to the SDK, where an app meets them ([RFC 0009](0009-sdk-api.md)). Deciding the public names in this RFC was not taken.
 
 Keeping the losing writes is what keeps RFC 0001's promise and principle 3 together. The rules not taken:
 
@@ -242,7 +242,7 @@ A reference is a field type of its own, `ncdb/ref` with rule version 1. It has n
 
 - **set** (1) writes it, with set's arguments `{1: value, 2: replaces}`, as for every basic value; `null` clears it. It is the type's only operation. Add, remove and delete are not defined on it, so a member parks them with the reason "unknown operation" ([Operations a member does not understand](#operations-a-member-does-not-understand)).
 - **It converges by the argument for basic values** ([Why it converges](#why-it-converges)). State, apply, read and outcome are basic values', and the value enters them only where a basic value's does: as a whole, compared by its canonical bytes (O5).
-- **One target per field.** A field holds a single reference. A field of many references is RFC 0005's ([References into another space](0005-schema-and-model-lock.md#references-into-another-space)).
+- **One target per field.** A field holds a single reference. There is no field of many references in v1 ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)).
 
 ### How a reference resolves
 
@@ -256,7 +256,7 @@ As for a link, the state is not part of the reference: the reference keeps the s
 
 Unlike a link's status, the state differs from member to member. Two members of the orders' space hold the same changes and the same reference, but only one of them may be in the customers' space. So the state is never part of the space's shared state (principle 2): no computed field, view, index or other stored value depends on it, and a computed field or view never follows a reference into its target. The computed-fields RFC must refuse one that tries. A member shows the state as local information only, as principle 3 allows for what differs from member to member. Two members that hold the same copies of the same spaces compute the same state. Keeping the resolution state as part of the field's stored state was not taken for that reason: it differs from member to member, so it can never be shared state (principle 3).
 
-Three states, not four. A target in a collection the schema does not name reads **missing**, and an old client that does not know a target collection added later reads **missing** until it upgrades. A fourth state, **wrong collection**, as links have, would be more precise, but every app would have to handle it.
+Three states, not four. A reference resolves to the three states above, and no more: a target in a collection the schema does not name reads **missing**, and an old client that does not know a target collection added later reads **missing** until it upgrades. A fourth state, **wrong collection**, as links have, would be more precise, but it would go beyond the three states the reference was decided with, and every app would have to handle it.
 
 **Not accessible** means exactly that the member's database holds no copy of the target's space. Resolution then reads what `space.get` on the target's space would read, so a reference never shows more or less than the app could read itself. A stricter rule, not accessible whenever the member is not a current member of the target's space by the control state of its copy, even while it holds rows of it, was not taken: the app can still read that copy through `space.get`, so the reference would hide what the app can read anyway.
 
