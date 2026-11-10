@@ -14,12 +14,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::ids::{ChangeId, MemberId, SpaceId};
+use crate::keys::SpaceKey;
 
 use super::body::Entry;
 use super::generations::Generations;
 use super::genesis::generation_id;
 use super::input::Node;
-use super::key_chain::{KeyChainEntry, PreviousKey};
+use super::key_chain::{KeyChainEntry, PreviousKey, seal_previous_key};
 use super::state::Verdict;
 
 /// The ordinal of a generation id: its upper 16 bits (RFC 0008,
@@ -79,6 +80,8 @@ pub(crate) fn current(
 /// the current members only.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MergeRotation {
+    /// The space it rotates.
+    pub space: SpaceId,
     /// The new generation id, derived from the space, the admin and the
     /// heads (RFC 0008, "Generation ids").
     pub generation: u64,
@@ -97,28 +100,40 @@ impl MergeRotation {
     ) -> MergeRotation {
         let previous: Vec<u64> = heads.iter().copied().collect();
         MergeRotation {
+            space,
             generation: generation_id(space, author, &previous),
             previous,
             recipients,
         }
     }
 
-    /// Its key chain entry, with each previous generation's key as
-    /// `encrypt` returns it: encrypted under the new generation's
-    /// key-chain subkey (RFC 0003), which the caller does. A merge rotation
-    /// answers no revocation.
-    pub fn entry(&self, mut encrypt: impl FnMut(u64) -> Vec<u8>) -> KeyChainEntry {
-        KeyChainEntry {
+    /// Its key chain entry under `new_key`, a fresh key for the new
+    /// generation: each head's key, which `key` finds, encrypted in
+    /// NOC-97's layout ([`seal_previous_key`]). None when `key` lacks the
+    /// key of a head: an admin that does not hold every head cannot merge
+    /// them. A merge rotation answers no revocation.
+    pub fn entry<'k>(
+        &self,
+        new_key: &SpaceKey,
+        mut key: impl FnMut(u64) -> Option<&'k SpaceKey>,
+    ) -> Option<KeyChainEntry> {
+        let previous = self.previous.iter().map(|generation| {
+            let sealed = seal_previous_key(
+                new_key,
+                self.space,
+                self.generation,
+                *generation,
+                key(*generation)?,
+            );
+            Some(PreviousKey {
+                generation: *generation,
+                key: sealed,
+            })
+        });
+        Some(KeyChainEntry {
             generation: self.generation,
-            previous: self
-                .previous
-                .iter()
-                .map(|generation| PreviousKey {
-                    generation: *generation,
-                    key: encrypt(*generation),
-                })
-                .collect(),
+            previous: previous.collect::<Option<_>>()?,
             answers: BTreeSet::new(),
-        }
+        })
     }
 }

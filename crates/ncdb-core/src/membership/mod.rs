@@ -35,6 +35,9 @@ pub use genesis::{
     GENERATION_CONTEXT, Genesis, MODEL_ID_CONTEXT, MODEL_ID_FIELD_LEN, SPACE_ID_CONTEXT,
     generation_id, open_model_id, seal_model_id, seal_model_id_with_nonce, space_id,
 };
-pub use key_chain::{KeyChainEntry, PreviousKey};
+pub use key_chain::{
+    KeyChainEntry, PREVIOUS_KEY_LEN, PreviousKey, open_previous_key, seal_previous_key,
+    seal_previous_key_with_nonce,
+};
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
