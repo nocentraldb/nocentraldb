@@ -20,6 +20,8 @@ mod generations;
 mod genesis;
 mod input;
 mod key_chain;
+mod person_key;
+mod person_keys;
 mod resolve;
 mod rights;
 mod state;
@@ -39,5 +41,10 @@ pub use key_chain::{
     KeyChainEntry, PREVIOUS_KEY_LEN, PreviousKey, open_previous_key, seal_previous_key,
     seal_previous_key_with_nonce,
 };
+pub use person_key::{
+    PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, record_hash,
+    sign_record, verify_record,
+};
+pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};

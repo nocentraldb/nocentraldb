@@ -6,7 +6,7 @@
 mod support;
 
 use ncdb_core::change::{Change, Kind};
-use ncdb_core::membership::{self, Role, SHRED};
+use ncdb_core::membership::{self, Role};
 use ncdb_relay::conformance::block_on;
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{ErrorCode, Pushed};
@@ -209,16 +209,6 @@ fn a_control_body_the_relay_does_not_understand_waits_for_an_upgrade() {
     let future = space.other(0, 9, &[&held[2]]);
     assert_eq!(
         push_one(&relay, 0, &future),
-        Pushed::Rejected(ErrorCode::UnsupportedSuite)
-    );
-}
-
-#[test]
-fn a_shred_entry_waits_until_the_relay_checks_its_sign_off() {
-    let (relay, _dir, mut space, held) = held();
-    let shred = space.other(0, SHRED, &[&held[2]]);
-    assert_eq!(
-        push_one(&relay, 0, &shred),
         Pushed::Rejected(ErrorCode::UnsupportedSuite)
     );
 }

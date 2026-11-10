@@ -1,7 +1,6 @@
 //! RFC 0007, "The errors", for what this server does not read: messages it
-//! cannot decode, and the requests it leaves out as a safe subset (large
-//! changes through an upload; keys and the person-key store), each refused
-//! with one of the RFC's codes.
+//! cannot decode, and the request it leaves out as a safe subset (large
+//! changes through an upload), each refused with one of the RFC's codes.
 
 mod support;
 
@@ -74,24 +73,4 @@ async fn an_upload_is_too_large_for_this_server() {
         array(field(&pushed, 3)),
         [accepted(1), rejected("too_large")]
     );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn keys_and_the_person_key_store_are_unsupported() {
-    let (addr, _dir) = server().await;
-    let (mut client, _) = Client::member(addr, 0).await;
-    let space = Value::Bytes(Space::new(0).space.0.to_vec());
-    let records = Value::Array(Vec::new());
-    let requests = [
-        message("keys", Some(1), &[(3, space.clone())]),
-        message("person-keys", Some(2), &[(3, space.clone())]),
-        message("put-person-keys", Some(3), &[(3, space), (4, records)]),
-    ];
-    for (n, request) in requests.iter().enumerate() {
-        let req = n as u64 + 1;
-        assert_eq!(
-            client.ask(request).await,
-            error(Some(req), "unsupported_suite")
-        );
-    }
 }

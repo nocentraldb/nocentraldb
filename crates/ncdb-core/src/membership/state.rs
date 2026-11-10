@@ -4,7 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::cbor::{self, Value};
+use crate::cbor::Value;
 use crate::change::Header;
 use crate::ids::{ChangeId, MemberId};
 use crate::keys::MemberPublicKey;
@@ -55,6 +55,12 @@ pub enum Rejection {
     /// A key chain entry that names the same generation id as another
     /// accepted one: both are rejected (RFC 0008, decision M23).
     DuplicateGeneration,
+    /// A person-key entry whose commitment is not the one of its id's first
+    /// accepted entry before it in the order (RFC 0008, "Person-key entry").
+    Commitment,
+    /// A person-key entry that the accepted shred with this change id, of
+    /// the same person key, did not see (RFC 0008, step 5).
+    Shredded(ChangeId),
 }
 
 /// One member of the state, current or former.
@@ -198,8 +204,9 @@ impl Members {
     }
 }
 
-/// The canonical bytes of a state: equal states give equal bytes.
-pub(crate) fn encode(
+/// The fields of a state's canonical map, from key 1 to key 7, without its
+/// person keys; equal states give equal fields.
+pub(crate) fn fields(
     genesis: Option<ChangeId>,
     first_generation: Option<u64>,
     members: &Members,
@@ -207,7 +214,7 @@ pub(crate) fn encode(
     gaps: &BTreeSet<ChangeId>,
     generations: &Generations,
     current: Option<u64>,
-) -> Vec<u8> {
+) -> Vec<(u64, Value)> {
     let id = |id: &ChangeId| fields::bytes(&id.0);
     let role = |role: Option<Role>| Value::Unsigned(role.map_or(0, Role::number));
     let optional = |n: Option<u64>| n.map_or(Value::Null, Value::Unsigned);
@@ -259,12 +266,16 @@ pub(crate) fn encode(
         };
         let cause = match cause {
             Some(Rejection::Excluded(by)) => id(&by),
+            Some(Rejection::Shredded(by)) => Value::Array(vec![
+                Value::Unsigned(rejection_code(Rejection::Shredded(by))),
+                id(&by),
+            ]),
             Some(other) => Value::Unsigned(rejection_code(other)),
             None => Value::Null,
         };
         Value::Array(vec![id(change), Value::Unsigned(code), cause])
     });
-    cbor::encode(&fields::map([
+    Vec::from([
         (1, genesis.as_ref().map_or(Value::Null, id)),
         (2, optional(first_generation)),
         (3, Value::Array(members.collect())),
@@ -272,7 +283,7 @@ pub(crate) fn encode(
         (5, Value::Array(gaps.iter().map(id).collect())),
         (6, Value::Array(generations.collect())),
         (7, optional(current)),
-    ]))
+    ])
 }
 
 fn rejection_code(rejection: Rejection) -> u64 {
@@ -287,5 +298,7 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::NoRight => 8,
         Rejection::Excluded(_) => 9,
         Rejection::DuplicateGeneration => 10,
+        Rejection::Commitment => 11,
+        Rejection::Shredded(_) => 12,
     }
 }

@@ -13,19 +13,24 @@
 //! The network server, with RFC 0007's messages and subscriptions, is the
 //! crate `ncdb-relay-server`.
 //!
-//! **What this does not do yet.** No `keys`, `person-keys` or
-//! `put-person-keys` requests; no uploads of large changes; no restore
-//! procedure beyond drawing a new epoch. The
-//! relay refuses shred entries, whose second-account sign-off it cannot
-//! check yet, as `unsupported_suite`.
+//! The `keys`, `person-keys` and `put-person-keys` requests of "Keys and the
+//! person-key store" are [`Relay::keys`], [`Relay::person_keys`] and
+//! [`Relay::put_person_keys`].
+//!
+//! **What this does not do yet.** No uploads of large changes; no restore
+//! procedure beyond drawing a new epoch. It does not delete the person-key
+//! record of a shred entry once the shred is stable (RFC 0008, M20): the
+//! record stays stored, and no new record of its id is accepted.
 
 pub mod auth;
 pub mod conformance;
 mod error;
+mod keys;
 pub mod record;
 mod relay;
 pub mod sqlite;
 pub mod store;
 
 pub use error::ErrorCode;
+pub use keys::Keys;
 pub use relay::{Config, MAX_FRAME, Pulled, Pushed, Relay};

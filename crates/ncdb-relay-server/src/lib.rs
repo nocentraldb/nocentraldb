@@ -9,11 +9,11 @@
 //! subscriptions of a space that a push appended to it. The `ncdb-relay`
 //! binary runs a [`Server`] locally on the SQLite backend.
 //!
-//! **What this does not do yet**, each refused with one of RFC 0007's
-//! codes: large changes ("Large changes"), since the largest frame this
-//! server accepts, [`MAX_FRAME`], fits into one message, so `upload` and an
-//! upload reference answer `too_large`; `keys`, `person-keys` and
-//! `put-person-keys`, which answer `unsupported_suite`. It serves plain
+//! **What this does not do yet**, refused with one of RFC 0007's codes:
+//! large changes ("Large changes"), since the largest frame this server
+//! accepts, [`MAX_FRAME`], fits into one message, so `upload` and an upload
+//! reference answer `too_large`. A `keys` or `person-keys` answer that does
+//! not fit into one message answers `too_large` too. It serves plain
 //! WebSocket: TLS is left to a proxy in front of it. Its subscriptions wake
 //! only on pushes to this server process.
 

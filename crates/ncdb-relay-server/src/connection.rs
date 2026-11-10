@@ -129,6 +129,20 @@ impl<S: RelayStore + 'static> Connection<S> {
         false
     }
 
+    /// Sends an answer, or the error of the relay core. An answer that does
+    /// not fit into one message is `too_large`: RFC 0007 pages none of
+    /// these answers.
+    fn answer(&self, req: u64, answer: Result<Vec<u8>, ErrorCode>) -> bool {
+        match answer {
+            Ok(bytes) if bytes.len() <= MAX_MESSAGE => {
+                self.send(bytes);
+                true
+            }
+            Ok(_) => self.fail(Some(req), ErrorCode::TooLarge),
+            Err(code) => self.fail(Some(req), code),
+        }
+    }
+
     fn malformed(&self, malformed: Malformed) -> bool {
         match self.state {
             State::Member(_) => self.fail(malformed.req, ErrorCode::Malformed),
@@ -230,9 +244,26 @@ impl<S: RelayStore + 'static> Connection<S> {
             // Large changes are left out: this server's largest frame fits
             // into one message, so it accepts no upload.
             Request::Upload { req } => self.fail(Some(req), ErrorCode::TooLarge),
-            // The relay core does not serve keys or the person-key store
-            // yet; the member keeps its records until a relay does.
-            Request::Keys { req } => self.fail(Some(req), ErrorCode::UnsupportedSuite),
+            Request::Keys { req, space } => {
+                let keys = blocking(async move { relay.keys(member, space).await }).await;
+                let answer = keys.map(|keys| wire::keys(req, space, &keys));
+                self.answer(req, answer)
+            }
+            Request::PersonKeys { req, space } => {
+                let records = blocking(async move { relay.person_keys(member, space).await }).await;
+                let answer = records.map(|records| wire::person_keys(req, space, &records));
+                self.answer(req, answer)
+            }
+            Request::PutPersonKeys {
+                req,
+                space,
+                records,
+            } => {
+                let put =
+                    blocking(async move { relay.put_person_keys(member, space, records).await })
+                        .await;
+                self.answer(req, put.map(|()| wire::ok(req)))
+            }
             Request::Ping { req } => {
                 self.send(wire::pong(req));
                 true
@@ -270,7 +301,9 @@ impl Request {
             | Request::Subscribe(Cursor { req, .. })
             | Request::Unsubscribe { req, .. }
             | Request::Upload { req }
-            | Request::Keys { req }
+            | Request::Keys { req, .. }
+            | Request::PersonKeys { req, .. }
+            | Request::PutPersonKeys { req, .. }
             | Request::Ping { req } => Some(*req),
         }
     }
