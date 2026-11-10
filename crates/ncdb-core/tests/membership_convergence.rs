@@ -25,7 +25,7 @@ use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, KeyChainEntry, MemberKind, MembershipEntry,
-    PreviousKey, Resolved, Role, Verdict, resolve,
+    PersonKeyEntry, PreviousKey, Rejection, Resolved, Role, ShredEntry, SignOff, Verdict, resolve,
 };
 use proptest::prelude::*;
 use support::convergence::{self, Author, Config, Generator, Mergeable, Op, OpId, Outcome};
@@ -44,6 +44,8 @@ fn base() -> &'static (SpaceId, u64, Vec<Change>) {
         let mut s = space::Space::with_nonce(1, [9; 16]);
         let g = s.genesis.clone();
         let two = s.add(1, 2, Role::Admin, &[&g]);
+        // Member 3's account is a second account, which signs off shreds.
+        s.certify_by(3, space::other_account(1));
         let three = s.add(1, 3, Role::Admin, &[&two]);
         let four = s.add(1, 4, Role::Writer, &[&three]);
         (s.space, s.first_generation, vec![g, two, three, four])
@@ -245,9 +247,29 @@ impl Generator<Copy> for Members {
                 )
                 .expect("a simulated member's key takes an envelope"),
             ),
+            // A record of person 1 or 2, under the generation the member
+            // writes with, committing to key 1 or 2 by the role drawn.
+            (None, 5) => Entry::PersonKey(PersonKeyEntry {
+                person_key: space::person(raw.subject % 2 + 1),
+                commitment: [raw.role % 2 + 1; 32],
+                generation,
+                record_hash: [raw.subject; 32],
+            }),
+            // A shred of person 1 or 2, signed off by member 3's account.
+            (None, 6) if raw.slack == 0 => {
+                let person_key = space::person(raw.subject % 2 + 1);
+                Entry::Shred(ShredEntry {
+                    person_key,
+                    sign_off: SignOff::sign(
+                        &space::other_account(1),
+                        space,
+                        person_key,
+                        space::id(who),
+                    ),
+                })
+            }
             (None, n) => Entry::Other {
-                entry_type: [membership::ACKNOWLEDGEMENT, membership::PERSON_KEY]
-                    [usize::from(n % 2)],
+                entry_type: membership::ACKNOWLEDGEMENT,
                 fields: BTreeMap::from([(8, ncdb_core::cbor::Value::Unsigned(u64::from(n)))]),
             },
         };
@@ -338,4 +360,28 @@ fn a_re_grant_and_revocations_end_in_the_same_membership_in_any_order() {
     assert_eq!(removed.verdict(again.id()), Some(&Verdict::Lost));
     assert_eq!(removed.verdict(after.id()), Some(&Verdict::Accepted));
     assert_eq!(removed.role(space::id(DAN)), None);
+}
+
+#[test]
+fn m_c10_shreds_and_re_wraps_end_in_one_shred_in_any_order() {
+    const ALICE: u8 = 1;
+    const BOB: u8 = 2;
+    const CAROL: u8 = 3;
+    let mut s = space::Space::with_nonce(ALICE, [9; 16]);
+    let g = s.genesis.clone();
+    let bob = s.add(ALICE, BOB, Role::Writer, &[&g]);
+    s.certify_by(CAROL, space::other_account(1));
+    let carol = s.add(ALICE, CAROL, Role::Admin, &[&bob]);
+    let entry = s.person_key(BOB, 1, 1, &[&carol]);
+    let by_bob = s.shred(BOB, 1, &space::other_account(1), &[&entry]);
+    let by_alice = s.shred(ALICE, 1, &space::other_account(1), &[&entry]);
+    let rewrap = s.person_key(ALICE, 1, 1, &[&entry]);
+    let base = [g, bob, carol, entry];
+    let state = in_every_order(s.space, &base, &[by_bob, by_alice.clone(), rewrap.clone()]);
+    let key = state.person_key(space::person(1)).expect("the person key");
+    assert_eq!(key.shred, Some(by_alice.id()));
+    assert!(matches!(
+        state.verdict(rewrap.id()),
+        Some(Verdict::Rejected(Rejection::Shredded(_)))
+    ));
 }
