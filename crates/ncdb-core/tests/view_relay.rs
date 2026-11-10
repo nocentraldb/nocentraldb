@@ -4,9 +4,6 @@
 //! one, hands out the changes the relay has not confirmed in local order,
 //! and forgets every position when the relay's epoch changes. A reopened
 //! view reads them back.
-//!
-//! Native only: the browser's view (OPFS) is a later ticket.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 
