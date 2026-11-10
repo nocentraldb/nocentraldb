@@ -11,8 +11,8 @@ use ncdb_core::membership::{self, ControlBody, Entry, Resolved};
 
 use crate::Relay;
 use crate::error::ErrorCode;
-use crate::relay::PAGE;
-use crate::store::{Entry as LogEntry, PersonKeyPut, PersonKeyRecord, RelayStore};
+use crate::relay::{PAGE, RETRIES};
+use crate::store::{Entry as LogEntry, PersonKeyPut, PersonKeyRecord, PutOutcome, RelayStore};
 
 /// A member's keys in one space: the key envelopes addressed to it and the
 /// key chain entries, in position order.
@@ -74,6 +74,11 @@ impl<S: RelayStore> Relay<S> {
     /// is the generation of the record it replaces, or descends from it.
     /// The records of one request are checked in order, each against the
     /// one before it of the same id.
+    ///
+    /// The backend stores the records only if every record it replaces is
+    /// still the one they were checked against. When another put got there
+    /// first, the core checks them again against the log and the records
+    /// as they are now, as it retries an overtaken append.
     pub async fn put_person_keys(
         &self,
         uploader: MemberId,
@@ -81,6 +86,23 @@ impl<S: RelayStore> Relay<S> {
         records: Vec<PersonKeyRecord>,
     ) -> Result<(), ErrorCode> {
         self.check_reader(uploader, space).await?;
+        for _ in 0..RETRIES {
+            let puts = self.checked_puts(space, &records).await?;
+            match self.store().put_person_keys(space, puts).await? {
+                PutOutcome::Stored => return Ok(()),
+                PutOutcome::Moved { .. } => continue,
+            }
+        }
+        Err(ErrorCode::Unavailable)
+    }
+
+    /// The records as puts on the stored records they replace, or
+    /// `bad_record` when one is not acceptable.
+    async fn checked_puts(
+        &self,
+        space: SpaceId,
+        records: &[PersonKeyRecord],
+    ) -> Result<Vec<PersonKeyPut>, ErrorCode> {
         let resolved = membership::resolve(space, &self.controls(space).await?);
         let mut current: BTreeMap<[u8; 16], u64> = self
             .store()
@@ -92,13 +114,15 @@ impl<S: RelayStore> Relay<S> {
         let mut puts = Vec::with_capacity(records.len());
         for record in records {
             let replaces = current.insert(record.id.0, record.generation);
-            if !acceptable(&resolved, space, &record, replaces) {
+            if !acceptable(&resolved, space, record, replaces) {
                 return Err(ErrorCode::BadRecord);
             }
-            puts.push(PersonKeyPut { record, replaces });
+            puts.push(PersonKeyPut {
+                record: record.clone(),
+                replaces,
+            });
         }
-        self.store().put_person_keys(space, puts).await?;
-        Ok(())
+        Ok(puts)
     }
 
     /// The space exists and `reader` is a current member of it.

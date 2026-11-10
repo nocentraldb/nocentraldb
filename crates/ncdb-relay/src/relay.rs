@@ -15,9 +15,10 @@ use crate::store::{
     AppendOutcome, Effect, Entry as LogEntry, Epoch, NewEntry, Position, RelayStore, StoreError,
 };
 
-/// How often the core re-checks and retries an append that another append
-/// overtook before it answers `unavailable`.
-const RETRIES: usize = 64;
+/// How often the core re-checks and retries an append, or a put of
+/// person-key records, that another one overtook before it answers
+/// `unavailable`.
+pub(crate) const RETRIES: usize = 64;
 
 /// How many entries the core reads at once when it collects a space's
 /// control changes.

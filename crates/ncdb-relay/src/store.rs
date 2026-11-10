@@ -10,6 +10,9 @@
 //! - **One change id, one position**: the check for a duplicate and the
 //!   append are one atomic step.
 //! - **An append and its effects are atomic.**
+//! - **A person-key put is conditional on the stored generation**: the
+//!   check that every record still replaces the generation the core
+//!   checked it against and the write are one atomic step.
 //! - **Exact bytes**: a frame comes back byte for byte.
 //! - **Read your writes**, also through another handle on the same storage.
 //! - **A new epoch after any loss.**

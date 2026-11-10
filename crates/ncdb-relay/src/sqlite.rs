@@ -2,7 +2,8 @@
 //! backend table says for SQLite: a conditional append is one write
 //! transaction on the head, a row in `spaces`; "one change id, one
 //! position" is a unique index on (space, change id); frames are kept
-//! inline.
+//! inline; a person-key put is one write transaction that reads each
+//! stored generation before it writes.
 //!
 //! Several handles, also in several processes, may open one database: each
 //! write transaction takes SQLite's write lock first (`BEGIN IMMEDIATE`) and
@@ -377,7 +378,23 @@ impl RelayStore for SqliteStore {
     ) -> Result<PutOutcome, StoreError> {
         let mut connection = self.connection();
         let tx = immediate(&mut connection)?;
-        for PersonKeyPut { record, .. } in puts {
+        for PersonKeyPut { record, replaces } in puts {
+            let stored = tx
+                .query_row(
+                    "SELECT generation FROM person_keys WHERE space = ?1 AND id = ?2",
+                    params![space.0, record.id.0],
+                    |row| row.get::<_, i64>(0),
+                )
+                .optional()
+                .map_err(failed("put person keys"))?
+                .map(unsigned);
+            if stored != replaces {
+                // Dropping the transaction rolls back the puts before it.
+                return Ok(PutOutcome::Moved {
+                    id: record.id,
+                    stored,
+                });
+            }
             tx.execute(
                 "INSERT INTO person_keys (space, id, generation, writer, wrapped, signature)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
