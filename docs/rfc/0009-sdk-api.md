@@ -8,6 +8,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 - **2026-11-09** · NOC-76 · [Amendment 1: groups leave the design](#amendment-1-groups-leave-the-design) records the owner's decision to keep groups out of every definition for now, and marks decision S14 withdrawn. `members.add` keeps taking a list of invitations, as plain batching. The sentences it changes are marked *(Amendment 1)*.
 - **2026-11-09** · NOC-80 · [Amendment 2: following RFC 0005 Amendment 4](#amendment-2-following-rfc-0005-amendment-4) follows RFC 0005's D16, which the owner decided: the TypeScript SDK reads and writes an `nc.int` as a `number`, so a write must be a safe integer, and a stored int beyond that range reads `undefined` and is named in `$raw`. It decides nothing. The sentences it changes are marked *(Amendment 2)*.
 - **2026-11-10** · NOC-80 · [Amendment 3: the object id in TypeScript](#amendment-3-the-object-id-in-typescript) records the owner's decision (Carsten, 2026-11-10) on PR #91: in TypeScript an object id is a `string`, its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id`. The sentence it changes is marked *(Amendment 3)*.
+- **2026-11-10** · NOC-92 · [Amendment 4: following RFC 0005's references](#amendment-4-following-rfc-0005s-references) follows [RFC 0005's D20 and D21](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22), which the owner decided: `nc.Infer` types a reference as `{ space, id }`, `space.inspect` gives its state as `status`, `"ok"`, `"notAccessible"` or `"missing"`, `$conflicts` never names a field for its state, and a subscription does not follow a reference's target. It decides nothing. The sentences it changes are marked *(Amendment 4)*.
 
 This RFC proposes the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It proposes the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
@@ -194,7 +195,8 @@ const task = await project.get(model.tasks, taskId);
 
 - every field optional; an unset field is `undefined`;
 - a choice as the union of its options, and `nc.Unknown`, `{ unknown: rawValue }`, for an option the lock does not list yet (decision [S5](#decisions-for-the-owner));
-- a set as an array, in the order of its elements' canonical bytes; a link as the target's object id; many links as an array of ids.
+- a set as an array, in the order of its elements' canonical bytes; a link as the target's object id; many links as an array of ids;
+- a reference as `{ space, id }`, the target's space id and object id, in the form `$space` and `$id` carry them. Its state is not part of the read object, so the object reads the same on every member of its space, and the SDK does not read the target: an app that wants it reads it with `space.get` in the target's space ([RFC 0005, D20](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22)). *(Amendment 4.)*
 
 In TypeScript an object id is a `string`: its 16 bytes as 32 lowercase hex digits, as the lock writes `model.id` ([RFC 0005, "The keys"](0005-schema-and-model-lock.md#the-keys)). An id can then be a map key, compared with `===`, and logged as it is. *(Amendment 3.)*
 
@@ -206,7 +208,7 @@ An object id is unique in its space, not across spaces: a hostile member can cre
 | --- | --- |
 | `$id`, `$space` | The object id and the space id. |
 | `$deleted` | `true` when the object is deleted. `space.get` returns deleted objects; queries do not (decision [S9](#decisions-for-the-owner)). |
-| `$conflicts` | The names of the fields that have conflicts, lost removals, or a link that is not **ok**. Empty when there are none. |
+| `$conflicts` | The names of the fields that have conflicts, lost removals, or a link that is not **ok**. Empty when there are none. A reference is named for its conflicts only, never for its state, because a state is not a conflict and differs from member to member ([RFC 0005, D20](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22)). *(Amendment 4)* |
 | `$raw` | The names of the fields whose value does not fit the field's kind, such as a text in an `nc.int` field written by a buggy member. Such a field reads `undefined`; `space.inspect` gives the raw value ([RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model), point 5). In TypeScript this includes an `nc.int` beyond −(2^53 − 1) to 2^53 − 1, which another member or the Rust SDK can write, and a set of ints holding such an element, as a whole; `space.inspect` gives such an int exactly, as a `bigint` ([RFC 0005, D16](0005-schema-and-model-lock.md#amendment-4-follow-ups-from-building-the-lock)). *(Amendment 2.)* |
 
 ### Conflicts, lost removals and link states
@@ -225,6 +227,7 @@ detail.deleted;          // { value: false, conflicts: [] }
 - **Basic values and single links:** `value` and `conflicts`, each conflict with its value, author member id and stamp. Conflicts whose value equals the winner's are left out, as RFC 0004 says.
 - **Sets and many links:** `elements`, and per element its `lostRemovals`, each with author and stamp.
 - **Links:** per target its `status`: `"ok"`, `"deleted"`, `"missing"` or `"wrongCollection"` ([RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution)).
+- **References:** `value`, `conflicts`, and the state of the winning reference as `status`: `"ok"`, `"notAccessible"` or `"missing"` ([RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space); [RFC 0005, D20](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22)). The state comes from the member's own copies, so it can differ from member to member and change without any change to the reference. *(Amendment 4.)*
 - **The object:** its collection and whether it is deleted, each a basic value with conflicts ([RFC 0004, "Two creates of one object id"](0004-merge-rules-basic-types.md#two-creates-of-one-object-id)).
 - **A field outside the kind:** `{ raw: value }`.
 
@@ -284,6 +287,7 @@ stop();
 
 - **`db.subscribe(query, listener)`** calls the listener with the query's page at once, and again after every fold that touched an object of the query's collection whose page may change. It passes the whole page, never a diff, so a listener cannot miss a step. Folds of one page of changes call it once ([RFC 0006, "Many changes"](0006-local-view.md#many-changes)). `space.subscribe(query, listener)` does the same for a query in one space.
 - **`space.subscribe(collection, id, listener)`** follows one object: the listener gets it as `space.get` returns it, or `undefined`.
+- **A subscription does not follow a reference's target.** It re-runs when the referencing object changes, not when the target arrives, changes or is deleted, and not when the member joins or leaves the target's space, so a fold in one space never calls the listeners of another. An app that shows the target subscribes to it in the target's space ([RFC 0005, D21](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22)). *(Amendment 4.)*
 - **`db.changes.subscribe(listener)`** is the change event: after each fold, the space, collection and ids it touched, and whether the change was this member's own write. It carries ids, never values, as RFC 0006's notification does, so an adapter or an agent's wake-up logic reads the objects itself.
 - Every `subscribe` returns a function that stops it, like `db.durability.subscribe` ([RFC 0006, decision 10](0006-local-view.md#amendment-2-durability-of-a-browser-copy)).
 - **Un-folding is a change too.** When a late control change rejects a change that was folded, the fields it touched are folded again ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)), and the listeners of those objects are called like after any fold. The app sees a value go back; `space.status` says why.
@@ -481,6 +485,7 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | `space.outcome` | The outcome of one change on one field | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
 | `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#decisions-for-the-owner) |
 | `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` | Link statuses | [RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution) |
+| `"ok"`, `"notAccessible"`, `"missing"` | Reference states *(Amendment 4)* | [RFC 0005, D20](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22) |
 | `"won"`, `"lost"`, `"replaced"`, `"applied"` | Outcomes | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
 | `nc.Unknown` | A choice option the lock does not list: `{ unknown }` | [RFC 0004, "Value rules per kind"](0004-merge-rules-basic-types.md#value-rules-per-kind) |
 | `$id`, `$space`, `$deleted`, `$conflicts`, `$raw` | What a read object carries beyond its fields | [RFC 0005, "Names"](0005-schema-and-model-lock.md#names) |
@@ -783,3 +788,13 @@ Added on 2026-11-10 for NOC-80. RFC 0002 makes an object id 16 random bytes ([RF
 - **The shape.** An object id is a `string` of 32 lowercase hex digits, the 16 bytes in order. It is the form the lock already writes `model.id` in, so one encoding serves both. `$id`, a link and each element of many links read this way, and a write takes an id this way.
 - **What it adds.** No public name: the type is a plain `string`.
 - **The Rust SDK** keeps the 16 bytes as they are.
+
+## Amendment 4: following RFC 0005's references
+
+Added on 2026-11-10 for NOC-92. [RFC 0005, Amendment 5](0005-schema-and-model-lock.md#amendment-5-a-reference-into-another-space) adds `nc.ref`, a reference into another space, and [RFC 0004, Amendment 4](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space) defines its merge and its three states. RFC 0005's [D20 and D21](0005-schema-and-model-lock.md#decisions-for-the-owner-d18-to-d22), which the owner decided as recommended (Carsten, 2026-11-10), chose how the SDK shows a reference and left the names to an amendment of this RFC. This amendment adds them to [Get by id](#get-by-id), [Conflicts, lost removals and link states](#conflicts-lost-removals-and-link-states), [Subscribe](#subscribe) and [Public names](#public-names), marked *(Amendment 4)* above, and decides nothing.
+
+- **The read object (D20).** `nc.Infer` types a reference as `{ space, id }`, the target's space id and object id. The state is not part of it, so a read object stays a function of its own space, and the SDK never reads the target along with the reference.
+- **`space.inspect` (D20).** A reference gives `value`, `conflicts` and `status`, as a single link does, with the states `"ok"`, `"notAccessible"` and `"missing"`. These are the public names of RFC 0004's **ok**, **not accessible** and **missing**.
+- **`$conflicts` (D20).** It names a reference for its conflicts only, never for its state: a state is not a conflict, and it differs from member to member.
+- **Subscriptions (D21).** A subscription does not follow a reference's target, nor the member's joining or leaving the target's space. An app that shows the target subscribes to it in its own space.
+- **What it adds.** The state names `"ok"`, `"notAccessible"` and `"missing"` for references in [Public names](#public-names); `"ok"` and `"missing"` are the names links already use.
