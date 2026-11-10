@@ -153,6 +153,8 @@ pub(crate) enum Answer {
     Error {
         req: Option<u64>,
         code: String,
+        /// How many seconds to wait before retrying, for `rate_limited`.
+        retry_after: Option<u64>,
     },
     /// `pong`, `ok` or a type this SDK does not read.
     Other {
@@ -257,6 +259,10 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
         "error" => Answer::Error {
             req,
             code: text(field(m, 3)?)?.to_owned(),
+            retry_after: match m.get(&Key::Unsigned(4)) {
+                Some(seconds) => Some(uint(seconds)?),
+                None => None,
+            },
         },
         _ => Answer::Other { req },
     })

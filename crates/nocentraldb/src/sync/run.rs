@@ -52,21 +52,37 @@ async fn run(db: Weak<Mutex<Inner>>, url: String, mut wake: watch::Receiver<()>)
         let Some(inner) = db.upgrade() else { return };
         set(&inner, Connection::Connecting, None);
         drop(inner);
-        let connected = match session(&db, &url, &mut wake).await {
+        let (progress, retry_after) = match session(&db, &url, &mut wake).await {
             End::Dropped => return,
-            End::Lost { connected } => connected,
+            End::Lost {
+                progress,
+                retry_after,
+            } => (progress, retry_after),
         };
         let Some(inner) = db.upgrade() else { return };
         set(&inner, Connection::Offline, None);
         drop(inner);
-        if connected {
+        if progress {
             delay = FIRST;
         }
-        tokio::select! {
-            () = tokio::time::sleep(jitter(delay)) => {}
-            changed = wake.changed() => if changed.is_err() { return },
+        let wait = jitter(delay).max(retry_after.unwrap_or_default());
+        if !sleep(wait, &mut wake).await {
+            return;
         }
         delay = (delay * 2).min(LONGEST);
+    }
+}
+
+/// Sleeps for `wait`; a local write does not cut it short. Returns
+/// `false` when the database was dropped meanwhile.
+async fn sleep(wait: Duration, wake: &mut watch::Receiver<()>) -> bool {
+    let sleep = tokio::time::sleep(wait);
+    tokio::pin!(sleep);
+    loop {
+        tokio::select! {
+            () = &mut sleep => return true,
+            changed = wake.changed() => if changed.is_err() { return false },
+        }
     }
 }
 

@@ -29,8 +29,13 @@ pub(super) enum End {
     /// The database was dropped: syncing ends.
     Dropped,
     /// The connection was lost or the relay ended it; the member
-    /// reconnects. `connected` says whether it had authenticated.
-    Lost { connected: bool },
+    /// reconnects. `progress` says whether the session synced every space
+    /// once, so that the backoff starts over; `retry_after` is how long the
+    /// relay asked the member to wait (RFC 0007, `rate_limited`).
+    Lost {
+        progress: bool,
+        retry_after: Option<Duration>,
+    },
 }
 
 type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
@@ -45,12 +50,18 @@ struct Session<'a> {
     subscribed: BTreeSet<SpaceId>,
     /// Spaces whose live entries left a gap, to pull again.
     gaps: BTreeSet<SpaceId>,
+    /// Whether every space was pulled, pushed and subscribed once.
+    progress: bool,
 }
 
-/// The connection ended after it authenticated. An error code that
-/// stops syncing is reported by [`Session::failed`].
+/// The connection ended. An error code that stops syncing is reported by
+/// [`Session::failed`]; whether the session made progress is filled in
+/// when it ends.
 fn lost() -> End {
-    End::Lost { connected: true }
+    End::Lost {
+        progress: false,
+        retry_after: None,
+    }
 }
 
 /// Runs `f` on the database, unless it was dropped.
@@ -66,9 +77,8 @@ pub(super) async fn session(
     url: &str,
     wake: &mut watch::Receiver<()>,
 ) -> End {
-    let not_connected = End::Lost { connected: false };
     let Ok((ws, _)) = tokio_tungstenite::connect_async(url).await else {
-        return not_connected;
+        return lost();
     };
     let mut session = Session {
         ws,
@@ -78,13 +88,18 @@ pub(super) async fn session(
         subscriptions: BTreeMap::new(),
         subscribed: BTreeSet::new(),
         gaps: BTreeSet::new(),
+        progress: false,
     };
-    match session.authenticate().await {
-        Ok(()) => {}
-        Err(End::Lost { .. }) => return not_connected,
-        Err(end) => return end,
+    if let Err(end) = session.authenticate().await {
+        return end;
     }
-    session.serve(wake).await.err().unwrap_or(lost())
+    match session.serve(wake).await.err().unwrap_or(lost()) {
+        End::Lost { retry_after, .. } => End::Lost {
+            progress: session.progress,
+            retry_after,
+        },
+        End::Dropped => End::Dropped,
+    }
 }
 
 impl Session<'_> {
@@ -145,6 +160,7 @@ impl Session<'_> {
                 }
             }
             push = false;
+            self.progress = true;
             with(self.db, |inner| {
                 if let Some(sync) = inner.sync.as_mut() {
                     sync.epoch_changed = false;
@@ -244,14 +260,19 @@ impl Session<'_> {
                 }
                 Ok(())
             }
-            Answer::Error { code, .. } => match code.as_str() {
+            Answer::Error {
+                code, retry_after, ..
+            } => match code.as_str() {
                 "not_member" | "removed_member" => {
                     with(self.db, |inner| apply::stop(inner, space))?;
                     Ok(())
                 }
                 // No subscription while the relay does not hold the space.
                 "unknown_space" => Ok(()),
-                _ => Err(lost()),
+                _ => Err(End::Lost {
+                    progress: false,
+                    retry_after: retry_after.map(Duration::from_secs),
+                }),
             },
             _ => Ok(()),
         }
