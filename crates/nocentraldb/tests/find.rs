@@ -85,7 +85,10 @@ fn a_query_leaves_deleted_objects_out() {
     let a3 = task(&a, "a0", "open", 0);
     now(a.write(|tx| tx.delete("tasks", a3))).unwrap();
 
-    let query = db.index("tasks", "byStatusPriority").unwrap().equal(["open"]);
+    let query = db
+        .index("tasks", "byStatusPriority")
+        .unwrap()
+        .equal(["open"]);
     let page = now(db.find(&query)).unwrap();
 
     assert_eq!(titles(&page), ["b1", "a3", "b4", "a5"]);
@@ -108,8 +111,14 @@ fn an_index_of_the_other_scope_is_refused() {
     let in_space = db.index("tasks", "open").unwrap().equal(["open"]);
     let everywhere = db.index("tasks", "byPriority").unwrap();
 
-    assert_eq!(now(db.find(&in_space)).unwrap_err().code(), ErrorCode::InvalidValue);
-    assert_eq!(now(a.find(&everywhere)).unwrap_err().code(), ErrorCode::InvalidValue);
+    assert_eq!(
+        now(db.find(&in_space)).unwrap_err().code(),
+        ErrorCode::InvalidValue
+    );
+    assert_eq!(
+        now(a.find(&everywhere)).unwrap_err().code(),
+        ErrorCode::InvalidValue
+    );
 }
 
 #[test]
@@ -147,15 +156,25 @@ fn a_cursor_of_another_index_is_refused() {
 fn an_index_the_model_does_not_declare_is_not_found() {
     let db = open();
 
-    assert_eq!(db.index("tasks", "byTitle").unwrap_err().code(), ErrorCode::NotFound);
-    assert_eq!(db.index("people", "byName").unwrap_err().code(), ErrorCode::NotFound);
+    assert_eq!(
+        db.index("tasks", "byTitle").unwrap_err().code(),
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        db.index("people", "byName").unwrap_err().code(),
+        ErrorCode::NotFound
+    );
 }
 
 #[test]
 fn a_cursor_prints_redacted() {
     let db = open();
     two_spaces(&db);
-    let query = db.index("tasks", "byStatusPriority").unwrap().equal(["open"]).take(1);
+    let query = db
+        .index("tasks", "byStatusPriority")
+        .unwrap()
+        .equal(["open"])
+        .take(1);
     let page = now(db.find(&query)).unwrap();
 
     let shown = format!("{:?} {:?}", page.cursor.unwrap(), query);

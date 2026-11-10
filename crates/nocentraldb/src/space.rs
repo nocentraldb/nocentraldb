@@ -128,6 +128,10 @@ impl Space {
         self.id
     }
 
+    pub(crate) fn inner(&self) -> &Arc<Mutex<Inner>> {
+        &self.inner
+    }
+
     /// Records a transaction with `record` and writes it as one change of
     /// this space: signed, sealed under the space key, appended to the log
     /// and folded into the view in one SQLite transaction. It returns when
