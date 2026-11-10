@@ -157,7 +157,7 @@ pub(super) fn unconfirmed(
 }
 
 /// Records the results of a push of the changes `ids` of `space`. A
-/// refusal is recorded by the code [`wire::shown_code`] maps it to, as the
+/// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
 /// sync status shows it, so the relay's own text never reaches the log
 /// (NOC-188). Returns the transient code that stopped it, after which the
 /// rest stays unconfirmed.
@@ -173,7 +173,7 @@ pub(super) fn pushed(
                 inner.view.confirm(space, *id, position)?;
             }
             Pushed::Rejected(code) => {
-                let code = wire::shown_code(&code);
+                let code = wire::mapped_code(&code);
                 if TRANSIENT.contains(&code.as_str()) {
                     return Ok(Some(code));
                 }
