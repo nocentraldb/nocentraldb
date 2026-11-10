@@ -1,5 +1,6 @@
 //! Test doubles for a member that receives changes (NOC-28): the checks of
-//! RFC 0002 Amendment 1, steps 3 to 5, and a fold that records which field
+//! RFC 0002, "What a member does with a change it receives", steps 3
+//! to 5, and a fold that records which field
 //! operations it folded and keeps the objects that creates and deletes fold
 //! into (NOC-39). The doubles stand in for real keys, so that a test
 //! of the steps can name a change's author and key generation by a small

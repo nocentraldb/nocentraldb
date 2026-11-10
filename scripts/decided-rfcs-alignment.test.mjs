@@ -283,7 +283,8 @@ test("RFC 0005 quotes RFC 0001's new wording on personal fields", () => {
 
 // pm, after #74 merged: the owner closed the first private window, so RFC 0006
 // says Firefox's private data is gone after the window closes and cites the
-// rows of docs/browser-storage.md, not #74's log headings (Amendment 3).
+// rows of docs/browser-storage.md, not #74's log headings (RFC 0006, "Durability of a
+// browser copy").
 const RFC_0006 = "docs/rfc/0006-local-view.md";
 
 // RFC 0006 carries this in its text since NOC-101 folded its amendments in.

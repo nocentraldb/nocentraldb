@@ -72,7 +72,7 @@ pub(super) fn index_name(index: &Index) -> String {
 /// its direction (RFC 0006, "Declared indexes"). Every index ends with the
 /// object id, so its order is total: one that spans every space orders by
 /// its keys, then the space id; one that runs in one space puts the space
-/// id first (Amendment 6).
+/// id first (RFC 0006, "Declared indexes").
 pub(super) fn index_columns(index: &Index) -> Vec<(String, Direction)> {
     let ascending = |name: &str| (name.to_owned(), Direction::Ascending);
     let keys = index
@@ -180,7 +180,7 @@ fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
             })
             .collect();
         // A partial index: no declared index holds a deleted object
-        // (RFC 0006, Amendment 6), and a lookup names the same condition.
+        // (RFC 0006, "Declared indexes"), and a lookup names the same condition.
         conn.execute_batch(&format!(
             "CREATE INDEX {} ON {} ({}) WHERE deleted = 0;",
             quote(&index_name(index)),

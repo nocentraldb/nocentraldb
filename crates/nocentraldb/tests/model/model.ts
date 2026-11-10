@@ -1,7 +1,7 @@
 // The model of the Rust SDK's tests (NOC-88). `ncdb model build` writes
 // model.lock.json from it; `crates/ncdb/tests/fixtures.rs` checks that the
 // lock is still what the build writes. `open` runs in one space (RFC 0006,
-// Amendment 6); `byPriority` and `byStatusPriority` span every space of the
+// "Declared indexes"); `byPriority` and `byStatusPriority` span every space of the
 // member.
 import { nc } from "../../../../packages/sdk/src/index.ts";
 

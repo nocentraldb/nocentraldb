@@ -1,5 +1,6 @@
 //! Each way `seal::verify` and `seal::open` fail maps to the step and the
-//! reason RFC 0002 Amendment 1 names (NOC-48): one test per row of the
+//! reason RFC 0002 names ("What a member does with a change it receives";
+//! NOC-48): one test per row of the
 //! table in `src/checks.rs`.
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;

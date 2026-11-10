@@ -85,10 +85,11 @@ test("every RFC is one complete text, so the README no longer says some are bein
     /^\d{4}-.*\.md$/.test(f),
   );
   for (const file of rfcs) {
+    // NOC-105: not even a link text or its History names an amendment.
     assert.doesNotMatch(
       read(`docs/rfc/${file}`),
-      /^## Amendment/m,
-      `${file} still has an amendment section`,
+      /Amendment/,
+      `${file} still names an amendment`,
     );
   }
   assert.doesNotMatch(readme(), /being rewritten/);

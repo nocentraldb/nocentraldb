@@ -246,14 +246,14 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 
 There is nothing else: no `where` on a field outside the index, no sort of the app's choosing, no raw SQL. An app that needs another filter declares another index, or a computed field and a view ([GENESIS.md, principle 6](../../factory/GENESIS.md#principles-in-priority-order)).
 
-**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query RFC 0006 allows. RFC 0005 and RFC 0006 are silent on it, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
+**A query in one space.** An index ends with the space id and the object id ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)), so it cannot fix the space: "the open tasks of Project A" is no query such an index allows, and an app needs it on its first screen. This RFC proposes an index option, `scope: "space"`, that puts the space id first, and `space.find(query)`, which fixes it (decision [S8](#s8-a-query-in-one-space)):
 
 ```ts
 // in the schema: indexes: { openByPriority: nc.index(["status", "priority"], { equal: 1, scope: "space" }) }
 const mine = await project.find(model.tasks.indexes.openByPriority.equal("open").take(50));
 ```
 
-This needs an amendment to RFC 0005 (the option and its key in the lock) and to RFC 0006 (the index's columns); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs).
+RFC 0005 states the option and its key in the lock ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)), and RFC 0006 the index's columns ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)); see [Conflicts](#conflicts-with-genesismd-and-the-other-rfcs), point 1.
 
 **What a page does not promise,** as RFC 0006 says: a row that changes its indexed values between two pages may appear twice or not at all; there is no snapshot over many pages. A cursor holds plaintext field values, never leaves the device in the SDK's design, and prints as `[redacted]`; an app that puts it in a URL makes a copy the core cannot erase.
 

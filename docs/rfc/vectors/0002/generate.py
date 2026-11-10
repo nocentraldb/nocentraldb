@@ -1,12 +1,11 @@
 """Writes the byte-exact examples of RFC 0002
-(docs/rfc/0002-change-and-log-format.md) in this directory: M1 and M2 of
-Amendment 5 and N1 and N2 of Amendment 6, each from its description in the
-RFC and independently of the Rust core and of the tooling tests' reader:
-with cbor2 (6.2.1, canonical mode), as docs/rfc/vectors/0004/generate.py
-does for RFC 0004 Amendment 1. The gates do not run this script;
-scripts/rfc-0002-model.test.mjs and scripts/rfc-0002-amendment-6.test.mjs
-check that the RFC's hex equals the committed files, and
-crates/ncdb-core/tests/depth.rs decodes N1 and N2.
+(docs/rfc/0002-change-and-log-format.md) in this directory: M1 and M2 ("The
+writer's model") and N1 and N2 ("The CBOR profile") of its "Byte-exact
+examples", each from its description in the RFC and independently of the Rust
+core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode), as
+docs/rfc/vectors/0004/generate.py does for RFC 0004. The gates do not run this
+script; scripts/rfc-0002-rules.test.mjs checks that the RFC's hex equals the
+committed files, and crates/ncdb-core/tests/depth.rs decodes N1 and N2.
 
 Run: python3 -I generate.py  (needs cbor2==6.2.1)
 

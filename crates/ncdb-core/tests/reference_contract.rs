@@ -1,4 +1,4 @@
-//! A reference (RFC 0004 Amendment 4) merges as a basic value: it meets
+//! A reference (RFC 0004, "References") merges as a basic value: it meets
 //! RFC 0004's plugin contract C1 to C7, checked by the convergence harness
 //! with at least three copies, random orders of arrival, duplicate
 //! deliveries and malformed writes, whose values do not fit.
