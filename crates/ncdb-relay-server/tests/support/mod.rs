@@ -195,6 +195,12 @@ pub struct Client {
     ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
 }
 
+impl From<WebSocketStream<MaybeTlsStream<TcpStream>>> for Client {
+    fn from(ws: WebSocketStream<MaybeTlsStream<TcpStream>>) -> Client {
+        Client { ws }
+    }
+}
+
 impl Client {
     /// A WebSocket connection that has not said hello yet.
     pub async fn connect(addr: SocketAddr) -> Client {
@@ -202,6 +208,42 @@ impl Client {
             .await
             .expect("the server accepts the connection");
         Client { ws }
+    }
+
+    /// hello, challenge, auth and welcome, false when the server ends the
+    /// connection on the way instead.
+    pub async fn try_authenticate(&mut self, who: Who) -> bool {
+        let versions = Value::Array(vec![Value::Unsigned(1)]);
+        let hello = cbor::encode(&message("hello", None, &[(3, versions)]));
+        let Some(challenge) = self.try_ask(hello).await else {
+            return false;
+        };
+        assert_eq!(kind(&challenge), "challenge");
+        let relay_id = bytes(field(&challenge, 4)).to_vec();
+        let nonce: [u8; 32] = bytes(field(&challenge, 5)).try_into().expect("32 bytes");
+        let auth = cbor::encode(&auth(who, &relay_id, &nonce));
+        match self.try_ask(auth).await {
+            Some(welcome) => kind(&welcome) == "welcome",
+            None => false,
+        }
+    }
+
+    /// Sends `bytes` and reads the next message, none when the connection
+    /// ends first.
+    async fn try_ask(&mut self, bytes: Vec<u8>) -> Option<Value> {
+        self.ws.send(Message::Binary(bytes.into())).await.ok()?;
+        loop {
+            let next = tokio::time::timeout(WAIT, self.ws.next())
+                .await
+                .expect("a message or a close in time");
+            match next?.ok()? {
+                Message::Binary(bytes) => {
+                    return Some(cbor::decode(&bytes).expect("canonical CBOR"));
+                }
+                Message::Ping(_) | Message::Pong(_) => continue,
+                _ => return None,
+            }
+        }
     }
 
     /// A connection authenticated as `who`, and its welcome.
