@@ -1,4 +1,4 @@
-//! A reference in the local view (RFC 0006, Amendment 7): one column of 32
+//! A reference in the local view (RFC 0006, "Declared indexes"): one column of 32
 //! bytes, an SQLite `BLOB`, the target's space id followed by its object
 //! id, as the reference is stored and whatever its state. An unset
 //! reference and a value that does not fit index as `NULL`. "All orders of

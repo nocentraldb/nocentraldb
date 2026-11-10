@@ -17,11 +17,12 @@ const rowsStarting = (text, pattern) =>
     .filter((l) => l.startsWith("|"))
     .filter((l) => pattern.test(l.split("|")[1] ?? ""));
 
+// Since NOC-101, "Decisions" keeps each decision in short form under its own heading.
 const decision = (id) => {
-  const text = section(read(RFC), "decisions-for-the-owner");
-  const found = text.split(new RegExp(`^\\*\\*${id}\\. `, "m"))[1];
+  const text = section(read(RFC), "decisions");
+  const found = text.split(new RegExp(`^### ${id}\\. `, "m"))[1];
   assert.ok(found, `${RFC} has no decision ${id}`);
-  return found.split(/^\*\*S\d+\. /m)[0];
+  return found.split(/^### S\d+\. /m)[0];
 };
 
 test("the Rust SDK opens a database at a path, in memory, with a key file, or as an agent", () => {
@@ -112,25 +113,13 @@ test("an app writes a reference as the { space, id } it reads, or null", () => {
   assert.match(ref, /set \(1\)/);
 });
 
-test("decisions S19 to S24 record the owner's choice of each recommendation", () => {
-  for (const [id, chosen] of [
-    ["S19", "A"],
-    ["S20", "A"],
-    ["S21", "A"],
-    ["S22", "B"],
-    ["S23", "A"],
-    ["S24", "A"],
-  ]) {
+test("decisions S19 to S24 record the owner's choice, on NOC-95", () => {
+  for (const id of ["S19", "S20", "S21", "S22", "S23", "S24"]) {
     const text = decision(id);
-    assert.match(text, new RegExp(`^- ${chosen}\\. .*\\(recommended\\)`, "m"));
-    assert.ok(
-      text.includes(
-        `Decided (Carsten, 2026-11-10): the recommendation, (${chosen}).`,
-      ),
-      `${id} records no ruling for ${chosen}`,
-    );
-    assert.match(text, /NOC-95/, `${id} names no NOC-95`);
+    assert.match(text, /^Decided \(Carsten, 2026-11-10\), on NOC-95: /m, id);
+    assert.match(text, /^Not taken:\n\n- /m, `${id} lists no option not taken`);
   }
+  assert.match(decision("S22"), /`storageFailed`/);
 });
 
 test("the new text carries no amendment mark, and the status names S19 to S24", () => {
@@ -140,7 +129,7 @@ test("the new text carries no amendment mark, and the status names S19 to S24", 
       assert.doesNotMatch(line, /\(Amendment \d/, line.slice(0, 60));
     }
   }
-  assert.doesNotMatch(rfc, /^## Amendment 5/m);
+  assert.doesNotMatch(rfc, /^## Amendment \d/m);
   const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
   assert.match(status, /S19 to S24.*Carsten, 2026-11-10/);
   assert.match(rfc, /^- \*\*2026-11-10\*\* · NOC-106 · .*\(#\d+\)\.?$/m);

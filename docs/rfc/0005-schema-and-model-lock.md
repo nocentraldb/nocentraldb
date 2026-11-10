@@ -101,7 +101,7 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.set(element)` | `ncdb/set` | Set: add wins, lost removals stay readable | The elements, in the order of their canonical bytes |
 | `nc.link("collection")` | `ncdb/link` | Basic value whose value is an object id | The target, with its resolution status |
 | `nc.links("collection")` | `ncdb/links` | Set of object ids | The targets, each with its resolution status |
-| `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)) | The target's space id and object id; its state, ok, not accessible or missing, comes from the member's own copies |
+| `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)) | The target's space id and object id; its state, ok, not accessible or missing, comes from the member's own copies |
 | `nc.richText()` | reserved | Later RFC (Yjs and Yrs) | Later RFC |
 | `nc.stream()` | reserved | Later RFC | Later RFC |
 
@@ -140,7 +140,7 @@ export const model = nc.model({
 });
 ```
 
-`nc.ref` takes one collection name, or a list of them, as `nc.link` does: `nc.ref(["customers", "leads"])`. It stores the target's space id and object id, and merges as a basic value: the last writer wins ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). The lock writes it as a link, with its own type id:
+`nc.ref` takes one collection name, or a list of them, as `nc.link` does: `nc.ref(["customers", "leads"])`. It stores the target's space id and object id, and merges as a basic value: the last writer wins ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). The lock writes it as a link, with its own type id:
 
 ```json
 { "customer": { "rule": 1, "since": 1, "targets": ["customers"], "type": "ncdb/ref" } }
@@ -369,7 +369,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Add a field to a collection | The same. Objects written before read the new field as unset. |
 | Add a personal field | As adding a field. |
 | Append an option to a choice, or to a set of choices | Old clients keep the new option as written and read it as an unknown option (RFC 0004). |
-| Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)), until they upgrade. |
+| Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)), until they upgrade. |
 | Add a computed field or a view (name only, for now) | Computed values are derived locally; they are not in the changes. |
 | Add, change or remove an index, or change its scope | Indexes are built locally from the view (RFC 0006) and never travel in a change. A page cursor names its index and the model hash (RFC 0006), so a cursor from before the change is refused, not misread. |
 | Add, change or remove a description | Descriptions change no data. The model version stays. |
@@ -440,7 +440,7 @@ Old clients exist: an agent on a laptop that has been closed for three weeks, a 
 3. **An unknown option is kept as written.** A choice, or a set of choices, holding an option the old lock does not list keeps the raw value; the app reads it as an unknown option (RFC 0004).
 4. **A link into an unknown target collection is kept.** Its status reads **wrong collection** on the old client, and **ok** after the upgrade, with no change to the link.
 5. **Values outside the schema are kept, never repaired.** A value of the wrong kind (a string in an `ncdb/int` field, written by a buggy or hostile member) is kept as written, and the app reads the raw value, as RFC 0004 does for an option the reader's schema does not list. RFC 0004's contract (C5) requires that such a value causes no panic and that the state still converges; this RFC adds no read status for it. The SDK reads such a field as unset and names it in `$raw`, and `space.inspect` gives the raw value ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)). The SDK never writes such a value.
-6. **Parked data is visible.** The SDK reports, per space, how many changes and operations are parked and why (unknown collection, unknown field, unknown type, another model), and the highest model version among the parked changes and operations of the app's own model (decision D10). An app can show "Some data needs a newer version of this app" instead of hiding it. Changes parked as "another model" are counted apart, under their reason: their model version belongs to another lineage, and no upgrade of this app reaches it ([RFC 0002](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload)).
+6. **Parked data is visible.** The SDK reports, per space, how many changes and operations are parked and why (unknown collection, unknown field, unknown type, another model), and the highest model version among the parked changes and operations of the app's own model (decision D10). An app can show "Some data needs a newer version of this app" instead of hiding it. Changes parked as "another model" are counted apart, under their reason: their model version belongs to another lineage, and no upgrade of this app reaches it ([RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model)).
 
 The other direction is simpler. A newer client reading data written under an older model finds every field the older model did not have unset, which every field allows (see [No required fields and no defaults](#no-required-fields-and-no-defaults)).
 
@@ -449,7 +449,7 @@ What this does not do, stated plainly:
 - An old client cannot read, query or index data in fields it does not know. Computed fields and views on an old client are computed from what it understands, so they can differ from an upgraded client's until it upgrades. This is RFC 0002's reading of principle 2, which the owner confirmed (Carsten, 2026-11-07): every client that understands all the changes it holds reaches the same state.
 - A client that never upgrades never reads the new fields. It still keeps and forwards them.
 - Deprecated fields stay in every copy and in every sync. Deprecation saves the developer from the field, not the disk.
-- A change names the model that wrote it, but that stops honest and buggy apps, not a hostile member. A space records the `model.id` it was created with in its genesis ([RFC 0008, "Genesis"](0008-membership.md#genesis)), and the SDK refuses to write into a space of another model. Every sealed change carries its writer's `model.id` and model version in payload key 64 ([RFC 0002](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload)), and a member parks, whole, every change whose key 64 names a `model.id` other than the one of its own `model.lock.json` (decision D13). So two apps with different `model.id`s that write into one space, with the same field name for fields of different types, cannot make members fold one field by two rules. A member that writes no key 64, or writes the space's own `model.id`, has its change folded by the rules of each member's lock; it gains nothing new, since a member can already write any value into any field.
+- A change names the model that wrote it, but that stops honest and buggy apps, not a hostile member. A space records the `model.id` it was created with in its genesis ([RFC 0008, "Genesis"](0008-membership.md#genesis)), and the SDK refuses to write into a space of another model. Every sealed change carries its writer's `model.id` and model version in payload key 64 ([RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model)), and a member parks, whole, every change whose key 64 names a `model.id` other than the one of its own `model.lock.json` (decision D13). So two apps with different `model.id`s that write into one space, with the same field name for fields of different types, cannot make members fold one field by two rules. A member that writes no key 64, or writes the space's own `model.id`, has its change folded by the rules of each member's lock; it gains nothing new, since a member can already write any value into any field.
 
 ## Personal fields
 
@@ -718,7 +718,7 @@ Not taken:
 
 ### D10. The model version in changes
 
-Decided (Carsten, 2026-11-08): the writer's model version goes into the payload as a "may ignore" key, so an old client can report which model version it needs to read its parked changes. [RFC 0002](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload) puts it in payload key 64, together with the writer's `model.id` (D13).
+Decided (Carsten, 2026-11-08): the writer's model version goes into the payload as a "may ignore" key, so an old client can report which model version it needs to read its parked changes. [RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model) puts it in payload key 64, together with the writer's `model.id` (D13).
 
 Why: it costs a few bytes inside the ciphertext, the relay cannot see it, and old clients can ignore it.
 
@@ -749,7 +749,7 @@ Not taken:
 
 ### D13. Two models in one space
 
-Decided (Carsten, 2026-11-08): both of two guards. A space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model ([RFC 0008, "Genesis"](0008-membership.md#genesis)). Each change carries its writer's `model.id` in payload key 64, with the model version of D10, and a member parks every change of another model, whole ([RFC 0002](0002-change-and-log-format.md#amendment-5-the-writers-model-in-the-payload)).
+Decided (Carsten, 2026-11-08): both of two guards. A space records the `model.id` it was created with in its first control entry, and the SDK refuses to write into a space of another model ([RFC 0008, "Genesis"](0008-membership.md#genesis)). Each change carries its writer's `model.id` in payload key 64, with the model version of D10, and a member parks every change of another model, whole ([RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model)).
 
 Why: the first guard stops honest apps at the first write; the second makes a buggy or hostile client's changes park the same way on every member instead of folding by the wrong rule. Two apps that should share a space then share one model lineage.
 

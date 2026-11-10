@@ -64,17 +64,17 @@ tasks:
     # scripts/rfc.test.mjs (RFC 0002 exists and links back to RFC 0001) and
     # scripts/rfc-0004.test.mjs (RFC 0004 exists, links back to RFC 0001 and has
     # its sections), scripts/rfc-0004-examples.test.mjs (the byte-exact examples
-    # of RFC 0004 Amendment 1 are canonical CBOR and equal the committed
-    # vectors in docs/rfc/vectors/0004), scripts/rfc-0002-model.test.mjs (RFC
-    # 0002 Amendment 5 carries the writer's model in payload key 64, and its
-    # examples equal the committed vectors in docs/rfc/vectors/0002),
+    # of RFC 0004, "Byte-exact examples", are canonical CBOR and equal the committed
+    # vectors in docs/rfc/vectors/0004), scripts/rfc-0002-rules.test.mjs (the
+    # rules RFC 0002 states, among them the writer's model in payload key 64,
+    # and its examples equal the committed vectors in docs/rfc/vectors/0002),
     # scripts/rfc-0001.test.mjs (RFC 0001,
     # the FAQ, the use cases and factory/GENESIS.md name what the relay sees and
     # every erasure limit, and their links resolve; the /factory/**/* input
     # covers GENESIS.md), scripts/rfc-0008-alignment.test.mjs (RFC 0001, 0002,
     # 0003, 0006, GENESIS.md and the FAQ follow RFC 0008, and
     # factory/decisions/ records NOC-44), scripts/rfc-0007-alignment.test.mjs
-    # (RFC 0002's Amendment 4, use cases 4 and 5 and every text on what the
+    # (RFC 0002's "On the relay", use cases 4 and 5 and every text on what the
     # relay sees follow RFC 0007, and factory/decisions/ records NOC-47),
     # scripts/rfc-feedback.test.mjs (factory/decisions/ records NOC-55, pm's
     # tick reads the "RFC feedback" category, and RFC 0002 to 0005, 0007 and
@@ -86,13 +86,11 @@ tasks:
     # the docs, and factory/decisions/ records NOC-76),
     # scripts/rfc-0009-alignment.test.mjs (RFC 0001, 0003, 0005, 0006, 0008
     # and the use cases follow RFC 0009's Conflicts; NOC-75),
-    # scripts/rfc-0009-amendment-2.test.mjs (RFC 0009 follows RFC 0005's D16
-    # on unsafe ints in writes and in $raw; NOC-80),
-    # scripts/rfc-0009-amendment-3.test.mjs (the owner's decision on the
-    # TypeScript object id; NOC-80),
-    # scripts/rfc-0006-amendment-7.test.mjs and
-    # scripts/rfc-0009-amendment-4.test.mjs (RFC 0006 and RFC 0009 follow
-    # RFC 0005's D19 to D21 on references; NOC-92), and the tests of the
+    # scripts/rfc-0006-integrated.test.mjs and
+    # scripts/rfc-0009-integrated.test.mjs (each RFC is one complete text,
+    # and the rules it took in stand where they belong, among them RFC 0005's
+    # D16 on unsafe ints and the TypeScript object id, NOC-80, and RFC 0005's
+    # D19 to D21 on references, NOC-92), and the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on

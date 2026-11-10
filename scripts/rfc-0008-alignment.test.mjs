@@ -1,8 +1,6 @@
-// Asserts that the RFCs on main follow RFC 0008's decisions (NOC-44): RFC
-// 0002, 0003 and 0006 each carry an amendment that a dated changelog line at
-// the top announces, every point of that amendment links the RFC 0008
-// decision or section it follows (RFC 0001 states them in its text since
-// NOC-100, which rfc-0001-complete.test.mjs holds), the FAQ lists what the relay sees of
+// Asserts that the RFCs on main follow RFC 0008's decisions (NOC-44): the
+// RFCs state them in their text since NOC-100 and NOC-101, which their own
+// tests hold; here, the FAQ lists what the relay sees of
 // control changes, no limit of erasure is stated more weakly than RFC 0008
 // states it, and RFC 0008's "Conflicts" section says which of its points are
 // resolved. The test checks that each claim is there and points to its
@@ -35,15 +33,6 @@ const RELAY_RULES = `${RFC_0008_FILE}#how-the-relay-applies-the-rules`;
  * since NOC-101 folded its amendments in; the test of its control table below
  * checks them where they stand.
  */
-const AMENDMENTS = [
-  {
-    path: RFC_0002,
-    number: 3,
-    decisions: ["M3", "M6", "M7", "M11", "M18", "M19", "M24"],
-  },
-  { path: RFC_0003, number: 2, decisions: ["M6", "M9", "M15", "M20", "M26"] },
-];
-const anchorOf = (number) => `amendment-${number}-following-rfc-0008`;
 
 /** GitHub's heading anchor: lower case, punctuation dropped, spaces to dashes. */
 const slug = (heading) =>
@@ -92,52 +81,7 @@ const relativeLinks = (path) =>
       return { target, resolved, anchor };
     });
 
-/** True if `target`, relative to `from`, names a heading of RFC 0008 that exists. */
-const resolvesInto0008 = (from, target) => {
-  const [file, anchor] = target.split("#");
-  if (normalize(join(dirname(from), file)) !== RFC_0008 || !anchor) {
-    return false;
-  }
-  return anchors(read(RFC_0008)).has(anchor);
-};
-
-for (const { path, number, decisions } of AMENDMENTS) {
-  const anchor = anchorOf(number);
-
-  test(`${path} announces Amendment ${number} in a dated NOC-44 changelog line at the top`, () => {
-    const top = read(path).split(/^## /m)[0];
-    assert.match(
-      top,
-      new RegExp(
-        `^- \\*\\*\\d{4}-\\d{2}-\\d{2}\\*\\* · NOC-44 · .*\\(#${anchor}\\)`,
-        "m",
-      ),
-      `no dated changelog line for NOC-44 linking to #${anchor} above the first section`,
-    );
-  });
-
-  test(`${path} has the section of Amendment ${number}, and every point links RFC 0008`, () => {
-    const body = section(read(path), anchor);
-    assert.ok(body, `no section #${anchor}`);
-    const points = body.split("\n").filter((line) => line.startsWith("- **"));
-    assert.ok(points.length > 0, "the amendment lists no points");
-    for (const point of points) {
-      assert.ok(
-        targets(point).some((t) => resolvesInto0008(path, t)),
-        `a point links no heading of RFC 0008: ${point.slice(0, 100)}`,
-      );
-    }
-    for (const id of decisions) {
-      assert.match(
-        body,
-        new RegExp(`\\b${id}\\b`),
-        `the amendment does not name ${id}`,
-      );
-    }
-  });
-}
-
-test("every relative link in the amended RFCs, RFC 0008 and the FAQ resolves, anchors included", () => {
+test("every relative link in RFC 0001, 0002, 0003, 0006 and 0008 and the FAQ resolves, anchors included", () => {
   for (const path of [RFC_0001, RFC_0002, RFC_0003, RFC_0006, RFC_0008, FAQ]) {
     for (const { target, resolved, anchor } of relativeLinks(path)) {
       assert.ok(existsSync(join(root, resolved)), `${path}: ${target}`);
@@ -237,28 +181,6 @@ test("RFC 0002's list of what the relay sees names what it sees of control chang
   );
 });
 
-test("RFC 0002's amendments 1 and 2 are decided, D13 as A", () => {
-  const rfc = read(RFC_0002);
-  assert.ok(
-    !/Decision: open, for the owner/.test(rfc),
-    "a decision is still open",
-  );
-  const status = rfc.split("\n").find((l) => l.startsWith("**Status.**"));
-  assert.ok(
-    !/proposal for the owner/.test(status),
-    "the status still calls an amendment a proposal",
-  );
-  for (const id of ["D10", "D11", "D12", "D13"]) {
-    const block = rfc.split(`**${id}.`)[1]?.split(/\n\*\*D\d+\.|\n## /)[0];
-    assert.ok(block, `no decision ${id}`);
-    assert.match(
-      block,
-      /Decided: A \(Carsten, 2026-11-08\)/,
-      `${id} is not decided as A`,
-    );
-  }
-});
-
 test("RFC 0003 no longer lets a reader's account sign off an erasure, or delete a record at once", () => {
   const rfc = read(RFC_0003);
   assert.ok(
@@ -335,10 +257,12 @@ test("RFC 0008's Conflicts section says which points NOC-44 resolved", () => {
         (t) =>
           /#amendment-\d+-following-rfc-0008$/.test(t) ||
           t.startsWith("0001-nocentraldb.md#") ||
+          t.startsWith("0002-change-and-log-format.md#") ||
+          t.startsWith("0003-keys-and-cryptography.md#") ||
           // RFC 0006 states it in its text since NOC-101 folded its amendments in.
           t.startsWith("0006-local-view.md#"),
       ),
-      `conflict ${n} links no amendment and no section of RFC 0001 or RFC 0006`,
+      `conflict ${n} links no amendment and no section of RFC 0001, 0002, 0003 or 0006`,
     );
   }
 });

@@ -26,7 +26,7 @@ const SHREDDING = "0003-keys-and-cryptography.md#shredding-a-persons-key";
 const REMOVING =
   "0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key";
 const RFC_0003_DECISIONS =
-  "0003-keys-and-cryptography.md#decisions-for-the-owner";
+  "0003-keys-and-cryptography.md#9-post-quantum-key-agreement";
 const RFC_0003_SDK = "0003-keys-and-cryptography.md#how-the-sdk-hides-keys";
 const PERSON_KEY = "0003-keys-and-cryptography.md#the-person-key";
 

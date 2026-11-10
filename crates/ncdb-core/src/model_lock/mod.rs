@@ -138,7 +138,7 @@ pub struct Index {
     pub since: u64,
 }
 
-/// Which rows an index orders (RFC 0005, Amendment 3).
+/// Which rows an index orders (RFC 0005, "Indexes").
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Scope {
     /// Every space of the member: the lock leaves `scope` out.
@@ -222,7 +222,7 @@ pub enum Kind {
     /// `ncdb/links`, with the collections a target may be in.
     Links(Vec<String>),
     /// `ncdb/ref`, a reference into any space, with the collections a
-    /// target may be in (RFC 0005, Amendment 5).
+    /// target may be in (RFC 0005, "References into another space").
     Ref(Vec<String>),
     /// A plugin's field type: its id `<namespace>/<name>` and its options.
     Plugin {

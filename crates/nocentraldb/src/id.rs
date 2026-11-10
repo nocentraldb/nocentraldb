@@ -1,6 +1,6 @@
 //! The ids an app sees: an object id and a space id, 16 bytes each, and a
 //! change id, 32 bytes. Each shows and reads back as lowercase hex, an
-//! object id as 32 digits (RFC 0009, Amendment 3).
+//! object id as 32 digits (RFC 0009, "Get by id").
 
 use std::fmt;
 use std::str::FromStr;

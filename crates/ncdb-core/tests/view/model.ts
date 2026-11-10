@@ -2,7 +2,7 @@
 // model.lock.json from it; `crates/ncdb/tests/fixtures.rs` checks that the
 // lock is still what the build writes. Both collections have an index named
 // byName: index names are scoped per collection (RFC 0005). inSpace and
-// inSpaceByTitle run in one space at a time (RFC 0005, Amendment 3).
+// inSpaceByTitle run in one space at a time (RFC 0005, "Indexes").
 import { nc } from "../../../../packages/sdk/src/index.ts";
 
 export const model = nc.model({

@@ -2,23 +2,15 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-8
 
-**Changelog.**
-
-- **2026-11-07** · NOC-8 · The owner accepted decisions 1 to 7.
-- **2026-11-08** · NOC-37 · [Amendment 1: how field operations travel in a change](#amendment-1-how-field-operations-travel-in-a-change) defines the operation numbers and the canonical CBOR of the arguments of set, add, remove and an object's delete inside [RFC 0002](0002-change-and-log-format.md)'s operation map, with byte-exact examples. The owner accepted the recommendation of each of its decisions 8 to 14 (Carsten, 2026-11-08). The sentences it changes elsewhere are marked *(Amendment 1)*.
-- **2026-11-09** · NOC-35 · [Amendment 2: a create that carries arguments is malformed](#amendment-2-a-create-that-carries-arguments-is-malformed) parks a create (operation 0) that carries key 5 with the reason "malformed arguments", as a delete that carries key 3 already is. The owner decided it (Carsten, 2026-11-09). The sentence it adds is marked *(Amendment 2)*.
-- **2026-11-09** · NOC-75 · [Amendment 3: the nesting limit is decided](#amendment-3-the-nesting-limit-is-decided) links [RFC 0002, Amendment 6](0002-change-and-log-format.md#amendment-6-a-nesting-limit-and-a-clock-that-never-waits), which records the owner's decision on the nesting limit (NOC-24), where this RFC still called it pending. It decides nothing. The sentence it changes is marked *(Amendment 3)*.
-- **2026-11-09** · NOC-63 · [Amendment 4: a reference into another space](#amendment-4-a-reference-into-another-space) defines the field type `ncdb/ref`, a reference into another space, which the owner decided in NOC-29 (Carsten, 2026-11-09): its state, its operation, its merge, its resolution to one of three states and its encoding, with the byte-exact examples E15 to E17. The owner accepted the recommendation of each of its decisions 15 to 20 (Carsten, 2026-11-10). The sentences it changes are marked *(Amendment 4)*.
-
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
-**Status.** Decided. The owner accepted every recommendation in [Decisions for the owner](#decisions-for-the-owner) by merging this RFC (Carsten, 2026-11-07). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) (NOC-37) is decided too: the owner accepted every recommendation in its decisions 8 to 14 (Carsten, 2026-11-08). So is [Amendment 2](#amendment-2-a-create-that-carries-arguments-is-malformed) (NOC-35): a create that carries key 5 is malformed (Carsten, 2026-11-09). [Amendment 4](#amendment-4-a-reference-into-another-space) (NOC-63) carries out the owner's decision on NOC-29, a reference into another space (Carsten, 2026-11-09), and the owner accepted every recommendation in its decisions 15 to 20 (Carsten, 2026-11-10).
+**Status.** Decided. GENESIS.md reserves merge rules, the wire format and public API names for the owner. The owner accepted decisions 1 to 7 by merging this RFC in #26 (Carsten, 2026-11-07), 8 to 14 on how field operations travel in a change (Carsten, 2026-11-08), that a create with arguments is malformed (Carsten, 2026-11-09), a reference into another space (NOC-29, Carsten, 2026-11-09), and 15 to 20 on that reference (Carsten, 2026-11-10). Merge rules are hard to change once a type ships (a changed rule makes old and new clients diverge). The implementation tickets are NOC-16 (basic values) and NOC-17 (sets and links). The convergence harness that checks the rules is NOC-9. [Decisions](#decisions) lists each decision, and [History](#history) every change since the first version.
 
 **How to give feedback.** This RFC has no discussion of its own yet: start one in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), named after the RFC, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6); how this RFC's operations sit inside RFC 0002's operation map is [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) *(Amendment 1)*. Object deletion (see [Links](#links) for what this RFC assumes about it). Of object creation, this RFC defines only what two creates of one object id mean.
+**Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata (RFC 0002, NOC-6); how this RFC's operations sit inside RFC 0002's operation map is [How field operations travel in a change](#how-field-operations-travel-in-a-change). Object deletion, except how a deletion travels ([Creating and deleting an object](#creating-and-deleting-an-object)); [Links](#links) says what this RFC assumes about it. Of object creation, this RFC defines only what two creates of one object id mean.
 
 ## Summary
 
@@ -28,14 +20,14 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 | Set                                                       | The additions no removal has seen, and the removals           | The elements with at least one live addition       | An addition wins over a removal that did not see it (add wins)    | Each removal that lost to a concurrent addition                  |
 | Link (one target)                                         | A basic value whose value is an object id                     | The winning target, with its resolution status     | As for basic values                                               | As for basic values; plus a target that is deleted or missing    |
 | Links (many targets)                                      | A set of object ids                                           | The targets, each with its resolution status       | As for sets                                                       | As for sets; plus each target that is deleted or missing         |
-| Reference (one target, in any space) *(Amendment 4)*      | A basic value whose value is a space id and an object id      | The winning reference, with its resolution state   | As for basic values                                               | As for basic values; plus a target that is not accessible or missing |
+| Reference (one target, in any space)                      | A basic value whose value is a space id and an object id      | The winning reference, with its resolution state   | As for basic values                                               | As for basic values; plus a target that is not accessible or missing |
 
 In one sentence: every field's state is a pure function of the set of changes a copy has received, so the order in which they arrive cannot matter; and no change disappears without either a later writer having seen it or the app being able to read that it lost.
 
 ## Terms
 
 - **Change.** One signed, encrypted entry in a space's log, as RFC 0002 defines it. A change carries one or more operations; this RFC looks only at the operations on one field of one object.
-- **Operation.** What a change does to one field: for example "set the title to X" or "add the tag Y". The change around it belongs to RFC 0002; its meaning belongs to this RFC, and its encoding to [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) *(Amendment 1)*.
+- **Operation.** What a change does to one field: for example "set the title to X" or "add the tag Y". The change around it belongs to RFC 0002; its meaning belongs to this RFC, and its encoding to [How field operations travel in a change](#how-field-operations-travel-in-a-change).
 - **Change id.** The id RFC 0002 gives each change. An operation is identified by its change id plus its position in the change; this RFC writes "the operation's id" for that pair.
 - **Stamp.** The ordering metadata of RFC 0002, attached to every change: its 64-bit hybrid logical clock, with 48 bits of milliseconds since the Unix epoch and a 16-bit counter, compared as an unsigned number. The rules below rely only on the properties listed in [What this RFC needs from RFC 0002](#what-this-rfc-needs-from-rfc-0002).
 - **Author member id.** RFC 0003's id of the member that signed a change, a hash of its public keys. RFC 0002 carries it in every change's header.
@@ -93,7 +85,7 @@ A write whose id is already in R arrives after the write that replaced it. Step 
 
 ### Tie-break
 
-Stamp order: compare the stamps of RFC 0002 as unsigned numbers (O2), then the author member id as bytes, then the operation id as bytes. All three are in the change itself, so every member holds the same three values for every operation and orders them the same way. The author member id comes before the operation id so that, for two writes with equal stamps, which one wins does not depend on the hash of their content. Either order converges; see [owner decision 2](#decisions-for-the-owner).
+Stamp order: compare the stamps of RFC 0002 as unsigned numbers (O2), then the author member id as bytes, then the operation id as bytes. All three are in the change itself, so every member holds the same three values for every operation and orders them the same way. The author member id comes before the operation id so that, for two writes with equal stamps, which one wins does not depend on the hash of their content. Either order converges; see [owner decision 2](#2-tie-break-order-after-the-stamp).
 
 ### Late changes stay identifiable
 
@@ -186,7 +178,7 @@ Because the status is a function of the copy, two copies that hold the same set 
 
 The link stays as written, with status **deleted**. It is not removed, because nothing in the copy may be dropped silently, and because a deletion may be undone. If the target is restored, the link reads **ok** again with no change to the link.
 
-This RFC assumes only one thing about object deletion, which belongs to a later RFC: whether an object is deleted is itself a converged value, so every copy with the same changes agrees on it. [Owner decision 4](#decisions-for-the-owner) recommends a rule for it.
+This RFC assumes only one thing about object deletion, which belongs to a later RFC: whether an object is deleted is itself a converged value, so every copy with the same changes agrees on it. [Owner decision 4](#4-object-deletion) gives the rule for it.
 
 ### Two creates of one object id
 
@@ -202,7 +194,82 @@ Every copy computes this from the set of creates and writes alone, so the rule c
 
 The link stays as written, with status **missing**. When the target's changes arrive, the status becomes **ok** (or **deleted**, or **wrong collection**) without any change to the link. A link is never refused or dropped because its target is unknown: in island mode, a member may receive a task's `dependsOn` before the task it depends on, and dropping the link would lose data and make copies diverge.
 
-A link cannot point into another space: the SDK refuses to write one. If a change still names an object of another space (a bug, or a hostile member), the target is never found in this space, so the link reads **missing** forever. A copy cannot tell "not arrived yet" from "will never arrive"; the status says what the copy knows, no more. Members of the other space do not learn anything from this, since the link is encrypted in this space. A reference into another space is a field type of its own, `nc.ref`, which [Amendment 4](#amendment-4-a-reference-into-another-space) defines. *(Amendment 4.)*
+A link cannot point into another space: the SDK refuses to write one. If a change still names an object of another space (a bug, or a hostile member), the target is never found in this space, so the link reads **missing** forever. A copy cannot tell "not arrived yet" from "will never arrive"; the status says what the copy knows, no more. Members of the other space do not learn anything from this, since the link is encrypted in this space. A reference into another space is a field type of its own, `nc.ref`, which [References](#references) defines.
+
+## References
+
+Rights come from many small spaces (GENESIS.md), so related data often lives in different spaces: customers in one space, the orders that name them in another. A link points only into its own space ([Links](#links)). A **reference** points into any space, and is written `nc.ref("collection")` in the schema ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). It stores the target's space id and its object id, and merges like a basic value. On read, the SDK resolves it from the member's own copies to one of three states. It can be indexed. Computed fields and views never follow it, so every member of the space computes the same state (principle 2). It gives no access to the target's space ([A reference into another space](#a-reference-into-another-space)).
+
+### State and operations
+
+A reference is a field type of its own, `ncdb/ref` with rule version 1 ([decision 15](#15-the-type-id-and-its-operation)). It has no merge rule of its own: its state is a basic value's, and its value is a pair, the target's space id and object id.
+
+| Type                                 | State                                                    | Read value                                       | Concurrent writes   | What stays visible to the app                                        |
+| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------ | ------------------- | -------------------------------------------------------------------- |
+| Reference (one target, in any space) | A basic value whose value is a space id and an object id | The winning reference, with its resolution state | As for basic values | As for basic values; plus a target that is not accessible or missing |
+
+- **set** (1) writes it, with set's arguments `{1: value, 2: replaces}`, as for every basic value; `null` clears it. It is the type's only operation. Add, remove and delete are not defined on it, so a member parks them with the reason "unknown operation" ([Operations a member does not understand](#operations-a-member-does-not-understand)).
+- **It converges by the argument for basic values** ([Why it converges](#why-it-converges)). State, apply, read and outcome are basic values', and the value enters them only where a basic value's does: as a whole, compared by its canonical bytes (O5).
+- **One target per field.** NOC-29 decided a single reference. A field of many references is RFC 0005's D22.
+
+### How a reference resolves
+
+As for a link, the state is not part of the reference: the reference keeps the space id and the object id as written, whatever happens to the target. The SDK works out the state when the app reads the reference, from the member's own copies of the spaces it holds. "Readable" in the owner's decision is **ok** here, the working name links use ([decision 7](#7-placeholder-names)); RFC 0005's D20 names them for the app: `"ok"`, `"notAccessible"` and `"missing"`.
+
+| State                | Meaning                                                                                                                                                                                                                                  |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ok**               | The member holds a copy of the target's space, and that copy holds the target, not deleted, in a collection the schema names for the field.                                                                                             |
+| **not accessible**   | The member holds no copy of the target's space: it never joined it, or it left and its rows of the space were deleted ([decision 20](#20-when-a-target-is-not-accessible)).                                                                 |
+| **missing**          | The member holds a copy of the target's space, but the copy holds no object with that id, or holds it deleted, or in a collection the schema does not name for the field ([decision 18](#18-a-target-in-a-collection-the-schema-does-not-list)). An erased target reads missing, as a deleted one does. |
+
+Unlike a link's status, the state differs from member to member. Two members of the orders' space hold the same changes and the same reference, but only one of them may be in the customers' space. So the state is never part of the space's shared state (principle 2): no computed field, view, index or other stored value depends on it, and a computed field or view never follows a reference into its target. The computed-fields RFC must refuse one that tries. A member shows the state as local information only, as principle 3 allows for what differs from member to member. Two members that hold the same copies of the same spaces compute the same state.
+
+The state changes without any change to the reference:
+
+- **The target arrives** in the member's copy of its space: **missing** becomes **ok**.
+- **The target is deleted:** **ok** becomes **missing**, and **ok** again if it is restored ([A link whose target was deleted](#a-link-whose-target-was-deleted)).
+- **The member joins** the target's space: **not accessible** becomes **missing** until the target arrives, then **ok**. **It leaves**, and its rows of the space are deleted: the state becomes **not accessible**.
+
+A copy cannot tell a target that has not arrived from one that never will, as for links ([A link to an object the member has not received](#a-link-to-an-object-the-member-has-not-received)). The state says what the member's copies hold, no more.
+
+### The value and its encoding
+
+The reference travels as a set (1) in RFC 0002's operation map, exactly as [How field operations travel in a change](#how-field-operations-travel-in-a-change) defines it for basic values. Only the value, argument 1, is new ([decision 16](#16-how-the-value-is-encoded)):
+
+```text
+arguments (CBOR map in key 5), as for every set
+├── 1 value         the reference, or null to clear the field
+└── 2 replaces      array of operation ids
+
+reference (CBOR array of two)
+├── 0 space id      16-byte byte string (RFC 0002, Space)
+└── 1 object id     16-byte byte string (RFC 0002, Object ids)
+```
+
+- **Written `[space id, object id]`,** a CBOR array of two 16-byte byte strings, in that order. It has one encoding and takes 35 bytes.
+- **The field's type is not encoded.** A member finds `ncdb/ref` in its `model.lock.json`, from the collection and field names, as for every field ([Where field operations sit in a change](#where-field-operations-sit-in-a-change)).
+- **Depth.** The array sits at level 7, where [the depth count](#the-arguments-of-each-operation) puts the value, and its byte strings at level 8, well inside the 26 levels a value may nest.
+- **A value that does not fit,** such as a bare 16-byte object id or an array whose items are not 16-byte byte strings, written by a buggy or hostile member, is applied and kept as written, as every basic value is. It names no object, so it reads **missing**, and `space.inspect` returns it as written ([decision 17](#17-a-value-that-does-not-fit)). This is what [The arguments of each operation](#the-arguments-of-each-operation) does for a link target that is not 16 bytes.
+- **The space id may be the referencing object's own space** ([decision 19](#19-a-reference-into-its-own-space)). Such a reference resolves as any other, to **ok** or **missing**, because the member holds its own space. Computed fields and views do not follow it either.
+
+### What the relay and the members see
+
+**The relay sees nothing new.** The reference lives in the payload of a change of the referencing space, which is AEAD ciphertext under that space's key (RFC 0002, The payload). The relay cannot tell a reference from any other value, and cannot link the two spaces through it. A reference adds 35 bytes to the plaintext, as a value of that size does.
+
+**Members of the referencing space** learn the target's space id and object id: that an order refers to some object in some other space, and which, by their random ids. They learn nothing of the target's content, and two references with the same space id tell them only that their targets share a space. Knowing a space id grants nothing: the relay checks membership on every request ([RFC 0007](0007-relay.md)), and a space's content is encrypted under keys only its members hold ([RFC 0003](0003-keys-and-cryptography.md)).
+
+**Members of the target space** learn nothing from a reference, unless they are members of the referencing space too.
+
+### What this does not do
+
+Stated plainly (principle 4):
+
+- **It gives no access.** A reference does not let a member of the orders' space read the customer. **not accessible** says only that this member cannot read the target; it says nothing about whether the target exists.
+- **It does not keep the target alive.** Nothing in the target's space knows it is referenced. Deleting or erasing the customer does not touch the orders that name it; they read **missing**. There is no referential integrity across spaces, and no cascade.
+- **Missing has several causes.** A target that has not arrived, was never created, was deleted or erased, or is in a collection the schema does not name all read **missing**. The state alone does not tell them apart.
+- **It differs from member to member,** and changes without a change to the referencing object. Whether a subscription re-runs when it changes is RFC 0005's D21.
+- **Nothing computed follows it.** "All open orders of customers in Berlin" is no query: the app reads the orders through the index on the reference (RFC 0005's D19), and the customers in their own space. That is the price of principle 2.
+- **A hostile member can write any reference,** including one to a space id and object id it guessed or learned elsewhere. It reads **not accessible** or **missing** for members who cannot read that target, and gives nobody access.
 
 ## The plugin contract
 
@@ -236,79 +303,13 @@ The harness runs in `pnpm gates` and is deterministic for a seed, which it print
 
 What the contract does not check: whether the merge does what users expect, how large the state grows, and whether the type is fast. Those are reviewed by people. The contract only guarantees that every copy agrees and that every change is accounted for.
 
-## Rejected options
+## How field operations travel in a change
 
-| Option                                                                                     | Why not                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Plain last writer wins, losing writes dropped                                              | A week-old offline edit disappears without a trace. Breaks principle 3 ("nothing is lost silently").                                                                                    |
-| A multi-value register as the read value (the app always gets a list of concurrent values) | Every app must handle several values for every field. RFC 0001 promises the last writer wins. We keep the multi-value state underneath and read one winner.                            |
-| Wall-clock time alone as the stamp                                                         | Not causal: a member with a slow clock can correct a value and still lose to the value it corrected. O3 rules it out.                                                                    |
-| First or last writer by arrival order                                                      | Arrival order differs per member, so copies diverge. This is the broken fixture NOC-9 uses.                                                                                             |
-| Recording "arrived late" in the converged state                                            | Arrival differs per member, so copies diverge. Lost-to-a-write-not-seen is the convergent form of "late".                                                                               |
-| Requiring causal delivery                                                                  | Members exchange changes in island mode and after compaction in any order, and the harness delivers in random order. A rule that needs causal delivery diverges when it is violated.  |
-| Remove wins for sets                                                                        | A removal from a device that was offline for a week silently undoes additions others made meanwhile. A lost removal is cheaper to show and redo than a lost addition.                    |
-| Two-phase set (a removed element can never come back)                                       | A tag removed once can never be added again; users expect to re-add.                                                                                                                    |
-| Last-writer-wins element set (add and remove compared by stamp)                             | Whether an element survives depends on clocks, and the losing addition is lost silently.                                                                                                |
-| Counters for numbers (concurrent increments add up)                                        | A different field type with different semantics; RFC 0001 ships numbers as last writer wins. A counter can come later as its own type.                                                 |
-| Dropping links whose target is missing or deleted                                          | The target may arrive later or be restored; dropping loses data and makes copies diverge during sync.                                                                                   |
-| Refusing a link to an unknown target (referential integrity)                               | Needs one place that sees every write before it is accepted. NoCentralDB has none (RFC 0001, "What it is not").                                                                        |
-| Plugins as code loaded at run time, in any language                                        | Every member must run the identical rule natively and in WebAssembly. Until a plugin RFC says otherwise, a plugin is Rust compiled into the core.                                      |
-
-## Decisions for the owner
-
-GENESIS.md reserves merge rules and public API names for the owner. Each decision below has options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-07). [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) adds decisions 8 to 14, whose recommendations the owner accepted as well (Carsten, 2026-11-08) *(Amendment 1)*. [Amendment 4](#amendment-4-a-reference-into-another-space) adds decisions 15 to 20, whose recommendations the owner accepted as well (Carsten, 2026-11-10) *(Amendment 4)*.
-
-1. **What basic values keep when writes conflict.**
-   - A: Last writer wins on read, losing writes stay as conflicts until someone writes having seen them (this RFC). Recommended: keeps RFC 0001's promise and principle 3.
-   - B: Plain last writer wins; losing writes stay only in the log and the archive. Simpler state, but the app cannot see the loss.
-   - C: Expose every concurrent value (multi-value register). Every app must handle lists.
-2. **Tie-break order after the stamp.**
-   - A: Author member id, then operation id (this RFC). Recommended: who wins a tie depends on who wrote, not on a hash of the content.
-   - B: Operation id only. One comparison fewer; the winner of a tie is effectively random.
-3. **Sets: add wins or remove wins.**
-   - A: Add wins (this RFC). Recommended: no addition is lost; a lost removal stays readable.
-   - B: Remove wins. A late removal undoes additions it never saw.
-4. **Object deletion (assumed here, defined in a later RFC).**
-   - A: Whether an object is deleted is a basic boolean value with this RFC's rule. A deletion can be undone; edits to a deleted object are kept and become visible again on restore; links read **deleted**. Recommended: nothing is lost, and the rule needs no new proof.
-   - B: Deletion is final and wins over everything. Simpler for apps, but a late edit to a deleted object is lost silently.
-5. **Links to targets the copy does not hold.**
-   - A: Keep the link, read as **missing**, resolve when the target arrives (this RFC). Recommended.
-   - B: Hide such links from reads until the target arrives. Same state, but an app cannot show "waiting for data".
-6. **No field type may assume causal delivery.**
-   - A: Yes (this RFC). Recommended: matches the harness and island mode. Cost: each field keeps the ids that were replaced (R and T above), which grow until compaction.
-   - B: RFC 0002 guarantees causal delivery, and field types may rely on it. Smaller state, but one relay or sync bug that reorders changes makes copies diverge.
-7. **Placeholder names.** `value`, `conflicts`, `lostRemovals`, `outcome`, and the statuses **ok**, **deleted**, **missing** and **wrong collection** are working names. Recommended: keep them in this RFC and decide the public names in the SDK's API review, not here.
-
-## Agreement with GENESIS.md and RFC 0001
-
-This RFC agrees with `factory/GENESIS.md` and [RFC 0001](0001-nocentraldb.md) on these points:
-
-- **Principle 2, every copy converges.** Every field's state is a function of the set of changes; the contract makes the harness check it for every type, built in or plugin.
-- **Principle 3, nothing is lost silently.** Losing writes and lost removals stay in the state and readable; deleted or missing link targets keep their links.
-- **Principle 7, one core.** C3 requires identical results natively and in WebAssembly.
-- **RFC 0001, field types.** Basic values: the last writer wins. Sets: additions and removals from every member merge. Links: point to another object in the same space. The FAQ's answer "both changes are kept" holds: the losing change stays readable.
-- **"A client keeps data it does not understand yet."** A choice outside the reader's list is kept as written.
-- **RFC 0002.** It meets O1 to O5, confirms that causal delivery is not guaranteed, and leaves concurrent creates of one object id to this RFC (its conflict point 3), which [Two creates of one object id](#two-creates-of-one-object-id) answers.
-
-It names these conflicts and limits for the owner and pm:
-
-1. **"Late" in principle 3.** GENESIS.md says a change that "arrives late … and loses to a newer change stays identifiable as such". Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher. This RFC makes identifiable what converges: that a change lost to a change its author had not seen. If the owner wants arrival time as well, it can only be local, per-member information, and GENESIS.md should say so. *Resolved:* GENESIS.md now uses this definition (Carsten, 2026-11-07).
-2. **"Last writer" is the highest stamp, not the last in real time.** With the wall-clock component of O4, a member whose clock runs ahead wins concurrent writes it should lose, until the others' clocks pass it. No member can correct this on its own without diverging. RFC 0002 decides that stamps far in the future are not refused, neither by the writing member, nor by a receiving member, nor by the relay, because refusing them on some members and not on others would break convergence. Members only warn when a received clock is more than a minute ahead of their own. This RFC states the limit (principle 4).
-3. **Concurrent increments do not add up.** RFC 0001's `priority: nc.int()` is last writer wins. Two agents that raise a priority by one at the same time raise it by one, not two, and one write shows as a conflict. RFC 0001 does not promise otherwise, but readers may assume it.
-4. **A missing link target is ambiguous.** A copy cannot tell a target that has not arrived from one that never will.
-5. **State grows.** The replaced ids (R and T) grow with every overwrite and removal. Compaction (a later RFC) must decide when they may be dropped without letting an old, replaced change come back.
-
-## Amendment 1: how field operations travel in a change
-
-Added on 2026-11-08 for NOC-37, after this RFC was merged. [RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This RFC defined the operations of basic values, sets and links by their meaning only: set with the writes it replaces, add with its tag, remove with the tags it observed. No RFC said how one becomes the other. The implementation of basic values (NOC-16, pull request #51) found the gap and did not guess. Without it, the fold cannot read field values from real changes.
-
-The encoding is a wire format, which GENESIS.md reserves for the owner. The owner decided it in [Decisions for the owner (8 to 14)](#decisions-for-the-owner-8-to-14), accepting every recommendation (Carsten, 2026-11-08); the text below describes the decided options. It changes no merge rule: state, apply, read and outcome above stay as they are. It changes nothing in RFC 0002 either: it fills in what RFC 0002 left to the field type. The sentences it changes elsewhere in this RFC are marked *(Amendment 1)*.
-
-It also says how an object's deletion travels, because the fold of creates and deletions (NOC-39) needs it: [owner decision 4](#decisions-for-the-owner) already made deletion a boolean basic value of the object, so this amendment only gives it an operation and an encoding. Everything else about deletion (who may delete, what a deleted object shows) stays with the later RFC on deletion. Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
+[RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This section fills them in for the types of this RFC, and for an object's deletion, which [owner decision 4](#4-object-deletion) made a boolean basic value of the object. It changes no merge rule: state, apply, read and outcome above stay as they are. Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
 
 ### Where field operations sit in a change
 
-A field operation is one entry of the payload's operation array (RFC 0002, payload key 4), so it is an RFC 0002 operation map. This amendment fills in key 4 and key 5 for the types of this RFC:
+A field operation is one entry of the payload's operation array (RFC 0002, payload key 4), so it is an RFC 0002 operation map. This section fills in key 4 and key 5 for the types of this RFC:
 
 ```text
 operation (RFC 0002's map, keys unchanged)
@@ -334,14 +335,14 @@ operation id (CBOR array of two)
 - **The operation's own id is not encoded.** It is the change id plus the operation's position in the array (RFC 0002, Operation ids). The tag of a set addition is that id, so an add carries no tag of its own.
 - **The field's type is not encoded either.** A member finds it in its `model.lock.json`, from the collection and field names (keys 2 and 3), and reads the operation number in the context of that type. An operation without a field (key 3 absent) is a create or a delete of the object.
 
-The frame, the header and the rest of the payload do not change. Every byte of this amendment sits inside the payload, which is encrypted (see [What the relay sees](#what-the-relay-sees)).
+The frame, the header and the rest of the payload do not change. Every byte of this section sits inside the payload, which is encrypted (see [What the relay sees](#what-the-relay-sees)).
 
 ### Operation numbers
 
 | Number    | Operation                     | Field types                                                      | Arguments                             |
 | --------- | ----------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
 | 0         | create the object (RFC 0002)  | none: it names a collection, not a field                         | none: keys 3 and 5 are absent         |
-| 1         | **set**                       | basic value (string, number, boolean, choice), link (one target), reference *(Amendment 4)* | `{1: value, 2: replaces}`             |
+| 1         | **set**                       | basic value (string, number, boolean, choice), link (one target), reference | `{1: value, 2: replaces}`             |
 | 2         | **add**                       | set, links (many targets)                                        | `{1: element, 2: replaces}`           |
 | 3         | **remove**                    | set, links (many targets)                                        | `{1: element, 3: observed}`           |
 | 4         | **delete**                    | none: it writes whether the object is deleted                    | `{1: true or false, 2: replaces}`; key 3 absent |
@@ -381,6 +382,8 @@ A reader treats such a list as a set: it accepts a list that is unsorted or name
 
 **The value.** Any value of RFC 0002's profile, inside the depth limit below. Whether it fits the field's kind, such as a text in an integer field, an option the reader's schema does not list, or a link target that is not 16 bytes, is not a question of encoding. The operation is applied, and the field type decides how the read shows the value, as this RFC does for choices ("unknown option") and as NOC-16 does for a value of the wrong kind (kept on arrival). A link target that is not a 16-byte byte string names no object, so it resolves as **missing**.
 
+**A personal value.** The personal fields RFC decides where the sealed personal value sits. RFC 0002 puts it in key 5; with arguments in key 5, the natural place is argument 1, which leaves `replaces` readable to members, not to the relay.
+
 **An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a transaction on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
 
 - A transaction that writes a field twice encodes only its last write.
@@ -389,11 +392,11 @@ A reader treats such a list as a set: it accepts a list that is unsorted or name
 
 A reader still accepts a change with several operations on one field and applies each by this RFC's rules. Two sets on one field in one change replace nothing of each other; they have the same stamp and author, so the higher position wins the tie-break and the other one is a conflict.
 
-**Depth.** RFC 0002's decoder allows 32 levels counted from the frame: the frame at depth 1, the header map at 2, the payload map at 3 (decided by the owner in NOC-24, [RFC 0002, Amendment 6](0002-change-and-log-format.md#amendment-6-a-nesting-limit-and-a-clock-that-never-waits)). Below them sit the operation array (4), the operation map (5), the arguments map (6), the value and the lists of ids (7), an operation id (8), and its change id and position (9). A value therefore nests at most 26 levels, counting itself. A basic value, a set element and a link target are one level. The SDK refuses to write a deeper value. A payload that holds one does not decode after decryption, so nothing of its change is folded; which log state such a change takes is RFC 0002's question (NOC-38, RFC 0002 Amendment 2), not this amendment's. *(Amendment 3.)*
+**Depth.** RFC 0002's decoder allows 32 levels counted from the frame: the frame at depth 1, the header map at 2, the payload map at 3 (decided by the owner in NOC-24, [RFC 0002, "The CBOR profile"](0002-change-and-log-format.md#the-cbor-profile)). Below them sit the operation array (4), the operation map (5), the arguments map (6), the value and the lists of ids (7), an operation id (8), and its change id and position (9). A value therefore nests at most 26 levels, counting itself. A basic value, a set element and a link target are one level. The SDK refuses to write a deeper value. A payload that holds one does not decode after decryption, so nothing of its change is folded; which log state such a change takes is RFC 0002's: it is parked ([RFC 0002, "A payload that decrypts but does not decode"](0002-change-and-log-format.md#a-payload-that-decrypts-but-does-not-decode)).
 
 ### Creating and deleting an object
 
-[Owner decision 4](#decisions-for-the-owner) made deletion a basic boolean value of the object, and [Two creates of one object id](#two-creates-of-one-object-id) made the object's collection a basic value fed by its creates. Both travel as operations on the object, with no field (key 3 absent):
+[Owner decision 4](#4-object-deletion) made deletion a basic boolean value of the object, and [Two creates of one object id](#two-creates-of-one-object-id) made the object's collection a basic value fed by its creates. Both travel as operations on the object, with no field (key 3 absent):
 
 - **create** (number 0, RFC 0002) writes `{1: object id, 2: collection, 4: 0}`, without key 5. Its collection (key 2) is the value it writes; it replaces nothing, as RFC 0004 says, so it carries no arguments.
 - **delete** (number 4) writes `{1: object id, 2: collection, 4: 4, 5: {1: deleted, 2: replaces}}`. The arguments are set's: `true` deletes the object, `false` restores it, and `replaces` names the deletes of this object, winner and conflicts, that the author's copy held. It merges as a basic value: the last writer wins, and a delete that lost stays readable as a conflict. Before any delete, an object is not deleted.
@@ -403,19 +406,21 @@ Rules for delete:
 - **It belongs to the object, not to the collection it names.** Key 2 is required by RFC 0002 and holds the collection the author's copy showed for the object. The deletion state is the object's, whichever collection a delete names. A delete that names a collection the member's model does not know is parked like any operation on an unknown collection (RFC 0002, Versioning).
 - **A value other than `true` reads as not deleted.** A value of the wrong kind is applied, as for every basic value ("The value" above), and reads as not deleted; this is what NOC-17's object model does.
 - **A delete with key 3 present is malformed.** It is parked with the reason "malformed arguments", like a delete without key 5 or without `replaces`.
-- **A create with key 5 present is malformed.** It is parked with the reason "malformed arguments", as a delete with key 3 present is. *(Amendment 2.)*
+- **A create with key 5 present is malformed.** It is parked with the reason "malformed arguments", as a delete with key 3 present is.
 - **A create and a delete are independent.** A create neither deletes nor restores, and a delete does not need the create to have arrived: it is kept, and applies to the object once it exists, as a link to a missing target is kept (RFC 0004, Links).
+
+Everything else about deletion, such as who may delete or restore, what an app sees of a deleted object, and how deletion meets compaction and erasure, belongs to a later RFC on deletion.
 
 ### Operations a member does not understand
 
-RFC 0002 Amendment 1 (D10) decides parking per operation, in its fold step 7. This amendment adds the cases of an operation on a field the member's model knows:
+RFC 0002's D10 decides parking per operation, in step 7 of [What a member does with a change it receives](0002-change-and-log-format.md#what-a-member-does-with-a-change-it-receives). This section adds the cases of an operation on a field the member's model knows:
 
 | The operation                                                                                                                       | The member                                                                       |
 | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | has a number the field's type does not define, for example 9 on a basic value, or 3 (remove) on a basic value                       | parks it, with the reason "unknown operation"; the rest of the change is folded  |
 | has an argument key from 4 to 63 that the operation does not define                                                                 | parks it, with the reason "unknown argument"                                     |
 | has an argument key from 64 up that the operation does not define                                                                   | applies it as if the key were absent                                             |
-| has malformed arguments: key 5 missing or not a map, a required key missing, a list that is not an array, or an item of a list that is not `[32-byte byte string, unsigned integer]` | parks it, with the reason "malformed arguments" ([decision 12](#decisions-for-the-owner-8-to-14)) |
+| has malformed arguments: key 5 missing or not a map, a required key missing, a list that is not an array, or an item of a list that is not `[32-byte byte string, unsigned integer]` | parks it, with the reason "malformed arguments" ([decision 12](#12-malformed-arguments)) |
 | has a value outside the field's kind                                                                                                | applies it (see "The value" above)                                               |
 | names ids it never saw, or forms a cycle with another operation                                                                     | applies it, as [Why it converges](#why-it-converges) says                        |
 
@@ -439,7 +444,7 @@ Each example is one operation map, as it sits in the payload's operation array, 
 - change id `A` also names the delete in E14;
 - the collection `tasks` with the fields `title` (string), `priority` (integer), `tags` (set of strings), `parent` (link) and `dependsOn` (links).
 
-The bytes are written by [`vectors/0004/generate.py`](vectors/0004/generate.py) from the descriptions below, with Python's cbor2 6.2.1 in canonical mode, into `vectors/0004/E1.hex` to `E14.hex`. `scripts/rfc-0004-examples.test.mjs` checks, in `pnpm gates`, that each example's hex below decodes under RFC 0002's profile with a strict reader of its own, encodes again to the same bytes, and equals the committed vector. The bytes were also decoded and re-encoded to the same bytes by `ncdb_core::cbor`, outside the gate. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from these examples and commit them as test vectors.
+The bytes are written by [`vectors/0004/generate.py`](vectors/0004/generate.py) from the descriptions below, with Python's cbor2 6.2.1 in canonical mode, into `vectors/0004/E1.hex` to `E14.hex`. `scripts/rfc-0004-examples.test.mjs` checks, in `pnpm gates`, that each example's hex below decodes under RFC 0002's profile with a strict reader of its own, encodes again to the same bytes, and equals the committed vector. The bytes were also decoded and re-encoded to the same bytes by `ncdb_core::cbor`, outside the gate. NOC-16 (basic values and the link) and NOC-17 (sets and links) build their encoders and decoders from E1 to E11, and NOC-39 the fold of creates and deletions from E12 to E14; each commits them as test vectors.
 
 **E1. set, the first write to a string.** `title` becomes "Ship v1"; nothing is replaced.
 
@@ -603,176 +608,9 @@ a401501111111111111111111111111111111102657461736b73040405a201f4
 aaaaaaaaaa03
 ```
 
-### What the relay sees
+**References.** E15 to E17 use the ids above, with three more: the space `S`, 16 bytes of `33`, and the customers `C1`, 16 bytes of `44`, and `C2`, 16 bytes of `55`, both in `S`. The object `T1` is an order in the collection `orders`, whose field `customer` is `nc.ref("customers")`.
 
-Nothing changes for the relay. Field operations, their numbers, values, `replaces` and `observed` live only inside the payload, which is AEAD ciphertext (RFC 0002, The payload). The header, the frame and control changes are untouched, and the relay still sees exactly what [RFC 0002 lists](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot).
-
-One effect is stated plainly (principle 4): `replaces` and `observed` make the plaintext larger, by about 37 bytes per named operation, so a write that resolves many conflicts produces a larger change. The relay sees the size of the ciphertext, as it does for every change; padding to a multiple of 256 bytes (RFC 0002, D8) blurs it but does not hide it. Inside the space, the lists show members which writes an author had seen, which they already learn from its dependencies.
-
-### What this means for the RFCs and tickets built on it
-
-- **NOC-16 and NOC-17** encode and decode set, add and remove as above, and take E1 to E11 as test vectors.
-- **NOC-39** builds the fold of creates and deletions from [Creating and deleting an object](#creating-and-deleting-an-object), with E12 to E14 as test vectors. The encoders and decoders themselves are built after this amendment is merged, in those tickets or in a ticket pm opens for them.
-- **RFC 0002** needs no change. Its sentence "RFC 0004 defines it for basic values, sets and links" now points here.
-- **The personal fields RFC** decides where the sealed personal value sits. RFC 0002 puts it in key 5; with arguments in key 5, the natural place is argument 1, which leaves `replaces` readable to members, not to the relay. That RFC decides; nothing here depends on it.
-- **The migrations RFC** inherits the rule that a new operation is a new rule version.
-- **The later RFC on deletion** keeps everything but the encoding: who may delete or restore, what an app sees of a deleted object, and how deletion meets compaction and erasure.
-
-### Rejected options
-
-| Option                                                                                     | Why not                                                                                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| New keys in RFC 0002's operation map for `replaces` and `observed` (keys 6 and 7)           | Changes RFC 0002's map for every field type to carry two of this RFC's concepts. Key 5 already belongs to the field type, and the core of NOC-14 would park the new keys anyway as unknown "must understand" keys.          |
-| The arguments as a positional array, `[value, replaces]`                                   | No room for a "may ignore" argument, and a new argument changes what every position means. A map with small integer keys costs one byte per argument more.                                                                  |
-| Operation numbers per type, each starting at 1 (set 1 on basic values, add 1 on sets)      | An operation sent to the wrong type is misread as that type's operation 1 instead of being parked, and a log cannot name an operation without the field's type.                                                              |
-| Operation names as text (`"set"`, `"add"`)                                                | RFC 0002 makes key 4 an unsigned integer, and text costs bytes in every operation.                                                                                                                                           |
-| An operation id as one byte string, change id followed by the position                    | A hand-written binary layout inside CBOR, with its own integer encoding: the risk RFC 0002's D4 avoided. The two-item array is plain CBOR and costs 3 bytes more.                                                           |
-| An operation id shortened to a prefix of the change id, or hashed                          | Two operations could share it, and a member could not check a reference by recomputing it.                                                                                                                                   |
-| Leaving an empty `replaces` out                                                            | Two encodings of the same operation if readers accept both, and a "required key" check that fails on the most common write.                                                                                                 |
-| A bare position in `replaces` naming an operation of the same change                       | A second form of operation id, for a case the SDK avoids by writing a transaction's net effect.                                                                                                                              |
-| Rejecting an unsorted or repeating list                                                    | A new failure mode that buys no convergence: the state depends on the set of ids only.                                                                                                                                       |
-| Reading malformed arguments leniently, for example a missing `replaces` as empty          | Converges, but a write without `replaces` would silently turn into a conflict, and each version of the core could be lenient in other ways.                                                                                  |
-| Rejecting the whole change for one malformed operation                                     | Rejected is for the checks of RFC 0002 Amendment 1 (signature, membership, key), which cover the whole change. One bad operation would hide its change's other operations from every member.                               |
-| Deletion as a set (number 1) on a reserved field name, such as `$deleted`                  | [RFC 0005](0005-schema-and-model-lock.md) already reserves names that start with `$` for the core, so the name is free; but no `model.lock.json` declares the field, so every member would special-case one name in its field lookup, and a member without that case would park a deletion as a write to an unknown field.                                         |
-| Deletion as a set (number 1) without a field (key 3 absent)                               | The meaning of set would depend on whether key 3 is there; a client that knows set but not deletion would misread it instead of parking it.                                                                                   |
-| Separate delete and restore operations                                                    | Two numbers for one boolean value; a restore would need to name the deletes it undoes anyway, which is what `replaces` already does.                                                                                         |
-| Adding operations to a type under the same rule version                                    | An old client would park what a new client applies under the same version; this RFC fixes a merge rule by its type id and version.                                                                                          |
-
-### Decisions for the owner (8 to 14)
-
-GENESIS.md reserves the wire format for the owner. Each decision lists its options and the recommendation; the owner accepted every recommendation (Carsten, 2026-11-08), and the text above describes the decided options.
-
-8. **Where the arguments sit.**
-   - A: In RFC 0002's key 5, as a map with small integer keys: 1 value or element, 2 `replaces`, 3 `observed`; 4 to 63 "must understand", 64 up "may ignore". Recommended: RFC 0002's map stays as it is, key 5 already belongs to the field type, and the map leaves room for arguments the way RFC 0002's maps do.
-   - B: New keys 6 and 7 in RFC 0002's operation map. Changes RFC 0002 for one RFC's concepts.
-   - C: A positional array in key 5. One byte smaller per argument, no room to extend.
-
-   Decided: A (Carsten, 2026-11-08).
-
-9. **Operation numbers.**
-   - A: One table for the built-in types: 0 create (RFC 0002), 1 set, 2 add, 3 remove, 4 delete; 5 to 63 for later built-in types; plugin types from 64 up, within their type id; no number reused. Recommended: an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type.
-   - B: Numbers per type, each starting at 1. Fewer reserved numbers; a mismatched operation is misread.
-
-   Decided: A (Carsten, 2026-11-08).
-
-10. **Operation ids in `replaces` and `observed`.**
-    - A: A two-item array, `[change id, position]`; a list sorted by bytes, without repeats, and written as an empty array when empty; readers accept any order and repeats. Recommended: plain CBOR, one encoding per operation, and the sort order is RFC 0004's tie-break order.
-    - B: One byte string, the change id followed by the position. Three bytes smaller per id; a hand-written layout.
-    - C: As A, but an empty list is left out. Two bytes smaller per first write; two encodings unless readers enforce one.
-
-    Decided: A (Carsten, 2026-11-08).
-
-11. **Several operations on one field in one change.**
-    - A: The SDK writes the net effect of a transaction: at most one set per field and one add or remove per element. Readers accept a change with more and apply each by RFC 0004's rules. Recommended: no second form of id, and nothing a reader must special-case.
-    - B: A bare position in `replaces` or `observed` names an operation of the same change. Lets the SDK write every step of a transaction, at the cost of two forms of id in every decoder.
-
-    Decided: A (Carsten, 2026-11-08).
-
-12. **Malformed arguments.**
-    - A: The operation is parked with the reason "malformed arguments" and reported; the rest of the change is folded. Recommended: no new state, deterministic on every member, and nothing is applied that the reader had to guess.
-    - B: Read leniently with defaults, for example a missing `replaces` as empty. Converges, but hides the error and turns a write into a conflict.
-    - C: The whole change is rejected. One bad operation hides its change's other operations.
-
-    Decided: A (Carsten, 2026-11-08).
-
-13. **How a field type adds operations.**
-    - A: A new operation is a new rule version, which only new fields can use until the migrations RFC exists (RFC 0005, D12), or a new field type; it takes a number never used before, and old clients park it. Recommended: a merge rule never changes under the same type id and version, as this RFC's contract already says.
-    - B: A type may add operations under the same rule version, as long as its existing operations keep their meaning. Faster to extend, but an old and a new client then differ under the same version.
-
-    Decided: A (Carsten, 2026-11-08).
-
-14. **How an object's deletion travels.**
-    - A: An operation of its own, number 4 **delete**, on the object without a field, with set's arguments: `true` deletes, `false` restores, `replaces` names the deletes it saw. Recommended: it is decision 4's boolean basic value with no new rule, and a client that does not know deletion parks it as an unknown operation instead of misreading it.
-    - B: A set (number 1) on a reserved field name such as `$deleted`, which RFC 0005's reserved `$` names allow. No new number, but every member special-cases a field that no lock declares.
-    - C: A set (number 1) with key 3 absent. No new number, but set's meaning then depends on a missing key.
-
-    Decided: A (Carsten, 2026-11-08).
-
-## How this RFC is tested
-
-`scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001, has the sections its ticket requires, and that its relative links resolve. For Amendment 1 it also checks the link to RFC 0002, the changelog line and the amendment's sections, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples) *(Amendment 1)*. For Amendment 4, `scripts/rfc-0004-amendment-4.test.mjs` checks its changelog line, sections, resolution table and the owner's decisions, and the same examples test checks E15 to E17 *(Amendment 4)*. The rules themselves are tested when they are built: NOC-16 and NOC-17 implement them test first against the convergence harness of NOC-9, with the contract above.
-
-## Amendment 2: a create that carries arguments is malformed
-
-Added on 2026-11-09 for NOC-35. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) says a create (operation 0) is written without key 5, but not what a member does with a create that carries one. The owner decided that it is parked with the reason "malformed arguments", as a delete that carries key 3 already is (Carsten, 2026-11-09). This amendment adds that rule, marked *(Amendment 2)* above, in [Creating and deleting an object](#creating-and-deleting-an-object).
-
-- **Why.** One create has one encoding, as the amendment's lists of ids have, and the rule depends only on the operation's bytes, so every member parks the same creates (principle 2). A later rule that gives creates arguments takes a new operation number, as [decision 13](#decisions-for-the-owner-8-to-14) requires for every new operation.
-- **Instead of** ignoring key 5 on a create, which would give one create two encodings and let a later version change what an old client already folded.
-- **Built.** NOC-39 (#66) already parks such a create in `ncdb-core`, and recorded the call in its [decision file](../../factory/decisions/2026-11-09-NOC-39-a-create-with-arguments-is-malformed.md); this amendment makes it part of the RFC.
-
-## Amendment 3: the nesting limit is decided
-
-Added on 2026-11-09 for NOC-75, at pm's request. [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) counted the levels a value may nest against RFC 0002's limit of 32, which was then still open for the owner in NOC-24. The owner decided that limit (Carsten, 2026-11-09), and [RFC 0002, Amendment 6](0002-change-and-log-format.md#amendment-6-a-nesting-limit-and-a-clock-that-never-waits) records it. This amendment changes the one sentence that still called it pending, marked *(Amendment 3)* above. It decides nothing: the count of levels and the 26 levels a value may nest stay as Amendment 1 gives them.
-
-## Amendment 4: a reference into another space
-
-Added on 2026-11-09 for NOC-63. Rights come from many small spaces (GENESIS.md), so related data often lives in different spaces: customers in one space, the orders that name them in another. A link points only into its own space ([Links](#links)). The owner decided NOC-29 as pm recommended (Carsten, 2026-11-09): NoCentralDB gets a field type for a reference into another space, written `nc.ref("collection")` in the schema ([RFC 0005, "References into another space"](0005-schema-and-model-lock.md#references-into-another-space)). The owner decided these points:
-
-- A reference stores the target's space id and its object id, and merges like a basic value: the last writer wins, and losing writes stay as conflicts.
-- On read, the SDK resolves it from the member's own copy, to one of three states: readable, not accessible (the member is not in the target's space), or missing (not arrived, or deleted).
-- It can be indexed.
-- Computed fields and views never follow it, so every member of the space computes the same state (principle 2).
-- It gives no access to the target space. A deleted or erased target reads missing. The relay sees nothing new: the reference is encrypted inside its own space.
-
-This amendment makes those points exact, in the tables and style of [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change). GENESIS.md reserves the wire format and public names for the owner, so what it needs beyond them went to the owner as [Decisions for the owner (15 to 20)](#decisions-for-the-owner-15-to-20), each with options and a recommendation. The owner accepted every recommendation (Carsten, 2026-11-10), and the text below describes the decided options. RFC 0005's Amendment 5 adds `nc.ref` to the schema language, the lock and "Public names", with the decisions that belong there, D18 to D22, decided the same way: the schema form, the index, how a read and a view show the three states, subscriptions and modifiers. The sentences this amendment changes elsewhere in this RFC are marked *(Amendment 4)*.
-
-### State and operations
-
-A reference is a field type of its own, `ncdb/ref` with rule version 1 ([decision 15](#decisions-for-the-owner-15-to-20)). It has no merge rule of its own: its state is a basic value's, and its value is a pair, the target's space id and object id.
-
-| Type                                 | State                                                    | Read value                                       | Concurrent writes   | What stays visible to the app                                        |
-| ------------------------------------ | -------------------------------------------------------- | ------------------------------------------------ | ------------------- | -------------------------------------------------------------------- |
-| Reference (one target, in any space) | A basic value whose value is a space id and an object id | The winning reference, with its resolution state | As for basic values | As for basic values; plus a target that is not accessible or missing |
-
-- **set** (1) writes it, with set's arguments `{1: value, 2: replaces}`, as for every basic value; `null` clears it. It is the type's only operation. Add, remove and delete are not defined on it, so a member parks them with the reason "unknown operation" ([Operations a member does not understand](#operations-a-member-does-not-understand)).
-- **It converges by the argument for basic values** ([Why it converges](#why-it-converges)). State, apply, read and outcome are basic values', and the value enters them only where a basic value's does: as a whole, compared by its canonical bytes (O5).
-- **One target per field.** NOC-29 decided a single reference. A field of many references is RFC 0005's D22.
-
-### Resolution
-
-As for a link, the state is not part of the reference: the reference keeps the space id and the object id as written, whatever happens to the target. The SDK works out the state when the app reads the reference, from the member's own copies of the spaces it holds. "Readable" in the owner's decision is **ok** here, the working name links use ([decision 7](#decisions-for-the-owner)); RFC 0005's D20 names them for the app: `"ok"`, `"notAccessible"` and `"missing"`.
-
-| State                | Meaning                                                                                                                                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ok**               | The member holds a copy of the target's space, and that copy holds the target, not deleted, in a collection the schema names for the field.                                                                                             |
-| **not accessible**   | The member holds no copy of the target's space: it never joined it, or it left and its rows of the space were deleted ([decision 20](#decisions-for-the-owner-15-to-20)).                                                                 |
-| **missing**          | The member holds a copy of the target's space, but the copy holds no object with that id, or holds it deleted, or in a collection the schema does not name for the field ([decision 18](#decisions-for-the-owner-15-to-20)). An erased target reads missing, as a deleted one does. |
-
-Unlike a link's status, the state differs from member to member. Two members of the orders' space hold the same changes and the same reference, but only one of them may be in the customers' space. So the state is never part of the space's shared state (principle 2): no computed field, view, index or other stored value depends on it, and a computed field or view never follows a reference into its target. The computed-fields RFC must refuse one that tries. A member shows the state as local information only, as principle 3 allows for what differs from member to member. Two members that hold the same copies of the same spaces compute the same state.
-
-The state changes without any change to the reference:
-
-- **The target arrives** in the member's copy of its space: **missing** becomes **ok**.
-- **The target is deleted:** **ok** becomes **missing**, and **ok** again if it is restored ([A link whose target was deleted](#a-link-whose-target-was-deleted)).
-- **The member joins** the target's space: **not accessible** becomes **missing** until the target arrives, then **ok**. **It leaves**, and its rows of the space are deleted: the state becomes **not accessible**.
-
-A copy cannot tell a target that has not arrived from one that never will, as for links ([A link to an object the member has not received](#a-link-to-an-object-the-member-has-not-received)). The state says what the member's copies hold, no more.
-
-### The value and its encoding
-
-The reference travels as a set (1) in RFC 0002's operation map, exactly as [Amendment 1](#amendment-1-how-field-operations-travel-in-a-change) defines it for basic values. Only the value, argument 1, is new ([decision 16](#decisions-for-the-owner-15-to-20)):
-
-```text
-arguments (CBOR map in key 5), as for every set
-├── 1 value         the reference, or null to clear the field
-└── 2 replaces      array of operation ids
-
-reference (CBOR array of two)
-├── 0 space id      16-byte byte string (RFC 0002, Space)
-└── 1 object id     16-byte byte string (RFC 0002, Object ids)
-```
-
-- **Written `[space id, object id]`,** a CBOR array of two 16-byte byte strings, in that order. It has one encoding and takes 35 bytes.
-- **The field's type is not encoded.** A member finds `ncdb/ref` in its `model.lock.json`, from the collection and field names, as for every field (Amendment 1).
-- **Depth.** The array sits at level 7, where Amendment 1 puts the value, and its byte strings at level 8, well inside the 26 levels a value may nest.
-- **A value that does not fit,** such as a bare 16-byte object id or an array whose items are not 16-byte byte strings, written by a buggy or hostile member, is applied and kept as written, as every basic value is. It names no object, so it reads **missing**, and `space.inspect` returns it as written ([decision 17](#decisions-for-the-owner-15-to-20)). This is what Amendment 1 does for a link target that is not 16 bytes.
-- **The space id may be the referencing object's own space** ([decision 19](#decisions-for-the-owner-15-to-20)). Such a reference resolves as any other, to **ok** or **missing**, because the member holds its own space. Computed fields and views do not follow it either.
-
-### Byte-exact examples (E15 to E17)
-
-The ids are those of [Amendment 1's examples](#byte-exact-examples), with three more: the space `S`, 16 bytes of `33`, and the customers `C1`, 16 bytes of `44`, and `C2`, 16 bytes of `55`, both in `S`. The object `T1` is an order in the collection `orders`, whose field `customer` is `nc.ref("customers")`.
-
-The same generator, [`vectors/0004/generate.py`](vectors/0004/generate.py), writes them into `vectors/0004/E15.hex` to `E17.hex`, and `scripts/rfc-0004-examples.test.mjs` checks them in `pnpm gates` as it checks E1 to E14. They follow decisions 15 and 16 as the owner decided them.
+The same generator, [`vectors/0004/generate.py`](vectors/0004/generate.py), writes them into `vectors/0004/E15.hex` to `E17.hex`, and `scripts/rfc-0004-examples.test.mjs` checks them in `pnpm gates` as it checks E1 to E14. They follow [decision 15](#15-the-type-id-and-its-operation) and [decision 16](#16-how-the-value-is-encoded).
 
 **E15. set, the first write to a reference.** `customer` points to `C1` in `S`; nothing is replaced.
 
@@ -814,34 +652,51 @@ a501501111111111111111111111111111111102666f72646572730368637573
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa04
 ```
 
-### What the relay and the members see
+### What the relay sees
 
-**The relay sees nothing new.** The reference lives in the payload of a change of the referencing space, which is AEAD ciphertext under that space's key (RFC 0002, The payload). The relay cannot tell a reference from any other value, and cannot link the two spaces through it. A reference adds 35 bytes to the plaintext, as a value of that size does.
+Nothing changes for the relay. Field operations, their numbers, values, `replaces` and `observed` live only inside the payload, which is AEAD ciphertext (RFC 0002, The payload). The header, the frame and control changes are untouched, and the relay still sees exactly what [RFC 0002 lists](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot).
 
-**Members of the referencing space** learn the target's space id and object id: that an order refers to some object in some other space, and which, by their random ids. They learn nothing of the target's content, and two references with the same space id tell them only that their targets share a space. Knowing a space id grants nothing: the relay checks membership on every request ([RFC 0007](0007-relay.md)), and a space's content is encrypted under keys only its members hold ([RFC 0003](0003-keys-and-cryptography.md)).
+One effect is stated plainly (principle 4): `replaces` and `observed` make the plaintext larger, by about 37 bytes per named operation, so a write that resolves many conflicts produces a larger change. The relay sees the size of the ciphertext, as it does for every change; padding to a multiple of 256 bytes (RFC 0002, D8) blurs it but does not hide it. Inside the space, the lists show members which writes an author had seen, which they already learn from its dependencies.
 
-**Members of the target space** learn nothing from a reference, unless they are members of the referencing space too.
+## Rejected options
 
-### What this does not do
+| Option                                                                                     | Why not                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Plain last writer wins, losing writes dropped                                              | A week-old offline edit disappears without a trace. Breaks principle 3 ("nothing is lost silently").                                                                                    |
+| A multi-value register as the read value (the app always gets a list of concurrent values) | Every app must handle several values for every field. RFC 0001 promises the last writer wins. We keep the multi-value state underneath and read one winner.                            |
+| Wall-clock time alone as the stamp                                                         | Not causal: a member with a slow clock can correct a value and still lose to the value it corrected. O3 rules it out.                                                                    |
+| First or last writer by arrival order                                                      | Arrival order differs per member, so copies diverge. This is the broken fixture NOC-9 uses.                                                                                             |
+| Recording "arrived late" in the converged state                                            | Arrival differs per member, so copies diverge. Lost-to-a-write-not-seen is the convergent form of "late".                                                                               |
+| Requiring causal delivery                                                                  | Members exchange changes in island mode and after compaction in any order, and the harness delivers in random order. A rule that needs causal delivery diverges when it is violated.  |
+| Remove wins for sets                                                                        | A removal from a device that was offline for a week silently undoes additions others made meanwhile. A lost removal is cheaper to show and redo than a lost addition.                    |
+| Two-phase set (a removed element can never come back)                                       | A tag removed once can never be added again; users expect to re-add.                                                                                                                    |
+| Last-writer-wins element set (add and remove compared by stamp)                             | Whether an element survives depends on clocks, and the losing addition is lost silently.                                                                                                |
+| Counters for numbers (concurrent increments add up)                                        | A different field type with different semantics; RFC 0001 ships numbers as last writer wins. A counter can come later as its own type.                                                 |
+| Dropping links whose target is missing or deleted                                          | The target may arrive later or be restored; dropping loses data and makes copies diverge during sync.                                                                                   |
+| Refusing a link to an unknown target (referential integrity)                               | Needs one place that sees every write before it is accepted. NoCentralDB has none (RFC 0001, "What it is not").                                                                        |
+| Plugins as code loaded at run time, in any language                                        | Every member must run the identical rule natively and in WebAssembly. Until a plugin RFC says otherwise, a plugin is Rust compiled into the core.                                      |
 
-Stated plainly (principle 4):
+### For how field operations travel
 
-- **It gives no access.** A reference does not let a member of the orders' space read the customer. **not accessible** says only that this member cannot read the target; it says nothing about whether the target exists.
-- **It does not keep the target alive.** Nothing in the target's space knows it is referenced. Deleting or erasing the customer does not touch the orders that name it; they read **missing**. There is no referential integrity across spaces, and no cascade.
-- **Missing has several causes.** A target that has not arrived, was never created, was deleted or erased, or is in a collection the schema does not name all read **missing**. The state alone does not tell them apart.
-- **It differs from member to member,** and changes without a change to the referencing object. Whether a subscription re-runs when it changes is RFC 0005's D21.
-- **Nothing computed follows it.** "All open orders of customers in Berlin" is no query: the app reads the orders through the index on the reference (RFC 0005's D19), and the customers in their own space. That is the price of principle 2.
-- **A hostile member can write any reference,** including one to a space id and object id it guessed or learned elsewhere. It reads **not accessible** or **missing** for members who cannot read that target, and gives nobody access.
+| Option                                                                                     | Why not                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New keys in RFC 0002's operation map for `replaces` and `observed` (keys 6 and 7)           | Changes RFC 0002's map for every field type to carry two of this RFC's concepts. Key 5 already belongs to the field type, and the core of NOC-14 would park the new keys anyway as unknown "must understand" keys.          |
+| The arguments as a positional array, `[value, replaces]`                                   | No room for a "may ignore" argument, and a new argument changes what every position means. A map with small integer keys costs one byte per argument more.                                                                  |
+| Operation numbers per type, each starting at 1 (set 1 on basic values, add 1 on sets)      | An operation sent to the wrong type is misread as that type's operation 1 instead of being parked, and a log cannot name an operation without the field's type.                                                              |
+| Operation names as text (`"set"`, `"add"`)                                                | RFC 0002 makes key 4 an unsigned integer, and text costs bytes in every operation.                                                                                                                                           |
+| An operation id as one byte string, change id followed by the position                    | A hand-written binary layout inside CBOR, with its own integer encoding: the risk RFC 0002's D4 avoided. The two-item array is plain CBOR and costs 3 bytes more.                                                           |
+| An operation id shortened to a prefix of the change id, or hashed                          | Two operations could share it, and a member could not check a reference by recomputing it.                                                                                                                                   |
+| Leaving an empty `replaces` out                                                            | Two encodings of the same operation if readers accept both, and a "required key" check that fails on the most common write.                                                                                                 |
+| A bare position in `replaces` naming an operation of the same change                       | A second form of operation id, for a case the SDK avoids by writing a transaction's net effect.                                                                                                                              |
+| Rejecting an unsorted or repeating list                                                    | A new failure mode that buys no convergence: the state depends on the set of ids only.                                                                                                                                       |
+| Reading malformed arguments leniently, for example a missing `replaces` as empty          | Converges, but a write without `replaces` would silently turn into a conflict, and each version of the core could be lenient in other ways.                                                                                  |
+| Rejecting the whole change for one malformed operation                                     | Rejected is for RFC 0002's checks (signature, membership, key), which cover the whole change. One bad operation would hide its change's other operations from every member.                               |
+| Deletion as a set (number 1) on a reserved field name, such as `$deleted`                  | [RFC 0005](0005-schema-and-model-lock.md) already reserves names that start with `$` for the core, so the name is free; but no `model.lock.json` declares the field, so every member would special-case one name in its field lookup, and a member without that case would park a deletion as a write to an unknown field.                                         |
+| Deletion as a set (number 1) without a field (key 3 absent)                               | The meaning of set would depend on whether key 3 is there; a client that knows set but not deletion would misread it instead of parking it.                                                                                   |
+| Separate delete and restore operations                                                    | Two numbers for one boolean value; a restore would need to name the deletes it undoes anyway, which is what `replaces` already does.                                                                                         |
+| Adding operations to a type under the same rule version                                    | An old client would park what a new client applies under the same version; this RFC fixes a merge rule by its type id and version.                                                                                          |
 
-### What this means for the RFCs and tickets built on it
-
-- **RFC 0005, Amendment 5** adds `nc.ref` to the schema language, the lock and "Public names", with the decisions D18 to D22.
-- **RFC 0006** records the column a reference takes in the view and its index (RFC 0005's D19), and that the view stores no state. An amendment of its own does it.
-- **RFC 0009** records how a read, a write and `space.inspect` show a reference and its state (RFC 0005's D20 and D21). An amendment of its own does it.
-- **The core** encodes, decodes and resolves the reference, with E15 to E17 as test vectors, in a ticket pm opens.
-- **The computed-fields RFC** refuses a computed field or view that follows a reference.
-
-### Rejected options
+### For references
 
 | Option                                                                                                  | Why not                                                                                                                                                                                                                       |
 | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -850,44 +705,276 @@ Stated plainly (principle 4):
 | Letting `nc.link` point into another space                                                              | It changes what a shipped type's value means, and computed fields follow links (RFC 0001's `nc.reach`), which a reference must never allow.                                                                                    |
 | The resolution state as part of the field's stored state                                                | It differs from member to member, so it can never be shared state (principle 3).                                                                                                                                             |
 
-### Decisions for the owner (15 to 20)
+## Decisions
 
-GENESIS.md reserves the wire format and public names for the owner. NOC-29 decided what a reference is; these decisions are the points it left open. Each lists its options and one recommendation. The owner accepted every recommendation (Carsten, 2026-11-10), and the text above describes the decided options.
+GENESIS.md reserves merge rules, the wire format and public API names for the owner. Each decision this RFC asked of the owner, in short form: what was chosen, by whom and when, why, and the options not taken. The design above describes the chosen options.
 
-15. **The type id and its operation.**
-    - A: A new built-in type, `ncdb/ref` with rule version 1, written by set (1) with set's arguments, with no other operation. Recommended: the one table of operation numbers stays as [decision 9](#decisions-for-the-owner-8-to-14) made it, the merge rule is basic values' and needs no new proof, and an old client that does not know `ncdb/ref` parks the field's operations as an unknown type ([RFC 0005](0005-schema-and-model-lock.md#data-from-a-newer-model)) instead of misreading them.
-    - B: `ncdb/link` with a new rule version whose value may name a space. One type for both; but a link's meaning changes under its own name, and every reader of links must handle both forms.
-    - C: `ncdb/ref` with a new operation number from 5 to 63, "set a reference". The type id already says what the value is; a second number for the same rule adds nothing.
+### 1. What basic values keep when writes conflict
 
-    Decided: A (Carsten, 2026-11-10).
+Decided (Carsten, 2026-11-07): the last writer wins on read, and losing writes stay as conflicts until someone writes having seen them.
 
-16. **How the value is encoded.**
-    - A: A CBOR array of two 16-byte byte strings, `[space id, object id]`. Recommended: plain CBOR with one encoding, the same form [decision 10](#decisions-for-the-owner-8-to-14) chose for an operation id; 35 bytes.
-    - B: One 32-byte byte string, the space id followed by the object id. Two bytes smaller; a hand-written layout inside CBOR, which decision 10 rejected for operation ids.
-    - C: A map, `{1: space id, 2: object id}`. Room for more keys, two bytes larger; a reference has nothing more to carry, since the target's collection is the target's own value ([Two creates of one object id](#two-creates-of-one-object-id)).
+Why: it keeps RFC 0001's promise and principle 3.
 
-    Decided: A (Carsten, 2026-11-10).
+Not taken:
 
-17. **A value that does not fit.**
-    - A: It is applied and kept as written, as every basic value is; it names no object, so it reads **missing**, and `space.inspect` returns it as written. Recommended: it is what Amendment 1 does for a link target that is not 16 bytes, so a link and a reference report the same mistake the same way.
-    - B: It reads as a value outside the field's kind: `undefined`, with the field named in [RFC 0009](0009-sdk-api.md#get-by-id)'s `$raw`. It tells the app that the value is wrong, not that the target is absent; but links and references then report the same mistake in two ways.
+- Plain last writer wins, losing writes kept only in the log and the archive: simpler state, but the app cannot see the loss.
+- Every concurrent value exposed (a multi-value register): every app must handle lists.
 
-    Decided: A (Carsten, 2026-11-10).
+### 2. Tie-break order after the stamp
 
-18. **A target in a collection the schema does not list.**
-    - A: It reads **missing**. Recommended: NOC-29 decided three states, and an old client that does not know a target collection added later reads **missing** until it upgrades, which RFC 0005's Accepted row then says.
-    - B: A fourth state, **wrong collection**, as for links. More precise; but a fourth state every app must handle, beyond what NOC-29 decided.
+Decided (Carsten, 2026-11-07): the author member id, then the operation id.
 
-    Decided: A (Carsten, 2026-11-10).
+Why: who wins a tie depends on who wrote, not on a hash of the content.
 
-19. **A reference into its own space.**
-    - A: Allowed. It resolves as any reference, to **ok** or **missing**, since the member holds its own space, and computed fields and views do not follow it either. Recommended: the schema cannot know where a target will live, and an app that keeps customers and orders in one space today and splits them later keeps its field.
-    - B: The SDK refuses it with `invalidValue`, and the app uses `nc.link`. A field then cannot hold targets in its own space and in others.
+Not taken:
 
-    Decided: A (Carsten, 2026-11-10).
+- The operation id only: one comparison fewer, but the winner of a tie is effectively random.
 
-20. **When a target is not accessible.**
-    - A: When the member's database holds no copy of the target's space: the member never joined it, or it left and its rows of the space were deleted ([RFC 0006](0006-local-view.md)). Resolution reads exactly what `space.get` on the target's space would read, so a reference never shows more or less than the app could read itself. Recommended.
-    - B: When the member is not a current member of the target's space by the control state of its copy, even while it still holds rows of it. Stricter for a removed member that keeps its copy (GENESIS.md: revoking a member does not delete its copy); but the app can still read that copy through `space.get`, so the reference would hide what the app can read anyway.
+### 3. Sets: add wins or remove wins
 
-    Decided: A (Carsten, 2026-11-10).
+Decided (Carsten, 2026-11-07): add wins.
+
+Why: no addition is lost, and a lost removal stays readable.
+
+Not taken:
+
+- Remove wins: a late removal undoes additions it never saw.
+
+### 4. Object deletion
+
+Decided (Carsten, 2026-11-07): whether an object is deleted is a basic boolean value with this RFC's rule. A deletion can be undone; edits to a deleted object are kept and become visible again on restore; links read **deleted**.
+
+Why: nothing is lost, and the rule needs no new proof. The rest of deletion belongs to a later RFC.
+
+Not taken:
+
+- Deletion is final and wins over everything: simpler for apps, but a late edit to a deleted object is lost silently.
+
+### 5. Links to targets the copy does not hold
+
+Decided (Carsten, 2026-11-07): keep the link, read it as **missing**, and resolve it when the target arrives.
+
+Why: the link is never lost, and an app can show that data is still arriving.
+
+Not taken:
+
+- Hide such links from reads until the target arrives: same state, but an app cannot show "waiting for data".
+
+### 6. No field type may assume causal delivery
+
+Decided (Carsten, 2026-11-07): no field type may assume it.
+
+Why: it matches the harness and island mode. The cost is that each field keeps the ids that were replaced (R and T above), which grow until compaction.
+
+Not taken:
+
+- RFC 0002 guarantees causal delivery and field types may rely on it: smaller state, but one relay or sync bug that reorders changes makes copies diverge.
+
+### 7. Placeholder names
+
+Decided (Carsten, 2026-11-07): `value`, `conflicts`, `lostRemovals`, `outcome`, and the statuses **ok**, **deleted**, **missing** and **wrong collection** stay working names here; the SDK's API review decides the public names.
+
+Why: public names belong to the SDK, where an app meets them.
+
+Not taken:
+
+- Decide the public names in this RFC.
+
+### 8. Where the arguments sit
+
+Decided (Carsten, 2026-11-08): in RFC 0002's key 5, as a map with small integer keys: 1 value or element, 2 `replaces`, 3 `observed`; 4 to 63 "must understand", 64 up "may ignore".
+
+Why: RFC 0002's map stays as it is, key 5 already belongs to the field type, and the map leaves room for arguments the way RFC 0002's maps do.
+
+Not taken:
+
+- New keys 6 and 7 in RFC 0002's operation map: changes RFC 0002 for one RFC's concepts.
+- A positional array in key 5: one byte smaller per argument, no room to extend.
+
+### 9. Operation numbers
+
+Decided (Carsten, 2026-11-08): one table for the built-in types: 0 create (RFC 0002), 1 set, 2 add, 3 remove, 4 delete; 5 to 63 for later built-in types; plugin types from 64 up, within their type id; no number reused.
+
+Why: an operation sent to the wrong type is parked, not misread, and a number names an operation without the field's type.
+
+Not taken:
+
+- Numbers per type, each starting at 1: fewer reserved numbers, but a mismatched operation is misread.
+
+### 10. Operation ids in replaces and observed
+
+Decided (Carsten, 2026-11-08): a two-item array, `[change id, position]`; a list sorted by bytes, without repeats, and written as an empty array when empty; readers accept any order and repeats.
+
+Why: plain CBOR, one encoding per operation, and the sort order is this RFC's tie-break order.
+
+Not taken:
+
+- One byte string, the change id followed by the position: three bytes smaller per id, but a hand-written layout.
+- As chosen, but an empty list left out: two bytes smaller per first write, and two encodings unless readers enforce one.
+
+### 11. Several operations on one field in one change
+
+Decided (Carsten, 2026-11-08): the SDK writes the net effect of a transaction: at most one set per field and one add or remove per element. Readers accept a change with more and apply each by this RFC's rules.
+
+Why: no second form of id, and nothing a reader must special-case.
+
+Not taken:
+
+- A bare position in `replaces` or `observed` names an operation of the same change: the SDK could write every step of a transaction, at the cost of two forms of id in every decoder.
+
+### 12. Malformed arguments
+
+Decided (Carsten, 2026-11-08): the operation is parked with the reason "malformed arguments" and reported; the rest of the change is folded.
+
+Why: no new state, deterministic on every member, and nothing is applied that the reader had to guess.
+
+Not taken:
+
+- Read leniently with defaults, for example a missing `replaces` as empty: converges, but hides the error and turns a write into a conflict.
+- Reject the whole change: one bad operation hides its change's other operations.
+
+### 13. How a field type adds operations
+
+Decided (Carsten, 2026-11-08): a new operation is a new rule version, which only new fields can use until the migrations RFC exists (RFC 0005, D12), or a new field type; it takes a number never used before, and old clients park it.
+
+Why: a merge rule never changes under the same type id and version, as [the plugin contract](#the-plugin-contract) says.
+
+Not taken:
+
+- Add operations under the same rule version as long as existing ones keep their meaning: faster to extend, but an old and a new client then differ under the same version.
+
+### 14. How an object's deletion travels
+
+Decided (Carsten, 2026-11-08): an operation of its own, number 4 **delete**, on the object without a field, with set's arguments: `true` deletes, `false` restores, `replaces` names the deletes it saw.
+
+Why: it is decision 4's boolean basic value with no new rule, and a client that does not know deletion parks it as an unknown operation instead of misreading it.
+
+Not taken:
+
+- A set (number 1) on a reserved field name such as `$deleted`: no new number, but every member special-cases a field that no lock declares.
+- A set (number 1) with key 3 absent: no new number, but set's meaning then depends on a missing key.
+
+### 15. The type id and its operation
+
+Decided (Carsten, 2026-11-10): a new built-in type, `ncdb/ref` with rule version 1, written by set (1) with set's arguments, with no other operation.
+
+Why: the one table of operation numbers stays as decision 9 made it, the merge rule is basic values' and needs no new proof, and an old client that does not know `ncdb/ref` parks the field's operations as an unknown type ([RFC 0005](0005-schema-and-model-lock.md#data-from-a-newer-model)) instead of misreading them.
+
+Not taken:
+
+- `ncdb/link` with a new rule version whose value may name a space: one type for both, but a link's meaning changes under its own name, and every reader of links must handle both forms.
+- `ncdb/ref` with a new operation number from 5 to 63, "set a reference": the type id already says what the value is, so a second number adds nothing.
+
+### 16. How the value is encoded
+
+Decided (Carsten, 2026-11-10): a CBOR array of two 16-byte byte strings, `[space id, object id]`.
+
+Why: plain CBOR with one encoding, the same form decision 10 chose for an operation id; 35 bytes.
+
+Not taken:
+
+- One 32-byte byte string, the space id followed by the object id: two bytes smaller, but a hand-written layout inside CBOR, which decision 10 rejected for operation ids.
+- A map, `{1: space id, 2: object id}`: room for more keys and two bytes larger, but a reference has nothing more to carry.
+
+### 17. A value that does not fit
+
+Decided (Carsten, 2026-11-10): it is applied and kept as written, as every basic value is; it names no object, so it reads **missing**, and `space.inspect` returns it as written.
+
+Why: a link and a reference then report the same mistake the same way.
+
+Not taken:
+
+- It reads as a value outside the field's kind, `undefined`, with the field named in [RFC 0009](0009-sdk-api.md#get-by-id)'s `$raw`: it tells the app the value is wrong, but links and references then report the same mistake in two ways.
+
+### 18. A target in a collection the schema does not list
+
+Decided (Carsten, 2026-11-10): it reads **missing**.
+
+Why: NOC-29 decided three states, and an old client that does not know a target collection added later reads **missing** until it upgrades.
+
+Not taken:
+
+- A fourth state, **wrong collection**, as for links: more precise, but a fourth state every app must handle, beyond what NOC-29 decided.
+
+### 19. A reference into its own space
+
+Decided (Carsten, 2026-11-10): allowed. It resolves as any reference, to **ok** or **missing**, and computed fields and views do not follow it either.
+
+Why: the schema cannot know where a target will live, and an app that keeps customers and orders in one space today and splits them later keeps its field.
+
+Not taken:
+
+- The SDK refuses it with `invalidValue`, and the app uses `nc.link`: a field then cannot hold targets in its own space and in others.
+
+### 20. When a target is not accessible
+
+Decided (Carsten, 2026-11-10): when the member's database holds no copy of the target's space: the member never joined it, or it left and its rows of the space were deleted ([RFC 0006](0006-local-view.md)).
+
+Why: resolution reads exactly what `space.get` on the target's space would read, so a reference never shows more or less than the app could read itself.
+
+Not taken:
+
+- When the member is not a current member of the target's space by the control state of its copy, even while it holds rows of it: stricter for a removed member that keeps its copy, but the app can still read that copy through `space.get`, so the reference would hide what the app can read anyway.
+
+### A reference into another space
+
+Decided (Carsten, 2026-11-09): a field type for a reference into another space, as NOC-29 asked: it stores the target's space id and object id, merges like a basic value, resolves on read to one of three states, can be indexed, is never followed by computed fields and views, and gives no access ([References](#references)).
+
+Why: rights come from many small spaces, so related data often lives in different spaces, and the SDK should know of the relation instead of every app building it again.
+
+Not taken:
+
+- No new type, the app stores the target's id as a plain value (NOC-29, option 1): the SDK would know nothing of the relation and could not say whether the target is readable.
+- Cross-space links that computed fields and views follow, for members of both spaces (NOC-29, option 3): two members with different memberships would compute different values from the same changes, which breaks principle 2.
+
+### A create that carries arguments
+
+Decided (Carsten, 2026-11-09): a create (operation 0) that carries key 5 is parked with the reason "malformed arguments", as a delete that carries key 3 is ([Creating and deleting an object](#creating-and-deleting-an-object)). NOC-35; built in NOC-39 (#66), which recorded the call in its [decision file](../../factory/decisions/2026-11-09-NOC-39-a-create-with-arguments-is-malformed.md).
+
+Why: one create has one encoding, and the rule depends only on the operation's bytes, so every member parks the same creates (principle 2). A later rule that gives creates arguments takes a new operation number, as decision 13 requires for every new operation.
+
+Not taken:
+
+- Ignore key 5 on a create: one create would have two encodings, and a later version could change what an old client already folded.
+
+### Decisions this RFC follows
+
+Each line names a decision of another RFC that changes what this one says, and links where that RFC states it.
+
+- **The nesting limit.** A change nests at most 32 levels, so a value of an operation nests at most 26: RFC 0002's nesting limit, NOC-24 (Carsten, 2026-11-09), [The nesting limit](0002-change-and-log-format.md#the-nesting-limit).
+- **New rule versions for existing fields.** An existing field cannot move to a new rule version until the migrations RFC exists: RFC 0005's D12 (Carsten, 2026-11-08), [D12](0005-schema-and-model-lock.md#d12-moving-a-field-to-a-new-rule-version).
+- **A reference in the schema.** `nc.ref("collection")`, its index, its states for the app, subscriptions and modifiers: RFC 0005's D18 to D22 (Carsten, 2026-11-10), [D18](0005-schema-and-model-lock.md#d18-how-the-schema-declares-a-reference).
+
+## Agreement with GENESIS.md and RFC 0001
+
+This RFC agrees with `factory/GENESIS.md` and [RFC 0001](0001-nocentraldb.md) on these points:
+
+- **Principle 2, every copy converges.** Every field's state is a function of the set of changes; the contract makes the harness check it for every type, built in or plugin.
+- **Principle 3, nothing is lost silently.** Losing writes and lost removals stay in the state and readable; deleted or missing link targets keep their links.
+- **Principle 7, one core.** C3 requires identical results natively and in WebAssembly.
+- **RFC 0001, field types.** Basic values: the last writer wins. Sets: additions and removals from every member merge. Links: point to another object in the same space. The FAQ's answer "both changes are kept" holds: the losing change stays readable.
+- **"A client keeps data it does not understand yet."** A choice outside the reader's list is kept as written.
+- **RFC 0002.** It meets O1 to O5, confirms that causal delivery is not guaranteed, and leaves concurrent creates of one object id to this RFC (its conflict point 3), which [Two creates of one object id](#two-creates-of-one-object-id) answers.
+
+It names these conflicts and limits for the owner and pm:
+
+1. **"Late" in principle 3.** GENESIS.md says a change that "arrives late … and loses to a newer change stays identifiable as such". Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher. This RFC makes identifiable what converges: that a change lost to a change its author had not seen. If the owner wants arrival time as well, it can only be local, per-member information, and GENESIS.md should say so. *Resolved:* GENESIS.md now uses this definition (Carsten, 2026-11-07).
+2. **"Last writer" is the highest stamp, not the last in real time.** With the wall-clock component of O4, a member whose clock runs ahead wins concurrent writes it should lose, until the others' clocks pass it. No member can correct this on its own without diverging. RFC 0002 decides that stamps far in the future are not refused, neither by the writing member, nor by a receiving member, nor by the relay, because refusing them on some members and not on others would break convergence. Members only warn when a received clock is more than a minute ahead of their own. This RFC states the limit (principle 4).
+3. **Concurrent increments do not add up.** RFC 0001's `priority: nc.int()` is last writer wins. Two agents that raise a priority by one at the same time raise it by one, not two, and one write shows as a conflict. RFC 0001 does not promise otherwise, but readers may assume it.
+4. **A missing link target is ambiguous.** A copy cannot tell a target that has not arrived from one that never will.
+5. **State grows.** The replaced ids (R and T) grow with every overwrite and removal. Compaction (a later RFC) must decide when they may be dropped without letting an old, replaced change come back.
+
+## How this RFC is tested
+
+`scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001 and RFC 0002, has the sections its ticket requires, and that its relative links resolve. `scripts/rfc-0004-complete.test.mjs` checks the rules of this text where they stand, its decisions and its history, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples). The rules themselves are tested when they are built: NOC-16 and NOC-17 implement them test first against the convergence harness of NOC-9, with the contract above.
+
+## History
+
+- **2026-11-08** · NOC-8 · The first version, with decisions 1 to 7, which the owner decided as recommended ([#26](https://github.com/nocentraldb/nocentraldb/pull/26)).
+- **2026-11-08** · NOC-8 · GENESIS.md takes this RFC's definition of a late change: one that lost to a change its author had not seen ([#39](https://github.com/nocentraldb/nocentraldb/pull/39)).
+- **2026-11-09** · NOC-37 · How field operations travel in a change: operation numbers, arguments, deletion and the examples E1 to E14; decisions 8 to 14 ([#52](https://github.com/nocentraldb/nocentraldb/pull/52)).
+- **2026-11-09** · NOC-55 · How to give feedback ([#72](https://github.com/nocentraldb/nocentraldb/pull/72)).
+- **2026-11-09** · NOC-35 · A create that carries arguments is malformed ([#76](https://github.com/nocentraldb/nocentraldb/pull/76)).
+- **2026-11-10** · NOC-75 · The depth count links RFC 0002's nesting limit, which the owner decided ([#87](https://github.com/nocentraldb/nocentraldb/pull/87)).
+- **2026-11-10** · NOC-63 · References into another space: the field type `ncdb/ref`, its resolution to three states, its encoding and the examples E15 to E17; decisions 15 to 20 ([#92](https://github.com/nocentraldb/nocentraldb/pull/92)).
+- **2026-11-10** · NOC-100 · Rewritten as one complete text: every change above stands where it belongs, the decisions are in short form, and this History replaces the changelog ([#121](https://github.com/nocentraldb/nocentraldb/pull/121)).

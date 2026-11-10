@@ -1,4 +1,4 @@
-//! What a member does with a change it receives (RFC 0002 Amendment 1;
+//! What a member does with a change it receives (RFC 0002;
 //! RFC 0006, "Folding"): decode, understand the header, verify the
 //! signature, check membership, decrypt, understand the payload, fold. A
 //! change stops at the first step it does not pass, and its [`State`] in
@@ -8,7 +8,7 @@
 //! field operations through [`Fold`], so the order of the steps and the
 //! states live here, and the field types (RFC 0004) plug in. Operations
 //! without a field, creates and deletes, belong to the object for every
-//! collection (RFC 0004 Amendment 1), so step 7 decodes them here and
+//! collection (RFC 0004, "Creating and deleting an object"), so step 7 decodes them here and
 //! hands them to [`Fold::fold_object`]. A check that fails
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
@@ -35,7 +35,8 @@ pub enum Stop {
 }
 
 impl Stop {
-    /// The step of RFC 0002 Amendment 1 whose reason this is.
+    /// The step of RFC 0002, "What a member does with a change it
+    /// receives", whose reason this is.
     pub fn step(self) -> u8 {
         match self {
             Stop::Parked(
