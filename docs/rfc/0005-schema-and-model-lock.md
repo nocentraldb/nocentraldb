@@ -101,7 +101,7 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.set(element)` | `ncdb/set` | Set: add wins, lost removals stay readable | The elements, in the order of their canonical bytes |
 | `nc.link("collection")` | `ncdb/link` | Basic value whose value is an object id | The target, with its resolution status |
 | `nc.links("collection")` | `ncdb/links` | Set of object ids | The targets, each with its resolution status |
-| `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)) | The target's space id and object id; its state, ok, not accessible or missing, comes from the member's own copies |
+| `nc.ref("collection")` | `ncdb/ref` | Basic value whose value is a space id and an object id ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)) | The target's space id and object id; its state, ok, not accessible or missing, comes from the member's own copies |
 | `nc.richText()` | reserved | Later RFC (Yjs and Yrs) | Later RFC |
 | `nc.stream()` | reserved | Later RFC | Later RFC |
 
@@ -140,7 +140,7 @@ export const model = nc.model({
 });
 ```
 
-`nc.ref` takes one collection name, or a list of them, as `nc.link` does: `nc.ref(["customers", "leads"])`. It stores the target's space id and object id, and merges as a basic value: the last writer wins ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)). The lock writes it as a link, with its own type id:
+`nc.ref` takes one collection name, or a list of them, as `nc.link` does: `nc.ref(["customers", "leads"])`. It stores the target's space id and object id, and merges as a basic value: the last writer wins ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). The lock writes it as a link, with its own type id:
 
 ```json
 { "customer": { "rule": 1, "since": 1, "targets": ["customers"], "type": "ncdb/ref" } }
@@ -369,7 +369,7 @@ GENESIS.md gives up "free schema changes (rename, retype, delete a field)" so th
 | Add a field to a collection | The same. Objects written before read the new field as unset. |
 | Add a personal field | As adding a field. |
 | Append an option to a choice, or to a set of choices | Old clients keep the new option as written and read it as an unknown option (RFC 0004). |
-| Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004](0004-merge-rules-basic-types.md#amendment-4-a-reference-into-another-space)), until they upgrade. |
+| Add a collection to a link's or a reference's `targets` | Old clients keep the link and read its status as **wrong collection** (RFC 0004), and keep the reference and read its state as **missing** ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)), until they upgrade. |
 | Add a computed field or a view (name only, for now) | Computed values are derived locally; they are not in the changes. |
 | Add, change or remove an index, or change its scope | Indexes are built locally from the view (RFC 0006) and never travel in a change. A page cursor names its index and the model hash (RFC 0006), so a cursor from before the change is refused, not misread. |
 | Add, change or remove a description | Descriptions change no data. The model version stays. |

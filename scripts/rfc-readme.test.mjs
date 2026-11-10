@@ -6,7 +6,7 @@
 // checks that each rule is there and where it points; whether the wording is
 // right is the review of the PR.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -78,4 +78,18 @@ test("CONTRIBUTING.md names the same ends, without amendments", () => {
     contributing,
     /change to an RFC's text|change to the RFC's text/,
   );
+});
+
+test("every RFC is one complete text, so the README no longer says some are being rewritten", () => {
+  const rfcs = readdirSync(join(root, "docs/rfc")).filter((f) =>
+    /^\d{4}-.*\.md$/.test(f),
+  );
+  for (const file of rfcs) {
+    assert.doesNotMatch(
+      read(`docs/rfc/${file}`),
+      /^## Amendment/m,
+      `${file} still has an amendment section`,
+    );
+  }
+  assert.doesNotMatch(readme(), /being rewritten/);
 });
