@@ -62,8 +62,8 @@ test('the daily note has an "RFC feedback" heading with links to new replies', (
 
 for (const number of RFCS) {
   test(`RFC ${number} says how to give feedback`, () => {
-    const [file] = readdirSync(join(root, "docs/rfc")).filter((name) =>
-      name.startsWith(`${number}-`),
+    const [file] = readdirSync(join(root, "docs/rfc")).filter(
+      (name) => name.startsWith(`${number}-`) && name.endsWith(".md"),
     );
     const line = read(`docs/rfc/${file}`)
       .split("\n")

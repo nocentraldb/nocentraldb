@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 576" width="880" height="576" role="img" aria-labelledby="rfc-0001-one-change-title rfc-0001-one-change-desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
+  <title id="rfc-0001-one-change-title">One change, encrypted then signed</title>
+  <desc id="rfc-0001-one-change-desc">Bob's phone encrypts a change with the content key of Project A's current key generation, signs it with its member key, appends and folds it, then pushes it; the relay checks the signature and the right to write, appends it and answers with its position, and sends it to subscribed members such as Alice's laptop, which checks the signature and the membership, then decrypts and folds it.</desc>
+  <style>
+    .bg { fill: #ffffff; }
+    .t { fill: #1f2328; }
+    .m { fill: #59636e; }
+    .ac { fill: #0969da; }
+    .box { fill: #f6f8fa; stroke: #d1d9e0; }
+    .plain { fill: #ffffff; stroke: #d1d9e0; }
+    .focal { fill: #ddf4ff; stroke: #0969da; }
+    .zone { fill: none; stroke: #d1d9e0; }
+    .zonea { fill: #0969da; fill-opacity: 0.05; stroke: #0969da; }
+    .frame { fill: #f6f8fa; stroke: #d1d9e0; }
+    .life { stroke: #d1d9e0; }
+    .ln { stroke: #59636e; fill: none; }
+    .lna { stroke: #0969da; fill: none; }
+    .mk { fill: #59636e; }
+    .mka { fill: #0969da; }
+    .mask { fill: #ffffff; }
+    .num { fill: #ffffff; }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #0d1117; }
+      .t { fill: #e6edf3; }
+      .m { fill: #9198a1; }
+      .ac { fill: #4493f8; }
+      .box { fill: #161b22; stroke: #3d444d; }
+      .plain { fill: #0d1117; stroke: #3d444d; }
+      .focal { fill: #0c2d4a; stroke: #4493f8; }
+      .zone { stroke: #3d444d; }
+      .zonea { fill: #4493f8; fill-opacity: 0.08; stroke: #4493f8; }
+      .frame { fill: #161b22; stroke: #3d444d; }
+      .life { stroke: #3d444d; }
+      .ln { stroke: #9198a1; }
+      .lna { stroke: #4493f8; }
+      .mk { fill: #9198a1; }
+      .mka { fill: #4493f8; }
+      .mask { fill: #0d1117; }
+      .num { fill: #0d1117; }
+    }
+  </style>
+  <defs>
+    <marker id="rfc-0001-one-change-m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mk"/></marker>
+    <marker id="rfc-0001-one-change-ma" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,1 L10,5 L0,9 z" class="mka"/></marker>
+  </defs>
+  <rect class="bg" x="0" y="0" width="880" height="576"/>
+  <line x1="150" y1="76" x2="150" y2="532" class="life" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="440" y1="76" x2="440" y2="532" class="life" stroke-width="1" stroke-dasharray="3,3"/>
+  <line x1="730" y1="76" x2="730" y2="532" class="life" stroke-width="1" stroke-dasharray="3,3"/>
+  <path d="M150,236 L438,236" class="ln" stroke-width="1.3" marker-end="url(#rfc-0001-one-change-m)"/>
+  <rect class="mask" x="275.8" y="212" width="38.4" height="18"/>
+  <text x="295" y="224" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">push</text>
+  <path d="M440,372 L152,372" class="ln" stroke-width="1.3" stroke-dasharray="5,4" marker-end="url(#rfc-0001-one-change-m)"/>
+  <rect class="mask" x="236.2" y="348" width="117.6" height="18"/>
+  <text x="295" y="360" class="m" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">pushed: position</text>
+  <path d="M440,404 L728,404" class="lna" stroke-width="1.6" marker-end="url(#rfc-0001-one-change-ma)"/>
+  <rect class="mask" x="536.1" y="380" width="97.8" height="18"/>
+  <text x="585" y="392" class="ac" font-size="11" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" text-anchor="middle">entries, live</text>
+  <rect class="plain" x="40" y="20" width="220" height="56" rx="6"/>
+  <text x="150" y="42" class="t" font-size="14" font-weight="600" text-anchor="middle">Bob's phone</text>
+  <text x="150" y="62" class="m" font-size="12.5" text-anchor="middle">writer in Project A</text>
+  <rect class="plain" x="330" y="20" width="220" height="56" rx="6"/>
+  <text x="440" y="42" class="t" font-size="14" font-weight="600" text-anchor="middle">Relay</text>
+  <text x="440" y="62" class="m" font-size="12.5" text-anchor="middle">holds no keys</text>
+  <rect class="plain" x="620" y="20" width="220" height="56" rx="6"/>
+  <text x="730" y="42" class="t" font-size="14" font-weight="600" text-anchor="middle">Alice's laptop</text>
+  <text x="730" y="62" class="m" font-size="12.5" text-anchor="middle">member, subscribed to Project A</text>
+  <rect class="box" x="24" y="92" width="268" height="124" rx="6"/>
+  <circle cx="46" cy="112" r="10" class="mk"/>
+  <text x="46" y="116" class="num" font-size="11" font-weight="600" text-anchor="middle">1</text>
+  <text x="64" y="116" class="t" font-size="13">encrypts it with the content key</text>
+  <text x="64" y="134" class="t" font-size="13">of Project A's current generation</text>
+  <circle cx="46" cy="156" r="10" class="mk"/>
+  <text x="46" y="160" class="num" font-size="11" font-weight="600" text-anchor="middle">2</text>
+  <text x="64" y="160" class="t" font-size="13">signs it with its member key</text>
+  <circle cx="46" cy="182" r="10" class="mk"/>
+  <text x="46" y="186" class="num" font-size="11" font-weight="600" text-anchor="middle">3</text>
+  <text x="64" y="186" class="t" font-size="13">appends and folds it: the view</text>
+  <text x="64" y="204" class="t" font-size="13">shows it at once</text>
+  <rect class="box" x="306" y="252" width="268" height="84" rx="6"/>
+  <circle cx="328" cy="272" r="10" class="mk"/>
+  <text x="328" y="276" class="num" font-size="11" font-weight="600" text-anchor="middle">4</text>
+  <text x="346" y="276" class="t" font-size="13">checks the signature, and that</text>
+  <text x="346" y="294" class="t" font-size="13">the author may write it</text>
+  <circle cx="328" cy="316" r="10" class="mk"/>
+  <text x="328" y="320" class="num" font-size="11" font-weight="600" text-anchor="middle">5</text>
+  <text x="346" y="320" class="t" font-size="13">appends it to Project A's log</text>
+  <rect class="focal" x="596" y="420" width="268" height="104" rx="6"/>
+  <circle cx="618" cy="440" r="10" class="ac"/>
+  <text x="618" y="444" class="num" font-size="11" font-weight="600" text-anchor="middle">6</text>
+  <text x="636" y="444" class="t" font-size="13">checks the signature</text>
+  <circle cx="618" cy="466" r="10" class="ac"/>
+  <text x="618" y="470" class="num" font-size="11" font-weight="600" text-anchor="middle">7</text>
+  <text x="636" y="470" class="t" font-size="13">checks the author was a member</text>
+  <text x="636" y="488" class="t" font-size="13">when it wrote the change</text>
+  <circle cx="618" cy="510" r="10" class="ac"/>
+  <text x="618" y="514" class="num" font-size="11" font-weight="600" text-anchor="middle">8</text>
+  <text x="636" y="514" class="t" font-size="13">decrypts it and folds it</text>
+  <text x="440" y="560" class="m" font-size="12.5" text-anchor="middle">A member that is not connected gets the change when it reconnects and pulls.</text>
+</svg>
