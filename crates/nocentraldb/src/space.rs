@@ -205,6 +205,15 @@ impl Space {
         let collections: BTreeSet<String> =
             operations.iter().map(|op| op.collection.clone()).collect();
         writable(&inner, self.id)?;
+        if crate::sync::stopped(&inner, space) {
+            return Err(Error::new(
+                ErrorCode::NotMember,
+                format!(
+                    "the relay no longer serves this member the space {}",
+                    self.id
+                ),
+            ));
+        }
         let wall = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));

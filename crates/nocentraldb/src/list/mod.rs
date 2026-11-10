@@ -14,7 +14,9 @@ pub struct SpaceInfo {
     pub id: SpaceId,
     /// The member's current role in the space, from the membership the
     /// copy folded: `None` once the member was removed, or while no
-    /// membership entry of the member has been folded yet.
+    /// membership entry of the member has been folded yet. A member the
+    /// relay answered `not_member` or `removed_member` for the space is
+    /// removed, even though the relay serves it no removal to fold.
     pub role: Option<Role>,
     /// Whether the space is of the lock's model.
     pub model: SpaceModel,
@@ -56,7 +58,10 @@ impl Spaces<'_> {
             .filter_map(|(&space, state)| {
                 Some(SpaceInfo {
                     id: SpaceId(space),
-                    role: state.checks.resolved().role(member).map(Role::of),
+                    role: match crate::sync::stopped(&inner, space) {
+                        true => None,
+                        false => state.checks.resolved().role(member).map(Role::of),
+                    },
                     model: SpaceModel::of(state.checks.model_id()?, inner.model_id),
                 })
             })
