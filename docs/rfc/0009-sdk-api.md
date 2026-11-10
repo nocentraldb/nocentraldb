@@ -491,9 +491,9 @@ Every public name this RFC proposes or uses, for the owner to approve in one pla
 | Name | What it is | Builds on |
 | --- | --- | --- |
 | `space.get` | Reads one object | [RFC 0005, "Types for the app"](0005-schema-and-model-lock.md#types-for-the-app) |
-| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
+| `space.inspect` | Reads one object with conflicts, lost removals and link statuses | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
 | `space.outcome` | The outcome of one change on one field | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
-| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, decision 7](0004-merge-rules-basic-types.md#7-placeholder-names) |
+| `value`, `conflicts`, `elements`, `lostRemovals`, `status`, `raw`, `author`, `stamp` | The parts of `inspect` | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
 | `"ok"`, `"deleted"`, `"missing"`, `"wrongCollection"` | Link statuses | [RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution) |
 | `"ok"`, `"notAccessible"`, `"missing"` | Reference states | [RFC 0005, D20](0005-schema-and-model-lock.md#d20-how-a-read-and-a-view-show-the-three-states) |
 | `"won"`, `"lost"`, `"replaced"`, `"applied"` | Outcomes | [RFC 0004, "Late changes stay identifiable"](0004-merge-rules-basic-types.md#late-changes-stay-identifiable) |
@@ -714,7 +714,7 @@ Not taken:
 
 Decided (Carsten, 2026-11-09): queries skip deleted objects, and `space.get` returns them with `$deleted: true`; the index does not hold them.
 
-Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, decision 4](0004-merge-rules-basic-types.md#4-object-deletion)), so `get` still finds the object to restore it.
+Why: an app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)), so `get` still finds the object to restore it.
 
 Not taken:
 
