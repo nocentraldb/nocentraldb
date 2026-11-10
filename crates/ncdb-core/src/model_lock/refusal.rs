@@ -80,7 +80,7 @@ pub enum Refusal {
         from: Vec<String>,
         to: Vec<String>,
     },
-    /// A collection removed from a link's targets.
+    /// A collection removed from the targets of a link or a reference.
     TargetRemoved {
         collection: String,
         field: String,
@@ -231,7 +231,7 @@ impl Refusal {
             ],
             TargetRemoved { collection: c, field: f, target: t } => vec![
                 format!("{c}.{f}: target {t} removed."),
-                format!("Existing links into {t} would read as wrong collection on upgraded clients only."),
+                format!("Existing links into {t} would read as wrong collection, and references into it as missing, on upgraded clients only."),
                 format!("Keep {t} in the targets."),
             ],
             MarkedPersonal { collection: c, field: f } => vec![

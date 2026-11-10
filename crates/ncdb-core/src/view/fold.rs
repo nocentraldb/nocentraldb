@@ -21,6 +21,7 @@ use crate::ids::{ObjectId, SpaceId};
 use crate::log::OperationParkReason;
 use crate::object::ObjectOperation;
 use crate::receive::Fold;
+use crate::reference;
 
 /// The fold of one change's operations into the tables of a space's
 /// collections, on the connection of the transaction that appends it.
@@ -157,6 +158,8 @@ impl<'a> SqlFold<'a> {
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
             (Field::Link(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
+            (Field::Ref(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
+                .map(|(bytes, read)| (bytes, Some(reference_column(read.value)))),
             (Field::Set(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
@@ -252,6 +255,23 @@ fn apply<T: Encoding>(
 fn column_value(winner: Option<Entry>) -> Sql {
     match winner.filter(|entry| entry.known) {
         Some(entry) => sql_value(entry.value),
+        None => Sql::Null,
+    }
+}
+
+/// The column value of a reference's winning write: the target's space id
+/// followed by its object id, 32 bytes, as stored and whatever its state
+/// (RFC 0006, Amendment 7). NULL when no write is live, the reference is
+/// cleared, or its value does not fit (RFC 0004, decision 17).
+fn reference_column(winner: Option<Entry>) -> Sql {
+    winner.map_or(Sql::Null, |entry| reference_sql(&entry.value))
+}
+
+/// A reference's value as the SQLite value its column holds: 32 bytes, or
+/// NULL for a value that names no target.
+pub(super) fn reference_sql(value: &Value) -> Sql {
+    match reference::target(value) {
+        Some(target) => Sql::Blob([target.space.0, target.object.0].concat()),
         None => Sql::Null,
     }
 }
