@@ -356,3 +356,27 @@ test("RFC 0010's fingerprint says how its 60 digits are computed", () => {
     "RFC 0010, The fingerprint",
   );
 });
+
+test("the fingerprint hashes today's account key until accounts are built", () => {
+  // NOC-154 point 4: both SDKs hash the same input today
+  holds(
+    part("invitations-and-members"),
+    [
+      /over the database's own account key/,
+      /once RFC 0010 is built, over the recovery key/,
+    ],
+    "Invitations and members",
+  );
+  holds(
+    part("the-fingerprint", RFC_0010),
+    [/[Uu]ntil this RFC is built/, /own account key/],
+    "RFC 0010, The fingerprint",
+  );
+});
+
+test("modelRefused names an older lock the newest one descends from, as step 3 does", () => {
+  assert.match(
+    line(part("errors"), "| `modelRefused` |"),
+    /an older lock the newest one descends from/,
+  );
+});
