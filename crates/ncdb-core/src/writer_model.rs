@@ -21,7 +21,7 @@ pub const KEY: u64 = 64;
 pub struct WriterModel {
     /// Key 1: the writer's `model.id`, its 32 hex digits as raw bytes.
     pub id: [u8; 16],
-    /// Key 2: the writer's `model.version`.
+    /// Key 2: the writer's `model.version`, 1 and up.
     pub version: u64,
 }
 
@@ -45,8 +45,10 @@ impl WriterModel {
         cbor::encode(&self.to_value())
     }
 
-    /// Reads the value of key 64. Keys of the map other than 1 and 2 are
-    /// ignored, so a later field of the model can be a new key of it.
+    /// Reads the value of key 64: key 1, 16 bytes, and key 2, a model
+    /// version of 1 and up. Keys of the map other than 1 and 2 are ignored,
+    /// so a later field of the model can be a new key of it. Both rules
+    /// wait for the owner on NOC-202.
     pub fn from_value(value: &Value) -> Result<WriterModel, WrongShape> {
         let Value::Map(entries) = value else {
             return Err(WrongShape);
@@ -54,7 +56,7 @@ impl WriterModel {
         let Some(Value::Bytes(id)) = entries.get(&Key::Unsigned(1)) else {
             return Err(WrongShape);
         };
-        let Some(Value::Unsigned(version)) = entries.get(&Key::Unsigned(2)) else {
+        let Some(Value::Unsigned(version @ 1..)) = entries.get(&Key::Unsigned(2)) else {
             return Err(WrongShape);
         };
         Ok(WriterModel {
