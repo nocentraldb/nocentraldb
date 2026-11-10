@@ -37,7 +37,10 @@ test("the sketch's put names the generation each record replaces and answers Sto
     rust,
     /async fn put_person_keys\(\s*&self,\s*space: SpaceId,\s*puts: Vec<PersonKeyPut>,?\s*\)\s*->\s*Result<PutOutcome, StoreError>;/,
   );
-  assert.doesNotMatch(rust, /put_person_keys\([^)]*records: Vec<PersonKeyRecord>/);
+  assert.doesNotMatch(
+    rust,
+    /put_person_keys\([^)]*records: Vec<PersonKeyRecord>/,
+  );
   const put = rust.match(/pub struct PersonKeyPut \{([\s\S]*?)\}/);
   assert.ok(put, "the sketch defines no PersonKeyPut");
   assert.match(put[1], /record: PersonKeyRecord/);
