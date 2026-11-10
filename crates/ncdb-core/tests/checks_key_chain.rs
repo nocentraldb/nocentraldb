@@ -5,7 +5,9 @@
 //! rotation, with an envelope for the new generation only, so reads the
 //! changes sealed before it, in whichever order the envelope and the key
 //! chain entry arrive. Only a key chain entry that the generation graph
-//! holds, valid when written, gives keys.
+//! holds, valid when written, gives keys, and of two that give different
+//! keys for one generation, every copy keeps the same one, in whichever
+//! order they arrive.
 
 mod support;
 
@@ -83,29 +85,29 @@ struct Rotated {
     to_carol: Change,
 }
 
+/// A key chain entry for `second`, sealed under [`second_key`], that gives
+/// `previous` as the key of the first generation.
+fn chain_entry(space: &Space, second: u64, previous: &SpaceKey) -> Entry {
+    let first = space.first_generation;
+    Entry::KeyChain(KeyChainEntry {
+        generation: second,
+        previous: vec![PreviousKey {
+            generation: first,
+            key: membership::seal_previous_key(&second_key(), space.space, second, first, previous),
+        }],
+        answers: BTreeSet::new(),
+    })
+}
+
 fn rotated(rotator: Who) -> Rotated {
     let mut space = Space::new(ALICE);
     let genesis = space.genesis.clone();
     let add_bob = space.add(ALICE, BOB, Role::Writer, &[&genesis]);
     let to_bob = space.envelope(ALICE, BOB, &[&add_bob]);
     let by_bob = space.sealed(BOB, vec![set_title(1)]);
-    let first = space.first_generation;
-    let second = membership::generation_id(space.space, id(rotator), &[first]);
-    let chain = KeyChainEntry {
-        generation: second,
-        previous: vec![PreviousKey {
-            generation: first,
-            key: membership::seal_previous_key(
-                &second_key(),
-                space.space,
-                second,
-                first,
-                &space_key(),
-            ),
-        }],
-        answers: BTreeSet::new(),
-    };
-    let rotation = space.write(rotator, Entry::KeyChain(chain), &[&to_bob]);
+    let second = membership::generation_id(space.space, id(rotator), &[space.first_generation]);
+    let chain = chain_entry(&space, second, &space_key());
+    let rotation = space.write(rotator, chain, &[&to_bob]);
     let add_carol = space.add_at(ALICE, CAROL, Role::Reader, second, &[&rotation]);
     let sealed = envelope::seal(&second_key(), space.space, second, &key(CAROL).public())
         .expect("a simulated member's key takes an envelope");
@@ -163,4 +165,38 @@ fn a_key_chain_entry_the_generation_graph_does_not_hold_gives_no_key() {
     assert!(carol.checks.resolved().generation(r.second).is_none());
     assert!(carol.checks.space_key(r.space.first_generation).is_none());
     assert_eq!(carol.state(&r.by_bob), State::Rejected(RejectReason::NoKey));
+}
+
+#[test]
+fn two_key_chain_entries_that_disagree_give_every_copy_the_same_key_in_either_order() {
+    // Carol holds the second generation's key before either entry arrives;
+    // Alice then writes two rotations to it, one with the first
+    // generation's real key and one with another.
+    let mut space = Space::new(ALICE);
+    let genesis = space.genesis.clone();
+    let add_bob = space.add(ALICE, BOB, Role::Writer, &[&genesis]);
+    let to_bob = space.envelope(ALICE, BOB, &[&add_bob]);
+    let by_bob = space.sealed(BOB, vec![set_title(1)]);
+    let add_carol = space.add(ALICE, CAROL, Role::Reader, &[&to_bob]);
+    let second = membership::generation_id(space.space, id(ALICE), &[space.first_generation]);
+    let sealed = envelope::seal(&second_key(), space.space, second, &key(CAROL).public())
+        .expect("a simulated member's key takes an envelope");
+    let to_carol = space.write(ALICE, Entry::KeyEnvelope(sealed), &[&add_carol]);
+    let real = chain_entry(&space, second, &space_key());
+    let real = space.write(ALICE, real, &[&to_carol]);
+    let other = chain_entry(&space, second, &SpaceKey::from_bytes([0x77; 32]));
+    let other = space.write(ALICE, other, &[&to_carol]);
+    let before = [&genesis, &add_bob, &to_bob, &add_carol, &to_carol, &by_bob];
+
+    let mut one = Copy::of(&space);
+    one.receive(&before);
+    one.receive(&[&real, &other]);
+    let mut two = Copy::of(&space);
+    two.receive(&before);
+    two.receive(&[&other, &real]);
+
+    let generations = one.checks.resolved().generation(second);
+    assert_eq!(generations.map(|g| g.entries.len()), Some(2));
+    assert_eq!(one.checks.model_id(), two.checks.model_id());
+    assert_eq!(one.state(&by_bob), two.state(&by_bob));
 }
