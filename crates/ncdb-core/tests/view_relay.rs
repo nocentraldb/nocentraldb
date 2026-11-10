@@ -15,6 +15,11 @@ mod space;
 #[path = "support/view.rs"]
 mod view_support;
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so every test runs on both targets (NOC-10).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ncdb_core::change::Change;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::field_op;
