@@ -104,3 +104,16 @@ async fn pause_and_resume_without_a_relay_change_nothing() {
     db.sync().resume().await;
     assert_eq!(db.sync().current().connection, Connection::None);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_resume_right_after_a_pause_drops_the_connection_and_connects_again() {
+    let relay = LocalRelay::start().await;
+    let db = open(ME, &relay.url()).await;
+    synced(&db).await;
+
+    for _ in 0..20 {
+        db.sync().pause().await;
+        db.sync().resume().await;
+        synced(&db).await;
+    }
+}
