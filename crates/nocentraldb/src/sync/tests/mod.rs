@@ -15,6 +15,7 @@ mod fake;
 mod pull;
 mod push;
 mod reconnect;
+mod reopen;
 mod spaces;
 mod support;
 mod timeouts;
