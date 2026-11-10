@@ -19,7 +19,7 @@ ncdb-core.workspace = true
 ncdb-relay.workspace = true
 # The asynchronous runtime: one task per connection and per subscription;
 # the SQLite backend's blocking calls run on its blocking threads.
-tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "net", "sync", "macros"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "net", "sync", "macros", "time"] }
 # WebSocket (RFC 6455) over tokio's TCP streams, RFC 0007's transport.
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }

@@ -47,6 +47,9 @@ pub const MAX_PUSH: usize = 32;
 /// changes (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = MAX_MESSAGE - 1024;
 
+/// The most messages a connection's outgoing queue holds, at most 4 MiB.
+pub const QUEUE: usize = 32;
+
 /// How long a connection waits for progress in writing a message to its
 /// member before it closes the connection (RFC 0007, "Liveness").
 pub const WRITE_TIMEOUT: Duration = Duration::from_secs(60);
