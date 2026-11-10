@@ -249,3 +249,23 @@ fn a_member_or_a_former_member_is_not_added_again() {
     assert_eq!(again.code(), ErrorCode::AlreadyMember);
     assert_eq!(re_grant.code(), ErrorCode::InvalidValue);
 }
+
+/// A fingerprint shows as RFC 0010 gives it ("The fingerprint"): SHA-256
+/// over `"nocentraldb/account-fingerprint"` and the account key, read as a
+/// big-endian integer mod 10^60, in twelve blocks of five digits. The
+/// vectors were computed with Python's `hashlib` and `cryptography`.
+#[test]
+fn a_fingerprint_shows_as_sixty_digits_in_twelve_blocks_of_five() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let invitation = now(of_account(1, &account).invitation());
+    let zero_padded = super::Fingerprint([7; 32]);
+
+    assert_eq!(
+        invitation.fingerprint().to_string(),
+        "16133 87624 73902 00999 15789 51045 80380 30084 28047 86277 74087 14820"
+    );
+    assert_eq!(
+        zero_padded.to_string(),
+        "58051 77504 08017 25286 35258 70213 78592 50688 13941 12806 64710 13483"
+    );
+}
