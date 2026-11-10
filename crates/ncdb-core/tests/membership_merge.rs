@@ -77,7 +77,10 @@ fn merge(s: &mut Space, author: Who, state: &Resolved, changes: &[Change]) -> (V
     let rotation = state
         .merge_rotation(id(author))
         .expect("an exposed current generation");
-    let entry = rotation.entry(|_| vec![0xc4; 72]);
+    let key = space::space_key();
+    let entry = rotation
+        .entry(&key, |_| Some(&key))
+        .expect("every simulated generation has the same key");
     let chain = s.write(author, Entry::KeyChain(entry), &heads(changes));
     let mut written = vec![chain];
     for recipient in &rotation.recipients {
@@ -113,16 +116,27 @@ fn an_exposed_current_generation_asks_an_admin_for_a_merge_rotation() {
     assert_eq!(
         rotation,
         MergeRotation {
+            space: s.space,
             generation: membership::generation_id(s.space, id(ALICE), &previous),
             previous: previous.clone(),
             recipients: BTreeSet::from([id(ALICE), id(BOB), id(CAROL)]),
         }
     );
     assert_eq!(rotation.generation >> 48, 3);
-    let entry = rotation.entry(|generation| generation.to_be_bytes().to_vec());
+    let key = space::space_key();
+    let entry = rotation
+        .entry(&key, |_| Some(&key))
+        .expect("every head's key");
     assert_eq!(entry.generation, rotation.generation);
     assert_eq!(entry.previous_generations().collect::<Vec<_>>(), previous);
-    assert_eq!(entry.previous[0].key, previous[0].to_be_bytes());
+    for p in &entry.previous {
+        let opened =
+            membership::open_previous_key(&key, s.space, rotation.generation, p.generation, &p.key);
+        assert!(
+            opened.is_some(),
+            "NOC-97's layout, under the new generation"
+        );
+    }
     assert!(entry.answers.is_empty());
     // Bob's merge rotation derives another id; a writer writes none.
     let by_bob = state.merge_rotation(id(BOB)).expect("Bob is an admin");

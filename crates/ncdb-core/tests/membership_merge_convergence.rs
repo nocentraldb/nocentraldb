@@ -86,9 +86,14 @@ fn merge(s: &mut Space, author: Who, state: &Resolved, seen: &[Change]) -> Vec<C
     let rotation = state
         .merge_rotation(id(author))
         .expect("an exposed current generation");
+    let key = space::space_key();
     let chain = s.write(
         author,
-        Entry::KeyChain(rotation.entry(|_| vec![0xc4; 72])),
+        Entry::KeyChain(
+            rotation
+                .entry(&key, |_| Some(&key))
+                .expect("every simulated generation has the same key"),
+        ),
         &heads(seen),
     );
     let mut written = vec![chain];

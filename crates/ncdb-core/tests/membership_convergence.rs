@@ -231,7 +231,9 @@ impl Generator<Copy> for Members {
             }),
             (None, 7) => {
                 if let Some(merge) = copy.resolved().merge_rotation(space::id(who)) {
-                    Entry::KeyChain(merge.entry(|_| vec![0xc4; 72]))
+                    let key = space::space_key();
+                    let entry = merge.entry(&key, |_| Some(&key));
+                    Entry::KeyChain(entry.expect("every simulated generation has the same key"))
                 } else {
                     let previous: Vec<u64> = copy.resolved().heads().into_iter().collect();
                     Entry::KeyChain(KeyChainEntry {
@@ -240,7 +242,7 @@ impl Generator<Copy> for Members {
                             .into_iter()
                             .map(|generation| PreviousKey {
                                 generation,
-                                key: vec![0xc4; 72],
+                                key: [0xc4; 72],
                             })
                             .collect(),
                         answers: BTreeSet::new(),
