@@ -688,7 +688,7 @@ Decided (Carsten, 2026-11-08), through RFC 0005's D13 C: the genesis carries the
 
 Why: two apps that should share a space then share one model lineage ([RFC 0005, D13](0005-schema-and-model-lock.md#d13-two-models-in-one-space)).
 
-Not taken:
+Not taken (named in the rewrite; the original text listed no options):
 
 - Keep the model id out of the genesis, which draft 0.2 of this RFC recommended.
 
@@ -728,7 +728,7 @@ Decided (Carsten, 2026-11-08): reader, writer and admin, and the outcome "lost g
 
 Why: as RFC 0004 does for its names, the API review decides every name a developer types in one place.
 
-Not taken:
+Not taken (named in the rewrite; the original text listed no options):
 
 - Fix the public names in this RFC.
 

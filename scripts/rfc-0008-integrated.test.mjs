@@ -133,7 +133,7 @@ test("Decisions keeps M1 to M26 in short form: decided, why, and the options not
     assert.match(text, /^Why: /m, `${id} gives no reason`);
     assert.match(
       text,
-      /^Not taken:\n\n?- /m,
+      /^Not taken( \(named in the rewrite; the original text listed no options\))?:\n\n?- /m,
       `${id} lists no option not taken`,
     );
     assert.doesNotMatch(text, /\*\(recommended/, id);
