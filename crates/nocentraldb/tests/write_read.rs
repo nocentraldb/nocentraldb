@@ -15,7 +15,10 @@ fn a_task_written_into_a_new_space_reads_back_by_its_id() {
     let written = now(project.write(|tx| {
         tx.create(
             "tasks",
-            [("title", Value::from("Ship the SDK")), ("priority", Value::from(2))],
+            [
+                ("title", Value::from("Ship the SDK")),
+                ("priority", Value::from(2)),
+            ],
         )?;
         Ok(())
     }))

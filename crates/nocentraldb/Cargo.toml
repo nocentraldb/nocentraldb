@@ -14,5 +14,10 @@ ncdb-core.workspace = true
 # The `Stream` a subscription returns (RFC 0009, "The Rust SDK"). The version
 # Cargo.lock already held.
 futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
-# Signs the member certificate with the account key, as the core does.
+# The account key that signs the member's certificate, as the core's
+# certificate takes it.
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
+# The member key's and the account key's secrets, from the platform's secure
+# generator, wiped from memory when they are dropped.
+getrandom = { version = "=0.4.3", default-features = false }
+zeroize = { version = "=1.9.1", default-features = false }
