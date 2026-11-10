@@ -12,7 +12,9 @@ use crate::space::Spaces;
 pub struct SpaceInfo {
     /// The space id.
     pub id: SpaceId,
-    /// The member's current role in the space.
+    /// The member's current role in the space, from the membership the
+    /// copy folded: `None` once the member was removed, or while no
+    /// membership entry of the member has been folded yet.
     pub role: Option<Role>,
     /// Whether the space is of the lock's model.
     pub model: SpaceModel,
@@ -32,12 +34,13 @@ impl Spaces<'_> {
     /// Every space the copy holds.
     pub async fn list(&self) -> Result<Vec<SpaceInfo>, Error> {
         let inner = self.db.lock();
+        let member = inner.member.key().id();
         Ok(inner
             .spaces
-            .keys()
-            .map(|&space| SpaceInfo {
+            .iter()
+            .map(|(&space, state)| SpaceInfo {
                 id: SpaceId(space),
-                role: Some(Role::Admin),
+                role: state.checks.resolved().role(member).map(Role::of),
                 model: SpaceModel::Ours,
             })
             .collect())
