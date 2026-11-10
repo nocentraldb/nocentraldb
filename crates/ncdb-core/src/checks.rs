@@ -67,6 +67,26 @@ impl SealChecks {
         &self.resolved
     }
 
+    /// The space key of `generation`, when an envelope to the checks'
+    /// member unwrapped it: the key a writer seals under.
+    pub fn space_key(&self, generation: u64) -> Option<&SpaceKey> {
+        self.space_keys.get(&generation)
+    }
+
+    /// The `model.id` the space's genesis names, opened with the space key
+    /// of its first generation (RFC 0008, "What it names"). `None` while
+    /// the checks hold no genesis or no key of the first generation, or
+    /// when the sealed id does not open under that key.
+    pub fn model_id(&self) -> Option<[u8; 16]> {
+        let genesis = self.controls.get(&self.resolved.genesis()?)?;
+        let body = ControlBody::decode(&genesis.header().payload).ok()?;
+        let Entry::Genesis(genesis) = body.entry else {
+            return None;
+        };
+        let key = self.space_keys.get(&genesis.first_generation)?;
+        membership::open_model_id(key, self.space, genesis.creator.id(), &genesis.model_id)
+    }
+
     /// The author's public keys; without them, the change stops at step 3
     /// as "unknown author". A control change may name its own author's keys.
     fn author(&self, change: &Change) -> Result<MemberPublicKey, Stop> {

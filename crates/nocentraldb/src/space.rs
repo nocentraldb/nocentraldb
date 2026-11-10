@@ -9,17 +9,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Payload};
 use ncdb_core::checks::SealChecks;
-use ncdb_core::clock::Clock;
 use ncdb_core::envelope;
 use ncdb_core::ids::ObjectId as CoreObjectId;
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
 use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis, MemberKind};
 use ncdb_core::seal;
+use ncdb_core::view::View;
 
 use crate::db::{Db, Inner, SpaceState, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ChangeId, ObjectId, SpaceId};
+use crate::next;
 use crate::object::Object;
 use crate::subscribe::touched;
 use crate::tx::Transaction;
@@ -30,7 +31,7 @@ pub struct Spaces<'a> {
     pub(crate) db: &'a Db,
 }
 
-/// The calls of one space, from [`Spaces::create`].
+/// The calls of one space, from [`Spaces::create`] or [`Spaces::get`].
 #[derive(Clone)]
 pub struct Space {
     inner: Arc<Mutex<Inner>>,
@@ -89,16 +90,9 @@ impl Spaces<'_> {
             generation,
             &ControlBody::new(BTreeSet::from([genesis.id()]), Entry::KeyEnvelope(sealed)),
         );
-        let mut state = SpaceState {
-            checks: SealChecks::new(space, member),
-            key,
-            generation,
-            sequence: 2,
-            clock: Clock::new(),
-            heads: own.id(),
-        };
+        let mut state = SpaceState::new(space, member);
         for change in [&genesis, &own] {
-            fold(&mut inner, &mut state, change)?;
+            fold(&mut inner.view, &mut state.checks, change)?;
         }
         inner.spaces.insert(space, state);
         crate::sync::wake(&inner);
@@ -107,26 +101,67 @@ impl Spaces<'_> {
             id: SpaceId(space),
         })
     }
+
+    /// The handle of the space `id`, which the member created or was added
+    /// to. A space is held once the copy holds its genesis and the space
+    /// key of its first and of its current generation; until then it is
+    /// `NotFound`. A space whose genesis names another `model.id` than the
+    /// lock's is `SpaceOfAnotherModel` (RFC 0009, "Spaces of another
+    /// model").
+    pub async fn get(&self, id: SpaceId) -> Result<Space, Error> {
+        let inner = self.db.lock();
+        writable(&inner, id)?;
+        Ok(Space {
+            inner: self.db.inner.clone(),
+            id,
+        })
+    }
+}
+
+/// Whether the member can write into the space `id`: the copy holds it, it
+/// is of the lock's model, and the member holds the key of its current
+/// generation.
+fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
+    let not_found = || Error::new(ErrorCode::NotFound, format!("the copy holds no space {id}"));
+    let state = inner.spaces.get(&id.0).ok_or_else(not_found)?;
+    let model_id = state.checks.model_id().ok_or_else(not_found)?;
+    if model_id != inner.model_id {
+        return Err(Error::new(
+            ErrorCode::SpaceOfAnotherModel,
+            format!(
+                "the space {id} is of the model {}, the lock is of the model {}",
+                hex(&model_id),
+                hex(&inner.model_id)
+            ),
+        ));
+    }
+    let generation = state.checks.resolved().current_generation();
+    match generation.and_then(|generation| state.checks.space_key(generation)) {
+        Some(_) => Ok(()),
+        None => Err(not_found()),
+    }
+}
+
+/// A model id as 32 lowercase hex digits, as `model.lock.json` writes it.
+fn hex(bytes: &[u8; 16]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// Appends the member's own change to the log and folds it. Every check
 /// passes on a change the member wrote itself, so a change that does not
 /// fold is a bug of the SDK.
-fn fold(inner: &mut Inner, state: &mut SpaceState, change: &Change) -> Result<(), Error> {
+fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(), Error> {
     let space = change.header().space;
-    inner
-        .view
-        .receive(change.bytes(), &mut state.checks)
-        .map_err(storage)?;
-    match inner.view.state(space, change.id()) {
+    view.receive(change.bytes(), checks).map_err(storage)?;
+    match view.state(space, change.id()) {
         Some(State::Folded { parked }) if parked.is_empty() => Ok(()),
         other => panic!("the member's own change was not folded: {other:?}"),
     }
 }
 
 impl Space {
-    /// A handle on a space the database holds, as the sync tests read a
-    /// space the member was added to.
+    /// A handle on a space the database holds, without the checks of
+    /// [`Spaces::get`], as the sync tests read a space of another model.
     #[cfg(test)]
     pub(crate) fn handle(inner: Arc<Mutex<Inner>>, id: SpaceId) -> Space {
         Space { inner, id }
@@ -162,44 +197,39 @@ impl Space {
         let (operations, ids) = tx.operations(&inner.view, space, member.id())?;
         let collections: BTreeSet<String> =
             operations.iter().map(|op| op.collection.clone()).collect();
-        let mut state = inner
-            .spaces
-            .remove(&space)
-            .expect("a space handle's space is held");
+        writable(&inner, self.id)?;
         let wall = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
-        let result = (|| {
-            let clock = state.clock.now(wall).map_err(|error| {
-                Error::new(
-                    ErrorCode::StorageFailed,
-                    format!("the space's clock: {error}"),
-                )
-            })?;
-            let payload = Payload::new(clock, BTreeSet::from([state.heads]), operations);
-            let sequence = state.sequence + 1;
-            let change = seal::seal(
-                &member,
-                &state.key,
-                space,
-                sequence,
-                state.generation,
-                &payload,
-            );
-            fold(&mut inner, &mut state, &change)?;
-            state.sequence = sequence;
-            state.heads = change.id();
-            touched(&mut inner.watchers, space, &collections);
-            Ok(Written {
-                change: ChangeId(change.id()),
-                ids,
-            })
-        })();
-        inner.spaces.insert(space, state);
-        if result.is_ok() {
-            crate::sync::wake(&inner);
-        }
-        result
+        let Inner {
+            view,
+            spaces,
+            watchers,
+            ..
+        } = &mut *inner;
+        let state = spaces.get_mut(&space).expect("a writable space is held");
+        let next = next::next(view, space, &state.checks, member.id());
+        let generation = next.generation.expect("a writable space has a generation");
+        state.clock.observe(next.seen);
+        let clock = state.clock.now(wall).map_err(|error| {
+            Error::new(
+                ErrorCode::StorageFailed,
+                format!("the space's clock: {error}"),
+            )
+        })?;
+        let payload = Payload::new(clock, next.heads, operations);
+        let key = state
+            .checks
+            .space_key(generation)
+            .expect("a writable space's key is held");
+        let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
+        fold(view, &mut state.checks, &change)?;
+        touched(watchers, space, &collections);
+        crate::sync::wake(&inner);
+        Ok(Written {
+            change: ChangeId(change.id()),
+            ids,
+        })
     }
 
     /// Reads the object `id` of `collection` in this space, or `None` when

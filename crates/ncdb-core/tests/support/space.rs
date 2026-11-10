@@ -81,7 +81,12 @@ impl Space {
     /// A space from this nonce; two calls with the same creator and nonce
     /// give the same space id.
     pub fn with_nonce(creator: Who, nonce: [u8; 16]) -> Space {
-        let (genesis, space, first_generation) = genesis(creator, nonce, [1; 16]);
+        Space::with_model(creator, nonce, [1; 16])
+    }
+
+    /// A space from this nonce whose genesis names this `model.id`.
+    pub fn with_model(creator: Who, nonce: [u8; 16], model_id: [u8; 16]) -> Space {
+        let (genesis, space, first_generation) = genesis(creator, nonce, model_id);
         Space {
             space,
             first_generation,

@@ -2,17 +2,14 @@
 //! syncs, the relay's epoch, the entries it pulled and the results of a
 //! push (RFC 0007, "Island mode"; RFC 0002, D12).
 
-use std::collections::BTreeSet;
-
 use ncdb_core::change::Change;
-use ncdb_core::checks::SealChecks;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::log::Appended;
 use ncdb_core::view::Error as ViewError;
 
 use super::SyncState;
 use super::wire::{Entry, Pushed};
-use crate::db::Inner;
+use crate::db::{Inner, SpaceState};
 use crate::subscribe::touched;
 
 /// The codes after which the same push may succeed later: the relay
@@ -28,13 +25,10 @@ fn sync(inner: &mut Inner) -> &mut SyncState {
 /// said it belongs to, except those it may no longer read.
 pub(super) fn spaces(inner: &Inner) -> Vec<SpaceId> {
     let stopped = inner.sync.as_ref().map(|s| &s.stopped);
-    let all: BTreeSet<SpaceId> = inner
+    inner
         .spaces
         .keys()
-        .chain(inner.received.keys())
         .copied()
-        .collect();
-    all.into_iter()
         .filter(|space| stopped.is_none_or(|s| !s.contains(space)))
         .collect()
 }
@@ -58,9 +52,9 @@ pub(super) fn welcome(
     }
     sync(inner).epoch = Some(epoch);
     for space in spaces {
-        if !inner.spaces.contains_key(space) && !inner.received.contains_key(space) {
-            let checks = SealChecks::new(*space, inner.member.key());
-            inner.received.insert(*space, checks);
+        if !inner.spaces.contains_key(space) {
+            let state = SpaceState::new(*space, inner.member.key());
+            inner.spaces.insert(*space, state);
         }
     }
     Ok(())
@@ -94,17 +88,13 @@ pub(super) fn entries(
         let Inner {
             view,
             spaces,
-            received,
             member,
             ..
         } = &mut *inner;
-        let checks = match spaces.get_mut(&space) {
-            Some(state) => &mut state.checks,
-            None => received
-                .entry(space)
-                .or_insert_with(|| SealChecks::new(space, member.key())),
-        };
-        match view.receive(&entry.frame, checks) {
+        let state = spaces
+            .entry(space)
+            .or_insert_with(|| SpaceState::new(space, member.key()));
+        match view.receive(&entry.frame, &mut state.checks) {
             Ok(Appended::New(_)) => {
                 folded = true;
                 sync(inner).folds += 1;
@@ -172,7 +162,7 @@ pub(super) fn stop(inner: &mut Inner, space: SpaceId) {
 /// refused, across every space the database holds.
 pub(super) fn own_counts(inner: &Inner) -> (u64, u64) {
     let me = inner.member.key().id();
-    let spaces = inner.spaces.keys().chain(inner.received.keys());
+    let spaces = inner.spaces.keys();
     let (mut unconfirmed, mut refused) = (0, 0);
     for space in spaces {
         let own = |change: &Change| change.header().author == me;

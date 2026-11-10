@@ -107,6 +107,13 @@ impl LocalRelay {
         entries.iter().map(|entry| entry.change).collect()
     }
 
+    /// The change `id` of `space`, as the relay holds it.
+    pub async fn change(&self, space: CoreSpaceId, id: CoreChangeId) -> Change {
+        let entries = self.store().read(space, 0, 10_000).await.expect("a read");
+        let entry = entries.iter().find(|entry| entry.change == id);
+        Change::decode(&entry.expect("the relay holds the change").frame).expect("a change")
+    }
+
     /// A raw connection of the simulated member `who` to the server.
     pub async fn client(&self, who: Who) -> Client {
         Client::member(self.addr, who).await.0

@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use ed25519_dalek::SigningKey;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Clock;
-use ncdb_core::ids::{ChangeId, SpaceId as CoreSpaceId};
-use ncdb_core::keys::{MemberKey, SpaceKey};
+use ncdb_core::ids::SpaceId as CoreSpaceId;
+use ncdb_core::keys::MemberKey;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::view::{Model, View};
 use zeroize::Zeroizing;
@@ -119,24 +119,30 @@ pub(crate) struct Inner {
     pub(crate) model_id: [u8; 16],
     pub(crate) member: Secrets,
     pub(crate) account: SigningKey,
+    /// Each space the member created or was added to.
     pub(crate) spaces: BTreeMap<CoreSpaceId, SpaceState>,
-    /// The checks of each space the member was added to and receives,
-    /// without a handle that writes into it yet.
-    pub(crate) received: BTreeMap<CoreSpaceId, SealChecks>,
     pub(crate) watchers: Vec<Watcher>,
     /// What the database keeps of its relay, when it syncs with one.
     pub(crate) sync: Option<SyncState>,
 }
 
-/// What the member needs to write into one space: its checks, the space
-/// key it writes under, its next author sequence, its clock and its heads.
+/// What the database keeps of one space besides its log: the checks,
+/// which hold the space keys its envelopes gave the member, and the
+/// member's clock in the space. The rest of what a write needs comes from
+/// the log (`crate::next`).
 pub(crate) struct SpaceState {
     pub(crate) checks: SealChecks,
-    pub(crate) key: SpaceKey,
-    pub(crate) generation: u64,
-    pub(crate) sequence: u64,
     pub(crate) clock: Clock,
-    pub(crate) heads: ChangeId,
+}
+
+impl SpaceState {
+    /// A space the database holds no change of yet.
+    pub(crate) fn new(space: CoreSpaceId, member: MemberKey) -> SpaceState {
+        SpaceState {
+            checks: SealChecks::new(space, member),
+            clock: Clock::new(),
+        }
+    }
 }
 
 impl Db {
@@ -199,7 +205,6 @@ impl Db {
             member,
             account,
             spaces: BTreeMap::new(),
-            received: BTreeMap::new(),
             watchers: Vec::new(),
             sync: None,
         };
