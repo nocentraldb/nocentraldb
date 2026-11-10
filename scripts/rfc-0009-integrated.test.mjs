@@ -1,10 +1,11 @@
 // Asserts RFC 0009 as one complete text (NOC-101), as docs/rfc/README.md's
 // "How a decided RFC changes" asks: every amendment is folded into the design
 // where its rule belongs, so no "Amendment" section, mark or in-page link is
-// left; "Decisions" keeps S1 to S29 in short form, with the owner's name and
+// left; "Decisions" keeps S1 to S34 in short form, with the owner's name and
 // date, why, and the options not taken, S14 stays listed as withdrawn, and
 // S25 is the object id the owner decided on #91 (S26 to S28 followed on
-// NOC-114, S29 on NOC-116); "History" lists dated lines
+// NOC-114, S29 on NOC-116, S30 to S32 on NOC-149, S33 and S34 on NOC-150);
+// "History" lists dated lines
 // that name their ticket and pull request; the status says what is built; and
 // every link other files use into RFC 0009 still resolves. The rules the
 // amendments made are checked where they now stand: groups leave the design
@@ -112,6 +113,8 @@ test("History lists dated lines, each with its ticket and pull request", () => {
     ["NOC-92", 98],
     ["NOC-106", 113],
     ["NOC-101", null],
+    ["NOC-149", 135],
+    ["NOC-150", null],
   ]) {
     const entry = entries.find((l) => l.includes(` · ${ticket} · `));
     assert.ok(entry, `History has no line for ${ticket}`);
@@ -125,11 +128,11 @@ test("Open questions says whether the owner still has one", () => {
   assert.match(section(read(), "open-questions"), /\S/);
 });
 
-test("Decisions keeps S1 to S32 in short form: decided, why, and the options not taken", () => {
+test("Decisions keeps S1 to S34 in short form: decided, why, and the options not taken", () => {
   const found = decisions();
   assert.deepEqual(
     found.map((d) => d.id),
-    Array.from({ length: 32 }, (_, i) => `S${i + 1}`),
+    Array.from({ length: 34 }, (_, i) => `S${i + 1}`),
   );
   for (const { id, text } of found) {
     const date = Number(id.slice(1)) <= 18 ? "2026-11-09" : "2026-11-10";
