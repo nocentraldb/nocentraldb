@@ -1,36 +1,23 @@
-//! `spaces().list()` on spaces a simulated admin shares with the member:
-//! the admin's control changes are folded into the member's copy as a
-//! pull folds them, without a relay, since the relay serves no change to a
-//! member it removed (RFC 0007, "The protocol").
-
-#[path = "../../../ncdb-core/tests/support/space.rs"]
-mod space;
+//! `spaces().list()` on spaces a simulated admin shares with the member
+//! (RFC 0009, "Spaces" and "Spaces of another model"): the admin's
+//! control changes are folded into the member's copy as a pull folds
+//! them, without a relay, since the relay serves no change to a member it
+//! removed (RFC 0007, "The protocol").
 
 use ncdb_core::change::Change;
 use ncdb_core::membership::Role as CoreRole;
 use ncdb_core::model_lock::ModelLock;
 
-use super::{SpaceInfo, SpaceModel};
+use super::support::{LOCK, Who, now, space};
 use crate::db::{Db, OpenOptions, SpaceState};
 use crate::id::SpaceId;
+use crate::list::{SpaceInfo, SpaceModel};
 use crate::members::Role;
-use space::Who;
-
-const LOCK: &str = include_str!("../../tests/model/model.lock.json");
 
 /// The simulated admin who creates the space.
 const ADMIN: Who = 0;
 /// The member whose database lists its spaces.
 const ME: Who = 1;
-
-/// The output of an SDK future, which is ready at its first poll.
-fn now<F: std::future::Future>(future: F) -> F::Output {
-    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-    match std::pin::pin!(future).poll(&mut cx) {
-        std::task::Poll::Ready(output) => output,
-        std::task::Poll::Pending => panic!("an SDK call waited"),
-    }
-}
 
 /// The `model.id` of the test lock.
 fn model_id() -> [u8; 16] {
@@ -44,8 +31,13 @@ fn model_id() -> [u8; 16] {
 /// The database of `ME`, of the simulated account, without a relay.
 fn database() -> Db {
     let options = OpenOptions::new(LOCK).in_memory();
-    now(Db::open_as(options, [ME; 32], [ME ^ 0x80; 32], space::account()))
-        .expect("the test lock opens")
+    now(Db::open_as(
+        options,
+        [ME; 32],
+        [ME ^ 0x80; 32],
+        space::account(),
+    ))
+    .expect("the test lock opens")
 }
 
 /// Folds `changes` into the database's copy, as a pull folds them.
