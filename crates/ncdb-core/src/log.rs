@@ -293,6 +293,27 @@ impl Log {
         true
     }
 
+    /// Forgets the relay's refusal of a change the log holds, so that the
+    /// member pushes it to the relay once more (RFC 0008, M19); a change
+    /// the relay has not confirmed counts as unconfirmed again. Returns
+    /// `false`, and changes nothing, when the log does not hold the change
+    /// or holds no refusal of it.
+    pub fn clear_relay_refusal(&mut self, id: ChangeId) -> bool {
+        let Some(entry) = self.entry_mut(id) else {
+            return false;
+        };
+        if entry.refusal.take().is_none() {
+            return false;
+        }
+        let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        let counts = self.counts_mut(author);
+        counts.refused -= 1;
+        if !confirmed {
+            counts.unconfirmed += 1;
+        }
+        true
+    }
+
     /// Records that the relay holds a change the log holds, at a position
     /// the member keeps elsewhere. Returns `false`, and records nothing,
     /// when the log does not hold the change.

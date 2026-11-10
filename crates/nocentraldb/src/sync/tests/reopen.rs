@@ -13,7 +13,7 @@ const ME: Who = 1;
 /// The database of `ME`, of the simulated account, at `dir`, syncing with
 /// the relay at `url`. Its key file holds `ME`'s keys, so the relay lets
 /// it create spaces.
-async fn open_at(dir: &TempDir, url: &str) -> crate::Db {
+pub(super) async fn open_at(dir: &TempDir, url: &str) -> crate::Db {
     let key_file = dir.0.join("member.key");
     if !key_file.exists() {
         let keys = Keys {

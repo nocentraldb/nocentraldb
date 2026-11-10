@@ -27,7 +27,13 @@ const LONGEST: Duration = Duration::from_secs(120);
 pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
     let (wake, receiver) = watch::channel(());
     let (pause, paused) = watch::channel(false);
-    lock(inner).sync = Some(SyncState::new(wake, pause));
+    {
+        let mut inner = lock(inner);
+        inner.sync = Some(SyncState::new(wake, pause));
+        // A log that cannot be read leaves nothing to push again; pushing
+        // reads it again and ends the session.
+        let _ = super::again::load(&mut inner);
+    }
     let db = Arc::downgrade(inner);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
