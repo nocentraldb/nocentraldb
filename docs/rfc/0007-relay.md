@@ -787,4 +787,4 @@ The protection of the person-key store and the key that authenticates a connecti
 - **2026-11-09** · NOC-35 · The first line drops the draft number of a decided RFC (#76).
 - **2026-11-10** · NOC-106 · [The keys of each message](#the-keys-of-each-message), with decision R12, which the owner decided as recommended on NOC-98 (#113).
 - **2026-11-10** · NOC-101 · Rewritten as one complete text: the decisions in short form, an Open questions section, and a status that says what is built (#117).
-- **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118).
+- **2026-11-10** · NOC-142 · [The backend interface](#the-backend-interface) draws the person-key put conditional on the stored generation, and its rules and the AWS backend say how each backend keeps it, as the relay is built since #130 (NOC-118) (#132).
