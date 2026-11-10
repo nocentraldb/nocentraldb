@@ -86,8 +86,8 @@ test("the status says the RFC is decided and points to Decisions, Open questions
   assert.ok(links(status, "#history"));
 });
 
-test("decisions 1 to 18 each say what was chosen, by the owner and when, why, and what was not taken", () => {
-  for (let n = 1; n <= 18; n += 1) {
+test("decisions 1 to 21 each say what was chosen, by the owner and when, why, and what was not taken", () => {
+  for (let n = 1; n <= 21; n += 1) {
     const text = decision(`${n}.`);
     const date = n <= 15 ? "2026-11-08" : "2026-11-10";
     assert.match(
@@ -108,6 +108,9 @@ test("decisions 1 to 18 each say what was chosen, by the owner and when, why, an
     [16, "NOC-95"],
     [17, "NOC-95"],
     [18, "NOC-97"],
+    [19, "NOC-114"],
+    [20, "NOC-110"],
+    [21, "NOC-117"],
   ]) {
     assert.ok(
       decision(`${n}.`).includes(ticket),
@@ -153,17 +156,15 @@ test("\"Decisions this RFC follows\" names RFC 0008's and RFC 0009's decisions, 
   }
 });
 
-test('"Open questions" names the bytes of the associated data of an encrypted previous key, with NOC-110', () => {
-  const open = part("open-questions");
-  assert.match(open, /associated data/);
-  assert.match(open, /previous key/);
-  assert.ok(
-    targets(open).some((t) =>
-      t.includes("linear.app/nocentraldb/issue/NOC-110/"),
-    ),
-    "no link to NOC-110",
+// The owner decided the last two open questions on 2026-11-10 (NOC-110
+// point 4, NOC-117), so the section says none is left, and the key-chain
+// subkey gives the bytes of its associated data instead of pointing there.
+test('"Open questions" says the owner has decided every question', () => {
+  assert.match(
+    part("open-questions"),
+    /^None\. The owner has decided every question/m,
   );
-  assert.ok(links(part("key-chain-subkey"), "#open-questions"));
+  assert.ok(!links(part("key-chain-subkey"), "#open-questions"));
 });
 
 test('"History" lists each change by date, oldest first, with its pull request', () => {

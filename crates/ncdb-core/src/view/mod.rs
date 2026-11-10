@@ -17,6 +17,7 @@ mod log_table;
 pub mod model;
 mod query;
 mod read;
+mod relay;
 mod schema;
 mod state;
 

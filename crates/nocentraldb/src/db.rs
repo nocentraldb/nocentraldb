@@ -7,7 +7,8 @@
 //! gives no place on disk natively, and the platform keystore that RFC 0003
 //! puts the member key in is a later ticket. The account key that signs the
 //! member's certificate is drawn on open too, until the accounts RFC
-//! designs accounts. There is no relay: the database stays local.
+//! designs accounts. A database opened with a relay syncs with it; see
+//! `crate::sync`.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -24,19 +25,32 @@ use zeroize::Zeroizing;
 use crate::error::{Error, ErrorCode, storage};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
+use crate::sync::{self, SyncState};
 
-/// The options of [`Db::open`]: the text of the app's `model.lock.json`.
+/// The options of [`Db::open`]: the text of the app's `model.lock.json`,
+/// and the relay to sync with.
 #[derive(Clone)]
 pub struct OpenOptions {
     lock: String,
+    relay: Option<String>,
 }
 
 impl OpenOptions {
     /// Options to open a database from the text of `model.lock.json`.
+    /// Without [`relay`](OpenOptions::relay), the database stays local.
     pub fn new(lock: &str) -> OpenOptions {
         OpenOptions {
             lock: lock.to_owned(),
+            relay: None,
         }
+    }
+
+    /// The one relay the database syncs with (RFC 0009, decision S16), by
+    /// its URL. Only plain WebSocket, `ws://`, is built yet; [`Db::open`]
+    /// refuses any other URL with `InvalidValue`.
+    pub fn relay(mut self, url: &str) -> OpenOptions {
+        self.relay = Some(url.to_owned());
+        self
     }
 }
 
@@ -78,6 +92,12 @@ impl Secrets {
     pub(crate) fn key(&self) -> MemberKey {
         MemberKey::from_secrets(*self.signing, *self.agreement)
     }
+
+    /// The secret half of the member signing key, which signs the relay's
+    /// challenge (RFC 0007, "Opening a connection").
+    pub(crate) fn signing(&self) -> &[u8; 32] {
+        &self.signing
+    }
 }
 
 /// 32 bytes from the platform's secure generator.
@@ -100,7 +120,12 @@ pub(crate) struct Inner {
     pub(crate) member: Secrets,
     pub(crate) account: SigningKey,
     pub(crate) spaces: BTreeMap<CoreSpaceId, SpaceState>,
+    /// The checks of each space the member was added to and receives,
+    /// without a handle that writes into it yet.
+    pub(crate) received: BTreeMap<CoreSpaceId, SealChecks>,
     pub(crate) watchers: Vec<Watcher>,
+    /// What the database keeps of its relay, when it syncs with one.
+    pub(crate) sync: Option<SyncState>,
 }
 
 /// What the member needs to write into one space: its checks, the space
@@ -117,8 +142,42 @@ pub(crate) struct SpaceState {
 impl Db {
     /// Opens the member's database from the app's `model.lock.json`, and
     /// creates the member key. A lock that cannot be read, or breaks the
-    /// rules RFC 0005 gives a lock, is refused with `ModelRefused`.
+    /// rules RFC 0005 gives a lock, is refused with `ModelRefused`; a relay
+    /// URL that is not `ws://`, with `InvalidValue`. With a relay, the
+    /// database starts syncing in the background.
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
+        Db::open_with(
+            options,
+            Secrets::generate(),
+            SigningKey::from_bytes(&random()),
+        )
+    }
+
+    /// Opens the database of the member with these secrets, of this
+    /// account, as the sync tests need it.
+    #[cfg(test)]
+    pub(crate) async fn open_as(
+        options: OpenOptions,
+        signing: [u8; 32],
+        agreement: [u8; 32],
+        account: SigningKey,
+    ) -> Result<Db, Error> {
+        let member = Secrets {
+            signing: Zeroizing::new(signing),
+            agreement: Zeroizing::new(agreement),
+        };
+        Db::open_with(options, member, account)
+    }
+
+    fn open_with(options: OpenOptions, member: Secrets, account: SigningKey) -> Result<Db, Error> {
+        if let Some(url) = &options.relay
+            && !url.starts_with("ws://")
+        {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "the relay URL must start with ws://; TLS is not built yet",
+            ));
+        }
         let lock = ModelLock::from_json(&options.lock).map_err(|error| {
             Error::new(
                 ErrorCode::ModelRefused,
@@ -137,14 +196,18 @@ impl Db {
             view,
             model,
             model_id: lock.model.id.0,
-            member: Secrets::generate(),
-            account: SigningKey::from_bytes(&random()),
+            member,
+            account,
             spaces: BTreeMap::new(),
+            received: BTreeMap::new(),
             watchers: Vec::new(),
+            sync: None,
         };
-        Ok(Db {
-            inner: Arc::new(Mutex::new(inner)),
-        })
+        let inner = Arc::new(Mutex::new(inner));
+        if let Some(url) = options.relay {
+            sync::start(&inner, url);
+        }
+        Ok(Db { inner })
     }
 
     /// The spaces of the member.

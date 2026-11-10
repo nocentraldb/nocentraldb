@@ -17,8 +17,10 @@
 //! ```
 //!
 //! Every call runs on the device and never waits for the network (RFC
-//! 0006, "Reads never touch the network"). This SDK has no relay and no
-//! sync yet; see [`Db`] for what else it leaves out.
+//! 0006, "Reads never touch the network"). A database opened with
+//! [`OpenOptions::relay`] syncs with that relay in the background (RFC
+//! 0007), and [`Db::sync`] reports how far; see [`Db`] for what the SDK
+//! leaves out.
 
 mod db;
 mod encode;
@@ -28,6 +30,7 @@ mod object;
 mod query;
 mod space;
 mod subscribe;
+mod sync;
 mod tx;
 mod value;
 
@@ -37,5 +40,6 @@ pub use id::{ChangeId, ObjectId, SpaceId};
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
+pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Transaction;
 pub use value::Value;
