@@ -30,21 +30,35 @@ pub enum SpaceModel {
     Another,
 }
 
+impl SpaceModel {
+    /// Whether the `model.id` a genesis names, `space`, is the lock's,
+    /// `lock`.
+    pub(crate) fn of(space: [u8; 16], lock: [u8; 16]) -> SpaceModel {
+        match space == lock {
+            true => SpaceModel::Ours,
+            false => SpaceModel::Another,
+        }
+    }
+}
+
 impl Spaces<'_> {
-    /// Every space the copy holds.
+    /// Every space the copy holds, in the order of their ids. A space is
+    /// listed once the copy holds its genesis and the space key of its
+    /// first generation, which opens the `model.id` the genesis names; a
+    /// space the member joined is left out until then, as
+    /// [`Spaces::get`] answers `NotFound` for it.
     pub async fn list(&self) -> Result<Vec<SpaceInfo>, Error> {
         let inner = self.db.lock();
         let member = inner.member.key().id();
         Ok(inner
             .spaces
             .iter()
-            .map(|(&space, state)| SpaceInfo {
-                id: SpaceId(space),
-                role: state.checks.resolved().role(member).map(Role::of),
-                model: match state.checks.model_id() {
-                    Some(model_id) if model_id == inner.model_id => SpaceModel::Ours,
-                    _ => SpaceModel::Another,
-                },
+            .filter_map(|(&space, state)| {
+                Some(SpaceInfo {
+                    id: SpaceId(space),
+                    role: state.checks.resolved().role(member).map(Role::of),
+                    model: SpaceModel::of(state.checks.model_id()?, inner.model_id),
+                })
             })
             .collect())
     }

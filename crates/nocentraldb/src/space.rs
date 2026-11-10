@@ -20,6 +20,7 @@ use ncdb_core::view::View;
 use crate::db::{Db, Inner, SpaceState, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ChangeId, ObjectId, SpaceId};
+use crate::list::SpaceModel;
 use crate::members::Members;
 use crate::next;
 use crate::object::Object;
@@ -126,7 +127,7 @@ pub(crate) fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
     let not_found = || Error::new(ErrorCode::NotFound, format!("the copy holds no space {id}"));
     let state = inner.spaces.get(&id.0).ok_or_else(not_found)?;
     let model_id = state.checks.model_id().ok_or_else(not_found)?;
-    if model_id != inner.model_id {
+    if SpaceModel::of(model_id, inner.model_id) == SpaceModel::Another {
         return Err(Error::new(
             ErrorCode::SpaceOfAnotherModel,
             format!(
