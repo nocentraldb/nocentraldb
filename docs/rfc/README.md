@@ -1,6 +1,6 @@
 # RFCs
 
-NoCentralDB is designed in the open. Each RFC here describes one part of the design. It says at its top whether it is a draft or decided, and it states the current design as one complete text. Its "History" section lists by date what changed and in which pull request.
+NoCentralDB is designed in the open. Each RFC here describes one part of the design. It says at its top whether it is a draft or decided, and it states the current design as one complete text. Its "History" section starts with its publication and lists by date what changed since, and in which pull request.
 
 | RFC | Title |
 | --- | --- |
@@ -28,13 +28,15 @@ A decided RFC still takes feedback. Its decisions change only through a decided 
 
 ## How a decided RFC changes
 
+A newly published RFC states its design directly. Each choice sits in the section it belongs to: what was chosen, a sentence on why, and the options not taken where a reader would ask "why not X?". There is no list of decisions, and there are no references such as "decision S13".
+
 A decided RFC changes by rewriting its text, never by adding to it. A pull request that changes a decided RFC does three things:
 
 1. The change is written into the text where it belongs, so that the RFC reads as if it had been written that way from the start. The pull request adds no amendment section and no mark such as "(Amendment 3)": an RFC has no amendment sections.
-2. The decision goes under "Decisions", in short form: what was chosen, who decided and when, why, and each option not taken in one line.
+2. The decision goes under "Decisions", in short form: what changed, who decided it and when, why, and the options not taken. This section appears only once a decision is made after publication, on new findings.
 3. A dated line in "History" names the pull request, and the discussion the change came from, if any.
 
-A change to a decision waits for the owner, as every RFC decision does. A withdrawn decision stays under "Decisions", marked as withdrawn. Git keeps every earlier version of the text, and the History lines lead to them.
+"History" starts at publication with one line, and each later change adds one. The git log keeps how the drafts got there. A change to a decision waits for the owner, as every RFC decision does. A withdrawn decision stays under "Decisions", marked as withdrawn.
 
 ## What happens to your feedback
 
