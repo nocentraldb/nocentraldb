@@ -17,13 +17,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::cbor;
 use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
 use super::body::{Action, Entry, Role};
 use super::current::{self, MergeRotation};
+use super::fields;
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
+use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 
@@ -45,6 +48,7 @@ pub struct Resolved {
     generations: Generations,
     heads: BTreeSet<u64>,
     current: Option<u64>,
+    person_keys: PersonKeys,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -211,6 +215,17 @@ impl Resolved {
         })
     }
 
+    /// A person key of the space: its commitment, its records and the shred
+    /// that destroyed it.
+    pub fn person_key(&self, id: [u8; 16]) -> Option<&PersonKey> {
+        self.person_keys.0.get(&id)
+    }
+
+    /// The person keys of the space, by person-key id.
+    pub fn person_keys(&self) -> impl Iterator<Item = ([u8; 16], &PersonKey)> + '_ {
+        self.person_keys.0.iter().map(|(id, key)| (*id, key))
+    }
+
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
     pub fn seen(&self) -> &BTreeMap<ChangeId, BTreeSet<ChangeId>> {
@@ -219,7 +234,7 @@ impl Resolved {
 
     /// The canonical bytes of the state: equal states, equal bytes.
     pub fn encode(&self) -> Vec<u8> {
-        state::encode(
+        let mut entries = state::fields(
             self.genesis,
             self.first_generation,
             &self.members,
@@ -227,7 +242,9 @@ impl Resolved {
             &self.gaps,
             &self.generations,
             self.current,
-        )
+        );
+        entries.push((8, self.person_keys.to_value()));
+        cbor::encode(&fields::map(entries))
     }
 }
 
@@ -265,6 +282,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         generations: Generations::default(),
         heads: BTreeSet::new(),
         current: None,
+        person_keys: PersonKeys::default(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -322,6 +340,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     members.settle(saw);
     resolved.verdicts.insert(genesis.id, Verdict::Accepted);
     let mut accepted_revocations: Vec<ChangeId> = Vec::new();
+    let mut keys = PersonKeys::default();
     for id in resolved.order.iter().filter(|id| **id != genesis.id) {
         let node = folded[id];
         let verdict = if !judged.valid(node.id) {
@@ -334,8 +353,11 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
             Verdict::Rejected(Rejection::Excluded(*by))
         } else if members.role(node.author) < Some(rights::needed(node)) {
             Verdict::Rejected(Rejection::NoRight)
+        } else if !keys.admits(node) {
+            Verdict::Rejected(Rejection::Commitment)
         } else {
             apply(members, node);
+            keys.apply(node);
             members.settle(saw);
             if node.membership().is_some_and(|m| m.cutoff().is_some()) {
                 accepted_revocations.push(node.id);
@@ -354,6 +376,8 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     reject_duplicate_generations(&mut resolved.verdicts, &folded);
     resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
     resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
+    resolved.person_keys =
+        person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
     resolved
 }
 

@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, SHRED, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -21,7 +21,7 @@ const RETRIES: usize = 64;
 
 /// How many entries the core reads at once when it collects a space's
 /// control changes.
-const PAGE: u32 = 1024;
+pub(crate) const PAGE: u32 = 1024;
 
 /// The largest frame the relay accepts: 16 MiB (RFC 0007, decision R5).
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
@@ -226,7 +226,11 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// The uploader or reader is a current member of the space.
-    async fn check_uploader(&self, uploader: MemberId, space: SpaceId) -> Result<(), ErrorCode> {
+    pub(crate) async fn check_uploader(
+        &self,
+        uploader: MemberId,
+        space: SpaceId,
+    ) -> Result<(), ErrorCode> {
         match self.store.member(space, uploader).await? {
             Some(row) if row.current => Ok(()),
             _ => Err(ErrorCode::NotMember),
@@ -236,8 +240,9 @@ impl<S: RelayStore> Relay<S> {
     /// A change to a space the relay holds. A sealed change: its signature
     /// verifies with its author's key from the membership table, and its
     /// author may write it (RFC 0008, "Sealed changes"). A control change:
-    /// `resolve` over the space's control changes and this one accepts it;
-    /// the new membership table is the append's effect.
+    /// `resolve` over the space's control changes and this one accepts it,
+    /// which for a shred entry includes its second account's sign-off; the
+    /// new membership table is the append's effect.
     async fn check_change(
         &self,
         space: SpaceId,
@@ -255,16 +260,8 @@ impl<S: RelayStore> Relay<S> {
             }
             return Ok(Vec::new());
         }
-        let body = control_body(change)?;
-        match body.entry {
-            Entry::Genesis(_) => return Err(ErrorCode::SpaceExists),
-            // The relay cannot yet check a shred entry's sign-off by a
-            // second account, which RFC 0007 requires: it keeps the entry
-            // out until it can.
-            Entry::Other { entry_type, .. } if entry_type == SHRED => {
-                return Err(ErrorCode::UnsupportedSuite);
-            }
-            _ => {}
+        if let Entry::Genesis(_) = control_body(change)?.entry {
+            return Err(ErrorCode::SpaceExists);
         }
         let mut controls = self.controls(space).await?;
         controls.push(change.clone());
@@ -274,7 +271,7 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// The space's control changes, in position order.
-    async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
+    pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
         let mut controls = Vec::new();
         let mut after = 0;
         loop {
