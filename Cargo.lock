@@ -585,8 +585,14 @@ version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
  "futures-core",
+ "futures-util",
  "getrandom",
  "ncdb-core",
+ "ncdb-relay",
+ "ncdb-relay-server",
+ "rusqlite",
+ "tokio",
+ "tokio-tungstenite",
  "zeroize",
 ]
 
