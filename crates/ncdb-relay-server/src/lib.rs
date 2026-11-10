@@ -33,6 +33,7 @@ use tokio::sync::Semaphore;
 use connection::Shared;
 use hub::Hub;
 
+mod accept;
 mod connection;
 mod hub;
 mod subscription;
@@ -169,7 +170,9 @@ impl<S: RelayStore + 'static> Server<S> {
         self.listener.local_addr()
     }
 
-    /// Accepts connections until the listener fails.
+    /// Accepts connections until the listener itself is gone. Any other
+    /// error from `accept`, such as running out of file descriptors, is
+    /// logged to stderr, and the server accepts again after a pause.
     ///
     /// A connection takes a place among the server's connections for as
     /// long as it is open, and one among its handshakes until it is sent
@@ -181,7 +184,7 @@ impl<S: RelayStore + 'static> Server<S> {
         let connections = Arc::new(Semaphore::new(self.max_connections));
         let handshakes = Arc::new(Semaphore::new(self.max_handshakes));
         loop {
-            let (stream, _) = self.listener.accept().await?;
+            let stream = accept::next(&self.listener).await?;
             let (Ok(place), Ok(handshake)) = (
                 connections.clone().try_acquire_owned(),
                 handshakes.clone().try_acquire_owned(),
