@@ -126,7 +126,7 @@ If you lose every device, the recovery code you keep restores your account key o
 
 ### How fine-grained are the rights?
 
-Rights apply per space. Every object belongs to exactly one space, and every member of a space can read the whole space. For finer rights, you use many small spaces. A member is a person's device, an agent or a sub-agent. A group is a list of members the SDK expands: adding the list to a space adds each of its members, and removing a member from the list removes it from every space the list gave it. A group that is a member of spaces in its own right is left to a later RFC ([RFC 0008, "Groups"](rfc/0008-membership.md#groups)). Whether that is enough for v1, or whether field-level write scopes are needed, is question 1 in the RFC, "Rights per space".
+Rights apply per space. Every object belongs to exactly one space, and every member of a space can read the whole space. For finer rights, you use many small spaces. A member is a person's device, an agent or a sub-agent. There are no groups for now: to give several members the same spaces, an app adds each of them to each space, and `members.add` takes several invitations in one call ([RFC 0001, Amendment 5](rfc/0001-nocentraldb.md#amendment-5-groups-leave-the-design)). Whether that is enough for v1, or whether field-level write scopes are needed, is question 1 in the RFC, "Rights per space".
 
 ### How do agents become members, and how do I remove them?
 

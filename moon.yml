@@ -81,7 +81,11 @@ tasks:
     # 0008 say how to give feedback), scripts/rfc-status.test.mjs (an RFC the
     # decision log records as decided by the owner never says Draft; NOC-35),
     # scripts/decided-rfcs-alignment.test.mjs (the FAQ, RFC 0001, the use cases
-    # and GENESIS.md follow RFC 0003, 0005 and 0006), and the tests of the
+    # and GENESIS.md follow RFC 0003, 0005 and 0006),
+    # scripts/groups-withdrawn.test.mjs (groups leave RFC 0001, 0008, 0009 and
+    # the docs, and factory/decisions/ records NOC-76),
+    # scripts/rfc-0009-alignment.test.mjs (RFC 0001, 0003, 0005, 0006, 0008
+    # and the use cases follow RFC 0009's Conflicts; NOC-75), and the tests of the
     # release tooling under scripts/release/ (incl. lib/; index.test.mjs holds
     # the committed release-notes/index.json to its shape). Both patterns are
     # quoted: node --test expands them itself, so the run does not depend on

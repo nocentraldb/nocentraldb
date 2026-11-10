@@ -146,7 +146,10 @@ test("every relative link in the amended RFCs, RFC 0008 and the FAQ resolves, an
   }
 });
 
-test("RFC 0001 no longer says groups can be members, and says the SDK expands them", () => {
+// RFC 0008's M10 had RFC 0001 define a group as a list the SDK expands; the
+// owner withdrew M10 and groups altogether (Carsten, 2026-11-09, NOC-76), so
+// the "Spaces" bullet now defines a member and names no group at all.
+test("RFC 0001 no longer says groups can be members, and its Spaces bullet names no group", () => {
   const rfc = read(RFC_0001);
   assert.ok(
     !/Groups can be members of many spaces/.test(rfc),
@@ -154,11 +157,11 @@ test("RFC 0001 no longer says groups can be members, and says the SDK expands th
   );
   const spaces = rfc.split("\n").find((l) => l.startsWith("- **Spaces.**"));
   assert.ok(spaces, "no bullet 'Spaces.'");
-  assert.match(spaces, /expand/i, "does not say the SDK expands a group");
-  assert.ok(
-    links(spaces, `${RFC_0008_FILE}#groups`),
-    "no link to RFC 0008's Groups",
+  assert.match(
+    spaces,
+    /A member is a person's device, an agent or a sub-agent/,
   );
+  assert.ok(!/\bgroups?\b/i.test(spaces), "the bullet still names groups");
 });
 
 test("the FAQ lists what the relay sees of control changes, with a link to RFC 0008", () => {
