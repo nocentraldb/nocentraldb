@@ -107,6 +107,22 @@ impl Spaces<'_> {
             id: SpaceId(space),
         })
     }
+
+    /// The handle of the space `id`, which the member created or was added
+    /// to. A space the copy does not hold is `NotFound`.
+    pub async fn get(&self, id: SpaceId) -> Result<Space, Error> {
+        let inner = self.db.lock();
+        if !inner.spaces.contains_key(&id.0) {
+            return Err(Error::new(
+                ErrorCode::NotFound,
+                format!("the copy holds no space {id}"),
+            ));
+        }
+        Ok(Space {
+            inner: self.db.inner.clone(),
+            id,
+        })
+    }
 }
 
 /// Appends the member's own change to the log and folds it. Every check
