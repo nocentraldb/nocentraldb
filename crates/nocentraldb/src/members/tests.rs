@@ -84,3 +84,32 @@ fn a_member_of_the_databases_own_account_needs_no_fingerprint() {
 
     now(project.members().add(&invitation, writer())).unwrap();
 }
+
+/// The invitation of a fresh database, its certificate changed by `spoil`.
+fn spoiled(spoil: impl FnOnce(&mut super::Invitation)) -> super::Invitation {
+    let mut invitation = now(database().invitation());
+    spoil(&mut invitation);
+    invitation
+}
+
+#[test]
+fn an_invitation_whose_certificate_does_not_hold_is_refused() {
+    let admin = database();
+    let project = space(&admin);
+    let forged = spoiled(|invitation| invitation.certificate.signature[0] ^= 1);
+    let other = now(database().invitation());
+    let of_another_member = spoiled(|invitation| invitation.key = other.key);
+    let of_a_sub_agent = spoiled(|invitation| {
+        invitation.certificate.kind = ncdb_core::membership::MemberKind::SubAgent;
+    });
+
+    for invitation in [forged, of_another_member, of_a_sub_agent] {
+        let options = AddMember {
+            fingerprint: Some(invitation.fingerprint()),
+            ..writer()
+        };
+        let refused = now(project.members().add(&invitation, options)).unwrap_err();
+
+        assert_eq!(refused.code(), ErrorCode::InvalidValue);
+    }
+}
