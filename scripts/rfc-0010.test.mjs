@@ -8,7 +8,9 @@
 // decisions, no list of rejected options, no open question and no "Qn"
 // reference, and no recommendation or draft wording; the options not taken
 // still stand in the text; the decision log records the owner's decision on
-// the RFC as a whole; and "History" names each step. The test checks the
+// the RFC as a whole; and, as every RFC now reads as freshly written
+// (NOC-165), the status says in one sentence that the owner decided it, and
+// "History" holds the one line of its first publication. The test checks the
 // shape of the design document, not whether the design is right; that is the
 // owner's review of the pull request.
 import assert from "node:assert/strict";
@@ -77,9 +79,11 @@ test("RFC 0010 says it is decided, by the owner, with the date", () => {
   assert.match(rfc.split("\n")[0], /^# RFC 0010: Accounts/);
   assert.doesNotMatch(rfc.split("\n")[2], /draft/i, "the header names a draft");
   const status = line(rfc, "**Status.**");
-  assert.match(status, /^\*\*Status\.\*\* Decided\. /);
-  assert.match(status, /\(Carsten, 2026-11-10\)/);
-  assert.match(status, /NOC-115/, "the status names where the owner decided");
+  assert.match(
+    status,
+    /^\*\*Status\.\*\* Decided\. [^.]*\(Carsten, 2026-11-10\)\.$/,
+  );
+  assert.doesNotMatch(status, /NOC-\d+|#\d+/, "the status tags a ticket or PR");
 });
 
 test("the design reads as decided: no recommendation or draft wording outside History", () => {
@@ -210,8 +214,11 @@ test("the decision log records the owner's decision on RFC 0010", () => {
   assert.match(entry, /^- Topics: .*rfc-0010/m);
 });
 
-test("History names the draft and the owner's decision", () => {
-  const history = section(read(), "History");
-  assert.match(history, /^- \*\*\d{4}-\d{2}-\d{2}\*\* · NOC-107 · Draft 0\.1/m);
-  assert.match(history, /^- \*\*2026-11-10\*\* · NOC-115 · .*Carsten/m);
+test("History holds one line: the first publication as a fresh text", () => {
+  const lines = section(read(), "History")
+    .split("\n")
+    .filter((l) => l.startsWith("- "));
+  assert.deepEqual(lines, [
+    "- **2026-11-10** · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165).",
+  ]);
 });
