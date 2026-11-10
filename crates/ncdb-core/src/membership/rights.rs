@@ -44,13 +44,10 @@ pub(crate) fn needed(node: &Node) -> Role {
 /// from its space, author and previous generations; an envelope's recipient
 /// is a member and its generation exists; an add's subject is not a member
 /// and its certificate holds; a set role's or a remove's subject is a
-/// member.
-///
-/// A re-grant, an add of a former member or a set role that gives the
-/// right to write to a member without it, needs a fresh generation, which
-/// only key chain entries and envelopes can show. This core does not fold
-/// them yet, so it never finds one, and a re-grant is not valid: a
-/// revocation always holds.
+/// member. A re-grant, an add of a former member or a set role that gives
+/// the right to write to a member without it, names a fresh generation as
+/// its from generation ([`fresh`]). The state of its causal past holds the
+/// revocation it re-grants after, so it has seen it.
 pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
     let entry = match &node.body.entry {
         Entry::Membership(entry) => entry,
@@ -67,8 +64,14 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
     };
     let MembershipEntry { subject, action } = entry;
     match action {
-        Action::Add { certificate, .. } => {
-            past.member(*subject).is_none()
+        Action::Add {
+            certificate,
+            from_generation,
+            ..
+        } => {
+            let former = past.member(*subject).is_some();
+            past.role(*subject).is_none()
+                && (!former || fresh(past, node.author, *subject, *from_generation))
                 && certificate.member == *subject
                 && match certificate.kind {
                     MemberKind::Device | MemberKind::Agent => {
@@ -84,12 +87,28 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
                     }),
                 }
         }
-        Action::SetRole { role, .. } => {
+        Action::SetRole {
+            role,
+            from_generation,
+            ..
+        } => {
             let current = past.role(*subject);
-            current.is_some() && !(*role >= Role::Writer && current < Some(Role::Writer))
+            let re_grant = *role >= Role::Writer && current < Some(Role::Writer);
+            current.is_some()
+                && (!re_grant
+                    || from_generation.is_some_and(|g| fresh(past, node.author, *subject, g)))
         }
         Action::Remove { .. } => past.role(*subject).is_some(),
     }
+}
+
+/// Whether `generation` is fresh for a re-grant of `subject` by `author`
+/// in the state of the re-grant's causal past: `author` wrote a key chain
+/// entry for it, and no key envelope to `subject` for it is there.
+fn fresh(past: &Resolved, author: MemberId, subject: MemberId, generation: u64) -> bool {
+    past.generation(generation).is_some_and(|g| {
+        g.entries.values().any(|by| *by == author) && !g.recipients.contains(&subject)
+    })
 }
 
 /// Step 2: the creator, then every member with a valid admin grant by its
