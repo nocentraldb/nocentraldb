@@ -84,7 +84,21 @@ A PR that changes only tooling may be merged without the owner (owner, 2026-11-1
 
 ## The daily note
 
-At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. List every PR you merged without the owner since the last note, so the owner can read it and ask for a revert or a follow-up. Under the heading "RFC feedback", link each new reply since the last note, with your draft answer to it; leave the heading out when there is none. Keep it short enough to read on a phone.
+At the time in CONFIG.md, post the status update FACTORY.md describes on the initiative, with its health. Keep it short enough to read on a phone. It has these sections, in this order (owner, 2026-11-11):
+
+1. **What changed on main.** The diff on `main` between the last note and this one: the two commits, the compare link, and the files and lines changed per area (crates, SDK packages, docs and RFCs, factory, CI). Then one line per area on what the diff did.
+2. **What works for a developer now.** What a developer can build with the SDK today, each point proven by an example application that runs it, named and linked (a, b, c …). A capability with no example application is listed as "not proven by an example yet", with the test that covers it.
+3. **Communication.** Where the texts for (a) developers and (b) contributors stand: the landing page, the documentation, the RFCs, and posts in other places (Discussions, forums, social media). For each, what changed since the last note and what is still missing.
+4. **Decisions waiting for the owner.** Every open ticket labelled for the owner's questions, most important first: what it blocks, the options and your recommendation, with its link.
+5. **Approvals waiting for the owner.** Every PR the merge rule reserves for the owner, most important first: what it changes, what waits for it, and whether its CI is green.
+
+Then the rest:
+
+- **Merged.** Every PR merged since the last note, in two lists: the ones you merged without the owner, with the authorship box you ticked and the RFC sections or sources you checked, so the owner can read them and ask for a revert or a follow-up; and the ones the owner approved.
+- **Tickets done** since the last note.
+- **Tickets open:** in progress, with the coding session that holds each, and blocked, with what blocks it.
+- **pm decided:** the decisions you made since the last note.
+- **RFC feedback:** each new reply since the last note, linked, with your draft answer to it. Leave the heading out when there is none.
 
 ## Never
 
