@@ -98,7 +98,7 @@ test("NOC-106's answers stand where they belong", () => {
   );
 });
 
-test("RFC 0008's rules stand in the text: generation ids, exposure, the sign-off, the person-key entry and the wait", () => {
+test("RFC 0008's rules stand in the text: generation ids, exposure, the sign-off, the person-key entry and a shred final when accepted", () => {
   assert.ok(links(part("the-space-key"), "0008-membership.md#generation-ids"));
   const removing = part("removing-a-member-and-rotating-the-space-key");
   assert.match(removing, /\*\*exposed\*\*/);
@@ -109,8 +109,8 @@ test("RFC 0008's rules stand in the text: generation ids, exposure, the sign-off
   );
   const shredding = part("shredding-a-persons-key");
   assert.match(shredding, /holds an admin member in the space/);
-  assert.match(shredding, /once the shred is stable/);
-  assert.match(shredding, /alarm/);
+  assert.match(shredding, /no later change can reject it/);
+  assert.doesNotMatch(shredding, /once the shred is stable|alarm/);
   assert.match(part("model-id-subkey"), /"nocentraldb\/model-id"/);
 });
 

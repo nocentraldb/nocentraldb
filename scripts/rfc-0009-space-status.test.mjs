@@ -2,8 +2,9 @@
 // recommendation) as RFC 0009 records it (NOC-195): the Rust names of the
 // per-space status. `space.status()` returns a `SpaceStatusReport` with
 // `current()` and `subscribe()`; `current()` gives a `SpaceStatus` with the
-// twelve values of "Sync and status" in snake case and their types; the
-// reasons and the refused, waiting shreds are their own types; and the
+// eleven values of "Sync and status" in snake case and their types; the
+// reasons and the refused changes are their own types (the waiting shreds
+// left with the owner's NOC-224: a shred is final when accepted); and the
 // status names no member by its `MemberId`, which the owner made public for
 // the member calls on NOC-203 (Carsten, 2026-11-11) while the status stays as
 // NOC-193 decided. Like every choice in the fresh texts, it stands
@@ -38,7 +39,7 @@ test("Sync and status points to the Rust names of the space status", () => {
   assert.match(sync, /`SpaceStatus`/);
 });
 
-test("the Rust SDK names the space status report and its twelve values with their types", () => {
+test("the Rust SDK names the space status report and its eleven values with their types", () => {
   const text = bullet("- **The space status.**");
   for (const pattern of [
     /`space\.status\(\)` returns a `SpaceStatusReport`/,
@@ -60,8 +61,7 @@ test("the Rust SDK names the space status report and its twelve values with thei
     /`equivocations: Vec<ChangeId>`/,
     /`exposed: bool`/,
     /`waiting_for_key: bool`/,
-    /`shreds_waiting: Vec<ShredWaiting>`/,
-    /`ShredWaiting \{ change: ChangeId, age: Duration, blocking: Vec<Fingerprint> \}`/,
+    /eleven values/,
     /another model/,
   ]) {
     assert.match(
@@ -94,8 +94,23 @@ test("Public names lists the space status types", () => {
     "ParkReason",
     "RejectReason",
     "Refused",
-    "ShredWaiting",
   ]) {
     assert.ok(row(names, `\`${name}`), `Public names has no row for ${name}`);
+  }
+  assert.ok(
+    !row(names, "`ShredWaiting"),
+    "Public names still lists ShredWaiting",
+  );
+});
+
+test("space.status names no waiting shreds: a shred is final when accepted (NOC-224)", () => {
+  const rfc = read(RFC);
+  for (const gone of [
+    /shredsWaiting/,
+    /shreds_waiting/,
+    /ShredWaiting/,
+    /effects-that-wait-until-a-change-is-stable/,
+  ]) {
+    assert.doesNotMatch(rfc, gone);
   }
 });
