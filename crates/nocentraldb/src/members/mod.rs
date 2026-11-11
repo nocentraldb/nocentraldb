@@ -4,14 +4,19 @@
 //! (RFC 0008, "Membership entry" and "Key envelope"; RFC 0003, "Sharing a
 //! space key with a new member").
 //!
-//! **What this does not do yet.** `list`, `set_role` and `remove`, and
-//! adding a list of invitations.
+//! [`Members::list`] gives the current members, and [`Members::remove`]
+//! and [`Members::set_role`] change them (the Rust shapes the owner decided
+//! on NOC-203).
+//!
+//! **What this does not do yet.** Adding a list of invitations, leaving a
+//! space, and re-wrapping person-key records in a rotation: a call that
+//! rotates refuses a space with a person key.
 
 use std::collections::BTreeSet;
 
 use ncdb_core::envelope;
-use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use ncdb_core::membership::{self, Action, Entry, MemberKind, MembershipEntry, Resolved};
+use ncdb_core::ids::{ChangeId, SpaceId};
+use ncdb_core::membership::{self, Action, Entry, MembershipEntry, Resolved};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
@@ -19,12 +24,15 @@ use crate::error::{Error, ErrorCode, storage};
 use crate::space::{Space, not_stopped, writable};
 
 mod batch;
+mod change;
+mod info;
 mod invitation;
 mod notice;
 mod rotate;
 
 use batch::Batch;
 
+pub use info::{MemberId, MemberInfo, MemberKind};
 pub use invitation::{Fingerprint, Invitation};
 pub use notice::{Notice, NoticeCode};
 
@@ -136,7 +144,7 @@ impl Members<'_> {
         let mut batch = Batch::new(view, state, &member, space.0);
         if former {
             rotate::rotatable(state)?;
-            rotate::rotate(&mut batch, state, &member, space.0, BTreeSet::new());
+            rotate::rotate(&mut batch, state, &member, space.0, BTreeSet::new(), None);
         }
         let added = batch.write(
             &member,
@@ -174,7 +182,7 @@ impl Members<'_> {
 /// role is needed for.
 pub(crate) fn holds(
     resolved: &Resolved,
-    member: MemberId,
+    member: ncdb_core::ids::MemberId,
     needed: membership::Role,
     doing: &str,
 ) -> Result<(), Error> {
@@ -195,7 +203,11 @@ pub(crate) fn holds(
 /// it is an admin, and `subject` is not a member. Says whether `subject`
 /// is a former member, whose add is a re-grant that rotates first (RFC
 /// 0008, M5).
-fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<bool, Error> {
+fn allowed(
+    resolved: &Resolved,
+    member: ncdb_core::ids::MemberId,
+    subject: ncdb_core::ids::MemberId,
+) -> Result<bool, Error> {
     holds(resolved, member, membership::Role::Admin, "adds members")?;
     match resolved.member(subject) {
         None => Ok(false),
@@ -215,7 +227,10 @@ fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<b
 fn certified(invitation: &Invitation) -> Result<(), Error> {
     let certificate = &invitation.certificate;
     let holds = certificate.member == invitation.key.id()
-        && matches!(certificate.kind, MemberKind::Device | MemberKind::Agent)
+        && matches!(
+            certificate.kind,
+            membership::MemberKind::Device | membership::MemberKind::Agent
+        )
         && certificate.verify(&certificate.account_key);
     match holds {
         true => Ok(()),
@@ -277,8 +292,12 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 mod batch_tests;
 #[cfg(test)]
 mod known_tests;
+#[cfg(test)]
+mod list_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
+#[cfg(test)]
+mod remove_tests;
 #[cfg(test)]
 mod rotate_tests;
 #[cfg(test)]

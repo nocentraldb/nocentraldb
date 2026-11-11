@@ -59,6 +59,9 @@ pub enum ErrorCode {
     InvalidCertificate,
     /// The invitation's member is a member of the space already.
     AlreadyMember,
+    /// The call would leave the space without an admin: its last admin
+    /// may not lower its own role (RFC 0008, "Roles and rights").
+    LastAdmin,
 }
 
 impl Error {

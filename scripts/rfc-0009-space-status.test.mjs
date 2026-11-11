@@ -3,8 +3,10 @@
 // per-space status. `space.status()` returns a `SpaceStatusReport` with
 // `current()` and `subscribe()`; `current()` gives a `SpaceStatus` with the
 // twelve values of "Sync and status" in snake case and their types; the
-// reasons and the refused, waiting shreds are their own types; and there is
-// no public `MemberId` in v1. Like every choice in the fresh texts, it stands
+// reasons and the refused, waiting shreds are their own types; and the
+// status names no member by its `MemberId`, which the owner made public for
+// the member calls on NOC-203 (Carsten, 2026-11-11) while the status stays as
+// NOC-193 decided. Like every choice in the fresh texts, it stands
 // in the section it belongs to, with the options not taken. Whether the
 // wording is right is the review of the PR.
 import assert from "node:assert/strict";
@@ -70,9 +72,10 @@ test("the Rust SDK names the space status report and its twelve values with thei
   }
 });
 
-test("there is no public MemberId in v1, and the forms not taken are named", () => {
+test("the space status names no member by its MemberId, and the forms not taken are named", () => {
   const text = bullet("- **The space status.**");
-  assert.match(text, /no public `MemberId`/);
+  assert.match(text, /names no member by its `MemberId`/);
+  assert.doesNotMatch(text, /no public `MemberId`/);
   for (const pattern of [
     /`StatusReport`/,
     /`SpaceRole`/,
