@@ -1,0 +1,59 @@
+---
+// The landing page, in the NoCentralDB brand (nxsflow/brand, commit 38abcfc).
+import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
+import Closing from "../components/Closing.astro";
+import CodeSection from "../components/CodeSection.astro";
+import Hero from "../components/Hero.astro";
+import LiveExample from "../components/LiveExample.astro";
+import UseCases from "../components/UseCases.astro";
+import "../styles/tokens.css";
+import "../styles/landing.css";
+
+// The wordmark is inlined, so the page shows it wherever its HTML is served.
+const logo = wordmark.replace(
+  "<svg ",
+  '<svg role="img" aria-label="NoCentralDB" ',
+);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NoCentralDB: a local-first database for people and agents</title>
+    <meta
+      name="description"
+      content="Everyone works on their own copy, under their own keys. The relay in the middle can't read a thing."
+    />
+    <meta name="theme-color" content="#111110" />
+    <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <script is:inline>
+      if (new URLSearchParams(location.search).has("shot")) document.documentElement.dataset.shot = "";
+    </script>
+  </head>
+  <body>
+    <nav class="nav" aria-label="Main">
+      <div class="wrap">
+        <a class="logo" href="/" set:html={logo} />
+        <ul>
+          <li class="hide-s"><a class="link" href="#use-cases">Use cases</a></li>
+          <li class="hide-s"><a class="link" href="#code">Code</a></li>
+          <li><a class="link" href="/docs/">Docs</a></li>
+          <li><a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a></li>
+        </ul>
+      </div>
+    </nav>
+    <main>
+      <Hero />
+      <UseCases />
+      <LiveExample />
+      <CodeSection />
+      <Closing />
+    </main>
+  </body>
+</html>
