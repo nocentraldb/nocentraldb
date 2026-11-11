@@ -17,7 +17,7 @@ use ncdb_core::membership::{
 
 use super::support::*;
 use crate::db::{Db, lock};
-use crate::members::{AddMember, MemberId, Role};
+use crate::members::{AddMember, Fingerprint, MemberId, Role};
 use crate::space::Space;
 
 /// The admin, who creates the space and its person key.
@@ -123,6 +123,8 @@ async fn a_member_fetches_and_holds_the_person_key_another_member_put() {
     })
     .await;
     assert_eq!(held(&admin, space), Some(commitment), "its writer holds it");
+    let status = handle(&member, space).status().current();
+    assert_eq!(status.bad_person_key_records, Vec::<Fingerprint>::new());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -145,6 +147,9 @@ async fn a_record_whose_key_does_not_match_its_commitment_is_not_held() {
     synced(&member).await;
 
     assert_eq!(held(&member, space), None);
+    let writer = Fingerprint(lock(&admin.inner).account.verifying_key().to_bytes());
+    let status = handle(&member, space).status().current();
+    assert_eq!(status.bad_person_key_records, vec![writer]);
 }
 
 /// The space's current generation on `db`.
