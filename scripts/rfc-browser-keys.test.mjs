@@ -25,7 +25,11 @@ test("RFC 0003's member key gives the browser's layout of the key record", () =>
     /no passkey/i,
     /Carsten, 2026-11-11, NOC-210/,
   ]) {
-    assert.match(member, pattern, `the member key section does not say ${pattern}`);
+    assert.match(
+      member,
+      pattern,
+      `the member key section does not say ${pattern}`,
+    );
   }
 });
 
@@ -42,6 +46,9 @@ test("RFC 0003 states the JavaScript heap limit plainly", () => {
 
 test("RFC 0003 no longer leaves browser storage out of scope", () => {
   const hides = section(read(RFC_0003), "how-the-sdk-hides-keys");
-  assert.doesNotMatch(hides, /Details of passkeys and browser storage are out of scope/);
+  assert.doesNotMatch(
+    hides,
+    /Details of passkeys and browser storage are out of scope/,
+  );
   assert.match(hides, /\(#the-member-key\)/);
 });
