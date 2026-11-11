@@ -21,6 +21,7 @@ mod list;
 mod live;
 mod members;
 mod pause;
+mod person_keys;
 mod pull;
 mod push;
 mod push_again;
