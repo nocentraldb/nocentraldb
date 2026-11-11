@@ -71,11 +71,13 @@ async fn a_member_that_joins_later_pulls_a_large_change() {
     let status = synced(&admin).await;
     assert_eq!(status.refused, 0, "the relay refused the large change");
     let member = open(2, &relay.url()).await;
+    synced(&member).await;
     let writer = AddMember {
         role: Role::Writer,
         fingerprint: None,
     };
     now(project.members().add(&now(member.invitation()), writer)).unwrap();
+    synced(&admin).await;
     eventually("the member holds the large task", || {
         title(&member, project.id(), task).as_deref() == Some(big.as_str())
     })

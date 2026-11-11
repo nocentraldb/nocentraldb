@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-121 · The Rust SDK carries large changes through the relay's URLs with a small HTTP/1.1 client of its own
+
+- Decided by: coding agent (NOC-121, first part), on pm's plan (uploads included, a strict client, no new dependency)
+- Why: RFC 0007, "Large changes", is decided for both directions, and since #199 the relay serves an upload URL and download links. A frame too large for one push now goes up through `upload`, a `PUT` of the frame and a push of `{1: upload id}`; an entry that comes as `{1: url, 2: size}` is fetched with a `GET` and then folded through the same checks as an inline frame. The client is hand-written over tokio's TcpStream, which the SDK already has: one request per connection, a response head of at most 8 KiB, `Content-Length` required and `Transfer-Encoding` refused, no redirect followed, exactly the declared size read and at most 16 MiB. A download that fails ends the pull at its entry, so the cursor stays before it and the next pull brings a fresh link; a live entry that comes as a link makes a gap that a pull fetches. A push that a gap delayed is no longer dropped: the serve loop pushes the space after its pull.
+- Instead of: `httparse` or a full HTTP client crate, which would be a new dependency of the SDK for a status line and one header; leaving uploads to a later ticket, which would keep every large local change refused as `too_large`.
+- What this does not do: `https://` URLs fail as unsupported until the second part of NOC-121 brings TLS with `wss://`.
+- Topics: sdk-rust, sync, rfc-0007
