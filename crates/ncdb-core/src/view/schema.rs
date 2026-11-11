@@ -5,8 +5,11 @@
 //! `confirmed_accounts` is no part of the view: it holds what a person
 //! confirmed, which no fold computes (`super::accounts`).
 
+use std::collections::BTreeMap;
+
 use rusqlite::{Connection, OptionalExtension, params};
 
+pub(super) use super::migrate::Additions;
 use super::model::{Direction, Field, Index, Model, Scope};
 use super::{Error, stored_lock};
 use crate::basic::Kind;
@@ -118,10 +121,14 @@ fn column_type(field: &Field) -> &'static str {
 }
 
 /// Whether the view's tables match the model the view is opened with.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Fit {
     /// They do: new tables, or tables folded by this model.
     Current,
+    /// They were folded by the model of the stored lock, and the model
+    /// they are opened with only adds to it: the view is migrated in place
+    /// (RFC 0006, "Rebuilding the view"; `super::migrate`).
+    Migrate(Additions),
     /// They were folded by another model, which the lock check accepted:
     /// the log must be folded again (RFC 0006, "Rebuilding the view").
     Refold,
@@ -157,11 +164,23 @@ pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result
             if found != super::View::FORMAT {
                 return Err(Error::Format { found });
             }
-            let current = meta(conn, "model")?.as_deref() == Some(hash.as_str());
+            let folded_by = meta(conn, "model")?;
+            let current = folded_by.as_deref() == Some(hash.as_str());
+            // The lock the tables may have been folded by, read before the
+            // check stores the new one in its place.
+            let stored = meta(conn, "lock")?;
             stored_lock::check(conn, lock, current)?;
-            Ok(match current {
-                true => Fit::Current,
-                false => Fit::Refold,
+            if current {
+                return Ok(Fit::Current);
+            }
+            let additions = stored
+                .and_then(|text| ModelLock::from_json(&text).ok())
+                .and_then(|stored| Model::from_lock(&stored).ok())
+                .filter(|old| folded_by.as_deref() == Some(hex(&old.hash()).as_str()))
+                .and_then(|old| Additions::between(&old, model));
+            Ok(match additions {
+                Some(additions) => Fit::Migrate(additions),
+                None => Fit::Refold,
             })
         }
     }
@@ -196,13 +215,28 @@ pub(super) fn replace(conn: &Connection, model: &Model) -> Result<(), Error> {
 /// deleted objects out while a read by id still finds them.
 fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
     for (collection, fields) in &model.collections {
-        let columns: String = fields
-            .iter()
-            .filter(|(_, field)| field.has_column())
-            .map(|(name, field)| format!(", {} {}", column(name), column_type(field)))
-            .collect();
-        conn.execute_batch(&format!(
-            "CREATE TABLE {} (
+        create_collection(conn, collection, fields)?;
+    }
+    for index in &model.indexes {
+        create_index(conn, index)?;
+    }
+    Ok(())
+}
+
+/// Creates the tables of one collection: its read values, with a column
+/// for each field that has one, and its merge states.
+pub(super) fn create_collection(
+    conn: &Connection,
+    collection: &str,
+    fields: &BTreeMap<String, Field>,
+) -> Result<(), Error> {
+    let columns: String = fields
+        .iter()
+        .filter(|(_, field)| field.has_column())
+        .map(|(name, field)| format!(", {} {}", column(name), column_type(field)))
+        .collect();
+    conn.execute_batch(&format!(
+        "CREATE TABLE {} (
                 space_id BLOB NOT NULL,
                 object_id BLOB NOT NULL,
                 deleted INTEGER NOT NULL DEFAULT 0{columns},
@@ -215,27 +249,49 @@ fn create(conn: &Connection, model: &Model) -> Result<(), Error> {
                 state BLOB NOT NULL,
                 PRIMARY KEY (space_id, object_id, field)
             ) STRICT;",
-            rows(collection),
-            states(collection),
-        ))?;
-    }
-    for index in &model.indexes {
-        let keys: Vec<String> = index_columns(index)
-            .into_iter()
-            .map(|(name, direction)| match direction {
-                Direction::Ascending => format!("{name} ASC"),
-                Direction::Descending => format!("{name} DESC"),
-            })
-            .collect();
-        // A partial index: no declared index holds a deleted object
-        // (RFC 0006, "Declared indexes"), and a lookup names the same condition.
+        rows(collection),
+        states(collection),
+    ))?;
+    Ok(())
+}
+
+/// Adds the column of a new field to its collection's table, when the
+/// field has one; existing rows read it as `NULL` until an operation on
+/// it is folded.
+pub(super) fn add_column(
+    conn: &Connection,
+    collection: &str,
+    name: &str,
+    field: &Field,
+) -> Result<(), Error> {
+    if field.has_column() {
         conn.execute_batch(&format!(
-            "CREATE INDEX {} ON {} ({}) WHERE deleted = 0;",
-            quote(&index_name(index)),
-            rows(&index.collection),
-            keys.join(", "),
+            "ALTER TABLE {} ADD COLUMN {} {};",
+            rows(collection),
+            column(name),
+            column_type(field),
         ))?;
     }
+    Ok(())
+}
+
+/// Creates the SQLite index of a declared index.
+pub(super) fn create_index(conn: &Connection, index: &Index) -> Result<(), Error> {
+    let keys: Vec<String> = index_columns(index)
+        .into_iter()
+        .map(|(name, direction)| match direction {
+            Direction::Ascending => format!("{name} ASC"),
+            Direction::Descending => format!("{name} DESC"),
+        })
+        .collect();
+    // A partial index: no declared index holds a deleted object
+    // (RFC 0006, "Declared indexes"), and a lookup names the same condition.
+    conn.execute_batch(&format!(
+        "CREATE INDEX {} ON {} ({}) WHERE deleted = 0;",
+        quote(&index_name(index)),
+        rows(&index.collection),
+        keys.join(", "),
+    ))?;
     Ok(())
 }
 

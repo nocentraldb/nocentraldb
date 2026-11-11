@@ -300,7 +300,7 @@ fn a_new_declared_index_is_created_without_folding_anything() {
     let conn = rusqlite::Connection::open(&db.0).unwrap();
     let indexes: i64 = conn
         .query_row(
-            "SELECT count(*) FROM sqlite_schema WHERE type = 'index' AND name LIKE '%inSpace%'",
+            "SELECT count(*) FROM sqlite_schema WHERE type = 'index' AND name = 'ix_task_inSpace'",
             [],
             |row| row.get(0),
         )
