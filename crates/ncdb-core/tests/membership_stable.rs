@@ -50,7 +50,7 @@ fn all_of(s: &Space) -> impl Fn(MemberId) -> u64 + '_ {
     }
 }
 
-fn runs(entries: &[(u8, u64)]) -> impl Fn(MemberId) -> u64 {
+fn runs(entries: &[(u8, u64)]) -> impl Fn(MemberId) -> u64 + use<> {
     let runs: BTreeMap<MemberId, u64> = entries.iter().map(|(who, n)| (id(*who), *n)).collect();
     move |member| runs.get(&member).copied().unwrap_or(0)
 }
