@@ -204,6 +204,7 @@ pub(crate) fn remove(
 /// yet, so the key chain entry carries stand-ins for the previous key,
 /// which `resolve` does not open. Neither change is folded into the
 /// admin's database; the test pushes them to the relay itself.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn regrant(
     admin: &Db,
     space: &Space,

@@ -8,18 +8,22 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::SigningKey;
 
 use super::tests::{now, of_account, space, writer};
 use super::{AddMember, Invitation, Role};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::db::{Db, OpenOptions};
 use crate::error::ErrorCode;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::space::Space;
 
+#[cfg(not(target_arch = "wasm32"))]
 const LOCK: &str = include_str!("../../tests/model/model.lock.json");
 
 /// The account of the members the admin adds: another than the admin's.
@@ -36,10 +40,10 @@ fn confirmed(invitation: &Invitation) -> AddMember {
     }
 }
 
-/// The time now, in milliseconds since the Unix epoch.
+/// The time now, in milliseconds since the Unix epoch, by the clock the
+/// SDK reads on every target.
 fn millis() -> u64 {
-    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-    u64::try_from(since.as_millis()).unwrap()
+    crate::clock::now_millis()
 }
 
 #[test]
