@@ -97,7 +97,10 @@ test("Public names lists the space status types", () => {
   ]) {
     assert.ok(row(names, `\`${name}`), `Public names has no row for ${name}`);
   }
-  assert.ok(!row(names, "`ShredWaiting"), "Public names still lists ShredWaiting");
+  assert.ok(
+    !row(names, "`ShredWaiting"),
+    "Public names still lists ShredWaiting",
+  );
 });
 
 test("space.status names no waiting shreds: a shred is final when accepted (NOC-224)", () => {

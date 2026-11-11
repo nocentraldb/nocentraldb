@@ -153,7 +153,11 @@ for (const [path, heading] of [
       line,
       "no passage says the key goes when the shred is accepted and links RFC 0008",
     );
-    assert.match(line, /offline|comes? back|syncs?/i, "does not say an offline device destroys it later");
+    assert.match(
+      line,
+      /offline|comes? back|syncs?/i,
+      "does not say an offline device destroys it later",
+    );
     assert.doesNotMatch(text, /stable/, "still names a wait until stable");
     assert.doesNotMatch(text, /alarm/i, "still names the alarm");
   });
@@ -225,8 +229,16 @@ test("RFC 0006's control table holds what RFC 0008 lists, and the shred row dele
   }
   const shred = rfc.split("\n").find((l) => l.startsWith("| Shred entry"));
   assert.ok(shred, "no shred row");
-  assert.match(shred, /at once/, "the shred row does not delete the key at once");
-  assert.doesNotMatch(shred, /stable/, "the shred row still waits until stable");
+  assert.match(
+    shred,
+    /at once/,
+    "the shred row does not delete the key at once",
+  );
+  assert.doesNotMatch(
+    shred,
+    /stable/,
+    "the shred row still waits until stable",
+  );
   assert.ok(
     links(shred, FINAL),
     "the shred row does not link RFC 0008's definition",

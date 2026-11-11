@@ -253,7 +253,11 @@ test("a shred is final when accepted; waiting until it is stable was not taken",
   assert.doesNotMatch(rfc, /effects-that-wait-until-a-change-is-stable/);
   assert.doesNotMatch(rfc, /\| Stable \|/, "the term Stable is gone");
   assert.match(rfc, /\| M-C8 \| An accepted shred stays accepted/);
-  assert.match(rfc, /a revocation that excludes a shred/, "M-C12 has no fixture for it");
+  assert.match(
+    rfc,
+    /a revocation that excludes a shred/,
+    "M-C12 has no fixture for it",
+  );
 });
 
 test("the cutoff says a revoked admin's fork can depend on its change id", () => {

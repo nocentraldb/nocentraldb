@@ -252,10 +252,7 @@ test("a shred: the sign-off, final when accepted, and the first person-key entry
   );
   assert.ok(links(shredding, "0008-membership.md#roles-and-rights"));
   assert.ok(
-    links(
-      shredding,
-      "0008-membership.md#a-shred-is-final-when-accepted",
-    ),
+    links(shredding, "0008-membership.md#a-shred-is-final-when-accepted"),
   );
 });
 
