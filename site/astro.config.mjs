@@ -54,9 +54,6 @@ export default defineConfig({
         { label: "API", slug: "docs/api" },
         { label: "RFCs", slug: "docs/rfcs" },
       ],
-      // Search (Pagefind) is off in the draft: its generated script is longer
-      // than the repository's file-size gate allows for committed code.
-      pagefind: false,
       plugins: [starlightLlmsTxt()],
     }),
   ],

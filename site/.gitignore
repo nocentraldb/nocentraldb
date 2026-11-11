@@ -1,2 +1,5 @@
+# Build output and Astro's cache; the root .gitignore covers node_modules/.
+dist/
 .astro/
-node_modules/
+# Screenshots from `pnpm shots`; they go to the PR, never into git.
+drafts/

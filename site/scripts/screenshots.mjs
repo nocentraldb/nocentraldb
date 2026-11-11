@@ -1,6 +1,7 @@
 // Screenshots of the landing page in its loud colour, magenta, at
 // desktop 1440 px and mobile 390 px, deviceScaleFactor 2 (NOC-211).
 // Usage: pnpm build && pnpm preview, then pnpm shots [base-url] in another shell.
+// drafts/ is git-ignored: the screenshots go to the pull request, never into git.
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
 
