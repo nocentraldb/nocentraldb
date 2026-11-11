@@ -7,7 +7,6 @@
 //! shred's age is counted from when this device first held it (NOC-218).
 //! Like `confirmed_accounts`, the table is not computed from the log, so
 //! nothing rebuilds it.
-#![cfg(not(target_arch = "wasm32"))]
 
 mod support;
 
@@ -15,6 +14,11 @@ mod support;
 mod space;
 #[path = "support/view.rs"]
 mod view_support;
+
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so every test runs on both targets (NOC-10).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use std::collections::{BTreeMap, BTreeSet};
 
