@@ -13,6 +13,10 @@ use crate::Db;
 use crate::members::{AddMember, Role};
 use crate::space::Space;
 
+/// A delay longer than any test: an admin with it does not rotate while
+/// the test runs.
+const AN_HOUR: Duration = Duration::from_secs(3600);
+
 /// The current generation of `space` as `db` resolved it, and whether it
 /// is exposed.
 fn current(db: &Db, space: &Space) -> Option<(u64, bool)> {
@@ -117,7 +121,8 @@ async fn a_writer_never_rotates() {
     let admin = open(1, &relay.url()).await;
     let writer = open(2, &relay.url()).await;
     let leaver = open(3, &relay.url()).await;
-    // The admin waits a minute, longer than the test; the writer would not.
+    // The admin waits longer than the test; the writer would not wait.
+    crate::sync::set_merge_delay(&admin, AN_HOUR);
     crate::sync::set_merge_delay(&writer, Duration::ZERO);
     synced(&writer).await;
     synced(&leaver).await;
@@ -147,6 +152,8 @@ async fn another_admins_rotation_cancels_a_pending_one() {
     let waiting = open(1, &relay.url()).await;
     let quick = open(2, &relay.url()).await;
     let leaver = open(3, &relay.url()).await;
+    crate::sync::set_merge_delay(&waiting, AN_HOUR);
+    crate::sync::set_merge_delay(&quick, AN_HOUR);
     synced(&quick).await;
     synced(&leaver).await;
     let project = now(waiting.spaces().create()).unwrap();
@@ -157,7 +164,7 @@ async fn another_admins_rotation_cancels_a_pending_one() {
     let on_leaver = joined(&leaver, &project).await;
     let (before, _) = current(&waiting, &project).unwrap();
 
-    // Both admins see the exposure and wait, each up to a minute.
+    // Both admins see the exposure and wait.
     now(on_leaver.leave()).unwrap();
     synced(&leaver).await;
     eventually("both admins have a merge rotation pending", || {
@@ -172,6 +179,9 @@ async fn another_admins_rotation_cancels_a_pending_one() {
         || current(&waiting, &project).is_some_and(|(now, exposed)| now != before && !exposed),
     )
     .await;
-    assert!(!pending(&waiting, &project));
+    eventually("the waiting admin dropped its pending rotation", || {
+        !pending(&waiting, &project)
+    })
+    .await;
     assert_eq!(current(&waiting, &project), current(&quick, &on_quick));
 }
