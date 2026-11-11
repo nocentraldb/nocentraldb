@@ -113,7 +113,8 @@ fn a_rotation_by_an_admin_removed_concurrently_still_counts_as_a_head() {
         Some(&Verdict::Rejected(Rejection::Excluded(remove.id())))
     );
     // A rejected rotation lists nothing, so the first generation stays a
-    // head; generation 2 has the higher ordinal (decision M17), and the
+    // head; generation 2 has the higher ordinal (RFC 0008, "Generation ids"),
+    // and the
     // exposure rule makes the next admin rotate away from it.
     assert_eq!(state.heads(), BTreeSet::from([first, two]));
     assert_eq!(state.current_generation(), Some(two));
@@ -125,7 +126,7 @@ fn a_generation_two_key_chain_entries_name_is_never_current() {
     let g = s.genesis.clone();
     let first = s.first_generation;
     // Alice rotates twice from the same view: both entries derive one id,
-    // and both are rejected (decision M23).
+    // and both are rejected (RFC 0008, "Generation ids").
     let (one, two) = s.rotate(ALICE, &[first], &[&g]);
     let (again, same) = s.rotate(ALICE, &[first], &[&g]);
     assert_eq!(two, same);

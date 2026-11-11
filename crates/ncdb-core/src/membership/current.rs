@@ -5,7 +5,7 @@
 //! chain entry lists as previous. Among the heads it is the one with the
 //! highest ordinal, then the one whose key chain entry comes first in the
 //! order. A generation that two key chain entries name has two keys under
-//! one id (decision M23), so it is never a head, and an entry that names it
+//! one id (RFC 0008, "Generation ids"), so it is never a head, and an entry that names it
 //! lists nothing.
 //!
 //! When the current generation is exposed, an admin writes a merge

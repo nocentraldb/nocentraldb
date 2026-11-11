@@ -1,4 +1,4 @@
-//! RFC 0008, M20, "Effects that wait until a change is stable": the relay
+//! RFC 0008, "Effects that wait until a change is stable": the relay
 //! deletes a shredded person key's record once the shred is stable in its
 //! log, and keeps it while an admin's run does not reach a change that saw
 //! the shred.

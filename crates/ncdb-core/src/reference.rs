@@ -55,7 +55,8 @@ pub fn target(value: &Value) -> Option<Target> {
 }
 
 /// What a member's copies hold of a reference's target (RFC 0004,
-/// "How a reference resolves"). RFC 0005's D20 names the states for the app
+/// "How a reference resolves"). RFC 0005's "References into another space"
+/// names the states for the app
 /// `"ok"`, `"notAccessible"` and `"missing"`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Status {

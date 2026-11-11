@@ -1,4 +1,5 @@
-//! D11 with the convergence harness (NOC-9, with NOC-19's contract checks
+//! RFC 0002, "Rejected changes", with the convergence harness (NOC-9, with
+//! NOC-19's contract checks
 //! C1, C2, C4 and C7): copies that receive the same
 //! changes, control changes among them, in any order and with duplicates,
 //! end with the same state for every change, the same folded operations and

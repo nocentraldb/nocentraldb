@@ -1,4 +1,4 @@
-//! Padding before encryption (RFC 0002, D8, owner-accepted): the canonical
+//! Padding before encryption (RFC 0002, "Padding"): the canonical
 //! encoding of every sealed payload map, padding (key 5) included, is a
 //! multiple of 256 bytes. The padding is a byte string of zeros; it costs
 //! at least two bytes (its key and its length), so a payload one byte

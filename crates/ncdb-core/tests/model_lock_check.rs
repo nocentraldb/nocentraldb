@@ -201,7 +201,8 @@ fn refuses_removing_a_collection_or_a_field() {
     assert!(
         refusals(&next)[0].lines()[1].ends_with("To rename it, add a field under the new name.")
     );
-    // Removing a deprecated field is refused too: deprecation is forever (D7).
+    // Removing a deprecated field is refused too: deprecation is forever
+    // (RFC 0005, "Modifiers").
     let next = v2(|t| {
         t.replace(r#""old": { "deprecated": 1, "deprecatedReason": "Unused.", "rule": 1, "since": 1, "type": "ncdb/boolean" },"#, "")
     });

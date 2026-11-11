@@ -4,7 +4,8 @@
 //! 0008's membership verdict ("Sealed changes"), and opens the key
 //! envelopes addressed to its member with `envelope::open`. A change
 //! rejected for an unknown author, a missing membership or a missing key is
-//! folded once the control change it lacked arrives (D11).
+//! folded once the control change it lacked arrives (RFC 0002, "Rejected
+//! changes").
 
 mod support;
 

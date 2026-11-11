@@ -1,6 +1,7 @@
 //! A view reopened on an existing database checks new changes against the
 //! control changes its log already holds (NOC-104; RFC 0006, "Control
-//! changes and changes that wait for them"; RFC 0002 D11): the checks the
+//! changes and changes that wait for them"; RFC 0002, "Rejected changes"): the
+//! checks the
 //! member opens it with know nothing yet, and learn the membership, the
 //! keys and the generation graph from the log.
 
