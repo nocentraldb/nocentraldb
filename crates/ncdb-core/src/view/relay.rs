@@ -3,9 +3,15 @@
 //! holds, and the relay's refusal of a change (RFC 0002, D12), in the
 //! `log` table's `relay_position` and `relay_refusal` columns. Neither
 //! changes a change's state: no other member sees the relay's answer.
+//!
+//! The relay epoch those positions belong to sits in `meta` under
+//! `relay_epoch` (NOC-145), so a reopened database knows whether its
+//! positions still hold (RFC 0007, "Restores and the relay epoch"). A
+//! space's cursor is derived from the positions, not stored.
 
 use rusqlite::{OptionalExtension, params};
 
+use super::schema;
 use super::{Error, View};
 use crate::change::Change;
 use crate::ids::MemberId;
@@ -116,6 +122,60 @@ impl View {
         Ok(())
     }
 
+    /// The relay epoch the relay positions in the log belong to, once
+    /// one was set.
+    pub fn relay_epoch(&self) -> Result<Option<[u8; 16]>, Error> {
+        let Some(text) = schema::meta(&self.conn, RELAY_EPOCH)? else {
+            return Ok(None);
+        };
+        let mut epoch = [0; 16];
+        let ok = text.len() == 32
+            && epoch.iter_mut().enumerate().all(|(i, byte)| {
+                u8::from_str_radix(&text[2 * i..2 * i + 2], 16)
+                    .map(|b| *byte = b)
+                    .is_ok()
+            });
+        match ok {
+            true => Ok(Some(epoch)),
+            false => Err(Error::Corrupt("relay epoch")),
+        }
+    }
+
+    /// Keeps `epoch` as the relay epoch the relay positions belong to.
+    pub fn set_relay_epoch(&mut self, epoch: [u8; 16]) -> Result<(), Error> {
+        let text: String = epoch.iter().map(|b| format!("{b:02x}")).collect();
+        self.conn.execute(
+            "INSERT INTO meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT DO UPDATE SET value = excluded.value",
+            [RELAY_EPOCH, &text],
+        )?;
+        Ok(())
+    }
+
+    /// The cursor of `space`: the highest relay position up to which the
+    /// log holds the change of every position, 0 when it holds none from
+    /// 1. It is derived, not stored, so it can be lower than the highest
+    /// position folded (when a pulled entry never reached the log) but
+    /// never higher: a member that pulls from it skips no change.
+    pub fn relay_cursor(&self, space: SpaceId) -> Result<u64, Error> {
+        let mut statement = self.conn.prepare(
+            "SELECT relay_position FROM log WHERE space_id = ?1
+             AND relay_position IS NOT NULL ORDER BY relay_position",
+        )?;
+        let mut rows = statement.query([space.0])?;
+        let mut cursor = 0u64;
+        while let Some(row) = rows.next()? {
+            let position = u64::try_from(row.get::<_, i64>(0)?)
+                .map_err(|_| Error::Corrupt("relay position"))?;
+            match position {
+                p if p <= cursor => {}
+                p if p == cursor + 1 => cursor = p,
+                _ => break,
+            }
+        }
+        Ok(cursor)
+    }
+
     /// Forgets every relay position, of every space: the relay's epoch
     /// changed, so no position it gave holds any more (RFC 0007, "Restores
     /// and the relay epoch"). Refusals stay.
@@ -139,3 +199,6 @@ impl View {
         Ok(changes)
     }
 }
+
+/// The `meta` key of the relay epoch, as 32 lowercase hex digits.
+const RELAY_EPOCH: &str = "relay_epoch";
