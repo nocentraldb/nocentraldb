@@ -8,9 +8,11 @@
 //! and [`Members::set_role`] change them (the Rust shapes the owner decided
 //! on NOC-203).
 //!
-//! **What this does not do yet.** Adding a list of invitations, leaving a
-//! space, and re-wrapping person-key records in a rotation: a call that
-//! rotates refuses a space with a person key.
+//! A member leaves a space with [`Space::leave`](crate::Space::leave).
+//!
+//! **What this does not do yet.** Adding a list of invitations, and
+//! re-wrapping person-key records in a rotation: a call that rotates
+//! refuses a space with a person key.
 
 use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,6 +30,7 @@ mod batch;
 mod change;
 mod info;
 mod invitation;
+mod leave;
 mod notice;
 mod rotate;
 

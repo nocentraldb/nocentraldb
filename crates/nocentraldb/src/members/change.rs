@@ -181,7 +181,7 @@ fn current(resolved: &Resolved, subject: ids::MemberId) -> Result<membership::Ro
 }
 
 /// How many admins `resolved` holds.
-fn admins(resolved: &Resolved) -> usize {
+pub(super) fn admins(resolved: &Resolved) -> usize {
     resolved
         .members()
         .filter(|(_, role)| *role == membership::Role::Admin)
@@ -193,7 +193,7 @@ fn admins(resolved: &Resolved) -> usize {
 /// its highest author sequence the log holds, or 0 when it holds none (RFC
 /// 0008, "The cutoff"). The batch is then folded in one transaction, and
 /// sync is woken.
-fn write(
+pub(super) fn write(
     inner: &mut Inner,
     space: ids::SpaceId,
     subject: ids::MemberId,

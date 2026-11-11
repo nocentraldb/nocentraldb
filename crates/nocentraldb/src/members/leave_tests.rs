@@ -85,7 +85,12 @@ fn the_leave_names_the_members_own_highest_sequence_as_its_cutoff() {
     now(on_member.leave()).unwrap();
 
     let state = resolved(&member, &project);
-    let left = state.member(invitation.key.id()).unwrap().revocations.last().copied();
+    let left = state
+        .member(invitation.key.id())
+        .unwrap()
+        .revocations
+        .last()
+        .copied();
     assert_eq!(left.map(|r| (r.role, r.cutoff)), Some((None, 2)));
 }
 
