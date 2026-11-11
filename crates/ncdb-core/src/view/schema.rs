@@ -3,7 +3,9 @@
 //! The layout is internal to the core and not a stable format (RFC 0006,
 //! decision 2); only the `log` table follows RFC 0002, "The log on disk".
 //! `confirmed_accounts` is no part of the view: it holds what a person
-//! confirmed, which no fold computes (`super::accounts`).
+//! confirmed, which no fold computes (`super::accounts`). Nor is
+//! `shreds_held`: when this device first held each shred
+//! (`super::shreds_held`).
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -39,6 +41,12 @@ CREATE TABLE IF NOT EXISTS meta (
 CREATE TABLE IF NOT EXISTS confirmed_accounts (
     account_key BLOB PRIMARY KEY NOT NULL,
     confirmed_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS shreds_held (
+    space_id BLOB NOT NULL,
+    change_id BLOB NOT NULL,
+    held_at INTEGER NOT NULL,
+    PRIMARY KEY (space_id, change_id)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS objects (
     space_id BLOB NOT NULL,

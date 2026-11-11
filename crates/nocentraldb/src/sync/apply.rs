@@ -158,6 +158,7 @@ pub(super) fn entries(
             .or_insert_with(|| SpaceState::new(space, member.key()));
         match view.receive(&entry.frame, &mut state.checks) {
             Ok(Appended::New(_)) => {
+                crate::status::note_shreds(view, &state.checks)?;
                 folded = true;
                 sync(inner).folds += 1;
                 if again::check(inner, space)? {

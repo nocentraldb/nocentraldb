@@ -430,6 +430,22 @@ impl Log {
         ids
     }
 
+    /// For each author in this log, the highest n such that the log holds
+    /// that author's changes 1 to n, sealed ones included: the runs that
+    /// decide whether a control change is stable (RFC 0008, "Effects that
+    /// wait until a change is stable"). An author whose sequence 1 the log
+    /// lacks is not listed.
+    pub fn runs(&self) -> BTreeMap<MemberId, u64> {
+        let mut runs: BTreeMap<MemberId, u64> = BTreeMap::new();
+        for (author, sequence) in self.sequences.keys() {
+            let run = runs.get(author).copied().unwrap_or(0);
+            if *sequence == run + 1 {
+                runs.insert(*author, *sequence);
+            }
+        }
+        runs
+    }
+
     /// The relay counts of `author`'s changes in this log.
     pub fn relay_counts(&self, author: MemberId) -> RelayCounts {
         self.relay_counts.get(&author).copied().unwrap_or_default()

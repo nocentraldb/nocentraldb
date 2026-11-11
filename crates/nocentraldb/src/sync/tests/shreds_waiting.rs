@@ -141,9 +141,20 @@ async fn after_7_days_an_admin_device_names_each_blocking_account_once() {
     let waiting = status(&db, &space).shreds_waiting;
 
     // X, ME and Y block it: X and ME share one account, Y has its own.
-    let mut accounts = vec![fingerprint(&space::account()), fingerprint(&space::other_account(1))];
+    let mut accounts = vec![
+        fingerprint(&space::account()),
+        fingerprint(&space::other_account(1)),
+    ];
     accounts.sort_by_key(|fingerprint| fingerprint.0);
-    let [ShredWaiting { change, age, blocking, .. }] = &waiting[..] else {
+    let [
+        ShredWaiting {
+            change,
+            age,
+            blocking,
+            ..
+        },
+    ] = &waiting[..]
+    else {
         panic!("one shred waits: {waiting:?}");
     };
     assert_eq!(*change, ChangeId(shred.id()));
@@ -184,7 +195,13 @@ async fn a_shred_every_admin_wrote_after_is_stable_and_no_longer_waits() {
     let (mut space, held, shred) = shredded(CoreRole::Writer);
     let by_x = space.envelope(X, W, &[&shred]);
     let by_y = space.envelope(Y, W, &[&shred]);
-    fold_all(&db, &held.iter().chain([&shred, &by_x, &by_y]).collect::<Vec<_>>());
+    fold_all(
+        &db,
+        &held
+            .iter()
+            .chain([&shred, &by_x, &by_y])
+            .collect::<Vec<_>>(),
+    );
 
     assert_eq!(status(&db, &space).shreds_waiting, []);
 }
@@ -198,7 +215,13 @@ async fn an_admin_whose_run_the_device_does_not_hold_keeps_the_shred_waiting() {
     // never received.
     space.skip(Y, 1);
     let by_y = space.envelope(Y, W, &[&shred]);
-    fold_all(&db, &held.iter().chain([&shred, &by_x, &by_y]).collect::<Vec<_>>());
+    fold_all(
+        &db,
+        &held
+            .iter()
+            .chain([&shred, &by_x, &by_y])
+            .collect::<Vec<_>>(),
+    );
 
     let waiting = status(&db, &space).shreds_waiting;
     assert_eq!(waiting.len(), 1);
@@ -210,7 +233,11 @@ async fn a_shred_pulled_from_the_relay_waits_from_when_it_arrived() {
     let relay = LocalRelay::start().await;
     let (space, held, shred) = shredded(CoreRole::Writer);
     let mut client = relay.client(X).await;
-    push(&mut client, &held.iter().chain([&shred]).collect::<Vec<_>>()).await;
+    push(
+        &mut client,
+        &held.iter().chain([&shred]).collect::<Vec<_>>(),
+    )
+    .await;
     let db = open(ME, &relay.url()).await;
     synced(&db).await;
 

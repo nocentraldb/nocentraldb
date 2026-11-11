@@ -94,7 +94,10 @@ fn the_checks_compute_which_admins_block_a_shred() {
 fn a_shred_this_device_never_held_has_no_time() {
     let view = View::open_in_memory(&lock()).unwrap();
     let space = Space::new(A);
-    assert_eq!(view.shred_held_at(space.space, ChangeId([7; 32])).unwrap(), None);
+    assert_eq!(
+        view.shred_held_at(space.space, ChangeId([7; 32])).unwrap(),
+        None
+    );
 }
 
 #[test]

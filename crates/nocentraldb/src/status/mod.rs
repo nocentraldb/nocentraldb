@@ -8,23 +8,30 @@
 //! status holds. `newest_model`, the highest model version among the
 //! parked changes and operations, and the reason "another model" need the
 //! writer's model in each change (RFC 0002, payload key 64), which the
-//! core does not read yet. `shreds_waiting` needs the stability of a shred
-//! (RFC 0008, M20 and M21), which the core does not compute yet. The
-//! struct is
-//! `#[non_exhaustive]`, so each field comes when it is built, instead of
-//! a field that always reads empty and claims nothing waits.
+//! core does not read yet. The struct is `#[non_exhaustive]`, so each
+//! field comes when it is built, instead of a field that always reads
+//! empty and claims nothing waits.
+//!
+//! **A shred's age.** A control change carries no clock (RFC 0008, "The
+//! control bodies"), so a shred's age counts from when this device first
+//! held it, which the view keeps ([`note_shreds`]; NOC-218). A device that
+//! joins later, or a fresh install, starts the count again: the alarm
+//! comes late, never early.
 
 mod reasons;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures_core::Stream;
-use ncdb_core::ids::SpaceId as CoreSpaceId;
-use ncdb_core::membership::Verdict;
+use ncdb_core::checks::SealChecks;
+use ncdb_core::ids::{ChangeId as CoreChangeId, MemberId, SpaceId as CoreSpaceId};
+use ncdb_core::membership::{Resolved, Verdict};
+use ncdb_core::view::{Error as ViewError, View};
 
 use crate::db::Inner;
 use crate::id::ChangeId;
-use crate::members::Role;
+use crate::members::{Fingerprint, Role};
 use crate::space::Space;
 
 pub use reasons::{ParkReason, RejectReason};
@@ -79,7 +86,31 @@ pub struct SpaceStatus {
     /// Whether this member is a member but holds no key for the space's
     /// current key generation, and waits for its envelope.
     pub waiting_for_key: bool,
+    /// The accepted shreds that are not stable yet, in change id order: a
+    /// shred destroys its person key for good only once nothing can reject
+    /// it any more (RFC 0008, "Effects that wait until a change is
+    /// stable").
+    pub shreds_waiting: Vec<ShredWaiting>,
 }
+
+/// A shred that is not stable yet.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ShredWaiting {
+    /// The shred entry.
+    pub change: ChangeId,
+    /// How long ago this device first held it.
+    pub age: Duration,
+    /// The accounts of the admin devices whose runs block it, each once,
+    /// in the order of their account keys. Filled only on an admin device
+    /// once the shred waited 7 days; empty before, and on any other device.
+    pub blocking: Vec<Fingerprint>,
+}
+
+/// How long a shred waits before an admin device names the accounts that
+/// block it (RFC 0008, "Effects that wait until a change is stable": 7
+/// days).
+const ALARM: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// One of this member's changes the relay refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,6 +193,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         equivocations: Vec::new(),
         exposed: false,
         waiting_for_key: false,
+        shreds_waiting: Vec::new(),
     };
     let Some(state) = inner.spaces.get(&space) else {
         return status;
@@ -184,5 +216,87 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         status.exposed = resolved.exposed(current);
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();
     }
+    let admin = status.role == Some(Role::Admin);
+    status.shreds_waiting = shreds_waiting(&inner.view, space, &state.checks, admin);
     status
+}
+
+/// The shreds of `space` that wait, as [`SpaceStatus::shreds_waiting`]
+/// gives them; `admin` says whether this device is an admin of the space.
+fn shreds_waiting(
+    view: &View,
+    space: CoreSpaceId,
+    checks: &SealChecks,
+    admin: bool,
+) -> Vec<ShredWaiting> {
+    let resolved = checks.resolved();
+    if shreds(resolved).next().is_none() {
+        return Vec::new();
+    }
+    let runs = view.log(space).map(|log| log.runs()).unwrap_or_default();
+    let stability = checks.stability(|member| runs.get(&member).copied().unwrap_or(0));
+    let now = now_millis();
+    stability
+        .shreds_waiting()
+        .map(|(shred, members)| {
+            let held = view
+                .shred_held_at(space, shred)
+                .ok()
+                .flatten()
+                .unwrap_or(now);
+            let age = Duration::from_millis(now.saturating_sub(held));
+            let blocking = if admin && age >= ALARM {
+                accounts(resolved, members)
+            } else {
+                Vec::new()
+            };
+            ShredWaiting {
+                change: ChangeId(shred),
+                age,
+                blocking,
+            }
+        })
+        .collect()
+}
+
+/// The accounts of `members`, each once, in the order of their account
+/// keys.
+fn accounts(resolved: &Resolved, members: &BTreeSet<MemberId>) -> Vec<Fingerprint> {
+    let keys: BTreeSet<[u8; 32]> = members
+        .iter()
+        .filter_map(|member| resolved.member(*member))
+        .map(|state| state.certificate.account_key)
+        .collect();
+    keys.into_iter().map(Fingerprint).collect()
+}
+
+/// The accepted shreds of a space.
+fn shreds(resolved: &Resolved) -> impl Iterator<Item = CoreChangeId> + '_ {
+    resolved.person_keys().filter_map(|(_, key)| key.shred)
+}
+
+/// Records in `view` that this device holds every accepted shred the
+/// checks know, now, unless it held it before: the start of a shred's age.
+/// The SDK calls it after it folds changes and when it opens a space.
+pub(crate) fn note_shreds(view: &mut View, checks: &SealChecks) -> Result<(), ViewError> {
+    let resolved = checks.resolved();
+    let mut held = shreds(resolved).peekable();
+    if held.peek().is_none() {
+        return Ok(());
+    }
+    let now = now_millis();
+    let space = checks.space();
+    for shred in held {
+        view.note_shred_held(space, shred, now)?;
+    }
+    Ok(())
+}
+
+/// Now, in milliseconds since the Unix epoch.
+fn now_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| {
+            u64::try_from(since.as_millis()).unwrap_or(u64::MAX)
+        })
 }

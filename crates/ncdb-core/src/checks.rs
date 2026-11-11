@@ -23,7 +23,7 @@ use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::keys::{MemberKey, MemberPublicKey, SpaceKey};
 use crate::log::{ParkReason, RejectReason};
 use crate::membership::{
-    self, Action, ControlBody, Entry, KeyChainEntry, MembershipEntry, Resolved,
+    self, Action, ControlBody, Entry, KeyChainEntry, MembershipEntry, Resolved, Stability,
 };
 use crate::receive::{Checks, Stop};
 use crate::seal::{self, OpenError};
@@ -94,9 +94,22 @@ impl SealChecks {
         }
     }
 
+    /// The space these checks belong to.
+    pub fn space(&self) -> SpaceId {
+        self.space
+    }
+
     /// The control state of the control changes that passed.
     pub fn resolved(&self) -> &Resolved {
         &self.resolved
+    }
+
+    /// Which accepted control changes are stable, and which members block
+    /// each waiting shred, for a holder whose runs `held` gives (RFC 0008,
+    /// "Effects that wait until a change is stable"): see
+    /// [`Resolved::stability`], over the control changes the checks hold.
+    pub fn stability(&self, held: impl Fn(MemberId) -> u64) -> Stability {
+        self.resolved.stability(self.controls.values(), held)
     }
 
     /// The space key of `generation`, when an envelope to the checks'

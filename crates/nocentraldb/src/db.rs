@@ -336,7 +336,7 @@ impl Db {
                 format!("the lock is refused: {error}"),
             )
         })?;
-        let (view, keys) = match place {
+        let (mut view, keys) = match place {
             Place::Memory => {
                 let view = View::open_in_memory(&lock).map_err(view_error)?;
                 (view, given.unwrap_or_else(Keys::generate))
@@ -344,10 +344,15 @@ impl Db {
             Place::Path { dir, key_file } => open_at(dir, key_file, store, &lock)?,
         };
         let model = Arc::new(view.model().clone());
-        let spaces = view
+        let spaces: BTreeMap<_, _> = view
             .spaces()
             .map(|space| (space, SpaceState::from_log(&view, space, keys.member.key())))
             .collect();
+        // A database from before the view kept when a shred was first held
+        // starts its shreds' age now (NOC-218).
+        for state in spaces.values() {
+            crate::status::note_shreds(&mut view, &state.checks).map_err(view_error)?;
+        }
         let inner = Inner {
             view,
             model,

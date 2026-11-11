@@ -122,5 +122,6 @@ pub(crate) fn commit(
             other => panic!("the member's own change was not folded: {other:?}"),
         }
     }
+    crate::status::note_shreds(view, &state.checks).map_err(storage)?;
     Ok(())
 }
