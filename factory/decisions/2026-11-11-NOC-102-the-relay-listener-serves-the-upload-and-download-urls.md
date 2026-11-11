@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-102 · The relay's own listener serves the upload and download URLs of large changes, with 32-byte random tokens
+
+- Decided by: Carsten (NOC-208, A and A, 2026-11-11), built by the coding agent (NOC-102)
+- Why: RFC 0007, "Large changes", sends a frame too large for one message through a one-time upload URL and a short-lived download URL. A local SQLite relay has no object storage, so the listener that serves the WebSocket protocol also serves `PUT /uploads/<token>` and `GET /frames/<token>` over plain HTTP/1.1. It reads the head of each new connection's first request with `httparse`; a WebSocket upgrade goes on to the handshake with the head put back in front of the stream. Each URL carries 32 random bytes in hex. An upload is single-use, valid 15 minutes, takes exactly its declared size, and is refused above 16 MiB before its body is read (413), as `upload` is with `too_large`. A download token is valid 5 minutes. The URLs start with `--public-url`, by default `http://` and the listening address.
+- Instead of: a second listener for HTTP, which a TLS proxy would need a second route for; signed URLs without stored tokens, which need a server secret and give no single use.
+- What this does not do: an HTTP request holds one of the 64 handshake places while it lasts; anyone holding a download URL reads the (encrypted) frame until it expires; the SDK side is NOC-121.
+- Topics: relay, protocol, rfc-0007

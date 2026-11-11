@@ -39,6 +39,13 @@ pub fn space_key() -> SpaceKey {
     SpaceKey::from_bytes([3; 32])
 }
 
+/// The `model.id` a simulated space's genesis names unless the test gives
+/// another: that of `tests/view/model.lock.json`, the lock of the tests'
+/// view, since a member never folds a space of another model (NOC-57).
+pub const MODEL: [u8; 16] = [
+    0x07, 0xc2, 0xec, 0x8c, 0xe1, 0x3d, 0x0c, 0x37, 0x05, 0x13, 0xdd, 0x1d, 0xfe, 0x53, 0xc6, 0xc7,
+];
+
 /// The account every simulated member's certificate names.
 pub fn account() -> SigningKey {
     SigningKey::from_bytes(&[0xAC; 32])
@@ -81,7 +88,7 @@ impl Space {
     /// A space from this nonce; two calls with the same creator and nonce
     /// give the same space id.
     pub fn with_nonce(creator: Who, nonce: [u8; 16]) -> Space {
-        Space::with_model(creator, nonce, [1; 16])
+        Space::with_model(creator, nonce, MODEL)
     }
 
     /// A space from this nonce whose genesis names this `model.id`.

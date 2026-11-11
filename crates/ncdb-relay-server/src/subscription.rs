@@ -13,23 +13,26 @@ use ncdb_relay::{ErrorCode, Relay};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
 
-use crate::connection::{Out, PAGE, blocking};
+use crate::connection::{Out, PAGE};
+use crate::page;
 use crate::wire::{self, Cursor};
 
 /// Starts a subscription of `member` from `cursor`; `head` must be watched
 /// before the first read, so no append between the two is missed.
 pub(crate) fn spawn<S: RelayStore + 'static>(
     relay: Arc<Relay<S>>,
+    base_url: Arc<str>,
     member: ncdb_core::ids::MemberId,
     cursor: Cursor,
     head: watch::Receiver<u64>,
     out: mpsc::Sender<Out>,
 ) -> JoinHandle<()> {
-    tokio::spawn(run(relay, member, cursor, head, out))
+    tokio::spawn(run(relay, base_url, member, cursor, head, out))
 }
 
 async fn run<S: RelayStore + 'static>(
     relay: Arc<Relay<S>>,
+    base_url: Arc<str>,
     member: ncdb_core::ids::MemberId,
     cursor: Cursor,
     mut head: watch::Receiver<u64>,
@@ -42,10 +45,9 @@ async fn run<S: RelayStore + 'static>(
     let mut catching_up = true;
     loop {
         loop {
-            let relay = relay.clone();
-            let limit = PAGE as u32;
-            let pulled =
-                blocking(async move { relay.pull(member, space, epoch, after, limit).await }).await;
+            let tag = catching_up.then_some(req);
+            let (relay, base_url) = (relay.clone(), base_url.clone());
+            let pulled = page::read(relay, base_url, member, tag, space, epoch, after, PAGE).await;
             let page = match pulled {
                 Ok(page) => page,
                 Err(code) => {
@@ -57,21 +59,16 @@ async fn run<S: RelayStore + 'static>(
                     return;
                 }
             };
-            let tag = catching_up.then_some(req);
-            if page.entries.is_empty() {
-                if catching_up {
-                    let (bytes, _) = wire::entries(tag, space, &[], page.head);
-                    if out.send(Out::Message(bytes)).await.is_err() {
-                        return;
-                    }
+            let Some(last) = page.last else {
+                if catching_up && out.send(Out::Message(page.bytes)).await.is_err() {
+                    return;
                 }
                 break;
-            }
-            let (bytes, sent) = wire::entries(tag, space, &page.entries, page.head);
-            if out.send(Out::Message(bytes)).await.is_err() {
+            };
+            if out.send(Out::Message(page.bytes)).await.is_err() {
                 return;
             }
-            after = page.entries[sent - 1].position;
+            after = last;
             if after >= page.head {
                 break;
             }

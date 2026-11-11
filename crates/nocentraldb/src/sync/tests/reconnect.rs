@@ -20,7 +20,7 @@ const MISSED: CoreObjectId = CoreObjectId([0x33; 16]);
 
 /// `ADMIN`'s space on the relay with `ME` as a writer, and a task.
 async fn shared(relay: &LocalRelay) -> (space::Space, Client) {
-    let mut space = space::Space::new(ADMIN);
+    let mut space = space::Space::with_model(ADMIN, [7; 16], super::rotation::model_id());
     let genesis = space.genesis.clone();
     let add = space.add(ADMIN, ME, Role::Writer, &[&genesis]);
     let envelope = space.envelope(ADMIN, ME, &[&add]);

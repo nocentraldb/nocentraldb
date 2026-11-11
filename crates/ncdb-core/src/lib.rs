@@ -59,6 +59,7 @@ pub mod set;
 pub mod tips;
 mod unfold;
 pub mod view;
+mod writer_model;
 
 /// Returns the crate name; exists so the gates have real code to check.
 pub fn name() -> &'static str {

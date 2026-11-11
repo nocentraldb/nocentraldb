@@ -8,6 +8,7 @@ use ncdb_core::cbor::Value;
 use ncdb_core::change::Operation;
 use ncdb_core::ids::{ObjectId, SpaceId};
 use ncdb_core::membership::Role;
+use support::http;
 use support::space::Space;
 use support::*;
 
@@ -204,15 +205,26 @@ async fn a_push_of_more_than_32_frames_is_malformed() {
     assert_eq!(client.ask(&push).await, error(Some(5), "malformed"));
 }
 
+/// A frame that fits into one push but not inline into an entry is
+/// accepted, and comes down as a download URL (RFC 0007, "Large changes").
 #[tokio::test(flavor = "multi_thread")]
-async fn a_frame_larger_than_the_server_carries_is_too_large() {
+async fn a_frame_too_large_to_come_inline_comes_as_a_download() {
     let (addr, _dir) = server().await;
-    let (mut client, _) = Client::member(addr, 0).await;
+    let (mut client, welcome) = Client::member(addr, 0).await;
     let mut space = Space::new(0);
     let genesis = space.genesis.clone();
-    let big = large(&mut space, ncdb_relay_server::MAX_FRAME);
-    assert!(big.bytes().len() > ncdb_relay_server::MAX_FRAME);
+    let big = large(&mut space, ncdb_relay_server::MAX_INLINE);
+    assert!(big.bytes().len() > ncdb_relay_server::MAX_INLINE);
     assert!(big.bytes().len() < ncdb_relay_server::MAX_MESSAGE - 200);
     let results = client.push(1, space.space, &[&genesis, &big]).await;
-    assert_eq!(results, [accepted(1), rejected("too_large")]);
+    assert_eq!(results, [accepted(1), accepted(2)]);
+    let page = client
+        .ask(&pull(2, space.space, &welcome.epoch, 1, 10))
+        .await;
+    let entry = &array(field(&page, 4))[0];
+    let download = field(entry, 3);
+    assert_eq!(keys(download), [1, 2]);
+    assert_eq!(uint(field(download, 2)), big.bytes().len() as u64);
+    let url = text(field(download, 1));
+    assert_eq!(http::get(url).await.body, big.bytes());
 }

@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-197 · The fold reports the lock's model id, and the newest model version is read from the frames when asked
+
+- Decided by: coding agent (NOC-197), the plan agreed with pm
+- Why: step 6 compares key 64 with the `model.id` of the member's lock, so the `Fold` trait, the model side of receiving, gains a required `model_id()`, and the view's `Model` carries the lock's `id` and `version`; a required method keeps any fold from forgetting it. The SDK writes key 64 from the same model into every payload it seals. The newest model version a space's parked data needs (`Log::newest_model`, `View::newest_model`) is read when asked: it opens each change parked for an unknown "must understand" payload key and each folded change with parked operations, and takes the highest version whose key 64 names the member's model. The log keeps no version per change, so nothing new is stored, and a reopened view gives the same answer from the same frames.
+- Instead of: recording each change's version as it is received, which a reopened view would have to rebuild by decrypting anyway, or a column in the log table, a change of the on-disk format.
+- What this does not do: each read decrypts every counted change once; parked data is rare, and a later change can cache it if a space holds much of it. A change parked for an unknown payload format, or at step 2, has no readable key 64 and does not count.
+- Topics: core, rfc-0002, rfc-0005, local-view
