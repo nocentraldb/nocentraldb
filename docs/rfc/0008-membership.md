@@ -43,7 +43,6 @@ Membership rules decide how permissions behave, which GENESIS.md asks us to tell
 | Cutoff | The highest author sequence of the revoked member that the revoking member held when it wrote the revocation. |
 | Generation id | The 64-bit number in RFC 0002's header key 4 that names one space key generation. |
 | Seniority | A total order on member ids, computed from the control changes; the creator comes first. |
-| Stable | A control change is stable on a holder when no change that can still arrive can reject it (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). |
 
 ## The design in one page
 
@@ -54,7 +53,7 @@ Membership rules decide how permissions behave, which GENESIS.md asks us to tell
 - **Revocations win.** A revocation wins over a concurrent grant. A removed or demoted member regains a right only through a grant that saw the revocation. That grant also starts a new key generation, so writes made in between never count.
 - **One order, computed from the set.** Every member puts its control changes into one order computed from the changes alone, and applies them in that order. The order of arrival never matters. Seniority settles cycles of concurrent revocations.
 - **Concurrent rotations merge.** A generation id is derived from its rotation, so two rotations never share one. When a member that is no longer in the space may hold the current generation, the next admin that notices rotates again.
-- **Irreversible effects wait.** Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record wait until the shred entry is stable. The view treats the person's fields as erased at once.
+- **A shred is final when accepted.** Its verdict reads only its causal past, so no revocation undoes it. Members destroy the person key and the relay deletes its record as soon as they accept the shred, and the view treats the person's fields as erased at once (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
 - **The relay runs the same code** over the control changes it holds. Where it holds fewer changes than a member, the members decide (see [How the relay applies the rules](#how-the-relay-applies-the-rules)).
 
 ## The first change of a space
@@ -288,7 +287,7 @@ acknowledgement (entry type 6)
 └── 9  deleted            bool: false for "seen", true for "deleted my copy"
 ```
 
-A member writes two acknowledgements per shred. It writes the first, with `deleted` false, as soon as it accepts the shred. That one is a control change that has the shred in its causal past, so an admin's first acknowledgement is what lets the shred become stable. It writes the second, with `deleted` true, after it deleted its copy of the key, which it does only once the shred is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). The audit's evidence of erasure is the second kind. A further acknowledgement of the same kind, for the same shred by the same member, changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
+A member writes two acknowledgements per shred, both as soon as it accepts the shred. The first, with `deleted` false, says it accepted it. The second, with `deleted` true, follows once it deleted its copy of the key, which it does at once (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). The audit's evidence of erasure is the second kind. A further acknowledgement of the same kind, for the same shred by the same member, changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
 
 ### What this RFC uses from RFC 0003
 
@@ -330,7 +329,8 @@ A grant is one deeper than the grant its author's right rested on. So an admin r
 
 - y needs a right above the role R sets;
 - y's author sequence is above R's cutoff;
-- y is not covered by a re-grant: y's causal past holds no grant of that right to its author that saw R. A grant of a right the author held before R does not count, because R caps it.
+- y is not covered by a re-grant: y's causal past holds no grant of that right to its author that saw R. A grant of a right the author held before R does not count, because R caps it;
+- y is not a shred entry: no revocation excludes a shred (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
 
 The third condition lets a re-granted member's later control changes count again. They must have the re-grant in their causal past, so changes written before the re-grant, whatever their sequence numbers, stay excluded. Sealed changes have no control dependencies; their re-grants work through the fresh generation (see [Sealed changes](#sealed-changes)). Each revocation that is valid when written wants to come before the changes it excludes. The edges are added one revocation at a time:
 
@@ -348,7 +348,7 @@ A cycle arises when concurrent revocations exclude each other. The first revocat
 2. its author holds the right in the state so far: the accepted changes before it in the order;
 3. no accepted revocation before it in the order excludes it.
 
-An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* with its reason, and changes nothing. Two rules apply to the whole set rather than to the order:
+A shred entry is the exception: it is accepted when it is valid when written, and conditions 2 and 3 do not apply to it (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* with its reason, and changes nothing. Two rules apply to the whole set rather than to the order:
 
 - A person-key entry that a shred of the same person-key id did not see is rejected when S holds an accepted shred for that id, wherever the entry falls in the order. A shred therefore wins over a concurrent re-wrap.
 - Of two accepted shreds of one person-key id, the first in the order takes effect, and the second changes nothing.
@@ -383,13 +383,13 @@ The fold does not need to be incremental. A space holds few control changes, hun
 - a grant arrives that gives some member an admin grant of smaller depth, so a cycle is settled the other way;
 - a missing control dependency arrives that a change's validity when written rests on;
 - a shred arrives that a person-key entry did not see;
-- a change arrives that moves which of two shreds of one person-key id comes first in the order;
+- a change arrives that moves which of two shreds of one person-key id comes first in the order, which changes only which of them the state names, since both are accepted and destroy the same key;
 - an equivocated genesis with a lower change id arrives late, and becomes the genesis (see [How the relay and members recognise it](#how-the-relay-and-members-recognise-it));
 - a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (see [Generation ids](#generation-ids)).
 
-**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its reversible effects follow at once, and its irreversible effects never happened, because they wait until it is stable (see [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable)). Un-folding is allowed because without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
+**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its effects follow at once, and they can all be undone. The one effect that cannot, destroying a person key, belongs to a shred, and a shred never loses its verdict once it is accepted (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). Un-folding is allowed because without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
 
-Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. A change that the authors of all possible revocations have seen can no longer flip. [Effects that wait until a change is stable](#effects-that-wait-until-a-change-is-stable) uses this. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change. That is the price of island mode under every option.
+Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change. That is the price of island mode under every option.
 
 ### The cutoff
 
@@ -399,36 +399,28 @@ The cutoff is a number in a control body, and the author sequence is a number in
 
 **What the cutoff does not stop.** A revoked member can write a new change under a sequence number at or below its cutoff that it already used. That is an equivocation (RFC 0002). Every member detects it once it holds both changes, and the SDK reports it, but the second change is inside the cutoff and is accepted, as RFC 0002 accepts both changes of every equivocation. The revoked member holds only generations up to the revocation's rotation, so such a change is sealed under an old generation. The SDK marks it as written by a revoked member under an old generation.
 
+A control change inside the cutoff still counts only where its author holds the right in the state so far (step 5). Whether a revoked admin's fork comes before or after its revocation in the order can depend on its change id: a fork has the same causal past as the change it duplicates, and step 4 puts the lower change id first. A fork that sorts first can come before the revocation, while its author is still an admin, and keep its effect; one that sorts later has no right and is rejected. Every copy reaches the same verdict, but the change id decides it, and a revoked device can write forks until one sorts first. The harness pins this case (NOC-226). It cannot undo an erasure, because no revocation excludes a shred.
+
 **Why a cutoff.** It needs only headers, so members and the relay reach one verdict. The same cutoff plus a hash over the subject's change ids up to it was not taken: a member can check it only when it holds all of them, which splits verdicts between members. Counting the changes the relay accepted before the revocation, and refusing every change from the removal on, was not taken: it depends on the relay's order, which members on an island do not have, and refuses changes the remover had already received. A cutoff checked against the dependencies inside sealed changes was not taken: only members that decrypt and hold those changes can check it, so members and the relay would reach different verdicts. Revoking by time was not taken: the clock is encrypted, and a removed member can write any clock.
 
-### Effects that wait until a change is stable
+### A shred is final when accepted
 
-The view can always be recomputed, so un-folding a change costs nothing but work. Some effects of control changes cannot be undone. They wait until the change can no longer be rejected:
+The view can always be recomputed, so un-folding a change costs nothing but work. One effect of a control change cannot be undone: destroying a person key. A shred entry's verdict therefore reads only its causal past, and once a holder accepts a shred, no change that can still arrive rejects it (Carsten, 2026-11-11, NOC-224):
 
-| Control change | Effect at once, reversible | Effect that waits until it is stable |
-| --- | --- | --- |
-| Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). The member writes its "seen" acknowledgement. | The member deletes its copy of the person key and then writes its "deleted" acknowledgement. The relay deletes the person-key record. |
-| Key envelope | The member unwraps the key into its keystore and can decrypt. | Nothing irreversible: if the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it. |
-| Membership entry, key chain entry, person-key entry, acknowledgement | They change the control state; the relay changes whom it serves. | Nothing irreversible. |
+- **A shred is accepted when it is valid when written** (step 1): in the state of its causal past, its author holds the right to perform an erasure, the person key exists, and the sign-off is valid. No revocation excludes a shred (step 3), and step 5 does not ask whether its author still holds the right in the state so far. The two rules for the whole set still apply: a shred wins over a person-key entry it did not see, and of two shreds of one person-key id the first in the order takes effect. Both are accepted and destroy the same key.
+- **Every holder reaches that verdict as soon as it holds the shred and its causal past**, whatever else it holds, members and the relay alike. A late equivocated genesis does not change it either, since step 1 reads only the shred's causal past and the genesis in it.
 
-Doing them as soon as the shred is accepted was not taken: a shred that a concurrent revocation later rejects must not have destroyed keys that cannot come back. The cost: one offline admin delays the destruction until it returns or is removed.
+| Control change | Its effects, all at once |
+| --- | --- |
+| Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). The member writes its "seen" acknowledgement, deletes its copy of the person key and writes its "deleted" acknowledgement. The relay deletes the person-key record. |
+| Key envelope | The member unwraps the key into its keystore and can decrypt. If the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it. |
+| Membership entry, key chain entry, person-key entry, acknowledgement | They change the control state; the relay changes whom it serves. Nothing irreversible. |
 
-**When a change is stable.** A holder computes its stable changes as the smallest set closed under this rule, starting from none. An accepted control change c is stable when, for every member id that holds the admin role in its state, or held it and lost it to an accepted revocation, the holder holds every change of that member from author sequence 1 up to one of:
+A member that is offline destroys the key when it syncs and accepts the shred. Until then it holds the key, as RFC 0003 says of every device that has not come back.
 
-- a control change of that member whose causal past contains c;
-- the cutoff of a revocation that took the role from that member and is itself stable.
+**The price.** A concurrent revocation of the performer no longer stops an erasure: the shred stands even when a revocation the performer did not see removed it. The sign-off is the whole defence. A second account, which holds an admin member in the shred's causal past, signed off this performer and this person key (see [Shred entry](#shred-entry)). A thief with a stolen writer device therefore cannot erase without that account. A thief who also controls such an account can erase a person's data for good: a loss of data, not a leak, and such a pair can already remove members.
 
-A revocation that is not stable yet bounds nothing: until it is, its subject counts as an admin whose run must reach a change that saw c. Applying the rule again until nothing is added gives one answer. The rule only adds, so this ends.
-
-**Why nothing can reject it then.** Only a revocation can reject an accepted change. It does so by excluding the change, or a grant that the author's right rests on, which is in c's causal past. Only an admin can write such a revocation. Every admin that saw c holds c's author's changes up to c, so its cutoff is at least c's sequence, and c is inside. Every revocation an admin wrote before it saw c, or before it lost the role, is among the changes the holder holds. Admins made later were made by an admin that had already seen c, or by one of those held changes. Their grants are in their own revocations' causal past, so c is too. A revocation that bounds a former admin's run is stable itself, so it cannot be undone and give that member's later changes the role back. Step 1 is fixed for a given causal past. Seniority can still change, but it only decides between revocations that exclude each other, and none can exclude c. The harness checks this argument (see [How the convergence harness checks it](#how-the-convergence-harness-checks-it)).
-
-**What this costs.** A shred becomes stable only when every admin has written a control change after seeing it. One admin device that is lost or stays offline therefore blocks the destruction of the key, the "deleted" acknowledgements and the relay's deletion for as long as it stays away: the rule is fail-closed (Carsten, 2026-11-11, NOC-205). The person's fields are erased in every view at once, but the key still exists on the members, which the audit shows. What the members have:
-
-- **An alarm.** When a shred has waited longer than a set period, the SDK of every admin raises an alarm. It names the admin devices whose runs block it, and the shred's age.
-- **An admin's first acknowledgement counts.** Every admin device that is online writes a "seen" acknowledgement as soon as it accepts the shred (see [Acknowledgement](#acknowledgement)). An admin that is online but otherwise idle therefore never blocks; only one that does not come online does.
-- **Demoting or removing a blocking admin does not end the wait while it stays away.** The demotion is a change like any other, and it becomes stable only once every admin of its own causal past, the blocking device included, has written a control change after it. So the demotion waits for the same device the shred waits for. Once that device syncs again, its acknowledgement ends the shred's wait anyway; the demotion then keeps it from blocking later shreds. Letting the demotion bound the blocking admin at its own cutoff was not taken: that admin may have written a concurrent revocation that seniority lets win, and the copies would then disagree about whether the erasure happened, which cannot be undone. A rule that lets a demotion by a more senior admin bound a junior one is not designed yet.
-
-The period is 7 days. It leaves well inside the one-month deadline of a data-subject request for a person to act, and it never changes a role without a person. Letting an admin's SDK demote the blocking admin devices on its own after 21 days was not taken: it lowers rights automatically, which the owner should allow explicitly. Destroying the key and acknowledging at once, so that only the relay's deletion waits, was not taken either: a shred that a concurrent revocation later rejects would then have destroyed keys for good. Until the shred is stable, the erasure has not fully happened, which principle 3's team lead does not expect (see [Agreement with GENESIS.md and the other RFCs](#agreement-with-genesismd-and-the-other-rfcs)).
+**Waiting until the shred is stable was not taken**, which was this RFC's earlier rule. A shred was stable once every admin and former admin had written a control change after seeing it, or was bounded by a stable revocation, and its key was destroyed only then. That rule holds only against admins that are honest or already revoked. An admin device that is stolen and not yet removed can still reject a stable shred: by a new change whose dependencies and cutoff leave the shred out, which nobody can check, or by an equivocation under a sequence the rule already counted, which is inside every cutoff (NOC-224; the harness pins both, NOC-226). The wait also let one lost admin device keep a key alive for as long as it stayed away. Two repairs were not taken either: refusing a second change under a counted sequence, because holders differ in what they call stable, so the state would split; and treating an admin's equivocation as a revocation of that admin, because the device chooses where to fork and can exclude a grant the shred rests on.
 
 ### Concurrent add and remove of one member
 
@@ -483,7 +475,7 @@ The raise is a re-grant. Alice writes a key chain entry for a fresh generation 8
 - **A revoked member keeps its copy.** Revocation and rotation keep it from writing, and from reading what is written under later generations. It still holds what it received (RFC 0003).
 - **A revoked member's equivocations inside its cutoff are accepted**, as RFC 0002 accepts every equivocation. The SDK reports them (see [The cutoff](#the-cutoff)).
 - **Grants a revoked admin made inside its cutoff stay.** If a stolen device added a member before the removing admin had received that add, the added member stays until an admin removes it too. The SDK lists the members a removed admin added, so that the remover can review them.
-- **Verdicts are not final until a change is stable.** Concurrent control changes can still flip them, as [What a new change can change](#what-a-new-change-can-change) lists.
+- **Verdicts are not final**, except a shred's. Concurrent control changes can still flip them, as [What a new change can change](#what-a-new-change-can-change) lists. An accepted shred stays accepted (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
 - **Nothing is enforced at write time.** Two admins can make decisions that contradict each other; the rules decide afterwards, the same way on every copy.
 
 ## How the convergence harness checks it
@@ -499,11 +491,11 @@ The control state is treated like a field type under RFC 0004's plugin contract.
 | M-C5 | Local checks never split the state. | Mixes in envelopes and key chain entries that hold wrong keys, and person-key records that miss their commitment. The control state must be equal on every copy. Only the local reports differ, and only on the members that can tell. |
 | M-C6 | Seniority and the order are total. | Generates mutual removals, rings and overlapping cycles of concurrent revocations, ties of depth, and missing dependencies. Checks the outcomes against a reference implementation of steps 2 to 5. For every pair of sets S ⊂ S′, checks that every verdict that differs between them is explained by one of the causes in [What a new change can change](#what-a-new-change-can-change). |
 | M-C7 | Writes without the right never come back, and re-granted writes do count. | Revoked members keep writing sealed and control changes under every generation they hold, and pre-write high sequence numbers. They are re-granted and raised again, two admins raise a member to different roles at once, and admins try to reuse a generation id. No write without the right may be accepted on any copy. Every change a re-granted member writes after seeing its re-grant must be accepted. |
-| M-C8 | A stable change stays accepted. | Whenever a holder calls a change stable, the harness adds further generated changes. These include concurrent revocations by former admins, revocations of the revocations that bounded them, and missing dependencies of non-admins. The change must stay accepted in every extension. A broken fixture that bounds a former admin by a revocation that is not stable must fail. |
+| M-C8 | An accepted shred stays accepted. | Whenever a copy accepts a shred, the harness adds further generated changes: concurrent revocations of its performer and of the admins its sign-off rests on, equivocations of control changes under sequences already used, and admins whose dependencies and cutoffs leave the shred out. The shred must stay accepted in every extension. |
 | M-C9 | Exposure counts every envelope. | Rejected rotations and envelopes from removed admins, delivered to some copies only. Once a merge rotation is accepted, no one outside the state may hold the current generation in any copy that holds those envelopes. |
 | M-C10 | Shreds are ordered. | Two shreds of one id, and shreds concurrent with re-wraps. Exactly one shred takes effect, and no re-wrap it did not see is accepted. |
 | M-C11 | The relay agrees. | After every delivery, the relay simulator's membership table equals `resolve` of its own log. Every change it refused is one that the members also reject for the same S, or one listed in [How the relay applies the rules](#how-the-relay-applies-the-rules). |
-| M-C12 | The checks fire. | Broken fixtures the harness must reject: add wins for membership; arrival order instead of the computed order; a revocation without its cutoff; seniority by arrival; a re-grant without a fresh generation; exposure that counts only accepted envelopes; a shred whose key is destroyed before it is stable. |
+| M-C12 | The checks fire. | Broken fixtures the harness must reject: add wins for membership; arrival order instead of the computed order; a revocation without its cutoff; seniority by arrival; a re-grant without a fresh generation; exposure that counts only accepted envelopes; a revocation that excludes a shred. |
 
 ## How the relay applies the rules
 
@@ -515,7 +507,7 @@ The relay holds no key. It does hold every accepted control change of a space, a
 - **A sealed change** is accepted by the rule in [Sealed changes](#sealed-changes), which needs only its header: author, author sequence and generation id.
 - **The uploader** must be a current member (RFC 0007).
 - **A person-key record** needs its person-key entry. It replaces the stored record when its generation is the stored record's generation or descends from it, because generation ids that carry a tag have no "newer" ([RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
-- **A shred's record deletion** happens when the shred becomes stable on the relay, by the same rule as on a member, not in the transaction that appends it.
+- **A shred's record deletion** happens as soon as the relay accepts the shred entry, by the same rule as on a member (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
 
 Where the relay and the members can disagree, and who decides:
 
@@ -568,10 +560,10 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 - **The sign-off** of an erasure comes from an account with an admin member in the space ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - **Formats.** RFC 0003 defines the member certificate, the account sign-off and the key-chain subkey, and this RFC uses them, including the sub-agent certificate its parent signs ([What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
 - **The person-key entry** carries RFC 0003's commitment and RFC 0007's record hash and generation ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key); [RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
-- **The relay's membership table** holds roles, grants with their from generations, revocations with their cutoffs and the generation graph. The relay checks author sequences against cutoffs, replaces a person-key record only with the same or a descendant generation, and deletes a record only once its shred is stable ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
-- **RFC 0006's control table** holds what [The function](#the-function) lists. Control changes are recomputed through `resolve`, and a shred's irreversible effects wait until it is stable ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)).
+- **The relay's membership table** holds roles, grants with their from generations, revocations with their cutoffs and the generation graph. The relay checks author sequences against cutoffs, replaces a person-key record only with the same or a descendant generation, and deletes a record as soon as it accepts its shred ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
+- **RFC 0006's control table** holds what [The function](#the-function) lists. Control changes are recomputed through `resolve`, and a shred's effects follow at once ([RFC 0006, "Control changes and changes that wait for them"](0006-local-view.md#control-changes-and-changes-that-wait-for-them)).
 - **The model id** stands in the genesis, key 13, required and sealed; RFC 0003 defines its subkey ([RFC 0003, "Model-id subkey"](0003-keys-and-cryptography.md#model-id-subkey)). A model id in every change's payload is RFC 0002's and RFC 0005's to carry out, not this RFC's ([RFC 0002, "The writer's model"](0002-change-and-log-format.md#the-writers-model)).
-- **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Here the key is destroyed only once the shred is stable, which an idle admin device delays. The view erases the fields at once, and the alarm after 7 days names the blocking devices, but until then the key exists on members. RFC 0001 names the wait in [its team lead's list](0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review), and RFC 0003 and the FAQ alongside it.
+- **Principle 3 and the team lead's erasure.** GENESIS.md promises that erasure destroys a key. Here every member destroys it as soon as it accepts the shred, and the relay deletes its record then; a device that is offline destroys it when it syncs. RFC 0001 names that limit in [its team lead's list](0001-nocentraldb.md#the-team-lead-who-has-to-pass-the-data-protection-review), and RFC 0003 and the FAQ alongside it.
 - **Add wins** stays the rule for RFC 0004's sets. Membership resolves the other way, so the revocation wins; membership is not a field type of the schema.
 
 ## Summary of the choices
@@ -589,7 +581,7 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | Two rotations at once? | Two generations with derived, distinct ids; the next admin that sees exposure rotates again. |
 | A removed member that keeps writing? | Its changes above the cutoff are rejected by every member and refused by the relay; equivocations inside the cutoff are reported, not rejected. |
 | A member raised again? | Only its changes under a fresh generation count. |
-| What waits? | Destroying a person key, its "deleted" acknowledgement and the relay's deletion of its record, until the shred is stable. |
+| When is a person key destroyed? | As soon as a member or the relay accepts the shred: its verdict reads only its causal past, so no revocation undoes it. |
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
 | Groups? | None: withdrawn by the owner (Carsten, 2026-11-09); a later RFC may bring them back. |
 
