@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Role, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -237,7 +237,7 @@ impl<S: RelayStore> Relay<S> {
             let Checked {
                 effects,
                 added,
-                recheck,
+                shredded,
             } = checked;
             let entry = NewEntry {
                 change: change.id(),
@@ -252,12 +252,12 @@ impl<S: RelayStore> Relay<S> {
                 .await?
             {
                 AppendOutcome::Appended { head } => {
-                    // Only an append that can change a shred's stability
-                    // makes the relay check again. The check deletes
-                    // nothing until NOC-224 is settled (NOC-225), and the
-                    // append stands whatever the check does.
-                    if recheck {
-                        let _ = self.stable_shreds(space).await;
+                    // A shred is final when accepted, so its record goes
+                    // now (RFC 0008, "A shred is final when accepted"). The
+                    // append stands whatever the deletion does; the next
+                    // control change deletes what is left.
+                    if !shredded.is_empty() {
+                        let _ = self.delete_shredded(space, &shredded).await;
                     }
                     return Ok((Pushed::Accepted(head), added));
                 }
@@ -326,10 +326,7 @@ impl<S: RelayStore> Relay<S> {
             if !row.admits(header) {
                 return Err(ErrorCode::AuthorNotMember);
             }
-            return Ok(Checked {
-                recheck: holds_or_held_admin(&row.state),
-                ..Checked::default()
-            });
+            return Ok(Checked::default());
         }
         if let Entry::Genesis(_) = control_body(change)?.entry {
             return Err(ErrorCode::SpaceExists);
@@ -339,10 +336,7 @@ impl<S: RelayStore> Relay<S> {
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
-        Ok(Checked {
-            recheck: true,
-            ..Checked::new(&resolved, &before)
-        })
+        Ok(Checked::new(&resolved, &before))
     }
 
     /// The space's control changes, in position order. It loads no sealed
@@ -391,13 +385,14 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
 }
 
 /// What a change that passed its checks writes besides the log, the
-/// members it makes current, and whether it can change a waiting shred's
-/// stability.
+/// members it makes current, and the person keys its space's state names
+/// as shredded, whose records the relay deletes once the change is
+/// appended.
 #[derive(Default)]
 struct Checked {
     effects: Vec<Effect>,
     added: Vec<MemberId>,
-    recheck: bool,
+    shredded: BTreeSet<[u8; 16]>,
 }
 
 impl Checked {
@@ -411,20 +406,17 @@ impl Checked {
             .map(|row| row.member)
             .collect();
         let effects = records.into_iter().map(Effect::Member).collect();
+        let shredded = resolved
+            .person_keys()
+            .filter(|(_, key)| key.shred.is_some())
+            .map(|(id, _)| id)
+            .collect();
         Checked {
             effects,
             added,
-            recheck: false,
+            shredded,
         }
     }
-}
-
-/// Whether a member's changes count for stability (RFC 0008, "When a change
-/// is stable"): it holds the admin role, or an accepted grant ever gave it.
-/// A sealed change of any other member cannot change a shred's stability:
-/// only control changes and the runs of these members can.
-fn holds_or_held_admin(state: &membership::MemberState) -> bool {
-    state.role == Some(Role::Admin) || state.grants.iter().any(|grant| grant.role == Role::Admin)
 }
 
 /// The current members of a resolved space.
