@@ -1,4 +1,5 @@
 ---
+
 title: The relay
 description: A server that stores and forwards changes it cannot read.
 sidebar: { order: 2 }

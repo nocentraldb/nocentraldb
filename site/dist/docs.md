@@ -34,7 +34,11 @@ export const model = nc.model({
       status: nc.oneOf(["open", "in_progress", "done"]),
       priority: nc.int(),
     },
-    { indexes: { byStatusPriority: nc.index(["status", "priority"], { equal: 1 }) } },
+    {
+      indexes: {
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+      },
+    },
   ),
 });
 ```
@@ -52,7 +56,11 @@ const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 const project = await db.spaces.create();
 
 await project.write((tx) => {
-  tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
+  tx.create(model.tasks, {
+    title: "Write the README",
+    status: "open",
+    priority: 1,
+  });
 });
 ```
 

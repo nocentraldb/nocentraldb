@@ -24,7 +24,11 @@ export const model = nc.model({
       status: nc.oneOf(["open", "in_progress", "done"]),
       priority: nc.int(),
     },
-    { indexes: { byStatusPriority: nc.index(["status", "priority"], { equal: 1 }) } },
+    {
+      indexes: {
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+      },
+    },
   ),
 });
 ```
@@ -39,7 +43,11 @@ const project = await db.spaces.create();
 
 
 await project.write((tx) => {
-  tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
+  tx.create(model.tasks, {
+    title: "Write the README",
+    status: "open",
+    priority: 1,
+  });
 });
 ```
  A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).

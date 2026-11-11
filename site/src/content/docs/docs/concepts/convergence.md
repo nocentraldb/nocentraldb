@@ -1,4 +1,5 @@
 ---
+
 title: Copies and convergence
 description: A full copy on every member, and the same state on all of them.
 sidebar: { order: 3 }

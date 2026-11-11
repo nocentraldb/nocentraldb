@@ -1,15 +1,34 @@
 ---
 // What it does not do (GENESIS principle 4), the way into the docs, and the footer.
 const limits = [
-  ["The relay sees metadata.", "Which key is in which space, when and how much each key writes, and who reads from where. It can withhold changes."],
-  ["Removing a member keeps their copy.", "The space key rotates, so they read nothing new. What they already received stays on their device."],
-  ["Erasure has edges.", "It does not reach devices that never come back online, a modified client, exports, screenshots or unmarked free text."],
-  ["No queries on the server.", "Queries run on declared indexes in the local copy. For analytics across all users, use a central database."],
-  ["v1 is not post-quantum.", "Ciphertext recorded today could be read by a future quantum computer."],
+  [
+    "The relay sees metadata.",
+    "Which key is in which space, when and how much each key writes, and who reads from where. It can withhold changes.",
+  ],
+  [
+    "Removing a member keeps their copy.",
+    "The space key rotates, so they read nothing new. What they already received stays on their device.",
+  ],
+  [
+    "Erasure has edges.",
+    "It does not reach devices that never come back online, a modified client, exports, screenshots or unmarked free text.",
+  ],
+  [
+    "No queries on the server.",
+    "Queries run on declared indexes in the local copy. For analytics across all users, use a central database.",
+  ],
+  [
+    "v1 is not post-quantum.",
+    "Ciphertext recorded today could be read by a future quantum computer.",
+  ],
 ];
 const docs = [
   ["Getting started", "Install, describe a model, open a database.", "/docs/"],
-  ["Concepts", "Spaces, the relay, convergence, erasure.", "/docs/concepts/spaces/"],
+  [
+    "Concepts",
+    "Spaces, the relay, convergence, erasure.",
+    "/docs/concepts/spaces/",
+  ],
   ["API", "The SDK calls, as RFC 0009 decides them.", "/docs/api/"],
   ["RFCs", "The whole design, open for your feedback.", "/docs/rfcs/"],
 ];

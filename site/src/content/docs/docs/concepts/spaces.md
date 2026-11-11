@@ -1,4 +1,5 @@
 ---
+
 title: Spaces and members
 description: The unit of sharing, membership and keys.
 sidebar: { order: 1 }

@@ -1,23 +1,56 @@
 ---
 // The eight use cases of docs/use-cases.md, one line each, linking to the full text.
-const base = "https://github.com/nocentraldb/nocentraldb/blob/main/docs/use-cases.md";
+const base =
+  "https://github.com/nocentraldb/nocentraldb/blob/main/docs/use-cases.md";
 const groups = [
   {
     title: "Where a central database is the weaker choice",
     items: [
-      ["Erasure that reaches every copy", "Erasing a person destroys their key, in every archive and snapshot. The audit trail survives.", "1-erasure-that-reaches-every-copy"],
-      ["A relay breach leaks nothing readable", "A copy of the relay's database is ciphertext and metadata, nothing more.", "2-a-breach-of-the-relay-leaks-nothing-readable"],
-      ["An outside agent, limited to one space", "It gets one space's keys, signs every write, and loses access when you remove it.", "3-an-outside-agent-limited-to-one-space"],
-      ["A thousand agent queries a minute", "Agents query their own copy: no round trip, no rate limit, no cost per read.", "4-a-thousand-agent-queries-a-minute-reads-at-no-cost"],
-      ["The relay goes down, work goes on", "Every member keeps reading and writing. When the relay is back, every copy converges.", "5-the-relay-goes-down-and-everyone-keeps-working"],
+      [
+        "Erasure that reaches every copy",
+        "Erasing a person destroys their key, in every archive and snapshot. The audit trail survives.",
+        "1-erasure-that-reaches-every-copy",
+      ],
+      [
+        "A relay breach leaks nothing readable",
+        "A copy of the relay's database is ciphertext and metadata, nothing more.",
+        "2-a-breach-of-the-relay-leaks-nothing-readable",
+      ],
+      [
+        "An outside agent, limited to one space",
+        "It gets one space's keys, signs every write, and loses access when you remove it.",
+        "3-an-outside-agent-limited-to-one-space",
+      ],
+      [
+        "A thousand agent queries a minute",
+        "Agents query their own copy: no round trip, no rate limit, no cost per read.",
+        "4-a-thousand-agent-queries-a-minute-reads-at-no-cost",
+      ],
+      [
+        "The relay goes down, work goes on",
+        "Every member keeps reading and writing. When the relay is back, every copy converges.",
+        "5-the-relay-goes-down-and-everyone-keeps-working",
+      ],
     ],
   },
   {
     title: "What you keep without a central server",
     items: [
-      ["Writing together through a tunnel", "Rich text on Yjs: both keep typing offline, and no text is lost when they meet again.", "6-writing-together-through-a-tunnel"],
-      ["Subscribe instead of poll", "A query on a declared index calls your app when a change may alter its page.", "7-subscribe-instead-of-poll"],
-      ["Streaming as a data type", "An agent's answer arrives chunk by chunk, over the same encrypted change stream.", "8-streaming-as-a-data-type"],
+      [
+        "Writing together through a tunnel",
+        "Rich text on Yjs: both keep typing offline, and no text is lost when they meet again.",
+        "6-writing-together-through-a-tunnel",
+      ],
+      [
+        "Subscribe instead of poll",
+        "A query on a declared index calls your app when a change may alter its page.",
+        "7-subscribe-instead-of-poll",
+      ],
+      [
+        "Streaming as a data type",
+        "An agent's answer arrives chunk by chunk, over the same encrypted change stream.",
+        "8-streaming-as-a-data-type",
+      ],
     ],
   },
 ];

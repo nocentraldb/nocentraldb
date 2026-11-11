@@ -13,8 +13,13 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
 for (const accent of accents) {
   for (const [name, width] of Object.entries(widths)) {
-    const page = await browser.newPage({ viewport: { width, height: 900 }, deviceScaleFactor: 2 });
-    await page.goto(`${base}/accent/${accent}/?shot`, { waitUntil: "networkidle" });
+    const page = await browser.newPage({
+      viewport: { width, height: 900 },
+      deviceScaleFactor: 2,
+    });
+    await page.goto(`${base}/accent/${accent}/?shot`, {
+      waitUntil: "networkidle",
+    });
     await page.evaluate(() => document.fonts.ready);
     await page.waitForTimeout(900);
     const file = new URL(`${accent}-${name}.png`, out);

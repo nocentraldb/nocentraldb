@@ -145,7 +145,8 @@ h2 {
 .link {
   font-weight: 700;
   text-decoration: none;
-  background: linear-gradient(currentColor, currentColor) 0 100% / 0 2px no-repeat;
+  background:
+    linear-gradient(currentColor, currentColor) 0 100% / 0 2px no-repeat;
   transition: background-size 220ms var(--ease-out);
   padding-bottom: 2px;
 }
@@ -238,11 +239,14 @@ h2 {
   display: none;
 }
 
+/* Under reduced motion everything rests; !important beats every component's animation. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win */
     animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win */
     transition: none !important;
   }
 }

@@ -1,4 +1,5 @@
 ---
+
 title: Erasure
 description: Erasing a person destroys a key.
 sidebar: { order: 4 }
