@@ -107,7 +107,7 @@ test("the rules of other RFCs it follows stand, linked, where the text says them
   assert.ok(
     links(
       lead,
-      "0008-membership.md#effects-that-wait-until-a-change-is-stable",
+      "0008-membership.md#a-shred-is-final-when-accepted",
     ),
   );
   assert.ok(

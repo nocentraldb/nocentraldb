@@ -231,17 +231,37 @@ test("the cutoff, and the rules for revoked members not taken", () => {
   );
 });
 
-test("irreversible effects wait, and the alarm after 7 days", () => {
-  // M20, M21; rejected: destroying a person key at once
+test("a shred is final when accepted; waiting until it is stable was not taken", () => {
+  // The owner's NOC-224, option 6; rejected: the wait (M20, M21), refusing a
+  // fork under a counted sequence, an equivocation as a revocation
+  const final = part("a-shred-is-final-when-accepted");
   holds(
-    part("effects-that-wait-until-a-change-is-stable"),
+    final,
     [
-      /as soon as the shred is accepted/,
-      /7 days/,
-      /21 days/,
-      /only the relay's deletion waits/,
+      /Carsten, 2026-11-11, NOC-224/,
+      /only its causal past/,
+      /[Nn]o revocation excludes a shred/,
+      /sign-off is the whole defence/,
+      /\*\*Waiting until the shred is stable was not taken\*\*/,
+      /equivocation/,
+      /NOC-226/,
     ],
-    "Effects that wait until a change is stable",
+    "A shred is final when accepted",
+  );
+  assert.doesNotMatch(final, /7 days|alarm/, "the alarm is gone");
+  const rfc = read(RFC);
+  assert.doesNotMatch(rfc, /effects-that-wait-until-a-change-is-stable/);
+  assert.doesNotMatch(rfc, /\| Stable \|/, "the term Stable is gone");
+  assert.match(rfc, /\| M-C8 \| An accepted shred stays accepted/);
+  assert.match(rfc, /a revocation that excludes a shred/, "M-C12 has no fixture for it");
+});
+
+test("the cutoff says a revoked admin's fork can depend on its change id", () => {
+  // NOC-226's finding
+  holds(
+    part("the-cutoff"),
+    [/change id/, /NOC-226/, /holds the right in the state so far/],
+    "The cutoff",
   );
 });
 
