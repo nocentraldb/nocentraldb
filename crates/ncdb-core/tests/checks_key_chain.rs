@@ -140,7 +140,7 @@ fn the_key_chain_entry_opens_the_first_generation_for_a_member_added_after_it() 
 
     assert_eq!(carol.state(&r.by_bob), State::Folded { parked: vec![] });
     assert!(carol.checks.space_key(r.space.first_generation).is_some());
-    assert_eq!(carol.checks.model_id(), Some([1; 16]));
+    assert_eq!(carol.checks.model_id(), Some(space::MODEL));
 }
 
 #[test]
