@@ -1,14 +1,16 @@
 //! A rotation of a space's key (RFC 0003, "Rotating a space key"; RFC
 //! 0008, "Key chain entry"): a key chain entry for a fresh generation,
-//! which encrypts the current generation's key under the new one, then a
+//! which encrypts the previous generations' keys under the new one, then a
 //! key envelope of the new key for every member of the space, the author
 //! included. Once they are folded, the new generation is current and the
 //! author holds its key, so what it writes next is sealed under it.
 //!
-//! **What this does not do yet.** It rotates away from the current
-//! generation only, not from every head of the generation graph, as a
-//! merge rotation does (RFC 0008, "Two removals that rotate the key at
-//! once", step 5). It does not re-wrap person-key records (RFC 0003,
+//! The key chain entry lists every head of the generation graph as a
+//! previous generation, as a merge rotation does (RFC 0008, "Two removals
+//! that rotate the key at once", step 5), so the new generation descends
+//! from all of them and is the one head after it.
+//!
+//! **What this does not do yet.** It does not re-wrap person-key records (RFC 0003,
 //! step 3): a space that holds a person key is refused before anything
 //! is written, since the SDK holds no record to re-wrap.
 
@@ -56,18 +58,25 @@ pub(crate) fn rotate(
 ) -> Result<u64, Error> {
     let next = next::next(view, space, &state.checks, member.id());
     let current = next.generation.expect("a writable space has a generation");
-    let fresh = membership::generation_id(space, member.id(), &[current]);
+    let heads: Vec<u64> = state.checks.resolved().heads().into_iter().collect();
+    let fresh = membership::generation_id(space, member.id(), &heads);
     let key = SpaceKey::generate();
-    let previous = state
-        .checks
-        .space_key(current)
-        .expect("a writable space's key is held");
+    let previous = heads
+        .iter()
+        .map(|head| {
+            let held = state
+                .checks
+                .space_key(*head)
+                .expect("the key of every head is held, as `rotatable` checks");
+            PreviousKey {
+                generation: *head,
+                key: seal_previous_key(&key, space, fresh, *head, held),
+            }
+        })
+        .collect();
     let chain = KeyChainEntry {
         generation: fresh,
-        previous: vec![PreviousKey {
-            generation: current,
-            key: seal_previous_key(&key, space, fresh, current, previous),
-        }],
+        previous,
         answers,
     };
     let rotation = membership::write(
