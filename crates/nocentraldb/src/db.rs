@@ -250,7 +250,9 @@ fn open_at(
         (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
-    let checks = |space| SealChecks::new(space, keys.member.key());
+    // The view keeps the checks while a rebuild runs (NOC-156).
+    let member = keys.member.clone();
+    let checks = move |space| SealChecks::new(space, member.key());
     let view = View::open_with(&file, lock, checks).map_err(view_error)?;
     Ok((view, keys))
 }
