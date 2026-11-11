@@ -57,7 +57,14 @@ async fn a_database_reopened_after_a_restore_pushes_again_what_the_relay_lost() 
     eventually("pushed again", || now(relay.log(space)).len() == 3).await;
     synced(&db).await;
     assert_eq!(relay.log(space).await[2], lost.change.0);
-    assert!(!db.sync().current().epoch_changed);
+    // The reopened database kept the epoch before the restore (NOC-145), so
+    // it reports the new one while it pushes again what the relay lost, and
+    // stops once its pass over the spaces is done: that can be after the
+    // relay confirmed the last change, which is all `synced` waits for.
+    eventually("the new epoch handled", || {
+        !db.sync().current().epoch_changed
+    })
+    .await;
 }
 
 /// The relay epoch and the cursor of `space`, as the database keeps them.
