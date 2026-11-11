@@ -16,6 +16,8 @@
 //! - **Exact bytes**: a frame comes back byte for byte.
 //! - **Read your writes**, also through another handle on the same storage.
 //! - **A new epoch after any loss.**
+//! - **An upload is filled once and taken once**, each one atomic step,
+//!   and taken only by its member in its space (RFC 0007, "Large changes").
 
 use std::fmt;
 use std::future::Future;
@@ -35,6 +37,38 @@ pub struct Epoch(pub [u8; 16]);
 /// The id of a person key in one space: 16 random bytes (RFC 0003).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PersonKeyId(pub [u8; 16]);
+
+/// The id of an upload, which a push names (RFC 0007, "Large changes"):
+/// 16 random bytes.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UploadId(pub [u8; 16]);
+
+/// The secret of an upload or download URL: 32 random bytes. Whoever holds
+/// it may fill the upload, or read the entry's frame.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Token(pub [u8; 32]);
+
+/// An upload a member began (RFC 0007, "Large changes").
+#[derive(Clone, PartialEq, Eq)]
+pub struct Upload {
+    /// The id its push names.
+    pub id: UploadId,
+    /// The secret of its URL.
+    pub token: Token,
+    /// The space it was begun in.
+    pub space: SpaceId,
+    /// The member that began it, the only one that may push it.
+    pub member: MemberId,
+    /// The declared size of its frame, in bytes.
+    pub size: u64,
+    /// When its URL stops taking the frame, in milliseconds since the Unix
+    /// epoch.
+    pub expires_at: u64,
+}
+
+/// How long a backend keeps an upload after its URL expired, in
+/// milliseconds: a frame filled in time may still be pushed within it.
+pub const UPLOAD_KEPT_AFTER_EXPIRY: u64 = 24 * 60 * 60 * 1000;
 
 /// A change the core appends: what the relay knows of it besides its frame.
 #[derive(Clone, PartialEq, Eq)]
@@ -257,6 +291,59 @@ pub trait RelayStore: Send + Sync {
     /// Draws a new relay epoch, which a restore must do before the relay
     /// serves any request.
     fn new_epoch(&self) -> impl Future<Output = Result<Epoch, StoreError>> + Send;
+
+    /// Stores a new, unfilled upload. In the same call, it deletes every
+    /// upload whose URL expired [`UPLOAD_KEPT_AFTER_EXPIRY`] or longer
+    /// before `now`, filled or not, and every download token that expired
+    /// at or before `now`.
+    fn begin_upload(
+        &self,
+        upload: Upload,
+        now: u64,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// The upload of a URL's token, and whether it is filled.
+    fn upload(
+        &self,
+        token: Token,
+    ) -> impl Future<Output = Result<Option<(Upload, bool)>, StoreError>> + Send;
+
+    /// Stores the frame of an upload if and only if it is not filled yet:
+    /// one atomic step. Whether it stored it.
+    fn fill_upload(
+        &self,
+        token: Token,
+        frame: Vec<u8>,
+    ) -> impl Future<Output = Result<bool, StoreError>> + Send;
+
+    /// Deletes a filled upload that `member` began in `space`, and returns
+    /// its frame: one atomic step, so a frame is taken once. None, and
+    /// nothing deleted, for an upload not filled, of another member or
+    /// space, or unknown.
+    fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, StoreError>> + Send;
+
+    /// Stores a download token for the entry at `position` of `space`,
+    /// valid until `expires_at`, and sweeps as [`RelayStore::begin_upload`]
+    /// does.
+    fn begin_download(
+        &self,
+        token: Token,
+        space: SpaceId,
+        position: Position,
+        expires_at: u64,
+        now: u64,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
+
+    /// The entry a download token names, and when the token expires.
+    fn download(
+        &self,
+        token: Token,
+    ) -> impl Future<Output = Result<Option<(SpaceId, Position, u64)>, StoreError>> + Send;
 }
 
 /// Debug output shows ids, positions, sizes and kinds: never a frame, a
@@ -282,6 +369,33 @@ mod debug {
             f.write_str("PersonKeyId(")?;
             hex(f, &self.0)?;
             f.write_str(")")
+        }
+    }
+
+    impl fmt::Debug for UploadId {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("UploadId(")?;
+            hex(f, &self.0)?;
+            f.write_str(")")
+        }
+    }
+
+    /// A token is a secret: its debug output shows none of it.
+    impl fmt::Debug for Token {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str("Token(..)")
+        }
+    }
+
+    impl fmt::Debug for Upload {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("Upload")
+                .field("id", &self.id)
+                .field("space", &self.space)
+                .field("member", &self.member)
+                .field("size", &self.size)
+                .field("expires_at", &self.expires_at)
+                .finish_non_exhaustive()
         }
     }
 
