@@ -1,6 +1,6 @@
 //! One `entries` message of a pull or a subscription. The log is read in
-//! small chunks, so a page of large frames holds only a few of them in
-//! memory at once; an entry whose frame is larger than [`MAX_INLINE`]
+//! small chunks, each at most `ncdb_relay::PAGE_BYTES` of frames, so a page
+//! of large frames holds only a few of them in memory at once; an entry whose frame is larger than [`MAX_INLINE`]
 //! comes as a download URL (RFC 0007, "Large changes").
 
 use std::sync::Arc;
@@ -79,7 +79,9 @@ pub(crate) async fn read<S: RelayStore + 'static>(
                 cursor = item.position;
                 items.push(item);
             }
-            if full || read < want || items.len() as u64 >= limit || cursor >= head {
+            // A pull may return fewer entries than asked, when their frames
+            // reach the core's byte bound: only an empty one ends the log.
+            if full || read == 0 || items.len() as u64 >= limit || cursor >= head {
                 break;
             }
         }

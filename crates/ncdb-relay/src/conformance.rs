@@ -86,6 +86,8 @@ macro_rules! conformance_suite {
             an_upload_is_taken_only_by_its_member_in_its_space_once_filled,
             a_download_token_names_one_entry,
             expired_uploads_and_downloads_are_swept,
+            control_entries_are_read_alone,
+            a_bounded_read_stops_before_its_byte_budget,
         );
     };
     (@tests $fresh:path; $($name:ident),* $(,)?) => {

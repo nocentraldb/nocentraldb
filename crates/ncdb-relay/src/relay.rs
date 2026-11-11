@@ -25,6 +25,11 @@ pub(crate) const RETRIES: usize = 64;
 /// control changes.
 pub(crate) const PAGE: u32 = 1024;
 
+/// The most frame bytes one read of the whole log loads, unless one frame
+/// alone is larger: 4 MiB. A space of large changes costs the relay at most
+/// this much memory per read, not a page of 16 MiB frames.
+pub const PAGE_BYTES: u64 = 4 * 1024 * 1024;
+
 /// The largest frame the relay accepts: 16 MiB (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
@@ -119,8 +124,9 @@ impl<S: RelayStore> Relay<S> {
         &self.config
     }
 
-    /// The entries of `space` after the cursor `after`, at most `limit`,
-    /// for `reader`.
+    /// The entries of `space` after the cursor `after`, at most `limit` and
+    /// at most [`PAGE_BYTES`] of frames (at least one entry, when there is
+    /// one), for `reader`.
     pub async fn pull(
         &self,
         reader: MemberId,
@@ -139,7 +145,10 @@ impl<S: RelayStore> Relay<S> {
         if after > head {
             return Err(ErrorCode::BadCursor);
         }
-        let entries = self.store.read(space, after, limit).await?;
+        let entries = self
+            .store
+            .read_bounded(space, after, limit, PAGE_BYTES)
+            .await?;
         Ok(Pulled { entries, head })
     }
 
@@ -244,11 +253,11 @@ impl<S: RelayStore> Relay<S> {
             {
                 AppendOutcome::Appended { head } => {
                     // Only an append that can change a shred's stability
-                    // makes the relay check again. The append stands
-                    // whatever the deletion does: a failed deletion is tried
-                    // again after the next such append.
+                    // makes the relay check again. The check deletes
+                    // nothing until NOC-224 is settled (NOC-225), and the
+                    // append stands whatever the check does.
                     if recheck {
-                        let _ = self.delete_stable_shreds(space).await;
+                        let _ = self.stable_shreds(space).await;
                     }
                     return Ok((Pushed::Accepted(head), added));
                 }
@@ -336,17 +345,18 @@ impl<S: RelayStore> Relay<S> {
         })
     }
 
-    /// The space's control changes, in position order.
+    /// The space's control changes, in position order. It loads no sealed
+    /// change's frame.
     pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
         let mut controls = Vec::new();
         let mut after = 0;
         loop {
-            let page = self.store.read(space, after, PAGE).await?;
+            let page = self.store.read_controls(space, after, PAGE).await?;
             let Some(last) = page.last() else {
                 return Ok(controls);
             };
             after = last.position;
-            for entry in page.iter().filter(|e| e.kind == Kind::CONTROL) {
+            for entry in &page {
                 // The relay appended only frames that decode.
                 let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
                 controls.push(change);
