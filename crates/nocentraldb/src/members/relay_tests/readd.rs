@@ -1,5 +1,5 @@
 //! Adding a former member again (RFC 0008, "A member demoted and raised
-//! again" and M5; NOC-154 point 2): the admin rotates to a fresh
+//! again" and "Membership entry"; NOC-154 point 2): the admin rotates to a fresh
 //! generation first, with an envelope for every member, then adds the
 //! member from that generation, and the relay accepts every change.
 

@@ -1,6 +1,6 @@
 //! Resolving a reference (RFC 0004, "How a reference resolves"): the state
 //! is worked out when the app reads, from the member's own copies of the
-//! spaces it holds, to ok, not accessible or missing (decisions 17 to 20).
+//! spaces it holds, to ok, not accessible or missing.
 //! It is never part of the field's state. Encoding is in
 //! `field_op_reference.rs`, the merge in `reference_contract.rs`.
 

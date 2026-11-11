@@ -1,7 +1,6 @@
-//! A member's invitation (RFC 0009, "Invitations and members"; decision
-//! S12): its public identity, which the app carries to an admin of a space.
-//! Nothing in it is secret, and no key bytes reach the app (RFC 0003,
-//! "How the SDK hides keys").
+//! A member's invitation (RFC 0009, "Invitations and members"): its public
+//! identity, which the app carries to an admin of a space. Nothing in it is
+//! secret, and no key bytes reach the app (RFC 0003, "How the SDK hides keys").
 //!
 //! Its text form is `ncdb-invite-1:` and unpadded base64url of a fixed
 //! binary layout that starts with a version byte (RFC 0003, "Invitation";

@@ -127,7 +127,7 @@ pub enum Effect {
     Member(MemberRecord),
 }
 
-/// A person-key record (RFC 0003, decision 14): opaque wrapped bytes and the
+/// A person-key record (RFC 0003, "Person-key record"): opaque wrapped bytes and the
 /// fields outside the wrapping.
 #[derive(Clone, PartialEq, Eq)]
 pub struct PersonKeyRecord {

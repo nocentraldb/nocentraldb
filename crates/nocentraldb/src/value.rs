@@ -1,9 +1,9 @@
-//! A field value, read and written by the field's name (RFC 0009, decision
-//! S18): a text, an integer, a float, a boolean or an object id, as the
-//! field's type in the lock asks; a set or many links reads as the list of
-//! its elements and is written with [`Value::add`] and [`Value::remove`],
-//! never whole (decision S4). Its `Debug` output prints `[redacted]`: a
-//! value is content.
+//! A field value, read and written by the field's name (RFC 0009, "The Rust
+//! SDK"): a text, an integer, a float, a boolean or an object id, as the
+//! field's type in the lock asks; a set or many links reads as the list of its
+//! elements and is written with [`Value::add`] and [`Value::remove`], never
+//! whole (RFC 0009, "Field operations per field type"). Its `Debug` output
+//! prints `[redacted]`: a value is content.
 
 use std::fmt;
 

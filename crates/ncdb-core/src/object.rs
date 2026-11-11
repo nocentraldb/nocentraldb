@@ -3,8 +3,8 @@
 //! collection, and whether it is deleted. Both are basic values, so two
 //! creates of one id and a deletion converge by the rule of basic values.
 //!
-//! Whether an object is deleted is a boolean basic value (RFC 0004, owner
-//! decision 4). Creates (operation 0) and deletes (operation 4) reach it as
+//! Whether an object is deleted is a boolean basic value (RFC 0004,
+//! "Creating and deleting an object"). Creates (operation 0) and deletes (operation 4) reach it as
 //! [`ObjectOperation`]s, which `field_op` decodes and the fold of
 //! `receive` applies (RFC 0004, "Creating and deleting an
 //! object"). Who may delete, and what a deleted object shows, belong to a
