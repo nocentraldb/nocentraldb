@@ -114,6 +114,12 @@ impl LocalRelay {
         Change::decode(&entry.expect("the relay holds the change").frame).expect("a change")
     }
 
+    /// The person-key records of `space` the relay stores, in person-key
+    /// id order.
+    pub async fn person_keys(&self, space: CoreSpaceId) -> Vec<ncdb_relay::store::PersonKeyRecord> {
+        self.store().person_keys(space).await.expect("a read")
+    }
+
     /// A raw connection of the simulated member `who` to the server.
     pub async fn client(&self, who: Who) -> Client {
         Client::member(self.addr, who).await.0

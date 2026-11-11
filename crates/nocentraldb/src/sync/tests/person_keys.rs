@@ -4,6 +4,10 @@
 //! another member fetches the space's records and holds each person key
 //! whose signature verifies, that unwraps under its generation, and that
 //! matches the commitment in the log. A record that fails is not held.
+//! A rotation re-wraps every person key its admin holds under the fresh
+//! generation and puts the new record, which replaces the old one at the
+//! relay (RFC 0003, "Removing a member and rotating the space key", step
+//! 3; NOC-206 part 3).
 
 use ncdb_core::ids::SpaceId as CoreSpaceId;
 use ncdb_core::keys::PersonKey;
@@ -13,13 +17,15 @@ use ncdb_core::membership::{
 
 use super::support::*;
 use crate::db::{Db, lock};
-use crate::members::{AddMember, Role};
+use crate::members::{AddMember, MemberId, Role};
 use crate::space::Space;
 
 /// The admin, who creates the space and its person key.
 const ADMIN: Who = 1;
 /// The member who fetches the records.
 const MEMBER: Who = 2;
+/// A member the admin removes, which rotates the space key.
+const GUEST: Who = 3;
 
 const PERSON: [u8; 16] = [0x9e; 16];
 
@@ -139,4 +145,66 @@ async fn a_record_whose_key_does_not_match_its_commitment_is_not_held() {
     synced(&member).await;
 
     assert_eq!(held(&member, space), None);
+}
+
+/// The space's current generation on `db`.
+fn current(db: &Db, space: CoreSpaceId) -> Option<u64> {
+    let inner = lock(&db.inner);
+    inner
+        .spaces
+        .get(&space)?
+        .checks
+        .resolved()
+        .current_generation()
+}
+
+/// A removal rotates the space key; the rotation re-wraps the person key
+/// under the fresh generation and puts the record, which replaces the old
+/// one at the relay. The other member, which forgot the key, holds it
+/// again from that record alone once it reconnects.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project) = shared(&relay).await;
+    let guest = open(GUEST, &relay.url()).await;
+    let invitation = now(guest.invitation());
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: None,
+    };
+    now(project.members().add(&invitation, options)).unwrap();
+    let key = PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    synced(&admin).await;
+    let space = project.id().0;
+    let before = current(&admin, space).expect("a generation");
+
+    now(project.members().remove(MemberId(invitation.key.id()))).unwrap();
+    let status = synced(&admin).await;
+
+    assert_eq!(status.refused, 0);
+    let fresh = current(&admin, space).expect("a generation");
+    assert_ne!(fresh, before);
+    let stored = relay.person_keys(space).await;
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].generation, fresh);
+    assert_eq!(stored[0].writer.0, lock(&admin.inner).member.key().id().0);
+
+    eventually("the member reaches the fresh generation", || {
+        current(&member, space) == Some(fresh)
+    })
+    .await;
+    lock(&member.inner)
+        .spaces
+        .get_mut(&space)
+        .expect("the member holds the space")
+        .person_keys
+        .clear();
+    relay.proxy.cut();
+    relay.proxy.restore();
+    let commitment = key.commitment(space, PERSON);
+    eventually("the member holds the person key again", || {
+        held(&member, space) == Some(commitment)
+    })
+    .await;
 }
