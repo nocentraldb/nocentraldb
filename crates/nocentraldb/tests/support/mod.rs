@@ -39,7 +39,7 @@ pub fn rebuilt(db: &Db) -> Vec<nocentraldb::ViewStatus> {
     let mut seen = Vec::new();
     for _ in 0..500 {
         let status = db.view().current();
-        seen.push(status.clone());
+        seen.push(status);
         if status.rebuild.is_none() {
             return seen;
         }
