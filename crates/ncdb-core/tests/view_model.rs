@@ -35,7 +35,7 @@ fn index(collection: &str, name: &str, keys: &[(&str, Direction)], equality: usi
 }
 
 #[test]
-fn the_view_model_holds_the_collections_fields_and_indexes_of_the_lock() {
+fn the_view_model_holds_the_model_id_version_collections_fields_and_indexes_of_the_lock() {
     let text = || Field::Basic(BasicValue { kind: Kind::Text });
     let task: BTreeMap<String, Field> = [
         ("title", text()),
@@ -59,6 +59,12 @@ fn the_view_model_holds_the_collections_fields_and_indexes_of_the_lock() {
     let project = [("name".to_owned(), text())].into();
     use Direction::{Ascending, Descending};
     let expected = Model {
+        // The lock's model.id, 07c2ec8ce13d0c370513dd1dfe53c6c7, and version.
+        id: [
+            0x07, 0xc2, 0xec, 0x8c, 0xe1, 0x3d, 0x0c, 0x37, 0x05, 0x13, 0xdd, 0x1d, 0xfe, 0x53,
+            0xc6, 0xc7,
+        ],
+        version: 2,
         collections: [("task".to_owned(), task), ("project".to_owned(), project)].into(),
         indexes: vec![
             index("project", "byName", &[("name", Ascending)], 0),

@@ -23,6 +23,7 @@ use crate::cbor::{self, DecodeError, Key, Value};
 use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use crate::redact::Size;
+pub use crate::writer_model::{WriterModel, WrongShape};
 
 /// The depth of the header map in a change: inside the frame.
 const HEADER_DEPTH: usize = 2;
