@@ -376,6 +376,8 @@ impl Db {
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        // A rebuild of the view runs in the background (RFC 0009, step 4).
+        crate::view_report::start(&inner);
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }
