@@ -211,7 +211,12 @@ impl<S: RelayStore> Relay<S> {
                 .append(space, expected_head, vec![entry], effects)
                 .await?
             {
-                AppendOutcome::Appended { head } => return Ok((Pushed::Accepted(head), added)),
+                AppendOutcome::Appended { head } => {
+                    // The append stands whatever the deletion does: a
+                    // failed deletion is tried again after the next append.
+                    let _ = self.delete_stable_shreds(space).await;
+                    return Ok((Pushed::Accepted(head), added));
+                }
                 AppendOutcome::Duplicate { position, .. } => {
                     return Ok((Pushed::Duplicate(position), Vec::new()));
                 }

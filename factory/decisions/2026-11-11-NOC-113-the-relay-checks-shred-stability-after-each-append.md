@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-113 · The relay checks shred stability after each append, with its own log as the holder
+
+- Decided by: coding agent (NOC-113), inside the relay core, with pm (lane and approach)
+- Why: RFC 0008 (M20) lets the relay delete a shredded person key's record only once the shred is stable. Any append can make it stable, a sealed change too, since it can close a gap in an admin's run. So after every successful append the relay checks: only when a shredded person key still has a stored record does it read the log, resolve it and call the core's `Resolved::stability`, with each author's run as far as the relay's log holds that author's changes from sequence 1 without a gap. It deletes the records of the shreds that are stable through the backend's `delete_person_keys`. The append's answer does not depend on the deletion: a deletion that fails is tried again after the next append, and a record never comes back once deleted.
+- Instead of: a separate sweep on a timer, which needs a scheduler in every deployment and deletes later; deleting on the shred's own append, which RFC 0008 forbids; failing the push when the deletion fails, which would make a member resend a change the relay already appended.
+- What this does not do: the relay holds only the changes members pushed, so an admin that keeps sealed changes local leaves a gap and keeps the record stored. That is the safe side. A space with a waiting shred costs one log read and one `resolve` more per append until the shred is stable.
+- Topics: relay, erasure, rfc-0008
