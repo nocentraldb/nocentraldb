@@ -25,7 +25,11 @@ impl Model {
         if !refusals.is_empty() {
             return Err(Invalid::Lock(refusals));
         }
-        let mut model = Model::default();
+        let mut model = Model {
+            id: lock.model.id.0,
+            version: lock.model.version,
+            ..Model::default()
+        };
         for (name, collection) in &lock.collections {
             let fields: BTreeMap<String, Field> = collection
                 .fields

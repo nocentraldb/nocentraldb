@@ -20,6 +20,7 @@ mod follow;
 mod list;
 mod live;
 mod members;
+mod newest_model;
 mod pause;
 mod pull;
 mod push;

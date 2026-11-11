@@ -33,6 +33,9 @@ pub const GOOD: &[u8] = &[1];
 pub const BAD: &[u8] = &[0];
 /// A sealed payload the double cannot decrypt, as if the AEAD failed.
 pub const GARBLED: &[u8] = b"garbled";
+/// The `model.id` of the member's lock, which its fold reports.
+pub const MODEL: [u8; 16] = [0x6d; 16];
+
 /// The collections and the field the recorder's model knows.
 pub const COLLECTION: &str = "task";
 pub const OTHER: &str = "project";
@@ -120,6 +123,10 @@ pub struct Recorder {
 }
 
 impl Fold for Recorder {
+    fn model_id(&self) -> [u8; 16] {
+        MODEL
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         collection == COLLECTION || collection == OTHER
     }

@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-197 · Key 64 ignores extra keys of its map, version 0 has the wrong shape, and step 6 checks key 64 before unknown payload keys
+
+- Decided by: pm (NOC-197), waiting for the owner on NOC-202
+- Why: RFC 0002, "The writer's model", does not say whether keys other than 1 and 2 in the key-64 map, or a model version of 0, give the map the wrong shape, nor which reason wins inside step 6 when a payload has both an unknown "must understand" key and key 64 of another model. The core reads only keys 1 and 2 and ignores the rest, since the RFC lets "a later field of the model … be a new key of it" and an exact map would park every change of a newer core as another model on every older client for good. A version of 0 has the wrong shape, since the RFC gives versions as "1 and up". Inside step 6 the core checks the payload format, then key 64, then unknown "must understand" payload keys: a change of another model never folds after an upgrade, so "another model" is its truer reason.
+- Instead of: an exact two-key map, which parks a newer model field as another model; version 0 as a valid shape; unknown payload keys before key 64.
+- Topics: core, rfc-0002, rfc-0005, wire-format
