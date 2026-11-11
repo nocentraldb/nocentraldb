@@ -10,9 +10,7 @@
 //!
 //! A member leaves a space with [`Space::leave`](crate::Space::leave).
 //!
-//! **What this does not do yet.** Adding a list of invitations, and
-//! re-wrapping person-key records in a rotation: a call that rotates
-//! refuses a space with a person key.
+//! **What this does not do yet.** Adding a list of invitations.
 
 use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -114,9 +112,10 @@ impl Members<'_> {
     /// `AlreadyMember`. A former member is added again after a rotation
     /// (RFC 0008, M5): the space key moves to a fresh generation, with an
     /// envelope for every member, and the member is added from it, so what
-    /// it wrote while it was not a member never counts again. A space that
-    /// holds a person key is refused with `InvalidValue` then, since
-    /// re-wrapping its records in a rotation is not built.
+    /// it wrote while it was not a member never counts again. The rotation
+    /// re-wraps every person key of the space under the fresh generation; a
+    /// space with a person key this member does not hold is refused with
+    /// `InvalidValue` then.
     ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
@@ -170,10 +169,11 @@ impl Members<'_> {
             Entry::KeyEnvelope(sealed),
             Some(BTreeSet::from([added])),
         );
-        batch.commit(view, state, secrets)?;
+        let records = batch.commit(view, state, secrets)?;
         if confirming {
             confirm(view, &invitation.certificate.account_key)?;
         }
+        crate::sync::put_person_keys(&mut inner, space.0, records);
         crate::sync::wake(&inner);
         Ok(Notice::MEMBER_ADDED)
     }

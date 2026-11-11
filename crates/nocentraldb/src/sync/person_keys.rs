@@ -11,10 +11,11 @@
 //! and the key matches the commitment in the log. A record that fails is
 //! not held.
 //!
-//! **What this does not do yet.** The member holds its person keys in
-//! memory only, and fetches them again on every connection: where a member
-//! keeps them on the device is not decided. A record that fails is ignored
-//! without naming its writer, which RFC 0003 asks the SDK to report.
+//! The member holds its person keys in memory only, and fetches them again
+//! on every connection, as the owner decided (NOC-222).
+//!
+//! **What this does not do yet.** A record that fails is ignored without
+//! naming its writer, which RFC 0003 asks the SDK to report.
 
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::membership::{record_hash, unwrap_person_key, verify_record};
@@ -23,10 +24,9 @@ use super::wire::Record;
 use crate::db::{Inner, SpaceState};
 
 /// Hands `records` of `space` to syncing to put, and holds each person
-/// key whose record the member accepts, as its writer does. The rotation
-/// that re-wraps records calls it (NOC-206 part 3); until then only the
-/// tests do.
-#[cfg_attr(not(test), allow(dead_code))]
+/// key whose record the member accepts, as its writer does. A rotation
+/// that re-wrapped person keys calls it once its batch is folded (NOC-206
+/// part 3).
 pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
     if let Some(state) = inner.spaces.get_mut(&space) {
         for record in &records {

@@ -3,6 +3,11 @@
 //! envelopes and the add that follows reach the log whole or not at all,
 //! so neither an error nor a crash in the middle leaves an admin with a
 //! rotation it holds no key of, or a rotation without its add.
+//!
+//! A rotation also re-wraps the person keys the member holds (NOC-206 part
+//! 3): the batch collects their signed records, and [`Batch::commit`]
+//! returns them once their entries are folded, for the caller to hand to
+//! syncing.
 
 use std::collections::BTreeSet;
 
@@ -17,6 +22,7 @@ use crate::db::SpaceState;
 use crate::error::{Error, storage};
 use crate::keys::Secrets;
 use crate::next;
+use crate::sync::Record;
 
 use super::control_heads;
 
@@ -32,6 +38,8 @@ pub(crate) struct Batch {
     pub(crate) fresh: Option<SpaceKey>,
     /// What the next change depends on, unless it names its dependencies.
     pub(crate) heads: BTreeSet<ChangeId>,
+    /// The person-key records the batch's person-key entries announce.
+    pub(crate) records: Vec<Record>,
     changes: Vec<Change>,
 }
 
@@ -51,6 +59,7 @@ impl Batch {
             generation: next.generation.expect("a writable space has a generation"),
             fresh: None,
             heads: control_heads(view, space),
+            records: Vec::new(),
             changes: Vec::new(),
         }
     }
@@ -88,15 +97,17 @@ impl Batch {
         id
     }
 
-    /// Folds the batch in one transaction.
+    /// Folds the batch in one transaction. Returns the person-key records
+    /// its entries announce, which the caller hands to syncing to put.
     pub(crate) fn commit(
         self,
         view: &mut View,
         state: &mut SpaceState,
         secrets: &Secrets,
-    ) -> Result<(), Error> {
+    ) -> Result<Vec<Record>, Error> {
         let frames: Vec<&[u8]> = self.changes.iter().map(Change::bytes).collect();
-        commit(view, state, secrets, self.space, &frames)
+        commit(view, state, secrets, self.space, &frames)?;
+        Ok(self.records)
     }
 }
 
