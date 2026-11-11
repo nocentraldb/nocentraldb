@@ -4,8 +4,9 @@
 //! for end users (RFC 0006, decision 14).
 
 /// What a membership call did, from [`Members::add`](crate::Members::add),
-/// [`Members::remove`](crate::Members::remove) or
-/// [`Members::set_role`](crate::Members::set_role).
+/// [`Members::remove`](crate::Members::remove),
+/// [`Members::set_role`](crate::Members::set_role) or
+/// [`Space::leave`](crate::Space::leave).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Notice {
     /// Which notice it is, for an app that shows its own text.
@@ -26,6 +27,10 @@ pub enum NoticeCode {
     /// A member's role was set: one whose role was lowered keeps its copy
     /// of what it received (Carsten, 2026-11-11, NOC-203).
     RoleSet,
+    /// This member left the space: it keeps its copy, and until an admin
+    /// rotates, the others write under a key it holds (Carsten, 2026-11-11,
+    /// NOC-219).
+    SpaceLeft,
 }
 
 impl Notice {
@@ -47,5 +52,13 @@ impl Notice {
     pub(crate) const ROLE_SET: Notice = Notice {
         code: NoticeCode::RoleSet,
         text: "A member whose role was lowered keeps its copy of everything it received before now.",
+    };
+
+    /// The notice of [`Space::leave`](crate::Space::leave), the text the
+    /// owner decided on NOC-219.
+    pub(crate) const SPACE_LEFT: Notice = Notice {
+        code: NoticeCode::SpaceLeft,
+        text: "This member keeps its copy of everything it received before now. \
+               Until an admin rotates the space key, the others write under a key it still holds.",
     };
 }

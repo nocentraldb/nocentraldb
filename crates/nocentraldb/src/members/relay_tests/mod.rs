@@ -3,5 +3,6 @@
 //! entry"): what an admin writes reaches the relay, which accepts it, and
 //! the other members, which fold it. They use the sync tests' support.
 
+mod leave;
 mod readd;
 mod remove;
