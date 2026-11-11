@@ -1,0 +1,248 @@
+/* NoCentralDB landing page, first draft (NOC-211).
+   60 % near-black, 30 % brand lime, 10 % one loud accent. The accent is the
+   owner's choice; the draft renders three candidates through data-accent. */
+
+:root {
+  --ink: #121211;
+  --ink-2: #1c1c1c;
+  --ink-3: #262624;
+  --paper: #faf9f7;
+  --lime: #b9ff66;
+  --lime-deep: #84cc16;
+  --radius-s: 6px;
+  --radius-m: 12px;
+  --radius-l: 20px;
+  --wrap: 1200px;
+  --gutter: clamp(20px, 5vw, 64px);
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --font-head: "Merriweather", Georgia, serif;
+  --font-body: "Merriweather Sans", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Candidate A, the default: signal magenta. */
+  --accent: #ff2e7e;
+  --on-accent: #121211;
+  --accent-on-ink: #ff5c98;
+}
+:root[data-accent="cobalt"] {
+  --accent: #2b59ff;
+  --on-accent: #faf9f7;
+  --accent-on-ink: #7d98ff;
+}
+:root[data-accent="cyan"] {
+  --accent: #00c8ff;
+  --on-accent: #121211;
+  --accent-on-ink: #00c8ff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--ink);
+  color: var(--paper);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-weight: 300;
+  font-size: 17px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-head);
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0;
+  text-wrap: balance;
+}
+p {
+  margin: 0;
+}
+a {
+  color: inherit;
+}
+code,
+pre {
+  font-family: var(--font-code);
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.wrap {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+main > section {
+  padding: clamp(72px, 11vw, 140px) 0;
+}
+.ground-lime {
+  background: var(--lime);
+  color: var(--ink);
+}
+.ground-paper {
+  background: var(--paper);
+  color: var(--ink);
+}
+.section-lead {
+  max-width: 40ch;
+  font-size: 19px;
+  font-weight: 400;
+  margin-top: 20px;
+}
+h2 {
+  font-size: clamp(32px, 4.6vw, 56px);
+  max-width: 20ch;
+}
+
+/* One button pair, one link look. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out),
+    background-color 160ms var(--ease-out);
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-accent {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.btn-lime {
+  background: var(--lime);
+  color: var(--ink);
+}
+.btn-ink {
+  background: var(--ink);
+  color: var(--paper);
+}
+.link {
+  font-weight: 700;
+  text-decoration: none;
+  background: linear-gradient(currentColor, currentColor) 0 100% / 0 2px no-repeat;
+  transition: background-size 220ms var(--ease-out);
+  padding-bottom: 2px;
+}
+.link:hover {
+  background-size: 100% 2px;
+}
+
+/* Navigation */
+.nav {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 5;
+}
+.nav .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 84px;
+}
+.brand {
+  font-family: var(--font-head);
+  font-weight: 900;
+  font-size: 22px;
+  text-decoration: none;
+  letter-spacing: -0.02em;
+}
+.brand span {
+  color: var(--lime);
+}
+.nav ul {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+}
+.nav li a:not(.btn) {
+  font-weight: 400;
+}
+@media (max-width: 760px) {
+  .nav .hide-s {
+    display: none;
+  }
+  .nav ul {
+    gap: 20px;
+  }
+}
+
+/* Draft-only accent switcher: hidden in screenshots. */
+.switcher {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  align-items: center;
+}
+.switcher span {
+  padding: 0 10px 0 8px;
+}
+.switcher a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.switcher a i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.switcher a[aria-current="true"] {
+  background: var(--ink);
+  color: var(--paper);
+}
+:root[data-shot] .switcher {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

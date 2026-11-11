@@ -1,0 +1,154 @@
+---
+// What it does not do (GENESIS principle 4), the way into the docs, and the footer.
+const limits = [
+  ["The relay sees metadata.", "Which key is in which space, when and how much each key writes, and who reads from where. It can withhold changes."],
+  ["Removing a member keeps their copy.", "The space key rotates, so they read nothing new. What they already received stays on their device."],
+  ["Erasure has edges.", "It does not reach devices that never come back online, a modified client, exports, screenshots or unmarked free text."],
+  ["No queries on the server.", "Queries run on declared indexes in the local copy. For analytics across all users, use a central database."],
+  ["v1 is not post-quantum.", "Ciphertext recorded today could be read by a future quantum computer."],
+];
+const docs = [
+  ["Getting started", "Install, describe a model, open a database.", "/docs/"],
+  ["Concepts", "Spaces, the relay, convergence, erasure.", "/docs/concepts/spaces/"],
+  ["API", "The SDK calls, as RFC 0009 decides them.", "/docs/api/"],
+  ["RFCs", "The whole design, open for your feedback.", "/docs/rfcs/"],
+];
+---
+
+<section id="limits" class="ground-lime" aria-labelledby="limits-title">
+  <div class="wrap limits-grid">
+    <div>
+      <h2 id="limits-title">What it does not do, said plainly.</h2>
+      <p class="section-lead">Every guarantee names its limits. These are the ones to know before you build.</p>
+    </div>
+    <dl>
+      {
+        limits.map(([t, d]) => (
+          <div>
+            <dt>{t}</dt>
+            <dd>{d}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</section>
+
+<section id="docs" aria-labelledby="docs-title">
+  <div class="wrap">
+    <h2 id="docs-title">Read the docs, then tell us where it breaks.</h2>
+    <ul class="doc-links">
+      {
+        docs.map(([t, d, href]) => (
+          <li>
+            <a href={href}>
+              <strong>{t}</strong>
+              <span>{d}</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+    <a class="btn btn-accent feedback" href="https://github.com/nocentraldb/nocentraldb/discussions"
+      >Share your feedback</a
+    >
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="/">No<span>Central</span>DB</a>
+    <p>Open source under MIT or Apache-2.0. Built by nxsflow.</p>
+    <a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
+  </div>
+</footer>
+
+<style>
+  .limits-grid {
+    display: grid;
+    grid-template-columns: 0.9fr 1.1fr;
+    gap: clamp(32px, 5vw, 72px);
+    align-items: start;
+  }
+  dl {
+    margin: 0;
+    display: grid;
+    gap: 10px;
+  }
+  dl div {
+    padding: 20px 22px;
+    border-radius: var(--radius-m);
+    background: rgb(18 18 17 / 0.08);
+  }
+  dt {
+    font-family: var(--font-head);
+    font-weight: 900;
+    font-size: 19px;
+  }
+  dd {
+    margin: 6px 0 0;
+    font-weight: 400;
+    font-size: 16px;
+  }
+  .doc-links {
+    list-style: none;
+    margin: 48px 0 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .doc-links a {
+    display: grid;
+    gap: 8px;
+    height: 100%;
+    padding: 24px 22px 28px;
+    border-radius: var(--radius-m);
+    background: var(--ink-2);
+    text-decoration: none;
+    transition: transform 180ms var(--ease-out);
+  }
+  .doc-links a:hover {
+    transform: translateY(-2px);
+  }
+  .doc-links strong {
+    font-family: var(--font-head);
+    font-weight: 900;
+    font-size: 22px;
+    color: var(--lime);
+  }
+  .feedback {
+    margin-top: 40px;
+  }
+  footer {
+    padding: 40px 0 96px;
+    background: var(--ink);
+  }
+  .foot {
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    font-size: 14px;
+  }
+  .foot .brand span {
+    color: var(--lime);
+  }
+  @media (max-width: 900px) {
+    .limits-grid {
+      grid-template-columns: 1fr;
+    }
+    .doc-links {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (max-width: 520px) {
+    .doc-links {
+      grid-template-columns: 1fr;
+    }
+    .feedback {
+      width: 100%;
+    }
+  }
+</style>

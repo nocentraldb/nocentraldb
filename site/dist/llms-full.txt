@@ -1,0 +1,138 @@
+<SYSTEM>This is the full developer documentation for NoCentralDB</SYSTEM>
+
+# Getting started
+
+> Install the SDK, describe a model and open a database.
+
+Not yet a product
+
+NoCentralDB is in its design stage. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
+
+## Install
+
+[Section titled “Install”](#install)
+
+The TypeScript SDK, for web apps, Node and agents written in TypeScript:
+
+```sh
+npm install @nocentraldb/sdk
+```
+
+The Rust SDK:
+
+```sh
+cargo add nocentraldb
+```
+
+The command-line tool `ncdb` builds `model.lock.json` from your schema. How it is distributed is not decided yet.
+
+## Describe the model
+
+[Section titled “Describe the model”](#describe-the-model)
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+
+
+export const model = nc.model({
+  tasks: nc.collection(
+    {
+      title: nc.string(),
+      status: nc.oneOf(["open", "in_progress", "done"]),
+      priority: nc.int(),
+    },
+    { indexes: { byStatusPriority: nc.index(["status", "priority"], { equal: 1 }) } },
+  ),
+});
+```
+
+Then build the lock that the Rust core and both SDKs read:
+
+```sh
+ncdb model build
+```
+
+## Open a database and write
+
+[Section titled “Open a database and write”](#open-a-database-and-write)
+
+```ts
+const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
+const project = await db.spaces.create();
+
+
+await project.write((tx) => {
+  tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
+});
+```
+
+A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
+
+# API
+
+> The SDK API for apps, as RFC 0009 defines it.
+
+The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md). This page will hold the reference once the TypeScript SDK runs in the browser.
+
+| Call                                      | What it does                                                                                    |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `nc.open({ model, lock, relay })`         | Opens the database, checks the model against the lock, creates this member’s key on first open. |
+| `db.spaces.create()`                      | Creates a space on this device, offline if need be.                                             |
+| `space.write(tx => …)`                    | One signed, encrypted change; resolves once it is in the local view.                            |
+| `db.find(query)`                          | A page of a declared index, in index order, with a cursor.                                      |
+| `db.subscribe(query, fn)`                 | Calls `fn` with the page now and after every change that may alter it.                          |
+| `space.members.add(invitation, { role })` | Adds a member; returns a notice of what the change does not do.                                 |
+| `db.sync.current()`                       | The connection and how many changes the relay has not confirmed.                                |
+
+# Copies and convergence
+
+> A full copy on every member, and the same state on all of them.
+
+Every member keeps the complete encrypted log of each space it belongs to and folds it into a local SQLite view. Reads never wait for the network.
+
+The same set of changes yields the same state on every member, in any order of arrival. Each field type says how concurrent edits merge. A change that loses to one its author had not seen stays identifiable as such, the same way on every member.
+
+With no relay, members keep working; when they reconnect, every copy converges.
+
+# Erasure
+
+> Erasing a person destroys a key.
+
+The schema marks personal fields. Each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives.
+
+**What it does not reach:** devices that never come back online, a modified client that ignores the erasure, a relay backup from before the erasure that a member obtains, exports and screenshots, and personal data in unmarked free text.
+
+# The relay
+
+> A server that stores and forwards changes it cannot read.
+
+The relay checks signatures and membership, appends signed, encrypted changes to a space’s log and hands them out from a cursor. It holds no keys, so it cannot read content.
+
+**What it does see.** Which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log.
+
+# Spaces and members
+
+> The unit of sharing, membership and keys.
+
+A **space** is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces.
+
+A **member** is a person’s device, an agent or a sub-agent, each with its own key. An agent can give a sub-agent a small space with only what its task needs, never its own keys.
+
+Removing a member rotates the space key, so it cannot read what is written afterwards. It does not delete the copy the member already holds.
+
+# RFCs
+
+> The design, decided in the open.
+
+NoCentralDB is designed in RFCs. Feedback is most useful while changes are still cheap: [how to give it](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md#giving-feedback).
+
+* [RFC 0001: NoCentralDB](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0001-nocentraldb.md)
+* [RFC 0002: The change and the log format](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0002-change-and-log-format.md)
+* [RFC 0003: Keys and cryptography](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0003-keys-and-cryptography.md)
+* [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0004-merge-rules-basic-types.md)
+* [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0005-schema-and-model-lock.md)
+* [RFC 0006: The local view on SQLite, natively and in the browser](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0006-local-view.md)
+* [RFC 0007: The relay protocol and its AWS backend](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0007-relay.md)
+* [RFC 0008: Membership, roles and the first change of a space](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0008-membership.md)
+* [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md)
+* [RFC 0010: Accounts](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0010-accounts.md)

@@ -1,0 +1,235 @@
+---
+// Install, then the code behind the core example, from RFC 0009 as the README shows it.
+import { Code } from "astro:components";
+
+const tabs = [
+  {
+    id: "model",
+    label: "Model",
+    note: "Describe the model once. ncdb model build turns it into model.lock.json.",
+    code: `import { nc } from "@nocentraldb/sdk";
+
+export const model = nc.model({
+  messages: nc.collection(
+    {
+      text: nc.string(),
+      author: nc.link("people"),
+      sentAt: nc.int(),
+    },
+    { indexes: { bySentAt: nc.index(["sentAt"]) } },
+  ),
+});`,
+  },
+  {
+    id: "open",
+    label: "Open",
+    note: "A creates this member's key on first open, then a space. No relay needed to start.",
+    code: `const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
+
+const chat = await db.spaces.create();`,
+  },
+  {
+    id: "share",
+    label: "Share",
+    note: "B and C send an invitation: a public identity, never a key. A adds them.",
+    code: `// On B and on C:
+const invitation = await db.invitation();
+send(invitation.toString());
+
+// On A, an admin of the space:
+await chat.members.add(nc.invitation(text), { role: "writer" });`,
+  },
+  {
+    id: "write",
+    label: "Write",
+    note: "One write is one signed, encrypted change. It resolves before the relay has it.",
+    code: `await chat.write((tx) => {
+  tx.create(model.messages, { text: "Can you look at the relay draft?", sentAt: Date.now() });
+});`,
+  },
+  {
+    id: "read",
+    label: "Subscribe",
+    note: "C reads its own copy. The listener runs at once and after every change that may alter the page.",
+    code: `const latest = model.messages.indexes.bySentAt.take(50);
+
+const stop = db.subscribe(latest, (page) => render(page.items));`,
+  },
+];
+---
+
+<section id="code" class="ground-paper" aria-labelledby="code-title">
+  <div class="wrap code-grid">
+    <div>
+      <h2 id="code-title">Install the SDK and write five calls.</h2>
+      <p class="section-lead">No keys in your code. The SDK creates, stores and rotates them.</p>
+      <div class="install">
+        <code>npm install @nocentraldb/sdk</code>
+        <button type="button" class="copy" data-copy="npm install @nocentraldb/sdk">Copy</button>
+      </div>
+      <p class="also">Rust: <code>cargo add nocentraldb</code></p>
+    </div>
+
+    <div class="tabs" data-tabs>
+      <div role="tablist" aria-label="Code for the core example">
+        {
+          tabs.map((t, i) => (
+            <button role="tab" type="button" id={`tab-${t.id}`} aria-controls={`panel-${t.id}`} aria-selected={i === 0 ? "true" : "false"} tabindex={i === 0 ? 0 : -1}>
+              {t.label}
+            </button>
+          ))
+        }
+      </div>
+      {
+        tabs.map((t, i) => (
+          <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden={i !== 0}>
+            <p class="note">{t.note}</p>
+            <Code code={t.code} lang="ts" theme="css-variables" />
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<style>
+  .code-grid {
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: clamp(32px, 5vw, 72px);
+    align-items: start;
+  }
+  .code-grid > * {
+    min-width: 0;
+  }
+  .install {
+    margin-top: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 8px 8px 20px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--paper);
+    max-width: 440px;
+  }
+  .install code {
+    font-size: 15px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .copy {
+    flex: none;
+    min-height: 40px;
+    padding: 0 18px;
+    border-radius: 999px;
+    border: 0;
+    background: var(--lime);
+    color: var(--ink);
+    font: 700 14px var(--font-body);
+    cursor: pointer;
+  }
+  .also {
+    margin-top: 16px;
+    font-size: 15px;
+    font-weight: 400;
+  }
+  .also code {
+    font-size: 14px;
+  }
+  [role="tablist"] {
+    display: flex;
+    gap: 4px;
+    padding: 5px;
+    border-radius: 999px;
+    background: var(--ink);
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  [role="tab"] {
+    min-height: 40px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: none;
+    color: var(--paper);
+    font: 700 14px var(--font-body);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 160ms var(--ease-out);
+  }
+  [role="tab"][aria-selected="true"] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+  .note {
+    margin: 20px 0 14px;
+    font-weight: 400;
+    min-height: 3.2em;
+  }
+  [role="tabpanel"] :global(pre) {
+    margin: 0;
+    padding: 24px;
+    border-radius: var(--radius-m);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-x: auto;
+    min-height: 300px;
+    --astro-code-background: var(--ink);
+    --astro-code-foreground: #faf9f7;
+    --astro-code-token-keyword: var(--accent-on-ink);
+    --astro-code-token-string: var(--lime);
+    --astro-code-token-string-expression: var(--lime);
+    --astro-code-token-function: #faf9f7;
+    --astro-code-token-constant: #e9e7e2;
+    --astro-code-token-parameter: #e9e7e2;
+    --astro-code-token-comment: #a3a29d;
+    --astro-code-token-punctuation: #c9c7c1;
+    --astro-code-token-link: var(--lime);
+  }
+  @media (max-width: 900px) {
+    .code-grid {
+      grid-template-columns: 1fr;
+    }
+    [role="tabpanel"] :global(pre) {
+      font-size: 13px;
+      padding: 18px;
+      min-height: 0;
+    }
+  }
+</style>
+
+<script is:inline>
+  (() => {
+    const root = document.querySelector("[data-tabs]");
+    if (!root) return;
+    const tabs = [...root.querySelectorAll('[role="tab"]')];
+    const select = (tab) => {
+      for (const t of tabs) {
+        const on = t === tab;
+        t.setAttribute("aria-selected", String(on));
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      }
+      tab.focus();
+    };
+    tabs.forEach((t, i) => {
+      t.addEventListener("click", () => select(t));
+      t.addEventListener("keydown", (e) => {
+        const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (d) select(tabs[(i + d + tabs.length) % tabs.length]);
+      });
+    });
+    document.querySelectorAll("[data-copy]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(b.dataset.copy);
+          b.textContent = "Copied";
+          setTimeout(() => (b.textContent = "Copy"), 1600);
+        } catch {}
+      }),
+    );
+  })();
+</script>

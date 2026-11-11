@@ -1,0 +1,23 @@
+/* Starlight in the brand: Merriweather headings, Merriweather Sans body, and
+   the draft's default accent (signal magenta) for links and the current page.
+   Starlight's own grey scales stay, so its light and dark themes both hold. */
+:root {
+  --sl-font: "Merriweather Sans", system-ui, sans-serif;
+  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --sl-color-accent-low: #3b0a1f;
+  --sl-color-accent: #ff2e7e;
+  --sl-color-accent-high: #ffc2d9;
+}
+:root[data-theme="light"] {
+  --sl-color-accent-low: #ffe0ec;
+  --sl-color-accent: #c4134f;
+  --sl-color-accent-high: #4a0a1f;
+}
+h1,
+h2,
+h3,
+.site-title {
+  font-family: "Merriweather", Georgia, serif;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
