@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, Upload, UploadId,
 };
 
 /// Passes every call to `inner`, and counts the calls to `read`.
@@ -98,5 +98,43 @@ impl<S: RelayStore> RelayStore for Counting<S> {
 
     async fn new_epoch(&self) -> Result<Epoch, StoreError> {
         self.inner.new_epoch().await
+    }
+
+    async fn begin_upload(&self, upload: Upload, now: u64) -> Result<(), StoreError> {
+        self.inner.begin_upload(upload, now).await
+    }
+
+    async fn upload(&self, token: Token) -> Result<Option<(Upload, bool)>, StoreError> {
+        self.inner.upload(token).await
+    }
+
+    async fn fill_upload(&self, token: Token, frame: Vec<u8>) -> Result<bool, StoreError> {
+        self.inner.fill_upload(token, frame).await
+    }
+
+    async fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.inner.take_upload(space, member, id).await
+    }
+
+    async fn begin_download(
+        &self,
+        token: Token,
+        space: SpaceId,
+        position: Position,
+        expires_at: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        self.inner
+            .begin_download(token, space, position, expires_at, now)
+            .await
+    }
+
+    async fn download(&self, token: Token) -> Result<Option<(SpaceId, Position, u64)>, StoreError> {
+        self.inner.download(token).await
     }
 }

@@ -305,6 +305,13 @@ impl View {
         Some(self.logs.get_mut(&space)?.tips(checks))
     }
 
+    /// The newest model version the parked data of `space` needs, of the
+    /// view's own model (RFC 0002, "What the model version is for"): see
+    /// [`Log::newest_model`]. `checks` open the changes it reads.
+    pub fn newest_model(&self, space: SpaceId, checks: &impl Checks) -> Option<u64> {
+        self.logs.get(&space)?.newest_model(checks, self.model.id)
+    }
+
     /// How many changes of `space` are parked and rejected, and how many
     /// operations of its folded changes are parked, per reason (RFC 0009,
     /// "Sync and status"); nothing for a space the view does not hold.

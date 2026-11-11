@@ -364,6 +364,10 @@ pub(super) fn sql_value(value: Value) -> Sql {
 }
 
 impl Fold for SqlFold<'_> {
+    fn model_id(&self) -> [u8; 16] {
+        self.model.id
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         self.model.collections.contains_key(collection)
     }

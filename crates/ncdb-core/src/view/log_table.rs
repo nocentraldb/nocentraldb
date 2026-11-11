@@ -24,13 +24,14 @@ fn columns(state: &State) -> (&'static str, Option<&'static str>) {
 }
 
 /// Every reason, by the name the `reason` column holds.
-const PARK: [(ParkReason, &str); 6] = [
+const PARK: [(ParkReason, &str); 7] = [
     (ParkReason::UnknownSuite, "unknown_suite"),
     (ParkReason::UnknownKind, "unknown_kind"),
     (ParkReason::UnknownHeaderFormat, "unknown_header_format"),
     (ParkReason::UnknownHeaderKey, "unknown_header_key"),
     (ParkReason::UnknownPayloadFormat, "unknown_payload_format"),
     (ParkReason::UnknownPayloadKey, "unknown_payload_key"),
+    (ParkReason::AnotherModel, "another_model"),
 ];
 const REJECT: [(RejectReason, &str); 5] = [
     (RejectReason::UnknownAuthor, "unknown_author"),

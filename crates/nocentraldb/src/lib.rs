@@ -51,6 +51,8 @@ pub use db::{Db, OpenOptions};
 mod agent_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
+#[cfg(test)]
+mod writer_model_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};

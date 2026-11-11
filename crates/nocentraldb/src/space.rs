@@ -6,7 +6,7 @@
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
 
-use ncdb_core::change::{Change, Payload};
+use ncdb_core::change::{Change, Payload, WriterModel};
 use ncdb_core::checks::SealChecks;
 use ncdb_core::envelope;
 use ncdb_core::ids::ObjectId as CoreObjectId;
@@ -230,6 +230,12 @@ impl Space {
         not_stopped(&inner, self.id)?;
         let resolved = inner.spaces[&space].checks.resolved();
         holds(resolved, member.id(), Role::Writer, "writes content")?;
+        // Key 64: the lock this database was opened with wrote the change
+        // (RFC 0002, "The writer's model").
+        let writer = WriterModel {
+            id: inner.model.id,
+            version: inner.model.version,
+        };
         let wall = crate::clock::now_millis();
         let Inner {
             view,
@@ -247,7 +253,8 @@ impl Space {
                 format!("the space's clock: {error}"),
             )
         })?;
-        let payload = Payload::new(clock, next.heads, operations);
+        let mut payload = Payload::new(clock, next.heads, operations);
+        payload.set_writer_model(writer);
         let key = state
             .checks
             .space_key(generation)
