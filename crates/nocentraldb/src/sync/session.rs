@@ -170,6 +170,9 @@ impl Session<'_> {
             let sync = inner.sync.as_mut().expect("a database that syncs");
             sync.connection = Connection::Connected;
             sync.error = None;
+            for state in inner.spaces.values_mut() {
+                state.person_keys_fetched = false;
+            }
             Ok(())
         })?
         .map_err(|_: ncdb_core::view::Error| lost())
@@ -228,6 +231,7 @@ impl Session<'_> {
             return Ok(());
         }
         self.push(space).await?;
+        self.fetch_person_keys(space).await?;
         let req = self.req();
         let after = with(self.db, |inner| apply::cursor(inner, space))?;
         self.send(wire::subscribe(req, space, self.epoch, after))
@@ -299,7 +303,73 @@ impl Session<'_> {
                 answer => return self.answer(space, answer),
             }
         }
-        Ok(())
+        self.put_person_keys(space).await
+    }
+
+    /// Puts the person-key records of `space` this member wrote, after the
+    /// changes that announce them (RFC 0007, `put-person-keys`). A record
+    /// the relay refuses with `bad_record` is dropped, the whole request
+    /// with it, since the relay stores none of them; any other answer
+    /// keeps them for the next connection.
+    async fn put_person_keys(&mut self, space: SpaceId) -> Result<(), End> {
+        let records = with(self.db, |inner| {
+            inner
+                .sync
+                .as_mut()
+                .and_then(|sync| sync.puts.remove(&space))
+                .unwrap_or_default()
+        })?;
+        if records.is_empty() {
+            return Ok(());
+        }
+        let req = self.req();
+        self.send(wire::put_person_keys(req, space, &records))
+            .await?;
+        match self.ask(req).await? {
+            Answer::Other { .. } => Ok(()),
+            Answer::Error { code, .. } if code == "bad_record" => Ok(()),
+            answer => {
+                with(self.db, |inner| {
+                    if let Some(sync) = inner.sync.as_mut() {
+                        sync.puts.entry(space).or_default().extend(records);
+                    }
+                })?;
+                self.answer(space, answer)
+            }
+        }
+    }
+
+    /// Fetches the person-key records of `space`, when its log names a
+    /// person key, and holds each person key whose record holds
+    /// (`person_keys::accept`).
+    async fn fetch_person_keys(&mut self, space: SpaceId) -> Result<(), End> {
+        let named = with(self.db, |inner| {
+            inner
+                .spaces
+                .get(&space)
+                .is_some_and(|state| state.checks.resolved().person_keys().next().is_some())
+        })?;
+        if named {
+            let req = self.req();
+            self.send(wire::person_keys(req, space)).await?;
+            match self.ask(req).await? {
+                Answer::PersonKeys { records, .. } => {
+                    with(self.db, |inner| {
+                        if let Some(state) = inner.spaces.get_mut(&space) {
+                            for record in &records {
+                                super::person_keys::accept(state, space, record);
+                            }
+                        }
+                    })?;
+                }
+                answer => return self.answer(space, answer),
+            }
+        }
+        with(self.db, |inner| {
+            if let Some(state) = inner.spaces.get_mut(&space) {
+                state.person_keys_fetched = true;
+            }
+        })
     }
 
     /// Handles an answer about `space` that is not the one asked for: an

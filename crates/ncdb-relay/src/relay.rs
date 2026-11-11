@@ -253,11 +253,11 @@ impl<S: RelayStore> Relay<S> {
             {
                 AppendOutcome::Appended { head } => {
                     // Only an append that can change a shred's stability
-                    // makes the relay check again. The append stands
-                    // whatever the deletion does: a failed deletion is tried
-                    // again after the next such append.
+                    // makes the relay check again. The check deletes
+                    // nothing until NOC-224 is settled (NOC-225), and the
+                    // append stands whatever the check does.
                     if recheck {
-                        let _ = self.delete_stable_shreds(space).await;
+                        let _ = self.stable_shreds(space).await;
                     }
                     return Ok((Pushed::Accepted(head), added));
                 }

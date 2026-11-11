@@ -1,6 +1,10 @@
-//! The relay deletes a shredded person key's record once the shred is
-//! stable (RFC 0008, "Effects that wait until a change is stable"). Until
-//! then the record stays stored, and no new record of its id is accepted.
+//! RFC 0008 ("Effects that wait until a change is stable") deletes a
+//! shredded person key's record once the shred is stable. The relay checks
+//! when a shred becomes stable, but keeps the record all the same: a stable
+//! shred can still be rejected later by an admin key that was not yet
+//! revoked (NOC-224), and the deletion is the one effect the relay cannot
+//! undo, so it waits until NOC-224 is settled (NOC-225). While a shredded
+//! key's record stays stored, no new record of its id is accepted.
 //!
 //! Stability is the core's ([`ncdb_core::membership::Resolved::stability`]),
 //! with the relay's log as the holder: an admin's run reaches as far as the
@@ -19,10 +23,14 @@ use crate::relay::{PAGE, PAGE_BYTES};
 use crate::store::{PersonKeyId, RelayStore};
 
 impl<S: RelayStore> Relay<S> {
-    /// Deletes the records of person keys whose shred is stable in the
-    /// relay's log of `space`. It reads the log only while a shredded key
-    /// still has a stored record.
-    pub(crate) async fn delete_stable_shreds(&self, space: SpaceId) -> Result<(), ErrorCode> {
+    /// The person keys whose shred is stable in the relay's log of `space`
+    /// and whose record is still stored. It reads the log only while a
+    /// shredded key still has a stored record. It deletes nothing: the
+    /// deletion waits for NOC-224 (NOC-225).
+    pub(crate) async fn stable_shreds(
+        &self,
+        space: SpaceId,
+    ) -> Result<Vec<PersonKeyId>, ErrorCode> {
         let stored: BTreeSet<[u8; 16]> = self
             .store()
             .person_keys(space)
@@ -31,7 +39,7 @@ impl<S: RelayStore> Relay<S> {
             .map(|record| record.id.0)
             .collect();
         if stored.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let controls = self.controls(space).await?;
         let resolved = membership::resolve(space, &controls);
@@ -41,20 +49,16 @@ impl<S: RelayStore> Relay<S> {
             .filter_map(|(id, key)| key.shred.map(|shred| (id, shred)))
             .collect();
         if shredded.is_empty() {
-            return Ok(());
+            return Ok(Vec::new());
         }
         let runs = self.runs(space).await?;
         let stability =
             resolved.stability(&controls, |member| runs.get(&member).copied().unwrap_or(0));
-        let ids: Vec<PersonKeyId> = shredded
+        Ok(shredded
             .into_iter()
             .filter(|(_, shred)| stability.is_stable(*shred))
             .map(|(id, _)| PersonKeyId(id))
-            .collect();
-        if !ids.is_empty() {
-            self.store().delete_person_keys(space, ids).await?;
-        }
-        Ok(())
+            .collect())
     }
 
     /// For each author in the log of `space`, the highest n such that the

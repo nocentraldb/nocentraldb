@@ -32,6 +32,7 @@
 mod again;
 mod apply;
 mod pause;
+mod person_keys;
 mod run;
 mod session;
 mod status;
@@ -44,8 +45,11 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg_attr(not(test), allow(unused_imports))]
+pub(crate) use person_keys::put as put_person_keys;
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
+pub(crate) use wire::Record;
 
 /// The state of the relay connection (RFC 0009, "Sync and status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -155,6 +159,9 @@ pub(crate) struct SyncState {
     /// member's fold rejected it since: one folded again is pushed once
     /// more (RFC 0008, M19).
     pub(crate) refused: BTreeMap<CoreSpaceId, BTreeMap<CoreChangeId, bool>>,
+    /// The person-key records this member wrote that wait to be put, per
+    /// space (`person_keys`).
+    pub(crate) puts: BTreeMap<CoreSpaceId, Vec<Record>>,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -181,6 +188,7 @@ impl SyncState {
             pulled: BTreeSet::new(),
             folds: 0,
             refused: BTreeMap::new(),
+            puts: BTreeMap::new(),
             wake,
             pause,
             halted: false,

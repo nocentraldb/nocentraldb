@@ -112,7 +112,9 @@ pub(crate) fn commit(
     frames: &[&[u8]],
 ) -> Result<(), Error> {
     if let Err(error) = view.receive_all(frames, &mut state.checks) {
+        let held = std::mem::take(&mut state.person_keys);
         *state = SpaceState::from_log(view, space, secrets.key());
+        state.person_keys = held;
         return Err(storage(error));
     }
     for frame in frames {
