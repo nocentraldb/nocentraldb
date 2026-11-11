@@ -33,6 +33,21 @@ pub fn ready<S: Stream + Unpin>(stream: &mut S) -> Option<S::Item> {
     }
 }
 
+/// Waits, a few seconds at most, until `db` runs no rebuild of its view
+/// (RFC 0009, `db.view`), and returns every status it saw on the way.
+pub fn rebuilt(db: &Db) -> Vec<nocentraldb::ViewStatus> {
+    let mut seen = Vec::new();
+    for _ in 0..500 {
+        let status = db.view().current();
+        seen.push(status.clone());
+        if status.rebuild.is_none() {
+            return seen;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the rebuild did not end: {seen:?}");
+}
+
 /// A database in memory, opened from the test model's lock.
 pub fn open() -> Db {
     now(Db::open(OpenOptions::new(LOCK).in_memory())).expect("the test lock opens")
