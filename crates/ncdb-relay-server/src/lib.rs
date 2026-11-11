@@ -10,11 +10,17 @@
 //! connections of a member that a push added it to a space (`added`). The `ncdb-relay`
 //! binary runs a [`Server`] locally on the SQLite backend.
 //!
+//! A change too large for one message (RFC 0007, "Large changes") goes up
+//! through an upload URL and comes down through a download URL, which the
+//! same listener serves over plain HTTP/1.1 (`http`): `PUT
+//! /uploads/<token>` takes the frame once, of its declared size, while the
+//! upload is valid (15 minutes); `GET /frames/<token>` serves an entry's
+//! frame while its token is valid (5 minutes). An entry whose frame is
+//! larger than [`MAX_INLINE`] comes as a download URL in `entries`.
+//!
 //! **What this does not do yet**, refused with one of RFC 0007's codes:
-//! large changes ("Large changes"), since the largest frame this server
-//! accepts, [`MAX_FRAME`], fits into one message, so `upload` and an upload
-//! reference answer `too_large`. A `keys` or `person-keys` answer that does
-//! not fit into one message answers `too_large` too. It serves plain
+//! a `keys` or `person-keys` answer that does not fit into one message
+//! answers `too_large`. It serves plain
 //! WebSocket, so it binds only a loopback address: TLS is left to a proxy
 //! on the same host (see the crate's README). Its subscriptions wake
 //! only on pushes to this server process.
@@ -35,7 +41,10 @@ use hub::Hub;
 
 mod accept;
 mod connection;
+mod http;
 mod hub;
+mod page;
+mod prefixed;
 mod subscription;
 pub mod wire;
 
@@ -46,10 +55,13 @@ pub const MAX_MESSAGE: usize = 128 * 1024;
 /// The most frames one push carries (RFC 0007, "Transport and encoding").
 pub const MAX_PUSH: usize = 32;
 
-/// The largest frame this server accepts: the largest whose entry still
-/// fits into one `entries` message, since this server carries no large
-/// changes (RFC 0007, "Large changes").
-pub const MAX_FRAME: usize = MAX_MESSAGE - 1024;
+/// The largest frame this server accepts: 16 MiB (RFC 0007, "Large
+/// changes").
+pub const MAX_FRAME: usize = ncdb_relay::MAX_FRAME;
+
+/// The largest frame an entry carries inline: one whose entry still fits
+/// into one `entries` message. A larger one comes as a download URL.
+pub const MAX_INLINE: usize = MAX_MESSAGE - 1024;
 
 /// The most messages a connection's outgoing queue holds, at most 4 MiB.
 pub const QUEUE: usize = 32;
@@ -119,8 +131,10 @@ impl<S: RelayStore + 'static> Server<S> {
             ));
         }
         let listener = TcpListener::bind(addrs.as_slice()).await?;
+        let base_url = format!("http://{}", listener.local_addr()?);
         let shared = Arc::new(Shared {
             relay: Arc::new(relay),
+            base_url: base_url.into(),
             relay_id,
             hub: Hub::default(),
             write_timeout: WRITE_TIMEOUT,
@@ -148,6 +162,16 @@ impl<S: RelayStore + 'static> Server<S> {
     pub fn with_handshake_timeout(mut self, timeout: Duration) -> Server<S> {
         if let Some(shared) = Arc::get_mut(&mut self.shared) {
             shared.handshake_timeout = timeout;
+        }
+        self
+    }
+
+    /// The upload and download URLs start with `base_url`, such as
+    /// `https://relay.example.com` behind a TLS proxy, instead of
+    /// `http://` and the address the server listens on.
+    pub fn with_base_url(mut self, base_url: &str) -> Server<S> {
+        if let Some(shared) = Arc::get_mut(&mut self.shared) {
+            shared.base_url = base_url.trim_end_matches('/').into();
         }
         self
     }
