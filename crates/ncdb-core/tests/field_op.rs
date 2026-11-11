@@ -3,7 +3,7 @@
 //! basic values, sets and links encode to exactly the bytes of examples E1
 //! to E9 and decode back to the same operations. The lists of operation ids
 //! are written sorted by bytes, without repeats, and `[]` when empty
-//! (decision 10). Parking is in `field_op_park.rs`.
+//! (RFC 0004, "The arguments of each operation"). Parking is in `field_op_park.rs`.
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).
@@ -140,7 +140,8 @@ const E2_UNSORTED: &str = "a501501111111111111111111111111111111102657461736b730
 
 #[test]
 fn a_non_canonical_list_is_read_as_a_set_and_never_written_back() {
-    // A reader accepts it (decision 10): the state depends on the set of
+    // A reader accepts it (RFC 0004, "The arguments of each operation"):
+    // the state depends on the set of
     // ids only.
     let decoded = Operation::decode(&hex(E2_UNSORTED)).unwrap();
     let op = priority().decode(&decoded, origin()).unwrap();

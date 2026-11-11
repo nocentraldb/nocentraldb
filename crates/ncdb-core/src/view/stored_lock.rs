@@ -1,5 +1,5 @@
 //! The check on the device (RFC 0005, "Two checks: at build and on the
-//! device", D11): the view keeps, in `meta`, the lock its database was
+//! device"): the view keeps, in `meta`, the lock its database was
 //! last opened with, as canonical JSON, and runs the additive check
 //! between that lock and the one it is opened with now.
 //!

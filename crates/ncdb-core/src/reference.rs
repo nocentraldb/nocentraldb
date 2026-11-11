@@ -27,7 +27,8 @@ pub struct Reference {
 }
 
 /// `target` as the value a reference holds: a CBOR array of two 16-byte
-/// byte strings, the space id and then the object id (decision 16).
+/// byte strings, the space id and then the object id (RFC 0004, "The
+/// value and its encoding").
 pub fn value(target: Target) -> Value {
     Value::Array(vec![
         Value::Bytes(target.space.0.to_vec()),
@@ -36,7 +37,8 @@ pub fn value(target: Target) -> Value {
 }
 
 /// The target `value` names, or `None` for a value that does not fit:
-/// anything but an array of two 16-byte byte strings (decision 17).
+/// anything but an array of two 16-byte byte strings (RFC 0004, "The
+/// value and its encoding").
 pub fn target(value: &Value) -> Option<Target> {
     let Value::Array(items) = value else {
         return None;
@@ -63,12 +65,13 @@ pub enum Status {
     /// The member holds a copy of the target's space, and it holds the
     /// target, not deleted, in a collection the field lists.
     Ok,
-    /// The member holds no copy of the target's space (decision 20).
+    /// The member holds no copy of the target's space (RFC 0004, "How a
+    /// reference resolves").
     NotAccessible,
     /// The member holds a copy of the target's space, but not the target,
     /// or holds it deleted, or in a collection the field does not list
-    /// (decision 18). A value that names no target reads missing too
-    /// (decision 17).
+    /// (RFC 0004, "How a reference resolves"). A value that names no
+    /// target reads missing too (RFC 0004, "The value and its encoding").
     Missing,
 }
 
@@ -125,7 +128,8 @@ fn status(collections: &BTreeSet<String>, value: &Value, copies: &impl Copies) -
 
 impl Reference {
     /// A new write of the reference to `target`, in any space, the
-    /// writer's own included (decision 19), or a clear with `None`. It
+    /// writer's own included (RFC 0004, "The value and its encoding"), or a
+    /// clear with `None`. It
     /// replaces what `state` holds: the winner and every conflict.
     pub fn set(
         &self,

@@ -122,7 +122,7 @@ impl SyncReport<'_> {
 
     /// Resolves when the relay records a position for the change
     /// `change`. It may never resolve: the relay can refuse the change, or
-    /// never be reached (RFC 0009, S3).
+    /// never be reached (RFC 0009, "One write, one change").
     pub async fn confirmed(&self, change: ChangeId) {
         let slot = self.db.lock().status.slot();
         std::future::poll_fn(|cx| {

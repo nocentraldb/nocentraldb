@@ -1,5 +1,5 @@
-//! Where a database lives (RFC 0009, "The Rust SDK", decisions S19 and
-//! S27): the app names a path or memory, and opening with neither is
+//! Where a database lives (RFC 0009, "The Rust SDK" and "Open and
+//! close"): the app names a path or memory, and opening with neither is
 //! refused with `invalidValue`, so no data lands where the app did not say.
 
 mod support;

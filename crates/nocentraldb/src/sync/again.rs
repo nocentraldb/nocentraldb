@@ -1,4 +1,5 @@
-//! Pushing again a change the relay refused (RFC 0008, M19; RFC 0002, "A
+//! Pushing again a change the relay refused (RFC 0008, "How the relay
+//! applies the rules"; RFC 0002, "A
 //! change the relay refuses after the member folded it"). A member does
 //! not push a refused change to the relay again, except when its own fold
 //! newly accepts it after a control change arrived: a concurrent change

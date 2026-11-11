@@ -3,7 +3,7 @@
 //! the key chain entries (RFC 0003, "Key-chain subkey"; RFC 0008, "Key
 //! chain entry"): `spaces().get` gives it a handle, and it reads the
 //! changes sealed before its join, back to the first generation, whose key
-//! opens the genesis's sealed `model.id` (RFC 0008, M26).
+//! opens the genesis's sealed `model.id` (RFC 0008, "What it names").
 //!
 //! The SDK does not rotate keys yet, so the admin's rotations are written
 //! through the core here, with a real key per generation.

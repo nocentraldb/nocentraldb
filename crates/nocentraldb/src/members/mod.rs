@@ -28,6 +28,8 @@ mod change;
 mod info;
 mod invitation;
 mod leave;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod merge;
 mod notice;
 mod rotate;
 
@@ -43,8 +45,8 @@ pub struct Members<'a> {
     pub(crate) space: &'a Space,
 }
 
-/// A member's role in a space (RFC 0009, decision S13; RFC 0008, "Roles
-/// and rights").
+/// A member's role in a space (RFC 0009, "Invitations and members"; RFC
+/// 0008, "Roles and rights").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Role {
     /// Reads the whole space.
@@ -109,7 +111,7 @@ impl Members<'_> {
     /// `not_member` or `removed_member` for the space, with `NotMember`
     /// (RFC 0009, "Errors"). A member of the space is refused with
     /// `AlreadyMember`. A former member is added again after a rotation
-    /// (RFC 0008, M5): the space key moves to a fresh generation, with an
+    /// (RFC 0008, "Membership entry"): the space key moves to a fresh generation, with an
     /// envelope for every member, and the member is added from it, so what
     /// it wrote while it was not a member never counts again. The rotation
     /// re-wraps every person key of the space under the fresh generation; a
@@ -120,7 +122,8 @@ impl Members<'_> {
     /// `InvalidCertificate`: one its account did not sign, one that
     /// certifies another member than the invitation's keys, or a
     /// sub-agent's. An account other than this database's own is new to it,
-    /// since each database draws its own account key (RFC 0009, S20),
+    /// since each database draws its own account key (RFC 0009, "Accounts and
+    /// devices"),
     /// until a person confirmed its fingerprint: its member is refused
     /// with `UnknownAccount` unless `options` carry the invitation's
     /// fingerprint. Once an add with the fingerprint succeeds, the database
@@ -205,7 +208,7 @@ pub(crate) fn holds(
 /// Whether `member` may add `subject` in the membership state `resolved`:
 /// it is an admin, and `subject` is not a member. Says whether `subject`
 /// is a former member, whose add is a re-grant that rotates first (RFC
-/// 0008, M5).
+/// 0008, "Membership entry").
 fn allowed(
     resolved: &Resolved,
     member: ncdb_core::ids::MemberId,
@@ -226,7 +229,7 @@ fn allowed(
 /// checks an add ("Membership entry"): it certifies the member of the
 /// invitation's keys as a device or an agent, and its account signed it.
 /// A sub-agent's certificate is signed by its parent when it is added
-/// (RFC 0008, M25), which is not built.
+/// (RFC 0008, "What this RFC uses from RFC 0003"), which is not built.
 fn certified(invitation: &Invitation) -> Result<(), Error> {
     let certificate = &invitation.certificate;
     let holds = certificate.member == invitation.key.id()
