@@ -1,7 +1,8 @@
 // End to end (NOC-175 slice 2; NOC-210 A): the Rust SDK's keys in the
 // browser, sealed with AES-GCM under a non-extractable WebCrypto key in
 // IndexedDB (crates/nocentraldb/src/keys/browser/), in a dedicated worker
-// in Chromium through Playwright. The SDK's wasm32 library tests are built
+// in Chromium through Playwright, and the SDK's database on OPFS there
+// (crates/nocentraldb/src/browser/). The SDK's wasm32 library tests are built
 // by build.mjs; wasm-bindgen-test-runner serves the IndexedDB tests, which
 // the gates skip in Node, which has no IndexedDB, and Chromium runs them.
 //
@@ -17,8 +18,12 @@ import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 import { buildTests, prebuilt, RUNNER } from "./build.mjs";
 
-/** The tests the gates skip in Node, which only a browser runs. */
-const FILTER = "keys::browser::tests::indexeddb";
+/**
+ * The SDK's browser tests: the keys in IndexedDB (keys::browser::tests) and
+ * the database on OPFS (browser::tests). The gates run the first module in
+ * Node and skip what needs IndexedDB, OPFS or a worker; Chromium runs all.
+ */
+const FILTER = "browser::tests::";
 
 let runner;
 let url;
@@ -61,7 +66,7 @@ before(async () => {
 
 after(() => runner?.kill());
 
-test("the IndexedDB key tests pass in a dedicated worker in Chromium", async () => {
+test("the SDK's browser tests pass in a dedicated worker in Chromium", async () => {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
