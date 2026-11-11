@@ -102,9 +102,12 @@ fn held(db: &Db, space: &Space) -> Option<[u8; 32]> {
     Some(key.commitment(space.id().0, PERSON))
 }
 
-/// The records the log of `db` announces for `PERSON` in `space`, by
-/// generation and record hash, and the commitment of the person key.
-fn announced(db: &Db, space: &Space) -> (Vec<(u64, [u8; 32])>, Option<[u8; 32]>) {
+/// A record a person-key entry announces: its generation and record hash.
+type Announced = (u64, [u8; 32]);
+
+/// The records the log of `db` announces for `PERSON` in `space`, and the
+/// commitment of the person key.
+fn announced(db: &Db, space: &Space) -> (Vec<Announced>, Option<[u8; 32]>) {
     let inner = db.lock();
     let resolved = inner.spaces[&space.id().0].checks.resolved();
     let key = resolved.person_key(PERSON).expect("the person key exists");

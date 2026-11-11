@@ -185,9 +185,25 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
     assert_eq!(status.refused, 0);
     let fresh = current(&admin, space).expect("a generation");
     assert_ne!(fresh, before);
-    let stored = relay.person_keys(space).await;
+    // The put follows the push of the rotation, so `synced` may return
+    // before the relay stored the new record.
+    let start = std::time::Instant::now();
+    let stored = loop {
+        let stored = relay.person_keys(space).await;
+        if stored.iter().any(|record| record.generation == fresh) {
+            break stored;
+        }
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "the relay stores the re-wrapped record: not in time; it holds generations {:?}",
+            stored
+                .iter()
+                .map(|record| record.generation)
+                .collect::<Vec<_>>()
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    };
     assert_eq!(stored.len(), 1);
-    assert_eq!(stored[0].generation, fresh);
     assert_eq!(stored[0].writer.0, lock(&admin.inner).member.key().id().0);
 
     eventually("the member reaches the fresh generation", || {
