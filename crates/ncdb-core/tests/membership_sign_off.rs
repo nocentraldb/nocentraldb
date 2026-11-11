@@ -43,7 +43,7 @@ fn verdict(
     s.certify_by(CAROL, other_account(1));
     let carol = s.add(ALICE, CAROL, role, &[&bob]);
     let last = setup(&mut s, &carol);
-    let entry = s.person_key(ALICE, 1, 0xc1, &[&last]);
+    let entry = s.person_key(BOB, 1, 0xc1, &[&last]);
     let shred = s.shred(performer, 1, &other_account(1), &[&entry]);
     let mut changes = vec![g, bob, carol];
     if last.id() != changes[2].id() {
@@ -104,4 +104,18 @@ fn a_writers_account_does_not_sign_off_when_the_only_admin_account_is_not_the_pe
 #[test]
 fn another_accounts_admin_still_signs_off() {
     assert_eq!(verdict(BOB, Role::Admin, none), Verdict::Accepted);
+}
+
+/// With no admin left, no account holds one: the exception needs exactly
+/// one, so a writer's account does not sign off.
+#[test]
+fn a_writers_account_does_not_sign_off_in_a_space_without_an_admin() {
+    let alice_leaves = |s: &mut Space, last: &Change| {
+        let cutoff = s.sequence(ALICE);
+        s.remove(ALICE, ALICE, cutoff, &[last])
+    };
+    assert_eq!(
+        verdict(BOB, Role::Writer, alice_leaves),
+        Verdict::Rejected(Rejection::NotValidWhenWritten)
+    );
 }
