@@ -98,7 +98,7 @@ Then the rest:
 - **Tickets done** since the last note.
 - **Tickets open:** in progress, with the coding session that holds each, and blocked, with what blocks it.
 - **pm decided:** the decisions you made since the last note.
-- **RFC feedback:** each new reply since the last note, linked, with your draft answer to it. Leave the heading out when there is none.
+- Under the heading "RFC feedback", link each new reply since the last note, with your draft answer to it. Leave the heading out when there is none.
 
 ## Never
 

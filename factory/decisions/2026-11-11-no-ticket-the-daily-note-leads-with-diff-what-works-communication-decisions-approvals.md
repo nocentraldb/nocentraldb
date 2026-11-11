@@ -1,4 +1,4 @@
-# 2026-11-11 · owner · The daily note leads with the diff on main, what works for a developer, communication, then the owner's decisions and approvals
+# 2026-11-11 · no ticket · The daily note leads with the diff on main, what works for a developer, communication, then the owner's decisions and approvals
 
 - Decided by: owner (Carsten, 2026-11-11, in conversation with pm)
 - Why: the owner reads the note to steer the project. He wants to see first how main moved, what a developer can build today, and where the texts for developers and contributors stand. Then what he must decide and approve, most important first, and only then the details: merges, tickets done and tickets open.
