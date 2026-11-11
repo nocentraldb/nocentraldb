@@ -24,6 +24,10 @@ zeroize = { version = "=1.9.1", default-features = false }
 # The account's fingerprint (RFC 0010, "The fingerprint"). The version the
 # core already pins.
 sha2 = { version = "=0.11.1", default-features = false }
+# An invitation's text form, unpadded base64url (RFC 0003, "Invitation"),
+# strict about padding and trailing bits. The version Cargo.lock already held
+# for tokio-tungstenite.
+data-encoding = { version = "=2.11.1", default-features = false, features = ["alloc"] }
 # The channels that tell syncing that the database wrote or paused, on
 # every target; the runtime, sockets and timers of syncing are native only
 # (below). The version Cargo.lock already held for the relay server.
