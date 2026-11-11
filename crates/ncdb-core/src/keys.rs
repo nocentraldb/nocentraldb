@@ -1,9 +1,12 @@
-//! The member key and the space key, as RFC 0003 defines them ("The keys").
+//! The member key, the recovery key and the space key, as RFC 0003 defines
+//! them ("The keys").
 //!
 //! A member key is two keys: an Ed25519 signing key, which signs every
 //! change the member writes, and an X25519 key-agreement key, to which
 //! other members wrap space keys. The member id is the SHA-256 hash of
-//! `"nocentraldb/member-id"` and both public keys. A space key is 32 random
+//! `"nocentraldb/member-id"` and both public keys. The recovery key, the
+//! account's identity, is derived from the recovery code when it is needed
+//! (RFC 0003, "Recovery key"). A space key is 32 random
 //! bytes per generation; members never use it directly but derive a subkey
 //! per purpose from it (see [`crate::seal`]).
 //!
@@ -15,6 +18,7 @@ use std::fmt;
 
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use ed25519_dalek::SigningKey;
+use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
 use zeroize::{ZeroizeOnDrop, Zeroizing};
 
@@ -36,6 +40,11 @@ pub struct MemberPublicKey {
     /// The X25519 public key, to which space keys are wrapped.
     pub agreement: [u8; 32],
 }
+
+/// The account's recovery key: an Ed25519 key whose seed derives from the
+/// recovery code's 128 bits. No device keeps it; it is derived when needed
+/// and dropped, and it signs only account key statements.
+pub struct RecoveryKey(SigningKey);
 
 /// One generation of a space key: 32 random bytes.
 pub struct SpaceKey(Zeroizing<[u8; 32]>);
@@ -100,6 +109,32 @@ impl MemberPublicKey {
     }
 }
 
+impl RecoveryKey {
+    /// The HKDF `info` of the recovery key's seed.
+    pub const CONTEXT: &'static [u8] = b"nocentraldb/recovery-key";
+
+    /// The recovery key of the recovery code's 128 bits: its Ed25519 seed is
+    /// HKDF-SHA256(ikm = the 16 bytes, salt = none, info =
+    /// `"nocentraldb/recovery-key"`), 32 bytes (RFC 0003, "Recovery key").
+    /// The caller's copy of the bits is not wiped.
+    pub fn from_code(code: &[u8; 16]) -> RecoveryKey {
+        let mut seed = Zeroizing::new([0; 32]);
+        Hkdf::<Sha256>::new(None, code)
+            .expand(RecoveryKey::CONTEXT, seed.as_mut())
+            .expect("32 bytes is a valid HKDF-SHA256 output length");
+        RecoveryKey(SigningKey::from_bytes(&seed))
+    }
+
+    /// The Ed25519 public key: the account's identity.
+    pub fn public(&self) -> [u8; 32] {
+        self.0.verifying_key().to_bytes()
+    }
+
+    pub(crate) fn signing(&self) -> &SigningKey {
+        &self.0
+    }
+}
+
 impl SpaceKey {
     /// A new space key from the platform's secure random generator.
     ///
@@ -123,11 +158,18 @@ impl SpaceKey {
 // The signing key wipes itself (ed25519-dalek's `zeroize` feature); the
 // other secrets sit in `Zeroizing`.
 impl ZeroizeOnDrop for MemberKey {}
+impl ZeroizeOnDrop for RecoveryKey {}
 impl ZeroizeOnDrop for SpaceKey {}
 
 impl fmt::Debug for MemberKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("MemberKey").field(&Hidden).finish()
+    }
+}
+
+impl fmt::Debug for RecoveryKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("RecoveryKey").field(&Hidden).finish()
     }
 }
 

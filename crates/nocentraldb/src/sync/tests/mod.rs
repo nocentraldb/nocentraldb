@@ -32,6 +32,6 @@ mod rotation;
 mod space_status;
 mod space_status_sync;
 mod spaces;
-mod support;
+pub(crate) mod support;
 mod timeouts;
 mod two_devices;

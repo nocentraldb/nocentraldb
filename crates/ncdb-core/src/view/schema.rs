@@ -2,6 +2,8 @@
 //! version in `meta` that says whether they match the code and the model.
 //! The layout is internal to the core and not a stable format (RFC 0006,
 //! decision 2); only the `log` table follows RFC 0002, "The log on disk".
+//! `confirmed_accounts` is no part of the view: it holds what a person
+//! confirmed, which no fold computes (`super::accounts`).
 
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -33,6 +35,10 @@ CREATE TABLE IF NOT EXISTS parked (
 CREATE TABLE IF NOT EXISTS meta (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS confirmed_accounts (
+    account_key BLOB PRIMARY KEY NOT NULL,
+    confirmed_at INTEGER NOT NULL
 ) STRICT;
 CREATE TABLE IF NOT EXISTS objects (
     space_id BLOB NOT NULL,
