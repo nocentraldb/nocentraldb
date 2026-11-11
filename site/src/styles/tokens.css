@@ -1,0 +1,54 @@
+/* Copied unchanged from nxsflow/brand, commit 38abcfc, tokens/nocentraldb.css (NOC-211).
+   Change it there and copy it again; never edit it here. */
+/* NoCentralDB tokens (endorsed brand), generated from BRAND.md, section "NoCentralDB (endorsed)" */
+/* Dark theme only. Separate from the family tokens on purpose: never mix --ncdb-* with --nxs-*. */
+
+/* Fonts. The name face is provisional until the first release. */
+@import url("https://fonts.googleapis.com/css2?family=Encode+Sans+Semi+Expanded:wght@700&family=Commissioner:wght@350..700&family=Syne+Mono&display=swap");
+/* Name face, only where the name or mark is set:
+   <link href="https://fonts.googleapis.com/css2?family=Love+Ya+Like+A+Sister&display=swap" rel="stylesheet"> */
+
+:root {
+  color-scheme: dark;
+
+  /* Colour roles */
+  --ncdb-bg: #111110;
+  --ncdb-surface: #1b1b19;
+  --ncdb-surface-2: #26261f;
+  --ncdb-ink: #ecebe4;
+  --ncdb-muted: #a3a299;
+  --ncdb-accent: #f2dc4b; /* safety yellow: primary action, live state, focus; under 5 % of a screen */
+  --ncdb-accent-ink: #111110;
+  --ncdb-glow-1: rgba(242, 220, 75, 0.28); /* hover only */
+  --ncdb-glow-2: rgba(242, 220, 75, 0.12); /* hover only */
+
+  /* Font families */
+  --ncdb-font-name:
+    "Love Ya Like A Sister", system-ui, sans-serif; /* provisional; name and mark only */
+  --ncdb-font-heading: "Encode Sans Semi Expanded", system-ui, sans-serif;
+  --ncdb-font-body: "Commissioner", system-ui, sans-serif;
+  --ncdb-font-mono: "Syne Mono", ui-monospace, monospace;
+
+  /* Weights */
+  --ncdb-weight-heading: 700;
+  --ncdb-weight-body: 350;
+  --ncdb-weight-emphasis: 500;
+  --ncdb-weight-strong: 700;
+
+  /* Fluid type scale: five steps, nothing in between */
+  --ncdb-text-small: clamp(
+    0.8125rem,
+    0.79rem +
+    0.1vw,
+    0.875rem
+  ); /* 13 to 14px */
+  --ncdb-text-body: clamp(1.0625rem, 1rem + 0.25vw, 1.1875rem); /* 17 to 19px */
+  --ncdb-text-lead: clamp(1.25rem, 1.1rem + 0.7vw, 1.625rem); /* 20 to 26px */
+  --ncdb-text-heading: clamp(2rem, 1.3rem + 3.2vw, 3.5rem); /* 32 to 56px */
+  --ncdb-text-display: clamp(
+    3rem,
+    1rem +
+    8vw,
+    7.5rem
+  ); /* 48 to 120px, the name */
+}

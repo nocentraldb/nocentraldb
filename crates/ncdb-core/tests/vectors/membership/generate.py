@@ -2,9 +2,9 @@
 (docs/rfc/0008-membership.md, "The control bodies") in this directory,
 independently of the Rust core: with cbor2 (6.2.1, canonical mode) for the
 bytes, hashlib for the hashes, cryptography's Ed25519 and HKDF, and PyNaCl's
-XChaCha20-Poly1305 (libsodium) for the sealed model id and the encrypted
-previous key of a key chain entry. It also writes RFC 0003's recovery key,
-account key statement and the certificates that carry one as key 6. RFC
+XChaCha20-Poly1305 (libsodium) for the sealed model id, the encrypted
+previous key of a key chain entry and a wrapped person key. It also writes
+RFC 0003's recovery key, account key statement and the certificates that carry one as key 6. RFC
 0008 gives no
 byte-exact examples, so these follow its text and RFC 0003's "Formats of
 what keys sign and derive". The gates do not run this script;
@@ -186,6 +186,28 @@ PREVIOUS_FIELD = CHAIN_NONCE + crypto_aead_xchacha20poly1305_ietf_encrypt(
 assert len(PREVIOUS_FIELD) == 72
 key_chain = {1: 3, 3: [ADD_ID], 8: SECOND_GENERATION, 9: [{1: FIRST_GENERATION, 2: PREVIOUS_FIELD}], 10: []}
 
+# A person key wrapped under generation 2, as the owner decided in NOC-209
+# (Carsten, 2026-11-11, A): nonce (24) || ciphertext (32) || tag (16),
+# XChaCha20-Poly1305 under RFC 0003's person-key subkey of generation 2's
+# key, HKDF-SHA256 with the info "nocentraldb/person-key-wrap" || space id
+# || generation id (8 bytes, big-endian), and the space id, the generation
+# id and the person-key id as associated data, 40 bytes.
+PERSON_KEY_ID = bytes(0x61 + i for i in range(16))
+PERSON_KEY = bytes([0x55] * 32)
+WRAP_NONCE = bytes(0xA1 + i for i in range(24))
+wrap_key = HKDF(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=None,
+    info=b"nocentraldb/person-key-wrap" + SPACE + SECOND_GENERATION.to_bytes(8, "big"),
+).derive(GENERATION_2_KEY)
+wrap_ad = SPACE + SECOND_GENERATION.to_bytes(8, "big") + PERSON_KEY_ID
+assert len(wrap_ad) == 40
+PERSON_KEY_WRAPPED = WRAP_NONCE + crypto_aead_xchacha20poly1305_ietf_encrypt(
+    PERSON_KEY, wrap_ad, WRAP_NONCE, wrap_key
+)
+assert len(PERSON_KEY_WRAPPED) == 72
+
 # RFC 0003, "Recovery key": the seed is HKDF-SHA256 of the recovery code's
 # 128 bits, with no salt and the info "nocentraldb/recovery-key", 32 bytes,
 # used as the recovery key's Ed25519 secret.
@@ -232,3 +254,4 @@ write("remove.body", enc(remove))
 write("second-generation", SECOND_GENERATION.to_bytes(8, "big"))
 write("key-chain-previous", PREVIOUS_FIELD)
 write("key-chain.body", enc(key_chain))
+write("person-key-wrapped", PERSON_KEY_WRAPPED)
