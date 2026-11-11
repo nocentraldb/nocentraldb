@@ -150,6 +150,12 @@ impl Resolved {
         self.members.0.get(&member)
     }
 
+    /// The certificate of every current or former member: each one's last
+    /// accepted genesis or add entry.
+    pub(crate) fn certificates(&self) -> impl Iterator<Item = &super::Certificate> + '_ {
+        self.members.0.values().map(|state| &state.certificate)
+    }
+
     /// The order of step 4, of the changes that take part in the fold.
     pub fn order(&self) -> &[ChangeId] {
         &self.order

@@ -3,11 +3,12 @@
 The NoCentralDB relay server: the protocol of [RFC 0007](../../docs/rfc/0007-relay.md) over WebSocket, in front of the relay core of `ncdb-relay`, on its SQLite backend. The `ncdb-relay` binary runs it locally.
 
 ```text
-ncdb-relay --database <path> [--listen <address>] [--allow-account <hex>]...
+ncdb-relay --database <path> [--listen <address>] [--public-url <url>] [--allow-account <hex>]...
 ```
 
 - `--database` is the SQLite file that holds the spaces' logs. The relay id lives next to it, in `<path>.relay-id`, and is drawn on the first start.
 - `--listen` is the address to serve on, by default `127.0.0.1:7700`. It must be a loopback address (see [TLS](#tls)).
+- `--public-url` is where members reach the upload and download URLs of large changes, such as `https://relay.example.com` behind a TLS proxy (see [Large changes](#large-changes)). By default it is `http://` and the address the server listens on, which a member on the same machine reaches.
 - `--allow-account` names, as 64 hex digits, an account key whose members may create spaces (RFC 0007, decision R6). Give it once per account.
 
 It prints one line, `ncdb-relay listening on ws://<address>`, and serves until it is stopped.
@@ -50,7 +51,12 @@ When the server cannot accept a connection, for example because the process or t
 
 When a push makes a member current in a space, such as a membership entry that adds it, the server sends `added {space}` to each of that member's open connections (RFC 0007, "Subscribe", decision R13), and the member pulls and subscribes to the space. The connection whose own push made its member current, the creator's with a genesis, gets `added` too, right after `pushed`; a member that already follows the space has nothing to do. Delivery is best-effort: a connection that closes before the message is written loses it, and its member learns of the space from `welcome` when it connects again.
 
+## Large changes
+
+A change whose frame does not fit into one 128 KiB message goes through the same listener over plain HTTP/1.1 (RFC 0007, "Large changes"). `upload {space, size}` answers with an upload id and a one-time URL, `<public url>/uploads/<token>`. The member sends the frame there with `PUT`, with exactly the declared size as `Content-Length`, within 15 minutes; a second `PUT` gets 404. It then pushes `{1: upload id}`, and the relay checks the uploaded frame like any other. The largest frame is 16 MiB: a larger `upload` answers `too_large`, and a larger `Content-Length` gets 413 before any of the body is read. On a pull or a subscription, an entry whose frame does not fit inline carries `{1: url, 2: size}` instead of the frame, a `GET <public url>/frames/<token>` that serves it for 5 minutes. Tokens are 32 random bytes. The SQLite backend keeps an uploaded frame until a push takes it, at most a day after its URL expired, and then keeps it in the log like any other frame.
+
+**What this does not do.** An HTTP request takes a place among the 64 handshakes while it lasts, and each read of an upload's body must make progress within 10 seconds. Anyone who holds a download URL can read the frame until it expires; the frame stays encrypted end to end.
+
 ## What it does not do yet
 
-- Large changes (RFC 0007, "Large changes"): the largest frame it accepts fits into one message, and `upload` answers `too_large`.
 - Its subscriptions wake, and its `added` messages go out, only on pushes to this server process, not on another process that writes to the same database.

@@ -24,14 +24,20 @@
 //! later by an admin key that was not yet revoked (NOC-225). While the
 //! record stays stored, no new record of its id is accepted.
 //!
-//! **What this does not do yet.** No uploads of large changes; no restore
-//! procedure beyond drawing a new epoch; no deletion of a stable shred's
-//! person-key record, which waits for NOC-224.
+//! A frame too large for one message goes up through an upload and comes
+//! down through a download token (RFC 0007, "Large changes"):
+//! [`Relay::begin_upload`], [`Relay::fill_upload`], [`Relay::push_frames`],
+//! [`Relay::begin_download`] and [`Relay::download`].
+//!
+//! **What this does not do yet.** No restore procedure beyond drawing a
+//! new epoch; no deletion of a stable shred's person-key record, which
+//! waits for NOC-224.
 
 pub mod auth;
 pub mod conformance;
 mod error;
 mod keys;
+mod large;
 pub mod record;
 mod relay;
 mod shred;
@@ -40,4 +46,5 @@ pub mod store;
 
 pub use error::ErrorCode;
 pub use keys::Keys;
+pub use large::{DOWNLOAD_URL_VALID_FOR, Filled, PushFrame, UPLOAD_URL_VALID_FOR};
 pub use relay::{Config, MAX_FRAME, Pulled, Push, Pushed, Relay};

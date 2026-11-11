@@ -10,6 +10,7 @@ use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Role
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
+use crate::large::PushFrame;
 use crate::record;
 use crate::store::{
     AppendOutcome, Effect, Entry as LogEntry, Epoch, NewEntry, Position, RelayStore, StoreError,
@@ -113,6 +114,11 @@ impl<S: RelayStore> Relay<S> {
         &self.store
     }
 
+    /// The deployment's configuration.
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
     /// The entries of `space` after the cursor `after`, at most `limit`,
     /// for `reader`.
     pub async fn pull(
@@ -141,12 +147,33 @@ impl<S: RelayStore> Relay<S> {
     /// appends the accepted ones in order. One result per frame: a refused
     /// frame does not stop the frames after it.
     pub async fn push(&self, uploader: MemberId, space: SpaceId, frames: Vec<Vec<u8>>) -> Push {
+        let frames = frames.into_iter().map(PushFrame::Bytes).collect();
+        self.push_frames(uploader, space, frames).await
+    }
+
+    /// As [`Relay::push`], with frames that may name an upload (RFC 0007,
+    /// "Large changes"). An upload is taken when its frame's turn comes,
+    /// whatever its result: a push names an upload once.
+    pub async fn push_frames(
+        &self,
+        uploader: MemberId,
+        space: SpaceId,
+        frames: Vec<PushFrame>,
+    ) -> Push {
         let mut push = Push {
             results: Vec::with_capacity(frames.len()),
             added: Vec::new(),
         };
         for frame in frames {
-            let result = match self.push_frame(uploader, space, frame).await {
+            let frame = match frame {
+                PushFrame::Bytes(bytes) => Ok(bytes),
+                PushFrame::Upload(id) => self.take_upload(uploader, space, id).await,
+            };
+            let pushed = match frame {
+                Ok(frame) => self.push_frame(uploader, space, frame).await,
+                Err(code) => Err(code),
+            };
+            let result = match pushed {
                 Ok((result, added)) => {
                     for member in added {
                         if !push.added.contains(&member) {
