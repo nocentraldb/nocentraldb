@@ -1,6 +1,0 @@
-# 2026-11-11 · NOC-203 · The Rust member calls take a public `MemberId`, `list` returns `MemberInfo`, and `set_role` returns `RoleSet`
-
-- Decided by: Carsten, 2026-11-11, on NOC-203 ("Die Vorschläge passen")
-- Why: `remove` and `set_role` must say which member they act on, and `list` is where an app finds it. `MemberId` is public and opaque (`Copy`, `Eq`, `Ord`, `Hash`, `Debug`, no text form yet); `Members::list() -> Result<Vec<MemberInfo>, Error>` gives the current members as `MemberInfo { id, account: Fingerprint, kind: MemberKind, role: Option<Role>, is_self }`, with `MemberKind { Device, Agent, SubAgent }` `#[non_exhaustive]`; `Members::remove(MemberId)` and `Members::set_role(MemberId, Role)` return a `Notice`, `set_role` with `NoticeCode::RoleSet` (TypeScript `roleSet`) and the text "A member whose role was lowered keeps its copy of everything it received before now." This revises NOC-193's "no public `MemberId` in v1" for the member calls; the space status still names no member. RFC 0009 records it in "Invitations and members" and "The Rust SDK".
-- Instead of: taking `&Invitation`, which an admin rarely keeps for an existing member; listing removed members with no role, as `SpaceInfo` does for spaces; `set_role` returning nothing, as the TypeScript example showed.
-- Topics: sdk-rust, rfc-0009, members, public-names
