@@ -233,3 +233,40 @@ async fn a_space_without_a_relay_is_neither_synced_nor_behind() {
     assert_eq!(status.behind, 0);
     let _ = SpaceId(space.space);
 }
+
+#[tokio::test]
+async fn two_changes_of_one_author_under_one_sequence_are_an_equivocation() {
+    use std::collections::BTreeSet;
+
+    use ncdb_core::change::Payload;
+    use ncdb_core::clock::Hlc;
+    use ncdb_core::seal;
+
+    let db = mine().await;
+    let (mut space, _) = joined(&db);
+    let first = space.sealed(X, vec![field_op::create(CoreObjectId([1; 16]), "tasks")]);
+    let other = space.sealed(X, vec![field_op::create(CoreObjectId([2; 16]), "tasks")]);
+    // X's device, restored from a backup, writes again under the sequence
+    // of its first task.
+    let sequence = first.header().sequence;
+    let operations = vec![field_op::create(CoreObjectId([3; 16]), "tasks")];
+    let payload = Payload::new(Hlc((sequence << 16) + 1), BTreeSet::new(), operations);
+    let again = seal::seal(
+        &space::key(X),
+        &space::space_key(),
+        space.space,
+        sequence,
+        space.first_generation,
+        &payload,
+    );
+    for change in [&first, &other, &again] {
+        fold(&db, change);
+    }
+
+    let status = status(&db, &space);
+
+    assert_eq!(
+        status.equivocations,
+        [ChangeId(first.id()), ChangeId(again.id())]
+    );
+}

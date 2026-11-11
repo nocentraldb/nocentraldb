@@ -2,6 +2,8 @@
 //! syncs, the relay's epoch, the entries it pulled and the results of a
 //! push (RFC 0007, "Island mode"; RFC 0002, D12).
 
+use std::collections::BTreeMap;
+
 use ncdb_core::change::Change;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::log::Appended;
@@ -33,18 +35,35 @@ pub(super) fn spaces(inner: &Inner) -> Vec<SpaceId> {
         .collect()
 }
 
+/// Reads back what the database kept of its relay: the relay epoch its
+/// relay positions belong to, and each space's cursor, derived from those
+/// positions (NOC-145). A database that kept no epoch starts with none,
+/// and its first `welcome` forgets every position.
+pub(super) fn load(inner: &mut Inner) -> Result<(), ViewError> {
+    let epoch = inner.view.relay_epoch()?;
+    let spaces: Vec<SpaceId> = inner.view.spaces().collect();
+    let mut cursors = BTreeMap::new();
+    if epoch.is_some() {
+        for space in spaces {
+            cursors.insert(space, inner.view.relay_cursor(space)?);
+        }
+    }
+    let sync = sync(inner);
+    sync.epoch = epoch;
+    sync.cursors = cursors;
+    Ok(())
+}
+
 /// What `welcome` says: the relay's epoch, and the spaces this member
-/// belongs to. A new epoch makes every relay position unconfirmed and
-/// every cursor 0 (RFC 0007, "Restores and the relay epoch"). A space the
+/// belongs to. An epoch other than the one the relay positions belong to
+/// makes every relay position unconfirmed and every cursor 0 (RFC 0007,
+/// "Restores and the relay epoch"), and is kept with the database, so a
+/// reopened database starts from its cursors. A database that knew no
+/// epoch yet, such as one kept before NOC-145, forgets its positions too,
+/// without reporting a new epoch: pulling from 0 confirms again every
+/// change the relay still holds, and the rest is pushed again. A space the
 /// database does not hold yet is joined: its changes fold as they arrive,
 /// and its keys come with them.
-///
-/// The epoch is kept in memory, so the first `welcome` after the database
-/// opens cannot tell which epoch the relay positions in its log belong to:
-/// a reopened database may have been closed while the relay was restored.
-/// It forgets them too, without reporting a new epoch; pulling from 0
-/// confirms again every change the relay still holds, and the rest is
-/// pushed again.
 pub(super) fn welcome(
     inner: &mut Inner,
     epoch: [u8; 16],
@@ -53,6 +72,7 @@ pub(super) fn welcome(
     let known = sync(inner).epoch;
     if known != Some(epoch) {
         inner.view.forget_relay_positions()?;
+        inner.view.set_relay_epoch(epoch)?;
         let sync = sync(inner);
         sync.cursors.clear();
         sync.heads.clear();

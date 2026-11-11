@@ -21,6 +21,7 @@ mod genesis;
 mod input;
 mod key_chain;
 mod person_key;
+mod person_key_wrap;
 mod person_keys;
 mod resolve;
 mod rights;
@@ -46,6 +47,9 @@ pub use key_chain::{
 pub use person_key::{
     PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, person_key_commitment,
     record_hash, sign_record, verify_record,
+};
+pub use person_key_wrap::{
+    WRAPPED_PERSON_KEY_LEN, unwrap_person_key, wrap_person_key, wrap_person_key_with_nonce,
 };
 pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
