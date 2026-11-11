@@ -3,7 +3,8 @@
 //! bytes of the state, what the app reads, and where each operation went.
 //!
 //! Internal to the core for now: the names here are working names, not the
-//! SDK's public API, which the owner decides (RFC 0004, decision 7).
+//! SDK's public API, which the owner decides (RFC 0004, "Late changes
+//! stay identifiable").
 
 use crate::ids::OperationId;
 

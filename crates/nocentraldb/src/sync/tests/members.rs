@@ -27,7 +27,7 @@ async fn a_member_of_another_account_added_with_its_fingerprint_writes_after_syn
     synced(&admin).await;
 
     // The new member stays connected: the relay tells it that it was
-    // added (RFC 0007, "Subscribe", decision R13).
+    // added (RFC 0007, "Subscribe").
     let mut joined = Err(());
     eventually("the new member holds the space", || {
         joined = now(joining.spaces().get(project.id())).map_err(|_| ());

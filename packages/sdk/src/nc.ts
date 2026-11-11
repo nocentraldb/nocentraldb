@@ -29,7 +29,7 @@ interface Field<T = unknown, D extends boolean = false> extends Value<T, D> {
   deprecated(reason: string): Field<T, true>;
 }
 
-/** A reference field, deprecated when `D` is true: it takes `describe` and `deprecated`, and cannot be personal (RFC 0005, D22). */
+/** A reference field, deprecated when `D` is true: it takes `describe` and `deprecated`, and cannot be personal (RFC 0005, "References into another space"). */
 interface Ref<D extends boolean = false> extends Value<Target, D> {
   /** Adds a description, which is copied into the lock. */
   describe(text: string): Ref<D>;
@@ -53,14 +53,14 @@ type Visible<C> = {
   [K in keyof C as C[K] extends Collection<Fields, true> ? never : K]: C[K];
 };
 
-/** A choice option the lock does not list yet, kept as written (RFC 0009, S5). */
+/** A choice option the lock does not list yet, kept as written (RFC 0009, "Get by id"). */
 export type Unknown = { unknown: string };
 
 /**
  * An object of the collection `C` as the app reads it (RFC 0005, "Types for
  * the app"): every field optional, without the deprecated ones. A choice
- * reads as its options or `Unknown`, an `nc.int` as a `number` (D16), a set
- * as an array, a link as an object id, a reference as `{ space, id }`
+ * reads as its options or `Unknown`, an `nc.int` as a `number`, a set as
+ * an array, a link as an object id, a reference as `{ space, id }`
  * (RFC 0009, "Get by id").
  */
 export type Infer<C extends Collection<Fields, boolean>> =
@@ -143,7 +143,7 @@ const field = <T>(state: FieldState): Field<T> => {
   return made;
 };
 
-/** The reference with this state: a field without `personal` (D22). */
+/** The reference with this state: a field without `personal` (RFC 0005, "References into another space"). */
 const reference = <D extends boolean>(state: FieldState): Ref<D> => {
   const made = {
     describe: (text: string) => reference({ ...state, description: text }),
@@ -207,7 +207,7 @@ const makeCollection = <F extends Fields, D extends boolean>(
 
 /** A string, basic value. */
 export const string = (): Field<string> => basic("ncdb/string");
-/** A signed 64-bit integer, basic value. The app reads and writes it as a `number`, a safe integer (D16). */
+/** A signed 64-bit integer, basic value. The app reads and writes it as a `number`, a safe integer (RFC 0005, "Types for the app"). */
 export const int = (): Field<number> => basic("ncdb/int");
 /** A binary64 number, basic value. */
 export const float = (): Field<number> => basic("ncdb/float");

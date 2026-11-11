@@ -1,7 +1,7 @@
 //! The notice a call that changes who can read or write returns (RFC 0009,
 //! "Invitations and members", "Notices"): what the change does, and what it
 //! does not do, in plain English for the developer. The SDK ships no text
-//! for end users (RFC 0006, decision 14).
+//! for end users (RFC 0006, "What developers and their users read").
 
 /// What a membership call did, from [`Members::add`](crate::Members::add),
 /// [`Members::remove`](crate::Members::remove),

@@ -1,5 +1,5 @@
 //! Several changes received in one SQLite transaction (NOC-204; RFC 0006,
-//! decision 7): `View::receive_all` appends and folds every frame of a
+//! "Many changes"): `View::receive_all` appends and folds every frame of a
 //! batch, or none of them, so a member that writes a key rotation, its
 //! envelopes and the add that follows never leaves half of it in its log.
 

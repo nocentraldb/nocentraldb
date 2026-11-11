@@ -1,5 +1,5 @@
 //! A database at a path, with its keys in a key file (RFC 0009, "The Rust
-//! SDK", decision S19; RFC 0003, "The member key"): reopening it finds its
+//! SDK"; RFC 0003, "The member key"): reopening it finds its
 //! keys, its spaces and its objects again, and the member writes on. CI
 //! has no platform keystore, so the key file is the path tested here in
 //! full; `src/keys/tests.rs` tests the keystore.
