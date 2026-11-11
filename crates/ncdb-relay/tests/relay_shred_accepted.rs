@@ -1,7 +1,6 @@
-//! RFC 0008, "Effects that wait until a change is stable": the relay
-//! keeps a shredded person key's record while an admin's run does not reach
-//! a change that saw the shred, and, until NOC-224 settles whether a stable
-//! shred can still be rejected, also once the shred is stable (NOC-225).
+//! RFC 0008, "A shred is final when accepted" (the owner's NOC-224,
+//! NOC-229): the relay deletes a shredded person key's record as soon as it
+//! accepts the shred, since no later change can reject an accepted shred.
 
 mod support;
 
@@ -73,49 +72,29 @@ fn accepted(relay: &Relay<SqliteStore>, uploader: u8, change: &Change) {
 }
 
 #[test]
-fn a_shred_no_admin_wrote_after_keeps_its_record() {
+fn accepting_a_shred_deletes_its_record_at_once() {
     let (relay, _dir, mut space, held) = held();
     let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
+
     accepted(&relay, WRITER, &shred);
-    assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
+
+    assert_eq!(stored(&relay, space.space), [person(2)]);
 }
 
+/// A revocation of the performer that the shred did not see arrives later.
+/// It does not reject the shred, so the record stays deleted and no record
+/// of the shredded id is taken again.
 #[test]
-fn the_record_stays_while_one_admin_has_not_written_after_the_shred() {
+fn a_later_revocation_of_the_performer_does_not_bring_the_record_back() {
     let (relay, _dir, mut space, held) = held();
     let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
     accepted(&relay, WRITER, &shred);
-    let by_creator = space.envelope(CREATOR, WRITER, &[&shred]);
-    accepted(&relay, CREATOR, &by_creator);
-    assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
-}
+    let before_shred = shred.header().sequence - 1;
+    let removal = space.remove(CREATOR, WRITER, before_shred, &[&held[2]]);
 
-/// A stable shred can still be rejected later by an admin key that was not
-/// yet revoked (NOC-224), so the deletion, the one effect that cannot be
-/// undone, waits: the record stays (NOC-225).
-#[test]
-fn the_record_stays_once_the_shred_is_stable() {
-    let (relay, _dir, mut space, held) = held();
-    let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
-    accepted(&relay, WRITER, &shred);
-    let by_creator = space.envelope(CREATOR, WRITER, &[&shred]);
-    accepted(&relay, CREATOR, &by_creator);
-    let by_second = space.envelope(SECOND, WRITER, &[&shred]);
-    accepted(&relay, SECOND, &by_second);
-    assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
-}
+    accepted(&relay, CREATOR, &removal);
 
-#[test]
-fn an_admin_change_after_a_gap_in_its_run_does_not_make_the_shred_stable() {
-    // The second admin's change that saw the shred follows sealed changes
-    // the relay never received, so its run in the relay's log has a gap.
-    let (relay, _dir, mut space, held) = held();
-    let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
-    accepted(&relay, WRITER, &shred);
-    let by_creator = space.envelope(CREATOR, WRITER, &[&shred]);
-    accepted(&relay, CREATOR, &by_creator);
-    space.skip(SECOND, 2);
-    let by_second = space.envelope(SECOND, WRITER, &[&shred]);
-    accepted(&relay, SECOND, &by_second);
-    assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
+    assert_eq!(stored(&relay, space.space), [person(2)]);
+    let again = vec![record(space.space, 1, space.first_generation)];
+    assert!(block_on(relay.put_person_keys(id(CREATOR), space.space, again)).is_err());
 }
