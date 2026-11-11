@@ -2,6 +2,11 @@
 //! (NOC-204): a batch that cannot be received whole leaves neither the
 //! log nor the space's checks changed, so nothing half-written survives.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 use ncdb_core::membership::{self, Action, ControlBody, Entry, MembershipEntry};
 

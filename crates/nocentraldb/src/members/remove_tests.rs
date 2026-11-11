@@ -2,6 +2,11 @@
 //! "Invitations and members"; RFC 0008, "Membership entry", "The cutoff",
 //! "Key chain entry" and "A member demoted and raised again"; NOC-203).
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 use ncdb_core::membership::Resolved;
 

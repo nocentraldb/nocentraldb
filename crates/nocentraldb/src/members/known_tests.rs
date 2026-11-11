@@ -3,18 +3,27 @@
 //! fingerprint in an add, the database remembers the account, and a later
 //! add of another member of it needs no fingerprint, also after a reopen.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ed25519_dalek::SigningKey;
 
 use super::tests::{now, of_account, space, writer};
 use super::{AddMember, Invitation, Role};
+#[cfg(not(target_arch = "wasm32"))]
 use crate::db::{Db, OpenOptions};
 use crate::error::ErrorCode;
+#[cfg(not(target_arch = "wasm32"))]
 use crate::space::Space;
 
+#[cfg(not(target_arch = "wasm32"))]
 const LOCK: &str = include_str!("../../tests/model/model.lock.json");
 
 /// The account of the members the admin adds: another than the admin's.
@@ -31,10 +40,10 @@ fn confirmed(invitation: &Invitation) -> AddMember {
     }
 }
 
-/// The time now, in milliseconds since the Unix epoch.
+/// The time now, in milliseconds since the Unix epoch, by the clock the
+/// SDK reads on every target.
 fn millis() -> u64 {
-    let since = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-    u64::try_from(since.as_millis()).unwrap()
+    crate::clock::now_millis()
 }
 
 #[test]
@@ -112,8 +121,10 @@ fn a_refused_add_does_not_confirm_the_account() {
 }
 
 /// A directory of its own, removed when dropped.
+#[cfg(not(target_arch = "wasm32"))]
 struct Dir(PathBuf);
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Dir {
     fn new() -> Dir {
         static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -133,12 +144,16 @@ impl Dir {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 impl Drop for Dir {
     fn drop(&mut self) {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
 
+/// A database at a path needs a file system and a keystore, which the
+/// browser's database gets in a later slice (NOC-175).
+#[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn a_confirmed_account_stays_known_after_a_reopen() {
     let dir = Dir::new();
