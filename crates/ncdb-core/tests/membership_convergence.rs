@@ -370,8 +370,10 @@ fn a_re_grant_and_revocations_end_in_the_same_membership_in_any_order() {
     assert_eq!(lost.verdict(again.id()), Some(&Verdict::Lost));
     assert_eq!(lost.role(space::id(DAN)), None);
 
+    // Bob's later removal saw the re-add and revoked it on purpose, so the
+    // re-add is not lost (RFC 0008: lost only for a concurrent cap).
     let removed = in_every_order(s.space, &base, &set(&[&after]));
-    assert_eq!(removed.verdict(again.id()), Some(&Verdict::Lost));
+    assert_eq!(removed.verdict(again.id()), Some(&Verdict::Accepted));
     assert_eq!(removed.verdict(after.id()), Some(&Verdict::Accepted));
     assert_eq!(removed.role(space::id(DAN)), None);
 }

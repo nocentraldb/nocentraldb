@@ -1,6 +1,7 @@
 //! The generation graph of RFC 0008 ("Generation ids"): the space's first
 //! generation, and every generation a key chain entry that is valid when
-//! written names, accepted or later rejected (decision M17), each linked to
+//! written names, accepted or later rejected (RFC 0008, "Generation ids"),
+//! each linked to
 //! its previous generations. "Descends from" follows those links.
 //!
 //! Each generation also records who may hold it ("Two removals that rotate
@@ -24,7 +25,7 @@ pub struct Generation {
     pub previous: BTreeSet<u64>,
     /// The key chain entries that name it, valid when written, with their
     /// authors; none for the first. Two of them share an id only through
-    /// equivocation or a hash collision (decision M23).
+    /// equivocation or a hash collision (RFC 0008, "Generation ids").
     pub entries: BTreeMap<ChangeId, MemberId>,
     /// The recipients of every key envelope for it in the set, whatever its
     /// verdict, since a rejected envelope may still have been delivered.

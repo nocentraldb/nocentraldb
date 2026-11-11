@@ -11,7 +11,8 @@
 //!
 //! Steps 4 and 5 are checked again, step 5 through
 //! [`Checks::still_opens`]. The authors' keys the checks hold only grow as
-//! control changes arrive (D11; NOC-78), so a change that passed step 3
+//! control changes arrive (RFC 0002, "Rejected changes"; NOC-78), so a
+//! change that passed step 3
 //! still passes it. Control changes are never un-folded: their verdicts are
 //! `resolve`'s, recomputed over every control change held.
 //!

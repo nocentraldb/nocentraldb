@@ -39,10 +39,11 @@ mod hub;
 mod subscription;
 pub mod wire;
 
-/// The largest message, in bytes, on every backend (RFC 0007, decision R4).
+/// The largest message, in bytes, on every backend (RFC 0007, "Transport
+/// and encoding").
 pub const MAX_MESSAGE: usize = 128 * 1024;
 
-/// The most frames one push carries (RFC 0007, decision R4).
+/// The most frames one push carries (RFC 0007, "Transport and encoding").
 pub const MAX_PUSH: usize = 32;
 
 /// The largest frame this server accepts: the largest whose entry still

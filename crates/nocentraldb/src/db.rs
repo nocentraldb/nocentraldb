@@ -168,7 +168,7 @@ impl SpaceState {
     /// its checks learn every folded control change of the log, and with
     /// them the membership and the space keys the envelopes give the
     /// member. The clock observes the log on the next write (`crate::next`).
-    fn from_log(view: &View, space: CoreSpaceId, member: MemberKey) -> SpaceState {
+    pub(crate) fn from_log(view: &View, space: CoreSpaceId, member: MemberKey) -> SpaceState {
         let mut state = SpaceState::new(space, member);
         if let Some(log) = view.log(space) {
             for (_, change) in log.after(Position::START) {

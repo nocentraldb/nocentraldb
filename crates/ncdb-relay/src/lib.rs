@@ -17,10 +17,13 @@
 //! person-key store" are [`Relay::keys`], [`Relay::person_keys`] and
 //! [`Relay::put_person_keys`].
 //!
-//! **What this does not do yet.** No uploads of large changes; no restore
-//! procedure beyond drawing a new epoch. It does not delete the person-key
-//! record of a shred entry once the shred is stable (RFC 0008, M20): the
+//! After every append, the relay deletes the person-key record of a shred
+//! entry once the shred is stable in its log (RFC 0008, "Effects that wait
+//! until a change is stable"); until then the
 //! record stays stored, and no new record of its id is accepted.
+//!
+//! **What this does not do yet.** No uploads of large changes; no restore
+//! procedure beyond drawing a new epoch.
 
 pub mod auth;
 pub mod conformance;
@@ -28,6 +31,7 @@ mod error;
 mod keys;
 pub mod record;
 mod relay;
+mod shred;
 pub mod sqlite;
 pub mod store;
 

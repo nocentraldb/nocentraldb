@@ -161,6 +161,25 @@ impl ShredEntry {
     }
 }
 
+/// The context string of the commitment to a person key (RFC 0003, "The
+/// person key").
+const COMMIT_CONTEXT: &[u8] = b"nocentraldb/person-key-commit";
+
+/// The commitment to a person key that every person-key entry carries
+/// (RFC 0003, "The person key"): `SHA-256("nocentraldb/person-key-commit"
+/// || space id || person-key id || key)`. The key is 32 random bytes, so
+/// the commitment reveals nothing about it, before or after a shred; a
+/// member that unwraps a record checks the key against it.
+pub fn person_key_commitment(space: SpaceId, person_key: [u8; 16], key: &[u8; 32]) -> [u8; 32] {
+    Sha256::new()
+        .chain_update(COMMIT_CONTEXT)
+        .chain_update(space.0)
+        .chain_update(person_key)
+        .chain_update(key)
+        .finalize()
+        .into()
+}
+
 /// The record hash a person-key entry announces: the SHA-256 of the
 /// record's wrapped bytes.
 pub fn record_hash(wrapped: &[u8]) -> [u8; 32] {

@@ -163,7 +163,8 @@ impl Log {
     /// (RFC 0006, "Control changes and changes that wait for them").
     ///
     /// When the frame is a control change that passes, the rejected changes
-    /// of the space are checked again in the same call (D11), until no
+    /// of the space are checked again in the same call (RFC 0002, "Rejected
+    /// changes"), until no
     /// further control change passes. Then every folded sealed change whose
     /// author the control state no longer admits, such as one above the
     /// cutoff of a revocation that arrived late, is un-folded (RFC 0006,
@@ -300,7 +301,8 @@ pub(crate) fn fold_one(
     Ok(())
 }
 
-/// Whether the member's model knows an operation; D10 parks it on its own
+/// Whether the member's model knows an operation; RFC 0002's "The atomic
+/// unit" parks it on its own
 /// when it does not.
 pub(crate) fn understand(
     operation: &Operation,

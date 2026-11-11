@@ -391,3 +391,15 @@ test("the relay takes a record from a current uploader, signed perhaps by a memb
   assert.match(rule, /has since left/);
   assert.doesNotMatch(rule, /only from a current member/);
 });
+
+test("the pairing answer seals the account key's secret seed, and key 6 is a nested map, absent before accounts", () => {
+  // pm's review of #178 (NOC-191)
+  assert.match(
+    part("pairing-answer"),
+    /32-byte Ed25519 secret seed of the account key/,
+  );
+  const cert = part("member-certificate");
+  assert.match(cert, /nested CBOR map/);
+  assert.match(cert, /not a byte string/);
+  assert.match(cert, /[Kk]ey 6 is absent/);
+});

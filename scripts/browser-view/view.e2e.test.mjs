@@ -4,7 +4,7 @@
 // WebKit through Playwright. It folds changes, closes, reopens, survives a
 // new page load, and reads back exactly what the same code reads natively.
 // In a private window of Firefox or WebKit, which have no OPFS, it runs on
-// SQLite's in-memory VFS (RFC 0006, decision 12).
+// SQLite's in-memory VFS (RFC 0006, "What the SDK reports").
 //
 // Windows are opened as NOC-33's probe opens them
 // (scripts/browser-storage/measure.mjs): a normal window is a persistent

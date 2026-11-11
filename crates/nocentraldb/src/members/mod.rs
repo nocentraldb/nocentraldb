@@ -8,21 +8,23 @@
 //! adding a list of invitations.
 
 use std::collections::BTreeSet;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use ncdb_core::membership::{
-    self, Action, ControlBody, Entry, MemberKind, MembershipEntry, Resolved,
-};
+use ncdb_core::membership::{self, Action, Entry, MemberKind, MembershipEntry, Resolved};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
-use crate::error::{Error, ErrorCode};
-use crate::next;
-use crate::space::{Space, fold, not_stopped, writable};
+use crate::error::{Error, ErrorCode, storage};
+use crate::space::{Space, not_stopped, writable};
 
+mod batch;
 mod invitation;
 mod notice;
+mod rotate;
+
+use batch::Batch;
 
 pub use invitation::{Fingerprint, Invitation};
 pub use notice::{Notice, NoticeCode};
@@ -98,64 +100,68 @@ impl Members<'_> {
     /// `NotAllowed`, one that was removed, or that the relay answered
     /// `not_member` or `removed_member` for the space, with `NotMember`
     /// (RFC 0009, "Errors"). A member of the space is refused with
-    /// `AlreadyMember`, and a former member with `InvalidValue`: adding it
-    /// again needs a rotation first (RFC 0008, M5), which is not built.
+    /// `AlreadyMember`. A former member is added again after a rotation
+    /// (RFC 0008, M5): the space key moves to a fresh generation, with an
+    /// envelope for every member, and the member is added from it, so what
+    /// it wrote while it was not a member never counts again. A space that
+    /// holds a person key is refused with `InvalidValue` then, since
+    /// re-wrapping its records in a rotation is not built.
     ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
     /// certifies another member than the invitation's keys, or a
-    /// sub-agent's. An account other than this database's own is new to it, since each
-    /// database draws its own account key (RFC 0009, S20): its member is
-    /// refused with `UnknownAccount` unless `options` carry the
-    /// invitation's fingerprint.
+    /// sub-agent's. An account other than this database's own is new to it,
+    /// since each database draws its own account key (RFC 0009, S20),
+    /// until a person confirmed its fingerprint: its member is refused
+    /// with `UnknownAccount` unless `options` carry the invitation's
+    /// fingerprint. Once an add with the fingerprint succeeds, the database
+    /// remembers the account, in its file or in memory, and a later add of
+    /// any member of it needs no fingerprint (NOC-154 point 3).
     pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
         writable(&inner, space)?;
         not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
-        allowed(resolved, inner.member.key().id(), invitation.key.id())?;
+        let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         certified(invitation)?;
-        known(&inner, invitation, options.fingerprint)?;
+        let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
-        let Inner { view, spaces, .. } = &mut *inner;
+        let Inner {
+            view,
+            spaces,
+            member: secrets,
+            ..
+        } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
-        let next = next::next(view, space.0, &state.checks, member.id());
-        let generation = next.generation.expect("a writable space has a generation");
-        let subject = invitation.key.id();
-        let added = membership::write(
+        let mut batch = Batch::new(view, state, &member, space.0);
+        if former {
+            rotate::rotatable(state)?;
+            rotate::rotate(&mut batch, state, &member, space.0, BTreeSet::new());
+        }
+        let added = batch.write(
             &member,
-            space.0,
-            next.sequence,
-            generation,
-            &ControlBody::new(
-                control_heads(view, space.0),
-                Entry::Membership(MembershipEntry {
-                    subject,
-                    action: Action::Add {
-                        role: options.role.into(),
-                        key: invitation.key,
-                        certificate: Box::new(invitation.certificate.clone()),
-                        from_generation: generation,
-                    },
-                }),
-            ),
+            Entry::Membership(MembershipEntry {
+                subject: invitation.key.id(),
+                action: Action::Add {
+                    role: options.role.into(),
+                    key: invitation.key,
+                    certificate: Box::new(invitation.certificate.clone()),
+                    from_generation: batch.generation,
+                },
+            }),
+            None,
         );
-        let key = state
-            .checks
-            .space_key(generation)
-            .expect("a writable space's key is held");
-        let sealed = envelope::seal(key, space.0, generation, &invitation.key)
+        let sealed = envelope::seal(batch.key(state), space.0, batch.generation, &invitation.key)
             .expect("a member's public key takes an envelope");
-        let sent = membership::write(
+        batch.write(
             &member,
-            space.0,
-            next.sequence + 1,
-            generation,
-            &ControlBody::new(BTreeSet::from([added.id()]), Entry::KeyEnvelope(sealed)),
+            Entry::KeyEnvelope(sealed),
+            Some(BTreeSet::from([added])),
         );
-        for change in [&added, &sent] {
-            fold(view, &mut state.checks, change)?;
+        batch.commit(view, state, secrets)?;
+        if confirming {
+            confirm(view, &invitation.certificate.account_key)?;
         }
         crate::sync::wake(&inner);
         Ok(Notice::MEMBER_ADDED)
@@ -187,19 +193,18 @@ pub(crate) fn holds(
 }
 
 /// Whether `member` may add `subject` in the membership state `resolved`:
-/// it is an admin, and `subject` is not a member and never was one.
-fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<(), Error> {
+/// it is an admin, and `subject` is not a member. Says whether `subject`
+/// is a former member, whose add is a re-grant that rotates first (RFC
+/// 0008, M5).
+fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<bool, Error> {
     holds(resolved, member, membership::Role::Admin, "adds members")?;
     match resolved.member(subject) {
-        None => Ok(()),
+        None => Ok(false),
         Some(state) if state.role.is_some() => Err(Error::new(
             ErrorCode::AlreadyMember,
             "the invitation's member is a member of the space already",
         )),
-        Some(_) => Err(Error::new(
-            ErrorCode::InvalidValue,
-            "the invitation's member was removed from the space; adding it again is not built",
-        )),
+        Some(_) => Ok(true),
     }
 }
 
@@ -223,15 +228,25 @@ fn certified(invitation: &Invitation) -> Result<(), Error> {
 }
 
 /// Whether the account of `invitation` is known: it is the database's
-/// own, or `fingerprint` is its fingerprint, which a person compared.
+/// own, or one a person confirmed before, or `fingerprint` is its
+/// fingerprint, which a person compared. Says whether the add confirms the
+/// account, which the database then remembers.
 fn known(
     inner: &Inner,
     invitation: &Invitation,
     fingerprint: Option<Fingerprint>,
-) -> Result<(), Error> {
+) -> Result<bool, Error> {
     let account = invitation.fingerprint();
-    if account.0 == inner.account.verifying_key().to_bytes() || fingerprint == Some(account) {
-        return Ok(());
+    let confirmed = inner
+        .view
+        .account_confirmed_at(&account.0)
+        .map_err(storage)?
+        .is_some();
+    if account.0 == inner.account.verifying_key().to_bytes() || confirmed {
+        return Ok(false);
+    }
+    if fingerprint == Some(account) {
+        return Ok(true);
     }
     Err(Error::new(
         ErrorCode::UnknownAccount,
@@ -239,6 +254,16 @@ fn known(
          once a person compared it",
     )
     .with_fingerprint(account))
+}
+
+/// Remembers that a person confirmed the account with the public key
+/// `account`, now.
+fn confirm(view: &mut View, account: &[u8; 32]) -> Result<(), Error> {
+    let since = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    let at = u64::try_from(since.as_millis()).unwrap_or(u64::MAX);
+    view.confirm_account(account, at).map_err(storage)
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control
@@ -252,6 +277,14 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
         .unwrap_or_default()
 }
 
+#[cfg(test)]
+mod batch_tests;
+#[cfg(test)]
+mod known_tests;
+#[cfg(test)]
+mod relay_tests;
+#[cfg(test)]
+mod rotate_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
