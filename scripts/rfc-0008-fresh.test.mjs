@@ -358,13 +358,15 @@ test("where this RFC makes the others more precise, each linked where the other 
   assert.doesNotMatch(agreement, /\*Resolved/);
 });
 
-test("the entry that carries a newer account key statement is named, still to be designed", () => {
-  // NOC-132, and pm's call on NOC-187: no new wire format in this rewrite
+test("the entry that carries a newer account key statement is named and linked", () => {
+  // NOC-132, then the owner's NOC-187 (Carsten, 2026-11-11): the entry is
+  // designed, so the text links it instead of naming it as still to come.
   holds(
     part("what-this-rfc-uses-from-rfc-0003"),
-    [/NOC-187/, /still to be designed/, /older account key/],
+    [/NOC-187/, /\(#account-key-statement-entry\)/, /older account key/],
     "What this RFC uses from RFC 0003",
   );
+  assert.doesNotMatch(part("what-this-rfc-uses-from-rfc-0003"), /still to be designed/);
 });
 
 test("the first accepted person-key entry chooses the key, and what that does not protect", () => {

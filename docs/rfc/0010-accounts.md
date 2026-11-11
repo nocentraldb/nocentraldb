@@ -168,7 +168,7 @@ Linking needs the old database. A per-database account whose database is gone ca
 2. Lists the spaces where the lost member is a member and no device of the account is an admin, so the app can ask their admins to remove it.
 3. Asks for the recovery code, draws a new account key with the next number, and hands it to each remaining device through the account space, wrapped to that device's agreement key as a pairing answer is (see [The account space](#the-account-space)). Each remaining device receives a new certificate.
 
-**What the higher number does.** An honest member's SDK that holds statement n refuses to write an add for a certificate under an older statement, and refuses an erasure sign-off by an older account key. That is a check the SDK makes before it writes, not a rule of the fold: the fold of RFC 0008 may read only a change's causal past, and no control entry carries a statement into a space yet. A member that has not yet learnt statement n still accepts the old key, and a change folded before stays folded. Writing statements into spaces, so that the fold itself refuses the old key, needs a control entry RFC 0008 does not have yet ([Changes to the decided RFCs](#changes-to-the-decided-rfcs)).
+**What the higher number does.** An honest member's SDK that holds statement n refuses to write an add for a certificate under an older statement, and refuses an erasure sign-off by an older account key. The SDK checks it before it writes, and once a member carries statement n into a space with RFC 0008's [account key statement entry](0008-membership.md#account-key-statement-entry), the fold refuses it too: an add or a sign-off under the older account key is not valid when written there, and an add that did not see the entry loses to it (Carsten, 2026-11-11, NOC-187). The SDK of a device of the account writes the entry into every space where the account has a member and the space does not yet hold that number; any member may carry it. A member that has not yet learnt statement n still accepts the old key, a change folded before stays folded, and an erasure the old key signed off before the space learnt the statement stands, since a shred is final when accepted.
 
 **What the lost device keeps:** its copy of every space it was in, as RFC 0003 says plainly, and the account key, valid to every member that has not learnt the next statement.
 
@@ -186,7 +186,7 @@ It learns no key. The account key travels sealed between two devices, mostly not
 
 - **Recovery does not bring back a space whose every member was lost.** The relay holds only ciphertext and nobody holds its key.
 - **A lost device keeps its copy**, of the spaces and of the account key. Removal stops it from reading what is written next; nothing takes back what it holds.
-- **The new account key does not reach a member that has not learnt it**, and the fold does not refuse the old key until a statement can be written into a space.
+- **The new account key does not reach a member that has not learnt it**, and the fold refuses the old key only in a space that holds the account key statement entry.
 - **Linking does not rewrite memberships.** Other members, the fold and the relay may see two accounts where the person sees one.
 - **An account is not a person.** Anybody can draw any number of accounts. The rule that a second account signs off an erasure rests on the admin role, not on accounts being people.
 - **Losing every device and the recovery code loses the account.** Nobody can restore it, by design: no server holds anything that could.

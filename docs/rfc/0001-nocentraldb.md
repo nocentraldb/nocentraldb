@@ -122,7 +122,7 @@ The erasure does not reach these cases:
 - An agent that runs as a user on that user's device can read what the user can read.
 - A modified client can ignore the erasure and keep the key ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
 - Backups of the relay keep the wrapped key until they expire. The relay cannot open it, but a member of the space who obtains a backup taken before the erasure can ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
-- Each member destroys the key as soon as it accepts the erasure, and the relay deletes its record then; no later change can undo an accepted erasure. A device that is offline keeps the key until it comes back and syncs. Every view shows the person's fields as erased at once ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
+- Each member destroys the key as soon as it accepts the erasure, and the relay deletes its record then; no later change can undo an accepted erasure. A device that is offline keeps the key until it comes back and syncs. Every view shows the person's fields as erased at once ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)). In a space with one account, that account signs off its own erasure, which stays provisional for 7 days and can be taken back until then; the key is destroyed once the erasure is finalized ([RFC 0008, "A provisional erasure in a space with one account"](0008-membership.md#a-provisional-erasure-in-a-space-with-one-account)).
 
 Your data protection officer decides whether destroying a key counts as erasure in your case. This is a design, not legal advice.
 

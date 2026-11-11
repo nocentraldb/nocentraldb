@@ -209,7 +209,7 @@ When the parent and the sub-agent run on the same machine, the ad-hoc space can 
 
 ## Shredding a person's key
 
-An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space and is not the performer's ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)), signs it off with its account key, because an erasure cannot be undone. Then:
+An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space and is not the performer's ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)), signs it off with its account key, because an erasure cannot be undone. In a space whose members all belong to one account, that account signs off its own erasure, which stays provisional for 7 days and can be taken back until an erasure decision finalizes it; the steps below then wait for that decision ([RFC 0008, "A provisional erasure in a space with one account"](0008-membership.md#a-provisional-erasure-in-a-space-with-one-account); Carsten, 2026-11-11, NOC-230). Then:
 
 1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
 2. The relay checks the shred entry's signature and the second account's sign-off, appends it, and deletes the person-key record from its store as soon as it accepts the shred. A shred's verdict reads only its causal past, so no later change can reject it, and a deleted record never has to come back (see [The person key](#the-person-key) and [RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
