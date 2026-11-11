@@ -1,0 +1,15 @@
+---
+// One page per candidate for the loud third colour, for the owner to compare (NOC-211).
+import { accents } from "../../accents";
+import Landing from "../../layouts/Landing.astro";
+
+export function getStaticPaths() {
+  return accents.map((a) => ({
+    params: { accent: a.id },
+    props: { accent: a.id },
+  }));
+}
+const { accent } = Astro.props;
+---
+
+<Landing accent={accent} />

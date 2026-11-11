@@ -137,10 +137,21 @@ const rows = [
     min-width: 0;
   }
   .pane-member {
-    background: var(--ncdb-surface);
+    background: var(--ncdb-accent);
+    color: var(--ncdb-accent-ink);
+  }
+  .pane-member .rows :global(li) {
+    background: rgb(17 17 16 / 0.08);
+  }
+  .pane-member .rows :global(small),
+  .pane-member .rows :global(.tag) {
+    color: var(--ncdb-accent-ink);
   }
   .pane-relay {
-    background: var(--ncdb-surface-2);
+    background: var(--ncdb-surface);
+  }
+  .pane-relay .rows :global(.tag) {
+    color: var(--loud);
   }
   .pane-title {
     font-family: var(--ncdb-font-heading);

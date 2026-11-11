@@ -1,8 +1,11 @@
 /* NoCentralDB landing page (NOC-211), on the brand's design language
-   "The marked floor": a near-black ground, neutral surfaces separated by
-   tone, and one safety-yellow accent under 5 % of any screen, only for the
-   primary action, the connected state, link underlines and focus.
-   Colours and type come from tokens.css (--ncdb-*), never raw values. */
+   "The marked floor", with the owner's 60/30/10 rule on top (2026-11-11):
+   about 60 % near-black (--ncdb-bg and the surfaces), about 30 % safety
+   yellow (--ncdb-accent) as grounds and panels, and about 10 % a loud third
+   colour (--loud) for the primary action, the connected state, link
+   underlines and focus. The brand does not define the loud colour yet; the
+   draft renders three candidates through data-accent. Where the brand's
+   "accent under 5 %" rule conflicts, the owner's rule wins. */
 
 :root {
   --radius-s: 6px;
@@ -11,7 +14,26 @@
   --wrap: 1200px;
   --gutter: clamp(20px, 5vw, 64px);
   --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --hover-glow: 0 12px 40px var(--ncdb-glow-1), 0 0 0 1px var(--ncdb-glow-2);
+  --hover-glow:
+    0 12px 40px color-mix(in srgb, var(--loud) 34%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--loud) 16%, transparent);
+
+  /* Loud candidate A, the default: signal blue. */
+  --loud: #2f5bff;
+  --on-loud: var(--ncdb-ink);
+}
+:root[data-accent="green"] {
+  --loud: #1fd38a;
+  --on-loud: var(--ncdb-bg);
+}
+:root[data-accent="magenta"] {
+  --loud: #ff3d8b;
+  --on-loud: var(--ncdb-bg);
+}
+/* The 30 %: a safety-yellow ground, with near-black text. */
+.ground-yellow {
+  background: var(--ncdb-accent);
+  color: var(--ncdb-accent-ink);
 }
 
 *,
@@ -67,7 +89,7 @@ pre,
   font-size: 0.95em;
 }
 :focus-visible {
-  outline: 3px solid var(--ncdb-accent);
+  outline: 3px solid var(--loud);
   outline-offset: 3px;
 }
 
@@ -114,8 +136,8 @@ h2 {
   transform: translateY(1px);
 }
 .btn-primary {
-  background: var(--ncdb-accent);
-  color: var(--ncdb-accent-ink);
+  background: var(--loud);
+  color: var(--on-loud);
 }
 .btn-primary:hover {
   box-shadow: var(--hover-glow);
@@ -189,6 +211,54 @@ a.card:focus-visible {
   }
   .nav .logo svg {
     height: 28px;
+  }
+}
+
+/* Draft only: the switcher between the loud candidates, hidden in screenshots. */
+.switcher {
+  position: fixed;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 4px;
+  padding: 6px;
+  border-radius: 999px;
+  background: var(--ncdb-ink);
+  color: var(--ncdb-bg);
+  font-size: var(--ncdb-text-small);
+  font-weight: var(--ncdb-weight-strong);
+  align-items: center;
+  white-space: nowrap;
+}
+.switcher span {
+  padding: 0 8px;
+}
+.switcher a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  text-decoration: none;
+}
+.switcher a i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+.switcher a[aria-current="true"] {
+  background: var(--ncdb-bg);
+  color: var(--ncdb-ink);
+}
+:root[data-shot] .switcher {
+  display: none;
+}
+@media (max-width: 420px) {
+  .switcher span {
+    display: none;
   }
 }
 

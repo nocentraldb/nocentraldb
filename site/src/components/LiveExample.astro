@@ -1,7 +1,7 @@
 ---
 // Placeholder for the live core example. The layout is final; the content is
 // simulated until the SDK and the relay run in the browser (a later ticket).
-// The accent marks one recurring thing only: the connected state.
+// The loud colour marks one recurring thing: the connected state.
 const members = [
   { id: "b", name: "B" },
   { id: "c", name: "C" },
@@ -100,7 +100,7 @@ const members = [
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--ncdb-accent);
+    background: var(--loud);
   }
   .state.island::before {
     background: none;
@@ -145,14 +145,14 @@ const members = [
   }
   .log :global(p.mine) {
     align-self: flex-end;
-    background: var(--ncdb-surface-2);
+    background: var(--ncdb-accent);
+    color: var(--ncdb-accent-ink);
   }
   .log :global(p.local)::after {
     content: "stored locally";
     display: block;
     margin-top: 2px;
     font-size: 12px;
-    color: var(--ncdb-muted);
   }
   .compose {
     margin-top: 12px;

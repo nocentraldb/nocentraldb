@@ -124,9 +124,9 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     padding: 0 18px;
     border-radius: 999px;
     border: 0;
-    background: var(--ncdb-surface-2);
-    color: var(--ncdb-ink);
-    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
+    background: var(--ncdb-accent);
+    color: var(--ncdb-accent-ink);
+    font: var(--ncdb-weight-strong) var(--ncdb-text-small) var(--ncdb-font-body);
     cursor: pointer;
   }
   .also {
@@ -160,8 +160,8 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     transition: background-color 160ms var(--ease-out);
   }
   [role="tab"][aria-selected="true"] {
-    background: var(--ncdb-surface-2);
-    color: var(--ncdb-ink);
+    background: var(--ncdb-accent);
+    color: var(--ncdb-accent-ink);
   }
   .note {
     margin: 20px 0 14px;
