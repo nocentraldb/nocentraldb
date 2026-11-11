@@ -7,6 +7,8 @@
 #[path = "../../../ncdb-core/tests/support/space.rs"]
 pub mod space;
 
+pub mod http;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
 use std::path::PathBuf;

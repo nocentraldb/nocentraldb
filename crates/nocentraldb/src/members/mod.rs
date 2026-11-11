@@ -8,8 +8,9 @@
 //! and [`Members::set_role`] change them (the Rust shapes the owner decided
 //! on NOC-203).
 //!
-//! **What this does not do yet.** Adding a list of invitations, and
-//! leaving a space.
+//! A member leaves a space with [`Space::leave`](crate::Space::leave).
+//!
+//! **What this does not do yet.** Adding a list of invitations.
 
 use std::collections::BTreeSet;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -27,6 +28,7 @@ mod batch;
 mod change;
 mod info;
 mod invitation;
+mod leave;
 mod notice;
 mod rotate;
 
@@ -297,6 +299,8 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 mod batch_tests;
 #[cfg(test)]
 mod known_tests;
+#[cfg(test)]
+mod leave_tests;
 #[cfg(test)]
 mod list_tests;
 #[cfg(test)]

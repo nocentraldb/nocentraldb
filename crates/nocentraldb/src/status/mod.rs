@@ -5,12 +5,8 @@
 //! whose `subscribe()` follows it.
 //!
 //! **What this does not report yet.** RFC 0009 lists more than this
-//! status holds. `newest_model`, the highest model version among the
-//! parked changes and operations, and the reason "another model" need the
-//! writer's model in each change (RFC 0002, payload key 64), which the
-//! core does not read yet. `shreds_waiting` needs the stability of a shred
-//! (RFC 0008, M20 and M21), which the core does not compute yet. The
-//! struct is
+//! status holds. `shreds_waiting` needs the stability of a shred (RFC
+//! 0008, M20 and M21), which the core does not compute yet. The struct is
 //! `#[non_exhaustive]`, so each field comes when it is built, instead of
 //! a field that always reads empty and claims nothing waits.
 
@@ -54,8 +50,17 @@ pub struct SpaceStatus {
     /// The control dependencies the copy does not hold (RFC 0002,
     /// "Dependencies").
     pub gaps: Vec<ChangeId>,
-    /// The parked changes and operations, per reason.
+    /// The parked changes and operations, per reason; the changes of
+    /// another model apart, as [`ParkReason::AnotherModel`].
     pub parked: BTreeMap<ParkReason, u64>,
+    /// The highest version of the app's own model that the parked changes
+    /// and operations need, from each one's payload key 64 (RFC 0002, "What
+    /// the model version is for"): an app that sees it above its own
+    /// version can say "Some data needs a newer version of this app".
+    /// `None` when no parked data names a version of this model; changes
+    /// of another model never count. A version above `u32::MAX` reads as
+    /// `u32::MAX`.
+    pub newest_model: Option<u32>,
     /// The rejected changes, per reason.
     pub rejected: BTreeMap<RejectReason, u64>,
     /// This member's changes in this space the relay refused, in local
@@ -163,6 +168,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         behind,
         gaps: Vec::new(),
         parked,
+        newest_model: None,
         rejected,
         refused,
         lost_grants: Vec::new(),
@@ -193,6 +199,10 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         .iter()
         .map(|account| Fingerprint(*account))
         .collect();
+    status.newest_model = inner
+        .view
+        .newest_model(space, &state.checks)
+        .map(|version| u32::try_from(version).unwrap_or(u32::MAX));
     if let Some(current) = resolved.current_generation() {
         status.exposed = resolved.exposed(current);
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();

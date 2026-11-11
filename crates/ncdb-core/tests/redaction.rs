@@ -101,7 +101,9 @@ fn secret_operation() -> Operation {
 fn secret_payload() -> Payload {
     let mut payload = Payload::new(Hlc(5), BTreeSet::new(), vec![secret_operation()]);
     payload.padding = Some(SECRET.as_bytes().to_vec());
-    assert!(payload.insert_extension(64, secret_value()));
+    // Key 65, a "may ignore" key with no meaning: key 64 names the writer's
+    // model, and a secret there would park the change as another model.
+    assert!(payload.insert_extension(65, secret_value()));
     payload
 }
 
@@ -275,7 +277,7 @@ fn founded_by(author: &MemberKey, key: &SpaceKey) -> (SpaceId, u64, [Change; 2])
         creator: author.public(),
         certificate: Certificate::sign(&account, author.id(), MemberKind::Agent),
         first_generation: first,
-        model_id: membership::seal_model_id(key, space, author.id(), [1; 16]),
+        model_id: membership::seal_model_id(key, space, author.id(), NO_MODEL),
     };
     let body = ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis));
     let genesis = membership::write(author, space, 1, first, &body);
@@ -285,10 +287,18 @@ fn founded_by(author: &MemberKey, key: &SpaceKey) -> (SpaceId, u64, [Change; 2])
     (space, first, [genesis, to_author])
 }
 
+/// The `model.id` of [`NoModel`], which the genesis of [`founded_by`]
+/// names: a member folds only a space of its own model (NOC-57).
+const NO_MODEL: [u8; 16] = [1; 16];
+
 /// A model that knows no collection, so every operation is parked.
 struct NoModel;
 
 impl Fold for NoModel {
+    fn model_id(&self) -> [u8; 16] {
+        NO_MODEL
+    }
+
     fn knows_collection(&self, _collection: &str) -> bool {
         false
     }

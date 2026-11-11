@@ -46,7 +46,11 @@ impl Stop {
                 | ParkReason::UnknownHeaderFormat
                 | ParkReason::UnknownHeaderKey,
             ) => 2,
-            Stop::Parked(ParkReason::UnknownPayloadFormat | ParkReason::UnknownPayloadKey) => 6,
+            Stop::Parked(
+                ParkReason::UnknownPayloadFormat
+                | ParkReason::UnknownPayloadKey
+                | ParkReason::AnotherModel,
+            ) => 6,
             Stop::Rejected(RejectReason::UnknownAuthor | RejectReason::BadSignature) => 3,
             Stop::Rejected(RejectReason::NotMember) => 4,
             Stop::Rejected(RejectReason::NoKey | RejectReason::Undecryptable) => 5,
@@ -96,6 +100,15 @@ pub trait Checks {
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         self.open(change)
     }
+    /// The `model.id` the space's genesis names, once the checks can read
+    /// it (RFC 0008, "What it names"). A sealed change of a space whose
+    /// genesis names another model than [`Fold::model_id`] is parked whole
+    /// as "another model": the space is never folded (RFC 0009, "Spaces of
+    /// another model"). Checks that cannot read it keep the default,
+    /// `None`, which checks nothing.
+    fn space_model_id(&self) -> Option<[u8; 16]> {
+        None
+    }
     /// Adds a control change that passed steps 1 to 4 to the control state.
     /// Adding a control change the checks already hold changes nothing, so
     /// [`Log::receive`] can hand them every folded control change of the
@@ -106,6 +119,9 @@ pub trait Checks {
 /// The fold of operations (step 7): the member's model, its field types
 /// and the objects of the copy, in memory or in the local view.
 pub trait Fold {
+    /// The `model.id` of the member's lock: a change whose payload key 64
+    /// names another is parked whole (RFC 0002, "The writer's model").
+    fn model_id(&self) -> [u8; 16];
     /// Whether the member's model knows the collection.
     fn knows_collection(&self, collection: &str) -> bool;
     /// Whether the member's model knows the field of the collection.
@@ -247,8 +263,23 @@ fn check(
         Ok(payload) => payload,
         Err(stop) => return (stop.into(), None),
     };
+    // A space of another model is never folded, whatever the change says
+    // of itself (NOC-57).
+    if checks
+        .space_model_id()
+        .is_some_and(|model| model != fold.model_id())
+    {
+        return (State::Parked(ParkReason::AnotherModel), None);
+    }
     if payload.format != Payload::FORMAT {
         return (State::Parked(ParkReason::UnknownPayloadFormat), None);
+    }
+    // Key 64 before unknown "must understand" keys: a change of another
+    // model never folds after an upgrade, so that is its reason (NOC-202).
+    match payload.writer_model() {
+        None => {}
+        Some(Ok(model)) if model.id == fold.model_id() => {}
+        Some(_) => return (State::Parked(ParkReason::AnotherModel), None),
     }
     if payload.extensions().must_understand() {
         return (State::Parked(ParkReason::UnknownPayloadKey), None);
