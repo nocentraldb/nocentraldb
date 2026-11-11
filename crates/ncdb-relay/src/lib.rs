@@ -18,7 +18,8 @@
 //! [`Relay::put_person_keys`].
 //!
 //! After every append, the relay deletes the person-key record of a shred
-//! entry once the shred is stable in its log (RFC 0008, M20); until then the
+//! entry once the shred is stable in its log (RFC 0008, "Effects that wait
+//! until a change is stable"); until then the
 //! record stays stored, and no new record of its id is accepted.
 //!
 //! **What this does not do yet.** No uploads of large changes; no restore

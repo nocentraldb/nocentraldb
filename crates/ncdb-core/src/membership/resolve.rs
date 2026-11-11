@@ -173,7 +173,7 @@ impl Resolved {
 
     /// The heads of the generation graph: the generations no accepted key
     /// chain entry lists as previous, leaving out a generation that two
-    /// entries name (decision M23).
+    /// entries name (RFC 0008, "Generation ids").
     pub fn heads(&self) -> BTreeSet<u64> {
         self.heads.clone()
     }
@@ -198,7 +198,7 @@ impl Resolved {
     /// exposed and `author` is an admin (RFC 0008, "Two removals that
     /// rotate the key at once", step 5): every head as previous, and an
     /// envelope for each current member. When to write it is the SDK's
-    /// (decision M15).
+    /// (RFC 0008, "Two removals that rotate the key at once", step 5).
     pub fn merge_rotation(&self, author: MemberId) -> Option<MergeRotation> {
         let current = self.current?;
         if self.role(author) != Some(Role::Admin) || !self.exposed(current) {
@@ -422,7 +422,7 @@ fn lost(state: &MemberState, grant: &Grant, saw: impl Fn(ChangeId, ChangeId) -> 
     })
 }
 
-/// Decision M23: when two accepted key chain entries name the same
+/// RFC 0008, "Generation ids": when two accepted key chain entries name the same
 /// generation id, both are rejected.
 fn reject_duplicate_generations(
     verdicts: &mut BTreeMap<ChangeId, Verdict>,

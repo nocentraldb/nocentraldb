@@ -143,7 +143,8 @@ fn a_received_change_is_in_the_log_with_its_frame_and_state() {
             row(&no_key, "rejected", Some("no_key")),
         ]
     );
-    // The operation the model does not know is parked on its own (D10).
+    // The operation the model does not know is parked on its own (RFC 0002,
+    // "The atomic unit").
     let parked: Vec<(Vec<u8>, i64, String)> = conn
         .prepare("SELECT change_id, position, reason FROM parked")
         .unwrap()
@@ -180,7 +181,7 @@ fn reopening_the_view_keeps_the_log_and_the_states_of_its_changes() {
         Appended::Duplicate(_)
     ));
     // The envelope that arrives after the reopen lets the rejected change
-    // pass (D11), so its state was reloaded with it.
+    // pass (RFC 0002, "Rejected changes"), so its state was reloaded with it.
     view.receive(&envelope(FOUNDER, 2, 0), &mut control)
         .unwrap();
     assert_eq!(

@@ -236,7 +236,8 @@ pub trait RelayStore: Send + Sync {
     /// one atomic step. The puts apply in order, so a later put of one id
     /// replaces the generation of the earlier. There is no delete request:
     /// a record goes only through [`RelayStore::delete_person_keys`] once
-    /// its shred entry is stable (RFC 0008, M20).
+    /// its shred entry is stable (RFC 0008, "Effects that wait until a change
+    /// is stable").
     fn put_person_keys(
         &self,
         space: SpaceId,

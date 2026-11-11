@@ -1,5 +1,5 @@
 //! The relay deletes a shredded person key's record once the shred is
-//! stable (RFC 0008, M20, "Effects that wait until a change is stable"). Until
+//! stable (RFC 0008, "Effects that wait until a change is stable"). Until
 //! then the record stays stored, and no new record of its id is accepted.
 //!
 //! Stability is the core's ([`ncdb_core::membership::Resolved::stability`]),
