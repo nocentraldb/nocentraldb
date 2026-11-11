@@ -66,7 +66,7 @@ fn same(a: &PersonKey, b: &PersonKey) -> bool {
 
 #[test]
 fn a_person_key_wraps_to_the_vectors_bytes() {
-    let wrapped = wrap_person_key_with_nonce(
+    let sealed = wrap_person_key_with_nonce(
         &generation_2_key(),
         space(),
         generation(),
@@ -74,8 +74,8 @@ fn a_person_key_wraps_to_the_vectors_bytes() {
         &person_key(),
         nonce(),
     );
-    assert_eq!(wrapped, wrapped());
-    assert_eq!(&wrapped[..24], &nonce(), "the nonce comes first");
+    assert_eq!(sealed, wrapped());
+    assert_eq!(&sealed[..24], &nonce(), "the nonce comes first");
 }
 
 #[test]
