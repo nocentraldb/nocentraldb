@@ -55,10 +55,11 @@ fn record(space: SpaceId, who: u8, generation: u64) -> PersonKeyRecord {
     }
 }
 
-/// The person-key ids whose records the relay holds.
+/// The person-key ids whose records the relay holds, as the creator reads
+/// them.
 fn stored(relay: &Relay<SqliteStore>, space: SpaceId) -> Vec<[u8; 16]> {
-    block_on(relay.person_keys(id(WRITER), space))
-        .expect("the writer reads the records")
+    block_on(relay.person_keys(id(CREATOR), space))
+        .expect("the creator reads the records")
         .into_iter()
         .map(|r| r.id.0)
         .collect()
