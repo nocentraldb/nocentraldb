@@ -7,6 +7,7 @@ use ncdb_core::ids::MemberId;
 
 use super::{Backend, append, block_on, entry, space};
 use crate::store::{RelayStore, Token, Upload, UploadId};
+use ncdb_core::change::Kind;
 
 /// An upload in space 1 for member `m`, of `size` bytes, its URL valid
 /// until `expires_at`.
@@ -81,4 +82,43 @@ pub fn expired_uploads_and_downloads_are_swept<B: Backend>(backend: &B) {
     block_on(store.begin_upload(upload(8, 1, 1, 10_000 + DAY), 101 + DAY)).unwrap();
     assert_eq!(block_on(store.upload(Token([5; 32]))).unwrap(), None);
     assert!(block_on(store.upload(Token([7; 32]))).unwrap().is_some());
+}
+
+/// Control entries come alone, in position order, after the cursor and up
+/// to the limit.
+pub fn control_entries_are_read_alone<B: Backend>(backend: &B) {
+    let store = backend.connect();
+    append(&store, space(1), 0, (1..=12).map(entry).collect());
+    let positions = |after, limit| -> Vec<u64> {
+        let read = block_on(store.read_controls(space(1), after, limit)).unwrap();
+        assert!(read.iter().all(|e| e.kind == Kind::CONTROL));
+        read.iter().map(|e| e.position).collect()
+    };
+    // `entry(n)` is a control change when n is a multiple of 5.
+    assert_eq!(positions(0, 100), [5, 10]);
+    assert_eq!(positions(5, 100), [10]);
+    assert_eq!(positions(0, 1), [5]);
+    assert_eq!(positions(10, 100), Vec::<u64>::new());
+    let all = block_on(store.read(space(1), 0, 100)).unwrap();
+    let controls = block_on(store.read_controls(space(1), 0, 100)).unwrap();
+    assert_eq!(controls, [all[4].clone(), all[9].clone()]);
+}
+
+/// A bounded read stops before its frames pass the budget, but always
+/// returns the first entry, and keeps to the limit.
+pub fn a_bounded_read_stops_before_its_byte_budget<B: Backend>(backend: &B) {
+    let store = backend.connect();
+    append(&store, space(1), 0, (1..=6).map(entry).collect());
+    let all = block_on(store.read(space(1), 0, 100)).unwrap();
+    let size = |n: usize| all[..n].iter().map(|e| e.frame.len() as u64).sum::<u64>();
+    let read =
+        |after, limit, max| block_on(store.read_bounded(space(1), after, limit, max)).unwrap();
+    assert_eq!(read(0, 100, size(2)), all[..2]);
+    assert_eq!(read(0, 100, size(2) + 1), all[..2]);
+    assert_eq!(read(0, 100, size(3) - 1), all[..2]);
+    assert_eq!(read(0, 100, 0), all[..1]);
+    assert_eq!(read(0, 100, u64::MAX), all);
+    assert_eq!(read(0, 3, u64::MAX), all[..3]);
+    assert_eq!(read(4, 100, u64::MAX), all[4..]);
+    assert!(read(6, 100, u64::MAX).is_empty());
 }

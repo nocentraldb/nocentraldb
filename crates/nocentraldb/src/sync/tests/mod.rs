@@ -22,6 +22,7 @@ mod live;
 mod members;
 mod newest_model;
 mod pause;
+mod person_keys;
 mod pull;
 mod push;
 mod push_again;

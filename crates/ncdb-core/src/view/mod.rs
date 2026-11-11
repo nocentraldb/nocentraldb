@@ -18,6 +18,7 @@ pub mod browser;
 mod fold;
 mod from_lock;
 mod log_table;
+mod migrate;
 pub mod model;
 mod query;
 mod read;
@@ -198,9 +199,15 @@ impl View {
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
-        if schema::open(&tx, &model, lock)? == schema::Fit::Refold {
-            let checks = checks.ok_or(Error::Model)?;
-            refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+        match schema::open(&tx, &model, lock)? {
+            schema::Fit::Current => {}
+            schema::Fit::Migrate(additions) => {
+                migrate::run(&tx, &model, &additions, log_table::load(&tx)?, checks)?;
+            }
+            schema::Fit::Refold => {
+                let checks = checks.ok_or(Error::Model)?;
+                refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+            }
         }
         query::check(&tx, &model.indexes)?;
         let logs = log_table::load(&tx)?;

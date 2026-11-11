@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-215 · The relay core reads control changes alone, and the whole log in pages of at most 4 MiB of frames
+
+- Decided by: coding agent (NOC-215), on pm's ticket from the NOC-102 follow-up
+- Why: with large changes (NOC-102), a space's log can hold frames of up to 16 MiB, and the core read it in pages of 1024 full entries on every control change (`controls`), every `keys` request and every shred check: gigabytes for one request. The backend interface gains `read_controls`, which returns a space's control entries alone and never loads a sealed frame (SQLite filters on `kind`, which comes before the frame in a row), and `read_bounded`, which stops before its frames pass a byte budget but always returns the first entry (SQLite reads `length(frame)` first, which does not load the blob). `controls` and `keys` use `read_controls`; the shred check's `runs`, which needs every change's author and sequence, and `pull` use `read_bounded` with `PAGE_BYTES`, 4 MiB. Two conformance rules test both methods.
+- Instead of: a column for the author's sequence, so `runs` needs no frame at all, which changes the on-disk format; a smaller page of entries, which still loads 16 MiB frames by the dozen.
+- What this does not do: a space whose control changes are themselves large still loads them all to resolve its membership, as `resolve` needs them; the shred check still reads every frame once, in bounded pages.
+- Topics: relay, backend, rfc-0007

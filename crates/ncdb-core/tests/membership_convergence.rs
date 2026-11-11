@@ -8,6 +8,13 @@
 //! arise (NOC-71). Admins merge concurrent rotations once their current
 //! generation is exposed, so every copy must also end in the same current
 //! generation, with the same exposure (NOC-86).
+//!
+//! Members also equivocate (NOC-226): they write a second control change
+//! or sealed change under an author sequence they already used, with
+//! dependencies chosen apart from the first one's. RFC 0002 keeps and folds
+//! both changes of an equivocation, so every copy must still agree on the
+//! state, on every control change's verdict, on the membership verdict of
+//! every sealed change, and on which control changes are stable.
 
 mod support;
 
@@ -22,13 +29,15 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 
-use ncdb_core::change::Change;
+use ncdb_core::change::{Change, Kind, Payload};
+use ncdb_core::clock::Hlc;
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, KeyChainEntry, MemberKind, MembershipEntry,
     PersonKeyEntry, PreviousKey, Rejection, Resolved, Role, ShredEntry, SignOff, Verdict, resolve,
 };
+use ncdb_core::seal;
 use proptest::prelude::*;
 use support::convergence::{self, Author, Config, Generator, Mergeable, Op, OpId, Outcome};
 
@@ -69,9 +78,15 @@ impl Copy {
         })
     }
 
-    /// The heads of the copy's control DAG: the changes no other names.
+    /// The heads of the copy's control DAG: the control changes no other
+    /// names.
     fn heads(&self) -> BTreeSet<ChangeId> {
-        let mut heads: BTreeSet<ChangeId> = self.changes.values().map(Change::id).collect();
+        let mut heads: BTreeSet<ChangeId> = self
+            .changes
+            .values()
+            .filter(|c| c.header().kind == Kind::CONTROL)
+            .map(Change::id)
+            .collect();
         heads.insert(base().2.last().expect("the base").id());
         for change in self.changes.values() {
             if let Ok(body) = ControlBody::decode(&change.header().payload) {
@@ -107,6 +122,25 @@ impl Copy {
             .max()
             .unwrap_or(0)
     }
+
+    /// The highest n such that the copy holds every change of `member`,
+    /// sealed ones too, from sequence 1 to n: the run RFC 0008's stability
+    /// reads. An equivocation adds no sequence, so it never lengthens it.
+    fn held(&self, member: MemberId) -> u64 {
+        let own: BTreeSet<u64> = base()
+            .2
+            .iter()
+            .chain(self.changes.values())
+            .filter(|c| c.header().author == member)
+            .map(|c| c.header().sequence)
+            .collect();
+        (1..).take_while(|n| own.contains(n)).last().unwrap_or(0)
+    }
+
+    /// Every change the copy holds, the base's included.
+    fn all(&self) -> impl Iterator<Item = &Change> {
+        base().2.iter().chain(self.changes.values())
+    }
 }
 
 impl std::fmt::Debug for Copy {
@@ -136,31 +170,51 @@ impl Mergeable for Copy {
     fn read(&self) -> Read {
         let resolved = self.resolved();
         let current = resolved.current_generation();
+        let stability = resolved.stability(self.all(), |m| self.held(m));
         Read {
             members: resolved.members().collect(),
             current,
             exposed: current.is_some_and(|c| resolved.exposed(c)),
             heads: resolved.heads(),
+            admitted: self
+                .changes
+                .values()
+                .filter(|c| c.header().kind == Kind::SEALED && resolved.admits(c.header()))
+                .map(Change::id)
+                .collect(),
+            stable: self
+                .all()
+                .map(Change::id)
+                .filter(|id| stability.is_stable(*id))
+                .collect(),
         }
     }
 
     fn outcome(&self, id: OpId) -> Outcome {
         let change = &self.changes[&id];
-        match self.resolved().verdict(change.id()) {
-            Some(Verdict::Accepted) => Outcome::Visible,
-            _ => Outcome::Lost,
+        let visible = match change.header().kind {
+            Kind::SEALED => self.resolved().admits(change.header()),
+            _ => self.resolved().verdict(change.id()) == Some(&Verdict::Accepted),
+        };
+        match visible {
+            true => Outcome::Visible,
+            false => Outcome::Lost,
         }
     }
 }
 
 /// What the SDK reads of a copy: its members, its current generation and
-/// whether that is exposed, and the heads a merge rotation would list.
+/// whether that is exposed, the heads a merge rotation would list, the
+/// sealed changes the membership rule admits, and the control changes that
+/// are stable for a holder of exactly the copy's changes.
 #[derive(Debug, PartialEq)]
 struct Read {
     members: Vec<(MemberId, Role)>,
     current: Option<u64>,
     exposed: bool,
     heads: BTreeSet<u64>,
+    admitted: BTreeSet<ChangeId>,
+    stable: BTreeSet<ChangeId>,
 }
 
 /// What a member does next, before its view decides the details.
@@ -173,25 +227,56 @@ struct Raw {
     slack: u8,
     /// Sequences the member uses in between, as sealed changes would.
     skip: u8,
+    /// What kind of change it is: 0 to 3 a control change under the next
+    /// sequence, 4 a control change that equivocates, 5 a sealed change, 6
+    /// a sealed change that equivocates.
+    kind: u8,
+    /// For an equivocation, how far below the member's highest sequence the
+    /// sequence it reuses lies.
+    back: u8,
+    /// For an equivocating control change, its dependencies are the base's
+    /// last change only, rather than the heads of the member's copy.
+    bare: bool,
 }
 
 /// Members that add, raise, lower and remove each other, leave, rotate
 /// (with a merge rotation when their current generation is exposed), wrap
 /// keys, and write entries of the other types, all from their own copy.
-struct Members;
+/// `forks` makes most changes equivocations or sealed changes.
+struct Members {
+    forks: bool,
+}
 
 impl Generator<Copy> for Members {
     type Raw = Raw;
 
     fn raw(&self, _member: u8) -> BoxedStrategy<Raw> {
-        (0..9u8, 2..=SUBJECTS, 1..=3u8, 0..2u8, 0..2u8)
-            .prop_map(|(action, subject, role, slack, skip)| Raw {
-                action,
-                subject,
-                role,
-                slack,
-                skip,
-            })
+        let kinds = match self.forks {
+            true => 3..7u8,
+            false => 0..7u8,
+        };
+        (
+            0..9u8,
+            2..=SUBJECTS,
+            1..=3u8,
+            0..2u8,
+            0..2u8,
+            kinds,
+            0..3u8,
+            any::<bool>(),
+        )
+            .prop_map(
+                |(action, subject, role, slack, skip, kind, back, bare)| Raw {
+                    action,
+                    subject,
+                    role,
+                    slack,
+                    skip,
+                    kind,
+                    back,
+                    bare,
+                },
+            )
             .boxed()
     }
 
@@ -287,8 +372,34 @@ impl Generator<Copy> for Members {
                 fields: BTreeMap::from([(8, ncdb_core::cbor::Value::Unsigned(u64::from(n)))]),
             },
         };
-        let body = ControlBody::new(copy.heads(), entry);
-        let sequence = copy.highest(space::id(who)) + 1 + u64::from(raw.skip);
+        // An equivocation reuses a sequence the member already wrote under,
+        // as a device restored from a backup or a stolen one would; a member
+        // that wrote nothing yet writes its first change instead.
+        let own = copy.highest(space::id(who));
+        let equivocates = matches!(raw.kind, 4 | 6) && own > 0;
+        let sequence = match equivocates {
+            true => own.saturating_sub(u64::from(raw.back)).max(1),
+            false => own + 1 + u64::from(raw.skip),
+        };
+        if matches!(raw.kind, 5 | 6) {
+            // The clock carries the operation's id, so that a sealed change
+            // that reuses a sequence differs from the first one.
+            let clock = Hlc((sequence << 16) | u64::from(author.id & 0xffff));
+            let payload = Payload::new(clock, BTreeSet::new(), vec![]);
+            return seal::seal(
+                &space::key(who),
+                &space::space_key(),
+                space,
+                sequence,
+                generation,
+                &payload,
+            );
+        }
+        let dependencies = match equivocates && raw.bare {
+            true => BTreeSet::from([base().2.last().expect("the base").id()]),
+            false => copy.heads(),
+        };
+        let body = ControlBody::new(dependencies, entry);
         membership::write(&space::key(who), space, sequence, first_generation, &body)
     }
 }
@@ -301,7 +412,23 @@ fn m_c1_the_same_control_changes_resolve_to_the_same_state_in_any_order() {
         cases: 48,
         ..Config::default()
     };
-    let result = convergence::check::<Copy, _>(&config, &Members);
+    let result = convergence::check::<Copy, _>(&config, &Members { forks: false });
+    assert!(result.is_ok(), "{}", result.unwrap_err());
+}
+
+/// NOC-226: members, admins included, equivocate with control and sealed
+/// changes, under dependencies chosen apart from the first change's. Every
+/// copy that holds the same changes still reaches the same state, the same
+/// verdicts, the same sealed verdicts and the same stable changes.
+#[test]
+fn m_c1_equivocations_of_control_and_sealed_changes_converge_in_any_order() {
+    let config = Config {
+        members: 3,
+        max_changes_per_member: 4,
+        cases: 64,
+        ..Config::default()
+    };
+    let result = convergence::check::<Copy, _>(&config, &Members { forks: true });
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
 
