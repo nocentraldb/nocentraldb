@@ -75,7 +75,7 @@ async fn two_devices_share_a_space_through_the_relay_and_see_the_same_view() {
     synced(&a).await;
 
     // B stays connected: the relay tells it that it was added (RFC 0007,
-    // "Subscribe", decision R13).
+    // "Subscribe").
     let mut on_b = Err(());
     eventually("B holds the space", || {
         on_b = now(b.spaces().get(on_a.id())).map_err(|_| ());

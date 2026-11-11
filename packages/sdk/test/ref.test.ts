@@ -1,7 +1,8 @@
 // nc.ref, a reference into another space (RFC 0005, "References into
 // another space"): one
-// collection or a list of them, as nc.link takes them (D18), and only the
-// modifiers .describe and .deprecated (D22).
+// collection or a list of them, as nc.link takes them, and only the
+// modifiers .describe and .deprecated (RFC 0005, "References into another
+// space").
 import { describe, expect, expectTypeOf, test } from "vitest";
 import { nc } from "../src/index.ts";
 

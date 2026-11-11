@@ -134,8 +134,8 @@ pub enum OperationParkReason {
     /// that the operation does not define (RFC 0004, "Operations a member
     /// does not understand").
     UnknownArgument,
-    /// The operation's arguments are malformed (RFC 0004, "The
-    /// arguments of each operation", decision 12).
+    /// The operation's arguments are malformed (RFC 0004, "Operations a
+    /// member does not understand").
     MalformedArguments,
 }
 
