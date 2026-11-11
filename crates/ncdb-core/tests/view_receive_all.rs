@@ -68,7 +68,10 @@ fn a_batch_with_one_bad_frame_leaves_nothing_after_a_reopen_either() {
     assert!(refused.is_err());
     assert_eq!(view.state(SPACE, id(&key)), None);
     assert_eq!(view.state(SPACE, id(&task)), None);
-    assert!(view.log(SPACE).is_none_or(|log| log.after(ncdb_core::log::Position::START).next().is_none()));
+    assert!(
+        view.log(SPACE)
+            .is_none_or(|log| log.after(ncdb_core::log::Position::START).next().is_none())
+    );
     drop(view);
     let view = View::open(&db.0, &lock()).unwrap();
     assert_eq!(view.state(SPACE, id(&key)), None);
