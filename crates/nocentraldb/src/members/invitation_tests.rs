@@ -3,6 +3,11 @@
 //! layout, `FromStr` reads it, and both hold to the vectors in
 //! docs/rfc/vectors/0003, which Python wrote independently of this crate.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ncdb_core::membership::MemberKind;
 
 use super::Invitation;

@@ -13,7 +13,6 @@
 //! **What this does not do yet.** Adding a list of invitations.
 
 use std::collections::BTreeSet;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, SpaceId};
@@ -277,11 +276,8 @@ fn known(
 /// Remembers that a person confirmed the account with the public key
 /// `account`, now.
 fn confirm(view: &mut View, account: &[u8; 32]) -> Result<(), Error> {
-    let since = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let at = u64::try_from(since.as_millis()).unwrap_or(u64::MAX);
-    view.confirm_account(account, at).map_err(storage)
+    view.confirm_account(account, crate::clock::now_millis())
+        .map_err(storage)
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control
@@ -305,7 +301,7 @@ mod known_tests;
 mod leave_tests;
 #[cfg(test)]
 mod list_tests;
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
 #[cfg(test)]
 mod remove_tests;
