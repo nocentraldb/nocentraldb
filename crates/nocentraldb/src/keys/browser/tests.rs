@@ -129,7 +129,7 @@ async fn the_wrapping_key_is_aes_gcm_256_for_encrypt_and_decrypt_and_cannot_be_e
     let key = generate().await.unwrap();
 
     assert!(!key.extractable());
-    let algorithm = key.algorithm();
+    let algorithm = key.algorithm().unwrap();
     let get = |field: &str| js_sys::Reflect::get(&algorithm, &JsValue::from_str(field)).unwrap();
     assert_eq!(get("name").as_string().as_deref(), Some("AES-GCM"));
     assert_eq!(get("length").as_f64(), Some(256.0));
