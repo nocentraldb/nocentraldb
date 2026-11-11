@@ -100,6 +100,15 @@ pub trait Checks {
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
         self.open(change)
     }
+    /// The `model.id` the space's genesis names, once the checks can read
+    /// it (RFC 0008, "What it names"). A sealed change of a space whose
+    /// genesis names another model than [`Fold::model_id`] is parked whole
+    /// as "another model": the space is never folded (RFC 0009, "Spaces of
+    /// another model"). Checks that cannot read it keep the default,
+    /// `None`, which checks nothing.
+    fn space_model_id(&self) -> Option<[u8; 16]> {
+        None
+    }
     /// Adds a control change that passed steps 1 to 4 to the control state.
     /// Adding a control change the checks already hold changes nothing, so
     /// [`Log::receive`] can hand them every folded control change of the
@@ -254,6 +263,14 @@ fn check(
         Ok(payload) => payload,
         Err(stop) => return (stop.into(), None),
     };
+    // A space of another model is never folded, whatever the change says
+    // of itself (NOC-57).
+    if checks
+        .space_model_id()
+        .is_some_and(|model| model != fold.model_id())
+    {
+        return (State::Parked(ParkReason::AnotherModel), None);
+    }
     if payload.format != Payload::FORMAT {
         return (State::Parked(ParkReason::UnknownPayloadFormat), None);
     }

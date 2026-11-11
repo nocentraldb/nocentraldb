@@ -20,7 +20,7 @@ const SECOND: CoreObjectId = CoreObjectId([0x22; 16]);
 /// A space of `ADMIN`'s on the relay, with `ME` as a writer that holds the
 /// space key, and one task.
 async fn shared(relay: &LocalRelay) -> (space::Space, Client) {
-    let mut space = space::Space::new(ADMIN);
+    let mut space = space::Space::with_model(ADMIN, [7; 16], super::rotation::model_id());
     let genesis = space.genesis.clone();
     let add = space.add(ADMIN, ME, Role::Writer, &[&genesis]);
     let own = space.envelope(ADMIN, ADMIN, &[&add]);

@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-102 · A backend keeps uploads and download tokens; a pushed frame stays in the log like any other
+
+- Decided by: coding agent (NOC-102), within the backend interface agreed for NOC-208
+- Why: the backend interface (RFC 0007, "The backend interface") gains six methods: `begin_upload`, `upload`, `fill_upload`, `take_upload`, `begin_download`, `download`. Filling and taking an upload are each one atomic step, so a frame is filled once and taken once, and only by the member that began it, in its space; the conformance suite tests both. The core takes the upload when its push frame's turn comes, whatever the frame's result, so a push names an upload once; a missing, unfilled or foreign upload is `malformed`. The SQLite backend stores uploads and download tokens in two new tables (`uploads`, `downloads`); a taken frame goes into `log.frame` like any other, and a download token names a log row. A new upload or download sweeps download tokens that expired and uploads whose URL expired a day or more ago, so a frame filled in time may still be pushed for a day.
+- Instead of: keeping large frames outside the log (an object store or a blob table), which a later backend with S3 may do behind the same interface; a sweeper task, which a library backend has no place to run.
+- What this does not do: the core reads the log in pages of full frames (`controls`, `keys`), so a space of many 16 MiB frames costs memory on every control change; the server reads a pull in chunks of 16 entries for the same reason.
+- Topics: relay, backend, rfc-0007
