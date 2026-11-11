@@ -312,7 +312,7 @@ sign-off (CBOR map, canonical)
                            person-key id (16 bytes) || performer member id (32 bytes))
 ```
 
-The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
+The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. When the performer's account is the only one with an admin member, RFC 0008 lets another account with a writer member sign off; a reader's never does ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)). It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
 
 ### Person-key record
 
