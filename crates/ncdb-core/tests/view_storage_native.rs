@@ -123,3 +123,39 @@ fn a_change_and_everything_its_fold_wrote_are_committed_together_or_not_at_all()
         .unwrap();
     assert_eq!(objects, 0);
 }
+
+/// A crash in the middle of a batch (NOC-204) leaves none of it: the
+/// changes before the crash share its one transaction.
+#[test]
+fn a_crash_in_the_middle_of_a_batch_leaves_none_of_it() {
+    let db = TempDb::new("batch-crash");
+    let key = envelope(FOUNDER, 1, 0);
+    let a = sealed(FOUNDER, 2, 0, vec![field_op::create(T, TASK)]);
+    let b = sealed(
+        FOUNDER,
+        3,
+        0,
+        vec![field_op::create(ObjectId([2; 16]), TASK)],
+    );
+    let mut view = View::open(&db.0, &lock()).unwrap();
+    let mut checks = CrashOnOpen {
+        control: Control::default(),
+        opens: Cell::new(0),
+        crash_at: 2,
+    };
+    let crash = catch_unwind(AssertUnwindSafe(|| {
+        view.receive_all(&[&key, &a, &b], &mut checks)
+    }));
+    assert!(crash.is_err());
+    drop(view);
+
+    let conn = Connection::open(&db.0).unwrap();
+    let rows: i64 = conn
+        .query_row("SELECT count(*) FROM log", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(rows, 0);
+    let tasks: i64 = conn
+        .query_row("SELECT count(*) FROM c_task", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(tasks, 0);
+}
