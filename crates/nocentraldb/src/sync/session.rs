@@ -250,7 +250,10 @@ impl Session<'_> {
                 Answer::Entries { entries, head, .. } => {
                     let empty = entries.is_empty();
                     self.entries(space, entries)?;
-                    let cursor = with(self.db, |inner| apply::cursor(inner, space))?;
+                    let cursor = with(self.db, |inner| {
+                        apply::heard(inner, space, head);
+                        apply::cursor(inner, space)
+                    })?;
                     if cursor >= head || empty {
                         return Ok(true);
                     }
@@ -263,7 +266,10 @@ impl Session<'_> {
                 }
                 // A space the relay does not hold yet: the push of its
                 // genesis creates it.
-                Answer::Error { code, .. } if code == "unknown_space" => return Ok(true),
+                Answer::Error { code, .. } if code == "unknown_space" => {
+                    with(self.db, |inner| apply::heard(inner, space, 0))?;
+                    return Ok(true);
+                }
                 answer => return self.answer(space, answer).map(|()| false),
             }
         }
@@ -302,7 +308,10 @@ impl Session<'_> {
         match answer {
             Answer::Entries { entries, head, .. } => {
                 self.entries(space, entries)?;
-                let cursor = with(self.db, |inner| apply::cursor(inner, space))?;
+                let cursor = with(self.db, |inner| {
+                    apply::heard(inner, space, head);
+                    apply::cursor(inner, space)
+                })?;
                 if cursor < head {
                     self.gaps.insert(space);
                 } else {

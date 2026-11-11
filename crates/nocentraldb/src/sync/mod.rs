@@ -45,7 +45,7 @@ use tokio::sync::watch;
 use crate::db::{Db, Inner};
 
 pub(crate) use run::start;
-pub(crate) use status::Notify;
+pub(crate) use status::{Notify, follow};
 
 /// The state of the relay connection (RFC 0009, "Sync and status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -143,6 +143,12 @@ pub(crate) struct SyncState {
     /// the space with `removed_member`; before, with `not_member` (RFC
     /// 0007, "Subscribe").
     pub(crate) live: BTreeSet<CoreSpaceId>,
+    /// The relay head of each space, the highest position the relay told
+    /// the member of in this epoch.
+    pub(crate) heads: BTreeMap<CoreSpaceId, u64>,
+    /// The spaces whose cursor reached the relay's head once in this
+    /// epoch, since the database opened: their initial sync is complete.
+    pub(crate) pulled: BTreeSet<CoreSpaceId>,
     /// How many changes syncing folded that the log did not hold.
     pub(crate) folds: u64,
     /// The changes the relay refused, per space, each with whether the
@@ -171,6 +177,8 @@ impl SyncState {
             stopped: BTreeSet::new(),
             removed: None,
             live: BTreeSet::new(),
+            heads: BTreeMap::new(),
+            pulled: BTreeSet::new(),
             folds: 0,
             refused: BTreeMap::new(),
             wake,
@@ -194,6 +202,24 @@ pub(crate) fn stopped(inner: &Inner, space: CoreSpaceId) -> bool {
         .sync
         .as_ref()
         .is_some_and(|sync| sync.stopped.contains(&space))
+}
+
+/// How far `space` is synced (RFC 0009, "Sync and status"): whether its
+/// initial sync is complete, and how many relay positions the member heard
+/// of but has not folded. Without a relay, `false` and 0.
+pub(crate) fn progress(inner: &Inner, space: CoreSpaceId) -> (bool, u64) {
+    let Some(sync) = inner.sync.as_ref() else {
+        return (false, 0);
+    };
+    let cursor = sync.cursors.get(&space).copied().unwrap_or(0);
+    let head = sync.heads.get(&space).copied().unwrap_or(0);
+    (sync.pulled.contains(&space), head.saturating_sub(cursor))
+}
+
+/// The code of a relay's refusal as the SDK shows it: one RFC 0007 lists,
+/// or `unknown_error` (NOC-188).
+pub(crate) fn mapped_code(code: &str) -> String {
+    wire::mapped_code(code)
 }
 
 /// Tells the sync thread, if there is one, and the followers of the sync
