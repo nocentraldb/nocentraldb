@@ -366,7 +366,10 @@ test("the entry that carries a newer account key statement is named and linked",
     [/NOC-187/, /\(#account-key-statement-entry\)/, /older account key/],
     "What this RFC uses from RFC 0003",
   );
-  assert.doesNotMatch(part("what-this-rfc-uses-from-rfc-0003"), /still to be designed/);
+  assert.doesNotMatch(
+    part("what-this-rfc-uses-from-rfc-0003"),
+    /still to be designed/,
+  );
 });
 
 test("the first accepted person-key entry chooses the key, and what that does not protect", () => {
