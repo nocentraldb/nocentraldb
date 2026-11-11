@@ -24,14 +24,14 @@ pub(crate) const RETRIES: usize = 64;
 /// control changes.
 pub(crate) const PAGE: u32 = 1024;
 
-/// The largest frame the relay accepts: 16 MiB (RFC 0007, decision R5).
+/// The largest frame the relay accepts: 16 MiB (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
 /// What a relay deployment configures.
 #[derive(Clone, Debug)]
 pub struct Config {
     /// The account keys whose members may create spaces on this relay
-    /// (RFC 0007, decision R6).
+    /// (RFC 0007, "What the relay checks", who may create a space).
     pub allowed_accounts: BTreeSet<[u8; 32]>,
     /// The largest frame the relay accepts.
     pub max_frame: usize,
@@ -82,7 +82,7 @@ pub struct Push {
     pub results: Vec<Pushed>,
     /// The members that an accepted control change made current in the
     /// space, each once, in the order they became current: the relay tells
-    /// their open connections with `added` (RFC 0007, decision R13).
+    /// their open connections with `added` (RFC 0007, "Subscribe").
     pub added: Vec<MemberId>,
 }
 
@@ -235,8 +235,8 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// A change to a space the relay does not hold: only its genesis, pushed
-    /// by its creator, a member of an account the relay allows (decision
-    /// R6), and valid by RFC 0008's rules for a genesis.
+    /// by its creator, a member of an account the relay allows (RFC 0007,
+    /// "What the relay checks"), and valid by RFC 0008's rules for a genesis.
     fn check_genesis(&self, uploader: MemberId, change: &Change) -> Result<Checked, ErrorCode> {
         let genesis = match control_body(change) {
             Ok(ControlBody {

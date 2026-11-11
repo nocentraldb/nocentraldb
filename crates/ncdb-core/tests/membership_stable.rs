@@ -1,5 +1,5 @@
 //! When a control change is stable (RFC 0008, "Effects that wait until a
-//! change is stable", M20/M21): the smallest set closed under its rule. A
+//! change is stable"): the smallest set closed under its rule. A
 //! change is stable once the holder holds, for every admin and every former
 //! admin, that member's changes from sequence 1 up to a control change of
 //! that member that saw it, or up to the cutoff of a stable revocation that

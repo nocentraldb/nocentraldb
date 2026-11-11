@@ -1,7 +1,8 @@
 //! Signing and sealing a change, as RFC 0003 defines it ("How a member
 //! signs and encrypts a change"), for suite 1.
 //!
-//! Sealing pads the payload map to a multiple of 256 bytes (RFC 0002, D8),
+//! Sealing pads the payload map to a multiple of 256 bytes (RFC 0002,
+//! "Padding"),
 //! encrypts it with XChaCha20-Poly1305 under the content key of the space
 //! key generation, with every header field except the payload as associated
 //! data, and then signs the header bytes, ciphertext included, with the
@@ -36,7 +37,7 @@ use crate::keys::{self, MemberKey, MemberPublicKey, SpaceKey};
 pub const SUITE: u64 = 1;
 
 /// Every sealed payload is padded to a multiple of this many bytes before
-/// encryption (RFC 0002, D8).
+/// encryption (RFC 0002, "Padding").
 pub const PADDING_BLOCK: usize = 256;
 
 /// The length of the random nonce in front of the ciphertext.

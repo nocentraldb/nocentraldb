@@ -11,7 +11,8 @@
 //! unwraps, and from the key chain entries, which
 //! [`membership::open_previous_key`] opens back to the first generation
 //! (RFC 0003, "Key-chain subkey"). Each control change that passes
-//! therefore checks the log's rejected changes again (D11).
+//! therefore checks the log's rejected changes again (RFC 0002, "Rejected
+//! changes").
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;

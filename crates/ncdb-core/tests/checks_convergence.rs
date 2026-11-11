@@ -4,7 +4,7 @@
 //! the same state for every change, the same folded operations and the
 //! same control state. A change rejected for an unknown author, a missing
 //! membership or a missing key is folded once the control change it lacked
-//! arrives, whatever came first (D11).
+//! arrives, whatever came first (RFC 0002, "Rejected changes").
 //!
 //! The pool holds no revocation that excludes a sealed change;
 //! `tests/unfold_convergence.rs` adds them.

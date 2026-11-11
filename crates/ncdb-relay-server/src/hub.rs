@@ -1,6 +1,6 @@
 //! Where a push tells the subscriptions of its space that the log grew
 //! (RFC 0007, "Subscribe": nothing polls), and the open connections of a
-//! member that it was added to a space (decision R13). Each space has a
+//! member that it was added to a space (RFC 0007, "Subscribe"). Each space has a
 //! watch of its head; a subscription waits for it to change and then reads
 //! its new entries through the relay core. Each authenticated connection
 //! is listed under its member, with its outgoing queue.

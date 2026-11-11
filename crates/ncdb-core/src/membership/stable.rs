@@ -1,5 +1,5 @@
 //! When a control change is stable (RFC 0008, "Effects that wait until a
-//! change is stable", decisions M20 and M21): once nothing can reject it any
+//! change is stable"): once nothing can reject it any
 //! more, so that a shred may destroy its person key for good.
 //!
 //! A holder's stable changes are the smallest set closed under RFC 0008's

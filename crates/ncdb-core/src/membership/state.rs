@@ -22,7 +22,7 @@ pub enum Verdict {
     /// An accepted grant that a revocation it did not see capped below the
     /// role it gives (RFC 0008, "Concurrent add and remove of one member").
     Lost,
-    /// Rejected, with its reason (RFC 0002, "Rejected changes", D11): it stays in
+    /// Rejected, with its reason (RFC 0002, "Rejected changes"): it stays in
     /// the log and changes nothing.
     Rejected(Rejection),
     /// Kept but not folded: an entry type or a key this core does not
@@ -53,7 +53,7 @@ pub enum Rejection {
     /// The accepted revocation with this change id excludes it.
     Excluded(ChangeId),
     /// A key chain entry that names the same generation id as another
-    /// accepted one: both are rejected (RFC 0008, decision M23).
+    /// accepted one: both are rejected (RFC 0008, "Generation ids").
     DuplicateGeneration,
     /// A person-key entry whose commitment is not the one of its id's first
     /// accepted entry before it in the order (RFC 0008, "Person-key entry").

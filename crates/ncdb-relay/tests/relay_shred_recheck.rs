@@ -1,4 +1,5 @@
-//! The relay re-checks a waiting shred's stability (RFC 0008, M20) only when
+//! The relay re-checks a waiting shred's stability (RFC 0008, "Effects that
+//! wait until a change is stable") only when
 //! an append can change it: a control change, or a change of a member that
 //! holds or held the admin role. A writer's sealed change cannot, and does
 //! not make the relay read and resolve the log again.

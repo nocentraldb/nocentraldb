@@ -1,4 +1,4 @@
-//! RFC 0007, "Subscribe" and decision R13, over a real socket: when the
+//! RFC 0007, "Subscribe", over a real socket: when the
 //! relay accepts a control change that makes a member current in a space,
 //! it sends `added {space}` to each of that member's open connections,
 //! without a request id. That includes the connection whose own push made

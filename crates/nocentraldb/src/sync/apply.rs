@@ -75,6 +75,8 @@ pub(super) fn welcome(
         inner.view.set_relay_epoch(epoch)?;
         let sync = sync(inner);
         sync.cursors.clear();
+        sync.heads.clear();
+        sync.pulled.clear();
         sync.epoch_changed = known.is_some();
     }
     sync(inner).epoch = Some(epoch);
@@ -105,6 +107,19 @@ pub(super) fn added(inner: &mut Inner, space: SpaceId) -> bool {
         sync.removed = None;
     }
     joined || restarted
+}
+
+/// Records the head of `space` the relay told: the highest relay position
+/// the member heard of. Once the cursor reaches it, the space's initial
+/// sync is complete (RFC 0009, "Sync and status").
+pub(super) fn heard(inner: &mut Inner, space: SpaceId, head: u64) {
+    let cursor = cursor(inner, space);
+    let sync = sync(inner);
+    let known = sync.heads.entry(space).or_insert(0);
+    *known = (*known).max(head);
+    if cursor >= *known {
+        sync.pulled.insert(space);
+    }
 }
 
 /// The cursor of `space`.

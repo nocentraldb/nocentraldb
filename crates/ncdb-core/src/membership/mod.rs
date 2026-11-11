@@ -44,8 +44,8 @@ pub use key_chain::{
     seal_previous_key_with_nonce,
 };
 pub use person_key::{
-    PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, record_hash,
-    sign_record, verify_record,
+    PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, person_key_commitment,
+    record_hash, sign_record, verify_record,
 };
 pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
