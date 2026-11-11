@@ -73,7 +73,14 @@ fn rotate_on(db: &Db, space: &Space) -> u64 {
         .get_mut(&space.id().0)
         .expect("the database holds the space");
     let mut batch = super::batch::Batch::new(view, state, &member, space.id().0);
-    let fresh = super::rotate::rotate(&mut batch, state, &member, space.id().0, Default::default());
+    let fresh = super::rotate::rotate(
+        &mut batch,
+        state,
+        &member,
+        space.id().0,
+        Default::default(),
+        None,
+    );
     batch.commit(view, state, secrets).unwrap();
     fresh
 }

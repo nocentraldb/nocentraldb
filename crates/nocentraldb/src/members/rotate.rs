@@ -2,7 +2,10 @@
 //! 0008, "Key chain entry"): a key chain entry for a fresh generation,
 //! which encrypts the previous generations' keys under the new one, then a
 //! key envelope of the new key for every member of the space, the author
-//! included. They are written into the call's [`Batch`], which folds them
+//! included, except the one the call leaves out: a removed member, which
+//! must never hold the new key, or the subject of a re-grant, whose
+//! envelope must follow its grant (RFC 0008, "Membership entry", "A
+//! re-grant"). They are written into the call's [`Batch`], which folds them
 //! with what follows in one transaction; once they are folded, the new
 //! generation is current and the author holds its key.
 //!
@@ -18,7 +21,7 @@
 use std::collections::BTreeSet;
 
 use ncdb_core::envelope;
-use ncdb_core::ids::{ChangeId, SpaceId};
+use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
 use ncdb_core::membership::{self, Entry, KeyChainEntry, PreviousKey, seal_previous_key};
 
@@ -58,14 +61,16 @@ pub(crate) fn rotatable(state: &SpaceState) -> Result<(), Error> {
 /// Adds to `batch` a rotation of its space's key: the key chain entry of
 /// a fresh generation that chains every head, answering `answers`, and
 /// one envelope of the new key per member of the space, the author
-/// included. What the batch writes after it is written with the new
-/// generation, after the envelopes. Returns the new generation.
+/// included and `leaving_out` left out. What the batch writes after it is
+/// written with the new generation, after the envelopes. Returns the new
+/// generation.
 pub(crate) fn rotate(
     batch: &mut Batch,
     state: &SpaceState,
     member: &MemberKey,
     space: SpaceId,
     answers: BTreeSet<ChangeId>,
+    leaving_out: Option<MemberId>,
 ) -> u64 {
     let resolved = state.checks.resolved();
     let heads: Vec<u64> = resolved.heads().into_iter().collect();
@@ -92,6 +97,7 @@ pub(crate) fn rotate(
     let rotation = batch.write(member, Entry::KeyChain(chain), None);
     let recipients: Vec<_> = resolved
         .members()
+        .filter(|(id, _)| Some(*id) != leaving_out)
         .filter_map(|(id, _)| resolved.member(id).map(|m| m.key))
         .collect();
     let mut envelopes = BTreeSet::new();

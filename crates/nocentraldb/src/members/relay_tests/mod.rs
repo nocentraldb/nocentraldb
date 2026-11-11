@@ -4,3 +4,4 @@
 //! the other members, which fold it. They use the sync tests' support.
 
 mod readd;
+mod remove;
