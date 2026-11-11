@@ -13,7 +13,7 @@
 //! certificate is drawn per database, until the accounts RFC designs
 //! accounts (RFC 0003, decision 17).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -161,6 +161,10 @@ pub(crate) struct SpaceState {
     /// Whether the relay's records of the space were fetched in the
     /// current connection.
     pub(crate) person_keys_fetched: bool,
+    /// The account keys of the writers whose records failed their checks
+    /// in the last fetch, though they signed them
+    /// (`crate::sync::person_keys`). In memory only, as the person keys.
+    pub(crate) bad_person_key_records: BTreeSet<[u8; 32]>,
 }
 
 impl SpaceState {
@@ -171,6 +175,7 @@ impl SpaceState {
             clock: Clock::new(),
             person_keys: BTreeMap::new(),
             person_keys_fetched: false,
+            bad_person_key_records: BTreeSet::new(),
         }
     }
 

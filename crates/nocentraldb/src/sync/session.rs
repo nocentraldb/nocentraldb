@@ -340,8 +340,9 @@ impl Session<'_> {
     }
 
     /// Fetches the person-key records of `space`, when its log names a
-    /// person key, and holds each person key whose record holds
-    /// (`person_keys::accept`).
+    /// person key, holds each person key whose record holds
+    /// (`person_keys::accept`), and keeps the accounts of the writers whose
+    /// signed records failed, which the space status names.
     async fn fetch_person_keys(&mut self, space: SpaceId) -> Result<(), End> {
         let named = with(self.db, |inner| {
             inner
@@ -356,9 +357,14 @@ impl Session<'_> {
                 Answer::PersonKeys { records, .. } => {
                     with(self.db, |inner| {
                         if let Some(state) = inner.spaces.get_mut(&space) {
+                            let mut bad = std::collections::BTreeSet::new();
                             for record in &records {
-                                super::person_keys::accept(state, space, record);
+                                let outcome = super::person_keys::accept(state, space, record);
+                                if let super::person_keys::Outcome::Bad(account) = outcome {
+                                    bad.insert(account);
+                                }
                             }
+                            state.bad_person_key_records = bad;
                         }
                     })?;
                 }

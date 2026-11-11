@@ -24,7 +24,7 @@ use ncdb_core::membership::Verdict;
 
 use crate::db::Inner;
 use crate::id::ChangeId;
-use crate::members::Role;
+use crate::members::{Fingerprint, Role};
 use crate::space::Space;
 
 pub use reasons::{ParkReason, RejectReason};
@@ -79,6 +79,13 @@ pub struct SpaceStatus {
     /// Whether this member is a member but holds no key for the space's
     /// current key generation, and waits for its envelope.
     pub waiting_for_key: bool,
+    /// The accounts whose person-key records failed their checks when the
+    /// member last fetched the space's records, in key order: their writer
+    /// signed them, but they do not unwrap under their generation or their
+    /// key does not match the commitment in the log (RFC 0003, "The person
+    /// key"; the owner decided the name on NOC-222). The member ignores
+    /// such a record.
+    pub bad_person_key_records: Vec<Fingerprint>,
 }
 
 /// One of this member's changes the relay refused.
@@ -162,6 +169,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         equivocations: Vec::new(),
         exposed: false,
         waiting_for_key: false,
+        bad_person_key_records: Vec::new(),
     };
     let Some(state) = inner.spaces.get(&space) else {
         return status;
@@ -180,6 +188,11 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
     if let Some(log) = inner.view.log(space) {
         status.equivocations = log.equivocations().into_iter().map(ChangeId).collect();
     }
+    status.bad_person_key_records = state
+        .bad_person_key_records
+        .iter()
+        .map(|account| Fingerprint(*account))
+        .collect();
     if let Some(current) = resolved.current_generation() {
         status.exposed = resolved.exposed(current);
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();
