@@ -14,13 +14,13 @@
 //! `#[non_exhaustive]`, so each field comes when it is built, instead of
 //! a field that always reads empty and claims nothing waits.
 
-mod lost;
 mod reasons;
 
 use std::collections::BTreeMap;
 
 use futures_core::Stream;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
+use ncdb_core::membership::Verdict;
 
 use crate::db::Inner;
 use crate::id::ChangeId;
@@ -165,12 +165,12 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         status.role = resolved.role(me).map(Role::of);
     }
     status.gaps = resolved.gaps().iter().map(|id| ChangeId(*id)).collect();
-    if let Some(log) = inner.view.log(space) {
-        status.lost_grants = lost::lost_grants(resolved, log)
-            .into_iter()
-            .map(ChangeId)
-            .collect();
-    }
+    status.lost_grants = resolved
+        .verdicts()
+        .iter()
+        .filter(|(_, verdict)| **verdict == Verdict::Lost)
+        .map(|(id, _)| ChangeId(*id))
+        .collect();
     if let Some(current) = resolved.current_generation() {
         status.exposed = resolved.exposed(current);
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();
