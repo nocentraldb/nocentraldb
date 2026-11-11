@@ -33,6 +33,9 @@ const workflow = (ctx) => {
 const steps = (ctx) =>
   Object.values(workflow(ctx).jobs ?? {}).flatMap((job) => job.steps ?? []);
 
+/** The steps of the job `view`, to change in a mutant. */
+const viewSteps = (ctx) => workflow(ctx).jobs.view.steps;
+
 const runs = (ctx) => steps(ctx).flatMap((s) => (s.run ? [s.run] : []));
 
 /** The step whose `run` mentions `text`. */
@@ -63,12 +66,12 @@ runWorkflowChecks({
       },
       mutants: {
         "playwright install --with-deps again": (ctx) => {
-          steps(ctx).push({
+          viewSteps(ctx).push({
             run: "pnpm exec playwright install --with-deps chromium firefox webkit",
           });
         },
         "an apt-get install": (ctx) => {
-          steps(ctx).push({ run: "sudo apt-get install -y libnss3" });
+          viewSteps(ctx).push({ run: "sudo apt-get install -y libnss3" });
         },
       },
     },
@@ -154,7 +157,7 @@ runWorkflowChecks({
       },
       mutants: {
         "no build on the runner": (ctx) => {
-          const all = steps(ctx);
+          const all = viewSteps(ctx);
           const at = all.findIndex((s) =>
             s.run?.includes("node scripts/browser-view/build.mjs"),
           );

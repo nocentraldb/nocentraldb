@@ -7,6 +7,12 @@
 # it runs on pull requests that touch the core, the test or the pinned
 # dependencies, and by hand. A browser that fails names itself in the
 # failing test.
+#
+# NOC-221: the job does not depend on the runner's apt mirror, whose
+# outage failed it before any test ran. The harness is built on the runner,
+# which needs no package from apt; the tests run in Playwright's image, which
+# holds the browsers and their system libraries at the version package.json
+# pins (scripts/browser-view-workflow.test.mjs keeps the two in step).
 name: browser-view
 
 on:
@@ -24,6 +30,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Playwright's image at the pinned playwright version, by digest.
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 
 concurrency:
   group: browser-view-${{ github.ref }}
@@ -57,11 +67,33 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The browser builds that the pinned playwright version expects, and
-      # the system libraries they need.
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      # The harness for the browser and what the same code reads natively,
+      # in target/browser-view (scripts/browser-view/build.mjs). As the root
+      # script `gates` does: a CI checkout is shallow, so moon must not diff
+      # against `main` to find what changed.
+      - name: The harness, built on the runner
+        run: |
+          moon exec repo:wasm-runner --force --base HEAD --head HEAD
+          node scripts/browser-view/build.mjs
 
-      # As the root script `gates` does: a CI checkout is shallow, so moon
-      # must not diff against `main` to find what changed.
+      # A registry that does not answer fails the pull in 4 minutes, and the
+      # pull is tried once more.
+      - name: Playwright's image, with a short timeout and one retry
+        timeout-minutes: 10
+        run: |
+          for attempt in 1 2; do
+            if timeout 240 docker pull "$PLAYWRIGHT_IMAGE"; then exit 0; fi
+            echo "docker pull failed (attempt $attempt)"
+            sleep 15
+          done
+          exit 1
+
+      # The tests in the image, on the checkout and its node_modules, with
+      # the harness built above.
       - name: The view in a worker in every engine
-        run: moon exec repo:browser-view --force --base HEAD --head HEAD
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e BROWSER_VIEW_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/browser-view/*.test.mjs'
