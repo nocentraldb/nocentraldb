@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-197 · `SpaceStatus::newest_model` reads core's version and saturates at `u32::MAX`; another model is a park reason of its own
+
+- Decided by: pm (the saturation, 2026-11-11, NOC-197); the field's name and type and the reason `AnotherModel` are RFC 0009's
+- Why: RFC 0009 types `newest_model` as `Option<u32>`, but payload key 64 carries the version as an unsigned CBOR integer, which core reads as `u64` (RFC 0002, "The writer's model"). A version above `u32::MAX` still means "newer than this app", which is all the field tells an app, so it reads as `u32::MAX`. A writer can't make the field read lower than the data needs. The value is core's `View::newest_model` over the app's lock `model.id`: the parked changes with an unknown "must understand" payload key, and the folded changes with parked operations. Core's `ParkReason::AnotherModel` maps onto the SDK's reason of the same name, which RFC 0009 lists as its own reason, so `parked` counts another model apart (RFC 0005, "Data from a newer model", point 6).
+- Instead of: leaving a version above `u32::MAX` out of `newest_model`, which would hide parked data; widening the field to `u64`, which changes RFC 0009's type.
+- What this does not do: `newest_model` opens each counted change once per status read, so a space with many parked changes pays one decryption each, on every read and every change a subscription sees.
+- Topics: sdk-rust, rfc-0002, rfc-0005, rfc-0009
