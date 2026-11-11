@@ -282,7 +282,11 @@ mod batch_tests;
 #[cfg(test)]
 mod known_tests;
 #[cfg(test)]
+mod list_tests;
+#[cfg(test)]
 mod relay_tests;
+#[cfg(test)]
+mod remove_tests;
 #[cfg(test)]
 mod rotate_tests;
 #[cfg(test)]
