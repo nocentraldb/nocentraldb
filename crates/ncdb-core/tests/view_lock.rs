@@ -1,5 +1,5 @@
 //! The check on the device (RFC 0005, "Two checks: at build and on the
-//! device", D11; RFC 0009, "What `nc.open` does", steps 3 and 4): the view
+//! device"; RFC 0009, "What `nc.open` does", steps 3 and 4): the view
 //! keeps the lock its database was last opened with, runs the additive
 //! check between it and the lock it is opened with now, refuses a lock of
 //! another model or a change that is not additive and changes nothing,

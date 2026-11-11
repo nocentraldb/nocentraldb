@@ -1,4 +1,5 @@
-//! Clearing the relay's refusal of a change (RFC 0008, M19; RFC 0002,
+//! Clearing the relay's refusal of a change (RFC 0008, "How the relay
+//! applies the rules"; RFC 0002,
 //! "A change the relay refuses after the member folded it"): when the
 //! member's own fold newly accepts a change the relay refused, the member
 //! pushes it to that relay once more. `View::clear_refusal` makes it

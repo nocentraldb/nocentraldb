@@ -28,6 +28,7 @@ use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
+use super::stable::{self, Stability};
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 
 /// The control state of a space: what `resolve` computes. Its `Debug`
@@ -93,6 +94,25 @@ fn seen(input: &Input, members: &Members) -> BTreeMap<ChangeId, BTreeSet<ChangeI
 }
 
 impl Resolved {
+    /// Which accepted control changes are stable for a holder that holds
+    /// `changes` (the same changes this state was resolved from), and which
+    /// members block each waiting shred (RFC 0008, "Effects that wait until
+    /// a change is stable"). `held(m)` is the highest author sequence n such
+    /// that the holder holds every change of member m, sealed ones too, from
+    /// 1 to n.
+    pub fn stability<'a>(
+        &self,
+        changes: impl IntoIterator<Item = &'a Change>,
+        held: impl Fn(MemberId) -> u64,
+    ) -> Stability {
+        stable::compute(
+            &Input::new(self.space, changes),
+            &self.members,
+            &self.verdicts,
+            held,
+        )
+    }
+
     /// The genesis the state starts from.
     pub fn genesis(&self) -> Option<ChangeId> {
         self.genesis
@@ -153,7 +173,7 @@ impl Resolved {
 
     /// The heads of the generation graph: the generations no accepted key
     /// chain entry lists as previous, leaving out a generation that two
-    /// entries name (decision M23).
+    /// entries name (RFC 0008, "Generation ids").
     pub fn heads(&self) -> BTreeSet<u64> {
         self.heads.clone()
     }
@@ -178,7 +198,7 @@ impl Resolved {
     /// exposed and `author` is an admin (RFC 0008, "Two removals that
     /// rotate the key at once", step 5): every head as previous, and an
     /// envelope for each current member. When to write it is the SDK's
-    /// (decision M15).
+    /// (RFC 0008, "Two removals that rotate the key at once", step 5).
     pub fn merge_rotation(&self, author: MemberId) -> Option<MergeRotation> {
         let current = self.current?;
         if self.role(author) != Some(Role::Admin) || !self.exposed(current) {
@@ -402,7 +422,7 @@ fn lost(state: &MemberState, grant: &Grant, saw: impl Fn(ChangeId, ChangeId) -> 
     })
 }
 
-/// Decision M23: when two accepted key chain entries name the same
+/// RFC 0008, "Generation ids": when two accepted key chain entries name the same
 /// generation id, both are rejected.
 fn reject_duplicate_generations(
     verdicts: &mut BTreeMap<ChangeId, Verdict>,

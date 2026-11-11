@@ -392,7 +392,7 @@ impl Client {
 
     /// Pushes changes to `space`; the results. An accepted genesis makes
     /// this connection's member current in the space, so its `added`
-    /// (RFC 0007, decision R13) must come right after `pushed`, and is
+    /// (RFC 0007, "Subscribe") must come right after `pushed`, and is
     /// read here.
     pub async fn push(&mut self, req: u64, space: SpaceId, changes: &[&Change]) -> Vec<Value> {
         let results = self.push_only(req, space, changes).await;

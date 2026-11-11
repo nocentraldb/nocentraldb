@@ -2,7 +2,7 @@
 //! field carries `targets`, the collections a target may be in, as a link
 //! does. The lock reads and writes it, the checks hold its targets to
 //! collections of the model and refuse removing one, and an index can use
-//! it (D19).
+//! it (RFC 0005, "References into another space").
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -77,7 +77,8 @@ fn an_index_can_use_a_reference() {
 #[test]
 fn a_reference_is_not_a_basic_value_and_not_a_link() {
     let kind = Kind::Ref(vec!["customers".into()]);
-    // It cannot be personal (D22), nor name the person of a personal field.
+    // It cannot be personal (RFC 0005, "References into another space"),
+    // nor name the person of a personal field.
     assert!(!kind.is_basic());
     let text = LOCK.replace(
         r#""customer": {"#,

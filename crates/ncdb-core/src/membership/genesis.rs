@@ -1,7 +1,7 @@
 //! The first change of a space (RFC 0008, "The first change of a space"):
 //! the genesis body, the space id it derives, the generation ids of RFC
-//! 0008's "Generation ids", and the sealed model id of its key 13 (decision
-//! M26 B, RFC 0003's "Model-id subkey").
+//! 0008's "Generation ids", and the sealed model id of its key 13 (RFC
+//! 0008, "Genesis"; RFC 0003's "Model-id subkey").
 
 use std::fmt;
 

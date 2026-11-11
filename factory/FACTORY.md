@@ -19,7 +19,7 @@ flowchart TD
     pr --> approve{Owner approves?}
     approve -->|changes asked| pr
     approve -->|yes| main["main<br/>pm merges"]
-    main -.->|"daily note: shipped, waiting, decided"| source
+    main -.->|"daily note: diff, what works, communication, decisions, approvals"| source
 ```
 
 - **Source: the owner.** Says what to build, in GENESIS.md and in conversation with pm. Approves every merge that the merge rule in CONFIG.md reserves for the owner.

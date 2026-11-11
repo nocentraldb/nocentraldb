@@ -236,22 +236,51 @@ impl View {
         bytes: &[u8],
         checks: &mut impl Checks,
     ) -> Result<Appended, Error> {
-        let space = change.header().space;
-        let log = self.logs.entry(space).or_insert_with(|| Log::new(space));
-        log.take_changed();
         let tx = self.conn.transaction()?;
-        let mut fold = fold::SqlFold::new(&tx, &self.model, space);
-        let appended = log.receive(bytes, checks, &mut fold);
-        fold.finish()?;
-        let appended = appended.map_err(Error::Receive)?;
-        if let Appended::New(_) = appended {
-            log_table::insert(&tx, log, change.id())?;
-            // A passing control change can change the state of others.
-            for id in log.take_changed() {
-                if id != change.id() {
-                    log_table::update(&tx, log, id)?;
-                }
-            }
+        let appended = append(&tx, &self.model, &mut self.logs, change, bytes, checks)?;
+        tx.commit()?;
+        Ok(appended)
+    }
+
+    /// Receives every frame of `frames`, in order, as [`View::receive`]
+    /// receives one, all in one SQLite transaction: either every frame is
+    /// appended and folded, or, when any of them fails, none is, and
+    /// neither the log nor the view changes. A crash in the middle leaves
+    /// none of them either. Says what became of each frame.
+    pub fn receive_all(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+    ) -> Result<Vec<Appended>, Error> {
+        let result = self.receive_batch(frames, checks);
+        if result.is_err() {
+            // The transaction rolled back; the logs in memory follow it.
+            self.logs = log_table::load(&self.conn)?;
+        }
+        result
+    }
+
+    fn receive_batch(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+    ) -> Result<Vec<Appended>, Error> {
+        let changes = frames
+            .iter()
+            .map(|bytes| Change::decode(bytes))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
+        let tx = self.conn.transaction()?;
+        let mut appended = Vec::with_capacity(frames.len());
+        for (change, bytes) in changes.iter().zip(frames) {
+            appended.push(append(
+                &tx,
+                &self.model,
+                &mut self.logs,
+                change,
+                bytes,
+                checks,
+            )?);
         }
         tx.commit()?;
         Ok(appended)
@@ -290,4 +319,34 @@ impl View {
     pub fn state(&self, space: SpaceId, id: ChangeId) -> Option<State> {
         self.logs.get(&space)?.state(id).cloned()
     }
+}
+
+/// Appends `change` to the log of its space inside the transaction `tx`,
+/// takes it through the steps and folds it, and records in `log` the
+/// changes whose state a passing control change changed.
+fn append(
+    tx: &Connection,
+    model: &Model,
+    logs: &mut BTreeMap<SpaceId, Log>,
+    change: &Change,
+    bytes: &[u8],
+    checks: &mut impl Checks,
+) -> Result<Appended, Error> {
+    let space = change.header().space;
+    let log = logs.entry(space).or_insert_with(|| Log::new(space));
+    log.take_changed();
+    let mut fold = fold::SqlFold::new(tx, model, space);
+    let appended = log.receive(bytes, checks, &mut fold);
+    fold.finish()?;
+    let appended = appended.map_err(Error::Receive)?;
+    if let Appended::New(_) = appended {
+        log_table::insert(tx, log, change.id())?;
+        // A passing control change can change the state of others.
+        for id in log.take_changed() {
+            if id != change.id() {
+                log_table::update(tx, log, id)?;
+            }
+        }
+    }
+    Ok(appended)
 }
