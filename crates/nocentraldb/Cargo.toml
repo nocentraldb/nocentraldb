@@ -24,6 +24,10 @@ zeroize = { version = "=1.9.1", default-features = false }
 # The account's fingerprint (RFC 0010, "The fingerprint"). The version the
 # core already pins.
 sha2 = { version = "=0.11.1", default-features = false }
+# An invitation's text form, unpadded base64url (RFC 0003, "Invitation"),
+# strict about padding and trailing bits. The version Cargo.lock already held
+# for tokio-tungstenite.
+data-encoding = { version = "=2.11.1", default-features = false, features = ["alloc"] }
 # Syncing with one relay (RFC 0007, "The protocol"): a WebSocket client on
 # a tokio runtime of the SDK's own, on a thread of its own, so an app needs
 # no runtime. The versions Cargo.lock already held for the relay server.

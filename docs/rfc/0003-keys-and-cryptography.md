@@ -112,7 +112,7 @@ The relay cannot check what a record contains, so the store must not let any one
 
 - **The log names every person key.** When a member creates a person key, it writes a **person-key entry**, a control change, with the person-key id (16 random bytes, never derived from who the person is), a commitment to the key: `H("nocentraldb/person-key-commit" || space id || person-key id || key)`, and the generation and SHA-256 hash of the record it stores, so that the relay accepts a record only with its entry. Every re-wrap of the record writes a further person-key entry that repeats the commitment. The key is 32 random bytes, so the commitment reveals nothing about it, before or after a shred. RFC 0008 defines the entry's body ([RFC 0008, "Person-key entry"](0008-membership.md#person-key-entry)).
 - **Every record is signed and checked against the log.** A record carries, outside the wrapping, the person-key id, the generation it is wrapped under and the member id of its writer, and the writer signs it with its member key, over the bytes [Person-key record](#person-key-record) gives. The relay accepts a record only when its uploader is a current member, only for a person-key id that a person-key entry names and no shred entry has destroyed, and only for the same generation as the one it holds or a generation that descends from it in RFC 0008's generation graph. The writer whose signature the record carries may be a member who has since left: a re-wrap written before a removal stays valid, and a removal does not strand a key ([RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)). A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A record that fails is ignored, the SDK reports its writer, and any member that still holds the key writes a correct record again.
-- **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record once the shred is stable, not when it appends the entry ([RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)). No other request deletes a record.
+- **Only a shred entry deletes.** The relay deletes a record only for a valid shred entry: written by a member with the right to perform an erasure, and signed off by the account key of a second account, one that holds an admin member in the space and is not the performing member's account. It deletes the record as soon as it accepts the shred, since no later change can reject an accepted shred ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)). No other request deletes a record.
 
 So a member cannot swap a person key without every other member noticing, and cannot erase one without a second account. A member that overwrites a record with garbage can make the key unavailable to new members until another member repairs it, and the signature on the record names it. It cannot make the other members delete their copies; only a shred entry does that.
 
@@ -163,7 +163,7 @@ A member receiving a change checks the signature, checks that the author was a m
 
 A member with the right to add members ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)) adds a new member like this:
 
-1. It obtains the new member's public identity: its member id, its two public keys and its member certificate. The SDK takes it from an invitation the new member accepted, never from a developer typing key bytes.
+1. It obtains the new member's public identity: its member id, its two public keys and its member certificate. The SDK takes it from an [invitation](#invitation) the new member sent, never from a developer typing key bytes.
 2. It checks the member certificate against the account it expects. If the account is new to it, the SDK shows the account's fingerprint, so a person can compare it once, the way messaging apps compare safety numbers ([Account fingerprint](#account-fingerprint)).
 3. It writes a **membership entry**, a control change, that adds the member id to the space.
 4. It writes a **key envelope** for the new member, also a control change: the current space key generation, wrapped with HPKE to the new member's X25519 key, signed by the adding member.
@@ -212,8 +212,8 @@ When the parent and the sub-agent run on the same machine, the ad-hoc space can 
 An erasure is a work order (RFC 0001, "Work orders"): one member performs it, and a second account, one that holds an admin member in the space and is not the performer's ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)), signs it off with its account key, because an erasure cannot be undone. Then:
 
 1. The performing member writes a **shred entry**, a control change, to the log: "person key P in this space is destroyed". It contains the key's id, never the key.
-2. The relay checks the shred entry's signature and the second account's sign-off, and appends it. It deletes the person-key record from its store only once the shred is stable, because until then a concurrent revocation could still reject the shred, and a deleted record cannot come back (see [The person key](#the-person-key) and [RFC 0008, "How the relay applies the rules"](0008-membership.md#how-the-relay-applies-the-rules)).
-3. Every member that accepts the shred entry writes a "seen" acknowledgement at once, another control change. Once the shred is stable, it deletes its local copy of the key and writes a "deleted" acknowledgement. The "deleted" acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back ([RFC 0001, "Where we want your advice"](0001-nocentraldb.md#where-we-want-your-advice), on erasure evidence). RFC 0008 defines both acknowledgements and when a shred is stable ([RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement)).
+2. The relay checks the shred entry's signature and the second account's sign-off, appends it, and deletes the person-key record from its store as soon as it accepts the shred. A shred's verdict reads only its causal past, so no later change can reject it, and a deleted record never has to come back (see [The person key](#the-person-key) and [RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
+3. Every member that accepts the shred entry writes a "seen" acknowledgement at once, another control change, then deletes its local copy of the key and writes a "deleted" acknowledgement. The "deleted" acknowledgements are the evidence: the audit shows which members confirmed the shred and which never came back ([RFC 0001, "Where we want your advice"](0001-nocentraldb.md#where-we-want-your-advice), on erasure evidence). RFC 0008 defines both acknowledgements and why a shred is final when accepted ([RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement); [RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
 4. From the shred entry on, the fold treats the person's personal fields as erased on every member, whether or not that member still holds the key. Computed fields and views therefore converge (principle 2): a member that has not deleted its copy yet does not compute a different state from the one that has.
 
 The person's fields stay in the log, in the archive and in old snapshots as ciphertext under a key that no longer exists. The signatures on those changes stay valid, because they cover the ciphertext, so the audit trail survives the erasure.
@@ -225,7 +225,7 @@ The person's fields stay in the log, in the archive and in old snapshots as ciph
 - **Copies made outside the database**, such as exports and screenshots, stay readable.
 - **Personal data in unmarked free text** was never encrypted with the person key, so shredding does not touch it.
 - **An agent running as that user on the user's device** can read what the user could read while the key existed.
-- **The key lives on until the shred is stable.** A shred is stable once every admin device of the space has written a control change after seeing it. Every view treats the person's fields as erased at once, but until then the key still exists on the members and the relay keeps the record. One admin device that stays offline delays it for as long as it is away; after 7 days the SDK of every admin raises an alarm that names the blocking devices; demoting them does not end the wait while they stay away ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)).
+- **The key goes when a member accepts the shred.** Each member destroys its copy as soon as it accepts the shred, and the relay deletes the record then; no later change can reject an accepted shred, not even a concurrent revocation of the performer, so the second account's sign-off is the whole defence. A device that is offline keeps the key until it comes back and syncs ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
 - **Backups of the relay** keep the wrapped person-key record until they expire. The relay and anyone who steals a backup cannot open it, because they hold no space key. A member of the space who also obtains such a backup could; that member could equally have kept the key while it was a member.
 - **The first person-key entry chooses the key.** The first accepted person-key entry in the order creates the person key. A member earlier in the order can win with its own concurrent first entry and choose the key. Honest entries are then rejected as "commitment". This adds little, since every member already reads every personal field while the key exists, and a shred never protects against a member who copied the data.
 
@@ -302,6 +302,29 @@ account fingerprint = SHA-256("nocentraldb/account-fingerprint" || recovery key 
 
 People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes. Until RFC 0010 is built, the SDKs compute it the same way over the database's own account key in place of the recovery key, so both SDKs hash the same input today.
 
+### Invitation
+
+A member's invitation carries its public identity to an admin of a space, over any channel the app has: a link, a QR code, a message ([Sharing a space key with a new member](#sharing-a-space-key-with-a-new-member), step 1). It travels as text: the prefix `ncdb-invite-1:` followed by base64url ([RFC 4648, section 5](https://www.rfc-editor.org/rfc/rfc4648#section-5)) of the bytes below, without padding (Carsten, 2026-11-10, NOC-141). It holds only public data.
+
+| Offset | Length | Field | Bytes |
+| --- | --- | --- | --- |
+| 0 | 1 | version | `1` |
+| 1 | 32 | signing key | the member's Ed25519 public key |
+| 33 | 32 | agreement key | the member's X25519 public key |
+| 65 | 32 | account key | key 1 of the [member certificate](#member-certificate) |
+| 97 | 1 | kind | key 3 of the certificate: `1` device or `2` agent |
+| 98 | 64 | certificate signature | key 5 of the certificate |
+| 162 | 1 | statement | `0`: the certificate carries no [account key statement](#account-key-statement); `1`: the three fields below follow |
+| 163 | 32 | recovery key | key 1 of the statement |
+| 195 | 8 | number | key 3 of the statement, big-endian, at least 1 |
+| 203 | 64 | statement signature | key 4 of the statement |
+
+An invitation of version 1 is 163 bytes without a statement and 267 bytes with one, about 230 and 370 characters as text. A reader rebuilds the rest: the member id from the two public keys ([The member key](#the-member-key)), which is key 2 of the certificate; the certificate's key 4 is absent, since only a device or an agent invites itself, and a sub-agent is added by its parent ([Sub-agents get an ad-hoc space](#sub-agents-get-an-ad-hoc-space)); the statement's key 2 is the certificate's key 1, the account key it names; and the [account fingerprint](#account-fingerprint) comes from the recovery key, or from the account key while there is no statement. Stored once each, no field can contradict another.
+
+A reader refuses the text with `invalidValue`, and reads nothing from it, when the prefix is not `ncdb-invite-1:`, when the rest is not unpadded base64url, when the version byte is not one it knows, when the kind is not `1` or `2`, when the statement byte is not `0` or `1`, when the number is 0, or when the length is not the one the statement byte gives. Reading an invitation checks its shape only. Whether the certificate holds is checked when an admin adds the member, which refuses one that does not with `invalidCertificate` ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members)). The version byte lets a later layout come with the same prefix; a reader that does not know it says so, instead of reading wrong fields.
+
+`docs/rfc/vectors/0003/` holds two invitations, without and with a statement, as text and as bytes, with every field in `fields.txt`; both SDKs check them. A fixed layout was taken because it is compact enough for a QR code and has one way to write each invitation. JSON with hex fields was not taken: about twice as long, so a QR code gets dense, and with more than one way to write the same invitation. CBOR was not taken either: the certificate's own canonical map would carry its keys a second time, and a person or a parser could not tell an invitation from other CBOR without a prefix anyway.
+
 ### Account sign-off of a shred
 
 ```text
@@ -312,7 +335,7 @@ sign-off (CBOR map, canonical)
                            person-key id (16 bytes) || performer member id (32 bytes))
 ```
 
-The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
+The sign-off is valid when its account holds an admin member in the space, and is not the account of the performer's certificate, as RFC 0008 requires. When the performer's account is the only one with an admin member, RFC 0008 lets another account with a writer member sign off; a reader's never does ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)). It names no work order, so the relay does not learn which sealed change was one. Replaying it gains nothing: it can only authorise the same performer to shred the same person key in the same space, which happens once.
 
 ### Person-key record
 

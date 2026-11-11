@@ -24,7 +24,7 @@ const USE_CASES = "docs/use-cases.md";
 const DECISIONS = "factory/decisions";
 
 const RFC_0008_FILE = "0008-membership.md";
-const STABLE = `${RFC_0008_FILE}#effects-that-wait-until-a-change-is-stable`;
+const FINAL = `${RFC_0008_FILE}#a-shred-is-final-when-accepted`;
 const RELAY_RULES = `${RFC_0008_FILE}#how-the-relay-applies-the-rules`;
 
 /**
@@ -133,28 +133,33 @@ test("the FAQ no longer offers groups as members of many spaces", () => {
   assert.ok(!/groups that are members of many spaces/i.test(answer));
 });
 
-// Principle 4: RFC 0008 says the key is destroyed only once the shred is
-// stable, which an admin device that does not come online delays, and that
-// the SDK then raises an alarm. Every list of what erasure does not reach
-// names that wait and links RFC 0008.
+// Principle 4: RFC 0008 says the key is destroyed as soon as a member or the
+// relay accepts the shred, which no later change can reject (the owner's
+// NOC-224). Every list of what erasure does not reach says so, links RFC
+// 0008, and no longer names a wait until the shred is stable or an alarm.
 for (const [path, heading] of [
   [RFC_0001, "the-team-lead-who-has-to-pass-the-data-protection-review"],
   [FAQ, "does-destroying-a-key-satisfy-a-gdpr-erasure-request"],
   [RFC_0003, "shredding-a-persons-key"],
   [USE_CASES, "1-erasure-that-reaches-every-copy"],
 ]) {
-  test(`${path} names the wait until a shred is stable among the limits of erasure`, () => {
+  test(`${path} says the key is destroyed when the shred is accepted, among the limits of erasure`, () => {
     const text = section(read(path), heading);
     assert.ok(text, `no section #${heading}`);
     const line = text
       .split("\n")
-      .find((l) => /stable/.test(l) && links(l, STABLE));
+      .find((l) => /accept/.test(l) && links(l, FINAL));
     assert.ok(
       line,
-      "no passage names the wait and links RFC 0008's stable effects",
+      "no passage says the key goes when the shred is accepted and links RFC 0008",
     );
-    assert.match(line, /admin/i, "does not say an admin device delays it");
-    assert.match(line, /alarm/i, "does not name the alarm");
+    assert.match(
+      line,
+      /offline|comes? back|syncs?/i,
+      "does not say an offline device destroys it later",
+    );
+    assert.doesNotMatch(text, /stable/, "still names a wait until stable");
+    assert.doesNotMatch(text, /alarm/i, "still names the alarm");
   });
 }
 
@@ -207,7 +212,7 @@ test("RFC 0003 names the model-id subkey under the formats of what keys derive",
   assert.match(subkey, /collide/i, "does not say why the label cannot collide");
 });
 
-test("RFC 0006's control table holds what RFC 0008 lists, and the shred row waits until stable", () => {
+test("RFC 0006's control table holds what RFC 0008 lists, and the shred row deletes the key at once", () => {
   const rfc = read(RFC_0006);
   const control = rfc
     .split("\n")
@@ -224,9 +229,18 @@ test("RFC 0006's control table holds what RFC 0008 lists, and the shred row wait
   }
   const shred = rfc.split("\n").find((l) => l.startsWith("| Shred entry"));
   assert.ok(shred, "no shred row");
-  assert.match(shred, /stable/, "the shred row does not wait until stable");
+  assert.match(
+    shred,
+    /at once/,
+    "the shred row does not delete the key at once",
+  );
+  assert.doesNotMatch(
+    shred,
+    /stable/,
+    "the shred row still waits until stable",
+  );
   assert.ok(
-    links(shred, STABLE),
+    links(shred, FINAL),
     "the shred row does not link RFC 0008's definition",
   );
   assert.match(
