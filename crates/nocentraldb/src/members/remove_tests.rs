@@ -101,7 +101,12 @@ fn the_removal_names_the_members_highest_sequence_the_admin_held_as_its_cutoff()
     now(project.members().remove(id)).unwrap();
 
     let state = resolved(&admin, &project);
-    let removal = state.member(invitation.key.id()).unwrap().revocations.last().copied();
+    let removal = state
+        .member(invitation.key.id())
+        .unwrap()
+        .revocations
+        .last()
+        .copied();
     assert_eq!(removal.map(|r| (r.role, r.cutoff)), Some((None, 2)));
 }
 
@@ -153,7 +158,10 @@ fn lowering_a_writer_to_a_reader_returns_role_set_and_does_not_rotate() {
     let subject = state.member(invitation.key.id()).unwrap();
     assert_eq!(subject.role, Some(Role::Reader.into()));
     assert_eq!(subject.grants.last().unwrap().from_generation, None);
-    assert_eq!(subject.revocations.last().unwrap().role, Some(Role::Reader.into()));
+    assert_eq!(
+        subject.revocations.last().unwrap().role,
+        Some(Role::Reader.into())
+    );
 }
 
 /// Raising a reader to a writer is a re-grant (RFC 0008, "A member demoted
