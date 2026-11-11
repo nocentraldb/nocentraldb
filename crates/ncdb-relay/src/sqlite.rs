@@ -223,6 +223,41 @@ fn sweep(tx: &Connection, now: u64) -> Result<(), StoreError> {
     Ok(())
 }
 
+/// The log entries `sql` selects, with the columns position, change,
+/// accepted at, author, kind and frame, in that order.
+fn entries(
+    connection: &Connection,
+    sql: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<Entry>, StoreError> {
+    let mut statement = connection.prepare(sql).map_err(failed("read"))?;
+    let rows = statement
+        .query_map(params, |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Vec<u8>>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, Vec<u8>>(5)?,
+            ))
+        })
+        .map_err(failed("read"))?;
+    let mut entries = Vec::new();
+    for row in rows {
+        let (position, change, accepted_at, author, kind, frame) = row.map_err(failed("read"))?;
+        entries.push(Entry {
+            position: unsigned(position),
+            change: ChangeId(array(change)?),
+            accepted_at: unsigned(accepted_at),
+            author: MemberId(array(author)?),
+            kind: Kind(unsigned(kind)),
+            frame,
+        });
+    }
+    Ok(entries)
+}
+
 impl RelayStore for SqliteStore {
     async fn append(
         &self,
@@ -291,39 +326,69 @@ impl RelayStore for SqliteStore {
         after: Position,
         limit: u32,
     ) -> Result<Vec<Entry>, StoreError> {
+        entries(
+            &self.connection(),
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 ORDER BY position LIMIT ?3",
+            params![space.0, int(after), i64::from(limit)],
+        )
+    }
+
+    async fn read_controls(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+    ) -> Result<Vec<Entry>, StoreError> {
+        // The kind comes before the frame in a row, so SQLite skips a
+        // sealed row without reading its frame's overflow pages.
+        entries(
+            &self.connection(),
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 AND kind = ?3 ORDER BY position LIMIT ?4",
+            params![space.0, int(after), int(Kind::CONTROL.0), i64::from(limit)],
+        )
+    }
+
+    async fn read_bounded(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+        max_bytes: u64,
+    ) -> Result<Vec<Entry>, StoreError> {
         let connection = self.connection();
+        // `length` of a blob reads the row's header, not the blob.
         let mut statement = connection
             .prepare(
-                "SELECT position, change, accepted_at, author, kind, frame FROM log
+                "SELECT position, length(frame) FROM log
                  WHERE space = ?1 AND position > ?2 ORDER BY position LIMIT ?3",
             )
             .map_err(failed("read"))?;
         let rows = statement
             .query_map(params![space.0, int(after), i64::from(limit)], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, Vec<u8>>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Vec<u8>>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, Vec<u8>>(5)?,
-                ))
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
             })
             .map_err(failed("read"))?;
-        let mut entries = Vec::new();
+        let (mut last, mut bytes) = (None, 0u64);
         for row in rows {
-            let (position, change, accepted_at, author, kind, frame) =
-                row.map_err(failed("read"))?;
-            entries.push(Entry {
-                position: unsigned(position),
-                change: ChangeId(array(change)?),
-                accepted_at: unsigned(accepted_at),
-                author: MemberId(array(author)?),
-                kind: Kind(unsigned(kind)),
-                frame,
-            });
+            let (position, length) = row.map_err(failed("read"))?;
+            bytes = bytes.saturating_add(unsigned(length));
+            if last.is_some() && bytes > max_bytes {
+                break;
+            }
+            last = Some(position);
         }
-        Ok(entries)
+        drop(statement);
+        let Some(last) = last else {
+            return Ok(Vec::new());
+        };
+        entries(
+            &connection,
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 AND position <= ?3 ORDER BY position",
+            params![space.0, int(after), last],
+        )
     }
 
     async fn head(&self, space: SpaceId) -> Result<Option<Position>, StoreError> {
