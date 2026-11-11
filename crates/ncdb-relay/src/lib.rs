@@ -17,13 +17,16 @@
 //! person-key store" are [`Relay::keys`], [`Relay::person_keys`] and
 //! [`Relay::put_person_keys`].
 //!
-//! After every append, the relay deletes the person-key record of a shred
-//! entry once the shred is stable in its log (RFC 0008, "Effects that wait
-//! until a change is stable"); until then the
-//! record stays stored, and no new record of its id is accepted.
+//! After an append that can change a shred's stability, the relay checks
+//! whether the shred is stable in its log (RFC 0008, "Effects that wait
+//! until a change is stable"), but keeps the shredded key's record: the
+//! deletion waits for NOC-224, since a stable shred can still be rejected
+//! later by an admin key that was not yet revoked (NOC-225). While the
+//! record stays stored, no new record of its id is accepted.
 //!
 //! **What this does not do yet.** No uploads of large changes; no restore
-//! procedure beyond drawing a new epoch.
+//! procedure beyond drawing a new epoch; no deletion of a stable shred's
+//! person-key record, which waits for NOC-224.
 
 pub mod auth;
 pub mod conformance;
