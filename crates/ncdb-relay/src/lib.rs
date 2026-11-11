@@ -44,4 +44,4 @@ pub mod store;
 pub use error::ErrorCode;
 pub use keys::Keys;
 pub use large::{DOWNLOAD_URL_VALID_FOR, Filled, PushFrame, UPLOAD_URL_VALID_FOR};
-pub use relay::{Config, MAX_FRAME, Pulled, Push, Pushed, Relay};
+pub use relay::{Config, MAX_FRAME, PAGE_BYTES, Pulled, Push, Pushed, Relay};

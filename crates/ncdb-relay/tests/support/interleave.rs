@@ -59,6 +59,27 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
         self.inner.read(space, after, limit).await
     }
 
+    async fn read_controls(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+    ) -> Result<Vec<Entry>, StoreError> {
+        self.inner.read_controls(space, after, limit).await
+    }
+
+    async fn read_bounded(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+        max_bytes: u64,
+    ) -> Result<Vec<Entry>, StoreError> {
+        self.inner
+            .read_bounded(space, after, limit, max_bytes)
+            .await
+    }
+
     async fn head(&self, space: SpaceId) -> Result<Option<Position>, StoreError> {
         self.inner.head(space).await
     }

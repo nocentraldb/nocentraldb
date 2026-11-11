@@ -231,6 +231,27 @@ pub trait RelayStore: Send + Sync {
         limit: u32,
     ) -> impl Future<Output = Result<Vec<Entry>, StoreError>> + Send;
 
+    /// The space's control entries after `after`, in position order, at
+    /// most `limit`. It never loads the frame of a sealed entry, so the core
+    /// resolves a space's membership without loading its large changes.
+    fn read_controls(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+    ) -> impl Future<Output = Result<Vec<Entry>, StoreError>> + Send;
+
+    /// As [`RelayStore::read`], but it stops before the frames it returns
+    /// add up to more than `max_bytes`; the first entry after `after` comes
+    /// whatever its size. It loads no frame it does not return.
+    fn read_bounded(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+        max_bytes: u64,
+    ) -> impl Future<Output = Result<Vec<Entry>, StoreError>> + Send;
+
     /// The head of the space's log, or none if the relay holds no such space.
     fn head(
         &self,

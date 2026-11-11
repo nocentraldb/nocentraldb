@@ -15,7 +15,7 @@ use ncdb_core::membership;
 
 use crate::Relay;
 use crate::error::ErrorCode;
-use crate::relay::PAGE;
+use crate::relay::{PAGE, PAGE_BYTES};
 use crate::store::{PersonKeyId, RelayStore};
 
 impl<S: RelayStore> Relay<S> {
@@ -58,12 +58,16 @@ impl<S: RelayStore> Relay<S> {
     }
 
     /// For each author in the log of `space`, the highest n such that the
-    /// log holds that author's changes 1 to n.
+    /// log holds that author's changes 1 to n. It reads every frame, in
+    /// pages of at most [`PAGE_BYTES`].
     async fn runs(&self, space: SpaceId) -> Result<BTreeMap<MemberId, u64>, ErrorCode> {
         let mut sequences: BTreeMap<MemberId, BTreeSet<u64>> = BTreeMap::new();
         let mut after = 0;
         loop {
-            let page = self.store().read(space, after, PAGE).await?;
+            let page = self
+                .store()
+                .read_bounded(space, after, PAGE, PAGE_BYTES)
+                .await?;
             let Some(last) = page.last() else {
                 break;
             };
