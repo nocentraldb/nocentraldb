@@ -294,19 +294,19 @@ fn a_member_that_was_removed_may_not_add_one() {
     assert_eq!(refused.code(), ErrorCode::NotMember);
 }
 
-/// A former member stays `InvalidValue` until re-adding it with a
-/// rotation is built (RFC 0008, M5; NOC-169).
+/// A member is refused with `AlreadyMember`; a former member is added
+/// again, after a rotation (RFC 0008, M5; NOC-154 point 2).
 #[test]
-fn a_member_or_a_former_member_is_not_added_again() {
+fn a_member_is_not_added_again_and_a_former_member_is() {
     let account = SigningKey::from_bytes(&[9; 32]);
     let (admin, project, _, invitation) = joined(&account, Role::Writer);
 
     let again = now(project.members().add(&invitation, writer())).unwrap_err();
     remove(&admin, &project, &invitation);
-    let re_grant = now(project.members().add(&invitation, writer())).unwrap_err();
+    let re_grant = now(project.members().add(&invitation, writer()));
 
     assert_eq!(again.code(), ErrorCode::AlreadyMember);
-    assert_eq!(re_grant.code(), ErrorCode::InvalidValue);
+    assert_eq!(re_grant.unwrap().code, NoticeCode::MemberAdded);
 }
 
 /// A fingerprint shows as RFC 0010 gives it ("The fingerprint"): SHA-256
