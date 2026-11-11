@@ -14,8 +14,10 @@
 //! for that generation is in the grant's causal past.
 //!
 //! Each call writes all its changes into one [`Batch`], folded in one
-//! transaction. A space with a person key is refused before anything is
-//! written when the call rotates, as [`rotate::rotatable`] says.
+//! transaction. When the call rotates, the rotation re-wraps every person
+//! key of the space, and a space with a person key this member does not
+//! hold is refused before anything is written, as [`rotate::rotatable`]
+//! says.
 
 use std::collections::BTreeSet;
 
@@ -43,9 +45,11 @@ impl Members<'_> {
     /// member of the space is refused with `NotFound`, and the database's
     /// own member with `InvalidValue`, since a member that leaves must not
     /// know the next key (RFC 0008, "Membership entry"): leaving is
-    /// `space.leave()`, which is not built. A space with a person key, or
-    /// one where this member lacks the key of a generation the rotation
-    /// chains, is refused with `InvalidValue`. Nothing is written when a
+    /// `space.leave()`, which is not built. The rotation re-wraps every
+    /// person key of the space under the fresh generation. A space with a
+    /// person key this member does not hold, or one where it lacks the key
+    /// of a generation the rotation chains, is refused with
+    /// `InvalidValue`. Nothing is written when a
     /// call is refused.
     pub async fn remove(&self, member: MemberId) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
@@ -103,7 +107,8 @@ impl Members<'_> {
     /// removed member with `NotMember`. The last admin may not lower its
     /// own role, which is refused with `LastAdmin`. A member that is not a
     /// member of the space is refused with `NotFound`; a re-grant in a
-    /// space with a person key with `InvalidValue`. Nothing is written
+    /// space with a person key this member does not hold with
+    /// `InvalidValue`. Nothing is written
     /// when a call is refused.
     pub async fn set_role(&self, member: MemberId, role: Role) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
@@ -191,8 +196,9 @@ pub(super) fn admins(resolved: &Resolved) -> usize {
 /// Writes one membership call about `subject` into `space`: `fill` adds
 /// its changes to a batch, given the cutoff of a revocation of `subject`,
 /// its highest author sequence the log holds, or 0 when it holds none (RFC
-/// 0008, "The cutoff"). The batch is then folded in one transaction, and
-/// sync is woken.
+/// 0008, "The cutoff"). The batch is then folded in one transaction, the
+/// person-key records a rotation re-wrapped are handed to syncing, and sync
+/// is woken.
 pub(super) fn write(
     inner: &mut Inner,
     space: ids::SpaceId,
@@ -212,7 +218,8 @@ pub(super) fn write(
         .map_or(0, |tips| tips.next_sequence(subject) - 1);
     let mut batch = Batch::new(view, state, &key, space);
     fill(&mut batch, state, &key, cutoff);
-    batch.commit(view, state, secrets)?;
+    let records = batch.commit(view, state, secrets)?;
+    crate::sync::put_person_keys(inner, space, records);
     crate::sync::wake(inner);
     Ok(())
 }
