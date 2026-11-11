@@ -16,4 +16,4 @@ if !status.parked.is_empty() {
 }
 ```
 
-The status does not report the newest model version among parked changes, the "another model" reason, equivocations or shreds that wait yet; each comes when it is built.
+The status does not report the newest model version among parked changes, the "another model" reason or shreds that wait yet; each comes when it is built.
