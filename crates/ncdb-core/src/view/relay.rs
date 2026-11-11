@@ -153,10 +153,11 @@ impl View {
     }
 
     /// The cursor of `space`: the highest relay position up to which the
-    /// log holds the change of every position, 0 when it holds none from
-    /// 1. It is derived, not stored, so it can be lower than the highest
-    /// position folded (when a pulled entry never reached the log) but
-    /// never higher: a member that pulls from it skips no change.
+    /// log holds the change of every position, or 0 when it holds no
+    /// change at position one. It is derived, not stored, so it can be
+    /// lower than the highest position folded (when a pulled entry never
+    /// reached the log) but never higher: a member that pulls from it
+    /// skips no change.
     pub fn relay_cursor(&self, space: SpaceId) -> Result<u64, Error> {
         let mut statement = self.conn.prepare(
             "SELECT relay_position FROM log WHERE space_id = ?1
