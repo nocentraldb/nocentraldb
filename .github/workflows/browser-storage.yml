@@ -8,6 +8,11 @@
 # the committed run, which the gate holds the table to. It also uploads the
 # probe page as a static folder (artifact browser-storage-probe), for the
 # manual checks on devices (docs/browser-storage-checklist.md).
+#
+# NOC-221: the job does not depend on the runner's apt mirror. The probe and
+# its measured rows run in Playwright's image, which holds the browsers and
+# their system libraries at the version package.json pins
+# (scripts/browser-storage-workflow.test.mjs keeps the two in step).
 name: browser-storage
 
 on:
@@ -21,6 +26,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Playwright's image at the pinned playwright version, by digest.
+  PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27
 
 concurrency:
   group: browser-storage-${{ github.ref }}
@@ -40,19 +49,32 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The browser builds that the pinned playwright version expects, and
-      # the system libraries they need.
-      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      # A registry that does not answer fails the pull in 4 minutes, and the
+      # pull is tried once more.
+      - name: Playwright's image, with a short timeout and one retry
+        timeout-minutes: 10
+        run: |
+          for attempt in 1 2; do
+            if timeout 240 docker pull "$PLAYWRIGHT_IMAGE"; then exit 0; fi
+            echo "docker pull failed (attempt $attempt)"
+            sleep 15
+          done
+          exit 1
 
+      # In the image, on the checkout and its node_modules.
       - name: The probe reports every behaviour in every engine
-        run: node --test 'scripts/browser-storage/*.test.mjs'
+        run: >-
+          docker run --rm --ipc=host -v "$PWD:/work" -w /work
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/browser-storage/*.test.mjs'
 
       - name: Measured rows
         run: |
           {
             echo "## Browser storage probe"
             echo
-            node scripts/browser-storage/run.mjs
+            docker run --rm --ipc=host -v "$PWD:/work" -w /work \
+              "$PLAYWRIGHT_IMAGE" node scripts/browser-storage/run.mjs
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: The probe page as a static folder
