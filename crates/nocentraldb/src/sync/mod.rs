@@ -16,7 +16,10 @@
 //!
 //! `status` follows the report and the confirmation of one write; `pause`
 //! stops and restarts syncing; `again` pushes a refused change once more
-//! when the member's own fold newly accepts it (RFC 0008, M19).
+//! when the member's own fold newly accepts it (RFC 0008, M19); `large`
+//! carries a change too large for one message through the relay's upload
+//! and download URLs (RFC 0007, "Large changes"), with the small HTTP/1.1
+//! client of `http`.
 //!
 //! **What this does not do yet.** The per-space `status` of RFC 0009 is
 //! not built: the relay's refusals are recorded per change in the log, by
@@ -24,10 +27,8 @@
 //! [`SyncStatus`] counts them. A log written before NOC-188 may hold a
 //! relay's own text there, so the API that first shows a refusal's code
 //! must read it through `wire::mapped_code`. The relay is reached over plain
-//! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
-//! relay hands out as a download link, is not read: the page that holds
-//! it ends the session, which backs off and meets the same page again,
-//! until NOC-121 reads the link.
+//! WebSocket (`ws://`) and its URLs over plain HTTP only; TLS is the second
+//! part of NOC-121.
 
 // On wasm32 only the counts of `apply` are read until the browser syncs
 // (NOC-175); the rest serves the connection, which is native only.
@@ -35,6 +36,12 @@
 mod again;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
+#[cfg(not(target_arch = "wasm32"))]
+mod http;
+#[cfg(not(target_arch = "wasm32"))]
+mod large;
+#[cfg(not(target_arch = "wasm32"))]
+mod merge;
 mod pause;
 mod person_keys;
 #[cfg(not(target_arch = "wasm32"))]
@@ -52,6 +59,8 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use person_keys::put as put_person_keys;
 #[cfg(not(target_arch = "wasm32"))]
@@ -134,6 +143,10 @@ fn status(inner: &Inner) -> SyncStatus {
     }
 }
 
+/// The longest an admin's SDK waits before it writes a merge rotation
+/// (RFC 0008, "Two removals that rotate the key at once", step 5).
+const MERGE_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// What a database that syncs keeps of its relay. On wasm32 nothing syncs
 /// yet (NOC-175), so a database there never holds one.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -172,6 +185,14 @@ pub(crate) struct SyncState {
     /// The person-key records this member wrote that wait to be put, per
     /// space (`person_keys`).
     pub(crate) puts: BTreeMap<CoreSpaceId, Vec<Record>>,
+    /// When this admin writes the merge rotation of each space whose
+    /// current generation is exposed, unless the exposure ends first
+    /// (`merge`; RFC 0008, "Two removals that rotate the key at once",
+    /// step 5).
+    pub(crate) merges: BTreeMap<CoreSpaceId, std::time::Instant>,
+    /// The longest delay before a merge rotation: a minute, which the
+    /// tests change (`set_merge_delay`).
+    pub(crate) merge_delay: std::time::Duration,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -200,6 +221,8 @@ impl SyncState {
             folds: 0,
             refused: BTreeMap::new(),
             puts: BTreeMap::new(),
+            merges: BTreeMap::new(),
+            merge_delay: MERGE_DELAY,
             wake,
             pause,
             halted: false,
