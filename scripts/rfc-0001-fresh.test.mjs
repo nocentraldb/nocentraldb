@@ -104,12 +104,7 @@ test("the rules of other RFCs it follows stand, linked, where the text says them
   assert.ok(links(design, "0007-relay.md#what-the-relay-sees"));
   assert.ok(links(design, "0009-sdk-api.md#queries-and-indexes"));
   const lead = part("the-team-lead-who-has-to-pass-the-data-protection-review");
-  assert.ok(
-    links(
-      lead,
-      "0008-membership.md#effects-that-wait-until-a-change-is-stable",
-    ),
-  );
+  assert.ok(links(lead, "0008-membership.md#a-shred-is-final-when-accepted"));
   assert.ok(
     links(lead, "0005-schema-and-model-lock.md#personal-data-in-free-text"),
   );

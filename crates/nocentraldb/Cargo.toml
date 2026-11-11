@@ -28,10 +28,27 @@ sha2 = { version = "=0.11.1", default-features = false }
 # strict about padding and trailing bits. The version Cargo.lock already held
 # for tokio-tungstenite.
 data-encoding = { version = "=2.11.1", default-features = false, features = ["alloc"] }
-# Syncing with one relay (RFC 0007, "The protocol"): a WebSocket client on
-# a tokio runtime of the SDK's own, on a thread of its own, so an app needs
-# no runtime. The versions Cargo.lock already held for the relay server.
+# The channels that tell syncing that the database wrote or paused, on
+# every target; the runtime, sockets and timers of syncing are native only
+# (below). The version Cargo.lock already held for the relay server.
+tokio = { version = "=1.54.1", default-features = false, features = ["sync"] }
+# The member key and the account key of a database at a path live in the
+# platform keystore (RFC 0003, "The member key"; RFC 0009, S19), through
+# keyring-core and one store per platform: the Keychain on macOS, the
+# Credential Manager on Windows, the Secret Service on Linux, reached in pure
+# Rust over D-Bus, so no system library is needed to build.
+keyring-core = { version = "=1.0.1", default-features = false }
+
+# Syncing with one relay (RFC 0007, "The protocol"), natively: a WebSocket
+# client on a tokio runtime of the SDK's own, on a thread of its own, so an
+# app needs no runtime. The versions Cargo.lock already held for the relay
+# server. In the browser, syncing runs over the browser's WebSocket, which
+# a later slice builds (NOC-175).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
+# TLS for `wss://` and the `https://` URLs of large changes (NOC-121):
+# rustls on the ring provider, with the platform's root certificates read
+# by rustls-native-certs, for the WebSocket and for the HTTP client.
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake", "rustls-tls-native-roots"] }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = { version = "=0.8.5", default-features = false }
@@ -40,12 +57,13 @@ futures-util = { version = "=0.3.34", default-features = false, features = ["sin
 # What the member signs to authenticate a connection, as the relay checks
 # it (RFC 0003, decision 13).
 ncdb-relay.workspace = true
-# The member key and the account key of a database at a path live in the
-# platform keystore (RFC 0003, "The member key"; RFC 0009, S19), through
-# keyring-core and one store per platform: the Keychain on macOS, the
-# Credential Manager on Windows, the Secret Service on Linux, reached in pure
-# Rust over D-Bus, so no system library is needed to build.
-keyring-core = { version = "=1.0.1", default-features = false }
+
+# On wasm32 (NOC-175): the secure generator through the browser's
+# crypto.getRandomValues, as the core has it, and the wall clock through
+# JavaScript's Date.now() (src/clock.rs). The versions the core pins.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }
@@ -57,10 +75,15 @@ windows-native-keyring-store = { version = "=1.1.0", default-features = false }
 zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = false, features = ["crypto-rust"] }
 
 # The sync tests run the relay server on SQLite locally and talk to it as a
-# simulated member would.
-[dev-dependencies]
+# simulated member would. Natively only: they need sockets and threads.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "time", "io-util", "net", "macros"] }
 # A backup of the relay's database, to restore it from (RFC 0007,
 # "Restores and the relay epoch").
 rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
+
+# The test-wasm task (moon.yml) runs the in-memory tests on wasm32 with
+# wasm-bindgen-test, the version the core's wasm tests pin.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.80"

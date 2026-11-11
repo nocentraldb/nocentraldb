@@ -1,6 +1,11 @@
 //! What `members().add` refuses (RFC 0009, "Invitations and members" and
 //! "Errors"), on the device, without a relay.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 
 use super::{AddMember, NoticeCode, Role};
@@ -199,6 +204,7 @@ pub(crate) fn remove(
 /// yet, so the key chain entry carries stand-ins for the previous key,
 /// which `resolve` does not open. Neither change is folded into the
 /// admin's database; the test pushes them to the relay itself.
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn regrant(
     admin: &Db,
     space: &Space,
