@@ -1,7 +1,8 @@
 //! The relay core never loads the log's large frames for work that does not
 //! need them (NOC-215): resolving a space's membership and answering `keys`
-//! read its control changes only, and the shred check, which needs every
-//! change's author and sequence, reads the log in pages of bounded size.
+//! read its control changes only, and so does accepting a shred, which
+//! deletes its record at once (RFC 0008, "A shred is final when
+//! accepted").
 
 mod support;
 
@@ -23,9 +24,6 @@ const CREATOR: u8 = 0;
 const WRITER: u8 = 1;
 const SECOND: u8 = 3;
 const MIB: usize = 1024 * 1024;
-/// The most frame bytes one read of the shred check may load, unless one
-/// frame alone is larger.
-const PAGE_BYTES: usize = 4 * MIB;
 
 fn accepted(relay: &Relay<Store>, uploader: u8, change: &Change) {
     let space = change.header().space;
@@ -97,7 +95,7 @@ fn record(space: SpaceId, generation: u64) -> PersonKeyRecord {
 }
 
 #[test]
-fn the_shred_check_reads_the_log_in_pages_of_bounded_size() {
+fn accepting_a_shred_loads_no_large_frame() {
     let (relay, _dir, mut space, second) = with_large_frames();
     let entry = space.person_key(WRITER, 1, 0xc1, &[&second]);
     accepted(&relay, WRITER, &entry);
@@ -105,13 +103,12 @@ fn the_shred_check_reads_the_log_in_pages_of_bounded_size() {
     block_on(relay.put_person_keys(id(WRITER), space.space, put)).expect("the record is stored");
     let shred = space.shred(WRITER, 1, &other_account(1), &[&entry]);
     relay.store().take_bytes();
-    // A control change with a waiting shred: the relay checks its stability,
-    // which needs every change's author and sequence.
+
     accepted(&relay, WRITER, &shred);
-    let (bytes, largest) = relay.store().take_bytes();
-    assert!(bytes >= 8 * MIB, "the shred check read the whole log");
+
+    let (bytes, _) = relay.store().take_bytes();
     assert!(
-        largest <= PAGE_BYTES + 2 * MIB,
-        "one read loaded {largest} frame bytes"
+        bytes < MIB,
+        "accepting the shred loaded {bytes} frame bytes"
     );
 }
