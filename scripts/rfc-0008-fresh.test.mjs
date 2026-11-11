@@ -389,3 +389,19 @@ test("the model id in every change's payload is named as RFC 0002's and RFC 0005
 test("the key chain entry states its rule without the owner's attribution", () => {
   assert.doesNotMatch(part("key-chain-entry"), /as the owner decided/);
 });
+
+test("the sign-off: another account's writer when the performer's account is the only admin account", () => {
+  // The owner's NOC-228, question 2 A
+  for (const anchor of ["roles-and-rights", "shred-entry"]) {
+    holds(
+      part(anchor),
+      [
+        /Carsten, 2026-11-11, NOC-228/,
+        /exactly one account/,
+        /writer member/,
+        /[Rr]eaders? may not|not a reader/,
+      ],
+      anchor,
+    );
+  }
+});
