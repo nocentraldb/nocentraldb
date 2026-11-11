@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Role, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -198,7 +198,11 @@ impl<S: RelayStore> Relay<S> {
                     (head, self.check_change(space, &change).await?)
                 }
             };
-            let Checked { effects, added } = checked;
+            let Checked {
+                effects,
+                added,
+                recheck,
+            } = checked;
             let entry = NewEntry {
                 change: change.id(),
                 accepted_at: (self.config.clock)(),
@@ -212,9 +216,13 @@ impl<S: RelayStore> Relay<S> {
                 .await?
             {
                 AppendOutcome::Appended { head } => {
-                    // The append stands whatever the deletion does: a
-                    // failed deletion is tried again after the next append.
-                    let _ = self.delete_stable_shreds(space).await;
+                    // Only an append that can change a shred's stability
+                    // makes the relay check again. The append stands
+                    // whatever the deletion does: a failed deletion is tried
+                    // again after the next such append.
+                    if recheck {
+                        let _ = self.delete_stable_shreds(space).await;
+                    }
                     return Ok((Pushed::Accepted(head), added));
                 }
                 AppendOutcome::Duplicate { position, .. } => {
@@ -282,7 +290,10 @@ impl<S: RelayStore> Relay<S> {
             if !row.admits(header) {
                 return Err(ErrorCode::AuthorNotMember);
             }
-            return Ok(Checked::default());
+            return Ok(Checked {
+                recheck: holds_or_held_admin(&row.state),
+                ..Checked::default()
+            });
         }
         if let Entry::Genesis(_) = control_body(change)?.entry {
             return Err(ErrorCode::SpaceExists);
@@ -292,7 +303,10 @@ impl<S: RelayStore> Relay<S> {
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
-        Ok(Checked::new(&resolved, &before))
+        Ok(Checked {
+            recheck: true,
+            ..Checked::new(&resolved, &before)
+        })
     }
 
     /// The space's control changes, in position order.
@@ -339,12 +353,14 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
     }
 }
 
-/// What a change that passed its checks writes besides the log, and the
-/// members it makes current.
+/// What a change that passed its checks writes besides the log, the
+/// members it makes current, and whether it can change a waiting shred's
+/// stability.
 #[derive(Default)]
 struct Checked {
     effects: Vec<Effect>,
     added: Vec<MemberId>,
+    recheck: bool,
 }
 
 impl Checked {
@@ -358,8 +374,20 @@ impl Checked {
             .map(|row| row.member)
             .collect();
         let effects = records.into_iter().map(Effect::Member).collect();
-        Checked { effects, added }
+        Checked {
+            effects,
+            added,
+            recheck: false,
+        }
     }
+}
+
+/// Whether a member's changes count for stability (RFC 0008, "When a change
+/// is stable"): it holds the admin role, or an accepted grant ever gave it.
+/// A sealed change of any other member cannot change a shred's stability:
+/// only control changes and the runs of these members can.
+fn holds_or_held_admin(state: &membership::MemberState) -> bool {
+    state.role == Some(Role::Admin) || state.grants.iter().any(|grant| grant.role == Role::Admin)
 }
 
 /// The current members of a resolved space.
