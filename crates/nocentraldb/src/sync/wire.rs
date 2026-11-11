@@ -132,6 +132,49 @@ pub(crate) fn subscribe(req: u64, space: SpaceId, epoch: [u8; 16], after: u64) -
     )
 }
 
+/// A person-key record (RFC 0007, `record`): `{1: person-key id, 2:
+/// generation, 3: writer member id, 4: wrapped, 5: signature}`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Record {
+    pub(crate) person_key: [u8; 16],
+    pub(crate) generation: u64,
+    pub(crate) writer: [u8; 32],
+    pub(crate) wrapped: Vec<u8>,
+    pub(crate) signature: [u8; 64],
+}
+
+impl Record {
+    fn value(&self) -> Value {
+        let fields = [
+            Value::Bytes(self.person_key.to_vec()),
+            Value::Unsigned(self.generation),
+            Value::Bytes(self.writer.to_vec()),
+            Value::Bytes(self.wrapped.clone()),
+            Value::Bytes(self.signature.to_vec()),
+        ];
+        Value::Map((1..).map(Key::Unsigned).zip(fields).collect())
+    }
+}
+
+pub(crate) fn person_keys(req: u64, space: SpaceId) -> Vec<u8> {
+    message(
+        "person-keys",
+        Some(req),
+        vec![Value::Bytes(space.0.to_vec())],
+    )
+}
+
+pub(crate) fn put_person_keys(req: u64, space: SpaceId, records: &[Record]) -> Vec<u8> {
+    message(
+        "put-person-keys",
+        Some(req),
+        vec![
+            Value::Bytes(space.0.to_vec()),
+            Value::Array(records.iter().map(Record::value).collect()),
+        ],
+    )
+}
+
 pub(crate) fn ping(req: u64) -> Vec<u8> {
     message("ping", Some(req), Vec::new())
 }
@@ -202,6 +245,11 @@ pub(crate) enum Answer {
         /// How many seconds to wait before retrying, for `rate_limited`.
         retry_after: Option<u64>,
     },
+    /// The person-key records of a space (RFC 0007, `person-keys`).
+    PersonKeys {
+        req: u64,
+        records: Vec<Record>,
+    },
     /// `pong`, `ok` or a type this SDK does not read.
     Other {
         req: Option<u64>,
@@ -212,7 +260,7 @@ impl Answer {
     /// The request id it answers.
     pub(crate) fn req(&self) -> Option<u64> {
         match self {
-            Answer::Pushed { req, .. } => Some(*req),
+            Answer::Pushed { req, .. } | Answer::PersonKeys { req, .. } => Some(*req),
             Answer::Entries { req, .. } | Answer::Error { req, .. } | Answer::Other { req } => *req,
             Answer::Challenge { .. } | Answer::Welcome { .. } | Answer::Added { .. } => None,
         }
@@ -302,6 +350,13 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
                 .collect::<Result<_, _>>()?,
             head: uint(field(m, 5)?)?,
         },
+        "person-keys" => Answer::PersonKeys {
+            req: req.ok_or(Unreadable)?,
+            records: array(field(m, 4)?)?
+                .iter()
+                .map(record)
+                .collect::<Result<_, _>>()?,
+        },
         "added" => Answer::Added {
             space: SpaceId(fixed(field(m, 3)?)?),
         },
@@ -314,6 +369,17 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
             },
         },
         _ => Answer::Other { req },
+    })
+}
+
+fn record(value: &Value) -> Result<Record, Unreadable> {
+    let m = map(value)?;
+    Ok(Record {
+        person_key: fixed(field(m, 1)?)?,
+        generation: uint(field(m, 2)?)?,
+        writer: fixed(field(m, 3)?)?,
+        wrapped: bytes(field(m, 4)?)?.to_vec(),
+        signature: fixed(field(m, 5)?)?,
     })
 }
 
