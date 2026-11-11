@@ -4,8 +4,8 @@
 //! the accounts of the admin devices whose runs block it.
 //!
 //! Control changes carry no clock, so the age counts from when this device
-//! first held the shred, which the view keeps (NOC-218, recommendation A,
-//! pending the owner's answer). The changes of a simulated space are
+//! first held the shred, which the view keeps (owner, 2026-11-11, NOC-218).
+//! The changes of a simulated space are
 //! folded into the database through the crate's internals, as syncing
 //! folds what it pulls, and once through a relay.
 
