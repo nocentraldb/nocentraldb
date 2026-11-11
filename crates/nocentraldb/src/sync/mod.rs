@@ -42,6 +42,8 @@ mod apply;
 mod http;
 #[cfg(not(target_arch = "wasm32"))]
 mod large;
+#[cfg(not(target_arch = "wasm32"))]
+mod merge;
 mod pause;
 mod person_keys;
 #[cfg(not(target_arch = "wasm32"))]
@@ -61,6 +63,8 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use person_keys::put as put_person_keys;
 #[cfg(not(target_arch = "wasm32"))]
@@ -143,6 +147,10 @@ fn status(inner: &Inner) -> SyncStatus {
     }
 }
 
+/// The longest an admin's SDK waits before it writes a merge rotation
+/// (RFC 0008, "Two removals that rotate the key at once", step 5).
+const MERGE_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// What a database that syncs keeps of its relay. On wasm32 nothing syncs
 /// yet (NOC-175), so a database there never holds one.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -181,6 +189,14 @@ pub(crate) struct SyncState {
     /// The person-key records this member wrote that wait to be put, per
     /// space (`person_keys`).
     pub(crate) puts: BTreeMap<CoreSpaceId, Vec<Record>>,
+    /// When this admin writes the merge rotation of each space whose
+    /// current generation is exposed, unless the exposure ends first
+    /// (`merge`; RFC 0008, "Two removals that rotate the key at once",
+    /// step 5).
+    pub(crate) merges: BTreeMap<CoreSpaceId, std::time::Instant>,
+    /// The longest delay before a merge rotation: a minute, which the
+    /// tests change (`set_merge_delay`).
+    pub(crate) merge_delay: std::time::Duration,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -209,6 +225,8 @@ impl SyncState {
             folds: 0,
             refused: BTreeMap::new(),
             puts: BTreeMap::new(),
+            merges: BTreeMap::new(),
+            merge_delay: MERGE_DELAY,
             wake,
             pause,
             halted: false,

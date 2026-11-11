@@ -21,6 +21,7 @@ mod large;
 mod list;
 mod live;
 mod members;
+mod merge;
 mod newest_model;
 mod pause;
 mod person_keys;

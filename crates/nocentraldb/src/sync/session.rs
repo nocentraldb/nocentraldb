@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::{SinkExt, StreamExt};
@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::wire::{self, Answer};
-use super::{Connection, apply, large};
+use super::{Connection, apply, large, merge};
 use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
@@ -43,6 +43,14 @@ const ANSWER: Duration = if cfg!(test) {
 } else {
     Duration::from_secs(30)
 };
+
+/// Waits until `deadline`, or forever without one.
+async fn until(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
+        None => std::future::pending().await,
+    }
+}
 
 /// What became of an upload.
 enum Uploaded {
@@ -231,12 +239,20 @@ impl Session<'_> {
                     sync.epoch_changed = false;
                 }
             })?;
+            // Merge rotations whose delay passed are written now; the
+            // write wakes this loop, which pushes them.
+            let due = with(self.db, |inner| merge::due(inner, Instant::now()))?;
+            for space in due {
+                with(self.db, |inner| merge::write(inner, space))?;
+            }
+            let deadline = with(self.db, |inner| merge::next(inner))?;
             tokio::select! {
                 answer = self.recv() => self.live(answer?)?,
                 changed = wake.changed() => match changed {
                     Ok(()) => push = true,
                     Err(_) => return Err(End::Dropped),
                 },
+                () = until(deadline) => {}
                 () = tokio::time::sleep(IDLE) => {
                     let req = self.req();
                     self.send(wire::ping(req)).await?;
