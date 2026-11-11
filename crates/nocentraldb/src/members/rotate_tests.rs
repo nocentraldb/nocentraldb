@@ -63,9 +63,19 @@ fn a_former_member_of_a_space_with_a_person_key_is_not_added_again() {
 fn rotate_on(db: &Db, space: &Space) -> u64 {
     let mut inner = db.lock();
     let member = inner.member.key();
-    let crate::db::Inner { view, spaces, .. } = &mut *inner;
-    let state = spaces.get_mut(&space.id().0).expect("the database holds the space");
-    super::rotate::rotate(view, state, &member, space.id().0, Default::default()).unwrap()
+    let crate::db::Inner {
+        view,
+        spaces,
+        member: secrets,
+        ..
+    } = &mut *inner;
+    let state = spaces
+        .get_mut(&space.id().0)
+        .expect("the database holds the space");
+    let mut batch = super::batch::Batch::new(view, state, &member, space.id().0);
+    let fresh = super::rotate::rotate(&mut batch, state, &member, space.id().0, Default::default());
+    batch.commit(view, state, secrets).unwrap();
+    fresh
 }
 
 /// The heads of the generation graph in `db`'s copy of `space`.
@@ -109,17 +119,19 @@ fn copy_some(from: &Db, to: &Db, space: &Space, keep: impl Fn(&Entry) -> bool) {
         let log = inner.view.log(space.id().0).expect("the space's log");
         log.after(ncdb_core::log::Position::START)
             .filter(|(_, change)| {
-                ControlBody::decode(&change.header().payload)
-                    .is_ok_and(|body| keep(&body.entry))
+                ControlBody::decode(&change.header().payload).is_ok_and(|body| keep(&body.entry))
             })
             .map(|(_, change)| change.bytes().to_vec())
             .collect()
     };
     let mut inner = to.lock();
     let crate::db::Inner { view, spaces, .. } = &mut *inner;
-    let state = spaces.get_mut(&space.id().0).expect("the database holds the space");
+    let state = spaces
+        .get_mut(&space.id().0)
+        .expect("the database holds the space");
     for bytes in changes {
-        view.receive(&bytes, &mut state.checks).expect("the change is received");
+        view.receive(&bytes, &mut state.checks)
+            .expect("the change is received");
     }
 }
 
@@ -138,7 +150,9 @@ fn a_rotation_is_refused_when_the_key_of_a_head_is_not_held() {
     rotate_on(&other, &project);
     rotate_on(&admin, &project);
     rotate_on(&admin, &project);
-    copy_some(&other, &admin, &project, |entry| matches!(entry, Entry::KeyChain(_)));
+    copy_some(&other, &admin, &project, |entry| {
+        matches!(entry, Entry::KeyChain(_))
+    });
     assert_eq!(heads(&admin, &project).len(), 2);
     remove(&admin, &project, &invitation);
     let before = changes(&admin, &project);

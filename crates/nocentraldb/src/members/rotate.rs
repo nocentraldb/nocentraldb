@@ -2,8 +2,9 @@
 //! 0008, "Key chain entry"): a key chain entry for a fresh generation,
 //! which encrypts the previous generations' keys under the new one, then a
 //! key envelope of the new key for every member of the space, the author
-//! included. Once they are folded, the new generation is current and the
-//! author holds its key, so what it writes next is sealed under it.
+//! included. They are written into the call's [`Batch`], which folds them
+//! with what follows in one transaction; once they are folded, the new
+//! generation is current and the author holds its key.
 //!
 //! The key chain entry lists every head of the generation graph as a
 //! previous generation, as a merge rotation does (RFC 0008, "Two removals
@@ -19,17 +20,12 @@ use std::collections::BTreeSet;
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
-use ncdb_core::membership::{
-    self, ControlBody, Entry, KeyChainEntry, PreviousKey, seal_previous_key,
-};
-use ncdb_core::view::View;
+use ncdb_core::membership::{self, Entry, KeyChainEntry, PreviousKey, seal_previous_key};
 
 use crate::db::SpaceState;
 use crate::error::{Error, ErrorCode};
-use crate::next;
-use crate::space::fold;
 
-use super::control_heads;
+use super::batch::Batch;
 
 /// Whether `state`'s space can be rotated by this SDK, checked before
 /// anything is written: the member holds the key of every head of the
@@ -59,20 +55,20 @@ pub(crate) fn rotatable(state: &SpaceState) -> Result<(), Error> {
     }
 }
 
-/// Rotates the key of `space`, which `member`, an admin, holds with the
-/// key of its current generation: writes the key chain entry, answering
-/// `answers`, and one envelope per member of the space, and folds them.
-/// Returns the new generation.
+/// Adds to `batch` a rotation of its space's key: the key chain entry of
+/// a fresh generation that chains every head, answering `answers`, and
+/// one envelope of the new key per member of the space, the author
+/// included. What the batch writes after it is written with the new
+/// generation, after the envelopes. Returns the new generation.
 pub(crate) fn rotate(
-    view: &mut View,
-    state: &mut SpaceState,
+    batch: &mut Batch,
+    state: &SpaceState,
     member: &MemberKey,
     space: SpaceId,
     answers: BTreeSet<ChangeId>,
-) -> Result<u64, Error> {
-    let next = next::next(view, space, &state.checks, member.id());
-    let current = next.generation.expect("a writable space has a generation");
-    let heads: Vec<u64> = state.checks.resolved().heads().into_iter().collect();
+) -> u64 {
+    let resolved = state.checks.resolved();
+    let heads: Vec<u64> = resolved.heads().into_iter().collect();
     let fresh = membership::generation_id(space, member.id(), &heads);
     let key = SpaceKey::generate();
     let previous = heads
@@ -93,31 +89,24 @@ pub(crate) fn rotate(
         previous,
         answers,
     };
-    let rotation = membership::write(
-        member,
-        space,
-        next.sequence,
-        current,
-        &ControlBody::new(control_heads(view, space), Entry::KeyChain(chain)),
-    );
-    fold(view, &mut state.checks, &rotation)?;
-    let recipients: Vec<_> = state
-        .checks
-        .resolved()
+    let rotation = batch.write(member, Entry::KeyChain(chain), None);
+    let recipients: Vec<_> = resolved
         .members()
-        .filter_map(|(id, _)| state.checks.resolved().member(id).map(|m| m.key))
+        .filter_map(|(id, _)| resolved.member(id).map(|m| m.key))
         .collect();
-    for (offset, recipient) in (1..).zip(recipients) {
+    let mut envelopes = BTreeSet::new();
+    for recipient in recipients {
         let sealed = envelope::seal(&key, space, fresh, &recipient)
             .expect("a member's public key takes an envelope");
-        let sent = membership::write(
+        let sent = batch.write(
             member,
-            space,
-            next.sequence + offset,
-            current,
-            &ControlBody::new(BTreeSet::from([rotation.id()]), Entry::KeyEnvelope(sealed)),
+            Entry::KeyEnvelope(sealed),
+            Some(BTreeSet::from([rotation])),
         );
-        fold(view, &mut state.checks, &sent)?;
+        envelopes.insert(sent);
     }
-    Ok(fresh)
+    batch.generation = fresh;
+    batch.fresh = Some(key);
+    batch.heads = envelopes;
+    fresh
 }

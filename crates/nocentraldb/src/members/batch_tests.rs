@@ -27,7 +27,12 @@ fn a_batch_that_is_not_received_whole_changes_nothing() {
     let refused = {
         let mut inner = admin.lock();
         let member = inner.member.key();
-        let crate::db::Inner { view, spaces, .. } = &mut *inner;
+        let crate::db::Inner {
+            view,
+            spaces,
+            member: secrets,
+            ..
+        } = &mut *inner;
         let state = spaces.get_mut(&id).expect("the admin holds the space");
         let next = crate::next::next(view, id, &state.checks, member.id());
         let removal = membership::write(
@@ -44,7 +49,7 @@ fn a_batch_that_is_not_received_whole_changes_nothing() {
             ),
         );
         let frames: [&[u8]; 2] = [removal.bytes(), b"garbled"];
-        super::batch::commit(view, state, &member, id, &frames)
+        super::batch::commit(view, state, secrets, id, &frames)
     };
 
     assert!(refused.is_err());

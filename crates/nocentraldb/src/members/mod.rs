@@ -12,19 +12,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
-use ncdb_core::membership::{
-    self, Action, ControlBody, Entry, MemberKind, MembershipEntry, Resolved,
-};
+use ncdb_core::membership::{self, Action, Entry, MemberKind, MembershipEntry, Resolved};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
-use crate::next;
-use crate::space::{Space, fold, not_stopped, writable};
+use crate::space::{Space, not_stopped, writable};
 
+mod batch;
 mod invitation;
 mod notice;
 mod rotate;
+
+use batch::Batch;
 
 pub use invitation::{Fingerprint, Invitation};
 pub use notice::{Notice, NoticeCode};
@@ -127,49 +127,39 @@ impl Members<'_> {
         certified(invitation)?;
         let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
-        let Inner { view, spaces, .. } = &mut *inner;
+        let Inner {
+            view,
+            spaces,
+            member: secrets,
+            ..
+        } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
+        let mut batch = Batch::new(view, state, &member, space.0);
         if former {
             rotate::rotatable(state)?;
-            rotate::rotate(view, state, &member, space.0, BTreeSet::new())?;
+            rotate::rotate(&mut batch, state, &member, space.0, BTreeSet::new());
         }
-        let next = next::next(view, space.0, &state.checks, member.id());
-        let generation = next.generation.expect("a writable space has a generation");
-        let subject = invitation.key.id();
-        let added = membership::write(
+        let added = batch.write(
             &member,
-            space.0,
-            next.sequence,
-            generation,
-            &ControlBody::new(
-                control_heads(view, space.0),
-                Entry::Membership(MembershipEntry {
-                    subject,
-                    action: Action::Add {
-                        role: options.role.into(),
-                        key: invitation.key,
-                        certificate: Box::new(invitation.certificate.clone()),
-                        from_generation: generation,
-                    },
-                }),
-            ),
+            Entry::Membership(MembershipEntry {
+                subject: invitation.key.id(),
+                action: Action::Add {
+                    role: options.role.into(),
+                    key: invitation.key,
+                    certificate: Box::new(invitation.certificate.clone()),
+                    from_generation: batch.generation,
+                },
+            }),
+            None,
         );
-        let key = state
-            .checks
-            .space_key(generation)
-            .expect("a writable space's key is held");
-        let sealed = envelope::seal(key, space.0, generation, &invitation.key)
+        let sealed = envelope::seal(batch.key(state), space.0, batch.generation, &invitation.key)
             .expect("a member's public key takes an envelope");
-        let sent = membership::write(
+        batch.write(
             &member,
-            space.0,
-            next.sequence + 1,
-            generation,
-            &ControlBody::new(BTreeSet::from([added.id()]), Entry::KeyEnvelope(sealed)),
+            Entry::KeyEnvelope(sealed),
+            Some(BTreeSet::from([added])),
         );
-        for change in [&added, &sent] {
-            fold(view, &mut state.checks, change)?;
-        }
+        batch.commit(view, state, secrets)?;
         if confirming {
             confirm(view, &invitation.certificate.account_key)?;
         }
@@ -288,13 +278,13 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 }
 
 #[cfg(test)]
+mod batch_tests;
+#[cfg(test)]
 mod known_tests;
 #[cfg(test)]
 mod relay_tests;
 #[cfg(test)]
 mod rotate_tests;
-#[cfg(test)]
-mod batch_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
