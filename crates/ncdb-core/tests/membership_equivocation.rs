@@ -1,18 +1,17 @@
-//! What an equivocating admin does to a stable shred today (NOC-226;
-//! RFC 0002, "Author and author sequence"; RFC 0008, "The cutoff" and "When
-//! a change is stable").
+//! What an equivocating or lying admin does to an accepted shred (NOC-226,
+//! NOC-229; RFC 0002, "Author and author sequence"; RFC 0008, "The cutoff"
+//! and "A shred is final when accepted").
 //!
 //! RFC 0002 keeps and folds both changes of an equivocation, inside a
-//! revocation's cutoff too, and RFC 0008 calls a change stable from the
-//! runs a holder holds. These tests pin what follows, as the owner's
-//! question NOC-224 describes: a revocation an admin writes under a
-//! sequence the stability rule already counted, or under a new sequence
-//! with dependencies that leave the shred out, rejects a shred that was
-//! stable. A former admin's fork inside a senior admin's demotion does
-//! so only when its change id sorts before the change it duplicates;
-//! otherwise its author lacks the right in the state so far. Every copy
-//! still agrees, in every order. When NOC-224 is decided, these tests
-//! change on purpose.
+//! revocation's cutoff too. Under RFC 0008's earlier rule, a revocation an
+//! admin wrote under a sequence the stability rule had counted, or under a
+//! new sequence with dependencies that leave the shred out, rejected a shred
+//! that was stable (NOC-224). The owner decided that a shred is final when
+//! accepted (Carsten, 2026-11-11, NOC-224), so the same changes now take
+//! effect on the membership and leave the shred accepted. A former admin's
+//! fork inside a senior admin's demotion still counts only when its change
+//! id sorts before the change it duplicates; it no longer reaches the shred.
+//! Every copy agrees, in every order.
 
 #[path = "support/space.rs"]
 mod space;
@@ -25,7 +24,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use std::collections::BTreeSet;
 
 use ncdb_core::change::{Change, Operation};
-use ncdb_core::ids::{MemberId, ObjectId, SpaceId};
+use ncdb_core::ids::{ObjectId, SpaceId};
 use ncdb_core::membership::{
     self, Action, Certificate, ControlBody, Entry, Genesis, MemberKind, MembershipEntry, Rejection,
     Resolved, Role, Verdict, resolve,
@@ -40,8 +39,7 @@ const DAN: u8 = 4;
 
 /// Alice creates the space, Bob is a writer, Carol an admin of a second
 /// account. Bob writes a person-key entry and shreds it under Carol's
-/// account's sign-off; Alice and Carol then write after the shred, so it is
-/// stable for a holder of all of it.
+/// account's sign-off; Alice and Carol then write after the shred.
 struct Shredded {
     s: Space,
     changes: Vec<Change>,
@@ -121,19 +119,6 @@ fn deterministic(creator: Who) -> Space {
     s
 }
 
-/// The run of every member the holder holds: up to the highest sequence
-/// among `changes`, which hold every sequence below it.
-fn runs(changes: &[Change]) -> impl Fn(MemberId) -> u64 + '_ {
-    move |member| {
-        changes
-            .iter()
-            .filter(|c| c.header().author == member)
-            .map(|c| c.header().sequence)
-            .max()
-            .unwrap_or(0)
-    }
-}
-
 /// Every order of `items`.
 fn permutations<T: Clone>(items: &[T]) -> Vec<Vec<T>> {
     if items.len() <= 1 {
@@ -164,24 +149,22 @@ fn in_every_order(space: SpaceId, held: &[Change], late: &[Change]) -> Resolved 
 }
 
 #[test]
-fn the_shred_is_stable_before_any_admin_equivocates() {
+fn the_shred_is_accepted_before_any_admin_equivocates() {
     let Shredded {
         s, changes, shred, ..
     } = shredded();
+
     let state = resolve(s.space, &changes);
 
-    let stability = state.stability(&changes, runs(&changes));
-
     assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
-    assert!(stability.is_stable(shred.id()));
 }
 
 /// Carol writes a second change under the sequence of her change that saw
 /// the shred, with only her own add as its past: a removal of Bob whose
 /// cutoff lies below the shred. It is inside every cutoff, so it is
-/// accepted, and it rejects the shred the holder had called stable.
+/// accepted and removes Bob, but no revocation excludes a shred.
 #[test]
-fn an_admins_equivocation_below_a_counted_sequence_rejects_a_stable_shred_today() {
+fn an_admins_equivocation_below_its_change_that_saw_the_shred_leaves_the_shred_accepted() {
     let Shredded {
         s,
         changes,
@@ -191,10 +174,6 @@ fn an_admins_equivocation_below_a_counted_sequence_rejects_a_stable_shred_today(
     let counted = s.sequence(CAROL);
     let before_shred = shred.header().sequence - 1;
     let fork = removal_at(&s, CAROL, counted, before_shred, &[&carol]);
-    assert!(
-        runs(&changes)(id(CAROL)) >= counted,
-        "the stability rule counted the sequence the fork reuses"
-    );
 
     let state = in_every_order(
         s.space,
@@ -203,18 +182,16 @@ fn an_admins_equivocation_below_a_counted_sequence_rejects_a_stable_shred_today(
     );
 
     assert_eq!(state.verdict(fork.id()), Some(&Verdict::Accepted));
-    assert_ne!(state.verdict(shred.id()), Some(&Verdict::Accepted));
     assert_eq!(state.role(id(BOB)), None);
-    let all: Vec<Change> = [changes.as_slice(), &[fork]].concat();
-    assert!(!state.stability(&all, runs(&all)).is_stable(shred.id()));
+    assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
 }
 
-/// No equivocation is needed: Carol's device writes the same removal under
-/// its next sequence, naming dependencies and a cutoff that leave the shred
-/// out. Nobody can check what a revoker held, so it rejects the stable
-/// shred too.
+/// No equivocation: Carol's device writes the same removal under its next
+/// sequence, naming dependencies and a cutoff that leave the shred out.
+/// Nobody can check what a revoker held, so it removes Bob; the shred
+/// stays accepted.
 #[test]
-fn an_admins_new_change_that_leaves_the_shred_out_rejects_a_stable_shred_today() {
+fn an_admins_new_change_that_leaves_the_shred_out_leaves_the_shred_accepted() {
     let Shredded {
         s,
         changes,
@@ -232,7 +209,7 @@ fn an_admins_new_change_that_leaves_the_shred_out_rejects_a_stable_shred_today()
     );
 
     assert_eq!(state.verdict(lie.id()), Some(&Verdict::Accepted));
-    assert_ne!(state.verdict(shred.id()), Some(&Verdict::Accepted));
+    assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
 }
 
 /// A former admin bounded by a stable demotion forks below that
@@ -243,17 +220,17 @@ fn an_admins_new_change_that_leaves_the_shred_out_rejects_a_stable_shred_today()
 /// change id first:
 ///
 /// - a fork before its twin also comes before the senior Alice's demotion,
-///   so Carol is still an admin there: it is accepted and rejects the
-///   shred the bound had made stable;
+///   so Carol is still an admin there: it is accepted and revokes Bob;
 /// - a fork after its twin comes after the demotion: it is rejected with
-///   `NoRight`, and the shred stays stable.
+///   `NoRight`.
 ///
-/// Every copy agrees either way, but whether the hole opens is decided by
-/// a change id. Every change here is deterministic, so both cases are
+/// Every copy agrees either way, and the change id decides it (RFC 0008,
+/// "The cutoff"). The shred stays accepted in both cases. Every change here is deterministic, so both cases are
 /// found among forks that differ in their cutoff, in whether they remove
 /// Bob or lower him to a reader, and in how they spell the same past.
 #[test]
-fn a_former_admins_fork_inside_its_demotions_cutoff_counts_only_if_it_sorts_before_its_twin() {
+fn a_former_admins_fork_inside_its_demotions_cutoff_counts_only_if_it_sorts_before_its_twin_and_never_reaches_the_shred()
+ {
     let mut s = deterministic(ALICE);
     let g = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Writer, &[&g]);
@@ -283,9 +260,8 @@ fn a_former_admins_fork_inside_its_demotions_cutoff_counts_only_if_it_sorts_befo
         by_dan,
     ];
     let state = resolve(s.space, &changes);
-    let stability = state.stability(&changes, runs(&changes));
-    assert!(stability.is_stable(demote.id()));
-    assert!(stability.is_stable(shred.id()));
+    assert_eq!(state.verdict(demote.id()), Some(&Verdict::Accepted));
+    assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
     let before_shred = shred.header().sequence - 1;
     let mut forks = Vec::new();
     for below in 0..=before_shred {
@@ -316,21 +292,16 @@ fn a_former_admins_fork_inside_its_demotions_cutoff_counts_only_if_it_sorts_befo
     {
         let late = [&changes[8..], &[(*fork).clone()]].concat();
         let state = in_every_order(s.space, &changes[..8], &late);
-        let all: Vec<Change> = [changes.as_slice(), &[(*fork).clone()]].concat();
-        let stable = state.stability(&all, runs(&all)).is_stable(shred.id());
 
         if sorts_first {
             assert_eq!(state.verdict(fork.id()), Some(&Verdict::Accepted));
-            assert_ne!(state.verdict(shred.id()), Some(&Verdict::Accepted));
-            assert!(!stable);
         } else {
             assert_eq!(
                 state.verdict(fork.id()),
                 Some(&Verdict::Rejected(Rejection::NoRight))
             );
-            assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
-            assert!(stable);
         }
+        assert_eq!(state.verdict(shred.id()), Some(&Verdict::Accepted));
     }
 }
 

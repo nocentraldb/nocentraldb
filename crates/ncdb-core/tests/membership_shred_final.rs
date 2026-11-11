@@ -120,7 +120,10 @@ fn a_revocation_that_takes_the_performers_grant_away_does_not_reject_the_shred()
     let before_add = bob.header().sequence - 1;
     let removal = s.remove(ALICE, CAROL, before_add, &[&dan]);
 
-    let after = state(&s, &[g, carol, dan, bob.clone(), entry, shred.clone(), removal]);
+    let after = state(
+        &s,
+        &[g, carol, dan, bob.clone(), entry, shred.clone(), removal],
+    );
 
     assert_ne!(after.verdict(bob.id()), Some(&Verdict::Accepted));
     assert_eq!(after.verdict(shred.id()), Some(&Verdict::Accepted));

@@ -280,7 +280,10 @@ pub(crate) fn excludes(
         return false;
     };
     let right = needed(y);
+    // A shred is final when accepted: no revocation excludes it (RFC 0008,
+    // "A shred is final when accepted").
     if y.is_genesis()
+        || matches!(y.body.entry, Entry::Shred(_))
         || y.id == r.id
         || y.author != revocation.subject
         || Some(right) <= revocation.role()
