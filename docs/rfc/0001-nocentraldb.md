@@ -109,7 +109,7 @@ Each field type defines how a field stores its value and how concurrent changes 
 
 **Before.** For every erasure request, someone searches the production database, the backups, the logs, the search index and whatever the agents copied, and writes down where they looked.
 
-**After.** The schema marks personal fields and ties each one to a person. An erasure is a work order: one member performs it, a second account that holds an admin member in the space signs it off, and the person's key is destroyed once every admin device has seen the erasure. The person's fields in archives and old snapshots become unreadable because the key is gone. Nobody has to find every copy. The audit trail still shows who changed what, when, and who signed off the erasure.
+**After.** The schema marks personal fields and ties each one to a person. An erasure is a work order: one member performs it, a second account that holds an admin member in the space signs it off, and each member destroys the person's key as soon as it accepts the erasure; a device that is offline does so when it comes back and syncs ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)). The person's fields in archives and old snapshots become unreadable because the key is gone. Nobody has to find every copy. The audit trail still shows who changed what, when, and who signed off the erasure.
 
 **What he would tell his boss:** "Erasure destroys a key instead of hunting through backups, the audit trail survives it, and the design says plainly what it does not reach."
 
