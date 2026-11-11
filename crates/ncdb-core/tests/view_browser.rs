@@ -6,8 +6,12 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use ncdb_core::view::browser::{InstallError, exists};
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there (NOC-10). The file holds wasm32 tests only.
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
+
+use ncdb_core::view::browser::{InstallError, exists};
 
 #[test]
 async fn outside_a_dedicated_worker_exists_fails_as_install_does() {
