@@ -4,7 +4,11 @@
 //! the certificates in the shred's causal past attach to either account
 //! key. Any shared recovery key means the same account, so a statement,
 //! forged or not, can only block a sign-off, never enable one. Without any
-//! statement this is the comparison of account keys alone.
+//! statement this is the comparison of account keys alone. Every
+//! certificate counts, the performer's and a former member's included
+//! (pm, within NOC-201 A). A certificate in the state carries only a
+//! statement that names its own key 1 and verifies, so each attaches its
+//! recovery key to its own account key.
 
 #[path = "support/space.rs"]
 mod space;
@@ -91,4 +95,76 @@ fn two_account_keys_under_one_recovery_key_are_one_account() {
     // After a recovery, one person's old and new account keys: the second
     // account's admin is the performer's own account.
     assert_eq!(sign_off(7, 7).as_ref(), NOT_VALID);
+}
+
+/// Bob, the performer, carries a statement under recovery code 7; Carol,
+/// admin of the second account, carries `carol`; Frank, of the first
+/// account, carries `frank` and is removed before the shred if
+/// `frank_removed`. The verdict of Bob's shred signed off by the second
+/// account.
+fn with_bob_and_frank(carol: u8, frank: Option<(u8, bool)>, bob: Option<u8>) -> Option<Verdict> {
+    const FRANK: u8 = 6;
+    let mut s = Space::new(ALICE);
+    let genesis = s.genesis.clone();
+    let bob_add = match bob {
+        Some(code) => s.add_certified(
+            ALICE,
+            BOB,
+            Role::Writer,
+            certified(BOB, &account(), code),
+            &[&genesis],
+        ),
+        None => s.add(ALICE, BOB, Role::Writer, &[&genesis]),
+    };
+    let carol_add = s.add_certified(
+        ALICE,
+        CAROL,
+        Role::Admin,
+        certified(CAROL, &other_account(1), carol),
+        &[&bob_add],
+    );
+    let mut all = vec![genesis, bob_add, carol_add.clone()];
+    let mut last = carol_add;
+    if let Some((code, removed)) = frank {
+        let add = s.add_certified(
+            ALICE,
+            FRANK,
+            Role::Admin,
+            certified(FRANK, &account(), code),
+            &[&last],
+        );
+        all.push(add.clone());
+        last = add;
+        if removed {
+            let removal = s.remove(ALICE, FRANK, 0, &[&last]);
+            all.push(removal.clone());
+            last = removal;
+        }
+    }
+    let entry = s.person_key(BOB, 1, 0xc1, &[&last]);
+    let shred = s.shred(BOB, 1, &other_account(1), &[&entry]);
+    all.extend([entry, shred.clone()]);
+    resolve(s.space, all.iter()).verdict(shred.id()).copied()
+}
+
+#[test]
+fn the_performers_own_statement_counts() {
+    // Bob is a writer, not an admin, but his certificate attaches recovery
+    // code 7 to the first account, and Carol's attaches it to the second.
+    assert_eq!(with_bob_and_frank(7, None, Some(7)).as_ref(), NOT_VALID);
+    assert_eq!(with_bob_and_frank(7, None, Some(8)).as_ref(), ACCEPTED);
+}
+
+#[test]
+fn a_former_admins_statement_counts() {
+    // Frank, an admin of the first account under recovery code 7, is
+    // removed before the shred; his certificate still names the account.
+    assert_eq!(
+        with_bob_and_frank(7, Some((7, true)), None).as_ref(),
+        NOT_VALID
+    );
+    assert_eq!(
+        with_bob_and_frank(7, Some((8, true)), None).as_ref(),
+        ACCEPTED
+    );
 }
