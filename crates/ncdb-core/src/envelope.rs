@@ -128,24 +128,74 @@ pub fn seal_with_ephemeral(
     recipient: &MemberPublicKey,
     ikm: [u8; 32],
 ) -> Result<KeyEnvelope, EnvelopeError> {
+    let (encapsulated_key, ciphertext) = seal_bytes(
+        space_key.bytes(),
+        &info(space, generation, recipient.id()),
+        recipient,
+        ikm,
+    )?;
+    Ok(KeyEnvelope {
+        recipient: recipient.id(),
+        generation,
+        encapsulated_key,
+        ciphertext,
+    })
+}
+
+/// Seals 32 secret bytes with RFC 0003's HPKE suite, base mode, under
+/// `info` and no associated data, to the recipient's X25519 key, with the
+/// ephemeral key derived from `ikm`: HPKE's encapsulated key and the
+/// ciphertext. Key envelopes and the account key of a pairing answer
+/// ([`crate::pairing`]) share it and differ only by `info`.
+pub(crate) fn seal_bytes(
+    plaintext: &[u8; 32],
+    info: &[u8],
+    recipient: &MemberPublicKey,
+    ikm: [u8; 32],
+) -> Result<(Vec<u8>, Vec<u8>), EnvelopeError> {
     let public = <suite::Kem as Kem>::PublicKey::from_bytes(&recipient.agreement)
         .map_err(|_| EnvelopeError::RecipientKey)?;
     let (encapsulated_key, ciphertext) =
         hpke::single_shot_seal_with_rng::<suite::Aead, suite::Kdf, suite::Kem>(
             &OpModeS::Base,
             &public,
-            &info(space, generation, recipient.id()),
-            space_key.bytes(),
+            info,
+            plaintext,
             &[],
             &mut Ephemeral(Some(Zeroizing::new(ikm))),
         )
         .map_err(|_| EnvelopeError::RecipientKey)?;
-    Ok(KeyEnvelope {
-        recipient: recipient.id(),
-        generation,
-        encapsulated_key: encapsulated_key.to_bytes().to_vec(),
-        ciphertext,
-    })
+    Ok((encapsulated_key.to_bytes().to_vec(), ciphertext))
+}
+
+/// Opens what [`seal_bytes`] sealed to this member under `info`: the 32
+/// secret bytes, wiped when dropped.
+pub(crate) fn open_bytes(
+    encapsulated_key: &[u8],
+    ciphertext: &[u8],
+    info: &[u8],
+    recipient: &MemberKey,
+) -> Result<Zeroizing<[u8; 32]>, EnvelopeError> {
+    let private = <suite::Kem as Kem>::PrivateKey::from_bytes(recipient.agreement())
+        .map_err(|_| EnvelopeError::Open)?;
+    let encapsulated_key = <suite::Kem as Kem>::EncappedKey::from_bytes(encapsulated_key)
+        .map_err(|_| EnvelopeError::Open)?;
+    let plaintext = Zeroizing::new(
+        hpke::single_shot_open::<suite::Aead, suite::Kdf, suite::Kem>(
+            &OpModeR::Base,
+            &private,
+            &encapsulated_key,
+            info,
+            ciphertext,
+            &[],
+        )
+        .map_err(|_| EnvelopeError::Open)?,
+    );
+    let bytes: &[u8; 32] = plaintext
+        .as_slice()
+        .try_into()
+        .map_err(|_| EnvelopeError::Open)?;
+    Ok(Zeroizing::new(*bytes))
 }
 
 /// Unwraps the space key of an envelope in this space for this member.
@@ -157,25 +207,12 @@ pub fn open(
     if envelope.recipient != recipient.id() {
         return Err(EnvelopeError::WrongRecipient);
     }
-    let private = <suite::Kem as Kem>::PrivateKey::from_bytes(recipient.agreement())
-        .map_err(|_| EnvelopeError::Open)?;
-    let encapsulated_key = <suite::Kem as Kem>::EncappedKey::from_bytes(&envelope.encapsulated_key)
-        .map_err(|_| EnvelopeError::Open)?;
-    let plaintext = Zeroizing::new(
-        hpke::single_shot_open::<suite::Aead, suite::Kdf, suite::Kem>(
-            &OpModeR::Base,
-            &private,
-            &encapsulated_key,
-            &info(space, envelope.generation, envelope.recipient),
-            &envelope.ciphertext,
-            &[],
-        )
-        .map_err(|_| EnvelopeError::Open)?,
-    );
-    let bytes: &[u8; 32] = plaintext
-        .as_slice()
-        .try_into()
-        .map_err(|_| EnvelopeError::Open)?;
+    let bytes = open_bytes(
+        &envelope.encapsulated_key,
+        &envelope.ciphertext,
+        &info(space, envelope.generation, envelope.recipient),
+        recipient,
+    )?;
     Ok(SpaceKey::from_bytes(*bytes))
 }
 

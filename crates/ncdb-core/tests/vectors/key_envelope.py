@@ -20,6 +20,11 @@ associated data, so it is empty. RFC 0008's entry type 2 carries the
 recipient (key 8), the generation (key 9), HPKE's enc (key 10) and the
 ciphertext (key 11); key-envelope.fields.hex is the canonical CBOR map of
 just those four keys.
+
+It also writes RFC 0003's pairing answer ("Pairing answer"): the account
+key, sealed the same way to the same recipient, under the info
+"nocentraldb/account-key" alone, with no space, generation or recipient
+after it. The plaintext is the 32-byte account key, its Ed25519 secret.
 """
 
 import hashlib
@@ -133,6 +138,19 @@ assert len(enc) == 32 and len(ciphertext) == 48
 suite = hpke.Suite(hpke.KEM.X25519, hpke.KDF.HKDF_SHA256, hpke.AEAD.CHACHA20_POLY1305)
 assert suite.decrypt(enc + ciphertext, agreement_private, info=info) == SPACE_KEY
 
+# The pairing answer's sealed account key: the account key of
+# membership/generate.py, to the same recipient, with an ephemeral of its own.
+ACCOUNT_SECRET = bytes([0x11] * 32)
+PAIRING_IKM_E = bytes(0xB0 + i for i in range(32))
+pairing_info = b"nocentraldb/account-key"
+pairing_enc, pairing_ciphertext = seal_base(
+    agreement_public, pairing_info, b"", ACCOUNT_SECRET, PAIRING_IKM_E
+)
+assert len(pairing_enc) == 32 and len(pairing_ciphertext) == 48
+assert suite.decrypt(pairing_enc + pairing_ciphertext, agreement_private, info=pairing_info) == (
+    ACCOUNT_SECRET
+)
+
 fields = cbor2.dumps({8: member_id, 9: GENERATION, 10: enc, 11: ciphertext}, canonical=True)
 
 
@@ -147,3 +165,6 @@ write("key-envelope.info", info)
 write("key-envelope.enc", enc)
 write("key-envelope.ciphertext", ciphertext)
 write("key-envelope.fields", fields)
+write("pairing.info", pairing_info)
+write("pairing.enc", pairing_enc)
+write("pairing.ciphertext", pairing_ciphertext)

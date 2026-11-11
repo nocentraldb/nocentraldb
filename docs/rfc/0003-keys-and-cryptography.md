@@ -257,7 +257,8 @@ member certificate (CBOR map, canonical)
 ├── 3 kind               uint: 1 device, 2 agent, 3 sub-agent
 ├── 4 parent member id   32 bytes; sub-agents only
 ├── 5 signature          64 bytes
-└── 6 statement          the account key statement that names key 1 (see below)
+└── 6 statement          map, the account key statement that names key 1 (see below);
+                         absent before accounts exist
 ```
 
 - **Device and agent** (kind 1 and 2): the account key signs `H("nocentraldb/member-cert" || canonical map of keys 1 to 4)`.
@@ -265,7 +266,7 @@ member certificate (CBOR map, canonical)
 
 The member id covers both public keys, so the certificate binds them too.
 
-The certificate carries the [account key statement](#account-key-statement) as key 6, so a member checks a chain of two: the statement against the account's recovery key, then the certificate against the account key the statement names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). Key 5 does not cover key 6; the statement carries its own signature. A sub-agent's certificate carries the statement of its parent's account.
+The certificate carries the [account key statement](#account-key-statement) as key 6, so a member checks a chain of two: the statement against the account's recovery key, then the certificate against the account key the statement names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). Key 5 does not cover key 6; the statement carries its own signature. Key 6 holds the statement as a nested CBOR map, not a byte string with the encoded map. Key 6 is absent on a certificate written before accounts exist, while each database draws its own account key ([The account key](#the-account-key)). A sub-agent's certificate carries the statement of its parent's account.
 
 ### Account key statement
 
@@ -291,7 +292,7 @@ The seed is the recovery key's Ed25519 secret. The recovery code encodes the 128
 
 ### Pairing answer
 
-When a device joins an account, the answer carries the account key sealed with HPKE to the new device's X25519 key: the construction of the [key envelope](#key-envelope), under its own `info` label, `"nocentraldb/account-key"`. The `info` input is that label alone: no space id, generation or recipient member id follows it, because an account key belongs to no space and is sealed to one device's key. The HPKE ciphertext is the 32-byte account key. A label of its own keeps an account key from ever being opened as a space key ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
+When a device joins an account, the answer carries the account key sealed with HPKE to the new device's X25519 key: the construction of the [key envelope](#key-envelope), under its own `info` label, `"nocentraldb/account-key"`. The `info` input is that label alone: no space id, generation or recipient member id follows it, because an account key belongs to no space and is sealed to one device's key. The HPKE plaintext is the 32-byte Ed25519 secret seed of the account key. A label of its own keeps an account key from ever being opened as a space key ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
 
 ### Account fingerprint
 

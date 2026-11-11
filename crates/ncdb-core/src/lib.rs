@@ -8,8 +8,9 @@
 //! which keeps what a member's next change takes from it ([`tips`]).
 //! It also holds the member and space keys ([`keys`]) and signing and
 //! sealing a change as RFC 0003 (`docs/rfc/0003-keys-and-cryptography.md`)
-//! defines it ([`seal`]), and the key envelopes that wrap a space key to one
-//! member with HPKE ([`envelope`]). A member takes each change it receives through the
+//! defines it ([`seal`]), the key envelopes that wrap a space key to one
+//! member with HPKE ([`envelope`]), and the account key sealed the same way
+//! for a pairing answer ([`pairing`]). A member takes each change it receives through the
 //! checks of RFC 0002 ("What a member does with a change it receives")
 //! and keeps it folded, parked or rejected
 //! ([`receive`]), and un-folds a folded change that a later control change
@@ -49,6 +50,7 @@ pub mod log;
 pub mod membership;
 pub mod model_lock;
 pub mod object;
+pub mod pairing;
 pub mod receive;
 mod redact;
 pub mod reference;
