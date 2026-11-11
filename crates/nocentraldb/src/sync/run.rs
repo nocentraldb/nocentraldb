@@ -33,6 +33,9 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
         // A log that cannot be read leaves nothing to push again; pushing
         // reads it again and ends the session.
         let _ = super::again::load(&mut inner);
+        // An epoch or cursor that cannot be read is left out: the first
+        // `welcome` then forgets the positions and pulls from 0.
+        let _ = super::apply::load(&mut inner);
     }
     let db = Arc::downgrade(inner);
     let runtime = tokio::runtime::Builder::new_current_thread()
