@@ -33,7 +33,9 @@ use crate::error::{Error, ErrorCode, storage};
 use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
-use crate::sync::{self, SyncState};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sync;
+use crate::sync::SyncState;
 
 /// The options of [`Db::open`]: the text of the app's `model.lock.json`,
 /// where the database lives, and the relay to sync with.
@@ -295,7 +297,7 @@ impl Db {
 
     /// Opens the database with keys from `store` in place of the
     /// platform's keystore, as the keystore's tests need it.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     pub(crate) fn open_with_store(options: OpenOptions, store: &Store<'_>) -> Result<Db, Error> {
         Db::open_with(options, None, store)
     }
@@ -322,6 +324,13 @@ impl Db {
         store: &Store<'_>,
     ) -> Result<Db, Error> {
         let place = options.place()?;
+        #[cfg(target_arch = "wasm32")]
+        if options.relay.is_some() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "syncing with a relay is not built on wasm32 yet",
+            ));
+        }
         if let Some(url) = &options.relay
             && !url.starts_with("ws://")
         {
@@ -364,6 +373,7 @@ impl Db {
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }

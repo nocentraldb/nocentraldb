@@ -29,12 +29,19 @@
 //! it ends the session, which backs off and meets the same page again,
 //! until NOC-121 reads the link.
 
+// On wasm32 only the counts of `apply` are read until the browser syncs
+// (NOC-175); the rest serves the connection, which is native only.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod again;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
 mod pause;
+#[cfg(not(target_arch = "wasm32"))]
 mod run;
+#[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -44,6 +51,7 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
 
@@ -122,7 +130,9 @@ fn status(inner: &Inner) -> SyncStatus {
     }
 }
 
-/// What a database that syncs keeps of its relay.
+/// What a database that syncs keeps of its relay. On wasm32 nothing syncs
+/// yet (NOC-175), so a database there never holds one.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) struct SyncState {
     pub(crate) connection: Connection,
     pub(crate) epoch_changed: bool,
@@ -166,6 +176,7 @@ pub(crate) struct SyncState {
     pub(crate) halted: bool,
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 impl SyncState {
     fn new(wake: watch::Sender<()>, pause: watch::Sender<bool>) -> SyncState {
         SyncState {
@@ -231,7 +242,7 @@ pub(crate) fn wake(inner: &Inner) {
     inner.status.notify();
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 impl Inner {
     /// How many changes syncing folded that the log did not hold.
     pub(crate) fn sync_folds(&self) -> u64 {

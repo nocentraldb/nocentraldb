@@ -24,21 +24,36 @@ zeroize = { version = "=1.9.1", default-features = false }
 # The account's fingerprint (RFC 0010, "The fingerprint"). The version the
 # core already pins.
 sha2 = { version = "=0.11.1", default-features = false }
-# Syncing with one relay (RFC 0007, "The protocol"): a WebSocket client on
-# a tokio runtime of the SDK's own, on a thread of its own, so an app needs
-# no runtime. The versions Cargo.lock already held for the relay server.
-tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
-tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake"] }
-futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
-# What the member signs to authenticate a connection, as the relay checks
-# it (RFC 0003, decision 13).
-ncdb-relay.workspace = true
+# The channels that tell syncing that the database wrote or paused, on
+# every target; the runtime, sockets and timers of syncing are native only
+# (below). The version Cargo.lock already held for the relay server.
+tokio = { version = "=1.54.1", default-features = false, features = ["sync"] }
 # The member key and the account key of a database at a path live in the
 # platform keystore (RFC 0003, "The member key"; RFC 0009, S19), through
 # keyring-core and one store per platform: the Keychain on macOS, the
 # Credential Manager on Windows, the Secret Service on Linux, reached in pure
 # Rust over D-Bus, so no system library is needed to build.
 keyring-core = { version = "=1.0.1", default-features = false }
+
+# Syncing with one relay (RFC 0007, "The protocol"), natively: a WebSocket
+# client on a tokio runtime of the SDK's own, on a thread of its own, so an
+# app needs no runtime. The versions Cargo.lock already held for the relay
+# server. In the browser, syncing runs over the browser's WebSocket, which
+# a later slice builds (NOC-175).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+# What the member signs to authenticate a connection, as the relay checks
+# it (RFC 0003, decision 13).
+ncdb-relay.workspace = true
+
+# On wasm32 (NOC-175): the secure generator through the browser's
+# crypto.getRandomValues, as the core has it, and the wall clock through
+# JavaScript's Date.now() (src/clock.rs). The versions the core pins.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }

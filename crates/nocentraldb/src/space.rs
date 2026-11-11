@@ -5,7 +5,6 @@
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Payload};
 use ncdb_core::checks::SealChecks;
@@ -231,9 +230,7 @@ impl Space {
         not_stopped(&inner, self.id)?;
         let resolved = inner.spaces[&space].checks.resolved();
         holds(resolved, member.id(), Role::Writer, "writes content")?;
-        let wall = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+        let wall = crate::clock::now_millis();
         let Inner {
             view,
             spaces,

@@ -18,9 +18,7 @@ fn now<F: std::future::Future>(future: F) -> F::Output {
 
 #[test]
 fn a_database_with_a_relay_is_refused_until_the_browser_syncs() {
-    let options = OpenOptions::new(LOCK)
-        .in_memory()
-        .relay("ws://127.0.0.1:1");
+    let options = OpenOptions::new(LOCK).in_memory().relay("ws://127.0.0.1:1");
     let refused = now(Db::open(options)).unwrap_err();
     assert_eq!(refused.code(), ErrorCode::InvalidValue);
     assert!(refused.to_string().contains("not built"), "{refused}");
