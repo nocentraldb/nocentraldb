@@ -31,6 +31,7 @@ mod reopen;
 mod rotation;
 mod space_status;
 mod space_status_sync;
+mod shreds_waiting;
 mod spaces;
 pub(crate) mod support;
 mod timeouts;
