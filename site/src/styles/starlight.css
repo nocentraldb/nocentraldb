@@ -1,23 +1,63 @@
-/* Starlight in the brand: Merriweather headings, Merriweather Sans body, and
-   the draft's default accent (signal magenta) for links and the current page.
-   Starlight's own grey scales stay, so its light and dark themes both hold. */
-:root {
-  --sl-font: "Merriweather Sans", system-ui, sans-serif;
-  --sl-font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --sl-color-accent-low: #3b0a1f;
-  --sl-color-accent: #ff2e7e;
-  --sl-color-accent-high: #ffc2d9;
+/* Starlight in the NoCentralDB brand (nxsflow/brand, commit 38abcfc): dark
+   only, the --ncdb-* roles from tokens.css, the safety-yellow accent only for
+   the current page, links and focus. */
+:root,
+:root[data-theme="dark"] {
+  --sl-font: var(--ncdb-font-body);
+  --sl-font-mono: var(--ncdb-font-mono);
+  --sl-color-bg: var(--ncdb-bg);
+  --sl-color-bg-nav: var(--ncdb-bg);
+  --sl-color-bg-sidebar: var(--ncdb-bg);
+  --sl-color-bg-inline-code: var(--ncdb-surface-2);
+  --sl-color-black: var(--ncdb-bg);
+  --sl-color-gray-6: var(--ncdb-surface);
+  --sl-color-gray-5: var(--ncdb-surface-2);
+  --sl-color-gray-3: var(--ncdb-muted);
+  --sl-color-gray-2: var(--ncdb-ink);
+  --sl-color-white: var(--ncdb-ink);
+  --sl-color-text: var(--ncdb-ink);
+  --sl-color-hairline: var(--ncdb-surface);
+  --sl-color-hairline-light: var(--ncdb-surface-2);
+  --sl-color-hairline-shade: var(--ncdb-bg);
+  --sl-color-accent-low: var(--ncdb-surface-2);
+  --sl-color-accent: var(--ncdb-accent);
+  --sl-color-accent-high: var(--ncdb-accent);
+  --sl-color-text-accent: var(--ncdb-ink);
+  --sl-color-text-invert: var(--ncdb-accent-ink);
 }
-:root[data-theme="light"] {
-  --sl-color-accent-low: #ffe0ec;
-  --sl-color-accent: #c4134f;
-  --sl-color-accent-high: #4a0a1f;
+body {
+  font-weight: var(--ncdb-weight-body);
 }
 h1,
 h2,
 h3,
-.site-title {
-  font-family: "Merriweather", Georgia, serif;
-  font-weight: 900;
-  letter-spacing: -0.01em;
+h4 {
+  font-family: var(--ncdb-font-heading);
+  font-weight: var(--ncdb-weight-heading);
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+}
+.site-title img {
+  height: 30px;
+  width: auto;
+}
+/* Links carry the accent as an underline, never as text colour. */
+.sl-markdown-content a {
+  color: var(--ncdb-ink);
+  text-decoration-color: var(--ncdb-accent);
+  text-underline-offset: 3px;
+}
+/* The current page in the sidebar: accent ground, accent-ink text. */
+.sidebar-content a[aria-current="page"] {
+  color: var(--ncdb-accent-ink);
+}
+/* Code: ink and muted only, never the accent. */
+.expressive-code {
+  --ec-frm-edBg: var(--ncdb-surface);
+}
+/* Asides are neutral: warnings are never yellow. */
+.starlight-aside {
+  --sl-color-asides-text-accent: var(--ncdb-ink);
+  --sl-color-asides-border: var(--ncdb-surface-2);
+  background: var(--ncdb-surface);
 }

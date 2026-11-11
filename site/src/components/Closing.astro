@@ -1,5 +1,6 @@
 ---
-// What it does not do (GENESIS principle 4), the way into the docs, and the footer.
+// Who it is not for and what it does not do (BRAND.md "Not for", GENESIS
+// principle 4), the way into the docs, and the footer with the endorsement line.
 const limits = [
   [
     "The relay sees metadata.",
@@ -7,15 +8,11 @@ const limits = [
   ],
   [
     "Removing a member keeps their copy.",
-    "The space key rotates, so they read nothing new. What they already received stays on their device.",
+    "The space key rotates, so they get no new changes. What they already received stays on their device.",
   ],
   [
-    "Erasure has edges.",
+    "Shredding has edges.",
     "It does not reach devices that never come back online, a modified client, exports, screenshots or unmarked free text.",
-  ],
-  [
-    "No queries on the server.",
-    "Queries run on declared indexes in the local copy. For analytics across all users, use a central database.",
   ],
   [
     "v1 is not post-quantum.",
@@ -26,24 +23,27 @@ const docs = [
   ["Getting started", "Install, describe a model, open a database.", "/docs/"],
   [
     "Concepts",
-    "Spaces, the relay, convergence, erasure.",
+    "Spaces, the relay, convergence, shredding.",
     "/docs/concepts/spaces/",
   ],
-  ["API", "The SDK calls, as RFC 0009 decides them.", "/docs/api/"],
+  ["API", "The SDK calls, as RFC 0009 designs them.", "/docs/api/"],
   ["RFCs", "The whole design, open for your feedback.", "/docs/rfcs/"],
 ];
 ---
 
-<section id="limits" class="ground-lime" aria-labelledby="limits-title">
+<section id="limits" aria-labelledby="limits-title">
   <div class="wrap limits-grid">
     <div>
-      <h2 id="limits-title">What it does not do, said plainly.</h2>
-      <p class="section-lead">Every guarantee names its limits. These are the ones to know before you build.</p>
+      <h2 id="limits-title">When a central database is exactly right.</h2>
+      <p class="section-lead">
+        If your app needs queries on the server, analytics across all users' data, or one global truth at write time, such
+        as unique names, use a central database. And know these limits before you build on NoCentralDB:
+      </p>
     </div>
     <dl>
       {
         limits.map(([t, d]) => (
-          <div>
+          <div class="card">
             <dt>{t}</dt>
             <dd>{d}</dd>
           </div>
@@ -55,12 +55,12 @@ const docs = [
 
 <section id="docs" aria-labelledby="docs-title">
   <div class="wrap">
-    <h2 id="docs-title">Read the docs, then tell us where it breaks.</h2>
+    <h2 id="docs-title">Read the design, then tell us where it breaks.</h2>
     <ul class="doc-links">
       {
         docs.map(([t, d, href]) => (
           <li>
-            <a href={href}>
+            <a class="card" href={href}>
               <strong>{t}</strong>
               <span>{d}</span>
             </a>
@@ -68,7 +68,7 @@ const docs = [
         ))
       }
     </ul>
-    <a class="btn btn-accent feedback" href="https://github.com/nocentraldb/nocentraldb/discussions"
+    <a class="btn btn-primary feedback" href="https://github.com/nocentraldb/nocentraldb/discussions"
       >Share your feedback</a
     >
   </div>
@@ -76,8 +76,8 @@ const docs = [
 
 <footer>
   <div class="wrap foot">
-    <a class="brand" href="/">No<span>Central</span>DB</a>
-    <p>Open source under MIT or Apache-2.0. Built by nxsflow.</p>
+    <p class="tagline">No center. No collisions.</p>
+    <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
     <a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
   </div>
 </footer>
@@ -94,20 +94,17 @@ const docs = [
     display: grid;
     gap: 10px;
   }
-  dl div {
+  dl .card {
     padding: 20px 22px;
-    border-radius: var(--radius-m);
-    background: rgb(18 18 17 / 0.08);
   }
   dt {
-    font-family: var(--font-head);
-    font-weight: 900;
-    font-size: 19px;
+    font-family: var(--ncdb-font-heading);
+    font-weight: var(--ncdb-weight-heading);
+    font-size: var(--ncdb-text-body);
   }
   dd {
     margin: 6px 0 0;
-    font-weight: 400;
-    font-size: 16px;
+    color: var(--ncdb-muted);
   }
   .doc-links {
     list-style: none;
@@ -122,26 +119,22 @@ const docs = [
     gap: 8px;
     height: 100%;
     padding: 24px 22px 28px;
-    border-radius: var(--radius-m);
-    background: var(--ink-2);
     text-decoration: none;
-    transition: transform 180ms var(--ease-out);
-  }
-  .doc-links a:hover {
-    transform: translateY(-2px);
   }
   .doc-links strong {
-    font-family: var(--font-head);
-    font-weight: 900;
-    font-size: 22px;
-    color: var(--lime);
+    font-family: var(--ncdb-font-heading);
+    font-weight: var(--ncdb-weight-heading);
+    font-size: var(--ncdb-text-lead);
+  }
+  .doc-links span {
+    color: var(--ncdb-muted);
   }
   .feedback {
     margin-top: 40px;
   }
   footer {
-    padding: 40px 0 96px;
-    background: var(--ink);
+    padding: 40px 0 56px;
+    background: var(--ncdb-surface);
   }
   .foot {
     display: flex;
@@ -149,10 +142,12 @@ const docs = [
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    font-size: 14px;
+    font-size: var(--ncdb-text-small);
   }
-  .foot .brand span {
-    color: var(--lime);
+  .tagline {
+    font-family: var(--ncdb-font-heading);
+    font-weight: var(--ncdb-weight-heading);
+    font-size: var(--ncdb-text-body);
   }
   @media (max-width: 900px) {
     .limits-grid {

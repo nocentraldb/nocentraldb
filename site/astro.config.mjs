@@ -3,9 +3,8 @@ import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
 
-// The domain is a placeholder until the owner picks one (NOC-211).
 export default defineConfig({
-  site: "https://nocentraldb.github.io",
+  site: "https://nocentraldb.io",
   output: "static",
   // Inline every stylesheet, so a built page also renders where only the
   // HTML file is served, such as a phone preview of the draft.
@@ -13,6 +12,15 @@ export default defineConfig({
   integrations: [
     starlight({
       title: "NoCentralDB",
+      logo: {
+        src: "./src/assets/brand/ncdb-wordmark-dark.svg",
+        replacesTitle: true,
+      },
+      favicon: "/brand/ncdb-favicon-dark.ico",
+      components: {
+        ThemeProvider: "./src/components/starlight/ThemeProvider.astro",
+        ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
+      },
       description:
         "A local-first database for apps where people and agents work on the same data.",
       social: [
@@ -22,7 +30,7 @@ export default defineConfig({
           href: "https://github.com/nocentraldb/nocentraldb",
         },
       ],
-      customCss: ["./src/styles/fonts.css", "./src/styles/starlight.css"],
+      customCss: ["./src/styles/tokens.css", "./src/styles/starlight.css"],
       head: [
         {
           tag: "link",

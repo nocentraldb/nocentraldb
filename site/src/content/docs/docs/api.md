@@ -4,7 +4,7 @@ title: API
 description: The SDK API for apps, as RFC 0009 defines it.
 ---
 
-The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md). This page will hold the reference once the TypeScript SDK runs in the browser.
+The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md). This page will hold the reference once the SDK exists. Every call below is designed, not built.
 
 | Call                                      | What it does                                                                                    |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------- |

@@ -23,7 +23,7 @@ export const model = nc.model({
   {
     id: "open",
     label: "Open",
-    note: "A creates this member's key on first open, then a space. No relay needed to start.",
+    note: "On first open, A creates this member's key, then a space. It needs no relay to start.",
     code: `const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 
 const chat = await db.spaces.create();`,
@@ -58,11 +58,11 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
 ];
 ---
 
-<section id="code" class="ground-paper" aria-labelledby="code-title">
+<section id="code" aria-labelledby="code-title">
   <div class="wrap code-grid">
     <div>
-      <h2 id="code-title">Install the SDK and write five calls.</h2>
-      <p class="section-lead">No keys in your code. The SDK creates, stores and rotates them.</p>
+      <h2 id="code-title">Five calls, once the SDK ships.</h2>
+      <p class="section-lead">No keys in your code: the SDK is designed to create, store and rotate them.</p>
       <div class="install">
         <code>npm install @nocentraldb/sdk</code>
         <button type="button" class="copy" data-copy="npm install @nocentraldb/sdk">Copy</button>
@@ -110,8 +110,7 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     gap: 12px;
     padding: 8px 8px 8px 20px;
     border-radius: 999px;
-    background: var(--ink);
-    color: var(--paper);
+    background: var(--ncdb-surface);
     max-width: 440px;
   }
   .install code {
@@ -125,15 +124,15 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     padding: 0 18px;
     border-radius: 999px;
     border: 0;
-    background: var(--lime);
-    color: var(--ink);
-    font: 700 14px var(--font-body);
+    background: var(--ncdb-surface-2);
+    color: var(--ncdb-ink);
+    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
     cursor: pointer;
   }
   .also {
     margin-top: 16px;
     font-size: 15px;
-    font-weight: 400;
+    color: var(--ncdb-muted);
   }
   .also code {
     font-size: 14px;
@@ -143,7 +142,7 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     gap: 4px;
     padding: 5px;
     border-radius: 999px;
-    background: var(--ink);
+    background: var(--ncdb-surface);
     width: max-content;
     max-width: 100%;
     overflow-x: auto;
@@ -154,19 +153,19 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     border: 0;
     border-radius: 999px;
     background: none;
-    color: var(--paper);
-    font: 700 14px var(--font-body);
+    color: var(--ncdb-muted);
+    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
     cursor: pointer;
     white-space: nowrap;
     transition: background-color 160ms var(--ease-out);
   }
   [role="tab"][aria-selected="true"] {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--ncdb-surface-2);
+    color: var(--ncdb-ink);
   }
   .note {
     margin: 20px 0 14px;
-    font-weight: 400;
+    color: var(--ncdb-muted);
     min-height: 3.2em;
   }
   [role="tabpanel"] :global(pre) {
@@ -177,17 +176,18 @@ const stop = db.subscribe(latest, (page) => render(page.items));`,
     line-height: 1.6;
     overflow-x: auto;
     min-height: 300px;
-    --astro-code-background: var(--ink);
-    --astro-code-foreground: #faf9f7;
-    --astro-code-token-keyword: var(--accent-on-ink);
-    --astro-code-token-string: var(--lime);
-    --astro-code-token-string-expression: var(--lime);
-    --astro-code-token-function: #faf9f7;
-    --astro-code-token-constant: #e9e7e2;
-    --astro-code-token-parameter: #e9e7e2;
-    --astro-code-token-comment: #a3a29d;
-    --astro-code-token-punctuation: #c9c7c1;
-    --astro-code-token-link: var(--lime);
+    /* BRAND.md: code blocks use ink and muted only, never the accent. */
+    --astro-code-background: var(--ncdb-surface);
+    --astro-code-foreground: var(--ncdb-ink);
+    --astro-code-token-keyword: var(--ncdb-muted);
+    --astro-code-token-string: var(--ncdb-ink);
+    --astro-code-token-string-expression: var(--ncdb-ink);
+    --astro-code-token-function: var(--ncdb-ink);
+    --astro-code-token-constant: var(--ncdb-ink);
+    --astro-code-token-parameter: var(--ncdb-ink);
+    --astro-code-token-comment: var(--ncdb-muted);
+    --astro-code-token-punctuation: var(--ncdb-muted);
+    --astro-code-token-link: var(--ncdb-ink);
   }
   @media (max-width: 900px) {
     .code-grid {

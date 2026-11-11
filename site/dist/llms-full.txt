@@ -6,7 +6,7 @@
 
 Not yet a product
 
-NoCentralDB is in its design stage. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
+NoCentralDB does not exist yet. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
 
 ## Install
 
@@ -74,13 +74,13 @@ await project.write((tx) => {
 });
 ```
 
-A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
+A `write` is designed to resolve once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
 
 # API
 
 > The SDK API for apps, as RFC 0009 defines it.
 
-The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md). This page will hold the reference once the TypeScript SDK runs in the browser.
+The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md). This page will hold the reference once the SDK exists. Every call below is designed, not built.
 
 | Call                                      | What it does                                                                                    |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------- |
@@ -96,27 +96,29 @@ The SDK API is designed in [RFC 0009: The SDK API for apps](https://github.com/n
 
 > A full copy on every member, and the same state on all of them.
 
-Every member keeps the complete encrypted log of each space it belongs to and folds it into a local SQLite view. Reads never wait for the network.
+Every member is designed to keep the complete encrypted log of each space it belongs to and to **fold** it, that is, apply each change in turn, into a local SQLite view. Reads are local; they never wait for the network.
 
-The same set of changes yields the same state on every member, in any order of arrival. Each field type says how concurrent edits merge. A change that loses to one its author had not seen stays identifiable as such, the same way on every member.
+Writes **converge**: the same set of changes yields the same state on every member, in any order of arrival. Each field type says how concurrent edits merge. A change that loses to one its author had not seen stays identifiable as such, the same way on every member.
 
-With no relay, members keep working; when they reconnect, every copy converges.
-
-# Erasure
-
-> Erasing a person destroys a key.
-
-The schema marks personal fields. Each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives.
-
-**What it does not reach:** devices that never come back online, a modified client that ignores the erasure, a relay backup from before the erasure that a member obtains, exports and screenshots, and personal data in unmarked free text.
+In **island mode**, with no relay at all, members keep working. Network gone? Your writes are stored locally and sync when the relay is back.
 
 # The relay
 
 > A server that stores and forwards changes it cannot read.
 
-The relay checks signatures and membership, appends signed, encrypted changes to a space’s log and hands them out from a cursor. It holds no keys, so it cannot read content.
+The **relay** is designed to check signatures and membership, append signed, encrypted changes to a space’s log and hand them out from a cursor. It holds no keys and folds nothing, so it cannot read content.
 
 **What it does see.** Which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. It can also withhold changes or show members different subsets of a log.
+
+# Shredding a person
+
+> Shredding a person destroys their key.
+
+The schema marks personal fields. Each is designed to be encrypted with one key per person per space. To **shred** a person, a member performs a `work order` and a second account gives its `sign-off`; then the key is destroyed. A person’s data can be shredded this way, and the audit trail of who changed what is designed to survive it.
+
+**What it does not reach:** devices that never come back online, a modified client that ignores the shred, a relay backup from before the shred that a member obtains, exports and screenshots, and personal data in unmarked free text.
+
+Whether destroying a key counts as erasure for you is for your data protection officer to decide. This is a design, not legal advice.
 
 # Spaces and members
 
@@ -124,9 +126,9 @@ The relay checks signatures and membership, appends signed, encrypted changes to
 
 A **space** is the unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces.
 
-A **member** is a person’s device, an agent or a sub-agent, each with its own key. An agent can give a sub-agent a small space with only what its task needs, never its own keys.
+A **member** is a person’s device, an agent or a sub-agent, each with its own key and a role: `reader`, `writer` or `admin`. An agent is designed to give a sub-agent a small space with only what its task needs, never its own keys.
 
-Removing a member rotates the space key, so it cannot read what is written afterwards. It does not delete the copy the member already holds.
+Removing a member rotates the space key, so the relay sends it no new changes. It does not delete the copy the member already holds.
 
 # RFCs
 

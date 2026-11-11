@@ -4,8 +4,8 @@
 
 ## Documentation Sets
 
-- [Abridged documentation](https://nocentraldb.github.io/llms-small.txt): a compact version of the documentation for NoCentralDB, with non-essential content removed
-- [Complete documentation](https://nocentraldb.github.io/llms-full.txt): the full documentation for NoCentralDB
+- [Abridged documentation](https://nocentraldb.io/llms-small.txt): a compact version of the documentation for NoCentralDB, with non-essential content removed
+- [Complete documentation](https://nocentraldb.io/llms-full.txt): the full documentation for NoCentralDB
 
 ## Notes
 

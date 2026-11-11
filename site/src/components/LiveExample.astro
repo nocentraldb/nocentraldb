@@ -1,41 +1,55 @@
 ---
 // Placeholder for the live core example. The layout is final; the content is
 // simulated until the SDK and the relay run in the browser (a later ticket).
+// The accent marks one recurring thing only: the connected state.
+const members = [
+  { id: "b", name: "B" },
+  { id: "c", name: "C" },
+];
 ---
 
 <section id="live" aria-labelledby="live-title">
   <div class="wrap">
-    <h2 id="live-title">Two members, one space, and a relay that sees bytes.</h2>
+    <h2 id="live-title">Two members, one space, and a relay that carries only bytes.</h2>
     <p class="section-lead">
-      Here the real SDK will run in three frames and the relay in your browser. Until then, this is a
-      simulation of what you will see.
+      Here the real SDK will run in three frames, with the relay in your browser. Until it exists, this is a simulation of
+      what you will see.
     </p>
 
     <div class="stage" data-live>
       <article class="frame frame-a">
         <header><b>A</b> Setup</header>
         <ol class="steps">
-          <li data-s="0">Open the database</li>
-          <li data-s="1">Create the space “team chat”</li>
-          <li data-s="2">Add B and C as writers</li>
+          <li>Open the database</li>
+          <li>Create the <span class="term">space</span> “team chat”</li>
+          <li>Add B and C as <span class="term">writer</span></li>
         </ol>
       </article>
-      <article class="frame chat" data-chat="b">
-        <header><b>B</b> Member</header>
-        <div class="log" aria-live="off"></div>
-        <div class="compose"><span data-typing="b"></span></div>
-      </article>
-      <article class="frame chat" data-chat="c">
-        <header><b>C</b> Member</header>
-        <div class="log" aria-live="off"></div>
-        <div class="compose"><span data-typing="c"></span></div>
-      </article>
+      {
+        members.map((m) => (
+          <article class="frame chat" data-chat={m.id}>
+            <header>
+              <b>{m.name}</b> Member
+              <span class="state" data-state={m.id}>
+                connected
+              </span>
+            </header>
+            <div class="log" />
+            <div class="compose">
+              <span data-typing={m.id} />
+            </div>
+          </article>
+        ))
+      }
       <article class="frame relay">
-        <header><b>R</b> Relay log</header>
+        <header><b>R</b> <span class="term">relay</span> log</header>
         <ol class="bytes" data-bytes></ol>
       </article>
       <button class="pause" type="button" data-live-pause>Pause</button>
     </div>
+    <p class="note">
+      Network gone? Your writes are stored locally and sync when the relay is back.
+    </p>
   </div>
 </section>
 
@@ -48,10 +62,10 @@
     gap: 12px;
   }
   .frame {
-    background: var(--ink-2);
+    background: var(--ncdb-surface);
     border-radius: var(--radius-m);
     padding: 16px;
-    min-height: 340px;
+    min-height: 360px;
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -60,8 +74,8 @@
     display: flex;
     gap: 10px;
     align-items: center;
-    font-weight: 700;
-    font-size: 14px;
+    font-weight: var(--ncdb-weight-strong);
+    font-size: var(--ncdb-text-small);
     margin-bottom: 16px;
   }
   header b {
@@ -70,38 +84,48 @@
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    background: var(--lime);
-    color: var(--ink);
+    background: var(--ncdb-surface-2);
     font-size: 13px;
   }
-  .relay header b {
-    background: var(--accent);
-    color: var(--on-accent);
+  .state {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-weight: var(--ncdb-weight-body);
+    color: var(--ncdb-muted);
+  }
+  .state::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ncdb-accent);
+  }
+  .state.island::before {
+    background: none;
+    box-shadow: inset 0 0 0 1.5px var(--ncdb-muted);
   }
   .steps {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 10px;
-    font-size: 14px;
+    gap: 12px;
+    font-size: 15px;
+    color: var(--ncdb-muted);
   }
   .steps li {
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
+    transition: color 300ms;
   }
-  .steps li::before {
-    content: "";
-    flex: none;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--ink-3);
-    transition: background-color 300ms;
+  .steps li.done {
+    color: var(--ncdb-ink);
   }
-  .steps li.done::before {
-    background: var(--lime);
+  .steps li.done::after {
+    content: " · done";
+    font-family: var(--ncdb-font-mono);
+    font-size: var(--ncdb-text-small);
+    color: var(--ncdb-muted);
   }
   .log {
     flex: 1;
@@ -111,25 +135,30 @@
     gap: 8px;
   }
   .log :global(p) {
-    max-width: 85%;
+    max-width: 88%;
     padding: 8px 12px;
     border-radius: 14px;
     font-size: 14px;
     line-height: 1.4;
-    background: var(--ink-3);
+    background: var(--ncdb-bg);
     animation: pop 360ms var(--ease-out);
   }
   .log :global(p.mine) {
     align-self: flex-end;
-    background: var(--lime);
-    color: var(--ink);
-    font-weight: 400;
+    background: var(--ncdb-surface-2);
+  }
+  .log :global(p.local)::after {
+    content: "stored locally";
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--ncdb-muted);
   }
   .compose {
     margin-top: 12px;
     min-height: 40px;
     border-radius: 999px;
-    background: var(--ink);
+    background: var(--ncdb-bg);
     padding: 9px 14px;
     font-size: 14px;
   }
@@ -140,7 +169,7 @@
     height: 1em;
     margin-left: 2px;
     vertical-align: -2px;
-    background: var(--lime);
+    background: var(--ncdb-ink);
   }
   .bytes {
     list-style: none;
@@ -153,18 +182,18 @@
     gap: 8px;
   }
   .bytes :global(li) {
-    font-family: var(--font-code);
+    font-family: var(--ncdb-font-mono);
     font-size: 12px;
     line-height: 1.45;
     word-break: break-all;
     padding: 8px 10px;
     border-radius: var(--radius-s);
-    background: var(--ink-3);
+    background: var(--ncdb-bg);
     animation: pop 360ms var(--ease-out);
   }
-  .bytes :global(li b) {
-    color: var(--accent-on-ink);
-    font-weight: 600;
+  .bytes :global(li span) {
+    display: block;
+    color: var(--ncdb-muted);
   }
   @keyframes pop {
     from {
@@ -174,23 +203,27 @@
   }
   .pause {
     position: absolute;
-    right: 12px;
+    right: 0;
     top: -56px;
     min-height: 40px;
     padding: 0 16px;
     border-radius: 999px;
     border: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font: 700 13px var(--font-body);
+    background: var(--ncdb-surface-2);
+    color: var(--ncdb-ink);
+    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
     cursor: pointer;
+  }
+  .note {
+    margin-top: 24px;
+    color: var(--ncdb-muted);
   }
   @media (max-width: 1000px) {
     .stage {
       grid-template-columns: 1fr 1fr;
     }
     .frame {
-      min-height: 260px;
+      min-height: 280px;
     }
   }
   @media (max-width: 560px) {
@@ -201,7 +234,7 @@
       min-height: 0;
     }
     .frame {
-      min-height: 220px;
+      min-height: 240px;
     }
     .pause {
       position: static;
@@ -218,35 +251,72 @@
     const $ = (s) => root.querySelector(s);
     const hex = (n) =>
       Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
-    const script = [
-      ["b", "Can you look at the relay draft?"],
-      ["c", "On it. Reading my own copy, so no wait."],
-      ["b", "I'm offline from here, train tunnel."],
-      ["c", "Fine, it syncs when you're back."],
-    ];
-    const say = (who, text) => {
-      for (const side of ["b", "c"]) {
-        const p = document.createElement("p");
-        p.textContent = text;
-        if (side === who) p.className = "mine";
-        const log = $(`[data-chat="${side}"] .log`);
-        log.append(p);
-        while (log.children.length > 4) log.firstElementChild.remove();
-      }
+    const online = { b: true, c: true };
+    const missed = { b: [], c: [] };
+    const pending = { b: [], c: [] };
+    const trim = (el) => {
+      while (el.children.length > 4) el.firstElementChild.remove();
+    };
+    const show = (side, who, text, local) => {
+      const p = document.createElement("p");
+      p.textContent = text;
+      if (side === who) p.className = local ? "mine local" : "mine";
+      const log = $(`[data-chat="${side}"] .log`);
+      log.append(p);
+      trim(log);
+    };
+    const relay = (who, text) => {
       const li = document.createElement("li");
-      li.innerHTML = `<b>${who.toUpperCase()} · gen 1 · ${120 + text.length * 2} B</b><br>`;
-      li.append(hex(18));
+      const head = document.createElement("span");
+      head.textContent = `${who.toUpperCase()} · gen 1 · ${120 + text.length * 2} B`;
+      li.append(head, hex(18));
       const bytes = $("[data-bytes]");
       bytes.append(li);
-      while (bytes.children.length > 4) bytes.firstElementChild.remove();
+      trim(bytes);
+    };
+    const deliver = (who, text) => {
+      relay(who, text);
+      for (const side of ["b", "c"]) {
+        if (side === who) continue;
+        if (online[side]) show(side, who, text);
+        else missed[side].push([who, text]);
+      }
+    };
+    const say = (who, text) => {
+      if (online[who]) {
+        show(who, who, text);
+        deliver(who, text);
+      } else {
+        show(who, who, text, true);
+        pending[who].push(text);
+      }
+    };
+    const setState = (who, isOnline) => {
+      online[who] = isOnline;
+      const el = $(`[data-state="${who}"]`);
+      el.textContent = isOnline ? "connected" : "island mode";
+      el.classList.toggle("island", !isOnline);
+      if (isOnline) {
+        for (const text of pending[who].splice(0)) deliver(who, text);
+        for (const [from, text] of missed[who].splice(0)) show(who, from, text);
+      }
     };
     const steps = [...root.querySelectorAll(".steps li")];
+    const actions = [
+      ...steps.map((s) => () => s.classList.add("done")),
+      ["b", "Can you look at the relay draft?"],
+      ["c", "On it. Reading my own copy, no wait."],
+      ["b", "Train tunnel ahead. I'll keep writing."],
+      () => setState("b", false),
+      ["b", "Two more notes on section 3."],
+      ["c", "Merged your first notes."],
+      () => setState("b", true),
+    ];
+    const loopFrom = steps.length;
     const still =
-      matchMedia("(prefers-reduced-motion: reduce)").matches ||
-      document.documentElement.dataset.shot !== undefined;
+      matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.shot !== undefined;
     if (still) {
-      steps.forEach((s) => s.classList.add("done"));
-      script.forEach(([w, t]) => say(w, t));
+      for (const a of actions) typeof a === "function" ? a() : say(...a);
       $("[data-live-pause]").hidden = true;
       return;
     }
@@ -255,27 +325,25 @@
     let typing = null;
     const tick = () => {
       if (paused) return;
-      if (t < steps.length) {
-        steps[t].classList.add("done");
-      } else {
-        const [who, text] = script[(t - steps.length) % script.length];
-        const box = $(`[data-typing="${who}"]`);
-        let k = 0;
-        clearInterval(typing);
-        typing = setInterval(() => {
-          box.textContent = text.slice(0, ++k);
-          if (k >= text.length) {
-            clearInterval(typing);
-            setTimeout(() => {
-              box.textContent = "";
-              say(who, text);
-            }, 250);
-          }
-        }, 38);
-      }
-      t++;
+      const a = actions[t];
+      t = t + 1 < actions.length ? t + 1 : loopFrom;
+      if (typeof a === "function") return a();
+      const [who, text] = a;
+      const box = $(`[data-typing="${who}"]`);
+      let k = 0;
+      clearInterval(typing);
+      typing = setInterval(() => {
+        box.textContent = text.slice(0, ++k);
+        if (k >= text.length) {
+          clearInterval(typing);
+          setTimeout(() => {
+            box.textContent = "";
+            say(who, text);
+          }, 250);
+        }
+      }, 38);
     };
-    let timer = setInterval(tick, 3000);
+    setInterval(tick, 3000);
     tick();
     $("[data-live-pause]").addEventListener("click", (e) => {
       paused = !paused;

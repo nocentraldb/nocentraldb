@@ -1,31 +1,23 @@
 ---
-// The first screen: what NoCentralDB is, for whom, and the one fact that
-// sets it apart, shown as the same changes seen by a member and by the relay.
+// The first screen, in BRAND.md's visible lines: eyebrow, headline, subline.
+// Next to them, the same changes as a member reads them and as the relay
+// stores them.
 const rows = [
   {
     coll: "tasks",
-    op: "create",
     text: "Write the README",
     meta: "open · priority 1",
     size: 312,
   },
   {
     coll: "tasks",
-    op: "update",
     text: "Write the README",
     meta: "status → in_progress",
     size: 188,
   },
-  {
-    coll: "people",
-    op: "create",
-    text: "Ada ••••••",
-    meta: "personal · shredable",
-    size: 264,
-  },
+  { coll: "people", text: "Ada ••••••", meta: "personal field", size: 264 },
   {
     coll: "messages",
-    op: "create",
     text: "Draft is up for review",
     meta: "agent · planner",
     size: 240,
@@ -34,58 +26,58 @@ const rows = [
 ---
 
 <section class="hero" aria-labelledby="hero-title">
-  <div class="wrap hero-grid">
-    <div class="hero-copy">
-      <h1 id="hero-title" class="enter" style="--d: 0ms">
-        The <span class="nowrap">local-first</span> database for <mark>people and agents</mark>.
-      </h1>
-      <p class="lead enter" style="--d: 120ms">
-        Every member keeps its own copy, under its own keys. Reads never leave the device. The relay
-        in the middle stores the changes and cannot read a byte of them.
-      </p>
-      <div class="actions enter" style="--d: 220ms">
-        <a class="btn btn-accent" href="docs/">Read the docs</a>
-        <a class="btn btn-lime" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md"
-          >Review the RFCs</a
-        >
+  <div class="wrap">
+    <p class="eyebrow mono enter" style="--d: 0ms">A local-first database for people and agents.</p>
+    <h1 id="hero-title" class="enter" style="--d: 60ms">
+      For when a central database is the wrong&nbsp;place.
+    </h1>
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="lead enter" style="--d: 140ms">
+          Everyone works on their own copy, under their own keys. The relay in the middle can't read a thing.
+        </p>
+        <div class="actions enter" style="--d: 220ms">
+          <a class="btn btn-primary" href="/docs/">Read the docs</a>
+          <a class="btn btn-secondary" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md"
+            >Review the RFCs</a
+          >
+        </div>
+        <p class="status enter" style="--d: 300ms">
+          NoCentralDB does not exist yet. This page shows what it is designed to do; the design is open in the RFCs.
+        </p>
       </div>
-      <p class="status enter" style="--d: 300ms">
-        In design. The API below is what the RFCs decide; nothing is released yet.
-      </p>
-    </div>
 
-    <figure class="split enter" style="--d: 180ms" aria-label="The same changes, as a member and as the relay see them">
-      <div class="pane pane-member">
-        <p class="pane-title">On a member</p>
-        <ol class="rows" data-rows="member">
-          {
-            rows.map((r) => (
-              <li>
-                <span class="tag">{r.coll}</span>
-                <strong>{r.text}</strong>
-                <small>{r.meta}</small>
-              </li>
-            ))
-          }
-        </ol>
-      </div>
-      <div class="pane pane-relay">
-        <p class="pane-title">On the relay</p>
-        <ol class="rows" data-rows="relay">
-          {
-            rows.map((r) => (
-              <li>
-                <span class="tag">{r.size} B</span>
-                <code class="cipher" data-len="44">
-                  9f3ac01e77b2d54a0c6e1f8b3d92a7e4c5b0f61d28a3
-                </code>
-              </li>
-            ))
-          }
-        </ol>
-      </div>
-      <button class="pause" type="button" aria-pressed="false" data-pause>Pause</button>
-    </figure>
+      <figure class="split enter" style="--d: 180ms" aria-label="The same changes, as a member and as the relay see them">
+        <div class="pane pane-member">
+          <p class="pane-title">On a member</p>
+          <ol class="rows" data-rows="member">
+            {
+              rows.map((r) => (
+                <li>
+                  <span class="tag term">{r.coll}</span>
+                  <strong>{r.text}</strong>
+                  <small>{r.meta}</small>
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+        <div class="pane pane-relay">
+          <p class="pane-title">On the <span class="term">relay</span></p>
+          <ol class="rows" data-rows="relay">
+            {
+              rows.map((r) => (
+                <li>
+                  <span class="tag">{r.size} B</span>
+                  <code class="cipher">9f3ac01e77b2d54a0c6e1f8b3d92a7e4c5b0f61d28a3</code>
+                </li>
+              ))
+            }
+          </ol>
+        </div>
+        <button class="pause" type="button" aria-pressed="false" data-pause>Pause</button>
+      </figure>
+    </div>
   </div>
 </section>
 
@@ -94,52 +86,42 @@ const rows = [
     min-height: 100svh;
     display: flex;
     align-items: center;
-    padding: 120px 0 72px !important;
+    padding: 128px 0 72px !important;
+  }
+  .hero > .wrap {
+    width: 100%;
+  }
+  .eyebrow {
+    font-size: var(--ncdb-text-small);
+    color: var(--ncdb-muted);
+    margin-bottom: 20px;
+  }
+  h1 {
+    max-width: 21ch;
   }
   .hero-grid {
     display: grid;
-    grid-template-columns: 1.15fr 1fr;
+    grid-template-columns: 0.9fr 1.1fr;
     gap: clamp(32px, 5vw, 72px);
-    align-items: center;
-    width: 100%;
-  }
-  h1 {
-    font-size: clamp(34px, 4.6vw, 64px);
-  }
-  .nowrap {
-    white-space: nowrap;
-  }
-  mark {
-    background: none;
-    color: var(--lime);
+    align-items: start;
+    margin-top: 44px;
   }
   .lead {
-    font-size: clamp(18px, 1.5vw, 21px);
-    margin-top: 28px;
-    max-width: 34ch;
+    font-size: var(--ncdb-text-lead);
+    line-height: 1.4;
+    max-width: 30ch;
   }
   .actions {
     display: flex;
     gap: 12px;
-    margin-top: 36px;
+    margin-top: 32px;
     flex-wrap: wrap;
   }
   .status {
     margin-top: 28px;
-    font-size: 14px;
-    font-weight: 400;
-    display: flex;
-    gap: 10px;
-    align-items: baseline;
-  }
-  .status::before {
-    content: "";
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--accent);
-    transform: translateY(-1px);
+    font-size: var(--ncdb-text-small);
+    color: var(--ncdb-muted);
+    max-width: 40ch;
   }
 
   .split {
@@ -149,69 +131,56 @@ const rows = [
     grid-template-columns: 1fr 1fr;
     border-radius: var(--radius-l);
     overflow: hidden;
-    min-height: 420px;
   }
   .pane {
-    padding: 24px 20px 64px;
+    padding: 22px 18px 64px;
     min-width: 0;
   }
   .pane-member {
-    background: var(--lime);
-    color: var(--ink);
+    background: var(--ncdb-surface);
   }
   .pane-relay {
-    background: var(--ink-2);
-    color: var(--paper);
+    background: var(--ncdb-surface-2);
   }
   .pane-title {
-    font-family: var(--font-head);
-    font-weight: 900;
-    font-size: 18px;
-    margin-bottom: 18px;
+    font-family: var(--ncdb-font-heading);
+    font-weight: var(--ncdb-weight-heading);
+    font-size: var(--ncdb-text-body);
+    margin-bottom: 16px;
   }
   .rows {
     list-style: none;
     margin: 0;
     padding: 0;
     display: grid;
-    gap: 10px;
+    gap: 8px;
   }
-  .rows li {
+  .rows :global(li) {
     display: grid;
     gap: 2px;
-    padding: 12px 14px;
-    border-radius: var(--radius-m);
-    min-height: 74px;
+    padding: 10px 12px;
+    border-radius: var(--radius-s);
+    background: var(--ncdb-bg);
+    min-height: 72px;
     align-content: start;
   }
-  .pane-member li {
-    background: rgb(18 18 17 / 0.08);
-  }
-  .pane-relay li {
-    background: var(--ink-3);
-  }
-  .rows strong {
-    font-weight: 700;
+  .rows :global(strong) {
+    font-weight: var(--ncdb-weight-emphasis);
     font-size: 15px;
     line-height: 1.3;
   }
-  .rows small {
-    font-size: 13px;
-    font-weight: 400;
+  .rows :global(small),
+  .rows :global(.tag) {
+    font-size: var(--ncdb-text-small);
+    color: var(--ncdb-muted);
   }
-  .tag {
-    font-size: 12px;
-    font-weight: 700;
-  }
-  .pane-relay .tag {
-    color: var(--accent-on-ink);
-  }
-  .cipher {
+  .rows :global(.cipher) {
     font-size: 12.5px;
     line-height: 1.45;
     word-break: break-all;
+    color: var(--ncdb-ink);
   }
-  .rows li.fresh {
+  .rows :global(li.fresh) {
     animation: arrive 520ms var(--ease-out);
   }
   @keyframes arrive {
@@ -228,9 +197,9 @@ const rows = [
     padding: 0 14px;
     border-radius: 999px;
     border: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font: 700 13px var(--font-body);
+    background: var(--ncdb-bg);
+    color: var(--ncdb-ink);
+    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
     cursor: pointer;
   }
 
@@ -252,21 +221,18 @@ const rows = [
     .hero {
       min-height: auto;
     }
-    .split {
-      min-height: 0;
-    }
   }
   @media (max-width: 520px) {
     .actions .btn {
       width: 100%;
     }
     .pane {
-      padding: 18px 12px 60px;
+      padding: 16px 10px 60px;
     }
-    .rows li {
+    .rows :global(li) {
       padding: 10px;
     }
-    .rows strong {
+    .rows :global(strong) {
       font-size: 14px;
     }
   }
@@ -280,35 +246,49 @@ const rows = [
     if (!member || !relay || !button) return;
     const hex = (n) =>
       Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
-    relay.querySelectorAll(".cipher").forEach((c) => (c.textContent = hex(22)));
+    relay.querySelectorAll(".cipher").forEach((c) => {
+      c.textContent = hex(22);
+    });
     const feed = [
       ["tasks", "Review the relay RFC", "open · priority 2", 296],
       ["tasks", "Review the relay RFC", "assignee → agent", 204],
       ["messages", "Ranked 50 open tasks", "agent · planner", 232],
-      ["people", "Ada ••••••", "erased · key destroyed", 96],
+      ["people", "Ada ••••••", "shredded · key destroyed", 96],
       ["tasks", "Write the README", "status → done", 188],
     ];
     let i = 0;
+    const row = (cells) => {
+      const li = document.createElement("li");
+      li.className = "fresh";
+      for (const [tag, cls, text] of cells) {
+        const el = document.createElement(tag);
+        el.className = cls;
+        el.textContent = text;
+        li.append(el);
+      }
+      return li;
+    };
     const step = () => {
       const [coll, text, meta, size] = feed[i++ % feed.length];
-      const m = document.createElement("li");
-      m.className = "fresh";
-      m.innerHTML = '<span class="tag"></span><strong></strong><small></small>';
-      m.children[0].textContent = coll;
-      m.children[1].textContent = text;
-      m.children[2].textContent = meta;
-      const r = document.createElement("li");
-      r.className = "fresh";
-      r.innerHTML = '<span class="tag"></span><code class="cipher"></code>';
-      r.children[0].textContent = `${size} B`;
-      r.children[1].textContent = hex(22);
-      member.prepend(m);
-      relay.prepend(r);
+      member.prepend(
+        row([
+          ["span", "tag term", coll],
+          ["strong", "", text],
+          ["small", "", meta],
+        ]),
+      );
+      relay.prepend(
+        row([
+          ["span", "tag", `${size} B`],
+          ["code", "cipher", hex(22)],
+        ]),
+      );
       member.lastElementChild.remove();
       relay.lastElementChild.remove();
     };
-    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    let timer = still || document.documentElement.dataset.shot !== undefined ? null : setInterval(step, 3200);
+    const still =
+      matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.shot !== undefined;
+    let timer = still ? null : setInterval(step, 3200);
     if (!timer) button.hidden = true;
     button.addEventListener("click", () => {
       if (timer) {

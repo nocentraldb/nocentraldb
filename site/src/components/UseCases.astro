@@ -1,44 +1,46 @@
 ---
-// The eight use cases of docs/use-cases.md, one line each, linking to the full text.
+// The eight use cases of docs/use-cases.md, one line each, linking to the
+// full text. Copy follows BRAND.md's claims rules: "designed to", and every
+// line about erasure names its limit.
 const base =
   "https://github.com/nocentraldb/nocentraldb/blob/main/docs/use-cases.md";
 const groups = [
   {
-    title: "Where a central database is the weaker choice",
+    title: "Why the data sits with the people and agents",
     items: [
       [
-        "Erasure that reaches every copy",
-        "Erasing a person destroys their key, in every archive and snapshot. The audit trail survives.",
+        "Shred a person, not a backup hunt",
+        "A person's data can be shredded by destroying their key. It does not reach devices that never come back online.",
         "1-erasure-that-reaches-every-copy",
       ],
       [
-        "A relay breach leaks nothing readable",
-        "A copy of the relay's database is ciphertext and metadata, nothing more.",
+        "A relay breach leaks no content",
+        "The relay is designed to hold no keys. A copy of its database is ciphertext and metadata.",
         "2-a-breach-of-the-relay-leaks-nothing-readable",
       ],
       [
-        "An outside agent, limited to one space",
-        "It gets one space's keys, signs every write, and loses access when you remove it.",
+        "An outside agent in one space",
+        "It gets the keys of one space, signs every write, and the relay sends it no new changes once you remove it.",
         "3-an-outside-agent-limited-to-one-space",
       ],
       [
         "A thousand agent queries a minute",
-        "Agents query their own copy: no round trip, no rate limit, no cost per read.",
+        "Agents query their own copy: no round trip, no rate limit, no cost per read. Writes still go through the relay.",
         "4-a-thousand-agent-queries-a-minute-reads-at-no-cost",
       ],
       [
         "The relay goes down, work goes on",
-        "Every member keeps reading and writing. When the relay is back, every copy converges.",
+        "In island mode every member keeps reading and writing. On rejoin, every copy converges.",
         "5-the-relay-goes-down-and-everyone-keeps-working",
       ],
     ],
   },
   {
-    title: "What you keep without a central server",
+    title: "What you keep without a server in the middle",
     items: [
       [
         "Writing together through a tunnel",
-        "Rich text on Yjs: both keep typing offline, and no text is lost when they meet again.",
+        "Collision-free edits on shared text: both keep typing offline, and no text is lost when they meet again.",
         "6-writing-together-through-a-tunnel",
       ],
       [
@@ -56,11 +58,11 @@ const groups = [
 ];
 ---
 
-<section id="use-cases" class="ground-lime" aria-labelledby="uc-title">
+<section id="use-cases" aria-labelledby="uc-title">
   <div class="wrap">
-    <h2 id="uc-title">Built for the data people and agents share.</h2>
+    <h2 id="uc-title">Your data lives where the work happens.</h2>
     <p class="section-lead">
-      Tickets, notes, customer records, shared documents. Eight situations, and what the design does in each.
+      On every device and with every agent you trust, under your own keys. The cloud carries it. It never owns it.
     </p>
     {
       groups.map((g) => (
@@ -72,6 +74,7 @@ const groups = [
                 <a class="card" href={`${base}#${anchor}`}>
                   <strong>{t}</strong>
                   <span>{line}</span>
+                  <em class="link">Read the case</em>
                 </a>
               </li>
             ))}
@@ -87,7 +90,6 @@ const groups = [
     margin-top: 56px;
   }
   h3 {
-    font-size: clamp(20px, 2vw, 25px);
     margin-bottom: 20px;
   }
   .cards {
@@ -103,30 +105,27 @@ const groups = [
     gap: 10px;
     align-content: start;
     height: 100%;
-    padding: 22px 22px 26px;
-    border-radius: var(--radius-m);
-    background: var(--ink);
-    color: var(--paper);
+    padding: 22px 22px 24px;
     text-decoration: none;
-    transition: transform 180ms var(--ease-out);
-  }
-  .card:hover {
-    transform: translateY(-2px);
   }
   .card strong {
-    font-family: var(--font-head);
-    font-weight: 900;
-    font-size: 19px;
+    font-family: var(--ncdb-font-heading);
+    font-weight: var(--ncdb-weight-heading);
+    font-size: var(--ncdb-text-body);
     line-height: 1.25;
   }
   .card span {
     font-size: 15px;
+    color: var(--ncdb-muted);
   }
-  .card::after {
-    content: "Read the case →";
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--accent-on-ink);
-    margin-top: 6px;
+  .card em {
+    font-style: normal;
+    font-size: var(--ncdb-text-small);
+    justify-self: start;
+    margin-top: 4px;
+  }
+  .card:hover em,
+  .card:focus-visible em {
+    background-size: 100% 2px;
   }
 </style>

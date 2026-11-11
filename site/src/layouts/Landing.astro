@@ -1,35 +1,35 @@
 ---
-import "../styles/fonts.css";
-import "../styles/landing.css";
+// The landing page, in the NoCentralDB brand (nxsflow/brand, commit 38abcfc).
+import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
 import CodeSection from "../components/CodeSection.astro";
 import Hero from "../components/Hero.astro";
 import LiveExample from "../components/LiveExample.astro";
 import UseCases from "../components/UseCases.astro";
+import "../styles/tokens.css";
+import "../styles/landing.css";
 
-export const accents = [
-  { id: "magenta", label: "Magenta", hex: "#ff2e7e" },
-  { id: "cobalt", label: "Cobalt", hex: "#2b59ff" },
-  { id: "cyan", label: "Cyan", hex: "#00c8ff" },
-] as const;
-
-interface Props {
-  accent: (typeof accents)[number]["id"];
-}
-const { accent } = Astro.props;
+// The wordmark is inlined, so the page shows it wherever its HTML is served.
+const logo = wordmark.replace(
+  "<svg ",
+  '<svg role="img" aria-label="NoCentralDB" ',
+);
 ---
 
 <!doctype html>
-<html lang="en" data-accent={accent}>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>NoCentralDB: the local-first database for people and agents</title>
+    <title>NoCentralDB: a local-first database for people and agents</title>
     <meta
       name="description"
-      content="Every member keeps its own copy, under its own keys. The relay in the middle cannot read a byte."
+      content="Everyone works on their own copy, under their own keys. The relay in the middle can't read a thing."
     />
-    <meta name="theme-color" content="#121211" />
+    <meta name="theme-color" content="#111110" />
+    <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
+    <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <script is:inline>
@@ -39,7 +39,7 @@ const { accent } = Astro.props;
   <body>
     <nav class="nav" aria-label="Main">
       <div class="wrap">
-        <a class="brand" href="/">No<span>Central</span>DB</a>
+        <a class="logo" href="/" set:html={logo} />
         <ul>
           <li class="hide-s"><a class="link" href="#use-cases">Use cases</a></li>
           <li class="hide-s"><a class="link" href="#code">Code</a></li>
@@ -55,16 +55,5 @@ const { accent } = Astro.props;
       <CodeSection />
       <Closing />
     </main>
-    <nav class="switcher" aria-label="Draft: accent colour">
-      <span>Draft accent</span>
-      {
-        accents.map((a) => (
-          <a href={`/accent/${a.id}/`} aria-current={a.id === accent ? "true" : "false"}>
-            <i style={`background:${a.hex}`} />
-            {a.label}
-          </a>
-        ))
-      }
-    </nav>
   </body>
 </html>

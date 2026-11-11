@@ -5,7 +5,7 @@ description: Install the SDK, describe a model and open a database.
 ---
 
 :::caution[Not yet a product]
-NoCentralDB is in its design stage. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
+NoCentralDB does not exist yet. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
 :::
 
 ## Install
@@ -66,4 +66,4 @@ await project.write((tx) => {
 });
 ```
 
-A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
+A `write` is designed to resolve once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
