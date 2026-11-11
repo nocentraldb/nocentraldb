@@ -27,6 +27,7 @@
 //! 0007), and [`Db::sync`] reports how far; see [`Db`] for what the SDK
 //! leaves out.
 
+mod clock;
 mod db;
 mod encode;
 mod error;
@@ -48,6 +49,8 @@ pub use db::{Db, OpenOptions};
 
 #[cfg(test)]
 mod agent_tests;
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};
