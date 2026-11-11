@@ -163,7 +163,7 @@ A member receiving a change checks the signature, checks that the author was a m
 
 A member with the right to add members ([RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights)) adds a new member like this:
 
-1. It obtains the new member's public identity: its member id, its two public keys and its member certificate. The SDK takes it from an invitation the new member accepted, never from a developer typing key bytes.
+1. It obtains the new member's public identity: its member id, its two public keys and its member certificate. The SDK takes it from an [invitation](#invitation) the new member sent, never from a developer typing key bytes.
 2. It checks the member certificate against the account it expects. If the account is new to it, the SDK shows the account's fingerprint, so a person can compare it once, the way messaging apps compare safety numbers ([Account fingerprint](#account-fingerprint)).
 3. It writes a **membership entry**, a control change, that adds the member id to the space.
 4. It writes a **key envelope** for the new member, also a control change: the current space key generation, wrapped with HPKE to the new member's X25519 key, signed by the adding member.
@@ -301,6 +301,29 @@ account fingerprint = SHA-256("nocentraldb/account-fingerprint" || recovery key 
 ```
 
 People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes. Until RFC 0010 is built, the SDKs compute it the same way over the database's own account key in place of the recovery key, so both SDKs hash the same input today.
+
+### Invitation
+
+A member's invitation carries its public identity to an admin of a space, over any channel the app has: a link, a QR code, a message ([Sharing a space key with a new member](#sharing-a-space-key-with-a-new-member), step 1). It travels as text: the prefix `ncdb-invite-1:` followed by base64url ([RFC 4648, section 5](https://www.rfc-editor.org/rfc/rfc4648#section-5)) of the bytes below, without padding (Carsten, 2026-11-10, NOC-141). It holds only public data.
+
+| Offset | Length | Field | Bytes |
+| --- | --- | --- | --- |
+| 0 | 1 | version | `1` |
+| 1 | 32 | signing key | the member's Ed25519 public key |
+| 33 | 32 | agreement key | the member's X25519 public key |
+| 65 | 32 | account key | key 1 of the [member certificate](#member-certificate) |
+| 97 | 1 | kind | key 3 of the certificate: `1` device or `2` agent |
+| 98 | 64 | certificate signature | key 5 of the certificate |
+| 162 | 1 | statement | `0`: the certificate carries no [account key statement](#account-key-statement); `1`: the three fields below follow |
+| 163 | 32 | recovery key | key 1 of the statement |
+| 195 | 8 | number | key 3 of the statement, big-endian, at least 1 |
+| 203 | 64 | statement signature | key 4 of the statement |
+
+An invitation of version 1 is 163 bytes without a statement and 267 bytes with one, about 230 and 370 characters as text. A reader rebuilds the rest: the member id from the two public keys ([The member key](#the-member-key)), which is key 2 of the certificate; the certificate's key 4 is absent, since only a device or an agent invites itself, and a sub-agent is added by its parent ([Sub-agents get an ad-hoc space](#sub-agents-get-an-ad-hoc-space)); the statement's key 2 is the certificate's key 1, the account key it names; and the [account fingerprint](#account-fingerprint) comes from the recovery key, or from the account key while there is no statement. Stored once each, no field can contradict another.
+
+A reader refuses the text with `invalidValue`, and reads nothing from it, when the prefix is not `ncdb-invite-1:`, when the rest is not unpadded base64url, when the version byte is not one it knows, when the kind is not `1` or `2`, when the statement byte is not `0` or `1`, when the number is 0, or when the length is not the one the statement byte gives. Reading an invitation checks its shape only. Whether the certificate holds is checked when an admin adds the member, which refuses one that does not with `invalidCertificate` ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members)). The version byte lets a later layout come with the same prefix; a reader that does not know it says so, instead of reading wrong fields.
+
+`docs/rfc/vectors/0003/` holds two invitations, without and with a statement, as text and as bytes, with every field in `fields.txt`; both SDKs check them. A fixed layout was taken because it is compact enough for a QR code and has one way to write each invitation. JSON with hex fields was not taken: about twice as long, so a QR code gets dense, and with more than one way to write the same invitation. CBOR was not taken either: the certificate's own canonical map would carry its keys a second time, and a person or a parser could not tell an invitation from other CBOR without a prefix anyway.
 
 ### Account sign-off of a shred
 
