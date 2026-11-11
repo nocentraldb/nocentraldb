@@ -297,6 +297,8 @@ mod batch_tests;
 #[cfg(test)]
 mod known_tests;
 #[cfg(test)]
+mod leave_tests;
+#[cfg(test)]
 mod list_tests;
 #[cfg(test)]
 mod relay_tests;
