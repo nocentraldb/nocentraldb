@@ -100,15 +100,19 @@ fn an_admins_sealed_change_makes_the_relay_check_again() {
     assert!(relay.store().take_reads() > 0);
 }
 
+/// The relay still checks once the shred becomes stable, but keeps the
+/// record until NOC-224 is settled (NOC-225).
 #[test]
-fn the_record_is_still_deleted_once_the_shred_is_stable() {
+fn the_record_stays_once_the_shred_is_stable() {
     let (relay, _dir, mut space, shred) = waiting();
     let sealed = space.sealed(WRITER, Vec::new());
     accepted(&relay, WRITER, &sealed);
     let by_creator = space.envelope(CREATOR, WRITER, &[&shred]);
     accepted(&relay, CREATOR, &by_creator);
     assert_eq!(stored(&relay, space.space), 1);
+    relay.store().take_reads();
     let by_second = space.envelope(SECOND, WRITER, &[&shred]);
     accepted(&relay, SECOND, &by_second);
-    assert_eq!(stored(&relay, space.space), 0);
+    assert!(relay.store().take_reads() > 0, "the relay checked");
+    assert_eq!(stored(&relay, space.space), 1);
 }

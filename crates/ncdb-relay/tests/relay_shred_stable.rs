@@ -1,7 +1,7 @@
 //! RFC 0008, "Effects that wait until a change is stable": the relay
-//! deletes a shredded person key's record once the shred is stable in its
-//! log, and keeps it while an admin's run does not reach a change that saw
-//! the shred.
+//! keeps a shredded person key's record while an admin's run does not reach
+//! a change that saw the shred, and, until NOC-224 settles whether a stable
+//! shred can still be rejected, also once the shred is stable (NOC-225).
 
 mod support;
 
@@ -90,8 +90,11 @@ fn the_record_stays_while_one_admin_has_not_written_after_the_shred() {
     assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
 }
 
+/// A stable shred can still be rejected later by an admin key that was not
+/// yet revoked (NOC-224), so the deletion, the one effect that cannot be
+/// undone, waits: the record stays (NOC-225).
 #[test]
-fn the_record_is_deleted_once_the_shred_is_stable() {
+fn the_record_stays_once_the_shred_is_stable() {
     let (relay, _dir, mut space, held) = held();
     let shred = space.shred(WRITER, 1, &other_account(1), &[&held[4]]);
     accepted(&relay, WRITER, &shred);
@@ -99,8 +102,7 @@ fn the_record_is_deleted_once_the_shred_is_stable() {
     accepted(&relay, CREATOR, &by_creator);
     let by_second = space.envelope(SECOND, WRITER, &[&shred]);
     accepted(&relay, SECOND, &by_second);
-    // Only the shredded key's record goes.
-    assert_eq!(stored(&relay, space.space), [person(2)]);
+    assert_eq!(stored(&relay, space.space), [person(1), person(2)]);
 }
 
 #[test]

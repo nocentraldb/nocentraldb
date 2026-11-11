@@ -271,7 +271,8 @@ pub trait RelayStore: Send + Sync {
     /// replaces the generation of the earlier. There is no delete request:
     /// a record goes only through [`RelayStore::delete_person_keys`] once
     /// its shred entry is stable (RFC 0008, "Effects that wait until a change
-    /// is stable").
+    /// is stable"), which the core does not call until NOC-224 is settled
+    /// (NOC-225).
     fn put_person_keys(
         &self,
         space: SpaceId,
