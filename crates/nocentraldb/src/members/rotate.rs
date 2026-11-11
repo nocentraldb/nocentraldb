@@ -31,11 +31,25 @@ use crate::space::fold;
 
 use super::control_heads;
 
-/// Whether `state`'s space can be rotated by this SDK: it holds no person
-/// key, whose records a rotation re-wraps (RFC 0003, step 3), which is not
-/// built. Checked before anything is written.
+/// Whether `state`'s space can be rotated by this SDK, checked before
+/// anything is written: the member holds the key of every head of the
+/// generation graph, which the rotation chains, and the space holds no
+/// person key, whose records a rotation re-wraps (RFC 0003, step 3), which
+/// is not built.
 pub(crate) fn rotatable(state: &SpaceState) -> Result<(), Error> {
-    match state.checks.resolved().person_keys().next() {
+    let resolved = state.checks.resolved();
+    if resolved
+        .heads()
+        .iter()
+        .any(|head| state.checks.space_key(*head).is_none())
+    {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "the member holds no key of a generation the rotation must chain; \
+             it rotates once an envelope for it arrives",
+        ));
+    }
+    match resolved.person_keys().next() {
         None => Ok(()),
         Some(_) => Err(Error::new(
             ErrorCode::InvalidValue,
