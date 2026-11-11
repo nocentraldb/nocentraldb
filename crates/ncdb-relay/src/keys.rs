@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use ncdb_core::change::{Change, Kind};
+use ncdb_core::change::Change;
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::membership::{self, ControlBody, Entry, Resolved};
 
@@ -36,12 +36,12 @@ impl<S: RelayStore> Relay<S> {
         };
         let mut after = 0;
         loop {
-            let page = self.store().read(space, after, PAGE).await?;
+            let page = self.store().read_controls(space, after, PAGE).await?;
             let Some(last) = page.last() else {
                 return Ok(keys);
             };
             after = last.position;
-            for entry in page.into_iter().filter(|e| e.kind == Kind::CONTROL) {
+            for entry in page {
                 // The relay appended only frames that decode.
                 let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
                 match ControlBody::decode(&change.header().payload).map(|body| body.entry) {

@@ -179,6 +179,8 @@ A personal field is written like any other field. The SDK seals it under the key
 - `person: "self"`: the object itself is the person.
 - `person: "<link field>"`: the target of that link, as the copy holds it after this transaction's own writes. A transaction that sets `assignee` and `notesAboutAssignee` together seals the notes under the new assignee's key.
 
+The SDK holds the person keys of a space in memory only, fetched from the relay's person-key store on every connection, and writes none to the device ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)).
+
 A personal field whose `person` link is unset is refused with `noPerson` ([RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks)): sealing it under no person would make it unerasable, and choosing a person would guess.
 
 **The same person in another space.** RFC 0005 gives a person a person id that the core carries over when the app records the same person in another space ([RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person)), and this RFC says how the app says "the same person". `tx.create` takes the option `samePersonAs`, an object of the same person read from another space:

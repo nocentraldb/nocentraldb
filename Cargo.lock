@@ -966,6 +966,7 @@ dependencies = [
  "ed25519-dalek",
  "futures-util",
  "getrandom",
+ "httparse",
  "libc",
  "ncdb-core",
  "ncdb-relay",

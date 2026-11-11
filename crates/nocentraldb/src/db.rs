@@ -22,7 +22,7 @@ use ncdb_core::change::Kind;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Clock;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
-use ncdb_core::keys::MemberKey;
+use ncdb_core::keys::{MemberKey, PersonKey};
 use ncdb_core::log::{Position, State};
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
@@ -153,6 +153,14 @@ pub(crate) struct Inner {
 pub(crate) struct SpaceState {
     pub(crate) checks: SealChecks,
     pub(crate) clock: Clock,
+    /// The person keys of the space the member holds, by person-key id,
+    /// each from a record whose signature, wrap and commitment held
+    /// (`crate::sync::person_keys`). In memory only: a reopened database
+    /// fetches them again from the relay.
+    pub(crate) person_keys: BTreeMap<[u8; 16], PersonKey>,
+    /// Whether the relay's records of the space were fetched in the
+    /// current connection.
+    pub(crate) person_keys_fetched: bool,
 }
 
 impl SpaceState {
@@ -161,6 +169,8 @@ impl SpaceState {
         SpaceState {
             checks: SealChecks::new(space, member),
             clock: Clock::new(),
+            person_keys: BTreeMap::new(),
+            person_keys_fetched: false,
         }
     }
 

@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_relay::store::RelayStore;
-use ncdb_relay::{ErrorCode, Pushed, Relay, auth};
+use ncdb_relay::store::{RelayStore, UploadId};
+use ncdb_relay::{ErrorCode, PushFrame, Pushed, Relay, auth};
 use tokio::net::TcpStream;
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
 use tokio::task::JoinHandle;
@@ -18,10 +18,11 @@ use tokio::time::Instant;
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
+use crate::http::{UPLOADS, hex};
 use crate::hub::Hub;
-use crate::subscription;
 use crate::wire::{self, Cursor, Frame, Malformed, Request};
 use crate::{MAX_FRAME, MAX_MESSAGE, MAX_PUSH, QUEUE, VERSIONS};
+use crate::{http, page, subscription};
 
 /// The most entries the server reads for one page of a pull; a page holds
 /// fewer when they do not fit into one message.
@@ -31,6 +32,8 @@ pub(crate) const PAGE: u64 = 256;
 pub(crate) struct Shared<S> {
     pub relay: Arc<Relay<S>>,
     pub relay_id: [u8; 16],
+    /// Where the upload and download URLs start: scheme, host and port.
+    pub base_url: Arc<str>,
     pub hub: Hub,
     /// How long writing one message may make no progress.
     pub write_timeout: std::time::Duration,
@@ -78,6 +81,9 @@ pub(crate) async fn serve<S: RelayStore + 'static>(
         .max_message_size(Some(MAX_MESSAGE))
         .max_frame_size(Some(MAX_MESSAGE));
     let step_timeout = shared.handshake_timeout;
+    let Some(stream) = http::route(stream, &shared).await else {
+        return;
+    };
     let upgrade = tokio_tungstenite::accept_async_with_config(stream, Some(config));
     let Ok(Ok(ws)) = tokio::time::timeout(step_timeout, upgrade).await else {
         return;
@@ -300,13 +306,21 @@ impl<S: RelayStore + 'static> Connection<S> {
                     after,
                     ..
                 } = cursor;
-                let pulled =
-                    blocking(async move { relay.pull(member, space, epoch, after, limit).await })
-                        .await;
+                let base_url = self.shared.base_url.clone();
+                let pulled = page::read(
+                    relay,
+                    base_url,
+                    member,
+                    Some(req),
+                    space,
+                    epoch,
+                    after,
+                    u64::from(limit),
+                )
+                .await;
                 match pulled {
                     Ok(page) => {
-                        let (bytes, _) = wire::entries(Some(req), space, &page.entries, page.head);
-                        self.send(bytes).await;
+                        self.send(page.bytes).await;
                         true
                     }
                     Err(code) => self.fail(Some(req), code).await,
@@ -315,7 +329,9 @@ impl<S: RelayStore + 'static> Connection<S> {
             Request::Subscribe(cursor) => {
                 let space = cursor.space;
                 let head = self.shared.hub.watch(space);
-                let running = subscription::spawn(relay, member, cursor, head, self.out.clone());
+                let base_url = self.shared.base_url.clone();
+                let out = self.out.clone();
+                let running = subscription::spawn(relay, base_url, member, cursor, head, out);
                 if let Some(previous) = self.subscriptions.insert(space, running) {
                     previous.abort();
                 }
@@ -327,9 +343,15 @@ impl<S: RelayStore + 'static> Connection<S> {
                 }
                 true
             }
-            // Large changes are left out: this server's largest frame fits
-            // into one message, so it accepts no upload.
-            Request::Upload { req } => self.fail(Some(req), ErrorCode::TooLarge).await,
+            Request::Upload { req, space, size } => {
+                let begun =
+                    blocking(async move { relay.begin_upload(member, space, size).await }).await;
+                let base_url = &self.shared.base_url;
+                let answer = begun.map(|(id, token)| {
+                    wire::upload(req, &id.0, &format!("{base_url}{UPLOADS}{}", hex(&token)))
+                });
+                self.answer(req, answer).await
+            }
             Request::Keys { req, space } => {
                 let keys = blocking(async move { relay.keys(member, space).await }).await;
                 let answer = keys.map(|keys| wire::keys(req, space, &keys));
@@ -390,7 +412,7 @@ impl Request {
             | Request::Pull(Cursor { req, .. })
             | Request::Subscribe(Cursor { req, .. })
             | Request::Unsubscribe { req, .. }
-            | Request::Upload { req }
+            | Request::Upload { req, .. }
             | Request::Keys { req, .. }
             | Request::PersonKeys { req, .. }
             | Request::PutPersonKeys { req, .. }
@@ -400,37 +422,28 @@ impl Request {
 }
 
 /// The results of a push, and the members it made current: the relay core
-/// checks and appends the frames, in order; a reference to an upload is
-/// `too_large`, since this server accepts no upload.
+/// checks and appends the frames, in order, each inline or taken from its
+/// upload (RFC 0007, "Large changes"). An upload id that is not 16 bytes
+/// names no upload: malformed.
 async fn push<S: RelayStore + 'static>(
     relay: Arc<Relay<S>>,
     member: MemberId,
     space: SpaceId,
     frames: Vec<Frame>,
 ) -> (Vec<Pushed>, Vec<MemberId>) {
-    let uploads: Vec<bool> = frames
-        .iter()
-        .map(|f| matches!(f, Frame::Upload(_)))
-        .collect();
-    let changes = frames
+    let frames = frames
         .into_iter()
-        .filter_map(|frame| match frame {
-            Frame::Change(bytes) => Some(bytes),
-            Frame::Upload(_) => None,
+        .map(|frame| match frame {
+            Frame::Change(bytes) => PushFrame::Bytes(bytes),
+            Frame::Upload(id) => match <[u8; 16]>::try_from(id) {
+                Ok(id) => PushFrame::Upload(UploadId(id)),
+                // An empty frame is malformed too: it decodes to no change.
+                Err(_) => PushFrame::Bytes(Vec::new()),
+            },
         })
         .collect();
-    let checked = blocking(async move { relay.push(member, space, changes).await }).await;
-    let mut results = checked.results.into_iter();
-    let results = uploads
-        .into_iter()
-        .map(|upload| match upload {
-            true => Pushed::Rejected(ErrorCode::TooLarge),
-            false => results
-                .next()
-                .unwrap_or(Pushed::Rejected(ErrorCode::Unavailable)),
-        })
-        .collect();
-    (results, checked.added)
+    let checked = blocking(async move { relay.push_frames(member, space, frames).await }).await;
+    (checked.results, checked.added)
 }
 
 /// Runs a future of the relay core on a thread that may block: the SQLite

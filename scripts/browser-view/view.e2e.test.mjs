@@ -14,7 +14,9 @@
 // takes effect from a profile's second launch.
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
-// `repo:browser-view` and the workflow browser-view.yml run it. A missing
+// `repo:browser-view` and the workflow browser-view.yml run it, the
+// workflow in Playwright's image on a harness built before
+// (BROWSER_VIEW_PREBUILT=1, build.mjs). A missing
 // browser fails its tests, named by engine: install it with
 // `pnpm exec playwright install --with-deps chromium firefox webkit`.
 import assert from "node:assert/strict";
@@ -23,7 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, firefox, webkit } from "playwright";
-import { buildHarness, runNative } from "./build.mjs";
+import { buildHarness, prebuilt, runNative } from "./build.mjs";
 import { startServer } from "./server.mjs";
 
 const ENGINES = { chromium, firefox, webkit };
@@ -37,8 +39,11 @@ let native;
 let server;
 
 before(async () => {
-  buildHarness();
-  native = runNative();
+  native = prebuilt();
+  if (native === null) {
+    buildHarness();
+    native = runNative();
+  }
   server = await startServer({ port: 0 });
 });
 

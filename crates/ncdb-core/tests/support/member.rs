@@ -33,8 +33,12 @@ pub const GOOD: &[u8] = &[1];
 pub const BAD: &[u8] = &[0];
 /// A sealed payload the double cannot decrypt, as if the AEAD failed.
 pub const GARBLED: &[u8] = b"garbled";
-/// The `model.id` of the member's lock, which its fold reports.
-pub const MODEL: [u8; 16] = [0x6d; 16];
+/// The `model.id` of the member's lock, which its fold reports: that of
+/// the simulated spaces' genesis (`space::MODEL`), since a member never
+/// folds a space of another model (NOC-57).
+pub const MODEL: [u8; 16] = [
+    0x07, 0xc2, 0xec, 0x8c, 0xe1, 0x3d, 0x0c, 0x37, 0x05, 0x13, 0xdd, 0x1d, 0xfe, 0x53, 0xc6, 0xc7,
+];
 
 /// The collections and the field the recorder's model knows.
 pub const COLLECTION: &str = "task";

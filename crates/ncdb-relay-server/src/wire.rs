@@ -52,11 +52,14 @@ pub enum Request {
         /// The space.
         space: SpaceId,
     },
-    /// An upload URL for a large change (RFC 0007, "Large changes"),
-    /// which this server leaves out.
+    /// An upload URL for a large change (RFC 0007, "Large changes").
     Upload {
         /// The request id.
         req: u64,
+        /// The space the change will be pushed to.
+        space: SpaceId,
+        /// The frame's size in bytes.
+        size: u64,
     },
     /// `keys`: the member's key envelopes and the key chain (RFC 0007,
     /// "Keys and the person-key store").
@@ -211,11 +214,11 @@ fn read(kind: &str, req: Option<u64>, fields: &mut Fields) -> Option<Request> {
             req: req?,
             space: SpaceId(fields.array(3)?),
         }),
-        "upload" => {
-            fields.array::<16>(3)?;
-            unsigned(fields.take(4)?)?;
-            Some(Request::Upload { req: req? })
-        }
+        "upload" => Some(Request::Upload {
+            req: req?,
+            space: SpaceId(fields.array(3)?),
+            size: unsigned(fields.take(4)?)?,
+        }),
         "keys" => Some(Request::Keys {
             req: req?,
             space: SpaceId(fields.array(3)?),
@@ -363,18 +366,66 @@ pub fn pushed(req: u64, results: &[Pushed]) -> Vec<u8> {
     message("pushed", Some(req), vec![(3, Value::Array(results))])
 }
 
+/// An entry as `entries` carries it: its frame inline, or a download URL
+/// for a frame too large for one message (RFC 0007, "Large changes").
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Item {
+    /// Its position in the space's log.
+    pub position: Position,
+    /// When the relay appended it.
+    pub accepted_at: u64,
+    /// Its frame, or where to fetch it.
+    pub carried: Carried,
+}
+
+/// How an entry carries its frame.
+#[derive(Clone, PartialEq, Eq)]
+pub enum Carried {
+    /// The frame itself.
+    Frame(Vec<u8>),
+    /// A short-lived URL that serves the frame, and the frame's size.
+    Download {
+        /// The download URL.
+        url: String,
+        /// The frame's size in bytes.
+        size: u64,
+    },
+}
+
+impl std::fmt::Debug for Carried {
+    /// Never a frame or a URL's token: their lengths.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Carried::Frame(frame) => write!(f, "Frame({} bytes)", frame.len()),
+            Carried::Download { size, .. } => write!(f, "Download({size} bytes)"),
+        }
+    }
+}
+
+/// The size of an `entries` message without entries, plus the most the
+/// entries array's length can grow (9 bytes).
+pub fn entries_overhead(req: Option<u64>, space: SpaceId, head: Position) -> usize {
+    entries(req, space, &[], head).0.len() + 8
+}
+
+/// The size of an item's encoding in an `entries` message.
+pub fn item_size(item: &Item) -> usize {
+    cbor::encode(&encode_item(item)).len()
+}
+
 /// `entries {req, space, entries, head}`, without a request id for a live
-/// subscription, with as many of `entries` as fit into one message, and how
-/// many that is. Each entry is `{1: position, 2: accepted at, 3: frame}`.
-/// The first entry always fits: the server accepts no frame larger than
-/// [`crate::MAX_FRAME`].
+/// subscription, with as many of `items` as fit into one message, and how
+/// many that is. Each entry is `{1: position, 2: accepted at, 3: frame}`,
+/// or `{1: position, 2: accepted at, 3: {1: url, 2: size}}` for a frame
+/// that comes as a download. The first entry always fits: an entry carries
+/// no frame larger than [`crate::MAX_INLINE`].
 pub fn entries(
     req: Option<u64>,
     space: SpaceId,
-    entries: &[Entry],
+    items: &[Item],
     head: Position,
 ) -> (Vec<u8>, usize) {
-    let items: Vec<Value> = entries.iter().map(entry).collect();
+    let items: Vec<Value> = items.iter().map(encode_item).collect();
     let encode = |items: Vec<Value>| {
         message(
             "entries",
@@ -401,7 +452,23 @@ pub fn entries(
     (bytes, fit)
 }
 
-/// An entry of the log: `{1: position, 2: accepted at, 3: frame}`.
+fn encode_item(item: &Item) -> Value {
+    let carried = match &item.carried {
+        Carried::Frame(frame) => Value::Bytes(frame.clone()),
+        Carried::Download { url, size } => map(vec![
+            (1, Value::Text(url.clone())),
+            (2, Value::Unsigned(*size)),
+        ]),
+    };
+    map(vec![
+        (1, Value::Unsigned(item.position)),
+        (2, Value::Unsigned(item.accepted_at)),
+        (3, carried),
+    ])
+}
+
+/// An entry of the log, its frame inline: `{1: position, 2: accepted at,
+/// 3: frame}`.
 fn entry(entry: &Entry) -> Value {
     map(vec![
         (1, Value::Unsigned(entry.position)),
@@ -441,6 +508,19 @@ pub fn person_keys(req: u64, space: SpaceId, records: &[PersonKeyRecord]) -> Vec
         vec![
             (3, Value::Bytes(space.0.to_vec())),
             (4, Value::Array(records.collect())),
+        ],
+    )
+}
+
+/// `upload {req, id, url}`: the upload's id, which a push names, and the
+/// one-time URL that takes its frame.
+pub fn upload(req: u64, id: &[u8; 16], url: &str) -> Vec<u8> {
+    message(
+        "upload",
+        Some(req),
+        vec![
+            (3, Value::Bytes(id.to_vec())),
+            (4, Value::Text(url.to_owned())),
         ],
     )
 }
