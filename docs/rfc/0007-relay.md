@@ -200,7 +200,7 @@ The store follows [RFC 0003, "The person key"](0003-keys-and-cryptography.md#the
 - **The relay accepts a record only under four conditions.** Its uploader is a current member. Its signature verifies against the writer's key, even if the writer has since left the space. Its person-key id is named by a person-key entry in the log whose generation and record hash match it, and destroyed by no shred entry. Its generation is the stored record's generation or descends from it in the generation graph ([RFC 0008](0008-membership.md#how-the-relay-applies-the-rules)). Otherwise the relay answers `bad_record`. The check and the write are one step: the backend stores the records only if the stored records are still the ones they were checked against, so two members that put a record of one person key at the same time cannot both replace the generation each of them checked against ([The backend interface](#the-backend-interface)).
 - **Members check the commitment.** A member accepts a record only if the signature verifies and the unwrapped key matches the commitment in the log. A relay that swaps records is caught, and the signature names who wrote each record.
 - **A writer who has since left.** The relay accepts a record whose writer's signature verifies even if that writer has since left; the uploader must still be a current member, and members still check the commitment after unwrapping. A re-wrap written before a removal stays valid this way, and a removal does not strand a key.
-- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only after it appended a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003, narrowed by RFC 0008). The relay deletes the record when the shred entry becomes stable, by the same rule as on a member, not in the transaction that appends it ([RFC 0008, "Effects that wait until a change is stable"](0008-membership.md#effects-that-wait-until-a-change-is-stable)). Until then a shred that a concurrent revocation rejects can still be undone.
+- **Nothing deletes a record except a shred entry.** There is no delete request. The relay deletes a record only after it appended a verified shred entry for its person-key id. The entry must be signed by a current member and signed off by the account key of a second account (RFC 0003, narrowed by RFC 0008). The relay deletes the record as soon as it accepts the shred entry, by the same rule as on a member: no later change can reject an accepted shred ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)).
 
 **What this does not prevent.** A member of the space can still upload a record whose wrapped key does not match the commitment. Every member then rejects that record and reports its writer, and any member that still holds the key writes a correct one. Until then, new members cannot open that person's fields. A member could equally have leaked the person key itself (RFC 0003). Unsigned person-key records that any member may overwrite or delete were not taken: one member could erase a person's data without the second account's sign-off, or swap a key unnoticed ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)).
 
@@ -374,8 +374,8 @@ pub trait RelayStore {
     /// puts apply in order, so a later put of one id replaces the generation
     /// of the earlier. Returns `Moved` when another put got there first; the
     /// core then re-checks and retries. There is no delete request: a record
-    /// goes only through `delete_person_keys` once its shred entry is stable
-    /// (RFC 0008, "Effects that wait until a change is stable").
+    /// goes only through `delete_person_keys` once the relay accepted its
+    /// shred entry (RFC 0008, "A shred is final when accepted").
     async fn put_person_keys(
         &self,
         space: SpaceId,
@@ -387,7 +387,7 @@ pub trait RelayStore {
     async fn epoch(&self) -> Result<Epoch, StoreError>;
     async fn new_epoch(&self) -> Result<Epoch, StoreError>;
 
-    /// Delete the person-key records of shred entries that became stable.
+    /// Delete the person-key records of shred entries the relay accepted.
     async fn delete_person_keys(&self, space: SpaceId, ids: Vec<PersonKeyId>)
         -> Result<(), StoreError>;
 
@@ -433,7 +433,7 @@ The rules every backend must keep:
 
 - **Dense positions, without a gap and without a position used twice.** The append is conditional on the head, so two relay processes appending to one space at the same time cannot both win. The loser gets `HeadMoved` and the core retries. Positions from timestamps or a database sequence were not taken: timestamps tie and run backwards, and sequences leave gaps after a failed transaction, which look like a lost change (RFC 0002). Nor were positions from DynamoDB Streams' order, which is per shard and not dense, so it cannot serve as a cursor.
 - **One change id, one position.** The check for a duplicate and the append are one atomic step.
-- **An append and its effects are atomic.** A control change and the membership table change together or not at all. The deletion of a person-key record is not such an effect: it waits until its shred entry is stable, and the core requests it then (RFC 0008, "Effects that wait until a change is stable").
+- **An append and its effects are atomic.** A control change and the membership table change together or not at all. The deletion of a person-key record is not such an effect: the core requests it once the shred entry is appended and accepted (RFC 0008, "A shred is final when accepted").
 - **A person-key put is conditional on the stored generation.** Each put names the generation of the stored record it replaces, none when no record of its person-key id is stored. The backend stores the request's records only if every one still replaces that generation, in one atomic step, and otherwise stores none and answers `Moved`. The core then reads the log and the records again, checks again and retries, up to the append's 64 tries before it answers `unavailable`. The condition is on the generation alone, because whether a record is acceptable depends on nothing else of the stored record: a re-wrap under the same generation stays acceptable whichever record of that generation is stored.
 - **Exact bytes.** A backend returns the frame byte for byte as it was appended.
 - **Read your writes.** A read after a successful append sees the appended entries.
@@ -491,7 +491,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
 | `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
-| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, "The person key"; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only when its shred entry is stable (RFC 0008, "Effects that wait until a change is stable"). |
+| `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, "The person key"; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only once the relay accepted its shred entry (RFC 0008, "A shred is final when accepted"). |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers, and a global secondary index on member id finds a member's connections, to send `added`. TTL removes what a missed `$disconnect` leaves behind. An operator who keeps connection records keeps them after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -531,7 +531,7 @@ A restore from a backup, such as DynamoDB point-in-time recovery, brings back th
 So a restore always ends with a **new relay epoch**, before the relay serves any request:
 
 1. The operator restores the tables, and the restore procedure draws a new epoch. The relay refuses every request until it has done so.
-2. The relay re-applies the effects of every shred entry in the restored log that is stable, so no record survives that a stable shred in the restored log deleted.
+2. The relay re-applies the effects of every accepted shred entry in the restored log, so no record survives that a shred in the restored log deleted.
 3. Each member sees the new epoch in `welcome`, or gets `epoch_changed` on a `pull` or `subscribe`. It then treats every position it stored for this relay as unconfirmed, pulls each space from 0 and folds nothing new twice, because it recognises changes by their ids. Finally it pushes every change the relay lacks, in its local order: its own, and the ones it received from others. The relay gives each change a position in the new epoch.
 4. Shred entries appended after the restore point come back in step 3, when the first member that holds one re-pushes it. Their effects delete the restored person-key records again.
 

@@ -27,7 +27,7 @@ pub(crate) trait SecretStore {
     /// Keeps `record` as the record of `user`.
     fn set(&self, user: &str, record: &[u8]) -> Result<(), Error>;
     /// Removes the record of `user`.
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg_attr(any(not(test), target_arch = "wasm32"), allow(dead_code))]
     fn delete(&self, user: &str) -> Result<(), Error>;
 }
 

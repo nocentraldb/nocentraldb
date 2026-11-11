@@ -979,10 +979,12 @@ name = "nocentraldb"
 version = "0.1.0"
 dependencies = [
  "apple-native-keyring-store",
+ "data-encoding",
  "ed25519-dalek",
  "futures-core",
  "futures-util",
  "getrandom",
+ "js-sys",
  "keyring-core",
  "ncdb-core",
  "ncdb-relay",
@@ -991,6 +993,7 @@ dependencies = [
  "sha2 0.11.1",
  "tokio",
  "tokio-tungstenite",
+ "wasm-bindgen-test",
  "windows-native-keyring-store",
  "zbus-secret-service-keyring-store",
  "zeroize",

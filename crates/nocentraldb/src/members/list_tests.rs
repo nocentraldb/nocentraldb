@@ -2,6 +2,11 @@
 //! current members of a space, each with its id, its account's
 //! fingerprint, its kind, its role and whether it is this member.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 
 use super::tests::{joined, now, of_account, remove, space};
