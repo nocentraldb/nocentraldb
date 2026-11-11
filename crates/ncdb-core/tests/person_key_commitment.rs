@@ -32,7 +32,16 @@ fn the_commitment_matches_the_independent_vector() {
 #[test]
 fn the_commitment_binds_the_space_the_person_key_id_and_the_key() {
     let base = person_key_commitment(SpaceId([1; 16]), [2; 16], &[3; 32]);
-    assert_ne!(person_key_commitment(SpaceId([9; 16]), [2; 16], &[3; 32]), base);
-    assert_ne!(person_key_commitment(SpaceId([1; 16]), [9; 16], &[3; 32]), base);
-    assert_ne!(person_key_commitment(SpaceId([1; 16]), [2; 16], &[9; 32]), base);
+    assert_ne!(
+        person_key_commitment(SpaceId([9; 16]), [2; 16], &[3; 32]),
+        base
+    );
+    assert_ne!(
+        person_key_commitment(SpaceId([1; 16]), [9; 16], &[3; 32]),
+        base
+    );
+    assert_ne!(
+        person_key_commitment(SpaceId([1; 16]), [2; 16], &[9; 32]),
+        base
+    );
 }
