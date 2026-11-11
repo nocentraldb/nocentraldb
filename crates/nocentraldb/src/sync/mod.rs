@@ -27,8 +27,10 @@
 //! [`SyncStatus`] counts them. A log written before NOC-188 may hold a
 //! relay's own text there, so the API that first shows a refusal's code
 //! must read it through `wire::mapped_code`. The relay is reached over plain
-//! WebSocket (`ws://`) and its URLs over plain HTTP only; TLS is the second
-//! part of NOC-121.
+//! WebSocket over TLS (`wss://`) or, on a local network, without it
+//! (`ws://`); its upload and download URLs likewise over `https://` or
+//! `http://`. TLS verifies the relay against the platform's trust store
+//! (`tls`).
 
 mod again;
 mod apply;
@@ -39,6 +41,7 @@ mod person_keys;
 mod run;
 mod session;
 mod status;
+mod tls;
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};

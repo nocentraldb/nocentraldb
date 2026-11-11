@@ -128,7 +128,13 @@ pub(super) async fn session(
     let config = WebSocketConfig::default()
         .max_message_size(Some(wire::MAX_MESSAGE))
         .max_frame_size(Some(wire::MAX_MESSAGE));
-    let connect = tokio_tungstenite::connect_async_with_config(url, Some(config), false);
+    // `wss://` verifies the relay against the platform's trust store.
+    let Some(tls) = super::tls::config() else {
+        return lost();
+    };
+    let connector = tokio_tungstenite::Connector::Rustls(tls);
+    let connect =
+        tokio_tungstenite::connect_async_tls_with_config(url, Some(config), false, Some(connector));
     let Ok(Ok((ws, _))) = tokio::time::timeout(CONNECT, connect).await else {
         return lost();
     };
