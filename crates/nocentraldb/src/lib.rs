@@ -51,7 +51,10 @@ mod agent_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};
-pub use members::{AddMember, Fingerprint, Invitation, Members, Notice, NoticeCode, Role};
+pub use members::{
+    AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
+    NoticeCode, Role,
+};
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
