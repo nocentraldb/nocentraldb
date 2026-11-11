@@ -24,6 +24,7 @@ use crate::space::{Space, fold, not_stopped, writable};
 
 mod invitation;
 mod notice;
+mod rotate;
 
 pub use invitation::{Fingerprint, Invitation};
 pub use notice::{Notice, NoticeCode};
@@ -99,8 +100,12 @@ impl Members<'_> {
     /// `NotAllowed`, one that was removed, or that the relay answered
     /// `not_member` or `removed_member` for the space, with `NotMember`
     /// (RFC 0009, "Errors"). A member of the space is refused with
-    /// `AlreadyMember`, and a former member with `InvalidValue`: adding it
-    /// again needs a rotation first (RFC 0008, M5), which is not built.
+    /// `AlreadyMember`. A former member is added again after a rotation
+    /// (RFC 0008, M5): the space key moves to a fresh generation, with an
+    /// envelope for every member, and the member is added from it, so what
+    /// it wrote while it was not a member never counts again. A space that
+    /// holds a person key is refused with `InvalidValue` then, since
+    /// re-wrapping its records in a rotation is not built.
     ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
@@ -118,12 +123,16 @@ impl Members<'_> {
         writable(&inner, space)?;
         not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
-        allowed(resolved, inner.member.key().id(), invitation.key.id())?;
+        let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         certified(invitation)?;
         let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner { view, spaces, .. } = &mut *inner;
         let state = spaces.get_mut(&space.0).expect("a writable space is held");
+        if former {
+            rotate::rotatable(state)?;
+            rotate::rotate(view, state, &member, space.0, BTreeSet::new())?;
+        }
         let next = next::next(view, space.0, &state.checks, member.id());
         let generation = next.generation.expect("a writable space has a generation");
         let subject = invitation.key.id();
@@ -194,19 +203,18 @@ pub(crate) fn holds(
 }
 
 /// Whether `member` may add `subject` in the membership state `resolved`:
-/// it is an admin, and `subject` is not a member and never was one.
-fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<(), Error> {
+/// it is an admin, and `subject` is not a member. Says whether `subject`
+/// is a former member, whose add is a re-grant that rotates first (RFC
+/// 0008, M5).
+fn allowed(resolved: &Resolved, member: MemberId, subject: MemberId) -> Result<bool, Error> {
     holds(resolved, member, membership::Role::Admin, "adds members")?;
     match resolved.member(subject) {
-        None => Ok(()),
+        None => Ok(false),
         Some(state) if state.role.is_some() => Err(Error::new(
             ErrorCode::AlreadyMember,
             "the invitation's member is a member of the space already",
         )),
-        Some(_) => Err(Error::new(
-            ErrorCode::InvalidValue,
-            "the invitation's member was removed from the space; adding it again is not built",
-        )),
+        Some(_) => Ok(true),
     }
 }
 
@@ -281,6 +289,10 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 
 #[cfg(test)]
 mod known_tests;
+#[cfg(test)]
+mod relay_tests;
+#[cfg(test)]
+mod rotate_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]

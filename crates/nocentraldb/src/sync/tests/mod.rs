@@ -30,6 +30,6 @@ mod removed;
 mod reopen;
 mod rotation;
 mod spaces;
-mod support;
+pub(crate) mod support;
 mod timeouts;
 mod two_devices;
