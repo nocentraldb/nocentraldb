@@ -10,8 +10,7 @@ use super::tests::{database, now};
 use crate::error::ErrorCode;
 
 const PLAIN: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation.txt");
-const STATEMENT: &str =
-    include_str!("../../../../docs/rfc/vectors/0003/invitation-statement.txt");
+const STATEMENT: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation-statement.txt");
 const FIELDS: &str = include_str!("../../../../docs/rfc/vectors/0003/fields.txt");
 const PLAIN_HEX: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation.hex");
 
@@ -34,7 +33,10 @@ fn from_hex(text: &str) -> Vec<u8> {
 
 /// The text form of `bytes`, written the way RFC 0003 gives it.
 fn text_of(bytes: &[u8]) -> String {
-    format!("ncdb-invite-1:{}", data_encoding::BASE64URL_NOPAD.encode(bytes))
+    format!(
+        "ncdb-invite-1:{}",
+        data_encoding::BASE64URL_NOPAD.encode(bytes)
+    )
 }
 
 #[test]
@@ -49,7 +51,10 @@ fn the_vector_without_a_statement_reads_field_by_field() {
     assert_eq!(certificate.member, invitation.key.id());
     assert_eq!(certificate.kind, MemberKind::Device);
     assert_eq!(certificate.parent, None);
-    assert_eq!(certificate.signature.to_vec(), field("certificate signature"));
+    assert_eq!(
+        certificate.signature.to_vec(),
+        field("certificate signature")
+    );
     assert!(certificate.statement.is_none());
     assert!(certificate.verify(&certificate.account_key));
 }
@@ -63,7 +68,11 @@ fn the_vector_with_a_statement_reads_its_recovery_key_number_and_signature() {
     assert_eq!(statement.account_key, invitation.certificate.account_key);
     assert_eq!(statement.number.to_be_bytes().to_vec(), field("number"));
     assert_eq!(statement.signature.to_vec(), field("statement signature"));
-    assert!(invitation.certificate.verify(&invitation.certificate.account_key));
+    assert!(
+        invitation
+            .certificate
+            .verify(&invitation.certificate.account_key)
+    );
 }
 
 #[test]
@@ -105,14 +114,20 @@ fn a_text_that_does_not_follow_the_layout_is_an_invalid_value() {
         ("another prefix", format!("ncdb-invite-2:{body}")),
         ("no prefix", body.to_string()),
         ("padding", format!("ncdb-invite-1:{body}=")),
-        ("a character outside base64url", format!("ncdb-invite-1:+{}", &body[1..])),
+        (
+            "a character outside base64url",
+            format!("ncdb-invite-1:+{}", &body[1..]),
+        ),
         ("an unknown version", changed(0, 2)),
         ("a sub-agent's kind", changed(97, 3)),
         ("kind 0", changed(97, 0)),
         ("an unknown statement byte", changed(162, 2)),
         ("a statement byte without the statement", changed(162, 1)),
         ("one byte short", text_of(&bytes[..162])),
-        ("one byte too many", text_of(&[bytes.as_slice(), &[0]].concat())),
+        (
+            "one byte too many",
+            text_of(&[bytes.as_slice(), &[0]].concat()),
+        ),
         ("number 0", text_of(&statement)),
         ("nothing", String::new()),
     ];
