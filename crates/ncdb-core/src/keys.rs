@@ -49,6 +49,12 @@ pub struct RecoveryKey(SigningKey);
 /// One generation of a space key: 32 random bytes.
 pub struct SpaceKey(Zeroizing<[u8; 32]>);
 
+/// A person key (RFC 0003, "The person key"): 32 random bytes, one per
+/// person per space, which encrypts that person's personal fields. It lives
+/// in the space's person-key store, wrapped under a generation of the space
+/// key (`membership::wrap_person_key`), never in the log.
+pub struct PersonKey(Zeroizing<[u8; 32]>);
+
 impl MemberKey {
     /// A new member key from the platform's secure random generator.
     ///
@@ -155,11 +161,38 @@ impl SpaceKey {
     }
 }
 
+impl PersonKey {
+    /// A new person key from the platform's secure random generator.
+    ///
+    /// # Panics
+    ///
+    /// When the platform has no secure generator.
+    pub fn generate() -> PersonKey {
+        PersonKey(random())
+    }
+
+    /// The person key of these bytes. The caller's copy is not wiped.
+    pub fn from_bytes(bytes: [u8; 32]) -> PersonKey {
+        PersonKey(Zeroizing::new(bytes))
+    }
+
+    /// The commitment to this key that every person-key entry for
+    /// `person_key` in `space` carries (RFC 0003, "The person key").
+    pub fn commitment(&self, space: crate::ids::SpaceId, person_key: [u8; 16]) -> [u8; 32] {
+        crate::membership::person_key_commitment(space, person_key, &self.0)
+    }
+
+    pub(crate) fn bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 // The signing key wipes itself (ed25519-dalek's `zeroize` feature); the
 // other secrets sit in `Zeroizing`.
 impl ZeroizeOnDrop for MemberKey {}
 impl ZeroizeOnDrop for RecoveryKey {}
 impl ZeroizeOnDrop for SpaceKey {}
+impl ZeroizeOnDrop for PersonKey {}
 
 impl fmt::Debug for MemberKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -176,6 +209,12 @@ impl fmt::Debug for RecoveryKey {
 impl fmt::Debug for SpaceKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_tuple("SpaceKey").field(&Hidden).finish()
+    }
+}
+
+impl fmt::Debug for PersonKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("PersonKey").field(&Hidden).finish()
     }
 }
 

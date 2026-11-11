@@ -85,7 +85,7 @@ pub enum State {
 }
 
 /// Why a change is parked: steps 2 and 6.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum ParkReason {
     /// The suite id is unknown.
@@ -101,6 +101,10 @@ pub enum ParkReason {
     UnknownPayloadFormat,
     /// The payload carries an unknown "must understand" key.
     UnknownPayloadKey,
+    /// Payload key 64 names another model than the member's lock, or has
+    /// the wrong shape: the change is parked whole (RFC 0002, "The
+    /// writer's model").
+    AnotherModel,
 }
 
 /// An operation of a folded change that was parked on its own (RFC 0002,
@@ -114,7 +118,7 @@ pub struct ParkedOperation {
 }
 
 /// Why an operation is parked on its own: step 7.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum OperationParkReason {
     /// The member's model does not know the collection.
@@ -136,7 +140,7 @@ pub enum OperationParkReason {
 }
 
 /// Why a change is rejected: steps 3 to 5.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[non_exhaustive]
 pub enum RejectReason {
     /// Step 3: no membership entry the member holds names the author.
@@ -171,6 +175,45 @@ pub struct RelayCounts {
     pub refused: u64,
 }
 
+/// How many changes of a log are parked and rejected, per reason, and how
+/// many operations of its folded changes are parked, per reason: what a
+/// member reports per space (RFC 0009, "Sync and status"). The log keeps
+/// them as states are set, so reading them costs no pass over the log.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct StateCounts {
+    /// The parked changes, per reason.
+    pub parked: BTreeMap<ParkReason, u64>,
+    /// The parked operations of folded changes, per reason.
+    pub parked_operations: BTreeMap<OperationParkReason, u64>,
+    /// The rejected changes, per reason.
+    pub rejected: BTreeMap<RejectReason, u64>,
+}
+
+impl StateCounts {
+    /// Adds `state` to the counts, or takes it away.
+    fn count(&mut self, state: &State, add: bool) {
+        fn step<K: Ord>(map: &mut BTreeMap<K, u64>, key: K, add: bool) {
+            if add {
+                *map.entry(key).or_default() += 1;
+            } else if let Some(count) = map.get_mut(&key) {
+                *count -= 1;
+                if *count == 0 {
+                    map.remove(&key);
+                }
+            }
+        }
+        match state {
+            State::Folded { parked } => {
+                for operation in parked {
+                    step(&mut self.parked_operations, operation.reason, add);
+                }
+            }
+            State::Parked(reason) => step(&mut self.parked, *reason, add),
+            State::Rejected(reason) => step(&mut self.rejected, *reason, add),
+        }
+    }
+}
+
 /// One entry: the change, and on a member its state, whether the relay
 /// confirmed it and the relay's refusal.
 #[derive(Clone)]
@@ -195,6 +238,11 @@ pub struct Log {
     /// The relay counts of each author, kept as changes are appended,
     /// confirmed and refused, so reading them costs no pass over the log.
     relay_counts: BTreeMap<MemberId, RelayCounts>,
+    /// The parked and rejected counts, kept as states are set.
+    state_counts: StateCounts,
+    /// The changes of each author and sequence, kept as changes are
+    /// appended; two or more are an equivocation (RFC 0002).
+    sequences: BTreeMap<(MemberId, u64), Vec<ChangeId>>,
 }
 
 impl fmt::Debug for Log {
@@ -216,6 +264,8 @@ impl Log {
             changed: BTreeSet::new(),
             tips: Tips::default(),
             relay_counts: BTreeMap::new(),
+            state_counts: StateCounts::default(),
+            sequences: BTreeMap::new(),
         }
     }
 
@@ -235,6 +285,8 @@ impl Log {
         }
         self.tips.appended(&change);
         self.counts_mut(change.header().author).unconfirmed += 1;
+        let key = (change.header().author, change.header().sequence);
+        self.sequences.entry(key).or_default().push(id);
         self.entries.push(Entry {
             change,
             state: None,
@@ -275,6 +327,18 @@ impl Log {
     /// The relay's refusal of a change, when one was recorded.
     pub fn relay_refusal(&self, id: ChangeId) -> Option<&RelayRefusal> {
         self.entry(id)?.refusal.as_ref()
+    }
+
+    /// The changes of `author` the relay refused, in local order, with the
+    /// relay's refusal of each.
+    pub fn refused_by(
+        &self,
+        author: MemberId,
+    ) -> impl Iterator<Item = (ChangeId, &RelayRefusal)> + '_ {
+        self.entries.iter().filter_map(move |entry| {
+            let refusal = entry.refusal.as_ref()?;
+            (entry.change.header().author == author).then(|| (entry.change.id(), refusal))
+        })
     }
 
     /// Records the relay's refusal of a change the log holds, beside the
@@ -348,6 +412,51 @@ impl Log {
         }
     }
 
+    /// The newest model version the parked data of the member's own model
+    /// needs (RFC 0002, "What the model version is for"): the highest
+    /// version in payload key 64 among the changes parked for an unknown
+    /// "must understand" payload key and the folded changes with parked
+    /// operations, whose key 64 names `model`. A change parked as another
+    /// model, or for a payload this core cannot read, does not count, nor
+    /// does one without key 64. It opens each such change with `checks`,
+    /// so it costs one decryption per counted change.
+    pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
+        self.entries
+            .iter()
+            .filter(|entry| match &entry.state {
+                Some(State::Parked(ParkReason::UnknownPayloadKey)) => true,
+                Some(State::Folded { parked }) => !parked.is_empty(),
+                _ => false,
+            })
+            .filter_map(|entry| {
+                let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
+                (writer.id == model).then_some(writer.version)
+            })
+            .max()
+    }
+
+    /// How many changes are parked and rejected, and how many operations
+    /// of folded changes are parked, per reason.
+    pub fn state_counts(&self) -> &StateCounts {
+        &self.state_counts
+    }
+
+    /// The changes of every equivocation in this log, in local order: two
+    /// or more different changes with the same author and sequence (RFC
+    /// 0002, "Author sequence"). Both are kept and folded; the SDK reports
+    /// them.
+    pub fn equivocations(&self) -> Vec<ChangeId> {
+        let mut ids: Vec<ChangeId> = self
+            .sequences
+            .values()
+            .filter(|ids| ids.len() > 1)
+            .flatten()
+            .copied()
+            .collect();
+        ids.sort_by_key(|id| self.position_of(*id));
+        ids
+    }
+
     /// The relay counts of `author`'s changes in this log.
     pub fn relay_counts(&self, author: MemberId) -> RelayCounts {
         self.relay_counts.get(&author).copied().unwrap_or_default()
@@ -373,6 +482,10 @@ impl Log {
         if folded(&entry.state) {
             self.tips.unfolded(id);
         }
+        if let Some(old) = &entry.state {
+            self.state_counts.count(old, false);
+        }
+        self.state_counts.count(&state, true);
         entry.state = Some(state);
         if folded(&entry.state) {
             self.tips.folded(&entry.change, opened);

@@ -38,6 +38,7 @@ mod next;
 mod object;
 mod query;
 mod space;
+mod status;
 mod subscribe;
 mod sync;
 mod tx;
@@ -47,13 +48,19 @@ pub use db::{Db, OpenOptions};
 
 #[cfg(test)]
 mod agent_tests;
+#[cfg(test)]
+mod writer_model_tests;
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};
-pub use members::{AddMember, Fingerprint, Invitation, Members, Notice, NoticeCode, Role};
+pub use members::{
+    AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
+    NoticeCode, Role,
+};
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
+pub use status::{ParkReason, Refused, RejectReason, SpaceStatus, SpaceStatusReport};
 pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Transaction;
 pub use value::Value;

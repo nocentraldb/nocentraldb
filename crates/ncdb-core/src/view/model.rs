@@ -23,6 +23,11 @@ use crate::set::{self, Set};
 /// names to field types, and the declared indexes.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Model {
+    /// The `model.id` of the lock, which the core writes into every sealed
+    /// payload and compares with key 64 of every payload it receives.
+    pub id: [u8; 16],
+    /// The `model.version` of the lock.
+    pub version: u64,
     /// The collections, by name, with their fields by name.
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.

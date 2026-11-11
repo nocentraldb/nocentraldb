@@ -143,6 +143,10 @@ fn apply<T: Encoding>(
 }
 
 impl Fold for Reference {
+    fn model_id(&self) -> [u8; 16] {
+        self.model.id
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         self.model.collections.contains_key(collection)
     }
