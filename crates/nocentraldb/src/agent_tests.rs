@@ -3,6 +3,11 @@
 //! it as a writer when no role is given (RFC 0008, M14); without it, the
 //! member is a device.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ncdb_core::log::Position;
 use ncdb_core::membership::{ControlBody, Entry, MemberKind};
 

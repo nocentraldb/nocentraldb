@@ -6,6 +6,11 @@
 //! with a live person key the member does not hold is not rotated, and
 //! nothing is written.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 use ncdb_core::keys::PersonKey;
 use ncdb_core::membership::{

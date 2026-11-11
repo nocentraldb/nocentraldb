@@ -235,14 +235,14 @@ test("personal fields in an ad-hoc space", () => {
   );
 });
 
-test("a shred: the sign-off, the wait, and the first person-key entry", () => {
-  // RFC 0008's sign-off and wait; NOC-133
+test("a shred: the sign-off, final when accepted, and the first person-key entry", () => {
+  // RFC 0008's sign-off; a shred is final when accepted (NOC-224); NOC-133
   const shredding = part("shredding-a-persons-key");
   holds(
     shredding,
     [
       /holds an admin member in the space/,
-      /once the shred is stable/,
+      /no later change can reject it/,
       /first accepted person-key entry in the order creates the person key/,
       /choose the key/,
       /rejected as "commitment"/,
@@ -252,10 +252,7 @@ test("a shred: the sign-off, the wait, and the first person-key entry", () => {
   );
   assert.ok(links(shredding, "0008-membership.md#roles-and-rights"));
   assert.ok(
-    links(
-      shredding,
-      "0008-membership.md#effects-that-wait-until-a-change-is-stable",
-    ),
+    links(shredding, "0008-membership.md#a-shred-is-final-when-accepted"),
   );
 });
 

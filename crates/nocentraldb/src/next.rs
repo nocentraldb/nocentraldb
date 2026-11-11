@@ -57,6 +57,6 @@ pub(crate) fn next(view: &mut View, space: SpaceId, checks: &SealChecks, me: Mem
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 #[path = "next_tests.rs"]
 mod tests;
