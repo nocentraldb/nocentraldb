@@ -36,7 +36,9 @@
 mod again;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
+#[cfg(not(target_arch = "wasm32"))]
 mod http;
+#[cfg(not(target_arch = "wasm32"))]
 mod large;
 mod pause;
 mod person_keys;
