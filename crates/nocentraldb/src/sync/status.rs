@@ -49,19 +49,26 @@ fn slot_lock(slot: &Slot) -> std::sync::MutexGuard<'_, Option<Waker>> {
     slot.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// The stream [`SyncReport::subscribe`] returns.
-struct Statuses {
+/// A stream of what `read` reads of the database: at once, and again
+/// whenever it differs from what the stream last yielded. Whatever may
+/// change it calls [`Notify::notify`]. Dropping the stream stops it.
+struct Follow<T, F> {
     inner: Arc<Mutex<Inner>>,
     slot: Arc<Slot>,
-    last: Option<SyncStatus>,
+    last: Option<T>,
+    read: F,
 }
 
-impl Stream for Statuses {
-    type Item = SyncStatus;
+impl<T, F> Stream for Follow<T, F>
+where
+    T: Clone + PartialEq + Unpin,
+    F: Fn(&Inner) -> T + Unpin,
+{
+    type Item = T;
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<SyncStatus>> {
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<T>> {
         let inner = lock(&self.inner);
-        let now = status(&inner);
+        let now = (self.read)(&inner);
         if self.last.as_ref() == Some(&now) {
             *slot_lock(&self.slot) = Some(cx.waker().clone());
             return Poll::Pending;
@@ -69,6 +76,24 @@ impl Stream for Statuses {
         drop(inner);
         self.last = Some(now.clone());
         Poll::Ready(Some(now))
+    }
+}
+
+/// Follows what `read` reads of the database `inner`; see [`Follow`].
+pub(crate) fn follow<T, F>(
+    inner: &Arc<Mutex<Inner>>,
+    read: F,
+) -> impl Stream<Item = T> + Unpin + use<T, F>
+where
+    T: Clone + PartialEq + Unpin,
+    F: Fn(&Inner) -> T + Unpin,
+{
+    let slot = lock(inner).status.slot();
+    Follow {
+        inner: inner.clone(),
+        slot,
+        last: None,
+        read,
     }
 }
 
@@ -85,12 +110,7 @@ impl SyncReport<'_> {
     /// Follows the report: the stream yields the status at once, and
     /// again whenever it changes. Dropping the stream stops it.
     pub fn subscribe(&self) -> impl Stream<Item = SyncStatus> + Unpin + use<> {
-        let slot = self.db.lock().status.slot();
-        Statuses {
-            inner: self.db.inner.clone(),
-            slot,
-            last: None,
-        }
+        follow(&self.db.inner, status)
     }
 
     /// Whether the relay holds the change `change`: it recorded a

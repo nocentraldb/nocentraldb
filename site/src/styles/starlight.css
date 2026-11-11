@@ -1,0 +1,77 @@
+/* Starlight in the NoCentralDB brand (nxsflow/brand, commit 38abcfc), dark
+   only, with the landing page's three roles (Carsten, 2026-11-11): near-black
+   ground and surfaces, safety yellow for the current page, and the loud
+   colour, hot magenta, for link underlines, focus and hover. */
+:root,
+:root[data-theme="dark"] {
+  --sl-font: var(--ncdb-font-body);
+  --sl-font-mono: var(--ncdb-font-mono);
+  --sl-color-bg: var(--ncdb-bg);
+  --sl-color-bg-nav: var(--ncdb-bg);
+  --sl-color-bg-sidebar: var(--ncdb-bg);
+  --sl-color-bg-inline-code: var(--ncdb-surface-2);
+  --sl-color-black: var(--ncdb-bg);
+  --sl-color-gray-6: var(--ncdb-surface);
+  --sl-color-gray-5: var(--ncdb-surface-2);
+  --sl-color-gray-3: var(--ncdb-muted);
+  --sl-color-gray-2: var(--ncdb-ink);
+  --sl-color-white: var(--ncdb-ink);
+  --sl-color-text: var(--ncdb-ink);
+  --sl-color-hairline: var(--ncdb-surface);
+  --sl-color-hairline-light: var(--ncdb-surface-2);
+  --sl-color-hairline-shade: var(--ncdb-bg);
+  --loud: #ff3d8b;
+  --sl-color-accent-low: var(--ncdb-surface-2);
+  --sl-color-accent: var(--loud);
+  --sl-color-accent-high: var(--loud);
+  --sl-color-text-accent: var(--ncdb-ink);
+  --sl-color-text-invert: var(--ncdb-accent-ink);
+}
+body {
+  font-weight: var(--ncdb-weight-body);
+}
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--ncdb-font-heading);
+  font-weight: var(--ncdb-weight-heading);
+  letter-spacing: -0.015em;
+  line-height: 1.05;
+}
+.site-title img {
+  height: 30px;
+  width: auto;
+}
+/* Links carry the loud colour as an underline, never as text colour. */
+.sl-markdown-content a {
+  color: var(--ncdb-ink);
+  text-decoration-color: var(--loud);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+:focus-visible {
+  outline-color: var(--loud);
+}
+/* The current page in the sidebar: a safety-yellow ground, near-black text. */
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  background: var(--ncdb-accent);
+  color: var(--ncdb-accent-ink);
+}
+/* Previous and next: neutral cards with the loud glow on hover. */
+.pagination-links a:hover {
+  border-color: var(--loud);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--loud) 34%, transparent);
+}
+/* Code: ink and muted only, never the accent. */
+.expressive-code {
+  --ec-frm-edBg: var(--ncdb-surface);
+}
+/* Asides are neutral: warnings are never yellow. */
+.starlight-aside {
+  --sl-color-asides-text-accent: var(--ncdb-ink);
+  --sl-color-asides-border: var(--ncdb-surface-2);
+  background: var(--ncdb-surface);
+}

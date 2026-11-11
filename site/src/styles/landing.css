@@ -1,0 +1,218 @@
+/* NoCentralDB landing page (NOC-211), on the brand's design language
+   "The marked floor", with the owner's 60/30/10 rule on top (Carsten,
+   2026-11-11): about 60 % near-black (--ncdb-bg and the surfaces), about
+   30 % safety yellow (--ncdb-accent) as grounds and panels, and about 10 %
+   the loud colour (--loud, hot magenta) for the primary action, the
+   connected state, link underlines and focus. On nocentraldb.io this
+   overrides BRAND.md's "accent under 5 %". */
+
+:root {
+  --radius-s: 6px;
+  --radius-m: 12px;
+  --radius-l: 20px;
+  --wrap: 1200px;
+  --gutter: clamp(20px, 5vw, 64px);
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --hover-glow:
+    0 12px 40px color-mix(in srgb, var(--loud) 34%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--loud) 16%, transparent);
+
+  /* The loud colour: hot magenta, the owner's choice (2026-11-11). */
+  --loud: #ff3d8b;
+  --on-loud: var(--ncdb-bg);
+}
+/* The 30 %: a safety-yellow ground, with near-black text. */
+.ground-yellow {
+  background: var(--ncdb-accent);
+  color: var(--ncdb-accent-ink);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html {
+  background: var(--ncdb-bg);
+  color: var(--ncdb-ink);
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  font-family: var(--ncdb-font-body);
+  font-weight: var(--ncdb-weight-body);
+  font-size: var(--ncdb-text-body);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--ncdb-font-heading);
+  font-weight: var(--ncdb-weight-heading);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 0;
+  text-wrap: balance;
+}
+h1,
+h2 {
+  font-size: var(--ncdb-text-heading);
+}
+h3 {
+  font-size: var(--ncdb-text-lead);
+}
+p {
+  margin: 0;
+}
+a {
+  color: inherit;
+}
+code,
+pre,
+.mono {
+  font-family: var(--ncdb-font-mono);
+  font-weight: 400;
+}
+/* Terms of the brand's vocabulary are set in the code face. */
+.term {
+  font-family: var(--ncdb-font-mono);
+  font-size: 0.95em;
+}
+:focus-visible {
+  outline: 3px solid var(--loud);
+  outline-offset: 3px;
+}
+
+.wrap {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+main > section {
+  padding: clamp(72px, 10vw, 128px) 0;
+}
+.section-lead {
+  max-width: 44ch;
+  font-size: var(--ncdb-text-lead);
+  line-height: 1.4;
+  margin-top: 20px;
+}
+h2 {
+  max-width: 22ch;
+}
+
+/* One button pair, one link look. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border-radius: 999px;
+  border: 0;
+  font-family: var(--ncdb-font-body);
+  font-weight: var(--ncdb-weight-strong);
+  font-size: var(--ncdb-text-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out);
+}
+.btn:hover {
+  transform: translateY(-2px);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background: var(--loud);
+  color: var(--on-loud);
+}
+.btn-primary:hover {
+  box-shadow: var(--hover-glow);
+}
+.btn-secondary {
+  background: var(--ncdb-surface-2);
+  color: var(--ncdb-ink);
+}
+.link {
+  font-weight: var(--ncdb-weight-emphasis);
+  text-decoration: none;
+  background:
+    linear-gradient(var(--ncdb-accent), var(--ncdb-accent)) 0 100% / 0 2px
+    no-repeat;
+  transition: background-size 220ms var(--ease-out);
+  padding-bottom: 2px;
+}
+.link:hover,
+.link:focus-visible {
+  background-size: 100% 2px;
+}
+
+/* A card: neutral at rest, a soft accent glow and a 2px lift on hover. */
+.card {
+  background: var(--ncdb-surface);
+  border-radius: var(--radius-m);
+  transition:
+    transform 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out);
+}
+a.card:hover,
+a.card:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: var(--hover-glow);
+}
+
+/* Navigation */
+.nav {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 5;
+}
+.nav .wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 84px;
+}
+.nav .logo {
+  display: block;
+  line-height: 0;
+}
+.nav .logo svg {
+  height: 34px;
+  width: auto;
+}
+.nav ul {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  align-items: center;
+}
+@media (max-width: 760px) {
+  .nav .hide-s {
+    display: none;
+  }
+  .nav ul {
+    gap: 20px;
+  }
+  .nav .logo svg {
+    height: 28px;
+  }
+}
+
+/* Under reduced motion everything rests; !important beats every component's animation. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win */
+    animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: reduced motion must win */
+    transition: none !important;
+  }
+}

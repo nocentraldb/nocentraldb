@@ -104,7 +104,7 @@ The schema marks personal fields and ties each one to a person (RFC 0001, "Perso
 
 For each person and each space that holds that person's data, the SDK creates a **person key**: 32 random bytes. There is one key per person id per space, because a space's members never need a key that also opens the person's data in other spaces; an erasure work order finds the person's keys by person id and shreds them in every space the performing account can reach. One key per person across all spaces, distributed into each space, was not taken.
 
-The person key encrypts the person's personal fields inside the change, before the change as a whole is encrypted with the space key. Unlike everything else in a space, the person key does not live in the append-only log, because a log entry cannot be destroyed. It lives in the space's **person-key store**: one record per person, wrapped under the current space key generation, held by the relay as an opaque record that can be deleted, and by each member in its local keystore. Destroying the key is the erasure; see [Shredding a person's key](#shredding-a-persons-key).
+The person key encrypts the person's personal fields inside the change, before the change as a whole is encrypted with the space key. Unlike everything else in a space, the person key does not live in the append-only log, because a log entry cannot be destroyed. It lives in the space's **person-key store**: one record per person, wrapped under the current space key generation ([Person-key record](#person-key-record)), held by the relay as an opaque record that can be deleted, and by each member in its local keystore. Destroying the key is the erasure; see [Shredding a person's key](#shredding-a-persons-key).
 
 The relay holds the wrapped records so that a new member, a cloud agent included, can open personal fields while no other member is online. It adds no reader the design does not already have (see the limits of shredding). Keeping person keys from the relay, so that members hand them to each other directly, was not taken: a new member would wait for another member to come online.
 
@@ -323,6 +323,21 @@ SHA-256("nocentraldb/person-key-record" || space id (16 bytes) || person-key id 
 ```
 
 The context comes first, the fields of fixed length follow, and the one field of variable length, the wrapped bytes, comes last, as in the [account sign-off of a shred](#account-sign-off-of-a-shred). The space id keeps a record from being replayed into another space. The relay checks the signature before it stores a record, and every member checks it before it accepts one. Two other inputs were not taken. The canonical CBOR of the record without its signature, with the space id as key 0, would be a second way of building signature inputs. The record hash in place of the wrapped bytes would make every field fixed in length, but the wrapped bytes would be hashed twice and the signature would depend on a second hash.
+
+The wrapped bytes are the person key, encrypted under a subkey of the space key of the record's generation:
+
+```text
+person-key subkey = HKDF-SHA256(ikm = the space key of the record's generation, salt = none,
+                                info = "nocentraldb/person-key-wrap" || space id (16 bytes) ||
+                                       generation id (8 bytes, big-endian))
+associated data   = space id (16 bytes) || generation id (8 bytes, big-endian) ||
+                    person-key id (16 bytes)                                         40 bytes
+wrapped bytes     = nonce (24 bytes) || ciphertext (32 bytes) || tag (16 bytes)       72 bytes
+  plaintext       = the 32-byte person key
+  AEAD            = XChaCha20-Poly1305, random nonce
+```
+
+It follows the [key-chain subkey](#key-chain-subkey): a subkey of the generation's key with a label of its own, the space and the generation in its `info`, and the associated data in the same shape, so a wrap cannot be moved to another person, another generation or another space. The writer is bound by the record's signature, not by the wrap. The layout is the one for everything a space key seals. The label is not a prefix of another label, and no other label is a prefix of it; the plain `"nocentraldb/person-key"` was not taken, because it is a prefix of the commitment's and the record's context strings. The person-key id alone as associated data was not taken: the subkey already binds the space and the generation, but the key chain's shape keeps one way of building associated data. Nor was the generation's content key, which would share a key with the sealed payloads, while every use of a space key has a subkey of its own. The owner decided the wrapped bytes on NOC-209 (Carsten, 2026-11-11). `crates/ncdb-core/tests/vectors/membership/generate.py` writes a test vector for them with independent libraries.
 
 ### Key-chain subkey
 
