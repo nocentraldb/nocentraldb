@@ -3,13 +3,16 @@
 //! the member writes into it like into a space it created, after the
 //! heads of its log (RFC 0002, "Dependencies"). A space of another model is
 //! `spaceOfAnotherModel`, and one whose key has not arrived `notFound`
-//! (RFC 0009, "Errors").
+//! (RFC 0009, "Errors"). A space of another model is never folded: its
+//! sealed changes are parked as another model, so nothing of it reaches
+//! the view (RFC 0009, "Spaces of another model"; NOC-57).
 
 use std::collections::BTreeSet;
 
 use ncdb_core::change::Change;
 use ncdb_core::field_op;
 use ncdb_core::ids::ObjectId as CoreObjectId;
+use ncdb_core::log::{ParkReason as CoreParkReason, State};
 use ncdb_core::membership::Role;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::seal;
@@ -153,4 +156,57 @@ async fn a_space_whose_key_has_not_arrived_is_not_found() {
     let error = now(db.spaces().get(SpaceId(space.space))).unwrap_err();
 
     assert_eq!(error.code(), ErrorCode::NotFound);
+}
+
+/// The state of `change` of `space` in the database's log.
+fn state(db: &crate::Db, space: &space::Space, change: &Change) -> Option<State> {
+    crate::db::lock(&db.inner)
+        .view
+        .state(space.space, change.id())
+}
+
+/// Whether the database's view holds the task `TASK` of `space`.
+fn holds_task(db: &crate::Db, space: &space::Space) -> bool {
+    let inner = crate::db::lock(&db.inner);
+    inner
+        .view
+        .get(space.space, "tasks", TASK)
+        .expect("the view reads")
+        .is_some()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_space_of_another_model_is_not_folded() {
+    let relay = LocalRelay::start().await;
+    let (space, envelope, task) = shared(&relay, [1; 16], true).await;
+    let db = open(ME, &relay.url()).await;
+    eventually("the task", || pulled(&db, &space, &task)).await;
+
+    // The membership folds, so the copy can name the space's model; the
+    // content does not.
+    assert!(matches!(
+        state(&db, &space, &envelope),
+        Some(State::Folded { .. })
+    ));
+    assert_eq!(
+        state(&db, &space, &task),
+        Some(State::Parked(CoreParkReason::AnotherModel))
+    );
+    assert!(!holds_task(&db, &space));
+    let counts = crate::db::lock(&db.inner).view.state_counts(space.space);
+    assert_eq!(counts.parked.get(&CoreParkReason::AnotherModel), Some(&1));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_space_of_the_locks_model_is_folded() {
+    let relay = LocalRelay::start().await;
+    let (space, _, task) = shared(&relay, model_id(), true).await;
+    let db = open(ME, &relay.url()).await;
+    eventually("the task", || pulled(&db, &space, &task)).await;
+
+    assert!(matches!(
+        state(&db, &space, &task),
+        Some(State::Folded { .. })
+    ));
+    assert!(holds_task(&db, &space));
 }

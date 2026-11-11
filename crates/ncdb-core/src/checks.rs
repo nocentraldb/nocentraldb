@@ -76,6 +76,9 @@ pub struct SealChecks {
     /// Every key held for a generation, the current one included.
     held: BTreeMap<u64, Vec<SpaceKey>>,
     resolved: Resolved,
+    /// [`SealChecks::model_id`], read again after every control change, so
+    /// that the check of every sealed change costs no decryption.
+    space_model: Option<[u8; 16]>,
 }
 
 impl SealChecks {
@@ -91,6 +94,7 @@ impl SealChecks {
             chain_keys: BTreeMap::new(),
             held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
+            space_model: None,
         }
     }
 
@@ -156,6 +160,10 @@ fn named_key(body: &ControlBody) -> Option<MemberPublicKey> {
 impl Checks for SealChecks {
     fn knows_suite(&self, suite: u64) -> bool {
         suite == seal::SUITE
+    }
+
+    fn space_model_id(&self) -> Option<[u8; 16]> {
+        self.space_model
     }
 
     fn verify(&self, change: &Change) -> Result<(), Stop> {
@@ -225,6 +233,7 @@ impl Checks for SealChecks {
         self.resolved = membership::resolve(self.space, self.controls.values());
         self.walk_key_chain();
         self.hold_keys();
+        self.space_model = self.model_id();
     }
 }
 
