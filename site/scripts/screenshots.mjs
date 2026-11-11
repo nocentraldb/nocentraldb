@@ -1,11 +1,11 @@
-// Screenshots of the landing page for each candidate loud colour, at
+// Screenshots of the landing page in its loud colour, magenta, at
 // desktop 1440 px and mobile 390 px, deviceScaleFactor 2 (NOC-211).
 // Usage: pnpm build && pnpm preview, then pnpm shots [base-url] in another shell.
 import { mkdir } from "node:fs/promises";
 import { chromium } from "playwright";
 
 const base = process.argv[2] ?? "http://localhost:4321";
-const accents = ["blue", "green", "magenta"];
+const accents = ["magenta"];
 const widths = { desktop: 1440, mobile: 390 };
 const out = new URL("../drafts/", import.meta.url);
 await mkdir(out, { recursive: true });
@@ -17,7 +17,7 @@ for (const accent of accents) {
       viewport: { width, height: 900 },
       deviceScaleFactor: 2,
     });
-    await page.goto(`${base}/accent/${accent}/?shot`, {
+    await page.goto(`${base}/?shot`, {
       waitUntil: "networkidle",
     });
     await page.evaluate(() => document.fonts.ready);

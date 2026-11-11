@@ -1,6 +1,5 @@
 ---
 // The landing page, in the NoCentralDB brand (nxsflow/brand, commit 38abcfc).
-import { type AccentId, accents } from "../accents";
 import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
 import CodeSection from "../components/CodeSection.astro";
@@ -10,11 +9,6 @@ import UseCases from "../components/UseCases.astro";
 import "../styles/tokens.css";
 import "../styles/landing.css";
 
-interface Props {
-  accent: AccentId;
-}
-const { accent } = Astro.props;
-
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
 const logo = wordmark.replace(
   "<svg ",
@@ -23,7 +17,7 @@ const logo = wordmark.replace(
 ---
 
 <!doctype html>
-<html lang="en" data-accent={accent}>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -61,16 +55,5 @@ const logo = wordmark.replace(
       <CodeSection />
       <Closing />
     </main>
-    <nav class="switcher" aria-label="Draft: loud colour">
-      <span>Draft colour</span>
-      {
-        accents.map((a) => (
-          <a href={`/accent/${a.id}/`} aria-current={a.id === accent ? "true" : "false"}>
-            <i style={`background:${a.hex}`} />
-            {a.label}
-          </a>
-        ))
-      }
-    </nav>
   </body>
 </html>

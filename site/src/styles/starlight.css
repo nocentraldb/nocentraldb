@@ -1,6 +1,7 @@
-/* Starlight in the NoCentralDB brand (nxsflow/brand, commit 38abcfc): dark
-   only, the --ncdb-* roles from tokens.css, the safety-yellow accent only for
-   the current page, links and focus. */
+/* Starlight in the NoCentralDB brand (nxsflow/brand, commit 38abcfc), dark
+   only, with the landing page's three roles (Carsten, 2026-11-11): near-black
+   ground and surfaces, safety yellow for the current page, and the loud
+   colour, hot magenta, for link underlines, focus and hover. */
 :root,
 :root[data-theme="dark"] {
   --sl-font: var(--ncdb-font-body);
@@ -19,9 +20,10 @@
   --sl-color-hairline: var(--ncdb-surface);
   --sl-color-hairline-light: var(--ncdb-surface-2);
   --sl-color-hairline-shade: var(--ncdb-bg);
+  --loud: #ff3d8b;
   --sl-color-accent-low: var(--ncdb-surface-2);
-  --sl-color-accent: var(--ncdb-accent);
-  --sl-color-accent-high: var(--ncdb-accent);
+  --sl-color-accent: var(--loud);
+  --sl-color-accent-high: var(--loud);
   --sl-color-text-accent: var(--ncdb-ink);
   --sl-color-text-invert: var(--ncdb-accent-ink);
 }
@@ -41,15 +43,27 @@ h4 {
   height: 30px;
   width: auto;
 }
-/* Links carry the accent as an underline, never as text colour. */
+/* Links carry the loud colour as an underline, never as text colour. */
 .sl-markdown-content a {
   color: var(--ncdb-ink);
-  text-decoration-color: var(--ncdb-accent);
+  text-decoration-color: var(--loud);
+  text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
-/* The current page in the sidebar: accent ground, accent-ink text. */
-.sidebar-content a[aria-current="page"] {
+:focus-visible {
+  outline-color: var(--loud);
+}
+/* The current page in the sidebar: a safety-yellow ground, near-black text. */
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  background: var(--ncdb-accent);
   color: var(--ncdb-accent-ink);
+}
+/* Previous and next: neutral cards with the loud glow on hover. */
+.pagination-links a:hover {
+  border-color: var(--loud);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--loud) 34%, transparent);
 }
 /* Code: ink and muted only, never the accent. */
 .expressive-code {
