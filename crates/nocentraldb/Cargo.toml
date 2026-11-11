@@ -50,10 +50,15 @@ windows-native-keyring-store = { version = "=1.1.0", default-features = false }
 zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = false, features = ["crypto-rust"] }
 
 # The sync tests run the relay server on SQLite locally and talk to it as a
-# simulated member would.
-[dev-dependencies]
+# simulated member would. Natively only: they need sockets and threads.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "time", "io-util", "net", "macros"] }
 # A backup of the relay's database, to restore it from (RFC 0007,
 # "Restores and the relay epoch").
 rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled"] }
+
+# The test-wasm task (moon.yml) runs the in-memory tests on wasm32 with
+# wasm-bindgen-test, the version the core's wasm tests pin.
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.80"

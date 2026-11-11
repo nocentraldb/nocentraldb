@@ -110,6 +110,9 @@ pub(crate) fn reject(reason: CoreRejectReason) -> Option<RejectReason> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
 
     /// Every reason the core has today maps to a public one.

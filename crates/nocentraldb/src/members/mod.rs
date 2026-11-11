@@ -281,7 +281,7 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 mod batch_tests;
 #[cfg(test)]
 mod known_tests;
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
 #[cfg(test)]
 mod rotate_tests;

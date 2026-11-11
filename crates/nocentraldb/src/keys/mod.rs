@@ -136,5 +136,5 @@ pub(crate) fn io(what: &str, error: &std::io::Error) -> Error {
     Error::new(code, format!("{what}: {error}"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;
