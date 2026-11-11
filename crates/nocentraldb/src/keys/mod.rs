@@ -10,6 +10,8 @@
 //! secret, the member key-agreement secret and the account secret, 32
 //! bytes each. No other format is read.
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod browser;
 mod file;
 pub(crate) mod store;
 
