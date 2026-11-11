@@ -2,6 +2,11 @@
 //! of the lock it opened the database with, into payload key 64 of every
 //! change it seals (RFC 0002, "The writer's model").
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ncdb_core::change::WriterModel;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::receive::Checks;

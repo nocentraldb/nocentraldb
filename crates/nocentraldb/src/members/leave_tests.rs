@@ -3,6 +3,11 @@
 //! NOC-219): the member writes a removal of itself with its cutoff, and does
 //! not rotate, since it must not know the next key.
 
+// On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+// this routes #[test] there, so these tests run on both targets (NOC-175).
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen_test::wasm_bindgen_test as test;
+
 use ed25519_dalek::SigningKey;
 use ncdb_core::membership::Resolved;
 

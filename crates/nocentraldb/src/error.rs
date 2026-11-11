@@ -121,6 +121,9 @@ pub(crate) fn storage(error: ncdb_core::view::Error) -> Error {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
 
     /// Only a full disk tells the app to free space (NOC-95, 4 B); the
