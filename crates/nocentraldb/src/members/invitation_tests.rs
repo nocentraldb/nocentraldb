@@ -13,6 +13,8 @@ const PLAIN: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation.t
 const STATEMENT: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation-statement.txt");
 const FIELDS: &str = include_str!("../../../../docs/rfc/vectors/0003/fields.txt");
 const PLAIN_HEX: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation.hex");
+const STATEMENT_HEX: &str =
+    include_str!("../../../../docs/rfc/vectors/0003/invitation-statement.hex");
 
 /// The field `name` of fields.txt, as bytes.
 fn field(name: &str) -> Vec<u8> {
@@ -106,9 +108,7 @@ fn a_text_that_does_not_follow_the_layout_is_an_invalid_value() {
         copy[offset] = value;
         text_of(&copy)
     };
-    let mut statement = from_hex(&include_str!(
-        "../../../../docs/rfc/vectors/0003/invitation-statement.hex"
-    ));
+    let mut statement = from_hex(STATEMENT_HEX);
     statement[195..203].copy_from_slice(&0u64.to_be_bytes());
     let cases = [
         ("another prefix", format!("ncdb-invite-2:{body}")),
