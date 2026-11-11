@@ -66,7 +66,8 @@ impl std::error::Error for AppendError {}
 #[non_exhaustive]
 pub enum State {
     /// Passed every check and folded. Operations the member's model does
-    /// not know yet are parked on their own (D10), listed here in order. A
+    /// not know yet are parked on their own (RFC 0002, "The atomic unit"),
+    /// listed here in order. A
     /// sealed change moves on to rejected, and is un-folded, when a later
     /// control change makes its membership check fail (RFC 0006,
     /// "Un-folding").
@@ -79,7 +80,7 @@ pub enum State {
     Parked(ParkReason),
     /// Kept and not folded, because it failed a check, or un-folded,
     /// because a later control change made it fail; checked again when a
-    /// control change of the space passes (D11).
+    /// control change of the space passes (RFC 0002, "Rejected changes").
     Rejected(RejectReason),
 }
 
@@ -102,7 +103,8 @@ pub enum ParkReason {
     UnknownPayloadKey,
 }
 
-/// An operation of a folded change that was parked on its own (D10).
+/// An operation of a folded change that was parked on its own (RFC 0002,
+/// "The atomic unit").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ParkedOperation {
     /// The operation's position in the change's operation array.
@@ -151,7 +153,8 @@ pub enum RejectReason {
 
 /// The relay's refusal of a change the member holds: the relay's error
 /// code (RFC 0007), such as `author_not_member`. It is recorded beside the
-/// change and never changes its [`State`] (D12): no other member sees the
+/// change and never changes its [`State`] (RFC 0002, "A change the relay
+/// refuses after the member folded it"): no other member sees the
 /// relay's answer, so a state that followed it could differ between
 /// members that hold the same changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -329,7 +332,8 @@ impl Log {
     }
 
     /// Records the relay's refusal of a change the log holds, beside the
-    /// change; its state stays as it is (D12). Returns `false`, and records
+    /// change; its state stays as it is (RFC 0002, "A change the relay refuses
+    /// after the member folded it"). Returns `false`, and records
     /// nothing, when the log does not hold the change.
     pub fn record_relay_refusal(&mut self, id: ChangeId, refusal: RelayRefusal) -> bool {
         let Some(entry) = self.entry_mut(id) else {
@@ -348,7 +352,8 @@ impl Log {
     }
 
     /// Forgets the relay's refusal of a change the log holds, so that the
-    /// member pushes it to the relay once more (RFC 0008, M19); a change
+    /// member pushes it to the relay once more (RFC 0008, "How the relay applies
+    /// the rules"); a change
     /// the relay has not confirmed counts as unconfirmed again. Returns
     /// `false`, and changes nothing, when the log does not hold the change
     /// or holds no refusal of it.

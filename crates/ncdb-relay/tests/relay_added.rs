@@ -1,4 +1,4 @@
-//! RFC 0007, "Subscribe" and decision R13: when an append makes a member
+//! RFC 0007, "Subscribe": when an append makes a member
 //! current in a space, the relay tells that member's open connections
 //! (`added`). The core says who became current; the server delivers.
 
@@ -100,7 +100,8 @@ fn a_member_added_again_after_its_removal_becomes_current_again() {
             .all(|r| matches!(r, Pushed::Accepted(_)))
     );
 
-    // RFC 0008, M5: a removed member comes back with a new grant.
+    // RFC 0008, "Membership entry": a removed member comes back with a new
+    // grant.
     let again = space.add_at(0, 1, Role::Writer, next, &[&rotation]);
     let push = block_on(relay.push(id(0), space.space, vec![again.bytes().to_vec()]));
     assert_eq!(push.results, [Pushed::Accepted(5)]);

@@ -5,7 +5,7 @@
 //! value, and names the JSON path of the first one that is wrong. Whether
 //! the model itself is sound (its names, indexes and personal fields) is
 //! [`super::check`]'s job. Keys a reader does not know are ignored: a
-//! later lock may add optional keys without a new format (RFC 0005, D8).
+//! later lock may add optional keys without a new format (RFC 0005, "Names").
 
 use std::collections::BTreeMap;
 use std::fmt;

@@ -343,7 +343,8 @@ pub fn welcome(member: &[u8; 32], epoch: &[u8; 16], spaces: &[[u8; 16]]) -> Vec<
     )
 }
 
-/// `added {space}`: the member was added to the space (decision R13).
+/// `added {space}`: the member was added to the space (RFC 0007,
+/// "Subscribe").
 pub fn added(space: SpaceId) -> Vec<u8> {
     message("added", None, vec![(3, Value::Bytes(space.0.to_vec()))])
 }
