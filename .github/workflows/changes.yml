@@ -57,12 +57,20 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"
       - run: rustup toolchain install --no-self-update
+      # Only the publishable crates the base also has: a crate new in the
+      # pull request has no baseline, and the tool's failure on it would read
+      # as a breaking change (NOC-253).
+      - name: Crates with a baseline
+        id: packages
+        run: node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"
       - name: Rust API against the base
         id: semver
+        if: steps.packages.outputs.any == 'true'
         uses: obi1kenobi/cargo-semver-checks-action@6b69fcf40e9b5fb17adeb57e4b6ecd020649a239 # v2.9
         with:
           baseline-root: ${{ runner.temp }}/baseline
           rust-toolchain: manual
+          package: ${{ steps.packages.outputs.packages }}
         continue-on-error: true
       - name: Explain a failed semver step
         id: semver-failed

@@ -9,6 +9,9 @@
 // PR's base, allowed to fail so the fragment step still runs, and the
 // TypeScript API report against the base; either one's finding turns into
 // --require-breaking for check-fragments, which --skip never waives.
+// cargo-semver-checks checks only the publishable crates the base also has
+// (scripts/release/semver-packages.mjs), and does not run when there are
+// none: a crate new in the pull request has no baseline (NOC-253).
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -48,6 +51,7 @@ const fragmentsStep = (ctx) =>
 const semverStep = (ctx) => at(ctx, (step) => step.id === "semver");
 const apiStep = (ctx) => at(ctx, (step) => step.id === "api");
 const baselineStep = (ctx) => at(ctx, (step) => step.id === "base-worktree");
+const packagesStep = (ctx) => at(ctx, (step) => step.id === "packages");
 const semverNoticeStep = (ctx) =>
   at(ctx, (step) => step.id === "semver-failed");
 const toolchainStep = (ctx) =>
@@ -72,6 +76,9 @@ const FRAGMENTS_RUN =
 const SEMVER_ACTION = "obi1kenobi/cargo-semver-checks-action@";
 const BASELINE_RUN =
   'git worktree add --detach "$RUNNER_TEMP/baseline" "$BASE"';
+const PACKAGES_RUN =
+  'node scripts/release/semver-packages.mjs --baseline "$RUNNER_TEMP/baseline" >> "$GITHUB_OUTPUT"';
+const SEMVER_IF = "steps.packages.outputs.any == 'true'";
 const SEMVER_NOTICE = {
   if: "steps.semver.outcome == 'failure'",
   run: 'echo "::warning title=cargo-semver-checks failed::Its log above shows which item broke. If it shows no failed lint, the tool itself failed (a download or build error): re-run the job instead of adding a breaking fragment."',
@@ -220,6 +227,12 @@ const checks = [
         fragmentsStep(ctx),
       ];
       assert.ok(baseline < semver, "the baseline is checked out after semver");
+      const packages = packagesStep(ctx);
+      assert.ok(
+        baseline < packages && packages < semver,
+        "the packages are listed outside baseline..semver",
+      );
+      assert.equal(all[packages].run, PACKAGES_RUN);
       assert.ok(toolchain < semver, "the toolchain is installed after semver");
       assert.ok(semver < api, "semver runs after the API report");
       assert.ok(api < fragments, "the API report runs after check-fragments");
@@ -241,7 +254,9 @@ const checks = [
       assert.deepEqual(sv.with, {
         "baseline-root": `${gh("runner.temp")}/baseline`,
         "rust-toolchain": "manual",
+        package: gh("steps.packages.outputs.packages"),
       });
+      assert.equal(sv.if, SEMVER_IF);
       assert.equal(sv["continue-on-error"], true);
 
       const report = all[api];
@@ -280,6 +295,20 @@ const checks = [
         const step = list.items.splice(fragmentsStep(ctx), 1)[0];
         list.items.splice(apiStep(ctx), 0, step);
       },
+      "semver checks every publishable crate, new ones included": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, semverStep(ctx), "with", "package"]),
+      "semver runs with no crate to check": (ctx) =>
+        ctx.doc.deleteIn([...STEPS, semverStep(ctx), "if"]),
+      "the packages are listed against the head, not the base": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, packagesStep(ctx), "run"],
+          PACKAGES_RUN.replace('"$RUNNER_TEMP/baseline"', "."),
+        ),
+      "the package list goes to the log, not the step outputs": (ctx) =>
+        ctx.doc.setIn(
+          [...STEPS, packagesStep(ctx), "run"],
+          PACKAGES_RUN.replace(' >> "$GITHUB_OUTPUT"', ""),
+        ),
       "semver without continue-on-error": (ctx) =>
         ctx.doc.deleteIn([...STEPS, semverStep(ctx), "continue-on-error"]),
       "semver against baseline-rev (an archive the repository's symlink breaks)":
