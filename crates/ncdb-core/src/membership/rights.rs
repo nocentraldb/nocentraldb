@@ -13,11 +13,13 @@ use super::genesis::generation_id;
 use super::input::Node;
 use super::person_key::ShredEntry;
 use super::resolve::{Judged, Resolved};
+use super::statement::AccountKeyStatement;
 
 /// The right a change's author needs. A membership entry needs admin,
 /// except a member's own leave (reader) or lowering of its own role (the
 /// role it sets). Key envelopes and key chain entries need admin,
-/// person-key and shred entries writer, acknowledgements reader.
+/// person-key and shred entries writer, acknowledgements and account key
+/// statement entries reader.
 pub(crate) fn needed(node: &Node) -> Role {
     match &node.body.entry {
         Entry::Genesis(_) => Role::Reader,
@@ -30,6 +32,7 @@ pub(crate) fn needed(node: &Node) -> Role {
         }
         Entry::Membership(_) | Entry::KeyEnvelope(_) | Entry::KeyChain(_) => Role::Admin,
         Entry::PersonKey(_) | Entry::Shred(_) => Role::Writer,
+        Entry::AccountKeyStatement(_) => Role::Reader,
         Entry::Other { entry_type, .. } => match *entry_type {
             ACKNOWLEDGEMENT => Role::Reader,
             _ => Role::Admin,
@@ -79,6 +82,7 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
                 .is_none_or(|commitment| commitment == entry.commitment);
         }
         Entry::Shred(shred) => return signed_off(space, node, shred, past),
+        Entry::AccountKeyStatement(statement) => return carries(statement, past),
         _ => return true,
     };
     let MembershipEntry { subject, action } = entry;
@@ -90,6 +94,11 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
         } => {
             let former = past.member(*subject).is_some();
             past.role(*subject).is_none()
+                && !superseded(
+                    past,
+                    certificate.account_key,
+                    certificate.statement.as_deref(),
+                )
                 && (!former || fresh(past, node.author, *subject, *from_generation))
                 && certificate.member == *subject
                 && match certificate.kind {
@@ -158,6 +167,7 @@ fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) 
     };
     past.person_key(shred.person_key).is_some()
         && shred.sign_off.verify(space, shred.person_key, node.author)
+        && !superseded(past, account, None)
         && !same_account(past, performer, account)
         && past
             .members()
@@ -165,18 +175,64 @@ fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) 
 }
 
 /// Whether the account keys `a` and `b` name one account: they are equal,
-/// or a certificate of the causal past attaches a recovery key to `a` that
-/// one attaches to `b` too. A certificate in the state carries only a
-/// statement that names its own key 1 and verifies (`Certificate::verify`).
+/// or a statement of the causal past attaches a recovery key to `a` that
+/// one attaches to `b` too. The statements are those of the certificates
+/// and of the accepted account key statement entries (NOC-201; Carsten,
+/// 2026-11-11, NOC-187). A certificate in the state carries only a
+/// statement that names its own key 1 and verifies (`Certificate::verify`),
+/// and an accepted statement entry only one that verifies.
 fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
     let recovery_keys = |account: [u8; 32]| -> BTreeSet<[u8; 32]> {
-        past.certificates()
-            .filter(|certificate| certificate.account_key == account)
-            .filter_map(|certificate| certificate.statement.as_ref())
+        past.all_statements()
+            .filter(|statement| statement.account_key == account)
             .map(|statement| statement.recovery_key)
             .collect()
     };
     a == b || !recovery_keys(a).is_disjoint(&recovery_keys(b))
+}
+
+/// Whether an account key statement entry holds its own rules in the
+/// state of its causal past (RFC 0008, "Account key statement entry"):
+/// its signature verifies under its recovery key, a certificate of a
+/// current or former member names that recovery key, and its number is
+/// higher than that of every statement for the recovery key there, in
+/// certificates and in statement entries alike.
+fn carries(statement: &AccountKeyStatement, past: &Resolved) -> bool {
+    let recovery = statement.recovery_key;
+    statement.verify()
+        && past.certificates().any(|certificate| {
+            certificate
+                .statement
+                .as_ref()
+                .is_some_and(|s| s.recovery_key == recovery)
+        })
+        && past
+            .all_statements()
+            .filter(|s| s.recovery_key == recovery)
+            .all(|s| s.number < statement.number)
+}
+
+/// Whether the account key `key` is superseded in the state `past` (RFC
+/// 0008, "The function", step 1): a statement there names `key` for a
+/// recovery key with some number, and another statement for the same
+/// recovery key has a higher one. The statements are those of the
+/// certificates and of the accepted statement entries, and `own`, the
+/// statement an add's own certificate carries: a certificate whose own
+/// statement is older than one of the causal past names a superseded key,
+/// even where no earlier certificate named it.
+pub(crate) fn superseded(
+    past: &Resolved,
+    key: [u8; 32],
+    own: Option<&AccountKeyStatement>,
+) -> bool {
+    past.all_statements()
+        .chain(own)
+        .filter(|s| s.account_key == key)
+        .any(|named| {
+            past.all_statements().any(|newer| {
+                newer.recovery_key == named.recovery_key && newer.number > named.number
+            })
+        })
 }
 
 /// Whether `generation` is fresh for a re-grant of `subject` by `author`

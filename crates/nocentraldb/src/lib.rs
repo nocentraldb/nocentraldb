@@ -44,6 +44,7 @@ mod subscribe;
 mod sync;
 mod tx;
 mod value;
+mod view_report;
 
 pub use db::{Db, OpenOptions};
 
@@ -67,3 +68,4 @@ pub use status::{ParkReason, Refused, RejectReason, SpaceStatus, SpaceStatusRepo
 pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Transaction;
 pub use value::Value;
+pub use view_report::{RebuildProgress, ViewReport, ViewStatus};

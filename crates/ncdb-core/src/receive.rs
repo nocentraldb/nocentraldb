@@ -116,6 +116,35 @@ pub trait Checks {
     fn add_control(&mut self, change: &Change);
 }
 
+/// Boxed checks are checks, so that a holder can keep checks of a type it
+/// does not name, such as a view's rebuild between its pages.
+impl<C: Checks + ?Sized> Checks for Box<C> {
+    fn knows_suite(&self, suite: u64) -> bool {
+        (**self).knows_suite(suite)
+    }
+    fn verify(&self, change: &Change) -> Result<(), Stop> {
+        (**self).verify(change)
+    }
+    fn is_member(&self, change: &Change) -> bool {
+        (**self).is_member(change)
+    }
+    fn open(&self, change: &Change) -> Result<Payload, Stop> {
+        (**self).open(change)
+    }
+    fn still_opens(&self, change: &Change) -> Result<(), Stop> {
+        (**self).still_opens(change)
+    }
+    fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
+        (**self).open_folded(change)
+    }
+    fn space_model_id(&self) -> Option<[u8; 16]> {
+        (**self).space_model_id()
+    }
+    fn add_control(&mut self, change: &Change) {
+        (**self).add_control(change)
+    }
+}
+
 /// The fold of operations (step 7): the member's model, its field types
 /// and the objects of the copy, in memory or in the local view.
 pub trait Fold {

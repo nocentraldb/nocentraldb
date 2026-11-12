@@ -34,6 +34,7 @@ const LEN: usize = MAGIC.len() + 1 + 3 * 32;
 /// The secret halves of the member key. The core's key cannot be copied,
 /// and the checks of each space hold one, so the SDK keeps the secrets and
 /// makes a key from them when it needs one.
+#[derive(Clone)]
 pub(crate) struct Secrets {
     signing: Zeroizing<[u8; 32]>,
     agreement: Zeroizing<[u8; 32]>,
