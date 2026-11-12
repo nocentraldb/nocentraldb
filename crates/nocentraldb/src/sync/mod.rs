@@ -35,6 +35,8 @@
 // On wasm32 only the counts of `apply` are read until the browser syncs
 // (NOC-175); the rest serves the connection, which is native only.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+mod acknowledge;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod again;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
