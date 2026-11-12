@@ -46,7 +46,9 @@ const fake = (answer: (request: Request) => Answer = () => ({ ok: null })) => {
 const calls = (requests: Request[]) => requests.map((r) => r.call);
 
 /** A core with a space and answers for writes and gets. */
-const withSpace = (more: (request: Request) => Answer | undefined = () => undefined) =>
+const withSpace = (
+  more: (request: Request) => Answer | undefined = () => undefined,
+) =>
   fake((request) => {
     const answer = more(request);
     if (answer) return answer;
@@ -67,14 +69,23 @@ describe("nc.open", () => {
     const { core, requests } = fake();
     await connect(core, { model, lock });
     expect(requests).toEqual([
-      { id: 1, call: "open", args: { lock: JSON.stringify(lock), name: "default" } },
+      {
+        id: 1,
+        call: "open",
+        args: { lock: JSON.stringify(lock), name: "default" },
+      },
     ]);
   });
 
   test("passes the name and the relay", async () => {
     const { core, requests } = fake();
-    await connect(core, { model, lock, name: "work_2", relay: "wss://relay.example.com" });
-    expect(requests[0].args).toEqual({
+    await connect(core, {
+      model,
+      lock,
+      name: "work_2",
+      relay: "wss://relay.example.com",
+    });
+    expect(requests[0]?.args).toEqual({
       lock: JSON.stringify(lock),
       name: "work_2",
       relay: "wss://relay.example.com",
@@ -85,7 +96,9 @@ describe("nc.open", () => {
     "refuses the name %j with invalidValue and starts no core",
     async (name) => {
       const { core, requests, terminated } = fake();
-      const refused = await connect(core, { model, lock, name }).catch((e) => e);
+      const refused = await connect(core, { model, lock, name }).catch(
+        (e) => e,
+      );
       expect(refused).toBeInstanceOf(nc.Error);
       expect(refused.code).toBe("invalidValue");
       expect(requests).toEqual([]);
@@ -95,7 +108,9 @@ describe("nc.open", () => {
 
   test("accepts a name of 64 characters", async () => {
     const { core } = fake();
-    await expect(connect(core, { model, lock, name: "a".repeat(64) })).resolves.toBeDefined();
+    await expect(
+      connect(core, { model, lock, name: "a".repeat(64) }),
+    ).resolves.toBeDefined();
   });
 
   test("rejects with the core's error as nc.Error and stops the core", async () => {
@@ -151,7 +166,9 @@ describe("nc.Error", () => {
 describe("spaces", () => {
   test("create, get and list ask the core and give spaces with their id", async () => {
     const { core, requests } = withSpace((request) =>
-      request.call === "spaces.list" ? { ok: [{ id: SPACE, role: "admin" }] } : undefined,
+      request.call === "spaces.list"
+        ? { ok: [{ id: SPACE, role: "admin" }] }
+        : undefined,
     );
     const db = await connect(core, { model, lock });
     const created = await db.spaces.create();
@@ -160,14 +177,21 @@ describe("spaces", () => {
     expect(created.id).toBe(SPACE);
     expect(same.id).toBe(SPACE);
     expect(all).toEqual([{ id: SPACE, role: "admin" }]);
-    expect(calls(requests)).toEqual(["open", "spaces.create", "spaces.get", "spaces.list"]);
-    expect(requests[2].args).toEqual({ space: SPACE });
+    expect(calls(requests)).toEqual([
+      "open",
+      "spaces.create",
+      "spaces.get",
+      "spaces.list",
+    ]);
+    expect(requests[2]?.args).toEqual({ space: SPACE });
   });
 
   test("get of a space the copy does not hold rejects with notFound", async () => {
     const { core } = withSpace((request) =>
       request.call === "spaces.get"
-        ? { error: { code: "notFound", message: "no such space", ids: [SPACE] } }
+        ? {
+            error: { code: "notFound", message: "no such space", ids: [SPACE] },
+          }
         : undefined,
     );
     const db = await connect(core, { model, lock });
@@ -184,8 +208,15 @@ describe("space.write", () => {
     const project = await db.spaces.create();
     let created = "";
     await project.write((tx) => {
-      created = tx.create(model.tasks, { title: "Ship", priority: 2, score: undefined });
-      tx.update(model.tasks, OBJECT, { tags: nc.add("docs", "sdk"), title: null });
+      created = tx.create(model.tasks, {
+        title: "Ship",
+        priority: 2,
+        score: undefined,
+      });
+      tx.update(model.tasks, OBJECT, {
+        tags: nc.add("docs", "sdk"),
+        title: null,
+      });
       tx.update(model.tasks, OBJECT, { tags: nc.remove("old") });
       tx.delete(model.tasks, OBJECT);
       tx.restore(model.tasks, OBJECT);
@@ -195,9 +226,24 @@ describe("space.write", () => {
     expect(write?.args).toEqual({
       space: SPACE,
       ops: [
-        { op: "create", collection: "tasks", id: created, values: { title: "Ship", priority: 2 } },
-        { op: "update", collection: "tasks", id: OBJECT, values: { tags: { $add: ["docs", "sdk"] }, title: null } },
-        { op: "update", collection: "tasks", id: OBJECT, values: { tags: { $remove: ["old"] } } },
+        {
+          op: "create",
+          collection: "tasks",
+          id: created,
+          values: { title: "Ship", priority: 2 },
+        },
+        {
+          op: "update",
+          collection: "tasks",
+          id: OBJECT,
+          values: { tags: { $add: ["docs", "sdk"] }, title: null },
+        },
+        {
+          op: "update",
+          collection: "tasks",
+          id: OBJECT,
+          values: { tags: { $remove: ["old"] } },
+        },
         { op: "delete", collection: "tasks", id: OBJECT },
         { op: "restore", collection: "tasks", id: OBJECT },
       ],
@@ -218,7 +264,12 @@ describe("space.write", () => {
   test("resolves with the change and the created ids the core answers", async () => {
     const { core } = withSpace((request) =>
       request.call === "write"
-        ? { ok: { change: CHANGE, ids: (request.args.ops as { id: string }[]).map((o) => o.id) } }
+        ? {
+            ok: {
+              change: CHANGE,
+              ids: (request.args.ops as { id: string }[]).map((o) => o.id),
+            },
+          }
         : undefined,
     );
     const db = await connect(core, { model, lock });
@@ -239,12 +290,9 @@ describe("space.write", () => {
     await project.delete(model.tasks, OBJECT);
     await project.restore(model.tasks, OBJECT);
     const writes = requests.filter((r) => r.call === "write");
-    expect(writes.map((w) => (w.args.ops as { op: string }[]).map((o) => o.op))).toEqual([
-      ["create"],
-      ["update"],
-      ["delete"],
-      ["restore"],
-    ]);
+    expect(
+      writes.map((w) => (w.args.ops as { op: string }[]).map((o) => o.op)),
+    ).toEqual([["create"], ["update"], ["delete"], ["restore"]]);
   });
 
   test("refuses an int that is not a safe integer with invalidValue, before the core", async () => {
@@ -252,7 +300,9 @@ describe("space.write", () => {
     const db = await connect(core, { model, lock });
     const project = await db.spaces.create();
     for (const priority of [2 ** 53, 1.5, Number.NaN]) {
-      const refused = await project.create(model.tasks, { priority }).catch((e) => e);
+      const refused = await project
+        .create(model.tasks, { priority })
+        .catch((e) => e);
       expect(refused.code).toBe("invalidValue");
     }
     expect(calls(requests)).not.toContain("write");
@@ -264,8 +314,8 @@ describe("space.write", () => {
     const project = await db.spaces.create();
     await project.create(model.tasks, { title: "é" });
     const write = requests.find((r) => r.call === "write");
-    const op = (write?.args.ops as { values: { title: string } }[])[0];
-    expect(op.values.title).toBe("é");
+    const op = ((write?.args.ops ?? []) as { values: { title: string } }[])[0];
+    expect(op?.values.title).toBe("é");
   });
 
   test("a function that throws writes nothing", async () => {
@@ -298,8 +348,18 @@ describe("space.get", () => {
     const db = await connect(core, { model, lock });
     const project = await db.spaces.create();
     const task = await project.get(model.tasks, OBJECT);
-    expect(task).toEqual({ $id: OBJECT, $space: SPACE, $deleted: false, title: "Ship", tags: ["a"] });
-    expect(requests.at(-1)?.args).toEqual({ space: SPACE, collection: "tasks", id: OBJECT });
+    expect(task).toEqual({
+      $id: OBJECT,
+      $space: SPACE,
+      $deleted: false,
+      title: "Ship",
+      tags: ["a"],
+    });
+    expect(requests.at(-1)?.args).toEqual({
+      space: SPACE,
+      collection: "tasks",
+      id: OBJECT,
+    });
   });
 
   test("gives undefined when the copy holds no such object", async () => {
