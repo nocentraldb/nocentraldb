@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::cbor::Value;
 use crate::ids::{ChangeId, MemberId};
 
-use super::body::Entry;
+use super::body::{ACKNOWLEDGEMENT, Entry};
 use super::fields;
 use super::input::Node;
 use super::person_key::PersonKeyEntry;
@@ -40,6 +40,11 @@ pub struct PersonKey {
     pub taken_back: Option<ChangeId>,
     /// The member that performed that shred, whose account decides it.
     pub(crate) performer: Option<MemberId>,
+    /// The members whose accepted acknowledgements name that shred, and
+    /// whether one of them says "deleted" (RFC 0008, "Acknowledgement"):
+    /// the audit's evidence of erasure. A member whose acknowledgement the
+    /// fold rejected is not listed, as one that never confirmed.
+    pub acknowledged: BTreeMap<MemberId, bool>,
 }
 
 impl PersonKey {
@@ -49,6 +54,7 @@ impl PersonKey {
             records: BTreeSet::new(),
             shred: None,
             provisional: false,
+            acknowledged: BTreeMap::new(),
             finalized: None,
             taken_back: None,
             performer: None,
@@ -138,6 +144,21 @@ impl PersonKeys {
                     slot.get_or_insert(node.id);
                 }
             }
+            Entry::Other { entry_type, fields } if *entry_type == ACKNOWLEDGEMENT => {
+                let named = match fields.get(&8) {
+                    Some(Value::Bytes(id)) => <[u8; 32]>::try_from(id.as_slice()).ok(),
+                    _ => None,
+                };
+                let deleted = matches!(fields.get(&9), Some(Value::Bool(true)));
+                let key = named.and_then(|named| {
+                    self.0
+                        .values_mut()
+                        .find(|key| key.shred == Some(ChangeId(named)))
+                });
+                if let Some(key) = key {
+                    *key.acknowledged.entry(node.author).or_insert(false) |= deleted;
+                }
+            }
             _ => {}
         }
     }
@@ -156,6 +177,14 @@ impl PersonKeys {
                 Value::Bool(key.provisional),
                 key.finalized.map_or(Value::Null, |s| fields::bytes(&s.0)),
                 key.taken_back.map_or(Value::Null, |s| fields::bytes(&s.0)),
+                Value::Array(
+                    key.acknowledged
+                        .iter()
+                        .map(|(member, deleted)| {
+                            Value::Array(vec![fields::bytes(&member.0), Value::Bool(*deleted)])
+                        })
+                        .collect(),
+                ),
             ])
         });
         Value::Array(keys.collect())

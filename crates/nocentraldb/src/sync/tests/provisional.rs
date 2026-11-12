@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use ncdb_core::membership::{self, ControlBody, Entry};
 
-use super::person_keys::{PERSON, fetched, held, person_key, shared};
+use super::person_keys::{PERSON, acknowledgements, held, person_key, shared, stored};
 use super::support::*;
 use crate::db::{Db, lock};
 use crate::members::{MemberId, NoticeCode};
@@ -51,13 +51,10 @@ async fn every_device_of_the_account_sees_the_provisional_erasure() {
     person_key(&admin, &project, &key, &key);
     synced(&admin).await;
     let space = project.id().0;
+    stored(&relay, space).await;
+    relay.proxy.cut();
+    relay.proxy.restore();
     eventually("the member holds the person key", || {
-        // A fetch that ran before the record was put finds nothing; a new
-        // connection fetches again.
-        if fetched(&member, space) && held(&member, space).is_none() {
-            relay.proxy.cut();
-            relay.proxy.restore();
-        }
         held(&member, space).is_some()
     })
     .await;
@@ -122,17 +119,16 @@ async fn the_admin_finalizes_and_retries_a_too_early_finalize() {
     person_key(&admin, &project, &key, &key);
     synced(&admin).await;
     let space = project.id().0;
+    stored(&relay, space).await;
+    relay.proxy.cut();
+    relay.proxy.restore();
     eventually("the member holds the person key", || {
-        if fetched(&member, space) && held(&member, space).is_none() {
-            relay.proxy.cut();
-            relay.proxy.restore();
-        }
         held(&member, space).is_some()
     })
     .await;
     crate::sync::set_finalize_after(&admin, Duration::ZERO, Duration::from_millis(200));
 
-    erase(&admin, &project);
+    let shred = erase(&admin, &project).0;
     eventually("the admin writes the finalize", || {
         let inner = lock(&admin.inner);
         let key = inner.spaces[&space].checks.resolved().person_key(PERSON);
@@ -157,6 +153,12 @@ async fn the_admin_finalizes_and_retries_a_too_early_finalize() {
     .await;
     eventually("the member destroys the key", || {
         held(&member, space).is_none()
+    })
+    .await;
+    // The admin folded its own finalize, so it acknowledges the shred as
+    // deleted too (RFC 0008, "Acknowledgement"; NOC-238).
+    eventually("the admin acknowledges seen and deleted", || {
+        acknowledgements(&admin, space).contains(&(shred, true))
     })
     .await;
     assert!(
