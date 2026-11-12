@@ -246,6 +246,19 @@ pub async fn open_with(who: Who, url: &str, lock: &str) -> Db {
         .expect("the test lock opens")
 }
 
+/// The database of the simulated member `who` as a device that joins the
+/// account, as a pairing one does (RFC 0010, "Adding a device or an agent
+/// to an account"): it creates no account space of its own.
+pub async fn open_joining(who: Who, url: &str) -> Db {
+    let options = OpenOptions::new(LOCK)
+        .in_memory()
+        .relay(url)
+        .joins_account();
+    Db::open_as(options, [who; 32], [who ^ 0x80; 32], account())
+        .await
+        .expect("the test lock opens")
+}
+
 /// A handle on a space the database holds.
 pub fn handle(db: &Db, space: CoreSpaceId) -> Space {
     Space::handle(db.inner.clone(), SpaceId(space))

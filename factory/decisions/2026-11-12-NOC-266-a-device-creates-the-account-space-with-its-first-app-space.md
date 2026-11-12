@@ -1,0 +1,7 @@
+# 2026-11-12 · NOC-266 · A device creates the account space with the first app space it creates, not when it opens
+
+- Decided by: Carsten, 2026-11-12, on #284
+- Why: RFC 0010 has the account's first device create the account space, and leaves when open. A relay lets only an account it admits create spaces (NOC-257), so an account space created at open is refused, for good, on a relay that admits the account only later. The first app space the device creates shows that the relay admits its account, so the account space comes with it. A fresh database then holds no change before the app writes one. A device that joins an account another device created (pairing, NOC-267) creates none.
+- What it leaves to the relay: an account that only joins other accounts' spaces has no account space, and on a relay that admits only listed accounts its account-space genesis, when it pairs a second device, would be refused. The owner decided on NOC-282 (A; Carsten, 2026-11-12) that such a relay also admits an account-space genesis from an account that is already a member of an admitted space; how the relay recognises it was open in NOC-286, since the genesis seals the model id, and NOC-286 (A1; Carsten, 2026-11-12) decided that such an account may create exactly one space; NOC-283 builds it.
+- Instead of: creating the account space when the database opens, which a relay that admits listed accounts refuses for every account it does not list.
+- Topics: accounts, sdk-rust, relay
