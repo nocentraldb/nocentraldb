@@ -127,19 +127,56 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
 /// performer, its account holds an admin in the causal past, and it is not
 /// the account of the performer's certificate (RFC 0008, "Shred entry"). A
 /// sub-agent's certificate carries its parent's account key, so a sub-agent
-/// counts as its parent's account.
+/// counts as its parent's account. When every admin of the causal past
+/// belongs to the performer's account, a writer of another account signs
+/// off instead; a reader never does (the owner's NOC-228, question 2 A).
+///
+/// Two account keys are one account when they are equal, or when any
+/// certificate of the causal past, current or former, the performer's
+/// included, attaches a recovery key to each of them (the owner's answer A
+/// on NOC-201). A statement can then only block a sign-off, never enable
+/// one; with no statement anywhere, the account keys alone decide.
 fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) -> bool {
     let account = shred.sign_off.account_key;
-    let performer = past.member(node.author);
+    let Some(performer) = past.member(node.author).map(|p| p.certificate.account_key) else {
+        return false;
+    };
+    let account_of = |member: MemberId| past.member(member).map(|m| m.certificate.account_key);
+    let admins: Vec<[u8; 32]> = past
+        .members()
+        .filter(|(_, role)| *role == Role::Admin)
+        .filter_map(|(member, _)| account_of(member))
+        .collect();
+    // Exactly one account holds an admin, and it is the performer's.
+    let only_admin_account_is_the_performers = !admins.is_empty()
+        && admins
+            .iter()
+            .all(|admin| same_account(past, *admin, performer));
+    let needed = match only_admin_account_is_the_performers {
+        true => Role::Writer,
+        false => Role::Admin,
+    };
     past.person_key(shred.person_key).is_some()
         && shred.sign_off.verify(space, shred.person_key, node.author)
-        && performer.is_some_and(|p| p.certificate.account_key != account)
-        && past.members().any(|(member, role)| {
-            role == Role::Admin
-                && past
-                    .member(member)
-                    .is_some_and(|m| m.certificate.account_key == account)
-        })
+        && !same_account(past, performer, account)
+        && past
+            .members()
+            .any(|(member, role)| role >= needed && account_of(member) == Some(account))
+}
+
+/// Whether the account keys `a` and `b` name one account: they are equal,
+/// or a certificate of the causal past attaches a recovery key to `a` that
+/// one attaches to `b` too. A certificate in the state carries only a
+/// statement that names its own key 1 and verifies (`Certificate::verify`).
+fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
+    let recovery_keys = |account: [u8; 32]| -> BTreeSet<[u8; 32]> {
+        past.certificates()
+            .filter(|certificate| certificate.account_key == account)
+            .filter_map(|certificate| certificate.statement.as_ref())
+            .map(|statement| statement.recovery_key)
+            .collect()
+    };
+    a == b || !recovery_keys(a).is_disjoint(&recovery_keys(b))
 }
 
 /// Whether `generation` is fresh for a re-grant of `subject` by `author`
@@ -259,7 +296,10 @@ pub(crate) fn excludes(
         return false;
     };
     let right = needed(y);
+    // A shred is final when accepted: no revocation excludes it (RFC 0008,
+    // "A shred is final when accepted").
     if y.is_genesis()
+        || matches!(y.body.entry, Entry::Shred(_))
         || y.id == r.id
         || y.author != revocation.subject
         || Some(right) <= revocation.role()

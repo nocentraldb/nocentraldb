@@ -244,6 +244,23 @@ tasks:
       - "/pnpm-lock.yaml"
     options:
       cache: false
+  sdk-keys:
+    # NOC-175 slice 2: the Rust SDK's keys in IndexedDB in a dedicated
+    # worker in Chromium through Playwright (scripts/sdk-keys/). Not part
+    # of `gates`, for the reasons of browser-storage above; the workflow
+    # browser-view.yml runs it in CI. Never cached: its result depends on
+    # the installed browser.
+    command: "node --test 'scripts/sdk-keys/*.test.mjs'"
+    deps: ["~:wasm-runner"]
+    inputs:
+      - "/scripts/sdk-keys/**/*"
+      - "/crates/nocentraldb/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      cache: false
   gates:
     deps:
       - "~:format-check"

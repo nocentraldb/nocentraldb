@@ -6,10 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Role, Verdict};
+use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
+use crate::large::PushFrame;
 use crate::record;
 use crate::store::{
     AppendOutcome, Effect, Entry as LogEntry, Epoch, NewEntry, Position, RelayStore, StoreError,
@@ -23,6 +24,11 @@ pub(crate) const RETRIES: usize = 64;
 /// How many entries the core reads at once when it collects a space's
 /// control changes.
 pub(crate) const PAGE: u32 = 1024;
+
+/// The most frame bytes one read of the whole log loads, unless one frame
+/// alone is larger: 4 MiB. A space of large changes costs the relay at most
+/// this much memory per read, not a page of 16 MiB frames.
+pub const PAGE_BYTES: u64 = 4 * 1024 * 1024;
 
 /// The largest frame the relay accepts: 16 MiB (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
@@ -113,8 +119,14 @@ impl<S: RelayStore> Relay<S> {
         &self.store
     }
 
-    /// The entries of `space` after the cursor `after`, at most `limit`,
-    /// for `reader`.
+    /// The deployment's configuration.
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// The entries of `space` after the cursor `after`, at most `limit` and
+    /// at most [`PAGE_BYTES`] of frames (at least one entry, when there is
+    /// one), for `reader`.
     pub async fn pull(
         &self,
         reader: MemberId,
@@ -133,7 +145,10 @@ impl<S: RelayStore> Relay<S> {
         if after > head {
             return Err(ErrorCode::BadCursor);
         }
-        let entries = self.store.read(space, after, limit).await?;
+        let entries = self
+            .store
+            .read_bounded(space, after, limit, PAGE_BYTES)
+            .await?;
         Ok(Pulled { entries, head })
     }
 
@@ -141,12 +156,33 @@ impl<S: RelayStore> Relay<S> {
     /// appends the accepted ones in order. One result per frame: a refused
     /// frame does not stop the frames after it.
     pub async fn push(&self, uploader: MemberId, space: SpaceId, frames: Vec<Vec<u8>>) -> Push {
+        let frames = frames.into_iter().map(PushFrame::Bytes).collect();
+        self.push_frames(uploader, space, frames).await
+    }
+
+    /// As [`Relay::push`], with frames that may name an upload (RFC 0007,
+    /// "Large changes"). An upload is taken when its frame's turn comes,
+    /// whatever its result: a push names an upload once.
+    pub async fn push_frames(
+        &self,
+        uploader: MemberId,
+        space: SpaceId,
+        frames: Vec<PushFrame>,
+    ) -> Push {
         let mut push = Push {
             results: Vec::with_capacity(frames.len()),
             added: Vec::new(),
         };
         for frame in frames {
-            let result = match self.push_frame(uploader, space, frame).await {
+            let frame = match frame {
+                PushFrame::Bytes(bytes) => Ok(bytes),
+                PushFrame::Upload(id) => self.take_upload(uploader, space, id).await,
+            };
+            let pushed = match frame {
+                Ok(frame) => self.push_frame(uploader, space, frame).await,
+                Err(code) => Err(code),
+            };
+            let result = match pushed {
                 Ok((result, added)) => {
                     for member in added {
                         if !push.added.contains(&member) {
@@ -201,7 +237,7 @@ impl<S: RelayStore> Relay<S> {
             let Checked {
                 effects,
                 added,
-                recheck,
+                shredded,
             } = checked;
             let entry = NewEntry {
                 change: change.id(),
@@ -216,12 +252,12 @@ impl<S: RelayStore> Relay<S> {
                 .await?
             {
                 AppendOutcome::Appended { head } => {
-                    // Only an append that can change a shred's stability
-                    // makes the relay check again. The append stands
-                    // whatever the deletion does: a failed deletion is tried
-                    // again after the next such append.
-                    if recheck {
-                        let _ = self.delete_stable_shreds(space).await;
+                    // A shred is final when accepted, so its record goes
+                    // now (RFC 0008, "A shred is final when accepted"). The
+                    // append stands whatever the deletion does; the next
+                    // control change deletes what is left.
+                    if !shredded.is_empty() {
+                        let _ = self.delete_shredded(space, &shredded).await;
                     }
                     return Ok((Pushed::Accepted(head), added));
                 }
@@ -290,10 +326,7 @@ impl<S: RelayStore> Relay<S> {
             if !row.admits(header) {
                 return Err(ErrorCode::AuthorNotMember);
             }
-            return Ok(Checked {
-                recheck: holds_or_held_admin(&row.state),
-                ..Checked::default()
-            });
+            return Ok(Checked::default());
         }
         if let Entry::Genesis(_) = control_body(change)?.entry {
             return Err(ErrorCode::SpaceExists);
@@ -303,23 +336,21 @@ impl<S: RelayStore> Relay<S> {
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
-        Ok(Checked {
-            recheck: true,
-            ..Checked::new(&resolved, &before)
-        })
+        Ok(Checked::new(&resolved, &before))
     }
 
-    /// The space's control changes, in position order.
+    /// The space's control changes, in position order. It loads no sealed
+    /// change's frame.
     pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
         let mut controls = Vec::new();
         let mut after = 0;
         loop {
-            let page = self.store.read(space, after, PAGE).await?;
+            let page = self.store.read_controls(space, after, PAGE).await?;
             let Some(last) = page.last() else {
                 return Ok(controls);
             };
             after = last.position;
-            for entry in page.iter().filter(|e| e.kind == Kind::CONTROL) {
+            for entry in &page {
                 // The relay appended only frames that decode.
                 let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
                 controls.push(change);
@@ -354,13 +385,14 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
 }
 
 /// What a change that passed its checks writes besides the log, the
-/// members it makes current, and whether it can change a waiting shred's
-/// stability.
+/// members it makes current, and the person keys its space's state names
+/// as shredded, whose records the relay deletes once the change is
+/// appended.
 #[derive(Default)]
 struct Checked {
     effects: Vec<Effect>,
     added: Vec<MemberId>,
-    recheck: bool,
+    shredded: BTreeSet<[u8; 16]>,
 }
 
 impl Checked {
@@ -374,20 +406,17 @@ impl Checked {
             .map(|row| row.member)
             .collect();
         let effects = records.into_iter().map(Effect::Member).collect();
+        let shredded = resolved
+            .person_keys()
+            .filter(|(_, key)| key.shred.is_some())
+            .map(|(id, _)| id)
+            .collect();
         Checked {
             effects,
             added,
-            recheck: false,
+            shredded,
         }
     }
-}
-
-/// Whether a member's changes count for stability (RFC 0008, "When a change
-/// is stable"): it holds the admin role, or an accepted grant ever gave it.
-/// A sealed change of any other member cannot change a shred's stability:
-/// only control changes and the runs of these members can.
-fn holds_or_held_admin(state: &membership::MemberState) -> bool {
-    state.role == Some(Role::Admin) || state.grants.iter().any(|grant| grant.role == Role::Admin)
 }
 
 /// The current members of a resolved space.

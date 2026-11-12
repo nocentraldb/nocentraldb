@@ -18,6 +18,7 @@ pub mod browser;
 mod fold;
 mod from_lock;
 mod log_table;
+mod migrate;
 pub mod model;
 mod query;
 mod read;
@@ -198,9 +199,15 @@ impl View {
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
-        if schema::open(&tx, &model, lock)? == schema::Fit::Refold {
-            let checks = checks.ok_or(Error::Model)?;
-            refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+        match schema::open(&tx, &model, lock)? {
+            schema::Fit::Current => {}
+            schema::Fit::Migrate(additions) => {
+                migrate::run(&tx, &model, &additions, log_table::load(&tx)?, checks)?;
+            }
+            schema::Fit::Refold => {
+                let checks = checks.ok_or(Error::Model)?;
+                refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+            }
         }
         query::check(&tx, &model.indexes)?;
         let logs = log_table::load(&tx)?;
@@ -303,6 +310,13 @@ impl View {
     /// sealed change once with `checks`; see [`Log::tips`].
     pub fn tips(&mut self, space: SpaceId, checks: &impl Checks) -> Option<&Tips> {
         Some(self.logs.get_mut(&space)?.tips(checks))
+    }
+
+    /// The newest model version the parked data of `space` needs, of the
+    /// view's own model (RFC 0002, "What the model version is for"): see
+    /// [`Log::newest_model`]. `checks` open the changes it reads.
+    pub fn newest_model(&self, space: SpaceId, checks: &impl Checks) -> Option<u64> {
+        self.logs.get(&space)?.newest_model(checks, self.model.id)
     }
 
     /// How many changes of `space` are parked and rejected, and how many

@@ -24,7 +24,7 @@ pub enum ErrorCode {
     /// The lock cannot be read, or breaks the rules RFC 0005 gives a lock,
     /// or is refused against the lock the database was last opened with:
     /// another `model.id`, or a change that is not additive (RFC 0005,
-    /// D11). The message names each refused change.
+    /// "Two checks: at build and on the device"). The message names each refused change.
     ModelRefused,
     /// The disk or the quota is full: freeing space may help.
     StorageFull,
@@ -42,7 +42,7 @@ pub enum ErrorCode {
     /// The cursor was made under another model, index or equality prefix.
     CursorOfAnotherModel,
     /// No platform keystore is reachable and the app named no key file;
-    /// the message names `key_file` (RFC 0009, S26).
+    /// the message names `key_file` (RFC 0009, "Open and close").
     KeyStoreUnavailable,
     /// The invitation's account is new to this database, and no
     /// fingerprint of it was passed to `members().add`. The error's
@@ -121,6 +121,9 @@ pub(crate) fn storage(error: ncdb_core::view::Error) -> Error {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
 
     /// Only a full disk tells the app to free space (NOC-95, 4 B); the

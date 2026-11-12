@@ -22,7 +22,7 @@ use ncdb_core::change::Kind;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Clock;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
-use ncdb_core::keys::MemberKey;
+use ncdb_core::keys::{MemberKey, PersonKey};
 use ncdb_core::log::{Position, State};
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
@@ -33,7 +33,9 @@ use crate::error::{Error, ErrorCode, storage};
 use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
-use crate::sync::{self, SyncState};
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sync;
+use crate::sync::SyncState;
 
 /// The options of [`Db::open`]: the text of the app's `model.lock.json`,
 /// where the database lives, and the relay to sync with.
@@ -102,7 +104,8 @@ impl OpenOptions {
     }
 
     /// The one relay the database syncs with (RFC 0009, decision S16), by
-    /// its URL. Only plain WebSocket, `ws://`, is built yet; [`Db::open`]
+    /// its URL: `wss://`, WebSocket over TLS verified against the
+    /// platform's trust store, or `ws://` on a local network. [`Db::open`]
     /// refuses any other URL with `InvalidValue`.
     pub fn relay(mut self, url: &str) -> OpenOptions {
         self.relay = Some(url.to_owned());
@@ -153,6 +156,15 @@ pub(crate) struct Inner {
 pub(crate) struct SpaceState {
     pub(crate) checks: SealChecks,
     pub(crate) clock: Clock,
+    /// The person keys of the space the member holds, by person-key id,
+    /// each from a record whose signature, wrap and commitment held
+    /// (`crate::sync::person_keys`). In memory only: a reopened database
+    /// fetches them again from the relay.
+    pub(crate) person_keys: BTreeMap<[u8; 16], PersonKey>,
+    /// Whether the relay's records of the space were fetched in the
+    /// current connection. Read by the session, which is native only.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub(crate) person_keys_fetched: bool,
 }
 
 impl SpaceState {
@@ -161,6 +173,8 @@ impl SpaceState {
         SpaceState {
             checks: SealChecks::new(space, member),
             clock: Clock::new(),
+            person_keys: BTreeMap::new(),
+            person_keys_fetched: false,
         }
     }
 
@@ -285,8 +299,8 @@ impl Db {
     /// `model.id`, or a change that is not additive, is `ModelRefused`,
     /// naming each refused change, and nothing changes; an additive change
     /// folds the database's log again by the new model before `open`
-    /// returns, so that what the old model parked is read. A relay URL that is not `ws://`, with
-    /// `InvalidValue`. An existing database whose keys are gone fails with
+    /// returns, so that what the old model parked is read. A relay URL that is neither `wss://` nor
+    /// `ws://` fails with `InvalidValue`. An existing database whose keys are gone fails with
     /// `StorageFailed`. With a relay, the database starts syncing in the
     /// background.
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
@@ -295,7 +309,7 @@ impl Db {
 
     /// Opens the database with keys from `store` in place of the
     /// platform's keystore, as the keystore's tests need it.
-    #[cfg(test)]
+    #[cfg(all(test, not(target_arch = "wasm32")))]
     pub(crate) fn open_with_store(options: OpenOptions, store: &Store<'_>) -> Result<Db, Error> {
         Db::open_with(options, None, store)
     }
@@ -322,12 +336,20 @@ impl Db {
         store: &Store<'_>,
     ) -> Result<Db, Error> {
         let place = options.place()?;
+        #[cfg(target_arch = "wasm32")]
+        if options.relay.is_some() {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "syncing with a relay is not built on wasm32 yet",
+            ));
+        }
         if let Some(url) = &options.relay
+            && !url.starts_with("wss://")
             && !url.starts_with("ws://")
         {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
-                "the relay URL must start with ws://; TLS is not built yet",
+                "the relay URL must start with wss:// or ws://",
             ));
         }
         let lock = ModelLock::from_json(&options.lock).map_err(|error| {
@@ -364,6 +386,7 @@ impl Db {
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }

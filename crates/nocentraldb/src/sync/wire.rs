@@ -22,7 +22,7 @@ pub(crate) const MAX_PUSH: usize = 32;
 const OVERHEAD: usize = 1024;
 
 /// The error codes RFC 0007 lists ("The errors").
-const CODES: [&str; 19] = [
+const CODES: [&str; 20] = [
     "unsupported_version",
     "unauthenticated",
     "not_member",
@@ -36,6 +36,7 @@ const CODES: [&str; 19] = [
     "bad_signature",
     "author_not_member",
     "membership_rule",
+    "too_early",
     "epoch_changed",
     "bad_record",
     "compacted",
@@ -107,6 +108,38 @@ pub(crate) fn push(req: u64, space: SpaceId, frames: &[Vec<u8>]) -> Vec<u8> {
     )
 }
 
+/// `push` of one frame that went up through the upload `id` (RFC 0007,
+/// "Large changes"): its element is `{1: upload id}`.
+pub(crate) fn push_upload(req: u64, space: SpaceId, id: &[u8]) -> Vec<u8> {
+    let reference = Value::Map(BTreeMap::from([(
+        Key::Unsigned(1),
+        Value::Bytes(id.to_vec()),
+    )]));
+    message(
+        "push",
+        Some(req),
+        vec![
+            Value::Bytes(space.0.to_vec()),
+            Value::Array(vec![reference]),
+        ],
+    )
+}
+
+/// `upload {req, space, size}`: an upload URL for a frame of `size` bytes.
+pub(crate) fn upload(req: u64, space: SpaceId, size: usize) -> Vec<u8> {
+    message(
+        "upload",
+        Some(req),
+        vec![Value::Bytes(space.0.to_vec()), Value::Unsigned(size as u64)],
+    )
+}
+
+/// Whether `frame` fits into a push of its own; a larger one goes up
+/// through an upload.
+pub(crate) fn fits_a_push(frame: &[u8]) -> bool {
+    frame.len() + 16 <= MAX_MESSAGE - OVERHEAD
+}
+
 pub(crate) fn pull(req: u64, space: SpaceId, epoch: [u8; 16], after: u64) -> Vec<u8> {
     message(
         "pull",
@@ -132,14 +165,57 @@ pub(crate) fn subscribe(req: u64, space: SpaceId, epoch: [u8; 16], after: u64) -
     )
 }
 
+/// A person-key record (RFC 0007, `record`): `{1: person-key id, 2:
+/// generation, 3: writer member id, 4: wrapped, 5: signature}`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct Record {
+    pub(crate) person_key: [u8; 16],
+    pub(crate) generation: u64,
+    pub(crate) writer: [u8; 32],
+    pub(crate) wrapped: Vec<u8>,
+    pub(crate) signature: [u8; 64],
+}
+
+impl Record {
+    fn value(&self) -> Value {
+        let fields = [
+            Value::Bytes(self.person_key.to_vec()),
+            Value::Unsigned(self.generation),
+            Value::Bytes(self.writer.to_vec()),
+            Value::Bytes(self.wrapped.clone()),
+            Value::Bytes(self.signature.to_vec()),
+        ];
+        Value::Map((1..).map(Key::Unsigned).zip(fields).collect())
+    }
+}
+
+pub(crate) fn person_keys(req: u64, space: SpaceId) -> Vec<u8> {
+    message(
+        "person-keys",
+        Some(req),
+        vec![Value::Bytes(space.0.to_vec())],
+    )
+}
+
+pub(crate) fn put_person_keys(req: u64, space: SpaceId, records: &[Record]) -> Vec<u8> {
+    message(
+        "put-person-keys",
+        Some(req),
+        vec![
+            Value::Bytes(space.0.to_vec()),
+            Value::Array(records.iter().map(Record::value).collect()),
+        ],
+    )
+}
+
 pub(crate) fn ping(req: u64) -> Vec<u8> {
     message("ping", Some(req), Vec::new())
 }
 
 /// The frames of `frames`, in order, in groups that each fit into one
 /// push: at most [`MAX_PUSH`] frames, and at most [`MAX_MESSAGE`] bytes. A
-/// frame too large for any push goes alone, and the relay answers
-/// `too_large`.
+/// frame too large for any push goes alone, and goes up through an upload
+/// (RFC 0007, "Large changes").
 pub(crate) fn batches(frames: Vec<Vec<u8>>) -> Vec<Vec<Vec<u8>>> {
     let mut batches: Vec<Vec<Vec<u8>>> = Vec::new();
     let mut size = 0;
@@ -158,10 +234,23 @@ pub(crate) fn batches(frames: Vec<Vec<u8>>) -> Vec<Vec<Vec<u8>>> {
     batches
 }
 
-/// One entry of a space's log, as `entries` carries it.
+/// One entry of a space's log, with its frame.
 pub(crate) struct Entry {
     pub(crate) position: u64,
     pub(crate) frame: Vec<u8>,
+}
+
+/// One entry of a space's log as `entries` carries it: its frame, or a
+/// short-lived URL that serves it (RFC 0007, "Large changes").
+pub(crate) struct Listed {
+    pub(crate) position: u64,
+    pub(crate) carried: Carried,
+}
+
+/// How an entry carries its frame.
+pub(crate) enum Carried {
+    Frame(Vec<u8>),
+    Download { url: String, size: u64 },
 }
 
 /// The result of one frame of a push.
@@ -188,8 +277,14 @@ pub(crate) enum Answer {
     Entries {
         req: Option<u64>,
         space: SpaceId,
-        entries: Vec<Entry>,
+        entries: Vec<Listed>,
         head: u64,
+    },
+    /// An upload URL for a large change, and the id its push names.
+    Upload {
+        req: u64,
+        id: Vec<u8>,
+        url: String,
     },
     /// The member was added to `space` while connected (RFC 0007,
     /// decision R13).
@@ -202,6 +297,11 @@ pub(crate) enum Answer {
         /// How many seconds to wait before retrying, for `rate_limited`.
         retry_after: Option<u64>,
     },
+    /// The person-key records of a space (RFC 0007, `person-keys`).
+    PersonKeys {
+        req: u64,
+        records: Vec<Record>,
+    },
     /// `pong`, `ok` or a type this SDK does not read.
     Other {
         req: Option<u64>,
@@ -212,7 +312,9 @@ impl Answer {
     /// The request id it answers.
     pub(crate) fn req(&self) -> Option<u64> {
         match self {
-            Answer::Pushed { req, .. } => Some(*req),
+            Answer::Pushed { req, .. }
+            | Answer::PersonKeys { req, .. }
+            | Answer::Upload { req, .. } => Some(*req),
             Answer::Entries { req, .. } | Answer::Error { req, .. } | Answer::Other { req } => *req,
             Answer::Challenge { .. } | Answer::Welcome { .. } | Answer::Added { .. } => None,
         }
@@ -302,6 +404,18 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
                 .collect::<Result<_, _>>()?,
             head: uint(field(m, 5)?)?,
         },
+        "person-keys" => Answer::PersonKeys {
+            req: req.ok_or(Unreadable)?,
+            records: array(field(m, 4)?)?
+                .iter()
+                .map(record)
+                .collect::<Result<_, _>>()?,
+        },
+        "upload" => Answer::Upload {
+            req: req.ok_or(Unreadable)?,
+            id: bytes(field(m, 3)?)?.to_vec(),
+            url: text(field(m, 4)?)?.to_owned(),
+        },
         "added" => Answer::Added {
             space: SpaceId(fixed(field(m, 3)?)?),
         },
@@ -317,6 +431,17 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
     })
 }
 
+fn record(value: &Value) -> Result<Record, Unreadable> {
+    let m = map(value)?;
+    Ok(Record {
+        person_key: fixed(field(m, 1)?)?,
+        generation: uint(field(m, 2)?)?,
+        writer: fixed(field(m, 3)?)?,
+        wrapped: bytes(field(m, 4)?)?.to_vec(),
+        signature: fixed(field(m, 5)?)?,
+    })
+}
+
 fn result(value: &Value) -> Result<Pushed, Unreadable> {
     let m = map(value)?;
     if let Some(position) = m.get(&Key::Unsigned(1)) {
@@ -328,12 +453,19 @@ fn result(value: &Value) -> Result<Pushed, Unreadable> {
     Ok(Pushed::Rejected(text(field(m, 3)?)?.to_owned()))
 }
 
-/// An entry whose key 3 holds the frame. A download link, which a relay
-/// that carries large changes sends instead, is not read yet.
-fn entry(value: &Value) -> Result<Entry, Unreadable> {
+/// An entry whose key 3 holds the frame, or a download link `{1: url,
+/// 2: size}` for a frame too large for one message.
+fn entry(value: &Value) -> Result<Listed, Unreadable> {
     let m = map(value)?;
-    Ok(Entry {
+    let carried = match field(m, 3)? {
+        Value::Map(link) => Carried::Download {
+            url: text(field(link, 1)?)?.to_owned(),
+            size: uint(field(link, 2)?)?,
+        },
+        frame => Carried::Frame(bytes(frame)?.to_vec()),
+    };
+    Ok(Listed {
         position: uint(field(m, 1)?)?,
-        frame: bytes(field(m, 3)?)?.to_vec(),
+        carried,
     })
 }

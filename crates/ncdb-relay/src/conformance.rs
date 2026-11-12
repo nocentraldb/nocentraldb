@@ -23,6 +23,9 @@ use std::thread::{self, Thread};
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 
+mod large;
+pub use large::*;
+
 use crate::store::{
     AppendOutcome, Effect, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut, PersonKeyRecord,
     Position, PutOutcome, RelayStore,
@@ -79,6 +82,12 @@ macro_rules! conformance_suite {
             a_person_key_put_on_a_moved_record_stores_nothing,
             concurrent_person_key_puts_on_one_generation_store_one,
             the_epoch_is_shared_and_a_new_one_differs,
+            an_upload_is_filled_once_and_taken_once,
+            an_upload_is_taken_only_by_its_member_in_its_space_once_filled,
+            a_download_token_names_one_entry,
+            expired_uploads_and_downloads_are_swept,
+            control_entries_are_read_alone,
+            a_bounded_read_stops_before_its_byte_budget,
         );
     };
     (@tests $fresh:path; $($name:ident),* $(,)?) => {

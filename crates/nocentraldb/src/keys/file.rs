@@ -1,5 +1,6 @@
 //! The keys in a key file the app names, for a headless agent without a
-//! platform keystore (RFC 0003, "The member key"; RFC 0009, S19). Only the
+//! platform keystore (RFC 0003, "The member key"; RFC 0009, "The Rust
+//! SDK"). Only the
 //! file's permissions protect it: on Unix the SDK creates it readable and
 //! writable by its user alone.
 

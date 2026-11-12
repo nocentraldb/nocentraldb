@@ -1,6 +1,8 @@
-// nc.Infer as RFC 0005 defines it ("Types for the app"): every field optional, a choice as the union of its options and
-// nc.Unknown, an nc.int as a number (D16), a set as an array, a link as an
-// object id, a reference as { space, id } (RFC 0009, "Get by id"), and nothing of a deprecated field or collection (D17). These
+// nc.Infer as RFC 0005 defines it ("Types for the app"): every field
+// optional, a choice as the union of its options and nc.Unknown, an nc.int as
+// a number, a set as an array, a link as an object id, a reference as
+// { space, id } (RFC 0009, "Get by id"), and nothing of a deprecated field or
+// collection (RFC 0005, "Modifiers"). These
 // are type-level tests: `tsc` (the typecheck gate) fails when they do not
 // hold, and vitest runs them as no-ops.
 import { describe, expectTypeOf, test } from "vitest";

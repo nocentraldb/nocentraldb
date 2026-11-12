@@ -64,7 +64,7 @@ pub fn lock_without(collection: &str, index: &str) -> ModelLock {
 /// A path for a database file no other test uses. Natively the directory
 /// is the system's temporary one, and the file is removed when the value
 /// drops. On wasm32 the path names a file of SQLite's in-memory VFS, the
-/// default there (RFC 0006, decision 12), which keeps it for the test
+/// default there (RFC 0006, "The browser"), which keeps it for the test
 /// binary's run, across connections, as a file would be kept.
 pub struct TempDb(pub PathBuf);
 
@@ -143,6 +143,10 @@ fn apply<T: Encoding>(
 }
 
 impl Fold for Reference {
+    fn model_id(&self) -> [u8; 16] {
+        self.model.id
+    }
+
     fn knows_collection(&self, collection: &str) -> bool {
         self.model.collections.contains_key(collection)
     }

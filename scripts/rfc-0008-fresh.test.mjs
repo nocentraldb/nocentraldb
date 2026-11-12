@@ -231,17 +231,41 @@ test("the cutoff, and the rules for revoked members not taken", () => {
   );
 });
 
-test("irreversible effects wait, and the alarm after 7 days", () => {
-  // M20, M21; rejected: destroying a person key at once
+test("a shred is final when accepted; waiting until it is stable was not taken", () => {
+  // The owner's NOC-224, option 6; rejected: the wait (M20, M21), refusing a
+  // fork under a counted sequence, an equivocation as a revocation
+  const final = part("a-shred-is-final-when-accepted");
   holds(
-    part("effects-that-wait-until-a-change-is-stable"),
+    final,
     [
-      /as soon as the shred is accepted/,
-      /7 days/,
-      /21 days/,
-      /only the relay's deletion waits/,
+      /Carsten, 2026-11-11, NOC-224/,
+      /only its causal past/,
+      /[Nn]o revocation excludes a shred/,
+      /sign-off is the whole defence/,
+      /\*\*Waiting until the shred is stable was not taken\*\*/,
+      /equivocation/,
+      /NOC-226/,
     ],
-    "Effects that wait until a change is stable",
+    "A shred is final when accepted",
+  );
+  assert.doesNotMatch(final, /7 days|alarm/, "the alarm is gone");
+  const rfc = read(RFC);
+  assert.doesNotMatch(rfc, /effects-that-wait-until-a-change-is-stable/);
+  assert.doesNotMatch(rfc, /\| Stable \|/, "the term Stable is gone");
+  assert.match(rfc, /\| M-C8 \| An accepted shred stays accepted/);
+  assert.match(
+    rfc,
+    /a revocation that excludes a shred/,
+    "M-C12 has no fixture for it",
+  );
+});
+
+test("the cutoff says a revoked admin's fork can depend on its change id", () => {
+  // NOC-226's finding
+  holds(
+    part("the-cutoff"),
+    [/change id/, /NOC-226/, /holds the right in the state so far/],
+    "The cutoff",
   );
 });
 
@@ -334,12 +358,17 @@ test("where this RFC makes the others more precise, each linked where the other 
   assert.doesNotMatch(agreement, /\*Resolved/);
 });
 
-test("the entry that carries a newer account key statement is named, still to be designed", () => {
-  // NOC-132, and pm's call on NOC-187: no new wire format in this rewrite
+test("the entry that carries a newer account key statement is named and linked", () => {
+  // NOC-132, then the owner's NOC-187 (Carsten, 2026-11-11): the entry is
+  // designed, so the text links it instead of naming it as still to come.
   holds(
     part("what-this-rfc-uses-from-rfc-0003"),
-    [/NOC-187/, /still to be designed/, /older account key/],
+    [/NOC-187/, /\(#account-key-statement-entry\)/, /older account key/],
     "What this RFC uses from RFC 0003",
+  );
+  assert.doesNotMatch(
+    part("what-this-rfc-uses-from-rfc-0003"),
+    /still to be designed/,
   );
 });
 
@@ -368,4 +397,20 @@ test("the model id in every change's payload is named as RFC 0002's and RFC 0005
 
 test("the key chain entry states its rule without the owner's attribution", () => {
   assert.doesNotMatch(part("key-chain-entry"), /as the owner decided/);
+});
+
+test("the sign-off: another account's writer when the performer's account is the only admin account", () => {
+  // The owner's NOC-228, question 2 A
+  for (const anchor of ["roles-and-rights", "shred-entry"]) {
+    holds(
+      part(anchor),
+      [
+        /Carsten, 2026-11-11, NOC-228/,
+        /exactly one account/,
+        /writer member/,
+        /[Rr]eaders? may not|not a reader/,
+      ],
+      anchor,
+    );
+  }
 });

@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, Upload, UploadId,
 };
 
 /// What runs once, right before the first person-key write reaches the
@@ -59,6 +59,27 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
         self.inner.read(space, after, limit).await
     }
 
+    async fn read_controls(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+    ) -> Result<Vec<Entry>, StoreError> {
+        self.inner.read_controls(space, after, limit).await
+    }
+
+    async fn read_bounded(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+        max_bytes: u64,
+    ) -> Result<Vec<Entry>, StoreError> {
+        self.inner
+            .read_bounded(space, after, limit, max_bytes)
+            .await
+    }
+
     async fn head(&self, space: SpaceId) -> Result<Option<Position>, StoreError> {
         self.inner.head(space).await
     }
@@ -106,5 +127,43 @@ impl<S: RelayStore> RelayStore for Interleave<S> {
 
     async fn new_epoch(&self) -> Result<Epoch, StoreError> {
         self.inner.new_epoch().await
+    }
+
+    async fn begin_upload(&self, upload: Upload, now: u64) -> Result<(), StoreError> {
+        self.inner.begin_upload(upload, now).await
+    }
+
+    async fn upload(&self, token: Token) -> Result<Option<(Upload, bool)>, StoreError> {
+        self.inner.upload(token).await
+    }
+
+    async fn fill_upload(&self, token: Token, frame: Vec<u8>) -> Result<bool, StoreError> {
+        self.inner.fill_upload(token, frame).await
+    }
+
+    async fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.inner.take_upload(space, member, id).await
+    }
+
+    async fn begin_download(
+        &self,
+        token: Token,
+        space: SpaceId,
+        position: Position,
+        expires_at: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        self.inner
+            .begin_download(token, space, position, expires_at, now)
+            .await
+    }
+
+    async fn download(&self, token: Token) -> Result<Option<(SpaceId, Position, u64)>, StoreError> {
+        self.inner.download(token).await
     }
 }

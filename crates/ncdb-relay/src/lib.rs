@@ -17,18 +17,23 @@
 //! person-key store" are [`Relay::keys`], [`Relay::person_keys`] and
 //! [`Relay::put_person_keys`].
 //!
-//! After every append, the relay deletes the person-key record of a shred
-//! entry once the shred is stable in its log (RFC 0008, "Effects that wait
-//! until a change is stable"); until then the
-//! record stays stored, and no new record of its id is accepted.
+//! When the relay accepts a shred, it deletes the shredded key's record at
+//! once (RFC 0008, "A shred is final when accepted"): no later change can
+//! reject an accepted shred. No new record of a shredded id is accepted.
 //!
-//! **What this does not do yet.** No uploads of large changes; no restore
-//! procedure beyond drawing a new epoch.
+//! A frame too large for one message goes up through an upload and comes
+//! down through a download token (RFC 0007, "Large changes"):
+//! [`Relay::begin_upload`], [`Relay::fill_upload`], [`Relay::push_frames`],
+//! [`Relay::begin_download`] and [`Relay::download`].
+//!
+//! **What this does not do yet.** No restore procedure beyond drawing a
+//! new epoch.
 
 pub mod auth;
 pub mod conformance;
 mod error;
 mod keys;
+mod large;
 pub mod record;
 mod relay;
 mod shred;
@@ -37,4 +42,5 @@ pub mod store;
 
 pub use error::ErrorCode;
 pub use keys::Keys;
-pub use relay::{Config, MAX_FRAME, Pulled, Push, Pushed, Relay};
+pub use large::{DOWNLOAD_URL_VALID_FOR, Filled, PushFrame, UPLOAD_URL_VALID_FOR};
+pub use relay::{Config, MAX_FRAME, PAGE_BYTES, Pulled, Push, Pushed, Relay};

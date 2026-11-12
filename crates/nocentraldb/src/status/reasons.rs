@@ -27,6 +27,11 @@ pub enum ParkReason {
     /// The payload decrypts but is not a payload this core can read, or
     /// its format is unknown (RFC 0002, steps 5a and 6).
     UnknownPayloadFormat,
+    /// The payload's key 64 names another model than the app's, or has
+    /// the wrong shape (RFC 0002, "The writer's model", step 6). Counted
+    /// apart: no upgrade of this app's model will fold it (RFC 0005,
+    /// "Data from a newer model", point 6).
+    AnotherModel,
     /// An operation names a collection the app's lock does not know (RFC
     /// 0005, "Data from a newer model").
     UnknownCollection,
@@ -79,6 +84,7 @@ pub(crate) fn park(reason: CoreParkReason) -> Option<ParkReason> {
         | CoreParkReason::UnknownHeaderKey
         | CoreParkReason::UnknownPayloadKey => ParkReason::UnknownFormat,
         CoreParkReason::UnknownPayloadFormat => ParkReason::UnknownPayloadFormat,
+        CoreParkReason::AnotherModel => ParkReason::AnotherModel,
         _ => return None,
     })
 }
@@ -110,6 +116,9 @@ pub(crate) fn reject(reason: CoreRejectReason) -> Option<RejectReason> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::*;
 
     /// Every reason the core has today maps to a public one.
@@ -125,6 +134,7 @@ mod tests {
             P::UnknownHeaderKey,
             P::UnknownPayloadFormat,
             P::UnknownPayloadKey,
+            P::AnotherModel,
         ];
         let operations = [
             O::UnknownCollection,

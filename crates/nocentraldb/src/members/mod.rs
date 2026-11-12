@@ -10,12 +10,9 @@
 //!
 //! A member leaves a space with [`Space::leave`](crate::Space::leave).
 //!
-//! **What this does not do yet.** Adding a list of invitations, and
-//! re-wrapping person-key records in a rotation: a call that rotates
-//! refuses a space with a person key.
+//! **What this does not do yet.** Adding a list of invitations.
 
 use std::collections::BTreeSet;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, SpaceId};
@@ -31,6 +28,8 @@ mod change;
 mod info;
 mod invitation;
 mod leave;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod merge;
 mod notice;
 mod rotate;
 
@@ -46,8 +45,8 @@ pub struct Members<'a> {
     pub(crate) space: &'a Space,
 }
 
-/// A member's role in a space (RFC 0009, decision S13; RFC 0008, "Roles
-/// and rights").
+/// A member's role in a space (RFC 0009, "Invitations and members"; RFC
+/// 0008, "Roles and rights").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Role {
     /// Reads the whole space.
@@ -112,17 +111,19 @@ impl Members<'_> {
     /// `not_member` or `removed_member` for the space, with `NotMember`
     /// (RFC 0009, "Errors"). A member of the space is refused with
     /// `AlreadyMember`. A former member is added again after a rotation
-    /// (RFC 0008, M5): the space key moves to a fresh generation, with an
+    /// (RFC 0008, "Membership entry"): the space key moves to a fresh generation, with an
     /// envelope for every member, and the member is added from it, so what
-    /// it wrote while it was not a member never counts again. A space that
-    /// holds a person key is refused with `InvalidValue` then, since
-    /// re-wrapping its records in a rotation is not built.
+    /// it wrote while it was not a member never counts again. The rotation
+    /// re-wraps every person key of the space under the fresh generation; a
+    /// space with a person key this member does not hold is refused with
+    /// `InvalidValue` then.
     ///
     /// An invitation whose certificate does not hold is refused with
     /// `InvalidCertificate`: one its account did not sign, one that
     /// certifies another member than the invitation's keys, or a
     /// sub-agent's. An account other than this database's own is new to it,
-    /// since each database draws its own account key (RFC 0009, S20),
+    /// since each database draws its own account key (RFC 0009, "Accounts and
+    /// devices"),
     /// until a person confirmed its fingerprint: its member is refused
     /// with `UnknownAccount` unless `options` carry the invitation's
     /// fingerprint. Once an add with the fingerprint succeeds, the database
@@ -170,10 +171,11 @@ impl Members<'_> {
             Entry::KeyEnvelope(sealed),
             Some(BTreeSet::from([added])),
         );
-        batch.commit(view, state, secrets)?;
+        let records = batch.commit(view, state, secrets)?;
         if confirming {
             confirm(view, &invitation.certificate.account_key)?;
         }
+        crate::sync::put_person_keys(&mut inner, space.0, records);
         crate::sync::wake(&inner);
         Ok(Notice::MEMBER_ADDED)
     }
@@ -206,7 +208,7 @@ pub(crate) fn holds(
 /// Whether `member` may add `subject` in the membership state `resolved`:
 /// it is an admin, and `subject` is not a member. Says whether `subject`
 /// is a former member, whose add is a re-grant that rotates first (RFC
-/// 0008, M5).
+/// 0008, "Membership entry").
 fn allowed(
     resolved: &Resolved,
     member: ncdb_core::ids::MemberId,
@@ -227,7 +229,7 @@ fn allowed(
 /// checks an add ("Membership entry"): it certifies the member of the
 /// invitation's keys as a device or an agent, and its account signed it.
 /// A sub-agent's certificate is signed by its parent when it is added
-/// (RFC 0008, M25), which is not built.
+/// (RFC 0008, "What this RFC uses from RFC 0003"), which is not built.
 fn certified(invitation: &Invitation) -> Result<(), Error> {
     let certificate = &invitation.certificate;
     let holds = certificate.member == invitation.key.id()
@@ -277,11 +279,8 @@ fn known(
 /// Remembers that a person confirmed the account with the public key
 /// `account`, now.
 fn confirm(view: &mut View, account: &[u8; 32]) -> Result<(), Error> {
-    let since = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    let at = u64::try_from(since.as_millis()).unwrap_or(u64::MAX);
-    view.confirm_account(account, at).map_err(storage)
+    view.confirm_account(account, crate::clock::now_millis())
+        .map_err(storage)
 }
 
 /// The heads of the control DAG of `space` in `view`: the folded control
@@ -298,12 +297,14 @@ pub(crate) fn control_heads(view: &View, space: SpaceId) -> BTreeSet<ChangeId> {
 #[cfg(test)]
 mod batch_tests;
 #[cfg(test)]
+mod invitation_tests;
+#[cfg(test)]
 mod known_tests;
 #[cfg(test)]
 mod leave_tests;
 #[cfg(test)]
 mod list_tests;
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
 #[cfg(test)]
 mod remove_tests;

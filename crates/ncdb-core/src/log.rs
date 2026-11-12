@@ -101,6 +101,10 @@ pub enum ParkReason {
     UnknownPayloadFormat,
     /// The payload carries an unknown "must understand" key.
     UnknownPayloadKey,
+    /// Payload key 64 names another model than the member's lock, or has
+    /// the wrong shape: the change is parked whole (RFC 0002, "The
+    /// writer's model").
+    AnotherModel,
 }
 
 /// An operation of a folded change that was parked on its own (RFC 0002,
@@ -130,8 +134,8 @@ pub enum OperationParkReason {
     /// that the operation does not define (RFC 0004, "Operations a member
     /// does not understand").
     UnknownArgument,
-    /// The operation's arguments are malformed (RFC 0004, "The
-    /// arguments of each operation", decision 12).
+    /// The operation's arguments are malformed (RFC 0004, "Operations a
+    /// member does not understand").
     MalformedArguments,
 }
 
@@ -406,6 +410,29 @@ impl Log {
         for author in returned {
             self.counts_mut(author).unconfirmed += 1;
         }
+    }
+
+    /// The newest model version the parked data of the member's own model
+    /// needs (RFC 0002, "What the model version is for"): the highest
+    /// version in payload key 64 among the changes parked for an unknown
+    /// "must understand" payload key and the folded changes with parked
+    /// operations, whose key 64 names `model`. A change parked as another
+    /// model, or for a payload this core cannot read, does not count, nor
+    /// does one without key 64. It opens each such change with `checks`,
+    /// so it costs one decryption per counted change.
+    pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
+        self.entries
+            .iter()
+            .filter(|entry| match &entry.state {
+                Some(State::Parked(ParkReason::UnknownPayloadKey)) => true,
+                Some(State::Folded { parked }) => !parked.is_empty(),
+                _ => false,
+            })
+            .filter_map(|entry| {
+                let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
+                (writer.id == model).then_some(writer.version)
+            })
+            .max()
     }
 
     /// How many changes are parked and rejected, and how many operations

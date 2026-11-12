@@ -84,7 +84,8 @@ test("the fold follows RFC 0008: control state, resolve, un-folding, a shred tha
     assert.match(control, item);
   }
   assert.match(control, /`resolve`/);
-  assert.match(line(rfc, "| Shred entry"), /stable/);
+  assert.match(line(rfc, "| Shred entry"), /at once/);
+  assert.doesNotMatch(line(rfc, "| Shred entry"), /stable/);
   assert.match(line(rfc, "**Un-folding.**"), /`resolve`/);
   assert.match(line(rfc, "- **Control change.**"), /RFC 0008/);
 });

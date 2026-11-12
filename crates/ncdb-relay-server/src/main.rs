@@ -1,14 +1,17 @@
 //! `ncdb-relay`: the relay server on the SQLite backend, run locally.
 //!
 //! ```text
-//! ncdb-relay --database <path> [--listen <address>] [--allow-account <hex>]...
+//! ncdb-relay --database <path> [--listen <address>] [--public-url <url>] [--allow-account <hex>]...
 //! ```
 //!
 //! It serves plain WebSocket (`ws://`) on `--listen`, by default
 //! `127.0.0.1:7700`, which must be a loopback address; TLS, which RFC 0007
 //! requires on the network, is left to a proxy on the same host. `--allow-account` names, as 64 hex digits,
 //! an account key whose members may create spaces (RFC 0007, "What the
-//! relay checks").
+//! relay checks"). `--public-url` is where members reach the server's
+//! upload and download URLs for large changes, such as
+//! `https://relay.example.com` behind a TLS proxy; by default `http://` and
+//! the address it listens on.
 //! The relay id lives next to the database, in `<path>.relay-id`, and is
 //! drawn on the first start. It prints one line, the address it listens on.
 
@@ -21,23 +24,26 @@ use ncdb_relay::Relay;
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay_server::{Server, config};
 
-const USAGE: &str =
-    "usage: ncdb-relay --database <path> [--listen <address>] [--allow-account <hex>]...";
+const USAGE: &str = "usage: ncdb-relay --database <path> [--listen <address>] [--public-url <url>] \
+     [--allow-account <hex>]...";
 
 /// What the command line asks for.
 struct Args {
     database: PathBuf,
     listen: String,
+    public_url: Option<String>,
     allowed: BTreeSet<[u8; 32]>,
 }
 
 fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
     let (mut database, mut listen, mut allowed) = (None, None, BTreeSet::new());
+    let mut public_url = None;
     while let Some(arg) = args.next() {
         let value = args.next()?;
         match arg.as_str() {
             "--database" => database = Some(PathBuf::from(value)),
             "--listen" => listen = Some(value),
+            "--public-url" => public_url = Some(value),
             "--allow-account" => {
                 allowed.insert(account(&value)?);
             }
@@ -47,6 +53,7 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
     Some(Args {
         database: database?,
         listen: listen.unwrap_or_else(|| "127.0.0.1:7700".to_owned()),
+        public_url,
         allowed,
     })
 }
@@ -101,9 +108,12 @@ async fn run(args: Args) -> Result<(), String> {
     let relay_id = relay_id(&args.database)?;
     let store = SqliteStore::open(&args.database).map_err(|e| e.to_string())?;
     let relay = Relay::new(store, config(args.allowed));
-    let server = Server::bind(&args.listen, relay, relay_id)
+    let mut server = Server::bind(&args.listen, relay, relay_id)
         .await
         .map_err(|e| format!("{}: {e}", args.listen))?;
+    if let Some(url) = &args.public_url {
+        server = server.with_base_url(url);
+    }
     let addr = server.local_addr().map_err(|e| e.to_string())?;
     println!("ncdb-relay listening on ws://{addr}");
     std::io::stdout().flush().map_err(|e| e.to_string())?;

@@ -16,7 +16,10 @@
 //!
 //! `status` follows the report and the confirmation of one write; `pause`
 //! stops and restarts syncing; `again` pushes a refused change once more
-//! when the member's own fold newly accepts it (RFC 0008, M19).
+//! when the member's own fold newly accepts it (RFC 0008, M19); `large`
+//! carries a change too large for one message through the relay's upload
+//! and download URLs (RFC 0007, "Large changes"), with the small HTTP/1.1
+//! client of `http`.
 //!
 //! **What this does not do yet.** The per-space `status` of RFC 0009 is
 //! not built: the relay's refusals are recorded per change in the log, by
@@ -24,17 +27,33 @@
 //! [`SyncStatus`] counts them. A log written before NOC-188 may hold a
 //! relay's own text there, so the API that first shows a refusal's code
 //! must read it through `wire::mapped_code`. The relay is reached over plain
-//! WebSocket (`ws://`) only; TLS is NOC-121. A large change, which the
-//! relay hands out as a download link, is not read: the page that holds
-//! it ends the session, which backs off and meets the same page again,
-//! until NOC-121 reads the link.
+//! WebSocket over TLS (`wss://`) or, on a local network, without it
+//! (`ws://`); its upload and download URLs likewise over `https://` or
+//! `http://`. TLS verifies the relay against the platform's trust store
+//! (`tls`).
 
+// On wasm32 only the counts of `apply` are read until the browser syncs
+// (NOC-175); the rest serves the connection, which is native only.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod again;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
+#[cfg(not(target_arch = "wasm32"))]
+mod http;
+#[cfg(not(target_arch = "wasm32"))]
+mod large;
+#[cfg(not(target_arch = "wasm32"))]
+mod merge;
 mod pause;
+mod person_keys;
+#[cfg(not(target_arch = "wasm32"))]
 mod run;
+#[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
+#[cfg(not(target_arch = "wasm32"))]
+mod tls;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -44,8 +63,14 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use merge::set_merge_delay;
+#[cfg_attr(not(test), allow(unused_imports))]
+pub(crate) use person_keys::put as put_person_keys;
+#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
+pub(crate) use wire::Record;
 
 /// The state of the relay connection (RFC 0009, "Sync and status").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -122,7 +147,13 @@ fn status(inner: &Inner) -> SyncStatus {
     }
 }
 
-/// What a database that syncs keeps of its relay.
+/// The longest an admin's SDK waits before it writes a merge rotation
+/// (RFC 0008, "Two removals that rotate the key at once", step 5).
+const MERGE_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// What a database that syncs keeps of its relay. On wasm32 nothing syncs
+/// yet (NOC-175), so a database there never holds one.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) struct SyncState {
     pub(crate) connection: Connection,
     pub(crate) epoch_changed: bool,
@@ -155,6 +186,17 @@ pub(crate) struct SyncState {
     /// member's fold rejected it since: one folded again is pushed once
     /// more (RFC 0008, M19).
     pub(crate) refused: BTreeMap<CoreSpaceId, BTreeMap<CoreChangeId, bool>>,
+    /// The person-key records this member wrote that wait to be put, per
+    /// space (`person_keys`).
+    pub(crate) puts: BTreeMap<CoreSpaceId, Vec<Record>>,
+    /// When this admin writes the merge rotation of each space whose
+    /// current generation is exposed, unless the exposure ends first
+    /// (`merge`; RFC 0008, "Two removals that rotate the key at once",
+    /// step 5).
+    pub(crate) merges: BTreeMap<CoreSpaceId, std::time::Instant>,
+    /// The longest delay before a merge rotation: a minute, which the
+    /// tests change (`set_merge_delay`).
+    pub(crate) merge_delay: std::time::Duration,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -166,6 +208,7 @@ pub(crate) struct SyncState {
     pub(crate) halted: bool,
 }
 
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 impl SyncState {
     fn new(wake: watch::Sender<()>, pause: watch::Sender<bool>) -> SyncState {
         SyncState {
@@ -181,6 +224,9 @@ impl SyncState {
             pulled: BTreeSet::new(),
             folds: 0,
             refused: BTreeMap::new(),
+            puts: BTreeMap::new(),
+            merges: BTreeMap::new(),
+            merge_delay: MERGE_DELAY,
             wake,
             pause,
             halted: false,
@@ -231,7 +277,7 @@ pub(crate) fn wake(inner: &Inner) {
     inner.status.notify();
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 impl Inner {
     /// How many changes syncing folded that the log did not hold.
     pub(crate) fn sync_folds(&self) -> u64 {
@@ -244,5 +290,5 @@ impl Inner {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) mod tests;

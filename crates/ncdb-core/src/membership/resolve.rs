@@ -13,7 +13,9 @@
 //!    then the lower change id.
 //! 5. **Apply** in that order: a change is accepted when it is valid when
 //!    written, its author holds the right, and no accepted revocation
-//!    before it excludes it.
+//!    before it excludes it. A shred needs only to be valid when written,
+//!    and no revocation excludes it (RFC 0008, "A shred is final when
+//!    accepted").
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -148,6 +150,12 @@ impl Resolved {
     /// revocations.
     pub fn member(&self, member: MemberId) -> Option<&MemberState> {
         self.members.0.get(&member)
+    }
+
+    /// The certificate of every current or former member: each one's last
+    /// accepted genesis or add entry.
+    pub(crate) fn certificates(&self) -> impl Iterator<Item = &super::Certificate> + '_ {
+        self.members.0.values().map(|state| &state.certificate)
     }
 
     /// The order of step 4, of the changes that take part in the fold.
@@ -371,7 +379,10 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         {
             // Reported before a missing right, which the exclusion explains.
             Verdict::Rejected(Rejection::Excluded(*by))
-        } else if members.role(node.author) < Some(rights::needed(node)) {
+        } else if !is_shred(node) && members.role(node.author) < Some(rights::needed(node)) {
+            // A shred needs only to be valid when written (RFC 0008, "A
+            // shred is final when accepted"); every other change also needs
+            // the right in the state so far.
             Verdict::Rejected(Rejection::NoRight)
         } else if !keys.admits(node) {
             Verdict::Rejected(Rejection::Commitment)
@@ -399,6 +410,12 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     resolved.person_keys =
         person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
     resolved
+}
+
+/// Whether `node` is a shred entry, which step 5 accepts when it is valid
+/// when written.
+fn is_shred(node: &Node) -> bool {
+    matches!(node.body.entry, Entry::Shred(_))
 }
 
 /// Whether an accepted grant is lost (RFC 0008, "Concurrent add and remove

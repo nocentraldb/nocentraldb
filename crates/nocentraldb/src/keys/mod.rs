@@ -10,6 +10,8 @@
 //! secret, the member key-agreement secret and the account secret, 32
 //! bytes each. No other format is read.
 
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod browser;
 mod file;
 pub(crate) mod store;
 
@@ -53,7 +55,9 @@ impl Secrets {
     }
 
     /// The secret half of the member signing key, which signs the relay's
-    /// challenge (RFC 0007, "Opening a connection").
+    /// challenge (RFC 0007, "Opening a connection"); natively only, until
+    /// the browser syncs (NOC-175).
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) fn signing(&self) -> &[u8; 32] {
         &self.signing
     }
@@ -136,5 +140,5 @@ pub(crate) fn io(what: &str, error: &std::io::Error) -> Error {
     Error::new(code, format!("{what}: {error}"))
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;

@@ -3,7 +3,9 @@
 //! transaction on the head, a row in `spaces`; "one change id, one
 //! position" is a unique index on (space, change id); frames are kept
 //! inline; a person-key put is one write transaction that reads each
-//! stored generation before it writes.
+//! stored generation before it writes. An upload's frame (RFC 0007, "Large
+//! changes") waits in `uploads` until a push takes it, and is then kept
+//! inline in the log like any other; a download token names a log row.
 //!
 //! Several handles, also in several processes, may open one database: each
 //! write transaction takes SQLite's write lock first (`BEGIN IMMEDIATE`) and
@@ -26,7 +28,8 @@ use rusqlite::{
 
 use crate::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, UPLOAD_KEPT_AFTER_EXPIRY,
+    Upload, UploadId,
 };
 
 /// How long a write waits for another handle's write lock.
@@ -69,6 +72,23 @@ CREATE TABLE IF NOT EXISTS person_keys (
     signature BLOB NOT NULL,
     PRIMARY KEY (space, id)
 ) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS uploads (
+    token BLOB PRIMARY KEY,
+    id BLOB NOT NULL UNIQUE,
+    space BLOB NOT NULL,
+    member BLOB NOT NULL,
+    size INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    frame BLOB
+);
+CREATE INDEX IF NOT EXISTS uploads_expiry ON uploads (expires_at);
+CREATE TABLE IF NOT EXISTS downloads (
+    token BLOB PRIMARY KEY,
+    space BLOB NOT NULL,
+    position INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS downloads_expiry ON downloads (expires_at);
 ";
 
 /// A handle on a relay's SQLite database. Its `Debug` output shows nothing
@@ -190,6 +210,54 @@ fn position_of(
     .map_err(failed("find"))
 }
 
+/// Deletes the uploads kept long enough after their URL expired, and the
+/// download tokens that expired, as of `now`.
+fn sweep(tx: &Connection, now: u64) -> Result<(), StoreError> {
+    tx.execute(
+        "DELETE FROM uploads WHERE expires_at <= ?1",
+        [int(now.saturating_sub(UPLOAD_KEPT_AFTER_EXPIRY))],
+    )
+    .map_err(failed("sweep uploads"))?;
+    tx.execute("DELETE FROM downloads WHERE expires_at <= ?1", [int(now)])
+        .map_err(failed("sweep downloads"))?;
+    Ok(())
+}
+
+/// The log entries `sql` selects, with the columns position, change,
+/// accepted at, author, kind and frame, in that order.
+fn entries(
+    connection: &Connection,
+    sql: &str,
+    params: impl rusqlite::Params,
+) -> Result<Vec<Entry>, StoreError> {
+    let mut statement = connection.prepare(sql).map_err(failed("read"))?;
+    let rows = statement
+        .query_map(params, |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, Vec<u8>>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Vec<u8>>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, Vec<u8>>(5)?,
+            ))
+        })
+        .map_err(failed("read"))?;
+    let mut entries = Vec::new();
+    for row in rows {
+        let (position, change, accepted_at, author, kind, frame) = row.map_err(failed("read"))?;
+        entries.push(Entry {
+            position: unsigned(position),
+            change: ChangeId(array(change)?),
+            accepted_at: unsigned(accepted_at),
+            author: MemberId(array(author)?),
+            kind: Kind(unsigned(kind)),
+            frame,
+        });
+    }
+    Ok(entries)
+}
+
 impl RelayStore for SqliteStore {
     async fn append(
         &self,
@@ -258,39 +326,69 @@ impl RelayStore for SqliteStore {
         after: Position,
         limit: u32,
     ) -> Result<Vec<Entry>, StoreError> {
+        entries(
+            &self.connection(),
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 ORDER BY position LIMIT ?3",
+            params![space.0, int(after), i64::from(limit)],
+        )
+    }
+
+    async fn read_controls(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+    ) -> Result<Vec<Entry>, StoreError> {
+        // The kind comes before the frame in a row, so SQLite skips a
+        // sealed row without reading its frame's overflow pages.
+        entries(
+            &self.connection(),
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 AND kind = ?3 ORDER BY position LIMIT ?4",
+            params![space.0, int(after), int(Kind::CONTROL.0), i64::from(limit)],
+        )
+    }
+
+    async fn read_bounded(
+        &self,
+        space: SpaceId,
+        after: Position,
+        limit: u32,
+        max_bytes: u64,
+    ) -> Result<Vec<Entry>, StoreError> {
         let connection = self.connection();
+        // `length` of a blob reads the row's header, not the blob.
         let mut statement = connection
             .prepare(
-                "SELECT position, change, accepted_at, author, kind, frame FROM log
+                "SELECT position, length(frame) FROM log
                  WHERE space = ?1 AND position > ?2 ORDER BY position LIMIT ?3",
             )
             .map_err(failed("read"))?;
         let rows = statement
             .query_map(params![space.0, int(after), i64::from(limit)], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, Vec<u8>>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Vec<u8>>(3)?,
-                    row.get::<_, i64>(4)?,
-                    row.get::<_, Vec<u8>>(5)?,
-                ))
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?))
             })
             .map_err(failed("read"))?;
-        let mut entries = Vec::new();
+        let (mut last, mut bytes) = (None, 0u64);
         for row in rows {
-            let (position, change, accepted_at, author, kind, frame) =
-                row.map_err(failed("read"))?;
-            entries.push(Entry {
-                position: unsigned(position),
-                change: ChangeId(array(change)?),
-                accepted_at: unsigned(accepted_at),
-                author: MemberId(array(author)?),
-                kind: Kind(unsigned(kind)),
-                frame,
-            });
+            let (position, length) = row.map_err(failed("read"))?;
+            bytes = bytes.saturating_add(unsigned(length));
+            if last.is_some() && bytes > max_bytes {
+                break;
+            }
+            last = Some(position);
         }
-        Ok(entries)
+        drop(statement);
+        let Some(last) = last else {
+            return Ok(Vec::new());
+        };
+        entries(
+            &connection,
+            "SELECT position, change, accepted_at, author, kind, frame FROM log
+             WHERE space = ?1 AND position > ?2 AND position <= ?3 ORDER BY position",
+            params![space.0, int(after), last],
+        )
     }
 
     async fn head(&self, space: SpaceId) -> Result<Option<Position>, StoreError> {
@@ -449,5 +547,133 @@ impl RelayStore for SqliteStore {
             .execute("UPDATE relay SET epoch = ?1 WHERE id = 1", [epoch.0])
             .map_err(failed("new epoch"))?;
         Ok(epoch)
+    }
+
+    async fn begin_upload(&self, upload: Upload, now: u64) -> Result<(), StoreError> {
+        let mut connection = self.connection();
+        let tx = immediate(&mut connection)?;
+        sweep(&tx, now)?;
+        tx.execute(
+            "INSERT INTO uploads (token, id, space, member, size, expires_at, frame)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)",
+            params![
+                upload.token.0,
+                upload.id.0,
+                upload.space.0,
+                upload.member.0,
+                int(upload.size),
+                int(upload.expires_at)
+            ],
+        )
+        .map_err(failed("begin upload"))?;
+        tx.commit().map_err(failed("begin upload"))
+    }
+
+    async fn upload(&self, token: Token) -> Result<Option<(Upload, bool)>, StoreError> {
+        let row = self
+            .connection()
+            .query_row(
+                "SELECT id, space, member, size, expires_at, frame IS NOT NULL FROM uploads
+                 WHERE token = ?1",
+                [token.0],
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, Vec<u8>>(2)?,
+                        row.get::<_, i64>(3)?,
+                        row.get::<_, i64>(4)?,
+                        row.get::<_, bool>(5)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(failed("upload"))?;
+        let Some((id, space, member, size, expires_at, filled)) = row else {
+            return Ok(None);
+        };
+        let upload = Upload {
+            id: UploadId(array(id)?),
+            token,
+            space: SpaceId(array(space)?),
+            member: MemberId(array(member)?),
+            size: unsigned(size),
+            expires_at: unsigned(expires_at),
+        };
+        Ok(Some((upload, filled)))
+    }
+
+    async fn fill_upload(&self, token: Token, frame: Vec<u8>) -> Result<bool, StoreError> {
+        let filled = self
+            .connection()
+            .execute(
+                "UPDATE uploads SET frame = ?2 WHERE token = ?1 AND frame IS NULL",
+                params![token.0, frame],
+            )
+            .map_err(failed("fill upload"))?;
+        Ok(filled == 1)
+    }
+
+    async fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.connection()
+            .query_row(
+                "DELETE FROM uploads
+                 WHERE id = ?1 AND space = ?2 AND member = ?3 AND frame IS NOT NULL
+                 RETURNING frame",
+                params![id.0, space.0, member.0],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()
+            .map_err(failed("take upload"))
+    }
+
+    async fn begin_download(
+        &self,
+        token: Token,
+        space: SpaceId,
+        position: Position,
+        expires_at: u64,
+        now: u64,
+    ) -> Result<(), StoreError> {
+        let mut connection = self.connection();
+        let tx = immediate(&mut connection)?;
+        sweep(&tx, now)?;
+        tx.execute(
+            "INSERT INTO downloads (token, space, position, expires_at) VALUES (?1, ?2, ?3, ?4)",
+            params![token.0, space.0, int(position), int(expires_at)],
+        )
+        .map_err(failed("begin download"))?;
+        tx.commit().map_err(failed("begin download"))
+    }
+
+    async fn download(&self, token: Token) -> Result<Option<(SpaceId, Position, u64)>, StoreError> {
+        let row = self
+            .connection()
+            .query_row(
+                "SELECT space, position, expires_at FROM downloads WHERE token = ?1",
+                [token.0],
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(failed("download"))?;
+        row.map(|(space, position, expires_at)| {
+            Ok((
+                SpaceId(array(space)?),
+                unsigned(position),
+                unsigned(expires_at),
+            ))
+        })
+        .transpose()
     }
 }

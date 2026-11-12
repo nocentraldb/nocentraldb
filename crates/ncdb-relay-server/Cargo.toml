@@ -23,6 +23,11 @@ tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-t
 # WebSocket (RFC 6455) over tokio's TCP streams, RFC 0007's transport.
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+# The head of a plain HTTP request on the relay's listener: the upload and
+# download URLs of large changes (RFC 0007, "Large changes"), told apart from
+# a WebSocket upgrade. Already in the tree through tungstenite; the same
+# pinned version.
+httparse = { version = "=1.10.1", default-features = false, features = ["std"] }
 # The challenge's nonce and a new relay id: the platform's secure generator.
 getrandom = { version = "=0.4.3", default-features = false }
 
