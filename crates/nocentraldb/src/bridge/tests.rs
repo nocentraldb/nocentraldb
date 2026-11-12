@@ -412,8 +412,8 @@ fn a_whole_number_written_to_a_float_field_reads_as_a_float() {
 fn an_error_with_a_fingerprint_answers_it_as_text() {
     use crate::error::{Error, ErrorCode};
     use crate::members::Fingerprint;
-    let error = Error::new(ErrorCode::UnknownAccount, "confirm it")
-        .with_fingerprint(Fingerprint([7; 32]));
+    let error =
+        Error::new(ErrorCode::UnknownAccount, "confirm it").with_fingerprint(Fingerprint([7; 32]));
     let fingerprint = error.fingerprint().expect("set").to_string();
     let answer = super::failure_of(3, &error.into());
     let error = field(&answer, "error").expect("an error");

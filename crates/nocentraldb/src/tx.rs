@@ -125,8 +125,35 @@ impl<'a> Transaction<'a> {
         values: impl IntoIterator<Item = (&'v str, Value)>,
         options: Create,
     ) -> Result<ObjectId, Error> {
+        self.create_at_with(
+            collection,
+            ObjectId(CoreObjectId::random()),
+            values,
+            options,
+        )
+    }
+
+    /// Records the creation of an object as [`Transaction::create`] does,
+    /// at `id`, an id the caller drew: the TypeScript SDK draws it on the
+    /// device so that its `tx.create` returns it at once (NOC-176).
+    pub(crate) fn create_at<'v>(
+        &mut self,
+        collection: &str,
+        id: ObjectId,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+    ) -> Result<ObjectId, Error> {
+        self.create_at_with(collection, id, values, Create::default())
+    }
+
+    fn create_at_with<'v>(
+        &mut self,
+        collection: &str,
+        id: ObjectId,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+        options: Create,
+    ) -> Result<ObjectId, Error> {
         let values = self.fields(collection, values)?;
-        let id = CoreObjectId::random();
+        let id = id.0;
         let same_as = options.same_person_as.and_then(|object| object.person_id());
         self.records
             .push(Record::Create(collection.to_owned(), id, values, same_as));

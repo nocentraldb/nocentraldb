@@ -42,7 +42,10 @@ mod tests;
 use std::collections::BTreeMap;
 use std::str::FromStr;
 
+use ncdb_core::basic::{BasicValue, Kind};
 use ncdb_core::cbor::{self, Key, Value};
+use ncdb_core::set::Set;
+use ncdb_core::view::{Field as ModelField, Model};
 
 use crate::db::{Db, OpenOptions};
 use crate::error::{Error, ErrorCode};
@@ -56,17 +59,20 @@ pub(crate) struct Bridge {
     db: Option<Db>,
 }
 
-/// Why a call failed: RFC 0009's code and a message.
-struct Failed(String, String);
+/// Why a call failed: RFC 0009's code, a message and, for
+/// `unknownAccount`, the account's fingerprint as twelve blocks (RFC 0009,
+/// "Errors"; Carsten, 2026-11-12, NOC-274).
+pub(super) struct Failed(String, String, Option<String>);
 
 impl From<Error> for Failed {
     fn from(error: Error) -> Failed {
-        Failed(code_name(error.code()), error.to_string())
+        let fingerprint = error.fingerprint().map(ToString::to_string);
+        Failed(code_name(error.code()), error.to_string(), fingerprint)
     }
 }
 
 fn invalid(message: impl Into<String>) -> Failed {
-    Failed("invalidValue".into(), message.into())
+    Failed("invalidValue".into(), message.into(), None)
 }
 
 /// RFC 0009's name of an error code: the variant's name in lower camel
@@ -100,7 +106,7 @@ impl Bridge {
         };
         cbor::encode(&match answer {
             Ok(value) => entries([("id", Value::Unsigned(id)), ("ok", value)]),
-            Err(Failed(code, message)) => failure(id, &code, &message),
+            Err(failed) => failure_of(id, &failed),
         })
     }
 
@@ -109,7 +115,11 @@ impl Bridge {
             return self.open(args).await;
         }
         let Some(db) = &self.db else {
-            return Err(Failed("closed".into(), "the database is not open".into()));
+            return Err(Failed(
+                "closed".into(),
+                "the database is not open".into(),
+                None,
+            ));
         };
         match call {
             "close" => {
@@ -173,6 +183,7 @@ impl Bridge {
 /// `{"space": id, "ops": [op]}`, written as one change.
 async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     let space = db.spaces().get(space_id(args)?).await?;
+    let model = db.lock().model.clone();
     let Some(Value::Array(ops)) = get(args, "ops") else {
         return Err(invalid("a write takes ops"));
     };
@@ -180,15 +191,15 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     for op in ops {
         let collection = text(op, "collection")?.to_owned();
         let values = match get(op, "values") {
-            Some(Value::Map(map)) => fields(map)?,
+            Some(Value::Map(map)) => fields(&model, &collection, map)?,
             None => Vec::new(),
             Some(_) => return Err(invalid("values is a map")),
         };
         let kind = text(op, "op")?;
-        let id = match kind {
-            "create" => None,
-            "update" | "delete" | "restore" => Some(object_id(op, "id")?),
-            other => return Err(invalid(format!("no op {other}"))),
+        let id = match (kind, get(op, "id")) {
+            ("create", None) => None,
+            ("create" | "update" | "delete" | "restore", _) => Some(object_id(op, "id")?),
+            (other, _) => return Err(invalid(format!("no op {other}"))),
         };
         parsed.push((kind.to_owned(), collection, id, values));
     }
@@ -199,7 +210,10 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
                     .iter()
                     .map(|(name, value)| (name.as_str(), value.clone()));
                 match (kind.as_str(), id) {
-                    ("create", _) => {
+                    ("create", Some(id)) => {
+                        tx.create_at(collection, *id, values)?;
+                    }
+                    ("create", None) => {
                         tx.create(collection, values)?;
                     }
                     ("update", Some(id)) => tx.update(collection, *id, values)?,
@@ -226,14 +240,42 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     ]))
 }
 
-/// The values of a create or an update, by field name.
-fn fields(map: &BTreeMap<Key, Value>) -> Result<Vec<(String, Field)>, Failed> {
+/// The values of a create or an update of `collection`, by field name. A
+/// whole number for a float field, or for an element of a set of floats,
+/// is that float: canonical CBOR writes 2.0 as the integer 2.
+fn fields(
+    model: &Model,
+    collection: &str,
+    map: &BTreeMap<Key, Value>,
+) -> Result<Vec<(String, Field)>, Failed> {
     map.iter()
         .map(|(key, value)| match key {
-            Key::Text(name) => Ok((name.clone(), field(value)?)),
+            Key::Text(name) => {
+                let float = matches!(
+                    model.field(collection, name),
+                    Some(ModelField::Basic(BasicValue { kind: Kind::Float }))
+                        | Some(ModelField::Set(Set { kind: Kind::Float }))
+                );
+                let mut value = field(value)?;
+                if float {
+                    value = as_float(value);
+                }
+                Ok((name.clone(), value))
+            }
             Key::Unsigned(_) => Err(invalid("a field's name is text")),
         })
         .collect()
+}
+
+/// `value` with each integer in it as a float.
+fn as_float(value: Field) -> Field {
+    let floats = |items: Vec<Field>| items.into_iter().map(as_float).collect();
+    Field(match value.0 {
+        Repr::Integer(n) => Repr::Float(n as f64),
+        Repr::Add(items) => Repr::Add(floats(items)),
+        Repr::Remove(items) => Repr::Remove(floats(items)),
+        other => other,
+    })
 }
 
 /// A value to write, from its protocol form.
@@ -330,7 +372,7 @@ fn object_id(args: &Value, key: &str) -> Result<ObjectId, Failed> {
     ObjectId::from_str(text(args, key)?).map_err(|_| invalid("not an object id"))
 }
 
-fn entries<const N: usize>(pairs: [(&str, Value); N]) -> Value {
+fn entries<'a>(pairs: impl IntoIterator<Item = (&'a str, Value)>) -> Value {
     Value::Map(
         pairs
             .into_iter()
@@ -341,9 +383,18 @@ fn entries<const N: usize>(pairs: [(&str, Value); N]) -> Value {
 
 /// An error answer to the request `id`.
 fn failure(id: u64, code: &str, message: &str) -> Value {
-    let error = entries([
-        ("code", Value::Text(code.into())),
-        ("message", Value::Text(message.into())),
-    ]);
-    entries([("id", Value::Unsigned(id)), ("error", error)])
+    failure_of(id, &Failed(code.into(), message.into(), None))
+}
+
+/// The answer to request `id` that failed with `failed`.
+pub(super) fn failure_of(id: u64, failed: &Failed) -> Value {
+    let Failed(code, message, fingerprint) = failed;
+    let mut error = vec![
+        ("code", Value::Text(code.clone())),
+        ("message", Value::Text(message.clone())),
+    ];
+    if let Some(fingerprint) = fingerprint {
+        error.push(("fingerprint", Value::Text(fingerprint.clone())));
+    }
+    entries([("id", Value::Unsigned(id)), ("error", entries(error))])
 }
