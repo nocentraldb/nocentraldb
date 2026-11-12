@@ -2007,6 +2007,8 @@ dependencies = [
  "js-sys",
  "libsqlite3-sys",
  "minicbor",
+ "ncdb-plugin",
+ "ncdb-test-counter",
  "proptest",
  "rusqlite",
  "serde_json",
@@ -2018,6 +2020,14 @@ dependencies = [
  "wasm-bindgen-test",
  "web-sys",
  "zeroize",
+]
+
+[[package]]
+name = "ncdb-plugin"
+version = "0.1.0"
+dependencies = [
+ "minicbor",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -2058,6 +2068,13 @@ dependencies = [
  "ncdb-relay",
  "tokio",
  "tokio-tungstenite",
+]
+
+[[package]]
+name = "ncdb-test-counter"
+version = "0.1.0"
+dependencies = [
+ "ncdb-plugin",
 ]
 
 [[package]]

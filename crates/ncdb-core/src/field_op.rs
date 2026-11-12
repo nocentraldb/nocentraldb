@@ -9,9 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::basic::{BasicValue, Write};
 use crate::cbor::{self, Key, Value};
 use crate::change::{ChangeError, Operation};
-use crate::clock::Hlc;
 use crate::field::FieldType;
-use crate::ids::{ChangeId, MemberId, ObjectId, OperationId};
+use crate::ids::{ChangeId, ObjectId, OperationId};
 use crate::link::{Link, Links};
 use crate::log::OperationParkReason;
 use crate::object::{Create, ObjectOperation};
@@ -46,16 +45,9 @@ const LAST_MUST_UNDERSTAND_ARGUMENT: u64 = 63;
 const OPERATION_DEPTH: usize = 5;
 
 /// What a field operation takes from its change rather than from its own
-/// bytes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Origin {
-    /// The change id and the operation's position in the payload.
-    pub id: OperationId,
-    /// The member that signed the change.
-    pub author: MemberId,
-    /// The payload's clock.
-    pub stamp: Hlc,
-}
+/// bytes: its id, its author and its stamp. It lives in `ncdb-plugin`,
+/// since a plugin's decode takes it too (RFC 0011).
+pub use ncdb_plugin::Origin;
 
 /// A field type whose operations travel in a change.
 pub trait Encoding: FieldType {
