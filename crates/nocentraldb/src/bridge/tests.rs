@@ -220,20 +220,27 @@ fn an_update_and_a_delete_change_what_a_get_reads() {
         field(field(&get(&mut bridge), "fields").unwrap(), "title"),
         Some(&text("b"))
     );
-    // `null`, which clears a field in RFC 0009, waits for the Rust SDK to
-    // write a clear: until then the bridge refuses it.
-    let clear = map(&[
+    // `null` clears a field (RFC 0009, "Field operations per field type"):
+    // the Rust SDK's Value::clear (Carsten, 2026-11-12, NOC-277).
+    write(
+        &mut bridge,
+        op("update", Some(&id), Some(map(&[("title", Value::Null)]))),
+    );
+    let title = field(field(&get(&mut bridge), "fields").unwrap(), "title").cloned();
+    assert!(matches!(title, None | Some(Value::Null)), "{title:?}");
+    // A set is never cleared whole.
+    let clear_tags = map(&[
         ("space", space.clone()),
         (
             "ops",
             Value::Array(vec![op(
                 "update",
                 Some(&id),
-                Some(map(&[("title", Value::Null)])),
+                Some(map(&[("tags", Value::Null)])),
             )]),
         ),
     ]);
-    assert_eq!(code(&mut bridge, "write", clear), "invalidValue");
+    assert_eq!(code(&mut bridge, "write", clear_tags), "invalidValue");
     write(&mut bridge, op("delete", Some(&id), None));
     assert_eq!(
         field(&get(&mut bridge), "$deleted"),
