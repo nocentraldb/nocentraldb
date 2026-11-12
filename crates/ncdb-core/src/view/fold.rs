@@ -13,6 +13,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
 use super::model::{Field, FieldState, Model};
+use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
 use std::collections::BTreeMap;
@@ -229,6 +230,9 @@ impl<'a> SqlFold<'a> {
             (Field::Links(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
+            (Field::Plugin(t), FieldState::Plugin(s)) => {
+                plugin::apply(t, &s, operation, origin)?.map(|bytes| (bytes, None))
+            }
             _ => unreachable!("a field's state matches its type"),
         };
         Ok(match folded {
@@ -372,6 +376,7 @@ pub(super) fn load(
         (None, empty) => empty,
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),
         (Some(bytes), FieldState::Set(_)) => FieldState::Set(state::set(&bytes)?),
+        (Some(bytes), FieldState::Plugin(_)) => FieldState::Plugin(bytes),
     })
 }
 
@@ -519,6 +524,10 @@ impl Fold for SqlFold<'_> {
 
     fn knows_field(&self, collection: &str, field: &str) -> bool {
         self.model.field(collection, field).is_some()
+    }
+
+    fn unregistered(&self, collection: &str, field: &str) -> bool {
+        self.model.unregistered(collection, field)
     }
 
     fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason> {
