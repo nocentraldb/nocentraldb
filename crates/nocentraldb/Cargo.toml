@@ -42,8 +42,8 @@ keyring-core = { version = "=1.0.1", default-features = false }
 # Syncing with one relay (RFC 0007, "The protocol"), natively: a WebSocket
 # client on a tokio runtime of the SDK's own, on a thread of its own, so an
 # app needs no runtime. The versions Cargo.lock already held for the relay
-# server. In the browser, syncing runs over the browser's WebSocket, which
-# a later slice builds (NOC-175).
+# server. In the browser, syncing runs over the browser's WebSocket instead
+# (below; NOC-175).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
 # TLS for `wss://` and the `https://` URLs of large changes (NOC-121):
@@ -54,9 +54,6 @@ rustls = { version = "=0.23.46", default-features = false, features = ["ring", "
 rustls-native-certs = { version = "=0.8.5", default-features = false }
 tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
-# What the member signs to authenticate a connection, as the relay checks
-# it (RFC 0003, decision 13).
-ncdb-relay.workspace = true
 
 # On wasm32 (NOC-175): the secure generator through the browser's
 # crypto.getRandomValues, as the core has it, and the wall clock through
@@ -70,7 +67,13 @@ js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
 # wasm-bindgen-futures. The versions the core pins.
 wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
 wasm-bindgen-futures = { version = "=0.4.80", default-features = false, features = ["std"] }
-web-sys = { version = "=0.3.107", default-features = false, features = ["std", "AesGcmParams", "AesKeyGenParams", "Crypto", "CryptoKey", "DomException", "Event", "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "SubtleCrypto"] }
+# Syncing in the browser (NOC-175; NOC-245): the relay over the browser's
+# WebSocket, the upload and download URLs of large changes through fetch()
+# with redirects refused and the body read as a stream up to its declared
+# size, and the sync loop on the page's event loop through
+# wasm-bindgen-futures, with tokio's select! from its "macros" feature.
+web-sys = { version = "=0.3.107", default-features = false, features = ["std", "AesGcmParams", "AesKeyGenParams", "BinaryType", "Crypto", "CryptoKey", "DomException", "Event", "Headers", "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "MessageEvent", "ReadableStream", "ReadableStreamDefaultReader", "Request", "RequestInit", "RequestRedirect", "Response", "SubtleCrypto", "WebSocket"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["sync", "macros"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }
@@ -85,6 +88,9 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = fal
 # simulated member would. Natively only: they need sockets and threads.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
+# The relay's own digest of what a member signs, which the SDK's own copy
+# must equal (src/sync/wire.rs), and the store the tests read.
+ncdb-relay.workspace = true
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "time", "io-util", "net", "macros"] }
 # A backup of the relay's database, to restore it from (RFC 0007,
 # "Restores and the relay epoch").

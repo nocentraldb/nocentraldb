@@ -80,6 +80,8 @@ libsqlite3-sys = { version = "=0.39.1", default-features = false }
 [dev-dependencies]
 # The test plugin, test/counter, which the view folds (RFC 0011).
 ncdb-test-counter.workspace = true
+# The convergence harness every field type is checked by (RFC 0011).
+ncdb-harness.workspace = true
 # The convergence harness (tests/support/convergence.rs) generates and shrinks
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).

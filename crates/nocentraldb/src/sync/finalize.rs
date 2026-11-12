@@ -104,7 +104,7 @@ fn millis(duration: Duration) -> u64 {
 
 /// Sets how long `db` holds a provisional shred before it finalizes it, and
 /// how long after a `too_early` it pushes again, as the tests need them.
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn set_finalize_after(db: &crate::Db, after: Duration, retry: Duration) {
     let mut inner = crate::db::lock(&db.inner);
     if let Some(sync) = inner.sync.as_mut() {

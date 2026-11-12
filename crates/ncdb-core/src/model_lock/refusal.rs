@@ -72,6 +72,14 @@ pub enum Refusal {
         from: u64,
         to: u64,
     },
+    /// A plugin field whose `config` changes, appears or disappears: the
+    /// config is part of the type's merge rule (RFC 0011, "A type that is
+    /// not registered"; RFC 0005, "Refused"; NOC-251).
+    ConfigChanged {
+        collection: String,
+        field: String,
+        type_id: String,
+    },
     /// Options of a choice, or a set of choices, that are not the previous
     /// options with new ones appended.
     OptionsChanged {
@@ -223,6 +231,11 @@ impl Refusal {
                 format!("{c}.{f}: the rule version of {type_id} changes from {from} to {to}."),
                 "A new rule version needs a migration that every member runs first, and there is none yet.".into(),
                 format!("Add a new field with rule version {to} instead, and deprecate {c}.{f}."),
+            ],
+            ConfigChanged { collection: c, field: f, type_id } => vec![
+                format!("{c}.{f}: the config of {type_id} changes."),
+                "The config is part of the type's merge rule: members would merge existing values differently.".into(),
+                format!("Add a new field with the new config instead, and deprecate {c}.{f}."),
             ],
             OptionsChanged { collection: c, field: f, from, to } => vec![
                 format!("{c}.{f}: options change from [{}] to [{}].", from.join(", "), to.join(", ")),

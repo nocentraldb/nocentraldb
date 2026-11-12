@@ -7,6 +7,7 @@ How this repository is laid out, how to set up its tools, and the gates every ch
 ```
 crates/ncdb-core/     Rust core (placeholder)
 crates/ncdb-plugin/   what a plugin field type implements and depends on (RFC 0011): the FieldType trait, Data, the ids of an operation, Plugin
+crates/ncdb-harness/  the convergence harness (RFC 0011): RFC 0004's checks C1 to C7 for a field type, built in or plugin
 crates/ncdb-test-counter/  a plugin for the tests, test/counter (RFC 0011); not published
 crates/ncdb/          the command line ncdb: ncdb model build and ncdb model check (RFC 0005)
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
@@ -86,6 +87,7 @@ What each project's `gates` task runs:
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`), `build-wasm` (`cargo build --locked --target wasm32-unknown-unknown`: the crate builds for the browser target, so it uses nothing the browser lacks), `test-wasm` (`cargo test --locked --target wasm32-unknown-unknown`: its tests pass as WebAssembly, run in Node by `wasm-bindgen-test-runner`) |
 | Rust plugin crate (`ncdb-plugin`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: every plugin runs natively and in the browser, so the crate does too |
+| Rust harness (`ncdb-harness`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: a plugin's author runs it natively and on wasm32 (C3) |
 | Rust test plugin (`ncdb-test-counter`) | `format-check`, `lint` and `test` as for `ncdb-core`; the core's tests run it on wasm32, so it has no wasm tasks of its own |
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); it runs natively only, so it has no wasm tasks |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
@@ -110,6 +112,11 @@ moon run ncdb-plugin:lint --force
 moon run ncdb-plugin:test --force
 moon run ncdb-plugin:build-wasm --force
 moon run ncdb-plugin:test-wasm --force
+moon run ncdb-harness:format-check --force
+moon run ncdb-harness:lint --force
+moon run ncdb-harness:test --force
+moon run ncdb-harness:build-wasm --force
+moon run ncdb-harness:test-wasm --force
 moon run ncdb-test-counter:format-check --force
 moon run ncdb-test-counter:lint --force
 moon run ncdb-test-counter:test --force
