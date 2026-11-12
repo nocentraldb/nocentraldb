@@ -11,16 +11,12 @@
 //! core swaps the new view in, the SDK reads and writes by the new model,
 //! and every subscription is told its data may have changed.
 
-use std::collections::BTreeSet;
-use std::sync::{Arc, Mutex, Weak};
-
 use futures_core::Stream;
 
-use crate::db::{Db, Inner, lock};
-use crate::subscribe::touched;
+use crate::db::{Db, Inner};
 
-/// How many frames of the log the rebuild folds while it holds the lock.
-const PAGE: usize = 128;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) use rebuild::start;
 
 /// The report of the view, from [`Db::view`].
 #[derive(Debug)]
@@ -80,43 +76,57 @@ fn status(inner: &Inner) -> ViewStatus {
     }
 }
 
-/// Runs the rebuild of the database `inner`'s view in a thread of its own,
-/// when one runs. The thread stops once the rebuild ends, fails or the
-/// database is dropped. A rebuild that fails stays reported and starts
-/// again at the next open.
-pub(crate) fn start(inner: &Arc<Mutex<Inner>>) {
-    if lock(inner).view.rebuild_progress().is_none() {
-        return;
-    }
-    let db = Arc::downgrade(inner);
-    let _ = std::thread::Builder::new()
-        .name("nocentraldb-rebuild".into())
-        .spawn(move || run(&db));
-}
+/// The thread that runs a rebuild, natively: wasm32 starts no thread yet
+/// (`Db::open`), so a browser's view rebuilds when a later slice runs it.
+#[cfg(not(target_arch = "wasm32"))]
+mod rebuild {
+    use std::collections::BTreeSet;
+    use std::sync::{Arc, Mutex, Weak};
 
-fn run(db: &Weak<Mutex<Inner>>) {
-    while let Some(inner) = db.upgrade() {
-        let mut inner = lock(&inner);
-        let step = inner.view.rebuild_step(PAGE);
-        if matches!(step, Ok(None)) {
-            swapped(&mut inner);
-        }
-        inner.status.notify();
-        if !matches!(step, Ok(Some(_))) {
+    use crate::db::{Inner, lock};
+    use crate::subscribe::touched;
+
+    /// How many frames of the log the rebuild folds while it holds the lock.
+    const PAGE: usize = 128;
+
+    /// Runs the rebuild of the database `inner`'s view in a thread of its own,
+    /// when one runs. The thread stops once the rebuild ends, fails or the
+    /// database is dropped. A rebuild that fails stays reported and starts
+    /// again at the next open.
+    pub(crate) fn start(inner: &Arc<Mutex<Inner>>) {
+        if lock(inner).view.rebuild_progress().is_none() {
             return;
         }
-        drop(inner);
-        std::thread::yield_now();
+        let db = Arc::downgrade(inner);
+        let _ = std::thread::Builder::new()
+            .name("nocentraldb-rebuild".into())
+            .spawn(move || run(&db));
     }
-}
 
-/// After the swap: the SDK reads and writes by the view's new model, and
-/// every subscription reads its data again.
-fn swapped(inner: &mut Inner) {
-    inner.model = Arc::new(inner.view.model().clone());
-    let collections: BTreeSet<String> = inner.model.collections.keys().cloned().collect();
-    let spaces: Vec<_> = inner.spaces.keys().copied().collect();
-    for space in spaces {
-        touched(&mut inner.watchers, space, &collections);
+    fn run(db: &Weak<Mutex<Inner>>) {
+        while let Some(inner) = db.upgrade() {
+            let mut inner = lock(&inner);
+            let step = inner.view.rebuild_step(PAGE);
+            if matches!(step, Ok(None)) {
+                swapped(&mut inner);
+            }
+            inner.status.notify();
+            if !matches!(step, Ok(Some(_))) {
+                return;
+            }
+            drop(inner);
+            std::thread::yield_now();
+        }
+    }
+
+    /// After the swap: the SDK reads and writes by the view's new model, and
+    /// every subscription reads its data again.
+    fn swapped(inner: &mut Inner) {
+        inner.model = Arc::new(inner.view.model().clone());
+        let collections: BTreeSet<String> = inner.model.collections.keys().cloned().collect();
+        let spaces: Vec<_> = inner.spaces.keys().copied().collect();
+        for space in spaces {
+            touched(&mut inner.watchers, space, &collections);
+        }
     }
 }
