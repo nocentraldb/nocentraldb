@@ -1,8 +1,9 @@
-//! The relay's answers in the member's log (RFC 0002, "The log on disk";
-//! RFC 0007, "Island mode"): the relay position of each change the relay
-//! holds, and the relay's refusal of a change (RFC 0002, D12), in the
-//! `log` table's `relay_position` and `relay_refusal` columns. Neither
-//! changes a change's state: no other member sees the relay's answer.
+//! The relay's answers in the member's log (RFC 0002, "The log on disk"; RFC
+//! 0007, "Island mode"): the relay position of each change the relay holds, and
+//! the relay's refusal of a change (RFC 0002, "A change the relay refuses after
+//! the member folded it"), in the `log` table's `relay_position` and
+//! `relay_refusal` columns. Neither changes a change's state: no other member
+//! sees the relay's answer.
 //!
 //! The relay epoch those positions belong to sits in `meta` under
 //! `relay_epoch` (NOC-145), so a reopened database knows whether its
@@ -95,7 +96,8 @@ impl View {
     }
 
     /// Records the relay's refusal of a change the log holds, by its RFC
-    /// 0007 code. The change keeps its state and stays folded (D12).
+    /// 0007 code. The change keeps its state and stays folded (RFC 0002, "A change
+    /// the relay refuses after the member folded it").
     pub fn refuse(&mut self, space: SpaceId, id: ChangeId, code: &str) -> Result<(), Error> {
         self.conn.execute(
             "UPDATE log SET relay_refusal = ?3 WHERE space_id = ?1 AND change_id = ?2",
@@ -108,9 +110,10 @@ impl View {
     }
 
     /// Forgets the relay's refusal of a change the log holds, because the
-    /// member's own fold newly accepts it and pushes it to the relay once
-    /// more (RFC 0008, M19). The change keeps its state; until the relay
-    /// answers again, it is unconfirmed, unless the relay already holds it.
+    /// member's own fold newly accepts it and pushes it to the relay once more
+    /// (RFC 0008, "How the relay applies the rules"). The change keeps its
+    /// state; until the relay answers again, it is unconfirmed, unless the
+    /// relay already holds it.
     pub fn clear_refusal(&mut self, space: SpaceId, id: ChangeId) -> Result<(), Error> {
         self.conn.execute(
             "UPDATE log SET relay_refusal = NULL WHERE space_id = ?1 AND change_id = ?2",

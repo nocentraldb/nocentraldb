@@ -1,12 +1,12 @@
 //! The keys in the platform keystore (RFC 0003, "How the SDK hides keys";
-//! RFC 0009, S19 and S26): the Keychain on macOS, the Credential Manager on
+//! RFC 0009, "The Rust SDK" and "Open and close"): the Keychain on macOS, the Credential Manager on
 //! Windows and the Secret Service on Linux, through `keyring-core`. One
 //! entry holds a database's key record, under the service `nocentraldb`
 //! and, as its user, the canonical path of the database's directory.
 //!
 //! A keystore that cannot be reached, or refuses access, is
 //! `KeyStoreUnavailable`, whose message names `key_file`; the SDK never
-//! falls back to a key file the app did not name (RFC 0003, decision 19).
+//! falls back to a key file the app did not name (RFC 0003, "The member key").
 
 use std::path::Path;
 use std::sync::Arc;
@@ -148,7 +148,8 @@ fn failed(error: KeyringError) -> Error {
     }
 }
 
-/// `KeyStoreUnavailable`, whose message names `key_file` (RFC 0009, S26).
+/// `KeyStoreUnavailable`, whose message names `key_file` (RFC 0009, "Open
+/// and close").
 pub(crate) fn unavailable(error: KeyringError) -> Error {
     Error::new(
         ErrorCode::KeyStoreUnavailable,

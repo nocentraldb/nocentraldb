@@ -1,6 +1,7 @@
 //! `agent()` marks the member as an agent in the certificate its account
-//! signs (RFC 0009, S20; RFC 0003, "Member certificate"), so a space adds
-//! it as a writer when no role is given (RFC 0008, M14); without it, the
+//! signs (RFC 0009, "Accounts and devices"; RFC 0003, "Member
+//! certificate"), so a space adds
+//! it as a writer when no role is given (RFC 0008, "Roles and rights"); without it, the
 //! member is a device.
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;

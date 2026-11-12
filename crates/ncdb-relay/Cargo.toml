@@ -13,7 +13,7 @@ description = "The NoCentralDB relay core: the checks of RFC 0007, the backend i
 [dependencies]
 ncdb-core.workspace = true
 # The relay authenticates a connection with the member's Ed25519 key over
-# H("nocentraldb/relay-auth" || relay id || nonce) (RFC 0003, decision 13).
+# H("nocentraldb/relay-auth" || relay id || nonce) (RFC 0003, "The member key").
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
 sha2 = { version = "=0.11.1", default-features = false, features = ["zeroize"] }
 # A new relay epoch: 16 bytes from the platform's secure generator.

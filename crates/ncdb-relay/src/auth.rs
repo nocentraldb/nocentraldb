@@ -1,5 +1,5 @@
 //! How a connection proves which member key it holds (RFC 0007, "Opening a
-//! connection"; RFC 0003, decision 13): the member signs
+//! connection"; RFC 0003, "The member key"): the member signs
 //! `H("nocentraldb/relay-auth" || relay id || nonce)` with its member
 //! signing key, and the relay verifies it, strictly.
 

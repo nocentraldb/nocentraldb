@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ed25519_dalek::{Signer, SigningKey};
 use futures_util::{SinkExt, StreamExt};
@@ -18,7 +18,7 @@ use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 use super::wire::{self, Answer};
-use super::{Connection, apply};
+use super::{Connection, apply, large, merge};
 use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
@@ -43,6 +43,25 @@ const ANSWER: Duration = if cfg!(test) {
 } else {
     Duration::from_secs(30)
 };
+
+/// Waits until `deadline`, or forever without one.
+async fn until(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
+        None => std::future::pending().await,
+    }
+}
+
+/// What became of an upload.
+enum Uploaded {
+    /// The frame is uploaded under this id; the push names it.
+    Id(Vec<u8>),
+    /// The relay refused the frame as too large; it is recorded as refused.
+    Refused,
+    /// The relay answered with another error, handled as an answer to the
+    /// push, which stops.
+    Stopped,
+}
 
 /// How a session ended.
 pub(super) enum End {
@@ -117,7 +136,13 @@ pub(super) async fn session(
     let config = WebSocketConfig::default()
         .max_message_size(Some(wire::MAX_MESSAGE))
         .max_frame_size(Some(wire::MAX_MESSAGE));
-    let connect = tokio_tungstenite::connect_async_with_config(url, Some(config), false);
+    // `wss://` verifies the relay against the platform's trust store.
+    let Some(tls) = super::tls::config() else {
+        return lost();
+    };
+    let connector = tokio_tungstenite::Connector::Rustls(tls);
+    let connect =
+        tokio_tungstenite::connect_async_tls_with_config(url, Some(config), false, Some(connector));
     let Ok(Ok((ws, _))) = tokio::time::timeout(CONNECT, connect).await else {
         return lost();
     };
@@ -198,7 +223,11 @@ impl Session<'_> {
                 if !self.subscribed.contains(&space) {
                     self.space(space).await?;
                 } else if gaps.contains(&space) {
-                    self.pull(space).await?;
+                    // A pending push of the space waits for the pull, but
+                    // is not dropped.
+                    if self.pull(space).await? && push {
+                        self.push(space).await?;
+                    }
                 } else if push {
                     self.push(space).await?;
                 }
@@ -210,12 +239,20 @@ impl Session<'_> {
                     sync.epoch_changed = false;
                 }
             })?;
+            // Merge rotations whose delay passed are written now; the
+            // write wakes this loop, which pushes them.
+            let due = with(self.db, |inner| merge::due(inner, Instant::now()))?;
+            for space in due {
+                with(self.db, |inner| merge::write(inner, space))?;
+            }
+            let deadline = with(self.db, |inner| merge::next(inner))?;
             tokio::select! {
                 answer = self.recv() => self.live(answer?)?,
                 changed = wake.changed() => match changed {
                     Ok(()) => push = true,
                     Err(_) => return Err(End::Dropped),
                 },
+                () = until(deadline) => {}
                 () = tokio::time::sleep(IDLE) => {
                     let req = self.req();
                     self.send(wire::ping(req)).await?;
@@ -253,7 +290,13 @@ impl Session<'_> {
             match self.ask(req).await? {
                 Answer::Entries { entries, head, .. } => {
                     let empty = entries.is_empty();
+                    let (entries, complete) = large::fetch(entries).await;
                     self.entries(space, entries)?;
+                    // A download that failed: the cursor stays before its
+                    // entry, and the session backs off and pulls again.
+                    if !complete {
+                        return Err(lost());
+                    }
                     let cursor = with(self.db, |inner| {
                         apply::heard(inner, space, head);
                         apply::cursor(inner, space)
@@ -289,7 +332,17 @@ impl Session<'_> {
         for batch in wire::batches(frames) {
             let batch_ids: Vec<_> = ids.by_ref().take(batch.len()).collect();
             let req = self.req();
-            self.send(wire::push(req, space, &batch)).await?;
+            match &batch[..] {
+                [frame] if !wire::fits_a_push(frame) => {
+                    let id = match self.upload(space, batch_ids[0], frame).await? {
+                        Uploaded::Id(id) => id,
+                        Uploaded::Refused => continue,
+                        Uploaded::Stopped => return Ok(()),
+                    };
+                    self.send(wire::push_upload(req, space, &id)).await?;
+                }
+                _ => self.send(wire::push(req, space, &batch)).await?,
+            }
             match self.ask(req).await? {
                 Answer::Pushed { results, .. } => {
                     let stopped = with(self.db, |inner| {
@@ -304,6 +357,37 @@ impl Session<'_> {
             }
         }
         self.put_person_keys(space).await
+    }
+
+    /// Uploads `frame`, too large for one push, to an upload URL the relay
+    /// hands out (RFC 0007, "Large changes"). A frame the relay refuses as
+    /// `too_large` is recorded as refused, as a push would; any other error
+    /// is handled as an answer to the push, which then stops. An upload that
+    /// fails ends the connection, and the change is pushed again on the next
+    /// one.
+    async fn upload(
+        &mut self,
+        space: SpaceId,
+        change: ncdb_core::ids::ChangeId,
+        frame: &[u8],
+    ) -> Result<Uploaded, End> {
+        let req = self.req();
+        self.send(wire::upload(req, space, frame.len())).await?;
+        match self.ask(req).await? {
+            Answer::Upload { id, url, .. } => {
+                large::upload(&url, frame).await.map_err(|_| lost())?;
+                Ok(Uploaded::Id(id))
+            }
+            Answer::Error { code, .. } if code == "too_large" => {
+                let refused = vec![wire::Pushed::Rejected(code)];
+                with(self.db, |inner| {
+                    apply::pushed(inner, space, &[change], refused)
+                })?
+                .map_err(|_| lost())?;
+                Ok(Uploaded::Refused)
+            }
+            answer => self.answer(space, answer).map(|()| Uploaded::Stopped),
+        }
     }
 
     /// Puts the person-key records of `space` this member wrote, after the
@@ -377,12 +461,15 @@ impl Session<'_> {
     fn answer(&mut self, space: SpaceId, answer: Answer) -> Result<(), End> {
         match answer {
             Answer::Entries { entries, head, .. } => {
+                // An entry that comes as a download link waits for a pull,
+                // which fetches it: the space has a gap from there.
+                let (entries, complete) = large::inline(entries);
                 self.entries(space, entries)?;
                 let cursor = with(self.db, |inner| {
                     apply::heard(inner, space, head);
                     apply::cursor(inner, space)
                 })?;
-                if cursor < head {
+                if cursor < head || !complete {
                     self.gaps.insert(space);
                 } else {
                     with(self.db, |inner| apply::caught_up(inner, space))?;

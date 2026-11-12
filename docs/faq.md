@@ -144,7 +144,7 @@ Your data protection officer decides that for your case; this is a design, not l
 
 ### What happens to the audit trail after an erasure?
 
-It stays intact. An erasure is a work order: one member performs it, and a second account signs it off. Destroying the person's key makes their fields unreadable but leaves the signatures valid. The audit trail therefore still shows who changed what and when, and who signed off the erasure. If no eligible member comes online before a deadline, the RFC has not decided yet how to escalate. That is question 5, "Nobody online".
+It stays intact. An erasure is a work order: one member performs it, and a second account signs it off. In a space with one account, that account signs it off itself, and the erasure stays provisional for 7 days, during which the account can take it back. Destroying the person's key makes their fields unreadable but leaves the signatures valid. The audit trail therefore still shows who changed what and when, and who signed off the erasure. If no eligible member comes online before a deadline, the RFC has not decided yet how to escalate. That is question 5, "Nobody online".
 
 ## Taking part
 

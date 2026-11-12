@@ -3,8 +3,9 @@
 //! highest author sequence as the cutoff. It writes no rotation: a member
 //! that leaves must not know the next key, so an admin rotates for it, and
 //! until then the space stays on a generation the leaver holds, which every
-//! member's status reports as exposed. An admin's SDK does not yet rotate
-//! on its own after a leave (NOC-220).
+//! member's status reports as exposed. An admin's SDK that syncs writes
+//! that rotation on its own, a merge rotation, after a random delay of up
+//! to a minute (`members::merge`, `sync::merge`; NOC-220).
 
 use ncdb_core::membership::{self, Action, Entry, MembershipEntry};
 

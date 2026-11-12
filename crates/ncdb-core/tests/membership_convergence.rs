@@ -48,7 +48,8 @@ const SUBJECTS: u8 = 6;
 
 /// What every copy starts from: the genesis by harness member 0, which
 /// then adds members 1 and 2 as admins and member 3 as a writer, so that
-/// every simulated member can write from the start.
+/// every simulated member can write from the start, and writes the keys of
+/// persons 1 and 2.
 fn base() -> &'static (SpaceId, u64, Vec<Change>) {
     static BASE: std::sync::OnceLock<(SpaceId, u64, Vec<Change>)> = std::sync::OnceLock::new();
     BASE.get_or_init(|| {
@@ -59,7 +60,15 @@ fn base() -> &'static (SpaceId, u64, Vec<Change>) {
         s.certify_by(3, space::other_account(1));
         let three = s.add(1, 3, Role::Admin, &[&two]);
         let four = s.add(1, 4, Role::Writer, &[&three]);
-        (s.space, s.first_generation, vec![g, two, three, four])
+        // Persons 1 and 2 have keys, so that a shred can be valid from the
+        // start (M-C8).
+        let one = s.person_key(1, 1, 1, &[&four]);
+        let other = s.person_key(1, 2, 2, &[&one]);
+        (
+            s.space,
+            s.first_generation,
+            vec![g, two, three, four, one, other],
+        )
     })
 }
 
@@ -137,6 +146,21 @@ impl Copy {
         (1..).take_while(|n| own.contains(n)).last().unwrap_or(0)
     }
 
+    /// The shred entries the copy accepts.
+    fn accepted_shreds(&self) -> BTreeSet<ChangeId> {
+        let resolved = self.resolved();
+        self.changes
+            .values()
+            .filter(|c| c.header().kind == Kind::CONTROL)
+            .filter(|c| {
+                ControlBody::decode(&c.header().payload)
+                    .is_ok_and(|body| matches!(body.entry, Entry::Shred(_)))
+            })
+            .map(Change::id)
+            .filter(|id| resolved.verdict(*id) == Some(&Verdict::Accepted))
+            .collect()
+    }
+
     /// Every change the copy holds, the base's included.
     fn all(&self) -> impl Iterator<Item = &Change> {
         base().2.iter().chain(self.changes.values())
@@ -156,10 +180,22 @@ impl Mergeable for Copy {
     type Change = Change;
     type Read = Read;
 
+    /// Adds a change. RFC 0008's M-C8: a shred the copy accepted stays
+    /// accepted whatever arrives next (RFC 0008, "A shred is final when
+    /// accepted"). Copies grow one change at a time in every order the
+    /// harness draws, equivocations and cutoffs that leave a shred out
+    /// included, so each step is checked.
     fn apply(&mut self, op: &Op<Change>) {
-        if let std::collections::btree_map::Entry::Vacant(entry) = self.changes.entry(op.id) {
-            entry.insert(op.body.clone());
+        if !self.changes.contains_key(&op.id) {
+            let shreds = self.accepted_shreds();
+            self.changes.insert(op.id, op.body.clone());
             self.resolved = OnceCell::new();
+            let after = self.accepted_shreds();
+            let lost: Vec<_> = shreds.difference(&after).collect();
+            assert!(
+                lost.is_empty(),
+                "M-C8: accepted shreds {lost:?} were rejected later"
+            );
         }
     }
 
@@ -242,9 +278,13 @@ struct Raw {
 /// Members that add, raise, lower and remove each other, leave, rotate
 /// (with a merge rotation when their current generation is exposed), wrap
 /// keys, and write entries of the other types, all from their own copy.
-/// `forks` makes most changes equivocations or sealed changes.
+/// `forks` makes most changes equivocations or sealed changes. `shreds`
+/// makes every change a person-key entry, a shred or a revocation of the
+/// two writers that perform shreds, so that revocations their copies did
+/// not see meet accepted shreds (M-C8).
 struct Members {
     forks: bool,
+    shreds: bool,
 }
 
 impl Generator<Copy> for Members {
@@ -255,9 +295,16 @@ impl Generator<Copy> for Members {
             true => 3..7u8,
             false => 0..7u8,
         };
+        let (actions, subjects) = match self.shreds {
+            true => (
+                prop_oneof![Just(2u8), Just(3), Just(5), Just(6), Just(6)].boxed(),
+                (2..=3u8).boxed(),
+            ),
+            false => ((0..9u8).boxed(), (2..=SUBJECTS).boxed()),
+        };
         (
-            0..9u8,
-            2..=SUBJECTS,
+            actions,
+            subjects,
             1..=3u8,
             0..2u8,
             0..2u8,
@@ -412,7 +459,13 @@ fn m_c1_the_same_control_changes_resolve_to_the_same_state_in_any_order() {
         cases: 48,
         ..Config::default()
     };
-    let result = convergence::check::<Copy, _>(&config, &Members { forks: false });
+    let result = convergence::check::<Copy, _>(
+        &config,
+        &Members {
+            forks: false,
+            shreds: false,
+        },
+    );
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
 
@@ -428,7 +481,34 @@ fn m_c1_equivocations_of_control_and_sealed_changes_converge_in_any_order() {
         cases: 64,
         ..Config::default()
     };
-    let result = convergence::check::<Copy, _>(&config, &Members { forks: true });
+    let result = convergence::check::<Copy, _>(
+        &config,
+        &Members {
+            forks: true,
+            shreds: false,
+        },
+    );
+    assert!(result.is_ok(), "{}", result.unwrap_err());
+}
+
+/// RFC 0008's M-C8 with NOC-229: shreds meet revocations of their
+/// performers that their copies did not see, cutoffs that leave them out
+/// and equivocations, and no copy ever rejects a shred it accepted.
+#[test]
+fn m_c8_an_accepted_shred_stays_accepted_on_every_copy_whatever_arrives_next() {
+    let config = Config {
+        members: 3,
+        max_changes_per_member: 4,
+        cases: 64,
+        ..Config::default()
+    };
+    let result = convergence::check::<Copy, _>(
+        &config,
+        &Members {
+            forks: true,
+            shreds: true,
+        },
+    );
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
 

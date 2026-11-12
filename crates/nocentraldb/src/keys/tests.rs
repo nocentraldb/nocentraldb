@@ -1,5 +1,5 @@
 //! The key record, and the keys in the platform keystore (RFC 0003, "The
-//! member key"; RFC 0009, S19 and S26). A fake keystore stands in for the
+//! member key"; RFC 0009, "The Rust SDK" and "Open and close"). A fake keystore stands in for the
 //! platform's, so that CI, which has none, tests every branch; the one test
 //! of the platform's own keystore runs where one is reachable.
 

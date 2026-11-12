@@ -2,7 +2,7 @@
 //! "Operations a member does not understand"): an operation number the
 //! field's type does not define parks with "unknown operation" (E10), an
 //! unknown "must understand" argument with "unknown argument", malformed
-//! arguments with "malformed arguments" (decision 12); a "may ignore"
+//! arguments with "malformed arguments"; a "may ignore"
 //! argument is read as if it were absent (E11).
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;

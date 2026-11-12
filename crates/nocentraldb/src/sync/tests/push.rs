@@ -124,11 +124,11 @@ async fn a_write_while_connected_is_pushed_at_once() {
 }
 
 #[tokio::test]
-async fn only_a_plain_websocket_relay_is_accepted() {
-    let options = crate::OpenOptions::new(LOCK)
-        .in_memory()
-        .relay("wss://relay.example.com");
-    let opened = crate::Db::open(options).await;
-    let error = opened.expect_err("TLS is not built yet");
-    assert_eq!(error.code(), crate::ErrorCode::InvalidValue);
+async fn only_a_websocket_relay_is_accepted() {
+    for url in ["https://relay.example.com", "relay.example.com"] {
+        let options = crate::OpenOptions::new(LOCK).in_memory().relay(url);
+        let opened = crate::Db::open(options).await;
+        let error = opened.expect_err("not a WebSocket URL");
+        assert_eq!(error.code(), crate::ErrorCode::InvalidValue);
+    }
 }
