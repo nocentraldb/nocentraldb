@@ -11,7 +11,7 @@ use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
 use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
-use super::person_key::ShredEntry;
+use super::person_key::{ErasureDecision, ShredEntry};
 use super::resolve::{Judged, Resolved};
 use super::statement::AccountKeyStatement;
 
@@ -30,7 +30,10 @@ pub(crate) fn needed(node: &Node) -> Role {
                 Action::Add { .. } => Role::Admin,
             }
         }
-        Entry::Membership(_) | Entry::KeyEnvelope(_) | Entry::KeyChain(_) => Role::Admin,
+        Entry::Membership(_)
+        | Entry::KeyEnvelope(_)
+        | Entry::KeyChain(_)
+        | Entry::ErasureDecision(_) => Role::Admin,
         Entry::PersonKey(_) | Entry::Shred(_) => Role::Writer,
         Entry::AccountKeyStatement(_) => Role::Reader,
         Entry::Other { entry_type, .. } => match *entry_type {
@@ -81,7 +84,8 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
                 .and_then(|key| key.commitment)
                 .is_none_or(|commitment| commitment == entry.commitment);
         }
-        Entry::Shred(shred) => return signed_off(space, node, shred, past),
+        Entry::Shred(shred) => return signed_off(space, node, shred, past).is_some(),
+        Entry::ErasureDecision(decision) => return decides(node, decision, past),
         Entry::AccountKeyStatement(statement) => return carries(statement, past),
         _ => return true,
     };
@@ -145,11 +149,25 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
 /// included, attaches a recovery key to each of them (the owner's answer A
 /// on NOC-201). A statement can then only block a sign-off, never enable
 /// one; with no statement anywhere, the account keys alone decide.
-fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) -> bool {
+///
+/// When every member of the causal past belongs to the performer's
+/// account, no other account can sign off, and the performer's own account
+/// does: the shred is then provisional (Carsten, 2026-11-11, NOC-228,
+/// NOC-230).
+pub(crate) fn signed_off(
+    space: SpaceId,
+    node: &Node,
+    shred: &ShredEntry,
+    past: &Resolved,
+) -> Option<SignedOff> {
     let account = shred.sign_off.account_key;
-    let Some(performer) = past.member(node.author).map(|p| p.certificate.account_key) else {
-        return false;
-    };
+    let performer = past.member(node.author)?.certificate.account_key;
+    let held = past.person_key(shred.person_key).is_some()
+        && shred.sign_off.verify(space, shred.person_key, node.author)
+        && !superseded(past, account, None);
+    if !held {
+        return None;
+    }
     let account_of = |member: MemberId| past.member(member).map(|m| m.certificate.account_key);
     let admins: Vec<[u8; 32]> = past
         .members()
@@ -165,13 +183,51 @@ fn signed_off(space: SpaceId, node: &Node, shred: &ShredEntry, past: &Resolved) 
         true => Role::Writer,
         false => Role::Admin,
     };
-    past.person_key(shred.person_key).is_some()
-        && shred.sign_off.verify(space, shred.person_key, node.author)
-        && !superseded(past, account, None)
-        && !same_account(past, performer, account)
-        && past
-            .members()
-            .any(|(member, role)| role >= needed && account_of(member) == Some(account))
+    let one_account = past
+        .members()
+        .all(|(member, _)| account_of(member).is_some_and(|a| same_account(past, a, performer)));
+    if same_account(past, performer, account) {
+        return one_account.then_some(SignedOff::Provisional);
+    }
+    past.members()
+        .any(|(member, role)| role >= needed && account_of(member) == Some(account))
+        .then_some(SignedOff::Final)
+}
+
+/// What a valid sign-off makes of a shred (RFC 0008, "Shred entry").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SignedOff {
+    /// Another account signed off: the shred is final when accepted.
+    Final,
+    /// The performer's own account signed off, in a space whose members
+    /// all belong to it: the shred is provisional.
+    Provisional,
+}
+
+/// Whether an erasure decision holds its own rules in the state of its
+/// causal past (RFC 0008, "Erasure decision" and step 1): it names a
+/// provisional shred there, its author belongs to the account that
+/// performed the shred (its right, admin, is checked with every other
+/// change's), and it does not reverse a decision there: a finalize holds no
+/// take-back of the shred, a take-back no finalize.
+fn decides(node: &Node, decision: &ErasureDecision, past: &Resolved) -> bool {
+    let Some(key) = past
+        .person_keys()
+        .map(|(_, key)| key)
+        .find(|key| key.shred == Some(decision.shred) && key.provisional)
+    else {
+        return false;
+    };
+    let account_of = |member: MemberId| past.member(member).map(|m| m.certificate.account_key);
+    let same = match (key.performer.and_then(account_of), account_of(node.author)) {
+        (Some(performer), Some(author)) => same_account(past, performer, author),
+        _ => false,
+    };
+    let reverses = match decision.finalize {
+        true => key.taken_back.is_some(),
+        false => key.finalized.is_some(),
+    };
+    same && !reverses
 }
 
 /// Whether the account keys `a` and `b` name one account: they are equal,

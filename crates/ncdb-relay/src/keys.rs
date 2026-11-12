@@ -155,7 +155,7 @@ fn acceptable(
     let hash = membership::record_hash(&record.wrapped);
     let announced = resolved
         .person_key(id)
-        .is_some_and(|key| key.shred.is_none() && key.records.contains(&(record.generation, hash)));
+        .is_some_and(|key| !key.destroyed() && key.records.contains(&(record.generation, hash)));
     let descends = replaces.is_none_or(|stored| resolved.descends(record.generation, stored));
     signed && announced && descends
 }
