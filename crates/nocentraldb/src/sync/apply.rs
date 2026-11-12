@@ -187,6 +187,11 @@ pub(super) fn entries(
         let _ = super::acknowledge::acknowledge(inner, space);
         let collections = inner.model.collections.keys().cloned().collect();
         touched(&mut inner.watchers, space, &collections);
+        // What the fold changed of the device's spaces or roles, or the
+        // account space it now holds, reaches its records there (RFC
+        // 0010, "The account space"). A failed write is made again by the
+        // next fold, so it does not stop this one.
+        let _ = crate::account::reconcile(inner);
     }
     Ok(gap)
 }
