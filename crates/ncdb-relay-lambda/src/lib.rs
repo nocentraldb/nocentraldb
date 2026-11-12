@@ -8,7 +8,8 @@
 //! [`connections`] holds what the relay knows of each open connection
 //! between invocations and the connection API it posts through, and
 //! [`log`] is the one log line of each invocation: ids, sizes, codes and
-//! times, no content and no keys.
+//! times, no content and no keys. [`invocation`] tells API Gateway's
+//! events from the daily schedule's, which runs the orphan sweep.
 //!
 //! On AWS, with the feature `aws`: `dynamo` is the `connections` table,
 //! which [`contract`] holds to the same rules as the in-memory store;
@@ -37,6 +38,7 @@ pub mod event;
 pub mod handler;
 #[cfg(feature = "harness")]
 pub mod harness;
+pub mod invocation;
 pub mod log;
 #[cfg(feature = "aws")]
 pub mod s3;
