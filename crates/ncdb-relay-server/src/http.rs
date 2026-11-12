@@ -13,6 +13,12 @@
 //!
 //! A token is 32 random bytes in hex. Each connection serves one request
 //! and closes. Every check goes through the relay core.
+//!
+//! Both URLs answer CORS for any origin (RFC 0007, "Large changes";
+//! Carsten, 2026-11-12, NOC-245), so an app in a browser reaches them with
+//! `fetch()`: every answer allows any origin to read it, and `OPTIONS` on
+//! either path answers the browser's preflight. A URL is a one-time
+//! capability and carries no cookie, so no origin gains anything by it.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -38,6 +44,9 @@ pub(crate) const UPLOADS: &str = "/uploads/";
 
 /// The path of a download URL, before its token.
 pub(crate) const FRAMES: &str = "/frames/";
+
+/// How long a browser may keep the answer to a preflight: ten minutes.
+const PREFLIGHT_MAX_AGE: u32 = 600;
 
 /// A token in hex, as a URL carries it.
 pub(crate) fn hex(token: &Token) -> String {
@@ -70,6 +79,9 @@ enum Head {
     Put(Option<Token>, Option<u64>),
     /// `GET /frames/<token>`.
     Get(Option<Token>),
+    /// `OPTIONS` on an upload or download URL: the browser's CORS
+    /// preflight, with the method the URL takes; `None` for another path.
+    Preflight(Option<&'static str>),
     /// Anything else.
     Other,
 }
@@ -99,12 +111,18 @@ pub(crate) async fn route<S: RelayStore + 'static>(
     };
     let (status, body) = match head {
         Head::Upgrade => return Some(Prefixed::new(buf, stream)),
+        Head::Preflight(Some(method)) => {
+            preflight(stream, shared, method).await;
+            return None;
+        }
         Head::Put(Some(token), length) => {
             let rest = buf.split_off(len);
             put(&mut stream, shared, token, length, rest).await
         }
         Head::Get(Some(token)) => get(shared.relay.clone(), token).await,
-        Head::Put(None, _) | Head::Get(None) | Head::Other => (404, Vec::new()),
+        Head::Put(None, _) | Head::Get(None) | Head::Preflight(None) | Head::Other => {
+            (404, Vec::new())
+        }
     };
     respond(stream, shared, status, body).await;
     None
@@ -138,9 +156,34 @@ fn parse(buf: &[u8]) -> Option<Option<(Head, usize)>> {
             Head::Put(token(&path[UPLOADS.len()..]), length)
         }
         Some("GET") if path.starts_with(FRAMES) => Head::Get(token(&path[FRAMES.len()..])),
+        Some("OPTIONS") => Head::Preflight(preflighted(path)),
         _ => Head::Other,
     };
     Some(Some((head, len)))
+}
+
+/// The method an upload or download URL at `path` takes, for its
+/// preflight; `None` for any other path.
+fn preflighted(path: &str) -> Option<&'static str> {
+    if let Some(hex) = path.strip_prefix(UPLOADS) {
+        token(hex).map(|_| "PUT")
+    } else if let Some(hex) = path.strip_prefix(FRAMES) {
+        token(hex).map(|_| "GET")
+    } else {
+        None
+    }
+}
+
+/// Answers the browser's preflight of a URL that takes `method`: any
+/// origin may send it, with a `Content-Type`.
+async fn preflight<S>(stream: TcpStream, shared: &Arc<Shared<S>>, method: &str) {
+    let head = format!(
+        "HTTP/1.1 204 No Content\r\nAccess-Control-Allow-Origin: *\r\n\
+         Access-Control-Allow-Methods: {method}\r\n\
+         Access-Control-Allow-Headers: content-type\r\n\
+         Access-Control-Max-Age: {PREFLIGHT_MAX_AGE}\r\nConnection: close\r\n\r\n"
+    );
+    write_and_close(stream, shared, head.into_bytes(), Vec::new()).await;
 }
 
 /// `PUT /uploads/<token>`: the declared size, the body of exactly that
@@ -199,11 +242,9 @@ async fn get<S: RelayStore + 'static>(relay: Arc<Relay<S>>, token: Token) -> (u1
     }
 }
 
-/// Writes the response and closes the connection. Before it closes, it
-/// reads and drops what the peer still sends, for a short while, so a
-/// refused body does not reset the connection before the peer reads the
-/// response.
-async fn respond<S>(mut stream: TcpStream, shared: &Arc<Shared<S>>, status: u16, body: Vec<u8>) {
+/// Writes the response, which any origin may read, and closes the
+/// connection.
+async fn respond<S>(stream: TcpStream, shared: &Arc<Shared<S>>, status: u16, body: Vec<u8>) {
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
@@ -218,11 +259,25 @@ async fn respond<S>(mut stream: TcpStream, shared: &Arc<Shared<S>>, status: u16,
         "Content-Type: application/octet-stream\r\n"
     };
     let head = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\n{content_type}Connection: close\r\n\r\n",
+        "HTTP/1.1 {status} {reason}\r\nContent-Length: {}\r\n{content_type}\
+         Access-Control-Allow-Origin: *\r\nConnection: close\r\n\r\n",
         body.len()
     );
+    write_and_close(stream, shared, head.into_bytes(), body).await;
+}
+
+/// Writes `head` and `body` and closes the connection. Before it closes,
+/// it reads and drops what the peer still sends, for a short while, so a
+/// refused body does not reset the connection before the peer reads the
+/// response.
+async fn write_and_close<S>(
+    mut stream: TcpStream,
+    shared: &Arc<Shared<S>>,
+    head: Vec<u8>,
+    body: Vec<u8>,
+) {
     let write = async {
-        stream.write_all(head.as_bytes()).await?;
+        stream.write_all(&head).await?;
         stream.write_all(&body).await?;
         stream.shutdown().await
     };
