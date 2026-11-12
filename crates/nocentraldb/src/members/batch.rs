@@ -133,6 +133,7 @@ pub(crate) fn commit(
         return Err(storage(error));
     }
     state.drop_shredded();
+    crate::personal::refresh(view, space, state).map_err(storage)?;
     crate::status::note_shreds(view, space, state.checks.resolved()).map_err(storage)?;
     for frame in frames {
         let id = Change::decode(frame).expect("received, so decoded").id();

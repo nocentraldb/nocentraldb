@@ -188,6 +188,9 @@ pub(crate) struct SpaceState {
     /// in the last fetch, though they signed them
     /// (`crate::sync::person_keys`). In memory only, as the person keys.
     pub(crate) bad_person_key_records: BTreeSet<[u8; 32]>,
+    /// The ids of the person keys the view opens the space's personal
+    /// fields with (`crate::personal::refresh`). In memory only.
+    pub(crate) opened: BTreeSet<[u8; 16]>,
 }
 
 impl SpaceState {
@@ -211,6 +214,7 @@ impl SpaceState {
             person_keys: BTreeMap::new(),
             person_keys_fetched: false,
             bad_person_key_records: BTreeSet::new(),
+            opened: BTreeSet::new(),
         }
     }
 

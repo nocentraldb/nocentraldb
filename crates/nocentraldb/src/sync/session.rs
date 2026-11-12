@@ -88,7 +88,18 @@ struct Session<'a, T: Transport> {
     gaps: BTreeSet<SpaceId>,
     /// Whether every space was pulled, pushed and subscribed once.
     progress: bool,
+    /// For each space whose log names a person key the member does not
+    /// hold, when to fetch the person keys again and the wait after that
+    /// (`person_keys::missing`).
+    refetch: BTreeMap<SpaceId, (Instant, Duration)>,
 }
+
+/// How long after a fetch that left a named person key missing the
+/// session fetches again, the first time; each later wait doubles, up to
+/// [`IDLE`]. A record follows its entry, which its writer pushed first,
+/// so it is usually there a moment later (RFC 0007, "Keys and the
+/// person-key store").
+const REFETCH: Duration = Duration::from_millis(250);
 
 /// The connection ended. An error code that stops syncing is reported by
 /// [`Session::failed`]; whether the session made progress is filled in
@@ -138,6 +149,7 @@ pub(super) async fn session(
         subscribed: BTreeSet::new(),
         gaps: BTreeSet::new(),
         progress: false,
+        refetch: BTreeMap::new(),
     };
     if let Err(end) = session.authenticate().await {
         return end;
@@ -244,9 +256,36 @@ impl<T: Transport> Session<'_, T> {
             for space in again {
                 self.push(space).await?;
             }
+            // A person key the log names but the member does not hold, as
+            // after an entry that announced a new person, is fetched again
+            // (RFC 0009, "How a personal field reads": the object reads
+            // again once the key arrives).
+            let missing = with(self.db, |inner| {
+                self.subscribed
+                    .iter()
+                    .copied()
+                    .filter(|space| super::person_keys::missing(inner, *space))
+                    .collect::<BTreeSet<_>>()
+            })?;
+            self.refetch.retain(|space, _| missing.contains(space));
+            for space in missing {
+                let now = Instant::now();
+                match self.refetch.get(&space).copied() {
+                    Some((at, _)) if at > now => {}
+                    previous => {
+                        self.fetch_person_keys(space).await?;
+                        let wait = previous.map_or(REFETCH, |(_, wait)| (wait * 2).min(IDLE));
+                        self.refetch.insert(space, (Instant::now() + wait, wait));
+                    }
+                }
+            }
+            let refetch = self.refetch.values().map(|(at, _)| *at).min();
             let deadline = with(self.db, |inner| {
                 let finalizes = finalize::next(inner, crate::clock::now_millis(), Instant::now());
-                [merge::next(inner), finalizes].into_iter().flatten().min()
+                [merge::next(inner), finalizes, refetch]
+                    .into_iter()
+                    .flatten()
+                    .min()
             })?;
             tokio::select! {
                 answer = self.recv() => self.live(answer?)?,
@@ -485,10 +524,15 @@ impl<T: Transport> Session<'_, T> {
             }
         }
         with(self.db, |inner| {
-            if let Some(state) = inner.spaces.get_mut(&space) {
-                state.person_keys_fetched = true;
-            }
-        })
+            let crate::db::Inner { view, spaces, .. } = inner;
+            let Some(state) = spaces.get_mut(&space) else {
+                return Ok(());
+            };
+            state.person_keys_fetched = true;
+            // The fetched keys open the space's personal fields.
+            crate::personal::refresh(view, space, state)
+        })?
+        .map_err(|_| lost())
     }
 
     /// Handles an answer about `space` that is not the one asked for: an
