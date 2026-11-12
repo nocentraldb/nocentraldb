@@ -28,7 +28,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
         }
         Command::Create => {
             let space = db.spaces().create().await.map_err(text)?;
-            settle(db, syncs).await?;
+            settle_write(db, syncs).await?;
             println!("{}", space.id());
         }
         Command::Spaces => {
@@ -57,7 +57,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
                 })
                 .await
                 .map_err(text)?;
-            settle(db, syncs).await?;
+            settle_write(db, syncs).await?;
             println!("{}", written.ids[0]);
         }
         Command::Done { space, task } => {
@@ -67,7 +67,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
                 .write(|tx| tx.update(TASKS, task, [("status", "done".into())]))
                 .await
                 .map_err(text)?;
-            settle(db, syncs).await?;
+            settle_write(db, syncs).await?;
         }
         Command::List => {
             let query = db.index(TASKS, BY_STATUS).map_err(text)?.take(PAGE);
@@ -85,7 +85,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
             let space = space
                 .map(|s| s.parse::<SpaceId>().map_err(text))
                 .transpose()?;
-            wait::synced(db, space, timeout).await?;
+            wait::synced(db, space, timeout, false).await?;
             let now = db.sync().current();
             println!(
                 "connection: {:?}, unconfirmed: {}, refused: {}",
@@ -135,7 +135,7 @@ async fn invite(
         }
         Err(e) => return Err(text(e)),
     }
-    settle(db, syncs).await
+    settle_write(db, syncs).await
 }
 
 /// Prints the list each time it changes, until a task titled `until`
@@ -166,10 +166,22 @@ async fn watch(db: &Db, until: Option<String>, timeout: Option<Duration>) -> Res
 
 /// Waits until the relay holds what this device wrote, when it syncs.
 async fn settle(db: &Db, syncs: bool) -> Result<(), String> {
-    match syncs {
-        true => wait::synced(db, None, crate::args::WAIT).await,
-        false => Ok(()),
+    if syncs {
+        wait::synced(db, None, crate::args::WAIT, false).await?;
     }
+    Ok(())
+}
+
+/// After a write: waits until the relay holds it, when the device syncs
+/// and is online. Offline, the write stays on this device and reaches the
+/// relay on a later sync, which it says (pm, NOC-237).
+async fn settle_write(db: &Db, syncs: bool) -> Result<(), String> {
+    if syncs && wait::synced(db, None, crate::args::WAIT, true).await? == wait::Held::Device {
+        eprintln!(
+            "saved on this device; the relay does not hold it yet, run `tasks sync` when it is back"
+        );
+    }
+    Ok(())
 }
 
 /// The space with the id `text`, which this device holds.

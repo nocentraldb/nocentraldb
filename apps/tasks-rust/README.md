@@ -9,7 +9,7 @@ It shows, in about ten minutes:
 - a second device invited with a text invitation, after its fingerprint is confirmed;
 - both devices syncing through a local relay, with live updates and the space's status.
 
-It uses only the public Rust SDK (`nocentraldb`). Each run opens the device's database, does one thing and exits. When it wrote something, it first waits until the relay holds it.
+It uses only the public Rust SDK (`nocentraldb`). Each run opens the device's database, does one thing and exits. When it wrote something, it first waits until the relay holds it. When the relay cannot be reached, the write stays on the device, the app says so, and a later `sync` brings it to the relay: the app works offline.
 
 ## What you need
 
@@ -17,11 +17,13 @@ It uses only the public Rust SDK (`nocentraldb`). Each run opens the device's da
 - Node.js 24 or later and pnpm, for the schema build.
 - A clone of this repository. Run every command below from its root.
 
+## 1. The schema and its lock
+
+Install the JavaScript packages first, once: the schema build needs them.
+
 ```sh
 pnpm install
 ```
-
-## 1. The schema and its lock
 
 The schema is `apps/tasks-rust/model.ts`: one collection, `tasks`, with a `title` and a `status` of `open` or `done`, and one index, `byStatus`, which a list reads. The app reads only the lock built from it, `apps/tasks-rust/model.lock.json`, which is checked in.
 
@@ -120,7 +122,13 @@ tasks $PHONE done $SPACE <task id>
 tasks $LAPTOP sync && tasks $LAPTOP list
 ```
 
-Stop the relay and keep adding tasks on both devices. Each works on its own copy. When the relay is back, `sync` brings both to the same list.
+Stop the relay and keep adding tasks on both devices. Each works on its own copy: a write succeeds and says where it is.
+
+```text
+saved on this device; the relay does not hold it yet, run `tasks sync` when it is back
+```
+
+When the relay is back, `sync` on each device brings both to the same list.
 
 ## 7. The space's status
 
