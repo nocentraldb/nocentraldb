@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["apps/*", "crates/*"]
 resolver = "3"
 
 [workspace.package]
@@ -18,6 +18,14 @@ ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.1.0" }
 ncdb-test-counter = { path = "crates/ncdb-test-counter", version = "=0.1.0" }
 ncdb-relay = { path = "crates/ncdb-relay", version = "=0.1.0" }
 ncdb-relay-server = { path = "crates/ncdb-relay-server", version = "=0.1.0" }
+nocentraldb = { path = "crates/nocentraldb", version = "=0.1.0" }
+
+# Debug and test builds keep only line tables, not full debug info: panics
+# and backtraces still name file and line, and a full `pnpm gates`, which
+# builds every crate natively and for wasm32, fits an agent container's disk
+# (NOC-279). Full debug info filled more than 27 GiB and ran out of space.
+[profile.dev]
+debug = "line-tables-only"
 
 # Debug tests spend most of their time in signature checks, key agreement and
 # hashing. Optimizing only these crates keeps the core's own code unoptimized,

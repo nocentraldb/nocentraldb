@@ -282,6 +282,16 @@ fn compare_field(
                 to: after.rule,
             });
         }
+        if let (Kind::Plugin { config: old, .. }, Kind::Plugin { config: new, .. }) =
+            (&before.kind, &after.kind)
+            && old != new
+        {
+            found.push(Refusal::ConfigChanged {
+                collection: c(),
+                field: f(),
+                type_id: after.kind.type_id().to_owned(),
+            });
+        }
         if let (Some(old), Some(new)) = (before.kind.options(), after.kind.options())
             && !new.starts_with(old)
         {

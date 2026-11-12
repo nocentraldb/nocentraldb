@@ -4,7 +4,7 @@
 //! subscription goes through [`ncdb_relay::Relay`], and the connection's
 //! signed challenge through [`ncdb_relay::auth`].
 //!
-//! [`wire`] reads and writes the messages, `connection` serves one member's
+//! [`wire`], the relay core's codec, reads and writes the messages, `connection` serves one member's
 //! connection, `subscription` one subscription, and `hub` tells the
 //! subscriptions of a space that a push appended to it, and the open
 //! connections of a member that a push added it to a space (`added`). The `ncdb-relay`
@@ -46,22 +46,13 @@ mod hub;
 mod page;
 mod prefixed;
 mod subscription;
-pub mod wire;
 
-/// The largest message, in bytes, on every backend (RFC 0007, "Transport
-/// and encoding").
-pub const MAX_MESSAGE: usize = 128 * 1024;
-
-/// The most frames one push carries (RFC 0007, "Transport and encoding").
-pub const MAX_PUSH: usize = 32;
+pub use ncdb_relay::wire;
+pub use ncdb_relay::wire::{MAX_INLINE, MAX_MESSAGE, MAX_PUSH, VERSIONS};
 
 /// The largest frame this server accepts: 16 MiB (RFC 0007, "Large
 /// changes").
 pub const MAX_FRAME: usize = ncdb_relay::MAX_FRAME;
-
-/// The largest frame an entry carries inline: one whose entry still fits
-/// into one `entries` message. A larger one comes as a download URL.
-pub const MAX_INLINE: usize = MAX_MESSAGE - 1024;
 
 /// The most messages a connection's outgoing queue holds, at most 4 MiB.
 pub const QUEUE: usize = 32;
@@ -87,9 +78,6 @@ pub const MAX_CONNECTIONS: usize = 512;
 /// as it is accepted, so peers that stop in the handshake cannot take the
 /// places of authenticated members.
 pub const MAX_HANDSHAKES: usize = 64;
-
-/// The protocol versions this server speaks.
-pub const VERSIONS: [u64; 1] = [1];
 
 /// The relay core's configuration for this server: members of these
 /// accounts may create spaces.
