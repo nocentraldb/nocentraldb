@@ -156,9 +156,15 @@ async fn a_reopen_with_a_relay_counts_what_it_confirms_again() {
     assert_eq!(counted(&db, "syncing after the reopen"), (0, 0));
 }
 
-/// The id of the one space the database holds.
+/// The id of the one app space the database holds.
 fn only_space(db: &Db) -> crate::SpaceId {
     let inner = db.lock();
-    let space = inner.view.spaces().next().expect("one space");
+    // Beside it, the copy holds the account space (RFC 0010).
+    let account = crate::account::space(&inner);
+    let space = inner
+        .view
+        .spaces()
+        .find(|space| Some(*space) != account)
+        .expect("one app space");
     crate::SpaceId(space)
 }

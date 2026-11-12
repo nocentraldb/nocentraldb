@@ -149,6 +149,9 @@ fn membership_object(member: [u8; 32], space: [u8; 16]) -> CoreObjectId {
     record_id("nocentraldb/account-membership", &[&member, &space])
 }
 
+/// The values of a record's fields, by field name.
+type Values = BTreeMap<String, Option<Value>>;
+
 /// The rows of a shipped collection in the account space, each object
 /// that is not deleted with its fields' values, read through the index
 /// `index`.
@@ -156,7 +159,7 @@ fn rows(
     inner: &Inner,
     collection: &str,
     index: &str,
-) -> Result<Vec<(CoreObjectId, BTreeMap<String, Option<Value>>)>, Error> {
+) -> Result<Vec<(CoreObjectId, Values)>, Error> {
     let Some(space) = space(inner) else {
         return Ok(Vec::new());
     };
@@ -189,7 +192,7 @@ fn rows(
     }
 }
 
-fn text(values: &BTreeMap<String, Option<Value>>, field: &str) -> Option<String> {
+fn text(values: &Values, field: &str) -> Option<String> {
     match values.get(field)? {
         Some(Value(Repr::Text(text))) => Some(text.clone()),
         _ => None,
