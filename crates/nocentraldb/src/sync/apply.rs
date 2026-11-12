@@ -176,6 +176,9 @@ pub(super) fn entries(
     }
     sync(inner).cursors.insert(space, cursor);
     if folded {
+        // The acknowledgements are written again by the next fold if this
+        // fails, since the log then holds none of them.
+        let _ = super::acknowledge::acknowledge(inner, space);
         let collections = inner.model.collections.keys().cloned().collect();
         touched(&mut inner.watchers, space, &collections);
     }
