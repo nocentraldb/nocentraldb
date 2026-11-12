@@ -9,8 +9,5 @@
   - **The tests** synthesize the stack with no AWS credentials and check every table's keys, indexes, billing, recovery and TTL against what the backend's own schema code creates. They also check the bucket's settings, the function, the routes, the role's actions (no wildcard and no IAM), the log retention, the alarms and the budget.
   - **The snapshot.** A committed snapshot of the template is how a pull request shows its diff against the deployed infrastructure without credentials (pm, answer C).
   - **Reporting off.** CDK's version reporting and the CLI's telemetry are off, as the emulator's is.
-- Instead of:
-  - table names CloudFormation generates, which the function could not derive from one prefix;
-  - the deployment's values committed in `cdk.json`, which would put the owner's address in the repository;
-  - a `cdk diff` against the real account on pull requests, which needs credentials that pull requests do not get.
+- Instead of: table names CloudFormation generates, which the function could not derive from one prefix; the deployment's values committed in `cdk.json`, which would put the owner's address in the repository; or a `cdk diff` against the real account on pull requests, which needs credentials that pull requests do not get.
 - Topics: relay, aws, infrastructure, cdk
