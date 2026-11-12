@@ -48,16 +48,18 @@ fn person(db: &Db, space: &Space, object: ObjectId) -> Person {
     Person::from_value(&PersonField.read(state).value.unwrap().value).unwrap()
 }
 
-fn name(db: &Db, space: &Space, object: ObjectId) -> (Option<String>, Vec<String>) {
-    let object = now(space.get("projects", object)).unwrap().unwrap();
+/// The name of `object` and the object's erased fields, once the copy
+/// holds the object.
+fn name(space: &Space, object: ObjectId) -> Option<(Option<String>, Vec<String>)> {
+    let object = now(space.get("projects", object)).unwrap()?;
     let name = object.get::<&str>("name").unwrap().map(str::to_owned);
-    (name, object.erased().to_vec())
+    Some((name, object.erased().to_vec()))
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn the_writer_reads_its_personal_value_at_once() {
     let relay = LocalRelay::start().await;
-    let (admin, _member, project) = shared(&relay).await;
+    let (_admin, _member, project) = shared(&relay).await;
     let id = now(project.write(|tx| {
         tx.create("projects", [("name", Value::from("Anna Schmidt"))])?;
         Ok(())
@@ -65,7 +67,7 @@ async fn the_writer_reads_its_personal_value_at_once() {
     .unwrap()
     .ids[0];
     assert_eq!(
-        name(&admin, &project, id),
+        name(&project, id).unwrap(),
         (Some("Anna Schmidt".to_owned()), Vec::new())
     );
 }
@@ -83,7 +85,7 @@ async fn another_member_reads_it_once_it_holds_the_key_and_an_erasure_empties_it
     synced(&admin).await;
     let on_member = member.spaces().get(project.id()).await.unwrap();
     eventually("the member reads the name", || {
-        name(&member, &on_member, id).0.as_deref() == Some("Anna Schmidt")
+        name(&on_member, id).is_some_and(|(name, _)| name.as_deref() == Some("Anna Schmidt"))
     })
     .await;
 
@@ -93,9 +95,9 @@ async fn another_member_reads_it_once_it_holds_the_key_and_an_erasure_empties_it
     let anna = person(&admin, &project, id);
     erase_key(&admin, &project, anna.person_key);
     synced(&admin).await;
-    assert_eq!(name(&admin, &project, id), (None, vec!["name".to_owned()]));
+    assert_eq!(name(&project, id).unwrap(), (None, vec!["name".to_owned()]));
     eventually("the member reads it as erased", || {
-        name(&member, &on_member, id) == (None, vec!["name".to_owned()])
+        name(&on_member, id) == Some((None, vec!["name".to_owned()]))
     })
     .await;
 }

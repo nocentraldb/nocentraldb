@@ -127,3 +127,22 @@ pub(crate) fn open_keys(state: &SpaceState) -> BTreeMap<[u8; 16], PersonKey> {
         .map(|(id, key)| (*id, key.clone()))
         .collect()
 }
+
+/// Gives the view the person keys of `space` it opens personal fields
+/// with, when they changed: after a fetch of the person keys, a shred, an
+/// erasure decision or a write that drew a key (RFC 0006, "What the view
+/// stores in plaintext": the fold erases an erased person's fields from
+/// the view at once).
+pub(crate) fn refresh(
+    view: &mut View,
+    space: CoreSpaceId,
+    state: &mut SpaceState,
+) -> Result<(), ncdb_core::view::Error> {
+    let keys = open_keys(state);
+    let ids: std::collections::BTreeSet<[u8; 16]> = keys.keys().copied().collect();
+    if ids != state.opened {
+        view.set_person_keys(space, keys)?;
+        state.opened = ids;
+    }
+    Ok(())
+}
