@@ -46,7 +46,11 @@ test("uploads and download tokens have tables of their own, keyed as decided", (
 
 test("uploads and tokens carry a ttl attribute", () => {
   for (const table of ["uploads", "tokens"]) {
-    assert.match(row(table), /`ttl`/, `the ${table} row names the ttl attribute`);
+    assert.match(
+      row(table),
+      /`ttl`/,
+      `the ${table} row names the ttl attribute`,
+    );
   }
 });
 
