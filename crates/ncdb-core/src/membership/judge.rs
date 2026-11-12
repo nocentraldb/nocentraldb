@@ -26,23 +26,28 @@ pub(crate) struct Judgement {
 /// The judgement of every node judged so far, and for each valid shred
 /// the members of the state of its causal past.
 #[derive(Default)]
-pub(crate) struct Judged(
-    pub(crate) BTreeMap<ChangeId, Judgement>,
-    pub(crate) BTreeMap<ChangeId, BTreeSet<MemberId>>,
-);
+pub(crate) struct Judged {
+    /// Each node's judgement, by change id.
+    pub(crate) judgements: BTreeMap<ChangeId, Judgement>,
+    /// For each valid shred, the members of the state of its causal past.
+    pub(crate) shred_past_members: BTreeMap<ChangeId, BTreeSet<MemberId>>,
+}
 
 impl Judged {
     pub(crate) fn valid(&self, id: ChangeId) -> bool {
-        self.0.get(&id).is_some_and(|j| j.valid)
+        self.judgements.get(&id).is_some_and(|j| j.valid)
     }
 
     pub(crate) fn provisional(&self, id: ChangeId) -> bool {
-        self.0.get(&id).is_some_and(|j| j.provisional)
+        self.judgements.get(&id).is_some_and(|j| j.provisional)
     }
 
     /// The members of the state of a valid shred's causal past.
     pub(crate) fn past_members(&self, id: ChangeId) -> BTreeSet<MemberId> {
-        self.1.get(&id).cloned().unwrap_or_default()
+        self.shred_past_members
+            .get(&id)
+            .cloned()
+            .unwrap_or_default()
     }
 }
 
@@ -64,7 +69,7 @@ pub(crate) fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved
             held.filter(|g| g.effective == Some(Role::Admin))
                 .filter_map(|g| match input.nodes.get(&g.change) {
                     Some(n) if n.is_genesis() => Some(0),
-                    _ => judged.0.get(&g.change).and_then(|j| j.depth),
+                    _ => judged.judgements.get(&g.change).and_then(|j| j.depth),
                 })
                 .min()
                 .map(|depth| depth + 1)
