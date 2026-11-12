@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-213 · The site deploys to GitHub Pages on every push to main that changes it, after the gate's own checks
+
+- Decided by: coding agent (NOC-213); the workflow and the gate change wait for the owner's tick
+- Why: `.github/workflows/site-pages.yml` builds `site/` and deploys `site/dist` to GitHub Pages on every push to `main` that changes `site/**` or the workflow, and when a person starts it. It runs the same steps as the new gate task `repo:site` (install from the site's lockfile, build, check the built output) before it uploads, so `main` never deploys a site whose `llms.txt` files or Markdown copies are missing. It holds the Pages permissions only (contents read, pages write, id-token write), deploys in the `github-pages` environment, runs one deploy at a time without cancelling one, and pins every action by SHA. The custom domain is set in the repository's Settings → Pages: with "GitHub Actions" as the source, Pages ignores a `CNAME` file, so `site/public/CNAME` only records the domain, which the output check holds.
+- Instead of: deploying only by hand (`workflow_dispatch` alone), which leaves the published site behind `main`; deploying from a pull request, which would publish unreviewed text; committing the built output, which #195 removed.
+- What this does not do: a repository has one Pages site, and `browser-storage-pages.yml` (NOC-33) deploys to it too, so a run of that workflow replaces nocentraldb.io until the next run of this one. pm decides how the probe page lives next to the site.
+- Topics: site, ci, tooling
