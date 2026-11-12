@@ -85,7 +85,11 @@ test("RFC 0003 gives the key record's format 2 and still reads format 1", () => 
     /key_record\.py/,
     /28 bytes more than the record/,
   ]) {
-    assert.match(part, pattern, `RFC 0003's member key does not say ${pattern}`);
+    assert.match(
+      part,
+      pattern,
+      `RFC 0003's member key does not say ${pattern}`,
+    );
   }
 });
 
@@ -97,7 +101,11 @@ test("RFC 0010 gives the number of a recovered account key and what an existing 
     /recovery code and statement number 1 for the account key it holds/,
     /entries already written stay as written/,
   ]) {
-    assert.match(part, pattern, `RFC 0010's recovery code does not say ${pattern}`);
+    assert.match(
+      part,
+      pattern,
+      `RFC 0010's recovery code does not say ${pattern}`,
+    );
   }
   assert.match(
     section(read(RFC_0010), "adding-a-device-or-an-agent-to-an-account"),
@@ -107,12 +115,22 @@ test("RFC 0010 gives the number of a recovered account key and what an existing 
 
 test("each record is the magic, its format, and the member's secrets", () => {
   const f = fields();
-  for (const state of ["format-1", "pairing", "device", "device-code", "agent"]) {
+  for (const state of [
+    "format-1",
+    "pairing",
+    "device",
+    "device-code",
+    "agent",
+  ]) {
     const bytes = record(state);
     assert.deepEqual(bytes.subarray(0, 16), MAGIC, state);
     assert.equal(bytes[16], state === "format-1" ? 1 : 2, state);
     assert.deepEqual(bytes.subarray(17, 49), f["member signing secret"], state);
-    assert.deepEqual(bytes.subarray(49, 81), f["member agreement secret"], state);
+    assert.deepEqual(
+      bytes.subarray(49, 81),
+      f["member agreement secret"],
+      state,
+    );
   }
   const old = record("format-1");
   assert.equal(old.length, 113);
@@ -142,7 +160,10 @@ test("a record with the account key holds its statement, and the code until conf
   }
   assert.equal(record("device")[218], 0, "no code");
   assert.equal(record("device-code")[218], 1, "the code follows");
-  assert.deepEqual(record("device-code").subarray(219, 235), f["recovery code"]);
+  assert.deepEqual(
+    record("device-code").subarray(219, 235),
+    f["recovery code"],
+  );
 });
 
 test("an agent's record holds its certificate and statement, and no account secret", () => {
@@ -176,7 +197,10 @@ test("the statement verifies against the recovery key, and the agent's certifica
   assert.ok(
     holds(
       f["account key"],
-      sha256("nocentraldb/member-cert", map3(f["account key"], f["member id"], 2)),
+      sha256(
+        "nocentraldb/member-cert",
+        map3(f["account key"], f["member id"], 2),
+      ),
       f["agent certificate signature"],
     ),
     "the agent's certificate",

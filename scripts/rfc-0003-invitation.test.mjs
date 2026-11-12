@@ -141,7 +141,11 @@ test("RFC 0003 gives version 2, the invitation of a member waiting to be paired"
     /Version 1 stays as it is/,
     /NOC-285/,
   ]) {
-    assert.match(part, pattern, `RFC 0003's Invitation does not say ${pattern}`);
+    assert.match(
+      part,
+      pattern,
+      `RFC 0003's Invitation does not say ${pattern}`,
+    );
   }
 });
 

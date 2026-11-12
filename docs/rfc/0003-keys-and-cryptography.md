@@ -70,7 +70,7 @@ We use two keys instead of converting the Ed25519 key into an X25519 key. Conver
 
 Where no keystore is reachable and no key file is named, the SDK does not open the database: opening fails with the error `keyStoreUnavailable`, whose message names the key-file option, and the SDK never falls back to a key file the app did not choose. The developer learns what to do, and a key reaches disk only in a file the app chose. A key file in the database's directory, made without being asked, was not taken: a key on disk that nobody chose is the risk the rule above avoids. Nor was `storageFailed`, the code of any other storage failure ([RFC 0009, "Errors"](0009-sdk-api.md#errors)): it does not tell the developer what to do.
 
-**The key record.** The keystore entry and the key file hold the same **key record**, the same bytes in the keystore and in a key file. It starts with the 16 ASCII bytes `nocentraldb-keys` and a format byte. **Format 2** (Carsten, 2026-11-12, NOC-285) holds the member key, the account state of the database and, until the person stored it, the recovery code ([RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code)):
+**The key record.** The keystore entry and the key file hold the same **key record**, the same in the keystore and in a key file. It starts with the 16 ASCII bytes `nocentraldb-keys` and a format byte. **Format 2** (Carsten, 2026-11-12, NOC-285) holds the member key, the account state of the database and, until the person stored it, the recovery code ([RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code)):
 
 | Offset | Length | Field | Bytes |
 | --- | --- | --- | --- |
