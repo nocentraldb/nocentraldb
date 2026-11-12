@@ -39,6 +39,9 @@ pub struct Create {
 pub struct Transaction<'a> {
     model: &'a Model,
     records: Vec<Record>,
+    /// What the view puts in front of the model's collection names: empty
+    /// for the app's lock, `$` for the model the SDK ships (NOC-266).
+    prefix: &'static str,
 }
 
 impl std::fmt::Debug for Transaction<'_> {
@@ -103,7 +106,32 @@ impl<'a> Transaction<'a> {
         Transaction {
             model,
             records: Vec::new(),
+            prefix: "",
         }
+    }
+
+    /// A transaction of the model the SDK ships, whose collections the
+    /// view holds under their `$` names (`crate::account`).
+    pub(crate) fn reserved(model: &'a Model) -> Transaction<'a> {
+        Transaction {
+            prefix: ncdb_core::view::RESERVED,
+            ..Transaction::new(model)
+        }
+    }
+
+    /// Records the creation of an object of `collection` with the id `id`,
+    /// which the caller derived: the account space's records have ids
+    /// their content determines (`crate::account`).
+    pub(crate) fn create_at<'v>(
+        &mut self,
+        collection: &str,
+        id: CoreObjectId,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+    ) -> Result<(), Error> {
+        let values = self.fields(collection, values)?;
+        self.records
+            .push(Record::Create(collection.to_owned(), id, values, None));
+        Ok(())
     }
 
     /// Records the creation of an object in `collection` with `values`,
@@ -242,6 +270,7 @@ impl<'a> Transaction<'a> {
         author: MemberId,
         persons: &mut Persons<'_>,
     ) -> Result<(Vec<Operation>, Vec<ObjectId>), Error> {
+        let prefix = self.prefix;
         let mut operations = Vec::new();
         let mut created: Vec<(CoreObjectId, String)> = Vec::new();
         let mut same_as: BTreeMap<CoreObjectId, [u8; 16]> = BTreeMap::new();
@@ -258,11 +287,11 @@ impl<'a> Transaction<'a> {
                     (collection, id, values)
                 }
                 Record::Update(collection, id, values) => {
-                    held(view, space, &created, &collection, id)?;
+                    held(view, space, &created, &collection, id, prefix)?;
                     (collection, id, values)
                 }
                 Record::Delete(collection, id, deleted) => {
-                    let deletion = held(view, space, &created, &collection, id)?;
+                    let deletion = held(view, space, &created, &collection, id, prefix)?;
                     let write = BasicValue {
                         kind: Kind::Boolean,
                     }
@@ -338,7 +367,7 @@ impl<'a> Transaction<'a> {
                 .field(collection, name)
                 .expect("a recorded field is in the model");
             let state = match view
-                .get(space, collection, *object)
+                .get(space, &format!("{prefix}{collection}"), *object)
                 .map_err(storage)?
                 .and_then(|mut row| row.fields.remove(name))
             {
@@ -415,7 +444,7 @@ fn person_link(
         return Ok((target, of.clone()));
     }
     for of in &field.collections {
-        if held(view, space, &[], of, target).is_ok() {
+        if held(view, space, &[], of, target, "").is_ok() {
             return Ok((target, of.clone()));
         }
     }
@@ -430,6 +459,7 @@ fn held(
     created: &[(CoreObjectId, String)],
     collection: &str,
     object: CoreObjectId,
+    prefix: &str,
 ) -> Result<ncdb_core::basic::State, Error> {
     let not_found = || {
         Error::new(
@@ -440,11 +470,12 @@ fn held(
             ),
         )
     };
-    let row = view.get(space, collection, object).map_err(storage)?;
+    let in_view = format!("{prefix}{collection}");
+    let row = view.get(space, &in_view, object).map_err(storage)?;
     match row {
         Some(row)
             if row.object.collection().value.map(|e| e.value)
-                == Some(cbor::Value::Text(collection.to_owned())) =>
+                == Some(cbor::Value::Text(in_view)) =>
         {
             Ok(row.object.deletion().clone())
         }

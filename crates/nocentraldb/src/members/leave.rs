@@ -52,6 +52,8 @@ impl Space {
                 None,
             );
         })?;
+        // The account space no longer records the space (RFC 0010).
+        crate::account::reconcile(&mut inner)?;
         Ok(Notice::SPACE_LEFT)
     }
 }

@@ -228,6 +228,12 @@ impl<T: Transport> Session<'_, T> {
                 }
             }
             push = false;
+            // A space the relay stopped has its unconfirmed changes pushed
+            // once more, so those it holds are confirmed (NOC-276).
+            for space in with(self.db, |inner| apply::flushing(inner))? {
+                self.push(space).await?;
+                with(self.db, |inner| apply::flushed(inner, space))?;
+            }
             self.progress = true;
             with(self.db, |inner| {
                 if let Some(sync) = inner.sync.as_mut() {
