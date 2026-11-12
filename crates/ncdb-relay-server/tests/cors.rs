@@ -1,8 +1,9 @@
-//! RFC 0007, "Large changes", as NOC-245 recommends (1A, for the owner's
-//! answer): the upload and download URLs answer CORS for any origin, so
-//! that an app in a browser reaches them with `fetch()`. A URL is a one-time capability and
-//! carries no cookie, so any origin gains nothing by it. A `PUT` asks the
-//! browser's preflight first, which the server answers for both paths.
+//! RFC 0007, "Large changes" (Carsten, 2026-11-12, NOC-245, 1A): the
+//! upload and download URLs answer CORS for any origin, so that an app in
+//! a browser reaches them with `fetch()`. A URL is a one-time capability
+//! and carries no cookie, so any origin gains nothing by it. A `PUT` asks
+//! the browser's preflight first, which the server answers for both
+//! paths.
 
 mod support;
 
