@@ -248,7 +248,8 @@ describe("subscriptions", () => {
     fold({ space: OTHER, collections: ["tasks"] });
     await settle();
     expect(pages.length).toBe(2);
-    expect((pages[1]?.items[0] as { priority: number }).priority).toBe(2);
+    const second = pages[1]?.items[0] as { priority: number } | undefined;
+    expect(second?.priority).toBe(2);
     expect(finds(requests).length).toBe(2);
   });
 
