@@ -9,6 +9,7 @@
 //! `shreds_held`: when this device first held each shred
 //! (`super::shreds_held`).
 
+use crate::plugins::Registry;
 use std::collections::BTreeMap;
 
 use rusqlite::{Connection, OptionalExtension, params};
@@ -194,7 +195,12 @@ pub(super) fn meta(conn: &Connection, key: &str) -> Result<Option<String>, Error
 /// otherwise checks that `meta` names this format, and `lock` against the
 /// lock the database was last opened with (`super::stored_lock`). Says
 /// whether the tables were folded by `model`.
-pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result<Fit, Error> {
+pub(super) fn open(
+    conn: &Connection,
+    model: &Model,
+    lock: &ModelLock,
+    registry: &Registry,
+) -> Result<Fit, Error> {
     conn.execute_batch(FIXED)?;
     add_written_at(conn)?;
     let hash = hex(&model.hash());
@@ -222,10 +228,15 @@ pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result
             if current {
                 return Ok(Fit::Current);
             }
-            let old = stored
-                .and_then(|text| ModelLock::from_json(&text).ok())
-                .and_then(|stored| Model::from_lock(&stored).ok())
-                .filter(|old| folded_by.as_deref() == Some(hex(&old.hash()).as_str()));
+            // The model the tables were folded by: the stored lock's, with
+            // the plugins of this open or with none, so that a plugin
+            // registered now finds the fields it adds (RFC 0011, "A type
+            // that is not registered"; NOC-84).
+            let stored = stored.and_then(|text| ModelLock::from_json(&text).ok());
+            let old = [registry, &Registry::default()]
+                .into_iter()
+                .filter_map(|registry| Model::from_lock_with(stored.as_ref()?, registry).ok())
+                .find(|old| folded_by.as_deref() == Some(hex(&old.hash()).as_str()));
             Ok(match old {
                 Some(old) => match Additions::between(&old, model) {
                     Some(additions) => Fit::Migrate(additions),
