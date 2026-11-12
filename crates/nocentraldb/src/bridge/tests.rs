@@ -239,6 +239,11 @@ fn an_update_and_a_delete_change_what_a_get_reads() {
         field(&get(&mut bridge), "$deleted"),
         Some(&Value::Bool(true))
     );
+    write(&mut bridge, op("restore", Some(&id), None));
+    assert_eq!(
+        field(&get(&mut bridge), "$deleted"),
+        Some(&Value::Bool(false))
+    );
 }
 
 #[test]

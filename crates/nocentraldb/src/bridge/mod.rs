@@ -274,6 +274,9 @@ fn value_of(field: &Field) -> Value {
         Repr::List(items) | Repr::Add(items) | Repr::Remove(items) => {
             Value::Array(items.iter().map(value_of).collect())
         }
+        // A plugin field's data passes through as its own CBOR value; how
+        // the TypeScript SDK shows it comes with plugin fields there.
+        Repr::Data(data) => data.to_value().unwrap_or(Value::Null),
     }
 }
 
