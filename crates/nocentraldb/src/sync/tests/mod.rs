@@ -11,6 +11,7 @@
 mod relay_support;
 
 mod added;
+mod auth;
 mod backoff;
 mod codes;
 mod confirmed;

@@ -18,6 +18,11 @@
 # in a dedicated worker in Chromium (scripts/sdk-keys/), which the gates
 # skip in Node, which has no IndexedDB. They are built on the runner as the
 # view's harness is, and run on pull requests that touch the SDK.
+#
+# NOC-175 sync slice: the same step runs the SDK's syncing from the browser
+# against the local relay server, which build.mjs builds on the runner next
+# to the tests and the test starts in the image; it runs on pull requests
+# that touch the relay too.
 name: browser-view
 
 on:
@@ -25,6 +30,8 @@ on:
     paths:
       - "crates/ncdb-core/**"
       - "crates/nocentraldb/**"
+      - "crates/ncdb-relay/**"
+      - "crates/ncdb-relay-server/**"
       - "scripts/browser-view/**"
       - "scripts/sdk-keys/**"
       - ".github/workflows/browser-view.yml"
@@ -83,9 +90,9 @@ jobs:
           moon exec repo:wasm-runner --force --base HEAD --head HEAD
           node scripts/browser-view/build.mjs
 
-      # The SDK's wasm32 library tests, in target/sdk-keys
-      # (scripts/sdk-keys/build.mjs), served in the image by the
-      # wasm-bindgen-test-runner the step above installed.
+      # The SDK's wasm32 library tests and the local relay server, in
+      # target/sdk-keys (scripts/sdk-keys/build.mjs), served in the image by
+      # the wasm-bindgen-test-runner the step above installed.
       - name: The SDK's key tests, built on the runner
         run: node scripts/sdk-keys/build.mjs
 
@@ -111,9 +118,10 @@ jobs:
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/browser-view/*.test.mjs'
 
-      # The SDK's keys in IndexedDB, in a dedicated worker in Chromium; run
-      # even when the view failed, so each reports on its own.
-      - name: The SDK's keys in IndexedDB in Chromium
+      # The SDK's keys in IndexedDB and its syncing, in a dedicated worker
+      # in Chromium; run even when the view failed, so each reports on its
+      # own.
+      - name: The SDK's keys in IndexedDB and its syncing in Chromium
         if: ${{ !cancelled() }}
         run: >-
           docker run --rm --ipc=host

@@ -1,11 +1,13 @@
-//! The sync thread: one connection at a time, reconnected with
+//! The sync loop: one connection at a time, reconnected with
 //! exponential backoff and jitter while the relay is unreachable or in
 //! trouble (RFC 0007, "Liveness" and "Island mode"). The backoff starts
 //! over only after a session synced every space once, it waits at least
 //! the retry-after of `rate_limited`, and a local write does not cut it
 //! short. A pause drops the connection, or the wait, and holds the thread
-//! until the app resumes; resuming connects at once. The thread ends when
-//! the database is dropped.
+//! until the app resumes; resuming connects at once. The loop ends when
+//! the database is dropped. Natively it runs on a thread of its own, with
+//! a tokio runtime of its own; in the browser, on the event loop of the
+//! page or worker that opened the database (NOC-175).
 
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -38,16 +40,21 @@ pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
         let _ = super::apply::load(&mut inner);
     }
     let db = Arc::downgrade(inner);
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build();
-    let started = runtime.map(|runtime| {
-        std::thread::Builder::new()
-            .name("nocentraldb-sync".into())
-            .spawn(move || runtime.block_on(run(db, url, receiver, paused)))
-    });
-    if !matches!(started, Ok(Ok(_))) {
-        set(inner, Connection::Offline, Some("unavailable".into()));
+    #[cfg(target_arch = "wasm32")]
+    wasm_bindgen_futures::spawn_local(run(db, url, receiver, paused));
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build();
+        let started = runtime.map(|runtime| {
+            std::thread::Builder::new()
+                .name("nocentraldb-sync".into())
+                .spawn(move || runtime.block_on(run(db, url, receiver, paused)))
+        });
+        if !matches!(started, Ok(Ok(_))) {
+            set(inner, Connection::Offline, Some("unavailable".into()));
+        }
     }
 }
 
