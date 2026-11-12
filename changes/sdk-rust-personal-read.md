@@ -8,3 +8,5 @@ A personal field is sealed under its person's key. An app must read it like any 
 
 ## Use
 `space.get` returns a personal field's value, opened with the person key this device holds. While the key is not held yet, the field reads as unset; it reads again once syncing fetches the key, which it now also does while connected, when a new person is announced. After an erasure, provisional or final, the field reads as unset on every device, and `object.erased()` names it. The view drops the erased person's values from its indexes at once.
+
+A write of a personal field whose person has a key this device does not hold yet is refused with `ErrorCode::PersonKeyNotHeld`; retry once syncing has fetched it.

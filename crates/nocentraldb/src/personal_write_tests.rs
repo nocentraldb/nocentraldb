@@ -279,10 +279,10 @@ fn a_value_whose_person_key_is_not_held_yet_is_refused() {
         .unwrap()
         .person_keys
         .clear();
-    let error = now(space.write(|tx| {
-        tx.update("projects", project, [("name", Value::from("Anna Schmidt"))])
-    }))
-    .unwrap_err();
+    let error =
+        now(space
+            .write(|tx| tx.update("projects", project, [("name", Value::from("Anna Schmidt"))])))
+        .unwrap_err();
     assert_eq!(error.code(), ErrorCode::PersonKeyNotHeld);
     assert_eq!(person(&db, &space, "projects", project), anna, "no new key");
 }

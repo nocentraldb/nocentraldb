@@ -19,9 +19,9 @@ use crate::db::SpaceState;
 use crate::error::{Error, ErrorCode, storage};
 
 /// The code of a write whose person has a key this device does not hold
-/// yet, as after a reconnect before the person keys are fetched. A
-/// placeholder: what such a write does is open with the owner (NOC-255).
-const KEY_NOT_HELD: ErrorCode = ErrorCode::NotAllowed;
+/// yet, as after a reconnect before the person keys are fetched (Carsten,
+/// 2026-11-12, NOC-255).
+const KEY_NOT_HELD: ErrorCode = ErrorCode::PersonKeyNotHeld;
 
 /// A person whose key this write draws.
 pub(crate) struct Drawn {
