@@ -8,16 +8,18 @@
 //! (`crate::keys`), and keeps it again when the person confirms the code
 //! and when a pairing completes.
 //!
-//! **What this does not do yet.** `pair` for a device adds it to no space
-//! yet and lists none: that needs the account space's records (NOC-266),
-//! and comes with recovery and `remove_member`. Pairing a database that has
-//! an account of its own, which links its account, comes with them too.
+//! `pair` for a device adds it to every space where this device is an
+//! admin, the account space too, and lists the account's other spaces for
+//! the app to ask their admins.
+//!
+//! **What this does not do yet.** Pairing a database that has an account
+//! of its own, which links its account, and recovery.
 
 use std::fmt;
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
-use ncdb_core::membership::MemberKind;
+use ncdb_core::membership::{Certificate, MemberKind, Role as CoreRole};
 use ncdb_core::pairing::{self as core, CheckError};
 use ncdb_core::recovery::{RecoveryCode as CoreCode, WORD_LIST};
 
@@ -26,7 +28,8 @@ use crate::error::{Error, ErrorCode};
 use crate::id::SpaceId;
 use crate::keys::{self, Keys};
 use crate::members::invitation::Form;
-use crate::members::{Invitation, Notice};
+use crate::members::{AddMember, Invitation, Notice, Role};
+use crate::space::Space;
 
 /// The account of a database, from [`Db::account`]: a handle, as
 /// [`Db::spaces`] is.
@@ -58,40 +61,67 @@ impl Account<'_> {
     /// invitation whose member already has an account; an invitation that
     /// asks to be paired as the other kind is `InvalidValue`.
     pub async fn pair(&self, kind: PairKind, invitation: &Invitation) -> Result<Paired, Error> {
-        let inner = self.db.lock();
-        let keys::Account::Holds { key, statement } = &inner.account else {
-            return Err(Error::new(
-                ErrorCode::NotAllowed,
-                "this database holds no account key, so it pairs nobody",
-            ));
-        };
-        let asked = match &invitation.form {
-            Form::Waiting(asked) => *asked,
-            Form::Certified(_) => {
+        let (answer, certified, plan) = {
+            let inner = self.db.lock();
+            let keys::Account::Holds { key, statement } = &inner.account else {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
-                    "the invitation's member already has an account: linking it is not built yet",
+                    "this database holds no account key, so it pairs nobody",
+                ));
+            };
+            let asked = match &invitation.form {
+                Form::Waiting(asked) => *asked,
+                Form::Certified(_) => {
+                    return Err(Error::new(
+                        ErrorCode::NotAllowed,
+                        "the invitation's member already has an account: linking it is not built yet",
+                    ));
+                }
+            };
+            let kind = kind.member_kind();
+            if asked != kind {
+                return Err(Error::new(
+                    ErrorCode::InvalidValue,
+                    "the invitation asks to be paired as the other kind",
                 ));
             }
+            let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, None)
+                .map_err(|_| {
+                    Error::new(
+                        ErrorCode::InvalidValue,
+                        "the account key cannot be sealed to the invitation's member",
+                    )
+                })?;
+            // The new member's certificate, as its pairing answer carries
+            // it, with which this device adds it to spaces.
+            let certificate =
+                Certificate::sign(key, invitation.key.id(), kind).with_statement(statement.clone());
+            let certified = Invitation {
+                key: invitation.key,
+                form: Form::Certified(certificate),
+            };
+            let plan = match kind {
+                MemberKind::Device => spaces_to_join(&inner)?,
+                MemberKind::Agent | MemberKind::SubAgent => Plan::default(),
+            };
+            (PairingAnswer(answer), certified, plan)
         };
-        let kind = kind.member_kind();
-        if asked != kind {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "the invitation asks to be paired as the other kind",
-            ));
+        let options = || AddMember {
+            role: Role::Admin,
+            fingerprint: None,
+        };
+        let mut added = Vec::new();
+        for (space, app) in plan.add {
+            let handle = Space::handle(self.db.inner.clone(), space);
+            handle.members().add(&certified, options()).await?;
+            if app {
+                added.push((space, Notice::DEVICE_ADDED));
+            }
         }
-        let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, None)
-            .map_err(|_| {
-                Error::new(
-                    ErrorCode::InvalidValue,
-                    "the account key cannot be sealed to the invitation's member",
-                )
-            })?;
         Ok(Paired {
-            answer: PairingAnswer(answer),
-            added: Vec::new(),
-            ask_admins: Vec::new(),
+            answer,
+            added,
+            ask_admins: plan.ask_admins,
         })
     }
 
@@ -148,6 +178,49 @@ impl Account<'_> {
         lock(&self.db.inner).account = keys.account;
         Ok(vec![notice])
     }
+}
+
+/// The spaces a new device of the account joins when this device pairs
+/// it, and those whose admins the app asks (RFC 0010, "Which spaces a new
+/// device joins").
+#[derive(Default)]
+struct Plan {
+    /// Each space where this device is an admin, and whether it is an app
+    /// space: the account space joins too, without a notice.
+    add: Vec<(SpaceId, bool)>,
+    /// The app spaces of the account where this device is no admin: the
+    /// ones it holds, and those the account space records for the
+    /// account's other devices that it does not hold.
+    ask_admins: Vec<SpaceId>,
+}
+
+fn spaces_to_join(inner: &Inner) -> Result<Plan, Error> {
+    let me = inner.member.key().id();
+    let account_space = crate::account::space(inner);
+    let mut plan = Plan::default();
+    for (space, state) in &inner.spaces {
+        let account = Some(*space) == account_space;
+        if !account && state.checks.model_id() != Some(inner.model_id) {
+            continue;
+        }
+        let role = state.checks.resolved().role(me);
+        if role == Some(CoreRole::Admin) {
+            plan.add.push((SpaceId(*space), !account));
+        } else if role.is_some() && !account {
+            plan.ask_admins.push(SpaceId(*space));
+        }
+    }
+    if account_space.is_some() {
+        for record in crate::account::memberships(inner)? {
+            let space = ncdb_core::ids::SpaceId(record.space);
+            if record.member != me.0 && !inner.spaces.contains_key(&space) {
+                plan.ask_admins.push(SpaceId(space));
+            }
+        }
+    }
+    plan.ask_admins.sort();
+    plan.ask_admins.dedup();
+    Ok(plan)
 }
 
 impl PairKind {
