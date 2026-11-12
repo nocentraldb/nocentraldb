@@ -1,0 +1,37 @@
+{
+  "collections": {
+    "members": {
+      "fields": {
+        "memberId": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {},
+      "since": 1
+    },
+    "memberships": {
+      "fields": {
+        "member": {
+          "rule": 1,
+          "since": 1,
+          "targets": ["members"],
+          "type": "ncdb/link"
+        },
+        "space": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "bySpace": {
+          "equal": 0,
+          "fields": [{ "direction": "asc", "field": "space" }],
+          "since": 1
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "id": "a7f0c3e19b2d48d6b5e14f0a9c3d2e71",
+    "version": 1
+  },
+  "plugins": {}
+}
