@@ -60,10 +60,18 @@ async fn gateway(max_age: Option<Duration>) -> Local {
 }
 
 impl Local {
-    /// Waits until the handler holds no open connection.
+    /// Waits until the handler holds no open connection, and every
+    /// `$disconnect` is logged: the gateway writes an invocation's line
+    /// after the handler returns.
     async fn forgotten(&self) {
         let started = Instant::now();
-        while !self.handler.connections().is_empty() {
+        let count = |route: &str| {
+            self.lines()
+                .iter()
+                .filter(|line| line["route"] == route)
+                .count()
+        };
+        while !self.handler.connections().is_empty() || count("connect") != count("disconnect") {
             assert!(
                 started.elapsed() < Duration::from_secs(20),
                 "forgotten in time"
@@ -176,8 +184,16 @@ async fn a_message_of_128_kib_still_reaches_the_handler() {
     zero.send_bytes(vec![0xa0; 128 * 1024]).await;
     let answer = zero.recv().await;
     assert_eq!(text(field(&answer, 3)), "malformed");
-    let last = local.lines().pop().unwrap();
-    assert_eq!(last["in"], 128 * 1024);
+    // The handler posts its answer before the gateway writes the
+    // invocation's log line, so the line may come a moment after.
+    let started = Instant::now();
+    while !local.lines().iter().any(|line| line["in"] == 128 * 1024) {
+        assert!(
+            started.elapsed() < Duration::from_secs(20),
+            "logged in time"
+        );
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
