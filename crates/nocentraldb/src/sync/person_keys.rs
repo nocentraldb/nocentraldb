@@ -153,3 +153,17 @@ pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) ->
         None => Outcome::Bad(account),
     }
 }
+
+/// Whether the log of `space` names a person key that the member does not
+/// hold and that is not destroyed: its record may be at the relay now, so
+/// the session fetches the records again.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub(crate) fn missing(inner: &Inner, space: SpaceId) -> bool {
+    inner.spaces.get(&space).is_some_and(|state| {
+        state
+            .checks
+            .resolved()
+            .person_keys()
+            .any(|(id, key)| !key.destroyed() && !state.person_keys.contains_key(&id))
+    })
+}

@@ -34,7 +34,7 @@ fn now<F: std::future::Future>(future: F) -> F::Output {
 
 /// The test model with `projects.name` personal to the project itself, and
 /// `tasks.title` personal to the task's `project`.
-fn lock() -> String {
+pub(crate) fn lock() -> String {
     let mut lock = ModelLock::from_json(LOCK).unwrap();
     lock.collections
         .get_mut("projects")
@@ -257,4 +257,32 @@ fn an_object_does_not_show_person() {
         object.get::<&str>(PERSON_FIELD).unwrap_err().code(),
         ErrorCode::NotFound
     );
+}
+
+/// A person whose key this device does not hold yet, as before a fetch
+/// after a reconnect: the write is refused with `PersonKeyNotHeld`, and no
+/// fresh key is drawn (Carsten, 2026-11-12, NOC-255).
+#[test]
+fn a_value_whose_person_key_is_not_held_yet_is_refused() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    let project = now(space.write(|tx| {
+        tx.create("projects", [("name", Value::from("Anna"))])?;
+        Ok(())
+    }))
+    .unwrap()
+    .ids[0];
+    let anna = person(&db, &space, "projects", project);
+    db.lock()
+        .spaces
+        .get_mut(&space.id().0)
+        .unwrap()
+        .person_keys
+        .clear();
+    let error =
+        now(space
+            .write(|tx| tx.update("projects", project, [("name", Value::from("Anna Schmidt"))])))
+        .unwrap_err();
+    assert_eq!(error.code(), ErrorCode::PersonKeyNotHeld);
+    assert_eq!(person(&db, &space, "projects", project), anna, "no new key");
 }

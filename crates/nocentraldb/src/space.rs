@@ -277,10 +277,7 @@ impl Space {
             .expect("a writable space's key is held");
         let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
         fold(view, &mut state.checks, &change)?;
-        if !records.is_empty() {
-            view.set_person_keys(space, crate::personal::open_keys(state))
-                .map_err(storage)?;
-        }
+        crate::personal::refresh(view, space, state).map_err(storage)?;
         touched(watchers, space, &collections);
         if !records.is_empty() {
             crate::sync::put_person_keys(&mut inner, space, records);

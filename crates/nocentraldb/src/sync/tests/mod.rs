@@ -27,6 +27,7 @@ mod merge;
 mod newest_model;
 mod pause;
 mod person_keys;
+mod personal;
 mod provisional;
 mod pull;
 mod push;
