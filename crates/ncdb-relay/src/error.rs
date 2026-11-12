@@ -32,6 +32,12 @@ pub enum ErrorCode {
     AuthorNotMember,
     /// A control change breaks the membership rules.
     MembershipRule,
+    /// An erasure decision that finalizes a provisional shred arrived less
+    /// than 7 days, by the relay's clock, after the relay accepted that
+    /// shred (RFC 0008, "A provisional erasure in a space with one
+    /// account"; Carsten, 2026-11-11, NOC-230). The member pushes it again
+    /// later.
+    TooEarly,
     /// The cursor belongs to an earlier relay epoch.
     EpochChanged,
     /// A person-key record the relay does not accept.
@@ -63,6 +69,7 @@ impl ErrorCode {
             ErrorCode::BadSignature => "bad_signature",
             ErrorCode::AuthorNotMember => "author_not_member",
             ErrorCode::MembershipRule => "membership_rule",
+            ErrorCode::TooEarly => "too_early",
             ErrorCode::EpochChanged => "epoch_changed",
             ErrorCode::BadRecord => "bad_record",
             ErrorCode::Compacted => "compacted",
