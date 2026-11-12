@@ -20,8 +20,7 @@ use std::collections::BTreeMap;
 use ncdb_core::cbor::Value;
 use ncdb_core::change::Change;
 use ncdb_core::membership::{
-    ACKNOWLEDGEMENT, Entry, ErasureDecision, PersonKey, Rejection, Resolved, Role, Verdict,
-    resolve,
+    ACKNOWLEDGEMENT, Entry, ErasureDecision, PersonKey, Rejection, Resolved, Role, Verdict, resolve,
 };
 
 use space::{Space, Who, account, person};
