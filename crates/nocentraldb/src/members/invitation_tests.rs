@@ -182,3 +182,22 @@ fn a_version_2_text_of_another_length_or_kind_is_refused() {
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{why}");
     }
 }
+
+/// A member waiting to be paired has no account: its fingerprint is SHA-256
+/// over `"nocentraldb/member-fingerprint"` and its member id, as twelve
+/// blocks of five digits (pm's proposal A to the owner, NOC-267). The
+/// digits were computed with Python's `hashlib`.
+#[test]
+fn a_waiting_members_fingerprint_is_over_its_member_id_and_never_an_accounts() {
+    let invitation: Invitation = PAIRING.trim().parse().unwrap();
+    assert_eq!(
+        invitation.fingerprint().to_string(),
+        "77045 61455 55361 23528 60888 57309 13884 34254 87150 48756 49352 12443"
+    );
+    let id: [u8; 32] = field("member id").try_into().unwrap();
+    assert_ne!(
+        invitation.fingerprint(),
+        super::Fingerprint::account(id),
+        "the same bytes under the account context are another fingerprint"
+    );
+}

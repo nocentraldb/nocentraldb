@@ -325,8 +325,8 @@ fn a_member_is_not_added_again_and_a_former_member_is() {
 #[test]
 fn a_fingerprint_shows_as_sixty_digits_in_twelve_blocks_of_five() {
     let account = SigningKey::from_bytes(&[9; 32]);
-    let without_statement = super::Fingerprint(account.verifying_key().to_bytes());
-    let zero_padded = super::Fingerprint([7; 32]);
+    let without_statement = super::Fingerprint::account(account.verifying_key().to_bytes());
+    let zero_padded = super::Fingerprint::account([7; 32]);
 
     assert_eq!(
         without_statement.to_string(),

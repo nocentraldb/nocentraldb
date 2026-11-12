@@ -66,23 +66,39 @@ pub(crate) enum Form {
 ///
 /// It shows as 60 digits in twelve blocks of five, as RFC 0010 gives it
 /// ("The fingerprint"), for a person to compare; two fingerprints also
-/// compare with `==`. RFC 0010 computes it over the account's recovery
-/// key, which is not built yet, so it is computed over the account key.
+/// compare with `==`. An account's is over its recovery key, or over its
+/// account key while its certificates carry no statement. A member waiting
+/// to be paired has no account yet: its invitation's fingerprint is the
+/// member's own, over its member id under a context of its own, so it can
+/// never equal an account's.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Fingerprint(pub(crate) [u8; 32]);
+pub struct Fingerprint(pub(crate) [u8; 32], pub(crate) &'static [u8]);
 
 impl Fingerprint {
-    /// The context string in front of the account key (RFC 0010, "The
+    /// The context string in front of an account's key (RFC 0010, "The
     /// fingerprint").
-    const CONTEXT: &'static [u8] = b"nocentraldb/account-fingerprint";
+    const ACCOUNT: &'static [u8] = b"nocentraldb/account-fingerprint";
+    /// The context string in front of the member id of a member waiting to
+    /// be paired.
+    const MEMBER: &'static [u8] = b"nocentraldb/member-fingerprint";
+
+    /// The fingerprint of the account whose identity is `key`: its
+    /// recovery key, or its account key while it has no statement.
+    pub(crate) fn account(key: [u8; 32]) -> Fingerprint {
+        Fingerprint(key, Fingerprint::ACCOUNT)
+    }
+
+    /// The fingerprint of a member waiting to be paired, over its member id.
+    pub(crate) fn member(id: [u8; 32]) -> Fingerprint {
+        Fingerprint(id, Fingerprint::MEMBER)
+    }
 
     /// The fingerprint's twelve blocks of five digits, the most significant
-    /// first: `SHA-256(CONTEXT || account key)` read as a big-endian
-    /// integer, mod 10^60. Each division by 10^5 gives the next block from
-    /// the end.
+    /// first: `SHA-256(context || key)` read as a big-endian integer, mod
+    /// 10^60. Each division by 10^5 gives the next block from the end.
     fn blocks(&self) -> [u32; 12] {
         let mut hash: [u8; 32] = Sha256::new()
-            .chain_update(Self::CONTEXT)
+            .chain_update(self.1)
             .chain_update(self.0)
             .finalize()
             .into();
@@ -129,12 +145,13 @@ impl Invitation {
 
     /// The fingerprint of the account that certified the member. An
     /// invitation of a member waiting to be paired has no account yet: its
-    /// fingerprint is the member's own, over its signing key, which a
-    /// person may compare on both screens before pairing it.
+    /// fingerprint is the member's own, over its member id under the context
+    /// `"nocentraldb/member-fingerprint"`, which a person may compare on
+    /// both screens before pairing it.
     pub fn fingerprint(&self) -> Fingerprint {
         match &self.form {
             Form::Certified(certificate) => Fingerprint::of(certificate),
-            Form::Waiting(_) => Fingerprint(self.key.signing),
+            Form::Waiting(_) => Fingerprint::member(self.key.id().0),
         }
     }
 
@@ -164,8 +181,8 @@ impl Fingerprint {
     /// "Account fingerprint").
     pub(crate) fn of(certificate: &Certificate) -> Fingerprint {
         match certificate.statement.as_deref() {
-            Some(statement) => Fingerprint(statement.recovery_key),
-            None => Fingerprint(certificate.account_key),
+            Some(statement) => Fingerprint::account(statement.recovery_key),
+            None => Fingerprint::account(certificate.account_key),
         }
     }
 }

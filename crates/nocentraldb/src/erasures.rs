@@ -206,7 +206,7 @@ pub(crate) fn of_account_key(resolved: &Resolved, key: [u8; 32]) -> Fingerprint 
         .filter_map(|(id, _)| resolved.member(id))
         .map(|state| &state.certificate)
         .find(|certificate| certificate.account_key == key && certificate.statement.is_some())
-        .map_or(Fingerprint(key), Fingerprint::of)
+        .map_or(Fingerprint::account(key), Fingerprint::of)
 }
 
 /// The fingerprint of a current or former member's account.
