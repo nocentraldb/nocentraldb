@@ -194,10 +194,7 @@ impl<'a> SqlFold<'a> {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
             (Field::Plugin(t), FieldState::Plugin(s)) => {
-                match plugin::apply(t, &s, operation, origin) {
-                    Ok(folded) => folded.map(|bytes| (bytes, None)),
-                    Err(error) => return Err(error),
-                }
+                plugin::apply(t, &s, operation, origin)?.map(|bytes| (bytes, None))
             }
             _ => unreachable!("a field's state matches its type"),
         };

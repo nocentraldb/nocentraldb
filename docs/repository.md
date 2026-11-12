@@ -6,6 +6,8 @@ How this repository is laid out, how to set up its tools, and the gates every ch
 
 ```
 crates/ncdb-core/     Rust core (placeholder)
+crates/ncdb-plugin/   what a plugin field type implements and depends on (RFC 0011): the FieldType trait, Data, the ids of an operation, Plugin
+crates/ncdb-test-counter/  a plugin for the tests, test/counter (RFC 0011); not published
 crates/ncdb/          the command line ncdb: ncdb model build and ncdb model check (RFC 0005)
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
 crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
@@ -82,6 +84,8 @@ What each project's `gates` task runs:
 | Project | Tasks |
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`), `build-wasm` (`cargo build --locked --target wasm32-unknown-unknown`: the crate builds for the browser target, so it uses nothing the browser lacks), `test-wasm` (`cargo test --locked --target wasm32-unknown-unknown`: its tests pass as WebAssembly, run in Node by `wasm-bindgen-test-runner`) |
+| Rust plugin crate (`ncdb-plugin`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: every plugin runs natively and in the browser, so the crate does too |
+| Rust test plugin (`ncdb-test-counter`) | `format-check`, `lint` and `test` as for `ncdb-core`; the core's tests run it on wasm32, so it has no wasm tasks of its own |
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); it runs natively only, so it has no wasm tasks |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
 | Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, and the `ncdb-relay` binary, on SQLite in temporary directories and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
@@ -99,6 +103,14 @@ moon run ncdb-core:lint --force
 moon run ncdb-core:test --force
 moon run ncdb-core:build-wasm --force
 moon run ncdb-core:test-wasm --force
+moon run ncdb-plugin:format-check --force
+moon run ncdb-plugin:lint --force
+moon run ncdb-plugin:test --force
+moon run ncdb-plugin:build-wasm --force
+moon run ncdb-plugin:test-wasm --force
+moon run ncdb-test-counter:format-check --force
+moon run ncdb-test-counter:lint --force
+moon run ncdb-test-counter:test --force
 moon run ncdb:format-check --force
 moon run ncdb:lint --force
 moon run ncdb:test --force
