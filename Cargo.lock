@@ -2063,6 +2063,9 @@ dependencies = [
  "aws-sdk-dynamodb",
  "aws-sdk-lambda",
  "aws-sdk-s3",
+ "getrandom 0.4.3",
+ "ncdb-core",
+ "ncdb-relay",
  "reqwest",
  "tokio",
 ]
