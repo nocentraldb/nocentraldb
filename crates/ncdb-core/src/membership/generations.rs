@@ -16,7 +16,7 @@ use crate::ids::{ChangeId, MemberId};
 
 use super::body::Entry;
 use super::input::Node;
-use super::resolve::Judged;
+use super::judge::Judged;
 
 /// One generation of the space key.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

@@ -11,8 +11,9 @@ use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
 use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
+use super::judge::Judged;
 use super::person_key::{ErasureDecision, ShredEntry};
-use super::resolve::{Judged, Resolved};
+use super::resolve::Resolved;
 use super::statement::AccountKeyStatement;
 
 /// The right a change's author needs. A membership entry needs admin,
