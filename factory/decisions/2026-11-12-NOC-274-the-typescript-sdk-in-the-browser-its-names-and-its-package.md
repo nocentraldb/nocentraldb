@@ -8,7 +8,7 @@
   4. `nc.Error` has `code`, `ids` and `fingerprint`.
   5. The exported types are `Db`, `Space`, `Tx`, `Invitation`, `Page<T>`, `Query<T>`, `Notice`, `SyncStatus`, `SpaceStatus` and `Durability`; a fingerprint is a plain string of twelve blocks.
   6. `take` is at most 1000; a larger value is `invalidValue`, in both SDKs.
-  7. Changed from the proposal: `@nocentraldb/sdk` becomes publishable with NOC-176's first slice, and its alphas are published to npm under the dist-tag `alpha`. The alpha job and the owner's first manual publish are follow-ups recorded in NOC-274's Decided comment, not yet in a ticket of their own; docs/release-management.md already describes the alpha dist-tag, so RFC 0009 records only what concerns the SDK's API.
+  7. Changed from the proposal: `@nocentraldb/sdk` becomes publishable with NOC-176's first slice, and its alphas are published to npm under the dist-tag `alpha`. The alpha job and the owner's first manual publish are the follow-up NOC-281; docs/release-management.md already describes the alpha dist-tag, so RFC 0009 records only what concerns the SDK's API.
 - RFC 0009 records points 2 to 6 in "Open and close", "Queries and indexes", "Errors" and "Public names".
 - Instead of: a `nocentraldb::wasm` module, which would make `OpenOptions::browser` a public Rust name; an option that names the worker's URL; no upper bound on `take`; a fingerprint object in TypeScript; publishing only with the first beta.
 - Topics: sdk-ts, browser, api, wasm, release
