@@ -14,8 +14,13 @@
 //! The member holds its person keys in memory only, and fetches them again
 //! on every connection, as the owner decided (NOC-222).
 //!
-//! **What this does not do yet.** A record that fails is ignored without
-//! naming its writer, which RFC 0003 asks the SDK to report.
+//! A record its writer signed that still fails, because it does not unwrap
+//! under its generation or its key does not match the commitment, is
+//! [`Outcome::Bad`]: the space status names the writer's account
+//! (`SpaceStatus::bad_person_key_records`; NOC-222 point 2). A record whose
+//! signature does not verify names no writer anyone vouched for, and one
+//! the log does not announce yet, or under a generation whose key the
+//! member lacks, may still hold later: those are only ignored.
 
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::membership::{record_hash, unwrap_person_key, verify_record};
@@ -38,15 +43,29 @@ pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
     }
 }
 
+/// What [`accept`] did with a record.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Outcome {
+    /// The member holds the record's person key.
+    Held,
+    /// The record's writer, whose account key this is, signed it, but it
+    /// does not unwrap, or its key does not match the commitment.
+    Bad([u8; 32]),
+    /// The record was not checked to the end: the log does not announce
+    /// it, its key was shredded, its writer is unknown or did not sign it,
+    /// or the member lacks its generation's key.
+    Ignored,
+}
+
 /// Holds the person key of `record` in `state` when the record holds: its
 /// writer, current or former, signed it; an accepted person-key entry
 /// announces its generation and hash and no shred destroyed the key; it
 /// unwraps under the generation's key, which the member holds; and the key
-/// matches the commitment in the log. Says whether it held.
-pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) -> bool {
+/// matches the commitment in the log. Says what it did.
+pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) -> Outcome {
     let resolved = state.checks.resolved();
     let Some(person) = resolved.person_key(record.person_key) else {
-        return false;
+        return Outcome::Ignored;
     };
     let announced = person
         .records
@@ -55,11 +74,12 @@ pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) ->
         .commitment
         .filter(|_| person.shred.is_none() && announced)
     else {
-        return false;
+        return Outcome::Ignored;
     };
     let Some(writer) = resolved.member(MemberId(record.writer)) else {
-        return false;
+        return Outcome::Ignored;
     };
+    let account = writer.certificate.account_key;
     let signed = verify_record(
         &writer.key,
         space,
@@ -69,7 +89,7 @@ pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) ->
         &record.signature,
     );
     let Some(space_key) = state.checks.space_key(record.generation).filter(|_| signed) else {
-        return false;
+        return Outcome::Ignored;
     };
     let unwrapped = unwrap_person_key(
         space_key,
@@ -81,8 +101,8 @@ pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) ->
     match unwrapped.filter(|key| key.commitment(space, record.person_key) == commitment) {
         Some(key) => {
             state.person_keys.insert(record.person_key, key);
-            true
+            Outcome::Held
         }
-        None => false,
+        None => Outcome::Bad(account),
     }
 }
