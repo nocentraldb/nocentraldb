@@ -9,7 +9,8 @@
 //! relay (RFC 0003, "Removing a member and rotating the space key", step
 //! 3; NOC-206 part 3).
 
-use ncdb_core::ids::SpaceId as CoreSpaceId;
+use ncdb_core::cbor::Value;
+use ncdb_core::ids::{ChangeId as CoreChangeId, SpaceId as CoreSpaceId};
 use ncdb_core::keys::PersonKey;
 use ncdb_core::membership::{
     self, ControlBody, Entry, PersonKeyEntry, record_hash, sign_record, wrap_person_key,
@@ -249,8 +250,8 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
 const SIGNER: Who = 4;
 
 /// The admin shreds `PERSON` in `space`, signed off by the account of
-/// `SIGNER`, folds the shred and wakes syncing.
-fn shred(admin: &Db, space: &Space) {
+/// `SIGNER`, folds the shred and wakes syncing. Returns the shred's id.
+fn shred(admin: &Db, space: &Space) -> CoreChangeId {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -271,15 +272,17 @@ fn shred(admin: &Db, space: &Space) {
     );
     crate::space::fold(view, &mut state.checks, &change).unwrap();
     crate::sync::wake(&inner);
+    change.id()
 }
 
 /// A shred is final when accepted (RFC 0008, "A shred is final when
 /// accepted"; NOC-229): a member that holds the person key drops it as
 /// soon as it folds the shred, and the relay holds no record of it.
-#[tokio::test(flavor = "multi_thread")]
-async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
-    let relay = LocalRelay::start().await;
-    let (admin, member, project) = shared(&relay).await;
+/// The admin and the member share a space with a signer of a second
+/// account; the member holds the person key `PERSON`, which the admin then
+/// shreds. Returns the shred's id.
+async fn shredded(relay: &LocalRelay) -> (Db, Db, Space, CoreChangeId) {
+    let (admin, member, project) = shared(relay).await;
     let options = OpenOptions::new(LOCK).in_memory().relay(&relay.url());
     let signer = Db::open_as(
         options,
@@ -307,9 +310,16 @@ async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
         held(&member, space).is_some()
     })
     .await;
-
-    shred(&admin, &project);
+    let shred = shred(&admin, &project);
     synced(&admin).await;
+    (admin, member, project, shred)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
+    let relay = LocalRelay::start().await;
+    let (_admin, member, project, _) = shredded(&relay).await;
+    let space = project.id().0;
 
     eventually("the member folds the shred", || {
         let inner = lock(&member.inner);
@@ -327,5 +337,70 @@ async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
     assert!(
         relay.person_keys(space).await.is_empty(),
         "the relay deleted the record"
+    );
+}
+
+/// The acknowledgements `db`'s own member wrote in `space`, in its order:
+/// the shred each names, and whether it says "deleted".
+fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId, bool)> {
+    let inner = lock(&db.inner);
+    let me = inner.member.key().id();
+    let log = inner.view.log(space).expect("the space's log");
+    let mut own: Vec<_> = log
+        .after(ncdb_core::log::Position::START)
+        .map(|(_, change)| change)
+        .filter(|change| change.header().author == me)
+        .filter_map(|change| {
+            let body = ControlBody::decode(&change.header().payload).ok()?;
+            let Entry::Other { entry_type, fields } = body.entry else {
+                return None;
+            };
+            if entry_type != membership::ACKNOWLEDGEMENT {
+                return None;
+            }
+            let shred = match fields.get(&8)? {
+                Value::Bytes(bytes) => CoreChangeId(bytes.as_slice().try_into().ok()?),
+                _ => return None,
+            };
+            let deleted = matches!(fields.get(&9)?, Value::Bool(true));
+            Some((change.header().sequence, shred, deleted))
+        })
+        .collect();
+    own.sort();
+    own.into_iter()
+        .map(|(_, shred, deleted)| (shred, deleted))
+        .collect()
+}
+
+/// RFC 0008, "Acknowledgement" (NOC-238): a member that folds a shred
+/// writes "seen" and then "deleted" for it, once, and pushes both. The
+/// performer acknowledges its own shred as well once it folds what others
+/// sent, and a reconnect, which fetches and folds again, writes nothing
+/// new.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_that_folds_a_shred_acknowledges_it_seen_then_deleted_once() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project, shred) = shredded(&relay).await;
+    let space = project.id().0;
+    let both = vec![(shred, false), (shred, true)];
+
+    eventually("the member acknowledges the shred", || {
+        acknowledgements(&member, space) == both
+    })
+    .await;
+    synced(&member).await;
+    eventually(
+        "the admin holds the member's acknowledgements and writes its own",
+        || acknowledgements(&admin, space) == both,
+    )
+    .await;
+    relay.proxy.cut();
+    relay.proxy.restore();
+    synced(&member).await;
+
+    assert_eq!(
+        acknowledgements(&member, space),
+        both,
+        "a second fold writes nothing new"
     );
 }
