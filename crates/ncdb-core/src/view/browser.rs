@@ -87,6 +87,26 @@ pub async fn exists(path: &str) -> Result<bool, InstallError> {
     }
 }
 
+/// Makes room in the pool for `slots` more files beyond those it holds, as
+/// a database with its journal needs two (RFC 0006, "Where a database
+/// lives"; NOC-231): the pool grows when it has fewer. Nothing where OPFS
+/// is missing. It fails as `install` does.
+pub async fn reserve(slots: usize) -> Result<(), InstallError> {
+    if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
+        return Err(InstallError::NotInWorker);
+    }
+    match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
+        Ok(pool) => {
+            let files = pool.len().map_err(InstallError::Opfs)?;
+            pool.ensure_capacity(files + slots)
+                .await
+                .map_err(InstallError::Opfs)
+        }
+        Err(error) if opfs_is_missing(&error) => Ok(()),
+        Err(error) => Err(InstallError::Opfs(error)),
+    }
+}
+
 /// Whether `error` says the browser has no OPFS here: the API is missing,
 /// or the browser refuses the OPFS root, as Firefox and WebKit do in a
 /// private window (NOC-33's findings, "Private window").
