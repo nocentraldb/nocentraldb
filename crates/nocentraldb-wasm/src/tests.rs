@@ -70,3 +70,22 @@ fn a_call_before_open_answers_closed() {
         Some(&Value::Text("closed".into()))
     );
 }
+
+// The worker forwards the fold events of the database the core opened
+// (NOC-176): the core gives them once open, and gives none before.
+#[test]
+fn the_core_gives_the_events_of_the_open_database() {
+    let core = Core::new();
+    assert!(core.events().is_none(), "no database yet");
+    let open = map(&[
+        ("lock", Value::Text(LOCK.into())),
+        ("inMemory", Value::Bool(true)),
+    ]);
+    now(core.answer(request(1, "open", open)));
+    let events = core.events().expect("the open database's events");
+    now(core.answer(request(2, "spaces.create", map(&[]))));
+    let first = core.events().expect("still open");
+    assert!(first.same(&events), "the same feed while the database is open");
+    now(core.answer(request(3, "close", map(&[]))));
+    assert!(events.is_closed());
+}
