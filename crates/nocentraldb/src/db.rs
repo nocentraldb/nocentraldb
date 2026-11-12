@@ -26,8 +26,10 @@ use ncdb_core::keys::{MemberKey, PersonKey};
 use ncdb_core::log::{Position, State};
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
+use ncdb_core::plugins::Registry;
 use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
+use ncdb_plugin::Plugin;
 
 use crate::durability::Storage;
 use crate::error::{Error, ErrorCode, storage};
@@ -48,6 +50,8 @@ pub struct OpenOptions {
     path: Option<PathBuf>,
     key_file: Option<PathBuf>,
     agent: bool,
+    /// The plugins whose field types the core folds (RFC 0011).
+    plugins: Vec<Plugin>,
     /// The name of a database on OPFS, in a dedicated worker (NOC-175):
     /// crate-internal until the browser export names it (NOC-176).
     #[cfg(target_arch = "wasm32")]
@@ -72,6 +76,7 @@ impl OpenOptions {
             path: None,
             key_file: None,
             agent: false,
+            plugins: Vec::new(),
             #[cfg(target_arch = "wasm32")]
             browser: None,
         }
@@ -117,6 +122,19 @@ impl OpenOptions {
     /// when the [`Db`] is dropped (RFC 0009, S19).
     pub fn in_memory(mut self) -> OpenOptions {
         self.in_memory = true;
+        self
+    }
+
+    /// Hands `plugin`'s field types to the core, as a plugin's crate
+    /// exports them from `plugin()`; call it once per plugin (RFC 0011,
+    /// "Handing plugins to the core"). A plugin field of the lock folds
+    /// through its code; one whose type and rule no plugin given here
+    /// implements parks, and a write to it is refused with `UnknownType`.
+    /// A plugin the lock does not name is ignored. [`Db::open`] refuses two
+    /// plugins of one namespace, or a plugin of the namespace `ncdb`, with
+    /// `InvalidValue`.
+    pub fn plugin(mut self, plugin: Plugin) -> OpenOptions {
+        self.plugins.push(plugin);
         self
     }
 
@@ -301,6 +319,7 @@ fn open_at(
     key_file: Option<PathBuf>,
     store: &Store<'_>,
     lock: &ModelLock,
+    registry: &Registry,
 ) -> Result<(View, Keys), Error> {
     let store = match key_file {
         Some(_) => None,
@@ -318,7 +337,7 @@ fn open_at(
     // The view keeps the checks while a rebuild runs (NOC-156).
     let member = keys.member.clone();
     let checks = move |space| SealChecks::new(space, member.key());
-    let view = View::open_with(&file, lock, checks).map_err(view_error)?;
+    let view = View::open_with_plugins(&file, lock, registry, checks).map_err(view_error)?;
     Ok((view, keys))
 }
 
@@ -437,15 +456,18 @@ impl Db {
                 format!("the lock is refused: {error}"),
             )
         })?;
+        let registry = Registry::new(options.plugins.iter().cloned())
+            .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?;
         let _ = &placed;
         let (mut view, keys, storage) = match place {
             Place::Memory => {
-                let view = View::open_in_memory(&lock).map_err(view_error)?;
+                let view =
+                    View::open_in_memory_with_plugins(&lock, &registry).map_err(view_error)?;
                 let keys = given.unwrap_or_else(Keys::generate);
                 (view, keys, Storage::Temporary)
             }
             Place::Path { dir, key_file } => {
-                let (view, keys) = open_at(dir, key_file, store, &lock)?;
+                let (view, keys) = open_at(dir, key_file, store, &lock, &registry)?;
                 (view, keys, Storage::Persistent)
             }
             #[cfg(target_arch = "wasm32")]
@@ -454,7 +476,8 @@ impl Db {
                 let member = placed.keys.member.clone();
                 let checks = move |space| SealChecks::new(space, member.key());
                 let view =
-                    View::open_with(Path::new(&placed.path), &lock, checks).map_err(view_error)?;
+                    View::open_with_plugins(Path::new(&placed.path), &lock, &registry, checks)
+                        .map_err(view_error)?;
                 (view, placed.keys, placed.storage)
             }
         };

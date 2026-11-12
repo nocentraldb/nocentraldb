@@ -245,7 +245,7 @@ impl View {
         schema::drop_staging(&tx)?;
         let mut serving = model;
         let mut rebuild = None;
-        match schema::open(&tx, &serving, lock)? {
+        match schema::open(&tx, &serving, lock, registry)? {
             schema::Fit::Current => {}
             schema::Fit::Migrate(additions) => {
                 migrate::run(&tx, &serving, &additions, log_table::load(&tx)?, checks)?;
