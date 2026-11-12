@@ -39,7 +39,14 @@ pub struct PersonKey {
     /// is accepted once the set holds an accepted finalize.
     pub taken_back: Option<ChangeId>,
     /// The member that performed that shred, whose account decides it.
-    pub(crate) performer: Option<MemberId>,
+    pub performer: Option<MemberId>,
+    /// The account key that signed that shred off (RFC 0008, "Shred
+    /// entry").
+    pub sign_off: Option<[u8; 32]>,
+    /// The members of the state of that shred's causal past: those that
+    /// could have held the key, whom the audit of erasures lists (RFC 0009,
+    /// "Erasures"; Carsten, 2026-11-12, NOC-246).
+    pub past_members: BTreeSet<MemberId>,
     /// The members whose accepted acknowledgements name that shred, and
     /// whether one of them says "deleted" (RFC 0008, "Acknowledgement"):
     /// the audit's evidence of erasure. A member whose acknowledgement the
@@ -58,6 +65,8 @@ impl PersonKey {
             finalized: None,
             taken_back: None,
             performer: None,
+            sign_off: None,
+            past_members: BTreeSet::new(),
         }
     }
 
@@ -100,11 +109,17 @@ impl PersonKeys {
 
     /// What an accepted change does to the person keys: the first entry of
     /// an id creates it, every entry adds its record, and the first shred
-    /// erases it, provisionally when `provisional` says so, and keeps its id
-    /// in the state even when no accepted entry of the id is left. The first
+    /// erases it, provisionally when `provisional` says so, with
+    /// `past_members` the members of its causal past, and keeps its id in
+    /// the state even when no accepted entry of the id is left. The first
     /// decision of each kind on that shred records itself; a decision on
     /// another shred of the id changes nothing.
-    pub(crate) fn apply(&mut self, node: &Node, provisional: bool) {
+    pub(crate) fn apply(
+        &mut self,
+        node: &Node,
+        provisional: bool,
+        past_members: &BTreeSet<MemberId>,
+    ) {
         match &node.body.entry {
             Entry::PersonKey(entry) => {
                 let key = self
@@ -123,6 +138,8 @@ impl PersonKeys {
                     key.shred = Some(node.id);
                     key.provisional = provisional;
                     key.performer = Some(node.author);
+                    key.sign_off = Some(shred.sign_off.account_key);
+                    key.past_members = past_members.clone();
                 }
             }
             Entry::ErasureDecision(decision) => {
@@ -171,6 +188,14 @@ impl PersonKeys {
                 Value::Bool(key.provisional),
                 key.finalized.map_or(Value::Null, |s| fields::bytes(&s.0)),
                 key.taken_back.map_or(Value::Null, |s| fields::bytes(&s.0)),
+                key.performer.map_or(Value::Null, |m| fields::bytes(&m.0)),
+                key.sign_off.map_or(Value::Null, |k| fields::bytes(&k)),
+                Value::Array(
+                    key.past_members
+                        .iter()
+                        .map(|member| fields::bytes(&member.0))
+                        .collect(),
+                ),
                 Value::Array(
                     key.acknowledged
                         .iter()
@@ -192,13 +217,15 @@ impl PersonKeys {
 /// it, the first in the order (Carsten, 2026-11-11, NOC-230). Returns the
 /// person keys of the changes accepted then, applied in the order.
 /// `saw(a, b)` is whether `b` is in `a`'s causal past, and
-/// `provisional(shred)` whether a shred is provisional.
+/// `provisional(shred)` whether a shred is provisional, and
+/// `past_members(shred)` the members of its causal past.
 pub(crate) fn settle(
     order: &[ChangeId],
     nodes: &BTreeMap<ChangeId, &Node>,
     verdicts: &mut BTreeMap<ChangeId, Verdict>,
     saw: impl Fn(ChangeId, ChangeId) -> bool,
     provisional: impl Fn(ChangeId) -> bool,
+    past_members: impl Fn(ChangeId) -> BTreeSet<MemberId>,
 ) -> PersonKeys {
     let accepted =
         |verdicts: &BTreeMap<ChangeId, Verdict>, id| verdicts.get(id) == Some(&Verdict::Accepted);
@@ -240,7 +267,7 @@ pub(crate) fn settle(
     }
     let mut keys = PersonKeys::default();
     for id in order.iter().filter(|id| accepted(verdicts, id)) {
-        keys.apply(nodes[id], provisional(*id));
+        keys.apply(nodes[id], provisional(*id), &past_members(*id));
     }
     keys
 }

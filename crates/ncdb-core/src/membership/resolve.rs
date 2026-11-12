@@ -69,6 +69,10 @@ pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>
     for node in nodes {
         let past = fold(&input, &judged, &node.past);
         let judgement = judge(&input, &judged, node, &past);
+        if judgement.valid && matches!(node.body.entry, Entry::Shred(_)) {
+            let members = past.members().map(|(member, _)| member);
+            judged.1.insert(node.id, members.collect());
+        }
         judged.0.insert(node.id, judgement);
     }
     let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
@@ -292,9 +296,13 @@ pub(crate) struct Judgement {
     pub(crate) depth: Option<u64>,
 }
 
-/// The judgement of every node judged so far.
+/// The judgement of every node judged so far, and for each valid shred
+/// the members of the state of its causal past.
 #[derive(Default)]
-pub(crate) struct Judged(pub(crate) BTreeMap<ChangeId, Judgement>);
+pub(crate) struct Judged(
+    pub(crate) BTreeMap<ChangeId, Judgement>,
+    pub(crate) BTreeMap<ChangeId, BTreeSet<MemberId>>,
+);
 
 impl Judged {
     pub(crate) fn valid(&self, id: ChangeId) -> bool {
@@ -303,6 +311,11 @@ impl Judged {
 
     pub(crate) fn provisional(&self, id: ChangeId) -> bool {
         self.0.get(&id).is_some_and(|j| j.provisional)
+    }
+
+    /// The members of the state of a valid shred's causal past.
+    pub(crate) fn past_members(&self, id: ChangeId) -> BTreeSet<MemberId> {
+        self.1.get(&id).cloned().unwrap_or_default()
     }
 }
 
@@ -425,6 +438,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         &mut resolved.verdicts,
         saw,
         |id| judged.provisional(id),
+        |id| judged.past_members(id),
     );
     resolved
 }
@@ -473,7 +487,11 @@ fn apply_order(
             Verdict::Rejected(Rejection::Commitment)
         } else {
             apply(&mut members, node);
-            keys.apply(node, judged.provisional(node.id));
+            keys.apply(
+                node,
+                judged.provisional(node.id),
+                &judged.past_members(node.id),
+            );
             if let Entry::AccountKeyStatement(statement) = &node.body.entry {
                 resolved.statements.insert(node.id, statement.clone());
             }
