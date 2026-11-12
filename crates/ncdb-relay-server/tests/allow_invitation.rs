@@ -230,7 +230,8 @@ fn a_text_that_is_not_an_invitation_stops_the_relay_at_start() {
 fn a_refused_invitation_is_not_repeated() {
     for (what, text) in malformed() {
         let (_, stderr) = refused(&text);
-        let body = text.strip_prefix("ncdb-invite-1:").unwrap_or(&text);
+        // The encoded part, after whatever prefix the text has.
+        let body = text.split_once(':').map_or(text.as_str(), |(_, body)| body);
         if body.len() >= 8 {
             assert!(!stderr.contains(body), "{what} repeats the text: {stderr}");
             assert!(
