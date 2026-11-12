@@ -220,6 +220,9 @@ impl<'a> SqlFold<'a> {
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
             (Field::Ref(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(reference_column(read.value)))),
+            (Field::Person(t), FieldState::Basic(s)) => {
+                apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
+            }
             (Field::Set(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }

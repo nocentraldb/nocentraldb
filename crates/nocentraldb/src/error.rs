@@ -36,6 +36,9 @@ pub enum ErrorCode {
     NotFound,
     /// A value does not fit the field's kind.
     InvalidValue,
+    /// A personal field's person link is unset, so the value has no person
+    /// to be sealed for (RFC 0009, "Personal fields").
+    NoPerson,
     /// The space's genesis names another `model.id` than the lock's; the
     /// message names both.
     SpaceOfAnotherModel,

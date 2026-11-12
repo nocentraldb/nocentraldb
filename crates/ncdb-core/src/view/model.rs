@@ -16,6 +16,7 @@ use crate::cbor::{self, Key, Value};
 use crate::link::{Link, Links};
 pub use crate::model_lock::Scope;
 use crate::model_lock::{Person, Refusal};
+use crate::personal::PersonField;
 use crate::reference::Reference;
 use crate::set::{self, Set};
 
@@ -52,6 +53,9 @@ pub enum Field {
     Links(Links),
     /// A reference to one object, in any space (RFC 0004, "References").
     Ref(Reference),
+    /// The hidden field `$person` of an object that can be a person (RFC
+    /// 0005, "Where the person id is kept").
+    Person(PersonField),
 }
 
 /// The merge state of one field, as its field type keeps it.
@@ -122,7 +126,7 @@ impl Field {
     /// The state of the field nobody has written.
     pub fn empty(&self) -> FieldState {
         match self {
-            Field::Basic(_) | Field::Link(_) | Field::Ref(_) => {
+            Field::Basic(_) | Field::Link(_) | Field::Ref(_) | Field::Person(_) => {
                 FieldState::Basic(basic::State::default())
             }
             Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
@@ -229,6 +233,7 @@ impl Field {
             Field::Set(t) => Value::Array(vec![Value::Unsigned(2), describe(&t.kind)]),
             Field::Links(t) => Value::Array(vec![Value::Unsigned(3), collections(&t.collections)]),
             Field::Ref(t) => Value::Array(vec![Value::Unsigned(4), collections(&t.collections)]),
+            Field::Person(_) => Value::Array(vec![Value::Unsigned(5)]),
         }
     }
 }
