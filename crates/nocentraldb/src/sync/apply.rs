@@ -204,7 +204,10 @@ pub(super) fn unconfirmed(
 /// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
 /// sync status shows it, so the relay's own text never reaches the log
 /// (NOC-188). Returns the transient code that stopped it, after which the
-/// rest stays unconfirmed.
+/// rest stays unconfirmed. A `too_early`, the relay's answer to a finalize
+/// that came before its 7 days passed, is no refusal: the change stays
+/// unconfirmed, and the space is pushed again later (RFC 0007, "The
+/// errors"; pm, NOC-234).
 pub(super) fn pushed(
     inner: &mut Inner,
     space: SpaceId,
@@ -220,6 +223,12 @@ pub(super) fn pushed(
                 let code = wire::mapped_code(&code);
                 if TRANSIENT.contains(&code.as_str()) {
                     return Ok(Some(code));
+                }
+                if code == "too_early" {
+                    let sync = sync(inner);
+                    let at = std::time::Instant::now() + sync.too_early_retry;
+                    sync.retries.entry(space).or_insert(at);
+                    continue;
                 }
                 inner.view.refuse(space, *id, &code)?;
                 again::refused(inner, space, *id);

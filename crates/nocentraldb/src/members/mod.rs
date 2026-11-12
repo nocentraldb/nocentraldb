@@ -25,6 +25,8 @@ use crate::space::{Space, not_stopped, writable};
 
 mod batch;
 mod change;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod erasure;
 mod info;
 mod invitation;
 mod leave;
