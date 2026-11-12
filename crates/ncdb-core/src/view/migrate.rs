@@ -166,10 +166,14 @@ pub(super) fn run<C: Checks>(
 }
 
 /// Whether an operation was parked because the model did not know its
-/// collection or field, which an additive change may now know.
+/// collection or field, or had no code for its field's type, which an
+/// additive change, or a plugin registered at the next open, may now
+/// know (RFC 0011, "A type that is not registered").
 fn unknown(reason: OperationParkReason) -> bool {
     matches!(
         reason,
-        OperationParkReason::UnknownCollection | OperationParkReason::UnknownField
+        OperationParkReason::UnknownCollection
+            | OperationParkReason::UnknownField
+            | OperationParkReason::UnknownType
     )
 }

@@ -7,7 +7,7 @@
 //! through [`Model::from_lock`]. It is a working name of the core, not the
 //! SDK's API.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sha2::{Digest, Sha256};
 
@@ -32,6 +32,10 @@ pub struct Model {
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.
     pub indexes: Vec<Index>,
+    /// The fields of each collection that the lock names with a plugin
+    /// type no code implements: their operations park as "unknown type"
+    /// (RFC 0011, "A type that is not registered").
+    pub unregistered: BTreeMap<String, BTreeSet<String>>,
 }
 
 /// A field and its field type (RFC 0004).
@@ -129,6 +133,14 @@ impl Model {
     /// The field type of a field.
     pub fn field(&self, collection: &str, field: &str) -> Option<&Field> {
         self.collections.get(collection)?.get(field)
+    }
+
+    /// Whether the lock names `field` of `collection` with a plugin type
+    /// no code implements.
+    pub fn unregistered(&self, collection: &str, field: &str) -> bool {
+        self.unregistered
+            .get(collection)
+            .is_some_and(|fields| fields.contains(field))
     }
 
     /// The declared index of `collection` with this name.

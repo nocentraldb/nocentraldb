@@ -90,6 +90,7 @@ fn the_view_model_holds_the_model_id_version_collections_fields_and_indexes_of_t
                 )
             },
         ],
+        unregistered: [].into(),
     };
     assert_eq!(Model::from_lock(&lock()), Ok(expected));
 }
@@ -173,7 +174,7 @@ fn two_indexes_of_one_collection_may_not_share_a_name() {
 }
 
 #[test]
-fn a_plugin_field_has_no_field_type_in_the_view_so_its_writes_park() {
+fn a_plugin_field_without_code_has_no_field_type_and_is_named_unregistered() {
     let mut lock = lock();
     let mut field = lock.field("task", "rank").unwrap().clone();
     field.kind = model_lock::Kind::Plugin {
@@ -186,7 +187,9 @@ fn a_plugin_field_has_no_field_type_in_the_view_so_its_writes_park() {
     task.fields.insert("price".into(), field);
     let model = Model::from_lock(&lock).unwrap();
     assert_eq!(model.field("task", "price"), None);
+    assert!(model.unregistered("task", "price"));
     assert!(model.field("task", "rank").is_some());
+    assert!(!model.unregistered("task", "rank"));
 }
 
 #[test]

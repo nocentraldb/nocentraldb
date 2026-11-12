@@ -3,12 +3,13 @@
 //! stored fields, and each collection's declared indexes, in the lock's
 //! order of names.
 //!
-//! A plugin's field type has no field type in the view yet, so the view's
-//! model leaves the field out: the fold parks its operations, as it parks
-//! any field its model does not know, and keeps them (RFC 0004).
+//! A plugin's field type has no code in the core yet, so the view's model
+//! leaves the field out of its fields and names it as unregistered: the
+//! fold parks its operations as "unknown type" and keeps them (RFC 0011,
+//! "A type that is not registered").
 //! Computed fields and views have no place in the view yet either.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::model::{Direction, Field, Index, Invalid, Model};
 use crate::basic::{BasicValue, Kind};
@@ -36,6 +37,15 @@ impl Model {
                 .iter()
                 .filter_map(|(field, f)| Some((field.clone(), field_type(&f.kind)?)))
                 .collect();
+            let unregistered: BTreeSet<String> = collection
+                .fields
+                .iter()
+                .filter(|(_, f)| matches!(f.kind, model_lock::Kind::Plugin { .. }))
+                .map(|(field, _)| field.clone())
+                .collect();
+            if !unregistered.is_empty() {
+                model.unregistered.insert(name.clone(), unregistered);
+            }
             model.collections.insert(name.clone(), fields);
             for (index, i) in &collection.indexes {
                 let keys = i

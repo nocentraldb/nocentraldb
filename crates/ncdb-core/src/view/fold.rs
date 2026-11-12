@@ -407,6 +407,10 @@ impl Fold for SqlFold<'_> {
         self.model.field(collection, field).is_some()
     }
 
+    fn unregistered(&self, collection: &str, field: &str) -> bool {
+        self.model.unregistered(collection, field)
+    }
+
     fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason> {
         if self.error.is_some() {
             return Ok(());
