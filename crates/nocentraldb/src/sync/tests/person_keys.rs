@@ -265,7 +265,11 @@ pub(super) fn write(admin: &Db, space: &Space, entry: Entry) -> CoreChangeId {
 
 /// The admin shreds `PERSON` in `space`, signed off by `account`. Returns
 /// the shred's id.
-pub(super) fn shred_signed(admin: &Db, space: &Space, account: &ed25519_dalek::SigningKey) -> CoreChangeId {
+pub(super) fn shred_signed(
+    admin: &Db,
+    space: &Space,
+    account: &ed25519_dalek::SigningKey,
+) -> CoreChangeId {
     let performer = lock(&admin.inner).member.key().id();
     let entry = Entry::Shred(membership::ShredEntry {
         person_key: PERSON,

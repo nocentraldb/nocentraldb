@@ -30,6 +30,7 @@
 mod clock;
 mod db;
 mod encode;
+mod erasures;
 mod error;
 mod id;
 mod keys;
@@ -54,6 +55,7 @@ mod agent_tests;
 mod wasm_tests;
 #[cfg(test)]
 mod writer_model_tests;
+pub use erasures::{Acknowledged, Erasure, ErasureMember, ErasureState, Erasures};
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};

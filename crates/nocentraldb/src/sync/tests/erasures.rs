@@ -6,9 +6,7 @@
 use ncdb_core::keys::PersonKey;
 use ncdb_core::membership::{self, Entry};
 
-use super::person_keys::{
-    GUEST, person_key, shared, shred_signed, shredded, write,
-};
+use super::person_keys::{GUEST, person_key, shared, shred_signed, shredded, write};
 use super::support::*;
 use crate::db::{Db, lock};
 use crate::erasures::{Acknowledged, Erasure, ErasureMember, ErasureState};
@@ -50,7 +48,9 @@ async fn a_final_shred_lists_its_performer_its_sign_off_and_who_deleted_the_key(
     let signer = Fingerprint(space::other_account(1).verifying_key().to_bytes());
 
     eventually("the admin's copy shows the member deleted the key", || {
-        list(&project).first().and_then(|e| member_of(e, id(&member)))
+        list(&project)
+            .first()
+            .and_then(|e| member_of(e, id(&member)))
             == Some(Acknowledged::Deleted)
     })
     .await;
