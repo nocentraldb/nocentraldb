@@ -1,15 +1,5 @@
-// file: cbor.d.ts
-export type Cbor = null | boolean | number | string | Uint8Array | Cbor[] | {
-    [key: string]: Cbor | undefined;
-};
-export declare const encode: (value: unknown) => Uint8Array;
-export declare const decode: (bytes: Uint8Array) => Cbor;
 // file: db.d.ts
 import type { Infer, model } from "./nc.ts";
-export interface Core {
-    call(request: Uint8Array): Promise<Uint8Array>;
-    terminate(): void;
-}
 type AnyCollection = Parameters<typeof model>[0][string];
 type Id = string;
 interface Elements<E> {
@@ -62,7 +52,6 @@ interface OpenOptions {
     name?: string;
 }
 export declare const open: (options: OpenOptions) => Promise<Db>;
-export declare const connect: (core: Core, options: OpenOptions) => Promise<Db>;
 export declare const add: <E>(...elements: E[]) => Elements<E>;
 export declare const remove: <E>(...elements: E[]) => Elements<E>;
 export {};
@@ -148,5 +137,3 @@ export declare const index: (fields: readonly (string | {
 }) => Index;
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
-// file: worker.d.ts
-export {};

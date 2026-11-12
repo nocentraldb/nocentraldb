@@ -6,7 +6,7 @@
 // runs the same calls against the real worker (test/browser/).
 import { describe, expect, test } from "vitest";
 import { decode, encode } from "../src/cbor.ts";
-import { type Core, connect } from "../src/db.ts";
+import { type Core, connect } from "../src/connect.ts";
 import { nc } from "../src/index.ts";
 
 const model = nc.model({
