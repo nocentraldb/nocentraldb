@@ -8,6 +8,10 @@
 // NOC-175 slice 2: the same job runs the SDK's key tests in IndexedDB in
 // Chromium (scripts/sdk-keys/), built on the runner as the view's harness
 // is, whenever a pull request touches the SDK.
+//
+// NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
+// (scripts/sdk-browser/), its package built on the runner, whenever a pull
+// request touches the TypeScript SDK or the crate its core is built from.
 import assert from "node:assert/strict";
 import {
   imageChecks,
@@ -21,6 +25,8 @@ import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 const BUILD = "node scripts/browser-view/build.mjs";
 const KEYS_BUILD = "node scripts/sdk-keys/build.mjs";
 const KEYS_TESTS = "scripts/sdk-keys/*.test.mjs";
+const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
+const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
 
 runWorkflowChecks({
   files: load(".github/workflows/browser-view.yml"),
@@ -107,6 +113,54 @@ runWorkflowChecks({
           const all = jobSteps(ctx);
           all.splice(
             all.findIndex((s) => s.run?.includes(KEYS_TESTS)),
+            1,
+          );
+        },
+      },
+    },
+    {
+      name: "the TypeScript SDK's browser tests run in the image, built on the runner, on SDK changes",
+      check: (ctx) => {
+        const all = steps(ctx);
+        const build = all.findIndex((s) => s.run?.includes(SDK_BUILD));
+        const test = all.findIndex(
+          (s) => s.run?.includes("docker run") && s.run.includes(SDK_TESTS),
+        );
+        assert.ok(build >= 0, "the TypeScript SDK is not built on the runner");
+        assert.ok(test > build, "its tests do not run after its build");
+        const run = all[test].run;
+        assert.match(run, /"\$PLAYWRIGHT_IMAGE"/);
+        assert.match(run, /SDK_BROWSER_PREBUILT=1/);
+        const paths = ctx.workflow.on?.pull_request?.paths ?? [];
+        for (const path of [
+          "packages/sdk/**",
+          "crates/nocentraldb-wasm/**",
+          "crates/nocentraldb/**",
+          "scripts/sdk-browser/**",
+        ]) {
+          assert.ok(paths.includes(path), `changes of ${path} do not run it`);
+        }
+      },
+      mutants: {
+        "no build of the TypeScript SDK": (ctx) => {
+          const all = jobSteps(ctx);
+          all.splice(
+            all.findIndex((s) => s.run?.includes(SDK_BUILD)),
+            1,
+          );
+        },
+        "the SDK's tests rebuild in the image": (ctx) => {
+          const run = jobSteps(ctx).find((s) => s.run?.includes(SDK_TESTS));
+          run.run = run.run.replace("SDK_BROWSER_PREBUILT=1", "X=1");
+        },
+        "TypeScript SDK changes do not run it": (ctx) => {
+          const paths = ctx.workflow.on.pull_request.paths;
+          paths.splice(paths.indexOf("packages/sdk/**"), 1);
+        },
+        "no TypeScript SDK tests at all": (ctx) => {
+          const all = jobSteps(ctx);
+          all.splice(
+            all.findIndex((s) => s.run?.includes(SDK_TESTS)),
             1,
           );
         },
