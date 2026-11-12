@@ -53,6 +53,10 @@ mod run;
 #[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+mod time;
+#[cfg(test)]
+mod time_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod tls;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
