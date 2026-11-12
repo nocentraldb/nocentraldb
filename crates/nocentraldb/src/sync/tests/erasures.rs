@@ -145,3 +145,32 @@ async fn a_reader_lists_the_erasures_too() {
     })
     .await;
 }
+
+/// Of two shreds of one person key, the first not taken back takes effect
+/// (Carsten, 2026-11-12, NOC-242): after a take-back, a later shred erases
+/// again, and the audit lists both, the first as taken back.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_shred_after_a_take_back_is_listed_beside_the_one_taken_back() {
+    let relay = LocalRelay::start().await;
+    let (admin, _member, project) = shared(&relay).await;
+    let key = PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    let first = shred_signed(&admin, &project, &account());
+    let decision = Entry::ErasureDecision(membership::ErasureDecision {
+        shred: first,
+        finalize: false,
+    });
+    write(&admin, &project, decision);
+    let second = shred_signed(&admin, &project, &account());
+
+    let erasures = list(&project);
+
+    let states: Vec<_> = erasures.iter().map(|e| (e.shred, e.state)).collect();
+    let mut expected = vec![
+        (ChangeId(first), ErasureState::TakenBack),
+        (ChangeId(second), ErasureState::Provisional),
+    ];
+    expected.sort_by_key(|(shred, _)| *shred);
+    assert_eq!(states, expected);
+    assert!(erasures.iter().all(|e| e.performer == id(&admin)));
+}

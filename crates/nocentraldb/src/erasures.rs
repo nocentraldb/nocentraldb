@@ -10,7 +10,7 @@
 //! and any member that acknowledged it later. Every member may list the
 //! erasures, a reader too.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::membership::{PersonKey, Resolved};
 
@@ -108,26 +108,68 @@ impl Erasures<'_> {
         let resolved = state.checks.resolved();
         let mut erasures: Vec<Erasure> = resolved
             .person_keys()
-            .filter_map(|(_, key)| erasure(resolved, key))
+            .flat_map(|(_, key)| erasures(resolved, key))
             .collect();
         erasures.sort_by_key(|erasure| erasure.shred);
         Ok(erasures)
     }
 }
 
-/// The erasure of a person key, if a shred erased it.
-fn erasure(resolved: &Resolved, key: &PersonKey) -> Option<Erasure> {
-    let shred = key.shred?;
-    let performer = key.performer?;
-    let state = match (key.provisional, key.finalized, key.taken_back) {
-        (false, _, _) | (true, Some(_), _) => ErasureState::Final,
-        (true, None, Some(_)) => ErasureState::TakenBack,
-        (true, None, None) => ErasureState::Provisional,
-    };
-    let ids: BTreeSet<_> = key
+/// The erasures of a person key: each earlier shred, which was taken back,
+/// and the shred that took effect (RFC 0008, "The function"; Carsten,
+/// 2026-11-12, NOC-242).
+fn erasures<'a>(resolved: &'a Resolved, key: &'a PersonKey) -> impl Iterator<Item = Erasure> + 'a {
+    let earlier = key.earlier.iter().filter_map(move |earlier| {
+        erasure(
+            resolved,
+            Shred {
+                id: earlier.id,
+                state: ErasureState::TakenBack,
+                performer: earlier.performer?,
+                sign_off: earlier.sign_off?,
+                past_members: &earlier.past_members,
+                acknowledged: &earlier.acknowledged,
+            },
+        )
+    });
+    let current = key.shred.and_then(|id| {
+        let state = match (key.provisional, key.finalized, key.taken_back) {
+            (false, _, _) | (true, Some(_), _) => ErasureState::Final,
+            (true, None, Some(_)) => ErasureState::TakenBack,
+            (true, None, None) => ErasureState::Provisional,
+        };
+        erasure(
+            resolved,
+            Shred {
+                id,
+                state,
+                performer: key.performer?,
+                sign_off: key.sign_off?,
+                past_members: &key.past_members,
+                acknowledged: &key.acknowledged,
+            },
+        )
+    });
+    earlier.chain(current)
+}
+
+/// What the audit reads of one shred of a person key.
+struct Shred<'a> {
+    id: ncdb_core::ids::ChangeId,
+    state: ErasureState,
+    performer: ncdb_core::ids::MemberId,
+    sign_off: [u8; 32],
+    past_members: &'a BTreeSet<ncdb_core::ids::MemberId>,
+    acknowledged: &'a BTreeMap<ncdb_core::ids::MemberId, bool>,
+}
+
+/// The erasure of one shred: every member of its causal past or that
+/// acknowledged it, with whether it is current and what it acknowledged.
+fn erasure(resolved: &Resolved, shred: Shred<'_>) -> Option<Erasure> {
+    let ids: BTreeSet<_> = shred
         .past_members
         .iter()
-        .chain(key.acknowledged.keys())
+        .chain(shred.acknowledged.keys())
         .copied()
         .collect();
     let members = ids
@@ -137,7 +179,7 @@ fn erasure(resolved: &Resolved, key: &PersonKey) -> Option<Erasure> {
                 id: MemberId(id),
                 account: account(resolved, id)?,
                 current: resolved.role(id).is_some(),
-                acknowledged: match key.acknowledged.get(&id) {
+                acknowledged: match shred.acknowledged.get(&id) {
                     Some(true) => Acknowledged::Deleted,
                     Some(false) => Acknowledged::Seen,
                     None => Acknowledged::Missing,
@@ -146,11 +188,11 @@ fn erasure(resolved: &Resolved, key: &PersonKey) -> Option<Erasure> {
         })
         .collect();
     Some(Erasure {
-        shred: ChangeId(shred),
-        state,
-        performer: MemberId(performer),
-        performer_account: account(resolved, performer)?,
-        sign_off: Fingerprint(key.sign_off?),
+        shred: ChangeId(shred.id),
+        state: shred.state,
+        performer: MemberId(shred.performer),
+        performer_account: account(resolved, shred.performer)?,
+        sign_off: Fingerprint(shred.sign_off),
         members,
     })
 }
