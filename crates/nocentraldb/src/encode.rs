@@ -12,7 +12,9 @@ use ncdb_core::ids::{
     ChangeId as CoreChangeId, MemberId, ObjectId as CoreObjectId, OperationId,
     SpaceId as CoreSpaceId,
 };
+use ncdb_core::keys::PersonKey;
 use ncdb_core::link::Target;
+use ncdb_core::personal::{self, Place, Sealed};
 use ncdb_core::view::{Field, FieldState};
 
 use crate::error::{Error, ErrorCode};
@@ -40,21 +42,34 @@ impl Site<'_> {
     pub(crate) const STAMP: Hlc = Hlc(0);
 
     /// The operations that write `intent` to the field, against `state`,
-    /// the copy's state of the field.
+    /// the copy's state of the field; a personal value sealed under `seal`,
+    /// a person key and its id (RFC 0009, "Personal fields").
     pub(crate) fn encode(
         &self,
         field: &Field,
         state: &FieldState,
         intent: &Intent,
+        seal: Option<(&PersonKey, [u8; 16])>,
     ) -> Result<Vec<Operation>, Error> {
         let (id, author, stamp) = (Site::ID, self.author, Site::STAMP);
         let invalid = || self.invalid();
         match (field, state, intent) {
             (Field::Basic(basic), FieldState::Basic(state), Intent::Set(value)) => {
                 let value = value.to_cbor().ok_or_else(invalid)?;
-                let write = basic
+                let mut write = basic
                     .set(state, id, author, stamp, value)
                     .map_err(|_| invalid())?;
+                if let Some((key, person_key)) = seal {
+                    let place = Place {
+                        space: self.space,
+                        object: self.object,
+                        person_key,
+                        collection: self.collection,
+                        field: self.name,
+                    };
+                    let bytes = personal::seal(key, &place, &write.value);
+                    write.value = Sealed { person_key, bytes }.to_value();
+                }
                 Ok(vec![self.operation(basic, &write)])
             }
             (Field::Link(link), FieldState::Basic(state), Intent::Set(value)) => {

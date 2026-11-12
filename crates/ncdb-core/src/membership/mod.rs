@@ -19,6 +19,7 @@ mod fields;
 mod generations;
 mod genesis;
 mod input;
+mod judge;
 mod key_chain;
 mod person_key;
 mod person_key_wrap;

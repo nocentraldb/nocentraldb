@@ -172,6 +172,7 @@ pub(crate) fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) ->
     let space = change.header().space;
     view.receive_own(change.bytes(), checks, crate::clock::now_millis())
         .map_err(storage)?;
+    crate::status::note_shreds(view, space, checks.resolved()).map_err(storage)?;
     match view.state(space, change.id()) {
         Some(State::Folded { parked }) if parked.is_empty() => Ok(()),
         other => panic!("the member's own change was not folded: {other:?}"),
@@ -224,7 +225,14 @@ impl Space {
         let mut inner = lock(&self.inner);
         let space = self.id.0;
         let member = inner.member.key();
-        let (operations, ids) = tx.operations(&inner.view, space, member.id())?;
+        let no_keys = std::collections::BTreeMap::new();
+        let held = inner
+            .spaces
+            .get(&space)
+            .map_or(&no_keys, |state| &state.person_keys);
+        let mut persons = crate::personal::Persons::new(held);
+        let (operations, ids) = tx.operations(&inner.view, space, member.id(), &mut persons)?;
+        let drawn = persons.drawn;
         let collections: BTreeSet<String> =
             operations.iter().map(|op| op.collection.clone()).collect();
         writable(&inner, self.id)?;
@@ -245,6 +253,13 @@ impl Space {
             ..
         } = &mut *inner;
         let state = spaces.get_mut(&space).expect("a writable space is held");
+        // Each person this write drew gets its key first: its person-key
+        // entry, folded before the content that is sealed under it (RFC
+        // 0003, "The person key").
+        let mut records = Vec::new();
+        for drawn in drawn {
+            records.push(person_key(view, state, space, &member, drawn)?);
+        }
         let next = next::next(view, space, &state.checks, member.id());
         let generation = next.generation.expect("a writable space has a generation");
         state.clock.observe(next.seen);
@@ -262,7 +277,11 @@ impl Space {
             .expect("a writable space's key is held");
         let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
         fold(view, &mut state.checks, &change)?;
+        crate::personal::refresh(view, space, state).map_err(storage)?;
         touched(watchers, space, &collections);
+        if !records.is_empty() {
+            crate::sync::put_person_keys(&mut inner, space, records);
+        }
         crate::sync::wake(&inner);
         Ok(Written {
             change: ChangeId(change.id()),
@@ -283,4 +302,48 @@ impl Space {
         }
         Object::read(&inner, self.id.0, collection, id.0)
     }
+}
+
+/// Writes the person-key entry of the person `drawn`, under the space's
+/// current generation, folds it, and holds the key; returns the record to
+/// put at the relay's person-key store (RFC 0003, "The person key"; RFC
+/// 0007, "Keys and the person-key store").
+fn person_key(
+    view: &mut View,
+    state: &mut SpaceState,
+    space: ncdb_core::ids::SpaceId,
+    member: &ncdb_core::keys::MemberKey,
+    drawn: crate::personal::Drawn,
+) -> Result<crate::sync::Record, Error> {
+    let id = drawn.person.person_key;
+    let next = next::next(view, space, &state.checks, member.id());
+    let generation = next.generation.expect("a writable space has a generation");
+    let space_key = state
+        .checks
+        .space_key(generation)
+        .expect("a writable space's key is held");
+    let wrapped = membership::wrap_person_key(space_key, space, generation, id, &drawn.key);
+    let signature = membership::sign_record(member, space, id, generation, &wrapped);
+    let entry = Entry::PersonKey(membership::PersonKeyEntry {
+        person_key: id,
+        commitment: drawn.key.commitment(space, id),
+        generation,
+        record_hash: membership::record_hash(&wrapped),
+    });
+    let change = membership::write(
+        member,
+        space,
+        next.sequence,
+        generation,
+        &ControlBody::new(crate::members::control_heads(view, space), entry),
+    );
+    fold(view, &mut state.checks, &change)?;
+    state.person_keys.insert(id, drawn.key);
+    Ok(crate::sync::Record {
+        person_key: id,
+        generation,
+        writer: member.id().0,
+        wrapped: wrapped.to_vec(),
+        signature,
+    })
 }

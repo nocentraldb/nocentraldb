@@ -162,6 +162,16 @@ impl Encoding for Reference {
     }
 }
 
+impl Encoding for crate::personal::PersonField {
+    fn arguments(&self, op: &Write) -> (u64, Value) {
+        write_arguments(op)
+    }
+
+    fn decode(&self, operation: &Operation, origin: Origin) -> Result<Write, OperationParkReason> {
+        decode_write(operation, origin)
+    }
+}
+
 impl Encoding for Set {
     fn arguments(&self, op: &Edit) -> (u64, Value) {
         edit_arguments(op)

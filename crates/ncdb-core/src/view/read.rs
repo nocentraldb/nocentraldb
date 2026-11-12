@@ -55,7 +55,7 @@ impl View {
             let name: String = row.get(0)?;
             let bytes: Vec<u8> = row.get(1)?;
             let state = match model.get(&name).ok_or(Error::Corrupt("field"))? {
-                Field::Basic(_) | Field::Link(_) | Field::Ref(_) => {
+                Field::Basic(_) | Field::Link(_) | Field::Ref(_) | Field::Person(_) => {
                     FieldState::Basic(state::basic(&bytes)?)
                 }
                 Field::Set(_) | Field::Links(_) => FieldState::Set(state::set(&bytes)?),
