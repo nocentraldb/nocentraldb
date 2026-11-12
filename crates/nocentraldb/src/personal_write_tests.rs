@@ -34,7 +34,7 @@ fn now<F: std::future::Future>(future: F) -> F::Output {
 
 /// The test model with `projects.name` personal to the project itself, and
 /// `tasks.title` personal to the task's `project`.
-fn lock() -> String {
+pub(crate) fn lock() -> String {
     let mut lock = ModelLock::from_json(LOCK).unwrap();
     lock.collections
         .get_mut("projects")

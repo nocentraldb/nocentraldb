@@ -20,6 +20,11 @@ use crate::space::Space;
 /// `admin` erases `PERSON` in `space`, signed off by its own account,
 /// folds the shred and wakes syncing. Returns the shred's change id.
 pub(super) fn erase(admin: &Db, space: &Space) -> crate::ChangeId {
+    erase_key(admin, space, PERSON)
+}
+
+/// [`erase`] of the person key `person`.
+pub(super) fn erase_key(admin: &Db, space: &Space, person: [u8; 16]) -> crate::ChangeId {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -28,8 +33,8 @@ pub(super) fn erase(admin: &Db, space: &Space) -> crate::ChangeId {
     let next = crate::next::next(view, id, &state.checks, member.id());
     let generation = next.generation.expect("a generation");
     let entry = Entry::Shred(membership::ShredEntry {
-        person_key: PERSON,
-        sign_off: membership::SignOff::sign(&account(), id, PERSON, member.id()),
+        person_key: person,
+        sign_off: membership::SignOff::sign(&account(), id, person, member.id()),
     });
     let change = membership::write(
         &member,

@@ -225,7 +225,12 @@ impl Proxy {
 /// The database of the simulated member `who`, of the simulated account,
 /// syncing with the relay at `url`.
 pub async fn open(who: Who, url: &str) -> Db {
-    let options = OpenOptions::new(LOCK).in_memory().relay(url);
+    open_with(who, url, LOCK).await
+}
+
+/// [`open`] with the lock `lock`.
+pub async fn open_with(who: Who, url: &str, lock: &str) -> Db {
+    let options = OpenOptions::new(lock).in_memory().relay(url);
     Db::open_as(options, [who; 32], [who ^ 0x80; 32], account())
         .await
         .expect("the test lock opens")
