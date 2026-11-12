@@ -29,10 +29,13 @@
 
 #[cfg(target_arch = "wasm32")]
 mod browser;
-// The worker's side of the TypeScript SDK (NOC-176): used once its export
-// to JavaScript is built, which waits for NOC-274.
-#[allow(dead_code)]
-mod bridge;
+// The worker's side of the TypeScript SDK (NOC-176): public only with the
+// feature `bridge`, which only the crate `nocentraldb-wasm` turns on, and
+// hidden from the docs, so the SDK's browser calls stay crate-internal
+// (Carsten, 2026-11-12, NOC-274, point 1; NOC-176, A).
+#[cfg(any(test, feature = "bridge"))]
+#[doc(hidden)]
+pub mod bridge;
 mod clock;
 mod db;
 mod durability;

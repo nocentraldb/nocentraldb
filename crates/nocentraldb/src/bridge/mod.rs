@@ -1,8 +1,13 @@
 //! The bridge between the TypeScript SDK and this SDK in a dedicated worker
-//! (NOC-176). Crate-internal and provisional: the export to JavaScript,
-//! the crate it lives in and every public TypeScript name wait for the
-//! owner's answers on NOC-274. What is fixed here is the message protocol
-//! the worker speaks, which the TypeScript side mirrors.
+//! (NOC-176). Public only with the feature `bridge` and hidden from the
+//! docs: the crate `nocentraldb-wasm` exports it to JavaScript (Carsten,
+//! 2026-11-12, NOC-274, point 1), and no other crate turns the feature on.
+//! Its API is one call, [`Bridge::handle`], bytes in and bytes out; the
+//! message protocol below is what the TypeScript side mirrors.
+//!
+//! The protocol is not versioned: `@nocentraldb/sdk` ships the worker, the
+//! wasm module and the TypeScript that speaks to it in one build, so both
+//! sides are always of the same version.
 //!
 //! Each message is CBOR (`ncdb_core::cbor`), so the bridge adds no
 //! dependency and its dispatch runs natively in tests, on a database in
@@ -42,7 +47,8 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use ncdb_core::basic::{BasicValue, Kind};
-use ncdb_core::cbor::{self, Key, Value};
+pub use ncdb_core::cbor;
+use ncdb_core::cbor::{Key, Value};
 use ncdb_core::set::Set;
 use ncdb_core::view::{Field as ModelField, Model};
 
@@ -54,7 +60,7 @@ use crate::object::Object;
 use crate::value::{Repr, Value as Field};
 
 /// The worker's side of the bridge: at most one open database.
-pub(crate) struct Bridge {
+pub struct Bridge {
     db: Option<Db>,
 }
 
@@ -85,13 +91,20 @@ fn code_name(code: ErrorCode) -> String {
     }
 }
 
+impl Default for Bridge {
+    fn default() -> Bridge {
+        Bridge::new()
+    }
+}
+
 impl Bridge {
-    pub(crate) fn new() -> Bridge {
+    /// A bridge with no database open.
+    pub fn new() -> Bridge {
         Bridge { db: None }
     }
 
     /// Answers one request, given and answered as CBOR.
-    pub(crate) async fn handle(&mut self, request: &[u8]) -> Vec<u8> {
+    pub async fn handle(&mut self, request: &[u8]) -> Vec<u8> {
         let Ok(request) = cbor::decode(request) else {
             return cbor::encode(&failure(0, "invalidValue", "the request is not CBOR"));
         };

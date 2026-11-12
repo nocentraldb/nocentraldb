@@ -44,7 +44,10 @@ fn the_core_opens_a_database_in_memory_and_creates_a_space() {
         ("inMemory", Value::Bool(true)),
     ]);
     let answer = cbor::decode(&now(core.answer(request(1, "open", open)))).unwrap();
-    assert_eq!(answer, map(&[("id", Value::Unsigned(1)), ("ok", Value::Null)]));
+    assert_eq!(
+        answer,
+        map(&[("id", Value::Unsigned(1)), ("ok", Value::Null)])
+    );
 
     let answer = cbor::decode(&now(core.answer(request(2, "spaces.create", map(&[]))))).unwrap();
     let Value::Map(answer) = answer else { panic!() };
