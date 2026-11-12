@@ -88,6 +88,10 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = fal
 # simulated member would. Natively only: they need sockets and threads.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
+# With NCDB_TEST_RELAY=lambda, the sync tests run against the relay's
+# Lambda handler behind its local stand-in for API Gateway instead
+# (NOC-271).
+ncdb-relay-lambda = { workspace = true, features = ["harness"] }
 # The relay's own digest of what a member signs, which the SDK's own copy
 # must equal (src/sync/wire.rs), and the store the tests read.
 ncdb-relay.workspace = true

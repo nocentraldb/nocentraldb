@@ -1,0 +1,14 @@
+language: rust
+layer: application
+
+# The Rust SDK's sync suite runs a second time with the relay's Lambda
+# handler behind the local stand-in for API Gateway instead of the
+# WebSocket server (NOC-271). Deps of `gates` merge with the inherited
+# ones.
+tasks:
+  test-sdk-sync:
+    command: "cargo test --locked -p nocentraldb --lib sync::tests"
+    env:
+      NCDB_TEST_RELAY: "lambda"
+  gates:
+    deps: ["~:test-sdk-sync"]

@@ -14,6 +14,7 @@ use ncdb_core::ids::{ChangeId as CoreChangeId, SpaceId as CoreSpaceId};
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
+use ncdb_relay_lambda::harness::Gateway;
 use ncdb_relay_server::Server;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
@@ -141,7 +142,8 @@ impl LocalRelay {
     }
 }
 
-/// A relay server on the database in `dir`; its address.
+/// A relay server on the database in `dir`, or with NCDB_TEST_RELAY=lambda
+/// the relay's Lambda handler behind its local API Gateway; its address.
 async fn serve(
     dir: &TempDir,
     allowed: BTreeSet<[u8; 32]>,
@@ -153,6 +155,14 @@ async fn serve(
         config.clock = clock;
     }
     config.max_frame = ncdb_relay_server::MAX_FRAME;
+    if std::env::var("NCDB_TEST_RELAY").as_deref() == Ok("lambda") {
+        let gateway = Gateway::bind("127.0.0.1:0", Relay::new(store, config), RELAY_ID)
+            .await
+            .expect("the gateway binds");
+        let addr = gateway.local_addr().expect("an address");
+        tokio::spawn(gateway.run());
+        return addr;
+    }
     let server = Server::bind("127.0.0.1:0", Relay::new(store, config), RELAY_ID)
         .await
         .expect("the server binds");
