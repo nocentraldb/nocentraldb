@@ -1,16 +1,16 @@
 ---
 // The landing page shell on the vendored design kit (public/assets, see
 // LICENSE-taste-skill.md): the head, the header and the footer. The sections
-// sit in main; Hero, UseCases, LiveExample, CodeSection and Closing stay there
-// until the scroll scenario replaces them.
+// sit in main: the hero, the scroll scenario, the code and the close.
 import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
 import CodeSection from "../components/CodeSection.astro";
 import Hero from "../components/Hero.astro";
-import LiveExample from "../components/LiveExample.astro";
-import UseCases from "../components/UseCases.astro";
+import Scenario from "../components/Scenario.astro";
 import "../styles/tokens.css";
 import "../styles/kit-tokens.css";
+import "../styles/scene.css";
+import "../styles/landing-page.css";
 
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
 const logo = wordmark.replace(
@@ -53,6 +53,9 @@ const links = [
       setTimeout(() => document.documentElement.classList.add("mo-safe"), 2500);
       if (new URLSearchParams(location.search).has("shot")) document.documentElement.dataset.shot = "";
     </script>
+    <link rel="modulepreload" href="/assets/moments/moments.js" />
+    <link rel="modulepreload" href="/assets/moments/lib.js" />
+    <link rel="modulepreload" href="/assets/moments/pinned-chapters/moment.js" />
   </head>
   <body>
     <header class="nav">
@@ -68,8 +71,7 @@ const links = [
     </header>
     <main id="top">
       <Hero />
-      <UseCases />
-      <LiveExample />
+      <Scenario />
       <CodeSection />
       <Closing />
     </main>

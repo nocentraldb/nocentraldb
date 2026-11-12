@@ -1,0 +1,59 @@
+/* The landing page's own rules on top of the vendored kit (public/assets):
+   the hero's two small lines, the drawing's 4:3 frame, the headline on a short
+   desktop window and the drawings' pause control. Ported from the accepted
+   prototype (docs/superpowers/specs/2026-11-12-landing-page-prototype/build.mjs). */
+
+.hero .status-line,
+.hero .fact-line {
+  color: var(--muted);
+  font-size: var(--t-small);
+  max-width: 44ch;
+}
+.hero .status-line {
+  margin-top: var(--s-6);
+}
+.hero .fact-line {
+  margin-top: var(--s-2);
+}
+
+/* The drawing's frame: 4:3 on the surface tone, in the hero and in the scenario. */
+.scene-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  background: var(--ncdb-surface);
+}
+[data-moment="pinned-chapters"] .mo-pc__visual {
+  background: var(--ncdb-surface);
+}
+
+/* A short desktop window (1440x670): the headline follows the window height. */
+@media (max-height: 780px) and (min-width: 1024px) {
+  .hero h1 {
+    font-size: clamp(36px, 7.6svh, 60px);
+  }
+  .hero .hero__lead,
+  .hero .status-line {
+    margin-top: var(--s-4);
+  }
+}
+
+/* Pause and Play, at the bottom right of each drawing's frame, above the figures. */
+button.scene-pause[data-scene-pause] {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 6;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink);
+  font: var(--ncdb-weight-emphasis) var(--t-small) var(--font-text);
+  cursor: pointer;
+}
+button.scene-pause[data-scene-pause][hidden] {
+  display: none;
+}

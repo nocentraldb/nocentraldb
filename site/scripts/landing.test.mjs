@@ -28,3 +28,31 @@ test("the title is unchanged and the description is the subline", () => {
     ),
   );
 });
+
+import { STEPS } from "../src/components/scene.mjs";
+
+test("the hero says what it is, in the spec's words", () => {
+  assert.match(html, /<h1[^>]*>A database that reads like a local file and syncs like a shared doc<\/h1>/);
+  for (const line of [
+    "A local-first database for people and agents",
+    "The changes sync encrypted through a server that can't read them.",
+    "NoCentralDB does not exist yet.",
+    "SDKs for TypeScript and Rust.",
+    "See how it works",
+    "Review the RFCs",
+  ]) assert.ok(html.includes(line.replace("'", "&#39;")) || html.includes(line), line);
+});
+test("the scenario holds all four steps and five drawings in the HTML", () => {
+  assert.match(html, /<section[^>]*id="story"[^>]*data-moment="pinned-chapters"/);
+  for (const s of STEPS) assert.ok(html.includes(s.title), s.title);
+  assert.equal(html.split('class="sc"').length - 1, 5);
+  assert.equal(html.split("mo-pc__step\"").length - 1, 4);
+});
+test("hero and scenario never say relay, and the drawings can be paused", () => {
+  const upTo = html.indexOf('id="code"');
+  assert.ok(!/relay/i.test(html.slice(html.indexOf("<main"), upTo)));
+  assert.ok(html.includes("data-scene-pause"));
+});
+test("the removed sections are gone", () => {
+  for (const id of ['id="use-cases"', 'id="live"']) assert.ok(!html.includes(id), id);
+});
