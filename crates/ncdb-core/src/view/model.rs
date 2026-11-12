@@ -8,11 +8,15 @@
 //! SDK's API.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
+use ncdb_plugin::{Data, ErasedField, Outcome};
 
 use sha2::{Digest, Sha256};
 
 use crate::basic::{self, BasicValue, Kind};
 use crate::cbor::{self, Key, Value};
+use crate::ids::OperationId;
 use crate::link::{Link, Links};
 use crate::model_lock::Refusal;
 pub use crate::model_lock::Scope;
@@ -51,6 +55,55 @@ pub enum Field {
     Links(Links),
     /// A reference to one object, in any space (RFC 0004, "References").
     Ref(Reference),
+    /// A field of a plugin type, with the code registered for it (RFC
+    /// 0011).
+    Plugin(PluginField),
+}
+
+/// A field of a plugin type: its type id, rule and `config`, and the code
+/// the registry gave it, configured for this field (RFC 0011, "The field
+/// type a plugin implements"). Two are equal when their type id, rule and
+/// `config` are: the code is the one the registry holds for them.
+#[derive(Clone)]
+pub struct PluginField {
+    /// The type id, `<namespace>/<name>`.
+    pub type_id: String,
+    /// The rule version.
+    pub rule: u64,
+    /// The canonical bytes of the field's `config`, empty without one.
+    pub config: Vec<u8>,
+    pub(crate) code: Arc<dyn ErasedField>,
+}
+
+impl PluginField {
+    /// What the app reads from the field's stored state, or `None` for
+    /// bytes the plugin did not write.
+    pub fn read(&self, state: &[u8]) -> Option<Data> {
+        self.code.read(Some(state))
+    }
+
+    /// Where the operation `id` went in the field's stored state, or
+    /// `None` when the state never received it.
+    pub fn outcome(&self, state: &[u8], id: OperationId) -> Option<Outcome> {
+        self.code.outcome(Some(state), id)
+    }
+}
+
+impl PartialEq for PluginField {
+    fn eq(&self, other: &PluginField) -> bool {
+        (&self.type_id, self.rule, &self.config) == (&other.type_id, other.rule, &other.config)
+    }
+}
+
+impl Eq for PluginField {}
+
+impl std::fmt::Debug for PluginField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginField")
+            .field("type_id", &self.type_id)
+            .field("rule", &self.rule)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The merge state of one field, as its field type keeps it.
@@ -60,6 +113,8 @@ pub enum FieldState {
     Basic(basic::State),
     /// The state of a set or of links.
     Set(set::State),
+    /// The state of a plugin field, as the plugin's code encodes it.
+    Plugin(Vec<u8>),
 }
 
 /// A declared index (RFC 0006, "Declared indexes").
@@ -125,6 +180,7 @@ impl Field {
                 FieldState::Basic(basic::State::default())
             }
             Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
+            Field::Plugin(plugin) => FieldState::Plugin(plugin.code.initial()),
         }
     }
 }
@@ -231,6 +287,12 @@ impl Field {
             Field::Set(t) => Value::Array(vec![Value::Unsigned(2), describe(&t.kind)]),
             Field::Links(t) => Value::Array(vec![Value::Unsigned(3), collections(&t.collections)]),
             Field::Ref(t) => Value::Array(vec![Value::Unsigned(4), collections(&t.collections)]),
+            Field::Plugin(t) => Value::Array(vec![
+                Value::Unsigned(5),
+                Value::Text(t.type_id.clone()),
+                Value::Unsigned(t.rule),
+                Value::Bytes(t.config.clone()),
+            ]),
         }
     }
 }

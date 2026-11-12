@@ -36,7 +36,9 @@
 //! ([`view`]).
 
 pub mod basic;
-pub mod cbor;
+/// The canonical CBOR of RFC 0002, which the core shares with plugins'
+/// `Data` (RFC 0011): it lives in `ncdb-plugin`.
+pub use ncdb_plugin::cbor;
 pub mod change;
 pub mod checks;
 pub mod clock;
@@ -51,6 +53,7 @@ pub mod membership;
 pub mod model_lock;
 pub mod object;
 pub mod pairing;
+pub mod plugins;
 pub mod receive;
 mod redact;
 pub mod reference;

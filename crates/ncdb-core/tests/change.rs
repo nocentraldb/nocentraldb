@@ -14,7 +14,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use ncdb_core::cbor::{self, Key, Reason, Value};
 use ncdb_core::change::{Change, ChangeError, Header, Kind, Operation, Payload};
 use ncdb_core::clock::Hlc;
-use ncdb_core::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
+use ncdb_core::ids::{self, ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use proptest::prelude::*;
 
 fn hex(text: &str) -> Vec<u8> {
@@ -362,9 +362,9 @@ fn the_change_id_is_the_hash_of_frame_version_and_header_bytes() {
     let a = Change::new(sealed_header(1), vec![1; 64]);
     let b = Change::new(sealed_header(1), vec![2; 64]);
     assert_eq!(a.id(), b.id());
-    assert_eq!(a.id(), ChangeId::compute(1, &sealed_header(1).encode()));
-    assert_ne!(a.id(), ChangeId::compute(2, &sealed_header(1).encode()));
-    assert_eq!(ChangeId::CONTEXT, b"nocentraldb/change-id");
+    assert_eq!(a.id(), ids::change_id(1, &sealed_header(1).encode()));
+    assert_ne!(a.id(), ids::change_id(2, &sealed_header(1).encode()));
+    assert_eq!(ids::CHANGE_ID_CONTEXT, b"nocentraldb/change-id");
 }
 
 #[test]

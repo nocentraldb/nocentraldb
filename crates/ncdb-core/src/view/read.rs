@@ -59,6 +59,7 @@ impl View {
                     FieldState::Basic(state::basic(&bytes)?)
                 }
                 Field::Set(_) | Field::Links(_) => FieldState::Set(state::set(&bytes)?),
+                Field::Plugin(_) => FieldState::Plugin(bytes),
             };
             fields.insert(name, state);
         }

@@ -63,7 +63,11 @@ impl FieldType for Counter {
         adds.into_iter()
             .map(|add| match add {
                 Data::Array(fields) => match fields.as_slice() {
-                    [Data::Bytes(change), Data::Integer(position), Data::Integer(n)] => Some((
+                    [
+                        Data::Bytes(change),
+                        Data::Integer(position),
+                        Data::Integer(n),
+                    ] => Some((
                         OperationId {
                             change: ChangeId(change.as_slice().try_into().ok()?),
                             position: u64::try_from(*position).ok()?,

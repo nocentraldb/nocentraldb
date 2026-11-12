@@ -13,6 +13,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
 use super::model::{Field, FieldState, Model};
+use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
 use crate::basic::Entry;
@@ -192,6 +193,12 @@ impl<'a> SqlFold<'a> {
             (Field::Links(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
+            (Field::Plugin(t), FieldState::Plugin(s)) => {
+                match plugin::apply(t, &s, operation, origin) {
+                    Ok(folded) => folded.map(|bytes| (bytes, None)),
+                    Err(error) => return Err(error),
+                }
+            }
             _ => unreachable!("a field's state matches its type"),
         };
         Ok(match folded {
@@ -335,6 +342,7 @@ pub(super) fn load(
         (None, empty) => empty,
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),
         (Some(bytes), FieldState::Set(_)) => FieldState::Set(state::set(&bytes)?),
+        (Some(bytes), FieldState::Plugin(_)) => FieldState::Plugin(bytes),
     })
 }
 
