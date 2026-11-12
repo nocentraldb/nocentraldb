@@ -28,16 +28,36 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com
 ```
 
-### 1.2 CDK's bootstrap
+### 1.2 CDK's bootstrap, with a narrow execution role
+
+The bootstrap creates CDK's own roles (`cdk-hnb659fds-*`) and its asset bucket. CloudFormation deploys the stack through CDK's execution role, and only CloudFormation can assume it. CDK's default gives that role `AdministratorAccess`. NOC-264 asks for least privilege, so the role gets two managed policies of the repository's own instead, in `infra/aws/execution-policy`:
+
+- `storage.json`: the stack's tables (`ncdb-*`), its bucket, and reading the function's package from CDK's asset bucket.
+- `service.json`: the WebSocket API, the function and its permissions, the function's role, the logs, the alarms, the alarm topic, the budget, and CDK's bootstrap version in SSM.
+
+Each action is one that CloudFormation's own handlers call for a resource type of the stack, and each names the stack's own resources (`NoCentralDbRelay-*`, `ncdb-*`), in eu-central-1. The function's role may be passed only to Lambda, and gets no managed policy but `AWSLambdaBasicExecutionRole`. `infra/aws/test/execution-policy.test.ts` checks the policies against the synthesized template: every resource type covered, nothing extra, nothing outside the stack. There are two policies because one would be larger than IAM allows.
 
 Run this once from the repository, after `pnpm install`:
 
 ```sh
 cd infra/aws
-pnpm exec cdk bootstrap "aws://$ACCOUNT/eu-central-1"
+for part in storage service; do
+  aws iam create-policy --policy-name "ncdb-relay-cloudformation-$part" \
+    --policy-document "file://execution-policy/$part.json"
+done
+pnpm exec cdk bootstrap "aws://$ACCOUNT/eu-central-1" \
+  --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-storage,arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-service"
 ```
 
-The bootstrap creates CDK's own roles (`cdk-hnb659fds-*`) and its asset bucket. CloudFormation deploys the stack through CDK's execution role. By default that role holds `AdministratorAccess`, and only CloudFormation can assume it. To narrow it, pass `--cloudformation-execution-policies` with a policy of your own.
+When a pull request changes a policy file, update the policy in IAM before the merge deploys it. For example, for `service.json`:
+
+```sh
+aws iam create-policy-version --set-as-default \
+  --policy-arn "arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-service" \
+  --policy-document file://execution-policy/service.json
+```
+
+IAM keeps at most five versions of a policy; delete the oldest with `aws iam delete-policy-version` when it refuses. If a deploy fails because the role lacks an action, CloudFormation rolls the stack back and its events name the action. Tell pm; the fix is a change to the policy file, and the test shows it.
 
 ### 1.3 The deploy role
 
@@ -126,6 +146,8 @@ Check two more things:
   3. In CloudWatch Logs, the function's logs hold one JSON line per invocation. During the test, no line may hold the code `unauthenticated` or `malformed`.
 
 If a check fails, roll back (below) and tell pm what you saw, with the log lines. The log lines hold no content.
+
+The function never logs the events API Gateway sends it. A one-time capture of a real event per route, as test fixtures, is NOC-292.
 
 ## 4. Rollback
 

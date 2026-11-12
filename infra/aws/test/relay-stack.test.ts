@@ -4,20 +4,11 @@
 // also kept as a snapshot, so a pull request shows how it changes the
 // deployed infrastructure without credentials (NOC-264, NOC-272).
 
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, test } from "vitest";
 import { RelayStack } from "../src/relay-stack.ts";
-
-/// A directory standing in for the function's built package.
-function lambdaPackage(): string {
-  const dir = mkdtempSync(join(tmpdir(), "ncdb-relay-lambda-"));
-  writeFileSync(join(dir, "bootstrap"), "not a real binary\n");
-  return dir;
-}
+import { lambdaPackage } from "./lambda-package.ts";
 
 function synth(): Template {
   const app = new App();
