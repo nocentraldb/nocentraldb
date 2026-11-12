@@ -610,3 +610,32 @@ fn tasks_in(bridge: &mut Bridge, space: &Value) {
         ]),
     );
 }
+
+// A cursor never survives its database: after a close and a new open in
+// the same worker, an old handle is refused, never another query's page.
+#[test]
+fn a_cursor_of_a_closed_database_is_of_another_model() {
+    let mut bridge = opened();
+    tasks(&mut bridge, &[(1, "open"), (2, "open")]);
+    let query = [
+        ("collection", text("tasks")),
+        ("index", text("byPriority")),
+        ("take", Value::Unsigned(1)),
+    ];
+    let first = find(&mut bridge, &query, None);
+    let cursor = field(&first, "cursor").unwrap().clone();
+    ok(&mut bridge, "close", map(&[]));
+    ok(
+        &mut bridge,
+        "open",
+        map(&[("lock", text(LOCK)), ("inMemory", Value::Bool(true))]),
+    );
+    tasks(&mut bridge, &[(5, "open"), (6, "open")]);
+    // A cursor of the new database takes a handle the old one never had.
+    let fresh = field(&find(&mut bridge, &query, None), "cursor").unwrap().clone();
+    assert_ne!(fresh, cursor);
+    let mut after = query.to_vec();
+    after.push(("after", cursor));
+    let refused = code(&mut bridge, "find", map(&[("query", map(&after))]));
+    assert_eq!(refused, "cursorOfAnotherModel");
+}
