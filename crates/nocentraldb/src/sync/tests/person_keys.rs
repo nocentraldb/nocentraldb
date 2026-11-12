@@ -171,6 +171,34 @@ fn current(db: &Db, space: CoreSpaceId) -> Option<u64> {
         .current_generation()
 }
 
+/// What `db` still holds to put for `space`, and whether the relay
+/// confirmed the person-key entries that announce it: the diagnosis of a
+/// record the relay did not store in time (NOC-259).
+fn waiting_puts(db: &Db, space: CoreSpaceId) -> String {
+    let inner = lock(&db.inner);
+    let waiting: Vec<u64> = inner
+        .sync
+        .as_ref()
+        .and_then(|sync| sync.puts.get(&space))
+        .map(|records| records.iter().map(|record| record.generation).collect())
+        .unwrap_or_default();
+    let log = inner.view.log(space).expect("the space's log");
+    let entries: Vec<(u64, bool)> = log
+        .after(ncdb_core::log::Position::START)
+        .filter_map(|(_, change)| {
+            let body = ControlBody::decode(&change.header().payload).ok()?;
+            let Entry::PersonKey(entry) = body.entry else {
+                return None;
+            };
+            let confirmed = inner.view.relay_position(space, change.id()).is_some();
+            Some((entry.generation, confirmed))
+        })
+        .collect();
+    format!(
+        "waiting to put: generations {waiting:?}; person-key entries (generation, confirmed): {entries:?}"
+    )
+}
+
 /// A removal rotates the space key; the rotation re-wraps the person key
 /// under the fresh generation and puts the record, which replaces the old
 /// one at the relay. The other member, which forgot the key, holds it
@@ -208,11 +236,12 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
         }
         assert!(
             start.elapsed() < std::time::Duration::from_secs(10),
-            "the relay stores the re-wrapped record: not in time; it holds generations {:?}",
+            "the relay stores the re-wrapped record: not in time; it holds generations {:?}; {}",
             stored
                 .iter()
                 .map(|record| record.generation)
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>(),
+            waiting_puts(&admin, space),
         );
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     };
