@@ -19,11 +19,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::cbor;
+use crate::cbor::{self, Value};
 use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
-use super::body::{Action, Entry, Role};
+use super::body::{Action, Entry, MembershipEntry, Role};
 use super::current::{self, MergeRotation};
 use super::fields;
 use super::generations::{Generation, Generations};
@@ -32,6 +32,7 @@ use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
 use super::stable::{self, Stability};
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
+use super::statement::AccountKeyStatement;
 
 /// The control state of a space: what `resolve` computes. Its `Debug`
 /// output shows ids, roles and verdicts, never content.
@@ -52,6 +53,8 @@ pub struct Resolved {
     heads: BTreeSet<u64>,
     current: Option<u64>,
     person_keys: PersonKeys,
+    /// The accepted account key statement entries, by change id.
+    statements: BTreeMap<ChangeId, AccountKeyStatement>,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -156,6 +159,23 @@ impl Resolved {
     /// accepted genesis or add entry.
     pub(crate) fn certificates(&self) -> impl Iterator<Item = &super::Certificate> + '_ {
         self.members.0.values().map(|state| &state.certificate)
+    }
+
+    /// The statements of the accepted account key statement entries, in
+    /// the order of their change ids (RFC 0008, "Account key statement
+    /// entry").
+    pub fn statements(&self) -> impl Iterator<Item = &AccountKeyStatement> + '_ {
+        self.statements.values()
+    }
+
+    /// Every account key statement of the state: those the certificates of
+    /// current and former members carry, and those of the accepted
+    /// statement entries.
+    pub fn all_statements(&self) -> impl Iterator<Item = &AccountKeyStatement> + '_ {
+        let certified = self
+            .certificates()
+            .filter_map(|certificate| certificate.statement.as_deref());
+        certified.chain(self.statements())
     }
 
     /// The order of step 4, of the changes that take part in the fold.
@@ -272,6 +292,11 @@ impl Resolved {
             self.current,
         );
         entries.push((8, self.person_keys.to_value()));
+        let statements = self
+            .statements
+            .iter()
+            .map(|(id, statement)| Value::Array(vec![fields::bytes(&id.0), statement.to_value()]));
+        entries.push((9, Value::Array(statements.collect())));
         cbor::encode(&fields::map(entries))
     }
 }
@@ -311,6 +336,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         heads: BTreeSet::new(),
         current: None,
         person_keys: PersonKeys::default(),
+        statements: BTreeMap::new(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -359,7 +385,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         from_generation: Some(body.first_generation),
         effective: Some(Role::Admin),
     };
-    let members = &mut resolved.members;
+    let mut members = Members::default();
     members.grant(
         genesis.author,
         Some((body.creator, &body.certificate)),
@@ -367,12 +393,77 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     );
     members.settle(saw);
     resolved.verdicts.insert(genesis.id, Verdict::Accepted);
+    let (before, start) = (resolved.verdicts.clone(), members);
+    // RFC 0008, step 5: an add concurrent with an accepted statement entry
+    // that supersedes its account key is rejected wherever it falls in the
+    // order. Rejecting it may change what else is accepted, so the order is
+    // applied again with every add found so far rejected, until no new one
+    // is found; the set only grows, so this ends.
+    let mut superseded: BTreeMap<ChangeId, ChangeId> = BTreeMap::new();
+    let members = loop {
+        resolved.verdicts = before.clone();
+        resolved.statements.clear();
+        let members = apply_order(
+            &mut resolved,
+            &folded,
+            input,
+            judged,
+            &superseded,
+            start.clone(),
+        );
+        let found = concurrent_adds(&resolved, &members, &folded, input);
+        let new: Vec<(ChangeId, ChangeId)> = found
+            .into_iter()
+            .filter(|(add, _)| !superseded.contains_key(add))
+            .collect();
+        if new.is_empty() {
+            break members;
+        }
+        superseded.extend(new);
+    };
+    resolved.members = members;
+    for state in resolved.members.0.values() {
+        for grant in &state.grants {
+            if lost(state, grant, saw) {
+                resolved.verdicts.insert(grant.change, Verdict::Lost);
+            }
+        }
+    }
+    reject_duplicate_generations(&mut resolved.verdicts, &folded);
+    resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
+    resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
+    resolved.person_keys =
+        person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
+    resolved
+}
+
+/// Step 5's walk through the order, from `members`, the state after the
+/// genesis: each change accepted or rejected, the accepted ones applied.
+/// An add in `superseded` is rejected, naming the statement entry that
+/// supersedes it.
+fn apply_order(
+    resolved: &mut Resolved,
+    folded: &BTreeMap<ChangeId, &Node>,
+    input: &Input,
+    judged: &Judged,
+    superseded: &BTreeMap<ChangeId, ChangeId>,
+    mut members: Members,
+) -> Members {
+    let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
+    let genesis = resolved.genesis;
     let mut accepted_revocations: Vec<ChangeId> = Vec::new();
     let mut keys = PersonKeys::default();
-    for id in resolved.order.iter().filter(|id| **id != genesis.id) {
+    for id in resolved
+        .order
+        .clone()
+        .iter()
+        .filter(|id| Some(**id) != genesis)
+    {
         let node = folded[id];
         let verdict = if !judged.valid(node.id) {
             Verdict::Rejected(Rejection::NotValidWhenWritten)
+        } else if let Some(entry) = superseded.get(&node.id) {
+            Verdict::Rejected(Rejection::Superseded(*entry))
         } else if let Some(by) = accepted_revocations
             .iter()
             .find(|r| rights::excludes(folded[r], node, &input.nodes, judged))
@@ -387,8 +478,11 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         } else if !keys.admits(node) {
             Verdict::Rejected(Rejection::Commitment)
         } else {
-            apply(members, node);
+            apply(&mut members, node);
             keys.apply(node);
+            if let Entry::AccountKeyStatement(statement) = &node.body.entry {
+                resolved.statements.insert(node.id, statement.clone());
+            }
             members.settle(saw);
             if node.membership().is_some_and(|m| m.cutoff().is_some()) {
                 accepted_revocations.push(node.id);
@@ -397,19 +491,57 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         };
         resolved.verdicts.insert(node.id, verdict);
     }
-    for state in members.0.values() {
-        for grant in &state.grants {
-            if lost(state, grant, saw) {
-                resolved.verdicts.insert(grant.change, Verdict::Lost);
-            }
+    members
+}
+
+/// The accepted adds concurrent with an accepted account key statement
+/// entry that supersedes the account key their certificate names, each
+/// with the first such entry by change id (RFC 0008, step 5; pm, NOC-233,
+/// for the owner's NOC-187 4B): neither is in the other's causal past, and
+/// a statement of the state, or the add's own certificate, names that key
+/// for the entry's recovery key with a lower number.
+fn concurrent_adds(
+    resolved: &Resolved,
+    members: &Members,
+    folded: &BTreeMap<ChangeId, &Node>,
+    input: &Input,
+) -> Vec<(ChangeId, ChangeId)> {
+    let saw = |a: ChangeId, b: ChangeId| input.nodes.get(&a).is_some_and(|n| n.past.contains(&b));
+    let certified = members
+        .0
+        .values()
+        .filter_map(|state| state.certificate.statement.as_deref());
+    let known: Vec<&AccountKeyStatement> = certified.chain(resolved.statements()).collect();
+    let mut found = Vec::new();
+    for (id, node) in folded {
+        let Some(MembershipEntry {
+            action: Action::Add { certificate, .. },
+            ..
+        }) = node.membership()
+        else {
+            continue;
+        };
+        if resolved.verdicts.get(id) != Some(&Verdict::Accepted) {
+            continue;
+        }
+        let key = certificate.account_key;
+        let named = |recovery: [u8; 32], number: u64| {
+            known
+                .iter()
+                .copied()
+                .chain(certificate.statement.as_deref())
+                .any(|s| s.recovery_key == recovery && s.account_key == key && s.number < number)
+        };
+        let by = resolved.statements.iter().find(|(entry, statement)| {
+            !saw(*id, **entry)
+                && !saw(**entry, *id)
+                && named(statement.recovery_key, statement.number)
+        });
+        if let Some((entry, _)) = by {
+            found.push((*id, *entry));
         }
     }
-    reject_duplicate_generations(&mut resolved.verdicts, &folded);
-    resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
-    resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
-    resolved.person_keys =
-        person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
-    resolved
+    found
 }
 
 /// Whether `node` is a shred entry, which step 5 accepts when it is valid

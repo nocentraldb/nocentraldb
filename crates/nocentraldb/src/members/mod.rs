@@ -32,6 +32,7 @@ mod leave;
 pub(crate) mod merge;
 mod notice;
 mod rotate;
+mod statement;
 
 use batch::Batch;
 
@@ -310,6 +311,8 @@ mod relay_tests;
 mod remove_tests;
 #[cfg(test)]
 mod rotate_tests;
+#[cfg(test)]
+mod statement_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
