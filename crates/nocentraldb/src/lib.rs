@@ -41,6 +41,7 @@ mod list;
 mod members;
 mod next;
 mod object;
+mod personal;
 mod query;
 mod space;
 mod status;
@@ -77,6 +78,7 @@ pub use status::{
     ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,
 };
 pub use sync::{Connection, SyncReport, SyncStatus};
+pub use tx::Create;
 pub use tx::Transaction;
 pub use value::Value;
 pub use view_report::{RebuildProgress, ViewReport, ViewStatus};
