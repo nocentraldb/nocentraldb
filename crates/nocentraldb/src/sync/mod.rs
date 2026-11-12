@@ -27,8 +27,10 @@
 //! [`SyncStatus`] counts them. A log written before NOC-188 may hold a
 //! relay's own text there, so the API that first shows a refusal's code
 //! must read it through `wire::mapped_code`. The relay is reached over plain
-//! WebSocket (`ws://`) and its URLs over plain HTTP only; TLS is the second
-//! part of NOC-121.
+//! WebSocket over TLS (`wss://`) or, on a local network, without it
+//! (`ws://`); its upload and download URLs likewise over `https://` or
+//! `http://`. TLS verifies the relay against the platform's trust store
+//! (`tls`).
 
 // On wasm32 only the counts of `apply` are read until the browser syncs
 // (NOC-175); the rest serves the connection, which is native only.
@@ -49,6 +51,8 @@ mod run;
 #[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
+#[cfg(not(target_arch = "wasm32"))]
+mod tls;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 

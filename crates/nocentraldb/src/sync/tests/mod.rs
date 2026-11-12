@@ -39,3 +39,4 @@ mod spaces;
 pub(crate) mod support;
 mod timeouts;
 mod two_devices;
+mod wss;
