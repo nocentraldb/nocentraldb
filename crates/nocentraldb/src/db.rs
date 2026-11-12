@@ -259,7 +259,9 @@ fn open_at(
         (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
-    let checks = |space| SealChecks::new(space, keys.member.key());
+    // The view keeps the checks while a rebuild runs (NOC-156).
+    let member = keys.member.clone();
+    let checks = move |space| SealChecks::new(space, member.key());
     let view = View::open_with(&file, lock, checks).map_err(view_error)?;
     Ok((view, keys))
 }
@@ -391,6 +393,10 @@ impl Db {
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        // A rebuild of the view runs in the background (RFC 0009, step 4),
+        // in a thread, which wasm32 does not start yet.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::view_report::start(&inner);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);

@@ -58,12 +58,32 @@ pub(super) fn quote(name: &str) -> String {
 
 /// The table of a collection's read values.
 pub(super) fn rows(collection: &str) -> String {
-    quote(&format!("c_{collection}"))
+    rows_in("", collection)
 }
 
 /// The table of a collection's merge states.
 pub(super) fn states(collection: &str) -> String {
-    quote(&format!("fs_{collection}"))
+    states_in("", collection)
+}
+
+/// The prefix of the tables a full rebuild folds into, beside the view's
+/// own, until it swaps them in (RFC 0006, "How"; NOC-227).
+pub(super) const STAGING: &str = "r_";
+
+/// The table of a collection's read values, under `prefix`: empty for the
+/// view's own tables, [`STAGING`] for a rebuild's.
+pub(super) fn rows_in(prefix: &str, collection: &str) -> String {
+    quote(&format!("{prefix}c_{collection}"))
+}
+
+/// The table of a collection's merge states, under `prefix`.
+pub(super) fn states_in(prefix: &str, collection: &str) -> String {
+    quote(&format!("{prefix}fs_{collection}"))
+}
+
+/// The table of the objects' creates and deletes, under `prefix`.
+pub(super) fn objects_in(prefix: &str) -> String {
+    quote(&format!("{prefix}objects"))
 }
 
 /// The column of a field's read value.
@@ -131,7 +151,9 @@ pub(super) enum Fit {
     Migrate(Additions),
     /// They were folded by another model, which the lock check accepted:
     /// the log must be folded again (RFC 0006, "Rebuilding the view").
-    Refold,
+    /// Holds that model when it is known, the stored lock's, so that the
+    /// old tables can serve while a rebuild runs (`super::rebuild`).
+    Refold(Option<Box<Model>>),
 }
 
 /// A value of `meta`, when it holds one.
@@ -173,14 +195,16 @@ pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result
             if current {
                 return Ok(Fit::Current);
             }
-            let additions = stored
+            let old = stored
                 .and_then(|text| ModelLock::from_json(&text).ok())
                 .and_then(|stored| Model::from_lock(&stored).ok())
-                .filter(|old| folded_by.as_deref() == Some(hex(&old.hash()).as_str()))
-                .and_then(|old| Additions::between(&old, model));
-            Ok(match additions {
-                Some(additions) => Fit::Migrate(additions),
-                None => Fit::Refold,
+                .filter(|old| folded_by.as_deref() == Some(hex(&old.hash()).as_str()));
+            Ok(match old {
+                Some(old) => match Additions::between(&old, model) {
+                    Some(additions) => Fit::Migrate(additions),
+                    None => Fit::Refold(Some(Box::new(old))),
+                },
+                None => Fit::Refold(None),
             })
         }
     }
@@ -190,6 +214,18 @@ pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result
 /// objects' states, and creates the tables of `model` in their place,
 /// empty: the start of folding the log again. `meta` then names `model`.
 pub(super) fn replace(conn: &Connection, model: &Model) -> Result<(), Error> {
+    drop_collections(conn)?;
+    conn.execute("DELETE FROM objects", [])?;
+    create(conn, model)?;
+    conn.execute(
+        "UPDATE meta SET value = ?1 WHERE key = 'model'",
+        [hex(&model.hash())],
+    )?;
+    Ok(())
+}
+
+/// Drops the tables of every collection, with their indexes.
+fn drop_collections(conn: &Connection) -> Result<(), Error> {
     let tables: Vec<String> = conn
         .prepare(
             "SELECT name FROM sqlite_schema WHERE type = 'table'
@@ -200,12 +236,6 @@ pub(super) fn replace(conn: &Connection, model: &Model) -> Result<(), Error> {
     for table in tables {
         conn.execute_batch(&format!("DROP TABLE {};", quote(&table)))?;
     }
-    conn.execute("DELETE FROM objects", [])?;
-    create(conn, model)?;
-    conn.execute(
-        "UPDATE meta SET value = ?1 WHERE key = 'model'",
-        [hex(&model.hash())],
-    )?;
     Ok(())
 }
 
@@ -230,6 +260,16 @@ pub(super) fn create_collection(
     collection: &str,
     fields: &BTreeMap<String, Field>,
 ) -> Result<(), Error> {
+    create_collection_in(conn, "", collection, fields)
+}
+
+/// [`create_collection`], under `prefix`.
+pub(super) fn create_collection_in(
+    conn: &Connection,
+    prefix: &str,
+    collection: &str,
+    fields: &BTreeMap<String, Field>,
+) -> Result<(), Error> {
     let columns: String = fields
         .iter()
         .filter(|(_, field)| field.has_column())
@@ -249,9 +289,72 @@ pub(super) fn create_collection(
                 state BLOB NOT NULL,
                 PRIMARY KEY (space_id, object_id, field)
             ) STRICT;",
-        rows(collection),
-        states(collection),
+        rows_in(prefix, collection),
+        states_in(prefix, collection),
     ))?;
+    Ok(())
+}
+
+/// Drops the staging tables a rebuild cut off by a close left behind.
+pub(super) fn drop_staging(conn: &Connection) -> Result<(), Error> {
+    let tables: Vec<String> = conn
+        .prepare(
+            "SELECT name FROM sqlite_schema WHERE type = 'table'
+             AND name LIKE 'r\\_%' ESCAPE '\\'",
+        )?
+        .query_map([], |r| r.get(0))?
+        .collect::<Result<_, _>>()?;
+    for table in tables {
+        conn.execute_batch(&format!("DROP TABLE {};", quote(&table)))?;
+    }
+    Ok(())
+}
+
+/// Creates a rebuild's staging tables for `model`, empty and without
+/// indexes, which the swap creates once the tables hold everything.
+pub(super) fn create_staging(conn: &Connection, model: &Model) -> Result<(), Error> {
+    for (collection, fields) in &model.collections {
+        create_collection_in(conn, STAGING, collection, fields)?;
+    }
+    conn.execute_batch(&format!(
+        "CREATE TABLE {} (
+            space_id BLOB NOT NULL,
+            object_id BLOB NOT NULL,
+            state BLOB NOT NULL,
+            PRIMARY KEY (space_id, object_id)
+        ) STRICT;",
+        objects_in(STAGING)
+    ))?;
+    Ok(())
+}
+
+/// Swaps a rebuild's staging tables in: drops the view's collection tables
+/// and objects, renames the staging tables in their place, creates the
+/// indexes of `model` and names it in `meta`.
+pub(super) fn swap_staging(conn: &Connection, model: &Model) -> Result<(), Error> {
+    drop_collections(conn)?;
+    conn.execute_batch("DROP TABLE objects;")?;
+    for collection in model.collections.keys() {
+        conn.execute_batch(&format!(
+            "ALTER TABLE {} RENAME TO {};
+             ALTER TABLE {} RENAME TO {};",
+            rows_in(STAGING, collection),
+            rows(collection),
+            states_in(STAGING, collection),
+            states(collection),
+        ))?;
+    }
+    conn.execute_batch(&format!(
+        "ALTER TABLE {} RENAME TO objects;",
+        objects_in(STAGING)
+    ))?;
+    for index in &model.indexes {
+        create_index(conn, index)?;
+    }
+    conn.execute(
+        "UPDATE meta SET value = ?1 WHERE key = 'model'",
+        [hex(&model.hash())],
+    )?;
     Ok(())
 }
 

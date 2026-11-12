@@ -19,9 +19,9 @@ mod view_support;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use std::cell::Cell;
 use std::collections::BTreeSet;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use ncdb_core::basic::{BasicValue, Kind, Write};
 use ncdb_core::cbor::Value;
@@ -89,7 +89,7 @@ fn without_index() -> ModelLock {
 /// again.
 struct Counting {
     inner: SealChecks,
-    opened: Rc<Cell<usize>>,
+    opened: Arc<AtomicUsize>,
 }
 
 impl Checks for Counting {
@@ -103,14 +103,14 @@ impl Checks for Counting {
         self.inner.is_member(change)
     }
     fn open(&self, change: &Change) -> Result<Payload, Stop> {
-        self.opened.set(self.opened.get() + 1);
+        self.opened.fetch_add(1, Ordering::Relaxed);
         self.inner.open(change)
     }
     fn still_opens(&self, change: &Change) -> Result<(), Stop> {
         self.inner.still_opens(change)
     }
     fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
-        self.opened.set(self.opened.get() + 1);
+        self.opened.fetch_add(1, Ordering::Relaxed);
         self.inner.open_folded(change)
     }
     fn space_model_id(&self) -> Option<[u8; 16]> {
@@ -127,8 +127,11 @@ fn checks_for(space: SpaceId) -> SealChecks {
 }
 
 /// A factory of [`Counting`] checks, and the count they share.
-fn counting() -> (impl FnMut(SpaceId) -> Counting, Rc<Cell<usize>>) {
-    let opened = Rc::new(Cell::new(0));
+fn counting() -> (
+    impl FnMut(SpaceId) -> Counting + Send + 'static,
+    Arc<AtomicUsize>,
+) {
+    let opened = Arc::new(AtomicUsize::new(0));
     let shared = opened.clone();
     let factory = move |space| Counting {
         inner: checks_for(space),
@@ -223,7 +226,11 @@ fn a_new_field_opens_only_the_changes_with_operations_parked_for_it() {
 
     let view = View::open_with(&db.0, &lock(), factory).unwrap();
 
-    assert_eq!(opened.get(), 1, "only the ranked task is opened again");
+    assert_eq!(
+        opened.load(Ordering::Relaxed),
+        1,
+        "only the ranked task is opened again"
+    );
     let ranked = changes.last().unwrap();
     assert_eq!(
         view.state(space, ranked.id()),
@@ -279,7 +286,11 @@ fn a_new_collection_adds_its_tables_and_folds_what_was_parked_for_it() {
 
     let view = View::open_with(&db.0, &lock(), factory).unwrap();
 
-    assert_eq!(opened.get(), 1, "only the project's change is opened again");
+    assert_eq!(
+        opened.load(Ordering::Relaxed),
+        1,
+        "only the project's change is opened again"
+    );
     assert!(view.get(space, PROJECT, project).unwrap().is_some());
     assert_eq!(
         view.state(space, changes.last().unwrap().id()),
