@@ -18,6 +18,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use ncdb_core::cbor::Value;
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, SpaceId};
+use ncdb_core::keys::MemberKey;
 use ncdb_core::log::Position;
 use ncdb_core::membership::{ACKNOWLEDGEMENT, ControlBody, Entry};
 use ncdb_core::view::View;
@@ -30,7 +31,7 @@ use crate::members::batch::Batch;
 /// accepted and has not acknowledged yet, and wakes syncing when it wrote
 /// any. A member that is not a member of the space, or holds no key to
 /// write with yet, writes none.
-pub(super) fn acknowledge(inner: &mut Inner, space: SpaceId) -> Result<(), Error> {
+pub(crate) fn acknowledge(inner: &mut Inner, space: SpaceId) -> Result<(), Error> {
     let me = inner.member.key().id();
     let Inner {
         view,
@@ -65,13 +66,31 @@ pub(super) fn acknowledge(inner: &mut Inner, space: SpaceId) -> Result<(), Error
     let key = secrets.key();
     let mut batch = Batch::new(view, state, &key, space);
     for shred in missing {
-        let seen = batch.write(&key, entry(shred, false), None);
-        let deleted = batch.write(&key, entry(shred, true), Some(BTreeSet::from([seen])));
-        batch.heads = BTreeSet::from([deleted]);
+        write(&mut batch, &key, shred, true);
     }
     batch.commit(view, state, secrets)?;
     crate::sync::wake(inner);
     Ok(())
+}
+
+/// Writes into `batch` the "seen" acknowledgement of `shred` and, when
+/// `deleted`, the "deleted" one after it, and moves the batch's heads past
+/// them. A provisional shred calls it with `deleted` false: its key stays
+/// until the decision that finalizes it (RFC 0008, "A shred is final when
+/// accepted"). Returns the last acknowledgement written.
+pub(crate) fn write(
+    batch: &mut Batch,
+    key: &MemberKey,
+    shred: ChangeId,
+    deleted: bool,
+) -> ChangeId {
+    let seen = batch.write(key, entry(shred, false), None);
+    let last = match deleted {
+        true => batch.write(key, entry(shred, true), Some(BTreeSet::from([seen]))),
+        false => seen,
+    };
+    batch.heads = BTreeSet::from([last]);
+    last
 }
 
 /// An acknowledgement of `shred`: field 8 its change id, field 9 whether
