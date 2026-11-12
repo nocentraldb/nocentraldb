@@ -29,6 +29,10 @@
 
 #[cfg(target_arch = "wasm32")]
 mod browser;
+// The worker's side of the TypeScript SDK (NOC-176): used once its export
+// to JavaScript is built, which waits for NOC-274.
+#[allow(dead_code)]
+mod bridge;
 mod clock;
 mod db;
 mod durability;
