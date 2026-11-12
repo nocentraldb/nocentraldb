@@ -62,11 +62,23 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 }
 
 /// Writes one `#[test]` per rule of the suite, each on a fresh backend from
-/// `$fresh`, a function that returns a [`Backend`].
+/// `$fresh`, a function that returns a [`Backend`]. With `ignore = "why"`,
+/// every test is `#[ignore]`d with that reason, for a backend that needs a
+/// service `cargo test` does not start:
+///
+/// ```text
+/// ncdb_relay::conformance_suite!(fresh_aws_backend, ignore = "needs the AWS Emulator");
+/// ```
 #[macro_export]
 macro_rules! conformance_suite {
     ($fresh:path) => {
-        $crate::conformance_suite!(@tests $fresh;
+        $crate::conformance_suite!(@list $fresh; #[test]);
+    };
+    ($fresh:path, ignore = $reason:literal) => {
+        $crate::conformance_suite!(@list $fresh; #[test] #[ignore = $reason]);
+    };
+    (@list $fresh:path; $($attr:tt)*) => {
+        $crate::conformance_suite!(@tests $fresh; [$($attr)*];
             an_unknown_space_is_empty,
             an_append_at_head_0_creates_the_space,
             positions_are_dense_and_frames_exact,
@@ -90,13 +102,17 @@ macro_rules! conformance_suite {
             a_bounded_read_stops_before_its_byte_budget,
         );
     };
-    (@tests $fresh:path; $($name:ident),* $(,)?) => {
+    (@tests $fresh:path; $attrs:tt; $($name:ident),* $(,)?) => {
         $(
-            #[test]
-            fn $name() {
-                $crate::conformance::$name(&$fresh());
-            }
+            $crate::conformance_suite!(@item $attrs
+                fn $name() {
+                    $crate::conformance::$name(&$fresh());
+                }
+            );
         )*
+    };
+    (@item [$($attr:tt)*] $item:item) => {
+        $($attr)* $item
     };
 }
 
