@@ -454,9 +454,18 @@ async fn a_reader_acknowledges_a_shred_as_well() {
 /// one account"; NOC-234) keeps the key: a member that folds it writes
 /// "seen" only and keeps the key. Once the performer's account finalizes
 /// it, the member writes "deleted" and drops the key.
+/// How far the relay's clock of the test below is ahead of the real one:
+/// the relay accepts a finalize only 7 days after the shred (RFC 0007,
+/// `too_early`; NOC-234).
+static RELAY_AHEAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn relay_now() -> u64 {
+    crate::clock::now_millis() + RELAY_AHEAD.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_provisional_shred_is_seen_and_only_deleted_once_finalized() {
-    let relay = LocalRelay::start().await;
+    let relay = LocalRelay::start_with_clock(relay_now).await;
     let (admin, member, project) = shared(&relay).await;
     let key = PersonKey::generate();
     person_key(&admin, &project, &key, &key);
@@ -483,6 +492,9 @@ async fn a_provisional_shred_is_seen_and_only_deleted_once_finalized() {
         "a provisional shred keeps the key"
     );
 
+    // The relay accepts the finalize only 7 days, by its own clock, after
+    // it accepted the shred (RFC 0007, `too_early`).
+    RELAY_AHEAD.store(7 * 24 * 60 * 60 * 1000, std::sync::atomic::Ordering::SeqCst);
     let decision = Entry::ErasureDecision(membership::ErasureDecision {
         shred,
         finalize: true,
