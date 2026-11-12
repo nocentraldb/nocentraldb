@@ -155,7 +155,7 @@ v1 ships X25519 for key agreement, and a suite id is reserved for a hybrid suite
 
 RFC 0002 defines the bytes: its header carries the suite id, the space key generation, the author's member id and the author sequence, and each personal field carries its person-key id. This RFC defines the order and what each step covers:
 
-1. **Personal fields first.** For each personal field, the SDK encrypts the value with the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field id and the person-key id, so a ciphertext cannot be moved to another field or another person.
+1. **Personal fields first.** For each personal field, the SDK encrypts the value with a subkey of the person's key (XChaCha20-Poly1305, random nonce). The associated data binds the space id, the object id, the field, by its collection and name, and the person-key id, so a ciphertext cannot be moved to another field or another person. The exact bytes are in [Personal value](#personal-value).
 2. **The change next.** The SDK encrypts the whole change payload, personal-field ciphertexts included, with the content key of the current space key generation. The associated data is every header field except the payload itself: the space id, the author's member id, the author sequence, the key generation, the kind, the header format and the suite id. A payload therefore cannot be moved to another space, author, sequence number, generation or kind, even by a member that re-signs it. Binding the whole header costs nothing, because every one of these fields is known before the payload is encrypted. The exact bytes of the content key, the nonce, the associated data and the padding are in [Sealed payload](#sealed-payload).
 3. **Then the signature.** The author signs the header, which contains the ciphertext, with its Ed25519 key. This is encrypt-then-sign: the relay can verify the signature without decrypting anything, and the signature stays valid after a person key is destroyed, because it covers ciphertext, not plaintext. That is what keeps the audit trail intact after an erasure (RFC 0001, "Shred and audit").
 
@@ -363,6 +363,31 @@ wrapped bytes     = nonce (24 bytes) || ciphertext (32 bytes) || tag (16 bytes) 
 ```
 
 It follows the [key-chain subkey](#key-chain-subkey): a subkey of the generation's key with a label of its own, the space and the generation in its `info`, and the associated data in the same shape, so a wrap cannot be moved to another person, another generation or another space. The writer is bound by the record's signature, not by the wrap. The layout is the one for everything a space key seals. The label is not a prefix of another label, and no other label is a prefix of it; the plain `"nocentraldb/person-key"` was not taken, because it is a prefix of the commitment's and the record's context strings. The person-key id alone as associated data was not taken: the subkey already binds the space and the generation, but the key chain's shape keeps one way of building associated data. Nor was the generation's content key, which would share a key with the sealed payloads, while every use of a space key has a subkey of its own. The owner decided the wrapped bytes on NOC-209 (Carsten, 2026-11-11). `crates/ncdb-core/tests/vectors/membership/generate.py` writes a test vector for them with independent libraries.
+
+### Personal value
+
+A personal field's value is sealed under a subkey of the person key (Carsten, 2026-11-12, NOC-244):
+
+```text
+personal-value subkey = HKDF-SHA256(ikm = the person key, salt = none,
+                                    info = "nocentraldb/personal-value")
+associated data       = "nocentraldb/personal-value" || space id (16 bytes) ||
+                        object id (16 bytes) || person-key id (16 bytes) ||
+                        collection name || field name
+                        each name: its length in bytes (2 bytes, big-endian) || its UTF-8 bytes
+sealed value          = nonce (24 bytes) || ciphertext || tag (16 bytes)
+  plaintext           = the canonical CBOR of the value, as argument 1 of a set would carry it
+  AEAD                = XChaCha20-Poly1305, random nonce
+```
+
+The operation carries `{1: person-key id, 2: sealed value}` as argument 1 of a set ([RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation)).
+
+- **A subkey, not the person key itself.** Every other use in this RFC derives a subkey of its own, so one key never serves two purposes. Encrypting with the person key directly was not taken: nothing else uses it today, but nothing would stop a later use from colliding with it. The label is not a prefix of another label, and no other label is a prefix of it.
+- **The associated data** starts with the context and the fields of fixed length, as every signed or sealed input of this RFC does. The field is named by its collection and its name, as [RFC 0002](0002-change-and-log-format.md#operations-object-field-and-value) names it, and each name carries its length, so two names can never run together. A canonical CBOR map of the same values was not taken: no other associated data in this RFC is CBOR.
+- **The layout** is the one for everything a space key seals. The nonce as a key of its own, beside the ciphertext, was not taken: one more key, for no gain.
+- **The plaintext** is the value as is, so opening it gives exactly what the field would hold unsealed. A type tag followed by raw bytes was not taken: a second encoding to specify and test.
+
+`docs/rfc/vectors/0003/personal_value.py` writes a test vector of each part, and of the operations that carry it, with independent libraries; `scripts/rfc-personal-fields.test.mjs` checks them again with Node's own primitives.
 
 ### Key-chain subkey
 

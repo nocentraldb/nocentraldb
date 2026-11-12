@@ -168,7 +168,7 @@ test("RFC 0003 defines the sealed personal value, with the owner's decision", ()
 });
 
 test("RFC 0002 and RFC 0004 put the sealed value in argument 1 of a set", () => {
-  assert.match(read(RFC["0002"]), /argument 1 of a set/);
+  assert.match(read(RFC["0002"]), /a set whose (?:value, )?argument 1/);
   const value = read(RFC["0004"]);
   assert.doesNotMatch(value, /The personal fields RFC decides where/);
   assert.match(
