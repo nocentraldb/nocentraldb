@@ -27,8 +27,11 @@
 //! 0007), and [`Db::sync`] reports how far; see [`Db`] for what the SDK
 //! leaves out.
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
 mod clock;
 mod db;
+mod durability;
 mod encode;
 mod erasures;
 mod error;
@@ -51,6 +54,8 @@ pub use db::{Db, OpenOptions};
 
 #[cfg(test)]
 mod agent_tests;
+#[cfg(test)]
+mod durability_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]

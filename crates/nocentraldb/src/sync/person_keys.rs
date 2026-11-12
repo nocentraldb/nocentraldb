@@ -45,6 +45,7 @@ pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
 
 /// What a person-key entry announces of its record: the person-key id, the
 /// generation and the record's hash.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 type Announced = ([u8; 16], u64, [u8; 32]);
 
 /// Splits the waiting `records` of `space` into those a session puts now
@@ -54,6 +55,7 @@ type Announced = ([u8; 16], u64, [u8; 32]);
 /// log does not hold yet. An entry the member wrote while a push was on the
 /// wire reaches the relay with the next push. A record no entry announces
 /// is put, and the relay's refusal drops it.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) fn ready(
     inner: &Inner,
     space: SpaceId,
