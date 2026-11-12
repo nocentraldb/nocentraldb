@@ -128,8 +128,9 @@ fn a_reserved_key_an_unknown_key_or_entry_type_is_not_understood() {
         });
         assert!(not_understood(&bytes), "key {key}");
     }
+    // RFC 0008 defines entry types 0 to 8; 9 is the first it does not.
     let newer = changed(ADD_BODY, |m| {
-        m.insert(Key::Unsigned(1), Value::Unsigned(7));
+        m.insert(Key::Unsigned(1), Value::Unsigned(9));
     });
     assert!(not_understood(&newer));
 }

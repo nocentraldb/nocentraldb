@@ -1,0 +1,7 @@
+# 2026-11-12 · NOC-233 · A statement entry rejects only concurrent adds, and an add's own certificate statement counts
+
+- Decided by: pm, carrying out the owner's NOC-187 decision (4B), for the coding agent's questions on NOC-233
+- Why: RFC 0008's step 5 rejects "an add that did not see an account key statement entry" when the entry supersedes the add's account key. Read literally, that also rejects the lost device's own add, written long before the entry, although the same section says a member admitted under an older certificate stays a member. The owner's 4B speaks of an add "concurrent with a statement entry". So the rule rejects an add only when the entry is not in the add's causal past and the add is not in the entry's. Step 1's "superseded" also counts the statement that the add's own certificate carries: an add whose certificate rests on a statement older than one the space knows is refused, even where no earlier certificate named the older key. Both rules only block an add, never enable one.
+- Instead of: the literal "did not see", which would reject members admitted before the entry; and the add's causal past alone, which lets a thief add a device in a space where no earlier certificate named the old key.
+- What this does not do: a sign-off is still judged by its shred's causal past only (RFC 0008, M-C14). A small docs PR tightens RFC 0008's wording to say "concurrent" and to name the add's own statement.
+- Topics: membership, accounts, rfc-0008
