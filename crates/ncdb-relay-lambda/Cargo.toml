@@ -51,7 +51,7 @@ harness = [
 # The tests talk to the gateway with the relay server's own test client
 # (crates/ncdb-relay-server/tests/support), as a member would.
 [dev-dependencies]
-ncdb-relay-lambda = { path = ".", features = ["harness"] }
+ncdb-relay-lambda = { workspace = true, features = ["harness"] }
 ncdb-relay-server.workspace = true
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "io-util"] }
