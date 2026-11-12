@@ -121,7 +121,9 @@ impl<'a> Transaction<'a> {
 
     /// Records the creation of an object of `collection` with the id `id`,
     /// which the caller derived: the account space's records have ids
-    /// their content determines (`crate::account`).
+    /// their content determines (`crate::account`), and the TypeScript
+    /// SDK draws an id on the device so that its `tx.create` returns it at
+    /// once (NOC-176).
     pub(crate) fn create_at<'v>(
         &mut self,
         collection: &str,
@@ -159,19 +161,6 @@ impl<'a> Transaction<'a> {
             values,
             options,
         )
-    }
-
-    /// Records the creation of an object as [`Transaction::create`] does,
-    /// at `id`, an id the caller drew: the TypeScript SDK draws it on the
-    /// device so that its `tx.create` returns it at once (NOC-176).
-    #[cfg(any(test, feature = "bridge"))]
-    pub(crate) fn create_at<'v>(
-        &mut self,
-        collection: &str,
-        id: ObjectId,
-        values: impl IntoIterator<Item = (&'v str, Value)>,
-    ) -> Result<ObjectId, Error> {
-        self.create_at_with(collection, id, values, Create::default())
     }
 
     fn create_at_with<'v>(

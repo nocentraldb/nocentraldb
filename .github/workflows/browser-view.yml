@@ -107,8 +107,10 @@ jobs:
 
       # The TypeScript SDK's package, in packages/sdk/dist
       # (packages/sdk/build.mjs), with the wasm-bindgen the first step
-      # installed.
+      # installed; built even when a build above failed, so its tests
+      # report on their own.
       - name: The TypeScript SDK, built on the runner
+        if: ${{ !cancelled() }}
         run: node scripts/sdk-browser/build.mjs
 
       # A registry that does not answer fails the pull in 4 minutes, and the

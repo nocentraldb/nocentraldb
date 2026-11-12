@@ -127,6 +127,11 @@ runWorkflowChecks({
           (s) => s.run?.includes("docker run") && s.run.includes(SDK_TESTS),
         );
         assert.ok(build >= 0, "the TypeScript SDK is not built on the runner");
+        assert.equal(
+          all[build].if,
+          "${{ !cancelled() }}",
+          "a failed build above skips the TypeScript SDK's build",
+        );
         assert.ok(test > build, "its tests do not run after its build");
         const run = all[test].run;
         assert.match(run, /"\$PLAYWRIGHT_IMAGE"/);
@@ -142,6 +147,10 @@ runWorkflowChecks({
         }
       },
       mutants: {
+        "the TypeScript SDK's build skipped after a failure above": (ctx) => {
+          const step = jobSteps(ctx).find((s) => s.run?.includes(SDK_BUILD));
+          delete step.if;
+        },
         "no build of the TypeScript SDK": (ctx) => {
           const all = jobSteps(ctx);
           all.splice(

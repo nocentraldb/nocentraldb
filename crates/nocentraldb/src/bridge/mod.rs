@@ -223,7 +223,7 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
                     .map(|(name, value)| (name.as_str(), value.clone()));
                 match (kind.as_str(), id) {
                     ("create", Some(id)) => {
-                        tx.create_at(collection, *id, values)?;
+                        tx.create_at(collection, id.0, values)?;
                     }
                     ("create", None) => {
                         tx.create(collection, values)?;
