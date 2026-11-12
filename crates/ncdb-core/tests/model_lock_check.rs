@@ -642,3 +642,64 @@ fn refuses_a_lock_of_another_model_or_a_lower_version() {
         }]
     );
 }
+
+/// V1 with the plugin field `votes` given this `config`, or none.
+fn with_votes_config(version: u64, config: Option<&str>) -> ModelLock {
+    let votes = match config {
+        Some(config) => format!(r#""votes": {{ "config": {config}, "rule": 1"#),
+        None => s(r#""votes": { "rule": 1"#),
+    };
+    lock(version, &V1.replace(r#""votes": { "rule": 1"#, &votes))
+}
+
+fn config_changed() -> Vec<Refusal> {
+    vec![Refusal::ConfigChanged {
+        collection: s("tasks"),
+        field: s("votes"),
+        type_id: s("acme/counter"),
+    }]
+}
+
+/// A plugin field's `config` is part of its merge rule (RFC 0011, "A type
+/// that is not registered"; RFC 0005, "Refused"; NOC-251): a change of it is
+/// refused, as a change of type is. A config that appears or disappears is a
+/// change too.
+#[test]
+fn refuses_changing_a_plugin_fields_config() {
+    let before = with_votes_config(1, Some(r#"{ "step": 1 }"#));
+    let after = with_votes_config(2, Some(r#"{ "step": 2 }"#));
+    let found = check::successor(&before, &after);
+    assert_eq!(found, config_changed());
+    assert_eq!(
+        found[0].lines(),
+        vec![
+            s("tasks.votes: the config of acme/counter changes."),
+            s("The config is part of the type's merge rule: members would merge existing values differently."),
+            s("Add a new field with the new config instead, and deprecate tasks.votes."),
+        ]
+    );
+
+    let none = with_votes_config(1, None);
+    let some = with_votes_config(2, Some(r#"{ "step": 1 }"#));
+    assert_eq!(check::successor(&none, &some), config_changed());
+
+    let some = with_votes_config(1, Some(r#"{ "step": 1 }"#));
+    let none = with_votes_config(2, None);
+    assert_eq!(check::successor(&some, &none), config_changed());
+}
+
+#[test]
+fn accepts_an_unchanged_config_and_a_new_plugin_field_with_one() {
+    let before = with_votes_config(1, Some(r#"{ "step": 1, "max": 5 }"#));
+    let after = with_votes_config(2, Some(r#"{ "max": 5, "step": 1 }"#));
+    assert_eq!(check::successor(&before, &after), vec![]);
+
+    let added = v2(|t| {
+        t.replace(
+            r#""votes": { "rule": 1, "since": 1, "type": "acme/counter" }"#,
+            r#""votes": { "rule": 1, "since": 1, "type": "acme/counter" },
+      "stars": { "config": { "step": 2 }, "rule": 1, "since": 2, "type": "acme/counter" }"#,
+        )
+    });
+    assert_eq!(refusals(&added), vec![]);
+}

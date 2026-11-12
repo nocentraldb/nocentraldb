@@ -284,3 +284,37 @@ fn a_draft_that_is_not_well_formed_is_refused_with_its_path() {
         "collections.tasks.indexes.byStatusPriority.equal"
     );
 }
+
+/// V1 with a plugin field `votes` of `acme/counter` with this `config`.
+fn with_votes(config: &str) -> String {
+    V1.replace(
+        r#""priority": { "rule": 1, "type": "ncdb/int" },"#,
+        &format!(
+            r#""priority": {{ "rule": 1, "type": "ncdb/int" }},
+        "votes": {{ "config": {config}, "rule": 1, "type": "acme/counter" }},"#
+        ),
+    )
+    .replace(r#""plugins": {}"#, r#""plugins": { "acme": { "npm": "@acme/x" } }"#)
+}
+
+/// RFC 0005, "Refused", and RFC 0011, "A type that is not registered"
+/// (NOC-251): a build that changes a plugin field's `config` is refused and
+/// builds nothing.
+#[test]
+fn a_changed_plugin_config_is_refused_and_builds_nothing() {
+    let previous = build(&draft(&with_votes(r#"{ "step": 1 }"#)), None, || ID)
+        .expect("the first version builds")
+        .lock;
+
+    let refusals = build(&draft(&with_votes(r#"{ "step": 2 }"#)), Some(&previous), no_new_id)
+        .unwrap_err();
+
+    assert_eq!(
+        refusals,
+        vec![Refusal::ConfigChanged {
+            collection: "tasks".into(),
+            field: "votes".into(),
+            type_id: "acme/counter".into(),
+        }]
+    );
+}
