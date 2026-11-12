@@ -1,20 +1,14 @@
 //! The example app end to end (NOC-237): two instances of `tasks`, each
 //! with a database of its own, sync through a local relay server on
-//! SQLite. The first creates a space and adds the second's device after
+//! SQLite, the `ncdb-relay` binary started as README step 3 starts it,
+//! with the first device's invitation (`--allow-invitation`, NOC-239 A). The first creates a space and adds the second's device after
 //! its fingerprint is confirmed; a task added on one is seen live on the
 //! other, completed there, and seen completed on the first.
 
-use std::collections::BTreeSet;
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, Instant};
-
-use ncdb_relay::sqlite::SqliteStore;
-use ncdb_relay::{Config, Relay};
-use ncdb_relay_server::Server;
-
-/// The relay id of the test's server.
-const RELAY_ID: [u8; 16] = [0x7a; 16];
 
 /// A directory of its own for one run of the test, removed when dropped.
 struct TempDir(PathBuf);
@@ -117,28 +111,73 @@ fn finish(mut child: Child, limit: Duration) -> Output {
     child.wait_with_output().expect("the output")
 }
 
-/// A relay server on a fresh SQLite database in `dir`, on which members of
-/// `allowed` may create spaces; the URL the devices sync with.
-async fn relay(dir: &Path, allowed: BTreeSet<[u8; 32]>) -> String {
-    let store = SqliteStore::open(&dir.join("relay.sqlite")).expect("the relay's database");
-    let mut config = Config::new(allowed);
-    config.max_frame = ncdb_relay_server::MAX_FRAME;
-    let server = Server::bind("127.0.0.1:0", Relay::new(store, config), RELAY_ID)
-        .await
-        .expect("the server binds");
-    let addr = server.local_addr().expect("an address");
-    tokio::spawn(server.run());
-    format!("ws://{addr}")
+/// A running `ncdb-relay`, stopped when dropped.
+struct Relay(Child);
+
+impl Drop for Relay {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
+/// The `ncdb-relay` binary, built by the same cargo into the same target
+/// directory as this test: a test sees only its own package's binaries,
+/// and the app depends on no relay crate.
+fn relay_binary() -> PathBuf {
+    let built = Command::new(env!("CARGO"))
+        .args([
+            "build",
+            "--locked",
+            "-q",
+            "-p",
+            "ncdb-relay-server",
+            "--bin",
+            "ncdb-relay",
+        ])
+        .status()
+        .expect("cargo runs");
+    assert!(built.success(), "cargo build of ncdb-relay failed");
+    // target/<profile>/deps/two_devices-<hash> → target/<profile>/ncdb-relay
+    let exe = std::env::current_exe().expect("the test's path");
+    let profile = exe
+        .parent()
+        .and_then(Path::parent)
+        .expect("target/<profile>");
+    profile.join(format!("ncdb-relay{}", std::env::consts::EXE_SUFFIX))
+}
+
+/// Starts `ncdb-relay` on a fresh SQLite database in `dir`, on a free local
+/// port, letting the account `invitation` names create spaces, as README
+/// step 3 does; the relay, and the URL the devices sync with.
+fn relay(dir: &Path, invitation: &str) -> (Relay, String) {
+    let mut child = Command::new(relay_binary())
+        .arg("--database")
+        .arg(dir.join("relay.sqlite"))
+        .args(["--listen", "127.0.0.1:0", "--allow-invitation", invitation])
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("ncdb-relay starts");
+    let stdout = child.stdout.take().expect("its output");
+    let relay = Relay(child);
+    let mut line = String::new();
+    BufReader::new(stdout).read_line(&mut line).expect("a line");
+    let addr = line
+        .trim()
+        .strip_prefix("ncdb-relay listening on ")
+        .unwrap_or_else(|| panic!("unexpected output: {line}"))
+        .to_owned();
+    (relay, addr)
+}
+
+#[test]
+fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
     let dir = TempDir::new();
     // Both devices first run offline, to learn their invitations; the
     // relay lets the first device's account create spaces.
     let laptop = Device::new(&dir.0, "laptop", "ws://127.0.0.1:9");
     let (laptop_invitation, _) = invitation(&laptop);
-    let url = relay(&dir.0, allowed_accounts(&laptop_invitation)).await;
+    let (_relay, url) = relay(&dir.0, &laptop_invitation);
     let laptop = Device::new(&dir.0, "laptop", &url);
     let phone = Device::new(&dir.0, "phone", &url);
 
@@ -186,16 +225,4 @@ async fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
     let status = phone.run(&["status", &space]);
     assert!(status.contains("role: writer"), "{status}");
     assert!(status.contains("initial sync complete: true"), "{status}");
-}
-
-/// The accounts the relay lets create spaces: the account `invitation`
-/// names.
-///
-/// Still to do (handover, NOC-237): the SDK shows no account key, and
-/// `ncdb-relay --allow-invitation` (NOC-239 A, #261) reads it from the
-/// invitation text inside the relay binary only. Start the `ncdb-relay`
-/// binary with `--allow-invitation <text>` here, as README step 3 does,
-/// in place of the in-process relay. Until then this test fails here.
-fn allowed_accounts(_invitation: &str) -> BTreeSet<[u8; 32]> {
-    todo!("start ncdb-relay with --allow-invitation (#261), as README step 3 does")
 }

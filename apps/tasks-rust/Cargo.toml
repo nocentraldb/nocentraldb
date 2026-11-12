@@ -23,9 +23,5 @@ tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time
 # pins.
 futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
 
-# The end-to-end test runs the relay server in its own process, from the
-# relay crates, on a temporary database; the app itself never depends on
-# them.
-[dev-dependencies]
-ncdb-relay.workspace = true
-ncdb-relay-server.workspace = true
+# The end-to-end test starts the `ncdb-relay` binary, which it builds with
+# cargo, so neither the app nor its tests depend on a relay crate.
