@@ -13,6 +13,7 @@ crates/ncdb/          the command line ncdb: ncdb model build and ncdb model che
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
 crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
 crates/ncdb-relay-aws/     the relay's AWS backend on DynamoDB and S3, and the check of what the AWS Emulator covers (docs/aws-emulator.md)
+crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's WebSocket API, and a local stand-in for API Gateway to test it (not deployable until the connections table and the connection API client exist, NOC-272)
 crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
@@ -94,6 +95,7 @@ What each project's `gates` task runs:
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); it runs natively only, so it has no wasm tasks |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
 | Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, and the `ncdb-relay` binary, on SQLite in temporary directories and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
+| Rust relay Lambda function (`ncdb-relay-lambda`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests drive the handler with recorded API Gateway events, and through the local stand-in for API Gateway over WebSocket, on SQLite in temporary directories); plus `test-sdk-sync`, the Rust SDK's sync suite run through that stand-in (`NCDB_TEST_RELAY=lambda`); native only, so it has no wasm tasks |
 | Rust relay AWS backend (`ncdb-relay-aws`) | `format-check`, `lint` and `test` as for `ncdb-core`; its unit tests run as any crate's; its tests against the AWS Emulator (the coverage check, the conformance suite and the backend's own) are ignored unless an emulator runs (`docs/aws-emulator.md`), and the CI job `aws-emulator` runs them; native only, so it has no wasm tasks |
 | Rust SDK (`nocentraldb`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`, except that `test-wasm` runs only the library's in-memory tests (`--lib`): its sync, relay, keystore and reopen tests need sockets, threads, a file system or a keystore and stay native (NOC-175) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
@@ -134,6 +136,10 @@ moon run ncdb-relay-server:test --force
 moon run ncdb-relay-aws:format-check --force
 moon run ncdb-relay-aws:lint --force
 moon run ncdb-relay-aws:test --force
+moon run ncdb-relay-lambda:format-check --force
+moon run ncdb-relay-lambda:lint --force
+moon run ncdb-relay-lambda:test --force
+moon run ncdb-relay-lambda:test-sdk-sync --force
 moon run nocentraldb:format-check --force
 moon run nocentraldb:lint --force
 moon run nocentraldb:test --force
