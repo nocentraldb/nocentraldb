@@ -5,6 +5,7 @@
 //! element's removals the copy holds and a remove naming the additions it
 //! observed.
 
+use ncdb_core::cbor;
 use ncdb_core::change::Operation;
 use ncdb_core::clock::Hlc;
 use ncdb_core::field_op::{self, Encoding};
@@ -15,7 +16,12 @@ use ncdb_core::ids::{
 use ncdb_core::keys::PersonKey;
 use ncdb_core::link::Target;
 use ncdb_core::personal::{self, Place, Sealed};
-use ncdb_core::view::{Field, FieldState};
+use ncdb_core::view::{Field, FieldState, PluginField};
+use ncdb_plugin::{DataError, WriteError};
+
+/// The first operation number of plugin types (RFC 0004, "Operation
+/// numbers").
+const FIRST_PLUGIN_OPERATION: u64 = 64;
 
 use crate::error::{Error, ErrorCode};
 use crate::tx::Intent;
@@ -103,8 +109,57 @@ impl Site<'_> {
                     Ok(self.operation(links, &edit))
                 })
                 .collect(),
+            (Field::Plugin(plugin), FieldState::Plugin(state), Intent::Set(value)) => {
+                self.plugin(plugin, state, value)
+            }
             _ => Err(invalid()),
         }
+    }
+
+    /// The operations a plugin's `write` makes of `value`, a `Data`
+    /// intent, against `state` (RFC 0011): each a number of 64 or more and
+    /// its arguments, keyed by number. An intent the plugin refuses is
+    /// `InvalidValue` with the plugin's reason; a value that is no `Data`,
+    /// or an operation below 64, is `InvalidValue` too.
+    fn plugin(
+        &self,
+        plugin: &PluginField,
+        state: &[u8],
+        value: &Value,
+    ) -> Result<Vec<Operation>, Error> {
+        let Repr::Data(intent) = &value.0 else {
+            return Err(self.invalid());
+        };
+        let written = plugin.write(state, intent).map_err(|error| match error {
+            WriteError::Invalid(why) => Error::new(
+                ErrorCode::InvalidValue,
+                format!("{}: {why}", self.invalid()),
+            ),
+            WriteError::Corrupt => Error::new(
+                ErrorCode::StorageFailed,
+                "the database holds an unreadable plugin state",
+            ),
+        })?;
+        written
+            .into_iter()
+            .map(|(number, arguments)| {
+                if number < FIRST_PLUGIN_OPERATION {
+                    return Err(self.invalid());
+                }
+                let arguments = arguments
+                    .into_iter()
+                    .map(|(key, data)| Ok((cbor::Key::Unsigned(key), data.to_value()?)))
+                    .collect::<Result<_, DataError>>()
+                    .map_err(|_| self.invalid())?;
+                Ok(Operation::new(
+                    self.object,
+                    self.collection.to_owned(),
+                    Some(self.name.to_owned()),
+                    number,
+                    Some(cbor::Value::Map(arguments)),
+                ))
+            })
+            .collect()
     }
 
     /// The object in this space that `value`, an object id, names.

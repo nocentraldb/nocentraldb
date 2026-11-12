@@ -54,7 +54,9 @@ enum Record {
     /// A create, with the person id of the person it is the same as.
     Create(String, CoreObjectId, Vec<(String, Value)>, Option<[u8; 16]>),
     Update(String, CoreObjectId, Vec<(String, Value)>),
-    Delete(String, CoreObjectId),
+    /// A delete (`true`) or a restore (`false`): delete (4) with that
+    /// boolean (RFC 0004, "Creating and deleting an object").
+    Delete(String, CoreObjectId, bool),
 }
 
 /// What one field of one object becomes in the change.
@@ -151,7 +153,18 @@ impl<'a> Transaction<'a> {
     pub fn delete(&mut self, collection: &str, id: ObjectId) -> Result<(), Error> {
         self.fields(collection, [])?;
         self.records
-            .push(Record::Delete(collection.to_owned(), id.0));
+            .push(Record::Delete(collection.to_owned(), id.0, true));
+        Ok(())
+    }
+
+    /// Records the restore of the deleted object `id` of `collection`
+    /// (RFC 0009, "One write, one change": delete (4) with `false`), which
+    /// fails as an update does when the copy holds no such object. An
+    /// object that is not deleted stays as it is.
+    pub fn restore(&mut self, collection: &str, id: ObjectId) -> Result<(), Error> {
+        self.fields(collection, [])?;
+        self.records
+            .push(Record::Delete(collection.to_owned(), id.0, false));
         Ok(())
     }
 
@@ -169,15 +182,24 @@ impl<'a> Transaction<'a> {
         })?;
         values
             .into_iter()
-            .map(
-                |(name, value)| match fields.contains_key(name) && !name.starts_with('$') {
+            .map(|(name, value)| {
+                if let Some((type_id, rule)) = self.model.unregistered_type(collection, name) {
+                    return Err(Error::new(
+                        ErrorCode::UnknownType,
+                        format!(
+                            "the field {name} of {collection} has the plugin type {type_id}, \
+                             rule {rule}, which no plugin given to OpenOptions::plugin implements"
+                        ),
+                    ));
+                }
+                match fields.contains_key(name) && !name.starts_with('$') {
                     true => Ok((name.to_owned(), value)),
                     false => Err(Error::new(
                         ErrorCode::NotFound,
                         format!("the collection {collection} has no field {name}"),
                     )),
-                },
-            )
+                }
+            })
             .collect()
     }
 
@@ -211,7 +233,7 @@ impl<'a> Transaction<'a> {
                     held(view, space, &created, &collection, id)?;
                     (collection, id, values)
                 }
-                Record::Delete(collection, id) => {
+                Record::Delete(collection, id, deleted) => {
                     let deletion = held(view, space, &created, &collection, id)?;
                     let write = BasicValue {
                         kind: Kind::Boolean,
@@ -221,7 +243,7 @@ impl<'a> Transaction<'a> {
                         Site::ID,
                         author,
                         Site::STAMP,
-                        cbor::Value::Bool(true),
+                        cbor::Value::Bool(deleted),
                     )
                     .expect("a boolean is a deletion's value");
                     operations.push(field_op::delete(id, &collection, &write));

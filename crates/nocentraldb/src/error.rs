@@ -69,6 +69,10 @@ pub enum ErrorCode {
     /// The call would leave the space without an admin: its last admin
     /// may not lower its own role (RFC 0008, "Roles and rights").
     LastAdmin,
+    /// A write to a plugin field whose type and rule no plugin given to
+    /// `OpenOptions::plugin` implements; the message names the type id and
+    /// the rule (RFC 0011, "A type that is not registered").
+    UnknownType,
 }
 
 impl Error {

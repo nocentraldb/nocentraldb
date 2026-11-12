@@ -8,6 +8,7 @@
 use std::fmt;
 
 use ncdb_core::cbor;
+use ncdb_plugin::Data;
 
 use crate::error::{Error, ErrorCode};
 use crate::id::ObjectId;
@@ -29,6 +30,9 @@ pub(crate) enum Repr {
     Add(Vec<Value>),
     /// Elements to remove from a set or from many links.
     Remove(Vec<Value>),
+    /// A plugin field's read value, or a write intent for it (RFC 0011,
+    /// "The data a plugin reads and writes").
+    Data(Data),
 }
 
 impl Value {
@@ -121,6 +125,15 @@ read_as!(f64, "a float", Repr::Float(x) => *x);
 read_as!(bool, "a boolean", Repr::Boolean(b) => *b);
 read_as!(ObjectId, "an object id", Repr::Id(id) => *id);
 read_as!(&'a [Value], "a list of elements", Repr::List(elements) => elements.as_slice());
+read_as!(Data, "a plugin's data", Repr::Data(data) => data.clone());
+
+impl From<Data> for Value {
+    /// A write intent for a plugin field, which the plugin's `write` turns
+    /// into operations (RFC 0011).
+    fn from(data: Data) -> Value {
+        Value(Repr::Data(data))
+    }
+}
 
 impl Value {
     /// The value as a change carries it (RFC 0004, "Value rules per
@@ -134,7 +147,7 @@ impl Value {
             Repr::Float(x) => cbor::Value::Float(*x),
             Repr::Boolean(b) => cbor::Value::Bool(*b),
             Repr::Id(id) => ncdb_core::link::value(id.0),
-            Repr::List(_) | Repr::Add(_) | Repr::Remove(_) => return None,
+            Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) => return None,
         })
     }
 

@@ -59,6 +59,10 @@ mod agent_tests;
 mod durability_tests;
 #[cfg(test)]
 mod personal_write_tests;
+#[cfg(test)]
+mod restore_tests;
+#[cfg(test)]
+mod shorthand_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]
@@ -71,6 +75,7 @@ pub use members::{
     AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
     NoticeCode, Role,
 };
+pub use ncdb_plugin::Data;
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};

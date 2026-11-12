@@ -81,6 +81,8 @@ A third workflow, `release` (`.github/workflows/release.yml`), is not a pull-req
 
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
+**Disk space.** Debug and test builds keep only line tables (`debug = "line-tables-only"` in the workspace `Cargo.toml`), so panics still name file and line while a full `pnpm gates` stays near 15 GiB of `target/` instead of filling a small disk; when space runs out anyway, `cargo clean -p <crate>` frees one crate, `cargo clean --target wasm32-unknown-unknown` frees the wasm builds under `target/wasm32-unknown-unknown/`, and `cargo clean` frees everything (NOC-279).
+
 What each project's `gates` task runs:
 
 | Project | Tasks |
