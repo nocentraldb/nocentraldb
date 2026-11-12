@@ -8,8 +8,8 @@ use std::sync::Mutex;
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequest;
 use ncdb_core::cbor::{self, Key, Value};
 use ncdb_relay::sqlite::SqliteStore;
-use ncdb_relay::store::{StoreError, Token};
-use ncdb_relay::{Config, Relay};
+use ncdb_relay::store::{Entry, RelayStore, StoreError, Token, UploadId};
+use ncdb_relay::{Config, ErrorCode, Relay};
 use ncdb_relay_lambda::connections::{Connections, MAX_CONNECTION_AGE, Stage};
 use ncdb_relay_lambda::{
     Body, ConnectionApi, Event, Handler, MemoryConnections, Posted, Route, Urls,
@@ -49,11 +49,16 @@ impl ConnectionApi for Recording {
 struct NoUrls;
 
 impl Urls for NoUrls {
-    fn upload(&self, _: &Token) -> String {
-        String::from("http://uploads.invalid/")
+    async fn upload(&self, _: UploadId, _: Token, _: u64) -> Result<String, ErrorCode> {
+        Ok(String::from("http://uploads.invalid/"))
     }
-    fn download(&self, _: &Token) -> String {
-        String::from("http://frames.invalid/")
+    async fn download<S: RelayStore>(
+        &self,
+        _: &Relay<S>,
+        _: ncdb_core::ids::SpaceId,
+        _: &Entry,
+    ) -> Result<String, ErrorCode> {
+        Ok(String::from("http://frames.invalid/"))
     }
 }
 

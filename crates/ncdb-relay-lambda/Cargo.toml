@@ -27,10 +27,22 @@ lambda_runtime = { version = "=1.5.0", default-features = false }
 # version ncdb-relay-aws pins (NOC-264 point 3: the AWS crates live only in
 # the relay's AWS crates). Its calls run on the caller's Tokio runtime.
 aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+# The AWS backend: DynamoDB and S3 behind the relay core's backend
+# interface (NOC-270), which the function runs on, and its S3 key names.
+ncdb-relay-aws.workspace = true
+# The presigned S3 URLs of large changes (RFC 0007, "How large changes go
+# to S3"), at the version ncdb-relay-aws pins.
+aws-sdk-s3 = { version = "=1.159.0", default-features = false, features = ["rt-tokio", "default-https-client", "sigv4a"] }
 # API Gateway's connection API, `@connections`: posts and closes (NOC-264
 # point 3), at the version ncdb-relay-aws's coverage check pins.
 aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
-tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time"] }
+# The runtime the function runs on: Lambda's loop, and the AWS clients'
+# calls. The version Cargo.lock already holds.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "macros", "time"] }
+# The AWS SDK's configuration: in Lambda, the function role's credentials
+# and the region from the environment. The version ncdb-relay-aws's tests
+# pin.
+aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client"] }
 # The challenge's nonce: the platform's secure generator, as in the core.
 getrandom = { version = "=0.4.3", default-features = false }
 # API Gateway hands a binary message to Lambda in base64. Already in the
@@ -62,8 +74,8 @@ harness = [
 # The tests talk to the gateway with the relay server's own test client
 # (crates/ncdb-relay-server/tests/support), as a member would.
 [dev-dependencies]
-# The AWS SDK's configuration, which reads the emulator's endpoint,
-# credentials file and region from the environment (docs/aws-emulator.md).
+# The AWS SDK's configuration with the emulator's credentials file
+# (docs/aws-emulator.md).
 aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client", "credentials-process"] }
 ncdb-relay-lambda = { workspace = true, features = ["harness"] }
 ncdb-relay-server.workspace = true

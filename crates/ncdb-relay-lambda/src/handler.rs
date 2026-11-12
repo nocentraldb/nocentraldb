@@ -9,7 +9,7 @@
 use std::time::Instant;
 
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_relay::store::{RelayStore, Token, UploadId};
+use ncdb_relay::store::{Entry, RelayStore, Token, UploadId};
 use ncdb_relay::wire::{self, Cursor, Frame, MAX_MESSAGE, MAX_PUSH, Request, VERSIONS};
 use ncdb_relay::{ErrorCode, PushFrame, Pushed, Relay, auth, page};
 
@@ -23,14 +23,44 @@ use crate::log::Line;
 /// WebSocket server.
 pub const PAGE: u64 = 256;
 
-/// How the deployment makes the URLs of large changes from their tokens
-/// (RFC 0007, "Large changes"): presigned S3 URLs on AWS, the harness's own
-/// listener in tests.
+/// How the deployment makes the URLs of large changes (RFC 0007, "Large
+/// changes"): presigned S3 URLs on AWS (`s3::S3Urls`), the harness's own
+/// listener and the core's tokens in tests. Its futures are `Send`.
 pub trait Urls: Send + Sync {
-    /// The URL an upload's frame goes to.
-    fn upload(&self, token: &Token) -> String;
-    /// The URL an entry's frame comes from.
-    fn download(&self, token: &Token) -> String;
+    /// The URL the frame of the upload `id`, of `size` bytes, goes to; the
+    /// relay core gave it `token`, which a deployment that serves uploads
+    /// itself puts in the URL.
+    fn upload(
+        &self,
+        id: UploadId,
+        token: Token,
+        size: u64,
+    ) -> impl Future<Output = Result<String, ErrorCode>> + Send;
+
+    /// The URL `entry` of `space` downloads from; `relay` hands out a
+    /// download token where the deployment serves downloads itself.
+    fn download<S: RelayStore>(
+        &self,
+        relay: &Relay<S>,
+        space: SpaceId,
+        entry: &Entry,
+    ) -> impl Future<Output = Result<String, ErrorCode>> + Send;
+}
+
+/// A page's download URLs, through the deployment's [`Urls`].
+struct Through<'a, S, U> {
+    relay: &'a Relay<S>,
+    urls: &'a U,
+}
+
+impl<S: RelayStore, U: Urls> page::Downloads for Through<'_, S, U> {
+    fn url(
+        &self,
+        space: SpaceId,
+        entry: &Entry,
+    ) -> impl Future<Output = Result<String, ErrorCode>> + Send {
+        self.urls.download(self.relay, space, entry)
+    }
 }
 
 /// The relay as one Lambda function: the relay core over a backend `S`,
@@ -81,6 +111,14 @@ where
     /// The connection API.
     pub fn api(&self) -> &A {
         &self.api
+    }
+
+    /// The download URLs of pages, through the deployment's [`Urls`].
+    fn downloads(&self) -> Through<'_, S, U> {
+        Through {
+            relay: &self.relay,
+            urls: &self.urls,
+        }
     }
 
     /// Handles one event; its log line.
@@ -281,7 +319,7 @@ where
                     after,
                     limit,
                 } = cursor;
-                let url = |token: &Token| self.urls.download(token);
+                let url = self.downloads();
                 let limit = limit.min(PAGE);
                 match page::read(relay, &url, member, Some(req), space, epoch, after, limit).await {
                     Ok(page) => self.send(call, page.bytes).await,
@@ -295,9 +333,14 @@ where
                 }
             }
             Request::Upload { req, space, size } => {
-                let begun = relay.begin_upload(member, space, size).await;
-                let answer =
-                    begun.map(|(id, token)| wire::upload(req, &id.0, &self.urls.upload(&token)));
+                let answer = match relay.begin_upload(member, space, size).await {
+                    Ok((id, token)) => self
+                        .urls
+                        .upload(id, token, size)
+                        .await
+                        .map(|url| wire::upload(req, &id.0, &url)),
+                    Err(code) => Err(code),
+                };
                 self.answer(call, req, answer).await
             }
             Request::Keys { req, space } => {
@@ -382,7 +425,7 @@ where
         let Ok(subscribers) = self.connections.subscribers(space).await else {
             return;
         };
-        let url = |token: &Token| self.urls.download(token);
+        let url = self.downloads();
         for (id, subscription) in subscribers {
             let mut cursor = after;
             while cursor < last {
@@ -442,7 +485,7 @@ where
         {
             return self.fail(call, Some(req), ErrorCode::Unavailable).await;
         }
-        let url = |token: &Token| self.urls.download(token);
+        let url = self.downloads();
         loop {
             let read = page::read(
                 &self.relay,

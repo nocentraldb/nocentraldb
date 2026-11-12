@@ -10,17 +10,21 @@
 //! [`log`] is the one log line of each invocation: ids, sizes, codes and
 //! times, no content and no keys.
 //!
+//! On AWS: [`dynamo`] is the `connections` table, which [`contract`] holds
+//! to the same rules as the in-memory store; [`apigw`] is the connection
+//! API; [`s3`] hands out presigned S3 URLs for large changes; [`settings`]
+//! reads the function's environment. The binary runs them over the AWS
+//! backend of `ncdb-relay-aws`.
+//!
 //! Limits, as RFC 0007 has them: API Gateway refuses a message above
 //! 128 KiB and closes every connection after 2 hours; the handler posts no
 //! message above 128 KiB, sends a frame that does not fit inline as a
 //! download URL, and lets a connection's record expire 2 hours after it
 //! opened.
 //!
-//! **What this does not do yet.** It runs on the SQLite backend and the
-//! in-memory connections, in tests and in the local harness
-//! (`harness`, with the feature `harness`). The DynamoDB and S3 backend
-//! exists (`ncdb-relay-aws`, NOC-270); a `connections` store on DynamoDB
-//! and the client of the real connection API follow (NOC-272).
+//! In tests and in the local harness (`harness`, with the feature
+//! `harness`), it runs on the SQLite backend and the in-memory
+//! connections. Its infrastructure and deploy are `infra/aws` (NOC-272).
 
 pub mod apigw;
 pub mod connections;
@@ -31,6 +35,8 @@ pub mod handler;
 #[cfg(feature = "harness")]
 pub mod harness;
 pub mod log;
+pub mod s3;
+pub mod settings;
 
 pub use connections::{ConnectionApi, Connections, MemoryConnections, Posted};
 pub use event::{Body, Event, Route};

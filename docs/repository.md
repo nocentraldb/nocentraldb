@@ -13,7 +13,7 @@ crates/ncdb/          the command line ncdb: ncdb model build and ncdb model che
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
 crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
 crates/ncdb-relay-aws/     the relay's AWS backend on DynamoDB and S3, and the check of what the AWS Emulator covers (docs/aws-emulator.md)
-crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's WebSocket API, and a local stand-in for API Gateway to test it (not deployable until the connections table and the connection API client exist, NOC-272)
+crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's WebSocket API, on the AWS backend, and a local stand-in for API Gateway to test it
 crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
