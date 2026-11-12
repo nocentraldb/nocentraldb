@@ -4,9 +4,8 @@
 //! command, so before it does, it waits until the relay holds what this
 //! device wrote, and until its spaces are synced. It follows the SDK's own
 //! streams for that: `db.sync().subscribe()` and each space's
-//! `space.status().subscribe()`. Nothing follows the list of spaces, so
-//! waiting for a space another device shared with this one asks again
-//! every 100 ms (a gap the README names).
+//! `space.status().subscribe()`, and `db.spaces().subscribe()` for a space
+//! another device shared with this one (NOC-256).
 //!
 //! A write that finds the connection offline does not wait for the relay:
 //! the SDK keeps it on the device, and it reaches the relay on a later
@@ -18,9 +17,6 @@ use std::time::Duration;
 
 use futures_core::Stream;
 use nocentraldb::{Connection, Db, SpaceId, SyncStatus};
-
-/// How often `spaces().get` is asked again while a space has not arrived.
-const POLL: Duration = Duration::from_millis(100);
 
 /// Where this device's changes are once [`synced`] returns.
 #[derive(Debug, PartialEq, Eq)]
@@ -57,8 +53,11 @@ pub async fn synced(
         }
         if let Some(id) = space {
             *waiting.borrow_mut() = format!("the space {id} to arrive");
-            while db.spaces().get(id).await.is_err() {
-                tokio::time::sleep(POLL).await;
+            let mut spaces = db.spaces().subscribe();
+            while let Some(list) = next(&mut spaces).await {
+                if list.iter().any(|info| info.id == id) {
+                    break;
+                }
             }
         }
         for info in db.spaces().list().await.map_err(|e| e.to_string())? {

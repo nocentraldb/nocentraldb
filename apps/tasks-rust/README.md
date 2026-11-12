@@ -142,11 +142,5 @@ It prints the device's role in the space, whether its first sync is done, how fa
 
 - `src/main.rs` opens the database with `Db::open(OpenOptions::new(LOCK).path(..).key_file(..).relay(..))`.
 - `src/commands.rs` holds one function per command: `db.spaces().create()`, `space.write(|tx| tx.create(..))`, `db.find(db.index("tasks", "byStatus")?)`, `db.subscribe(..)`, `space.members().add(..)` and `space.status()`.
-- `src/wait.rs` waits until the relay holds this device's changes and its spaces are synced, following `db.sync().subscribe()` and `space.status().subscribe()`.
+- `src/wait.rs` waits until the relay holds this device's changes and its spaces are synced, following `db.sync().subscribe()` and `space.status().subscribe()`, and waits for a space another device shared with it through `db.spaces().subscribe()`.
 - `tests/two_devices.rs` runs two instances of the app against a relay server, as the steps above do. It is part of `pnpm gates`.
-
-## What the SDK does not offer yet
-
-Building this app on the public API alone found these gaps. They are reported, not worked around:
-
-- **No stream of the list of spaces.** `db.spaces().list()` has no `subscribe`, so nothing tells an app that a space another device shared with it has arrived. `tasks sync --space` asks `db.spaces().get` again every 100 ms until it does.
