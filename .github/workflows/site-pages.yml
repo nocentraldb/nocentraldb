@@ -1,0 +1,76 @@
+# NOC-213: builds the site (site/: Astro, with Starlight for the docs under
+# /docs) and deploys it to GitHub Pages under the custom domain
+# nocentraldb.io. It runs on every push to main that changes the site or this
+# file, and when a person starts it. It does nothing until Pages is enabled
+# with "GitHub Actions" as its source; the custom domain is set in the
+# repository's Settings → Pages, since Pages ignores a CNAME file in an
+# Actions deploy (site/public/CNAME records the domain all the same).
+#
+# A repository has one Pages site: browser-storage-pages.yml (NOC-33)
+# deploys to the same one, so a run of it replaces the site until the next
+# run of this workflow.
+#
+# The build checks the built output (site/scripts/output.test.mjs) before it
+# uploads it, as repo:site does in `pnpm gates`. site/dist stays git-ignored.
+# scripts/site-pages-workflow.test.mjs asserts this file, and
+# scripts/toolchain-workflow.test.mjs how its build job installs the toolchain.
+name: site-pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/site-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; a running deploy is never cancelled, so Pages never
+# holds half of one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # proto, then moon, Node and pnpm as .prototools pins them, as in ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
+
+      # site/ is its own pnpm project, with its own lockfile.
+      - run: pnpm --dir site install --frozen-lockfile
+      - run: pnpm --dir site build
+      - run: node --test 'site/scripts/*.test.mjs'
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

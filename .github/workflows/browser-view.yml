@@ -13,13 +13,20 @@
 # which needs no package from apt; the tests run in Playwright's image, which
 # holds the browsers and their system libraries at the version package.json
 # pins (scripts/browser-view-workflow.test.mjs keeps the two in step).
+#
+# NOC-175 slice 2: the same job runs the Rust SDK's key tests in IndexedDB
+# in a dedicated worker in Chromium (scripts/sdk-keys/), which the gates
+# skip in Node, which has no IndexedDB. They are built on the runner as the
+# view's harness is, and run on pull requests that touch the SDK.
 name: browser-view
 
 on:
   pull_request:
     paths:
       - "crates/ncdb-core/**"
+      - "crates/nocentraldb/**"
       - "scripts/browser-view/**"
+      - "scripts/sdk-keys/**"
       - ".github/workflows/browser-view.yml"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -76,6 +83,12 @@ jobs:
           moon exec repo:wasm-runner --force --base HEAD --head HEAD
           node scripts/browser-view/build.mjs
 
+      # The SDK's wasm32 library tests, in target/sdk-keys
+      # (scripts/sdk-keys/build.mjs), served in the image by the
+      # wasm-bindgen-test-runner the step above installed.
+      - name: The SDK's key tests, built on the runner
+        run: node scripts/sdk-keys/build.mjs
+
       # A registry that does not answer fails the pull in 4 minutes, and the
       # pull is tried once more.
       - name: Playwright's image, with a short timeout and one retry
@@ -97,3 +110,14 @@ jobs:
           -e BROWSER_VIEW_PREBUILT=1
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/browser-view/*.test.mjs'
+
+      # The SDK's keys in IndexedDB, in a dedicated worker in Chromium; run
+      # even when the view failed, so each reports on its own.
+      - name: The SDK's keys in IndexedDB in Chromium
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_KEYS_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-keys/*.test.mjs'

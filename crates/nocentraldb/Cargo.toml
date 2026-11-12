@@ -64,6 +64,13 @@ ncdb-relay.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
 js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
+# The member's keys in the browser (NOC-175 slice 2; NOC-210 Q1 and Q2 A):
+# the key record sealed with AES-GCM under a non-extractable WebCrypto key,
+# both kept in IndexedDB, reached through web-sys and awaited through
+# wasm-bindgen-futures. The versions the core pins.
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+wasm-bindgen-futures = { version = "=0.4.80", default-features = false, features = ["std"] }
+web-sys = { version = "=0.3.107", default-features = false, features = ["std", "AesGcmParams", "AesKeyGenParams", "Crypto", "CryptoKey", "DomException", "Event", "IdbDatabase", "IdbFactory", "IdbObjectStore", "IdbOpenDbRequest", "IdbRequest", "IdbTransaction", "IdbTransactionMode", "SubtleCrypto"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }

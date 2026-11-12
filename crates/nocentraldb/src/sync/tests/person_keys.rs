@@ -17,7 +17,7 @@ use ncdb_core::membership::{
 
 use super::support::*;
 use crate::db::{Db, lock};
-use crate::members::{AddMember, MemberId, Role};
+use crate::members::{AddMember, Fingerprint, MemberId, Role};
 use crate::space::Space;
 
 /// The admin, who creates the space and its person key.
@@ -123,6 +123,8 @@ async fn a_member_fetches_and_holds_the_person_key_another_member_put() {
     })
     .await;
     assert_eq!(held(&admin, space), Some(commitment), "its writer holds it");
+    let status = handle(&member, space).status().current();
+    assert_eq!(status.bad_person_key_records, Vec::<Fingerprint>::new());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -138,13 +140,31 @@ async fn a_record_whose_key_does_not_match_its_commitment_is_not_held() {
         &PersonKey::generate(),
     );
     synced(&admin).await;
+    let space = project.id().0;
+    stored(&relay, space).await;
     relay.proxy.cut();
     relay.proxy.restore();
-    let space = project.id().0;
-    eventually("the member fetched the records", || fetched(&member, space)).await;
-    synced(&member).await;
+    let writer = Fingerprint(lock(&admin.inner).account.verifying_key().to_bytes());
+    eventually("the member names the record's writer", || {
+        let status = handle(&member, space).status().current();
+        status.bad_person_key_records == vec![writer]
+    })
+    .await;
 
     assert_eq!(held(&member, space), None);
+}
+
+/// Waits until the relay stores a person-key record of `space`: the put
+/// follows the push, so `synced` may return before it.
+async fn stored(relay: &LocalRelay, space: CoreSpaceId) {
+    let start = std::time::Instant::now();
+    while relay.person_keys(space).await.is_empty() {
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(10),
+            "the relay stores the record: not in time"
+        );
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
 }
 
 /// The space's current generation on `db`.
