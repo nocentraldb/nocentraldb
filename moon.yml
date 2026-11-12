@@ -244,6 +244,26 @@ tasks:
       - "/pnpm-lock.yaml"
     options:
       cache: false
+  sdk-browser:
+    # NOC-176 slice 1: the TypeScript SDK in Chromium through Playwright
+    # (scripts/sdk-browser/): it builds packages/sdk, its core in wasm
+    # included, and opens it in a page as an app does. Not part of `gates`,
+    # for the reasons of browser-storage above; the workflow browser-view.yml
+    # runs it in CI. Never cached: its result depends on the installed
+    # browser.
+    command: "node --test 'scripts/sdk-browser/*.test.mjs'"
+    deps: ["~:wasm-runner"]
+    inputs:
+      - "/scripts/sdk-browser/**/*"
+      - "/packages/sdk/**/*"
+      - "/crates/nocentraldb/**/*"
+      - "/crates/nocentraldb-wasm/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+    options:
+      cache: false
   sdk-keys:
     # NOC-175 slice 2: the Rust SDK's keys in IndexedDB in a dedicated
     # worker in Chromium through Playwright (scripts/sdk-keys/), and its
