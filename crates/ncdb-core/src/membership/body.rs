@@ -31,7 +31,7 @@ use super::certificate::Certificate;
 use super::fields::{self, Fields};
 use super::genesis::Genesis;
 use super::key_chain::KeyChainEntry;
-use super::person_key::{PersonKeyEntry, ShredEntry};
+use super::person_key::{ErasureDecision, PersonKeyEntry, ShredEntry};
 use super::statement::AccountKeyStatement;
 
 /// The depth of a control body in its change: inside the header's key 6.
@@ -54,6 +54,9 @@ pub const ACKNOWLEDGEMENT: u64 = 6;
 /// Entry type 7: an account key statement entry (Carsten, 2026-11-11,
 /// NOC-187).
 pub const ACCOUNT_KEY_STATEMENT: u64 = 7;
+/// Entry type 8: an erasure decision, which finalizes a provisional shred
+/// or takes it back (Carsten, 2026-11-11, NOC-230).
+pub const ERASURE_DECISION: u64 = 8;
 
 /// A role in one space (RFC 0008, "Roles and rights"), ordered by its
 /// rights: every right of a reader is a writer's, every right of a writer
@@ -118,6 +121,9 @@ pub enum Entry {
     /// Entry type 7: an account key statement, in key 8, that a member
     /// carries into the space (RFC 0008, "Account key statement entry").
     AccountKeyStatement(AccountKeyStatement),
+    /// Entry type 8: the decision that ends a provisional erasure (RFC
+    /// 0008, "Erasure decision").
+    ErasureDecision(ErasureDecision),
     /// Entry type 6, which this module does not read: its fields from key
     /// 8 up, as they are.
     Other {
@@ -221,6 +227,7 @@ impl ControlBody {
             Entry::PersonKey(_) => PERSON_KEY,
             Entry::Shred(_) => SHRED,
             Entry::AccountKeyStatement(_) => ACCOUNT_KEY_STATEMENT,
+            Entry::ErasureDecision(_) => ERASURE_DECISION,
             Entry::Other { entry_type, .. } => *entry_type,
         }
     }
@@ -263,6 +270,7 @@ impl ControlBody {
             Entry::PersonKey(entry) => entries.extend(entry.fields()),
             Entry::Shred(shred) => entries.extend(shred.fields()),
             Entry::AccountKeyStatement(statement) => entries.push((8, statement.to_value())),
+            Entry::ErasureDecision(decision) => entries.extend(decision.fields()),
             Entry::Other { fields, .. } => entries.extend(fields.clone()),
         }
         entries.extend(self.extensions.clone());
@@ -287,6 +295,7 @@ impl ControlBody {
                 AccountKeyStatement::from_value(map.required(8)?.1)
                     .map_err(|_| ChangeError::InvalidValue(8))?,
             ),
+            ERASURE_DECISION => Entry::ErasureDecision(ErasureDecision::take(&mut map)?),
             ACKNOWLEDGEMENT => Entry::Other {
                 entry_type,
                 fields: map.0.split_off(&8),

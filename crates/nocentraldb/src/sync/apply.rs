@@ -160,6 +160,7 @@ pub(super) fn entries(
         match view.receive(&entry.frame, &mut state.checks) {
             Ok(Appended::New(_)) => {
                 folded = true;
+                state.drop_shredded();
                 sync(inner).folds += 1;
                 if again::check(inner, space)? {
                     sync(inner).wake.send_replace(());
@@ -175,6 +176,9 @@ pub(super) fn entries(
     }
     sync(inner).cursors.insert(space, cursor);
     if folded {
+        // The acknowledgements are written again by the next fold if this
+        // fails, since the log then holds none of them.
+        let _ = super::acknowledge::acknowledge(inner, space);
         let collections = inner.model.collections.keys().cloned().collect();
         touched(&mut inner.watchers, space, &collections);
     }

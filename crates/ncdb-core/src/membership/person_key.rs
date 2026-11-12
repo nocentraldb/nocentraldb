@@ -22,7 +22,7 @@ use sha2::{Digest, Sha256};
 
 use crate::cbor::Value;
 use crate::change::ChangeError;
-use crate::ids::{MemberId, SpaceId};
+use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::keys::{MemberKey, MemberPublicKey};
 use crate::redact;
 
@@ -139,6 +139,34 @@ impl PersonKeyEntry {
             generation: fields::unsigned(map.required(10)?)?,
             record_hash: fields::fixed(map.required(11)?)?,
         })
+    }
+}
+
+/// Entry type 8: the decision that ends a provisional erasure, either way
+/// (RFC 0008, "Erasure decision"; Carsten, 2026-11-11, NOC-230).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ErasureDecision {
+    /// Key 8: the change id of the provisional shred entry.
+    pub shred: ChangeId,
+    /// Key 9: true finalizes the erasure, false takes it back.
+    pub finalize: bool,
+}
+
+impl ErasureDecision {
+    pub(crate) fn fields(&self) -> Vec<(u64, Value)> {
+        vec![
+            (8, fields::bytes(&self.shred.0)),
+            (9, Value::Bool(self.finalize)),
+        ]
+    }
+
+    pub(crate) fn take(map: &mut Fields) -> Result<ErasureDecision, ChangeError> {
+        let shred = ChangeId(fields::fixed(map.required(8)?)?);
+        let finalize = match map.required(9)?.1 {
+            Value::Bool(finalize) => finalize,
+            _ => return Err(ChangeError::InvalidValue(9)),
+        };
+        Ok(ErasureDecision { shred, finalize })
     }
 }
 
