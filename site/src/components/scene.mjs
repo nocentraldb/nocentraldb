@@ -2,7 +2,7 @@
 // each hold the same three tasks, a cloud server sits between them. One pure
 // function returns the SVG as a string in four states. Colours and type live in
 // site/src/styles/scene.css, on the classes used here.
-// Ported from the prototype the owner accepted on 2026-11-12 (its generator is in the git history).
+// Ported from the prototype the owner accepted on 2026-11-12.
 
 const W = 230;
 const X = { train: 20, home: 285, agent: 550 };
@@ -101,8 +101,10 @@ const scenery = (tunnel, id) => `
   <line x1="595" y1="510" x2="735" y2="510" class="sc-track"/><line x1="595" y1="538" x2="735" y2="538" class="sc-track"/>
   <circle cx="614" cy="496" r="4" class="sc-lamp"/><circle cx="614" cy="524" r="4" class="sc-lamp"/><circle cx="614" cy="552" r="4" class="sc-lamp"/>`;
 
-const link = (who, cut) => `<path d="${LINK[who]}" class="sc-link ${cut ? "sc-link-cut" : ""}"/>`;
-const links = (cutTrain) => `${link("train", cutTrain)}${link("home")}${link("agent")}`;
+const link = (who, cut) =>
+  `<path d="${LINK[who]}" class="sc-link ${cut ? "sc-link-cut" : ""}"/>`;
+const links = (cutTrain) =>
+  `${link("train", cutTrain)}${link("home")}${link("agent")}`;
 
 const R = {
   readme: (s, k) => ["Write README", s, k],

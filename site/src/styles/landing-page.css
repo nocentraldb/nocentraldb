@@ -2,7 +2,7 @@
    hero's two small lines, the drawing's 4:3 frame, the header's links on the right
    line, the drawings at rest, a short desktop window and the drawings' pause
    control. The drawing's look follows the prototype the owner accepted on
-   2026-11-12 (its generator is in the git history). */
+   2026-11-12. */
 
 .hero .status-line,
 .hero .fact-line {
@@ -88,6 +88,7 @@
     max-height: 26svh;
   }
 }
+/* beats moment.css's main > [data-moment="pinned-chapters"][data-moment]:not(.is-live) (min-height: 100svh) */
 main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
   min-height: calc(var(--h, 1) * 100svh);
 }
@@ -113,6 +114,7 @@ main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
   }
   /* The code and the close hold more than a short window: they grow past
      one screen rather than run over the next. */
+  /* beats system.css's main > :is(section, .section), footer.closing (height: one screen) */
   html main > section#code,
   html footer.closing {
     height: auto;
@@ -123,9 +125,14 @@ main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
   }
 }
 
-/* A phone: the close and the footer row a little closer, so footer.closing stays
-   one screen. */
+/* A phone: the code section as tall as its content (one screen at least), and the
+   close and the footer row a little closer, so footer.closing stays one screen. */
 @media (max-width: 639px) {
+  /* beats system.css's phone rule main > :is(section, .section):not(.hero, .section--hero) (min-height: --hm screens) */
+  html main > section#code {
+    height: auto;
+    min-height: 100svh;
+  }
   footer.closing > .wrap {
     row-gap: var(--s-6);
   }
@@ -136,6 +143,7 @@ main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
 
 /* Pause, at the bottom right of each drawing's frame, above the figures: filled
    in the ink while it holds the drawing (aria-pressed). */
+/* beats system.css's .frame > :not(canvas, .stage, ...) (position: relative) */
 button.scene-pause[data-scene-pause] {
   position: absolute;
   right: 12px;
@@ -155,5 +163,12 @@ button.scene-pause[data-scene-pause][aria-pressed="true"] {
   color: var(--bg);
 }
 button.scene-pause[data-scene-pause][hidden] {
+  display: none;
+}
+
+/* Without script the moment's stylesheet never loads (moments.js adds it), so the
+   scenario's shared frame would stand empty under the steps: it shows only with
+   script (the head's inline script sets .mo-js). */
+html:not(.mo-js) #story .mo-pc__visuals {
   display: none;
 }

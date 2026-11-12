@@ -1,7 +1,7 @@
 ---
 // Install, then five calls on the task model, from the README's "Code examples"
-// (RFC 0009). On a phone the section is two screens (the kit's .g2m): the words,
-// then the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
+// (RFC 0009). On a phone the section is as tall as its content: the words, then
+// the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
 // README's statements, a few dropped for length.
 import { Code } from "astro:components";
 
@@ -34,7 +34,7 @@ export const model = nc.model({
   {
     id: "open",
     label: "Open",
-    note: "The relay is the server from the scenario above. It needs no relay to start.",
+    note: "The relay is the server from the scenario above. Opening a database needs no relay.",
     code: `import { nc } from "@nocentraldb/sdk";
 import { model } from "./model";
 import lock from "./model.lock.json";
@@ -74,7 +74,7 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
 ];
 ---
 
-<section class="section g2m" id="code" aria-labelledby="code-h">
+<section class="section" id="code" aria-labelledby="code-h">
   <div class="wrap grid code-grid">
     <div class="span-5">
       <div class="section-head">
@@ -205,11 +205,12 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     text-indent: -4ch;
   }
   @media (max-width: 1023px) {
+    /* stacked: the tabs one heading gap under the install lines */
+    .code-grid {
+      row-gap: var(--head-gap);
+    }
     .code-grid > * {
       grid-column: 1 / -1;
-    }
-    .code-tabs {
-      margin-top: var(--s-7);
     }
   }
   /* a short desktop window (1440x670): the code a little denser, so the section stays one screen */

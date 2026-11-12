@@ -7,7 +7,7 @@
   {
     "check": "no-visual",
     "target": "section#code",
-    "reason": "owner's decision, 2026-11-12: the code section shows the five SDK calls in tabs (spec, The page, row 3), and that code is its picture; the kit's own code fragment needs ui.js, which is over the repository's 700-line file limit"
+    "reason": "builder's call, 2026-11-12, for the owner to confirm in the PR: the code section's picture is its five code tabs (spec, The page, row 3); the kit's code fragment needs ui.js, which is over the repository's 700-line file limit"
   },
   {
     "check": "hero-lines",
