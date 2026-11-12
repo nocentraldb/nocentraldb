@@ -288,14 +288,20 @@ impl<'a> Transaction<'a> {
                 }
             }
         }
-        // The person each personal value is sealed for.
+        // The person each personal value is sealed for. A clear is a plain
+        // null, never sealed, so it needs no person (RFC 0004, "A personal
+        // value"; Carsten, 2026-11-12, NOC-244).
         let mut sealed_for: BTreeMap<(CoreObjectId, String), [u8; 16]> = BTreeMap::new();
         for key in &order {
             let (collection, intent) = &intents[key];
             let (object, name) = key;
-            let (Some(whom), Intent::Set(_)) = (self.model.person(collection, name), intent) else {
+            let (Some(whom), Intent::Set(value)) = (self.model.person(collection, name), intent)
+            else {
                 continue;
             };
+            if let Repr::Clear = value.0 {
+                continue;
+            }
             let (person, of) = match whom {
                 Whom::Itself => (*object, collection.clone()),
                 Whom::Link(link) => person_link(

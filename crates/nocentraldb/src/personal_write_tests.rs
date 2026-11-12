@@ -286,3 +286,75 @@ fn a_value_whose_person_key_is_not_held_yet_is_refused() {
     assert_eq!(error.code(), ErrorCode::PersonKeyNotHeld);
     assert_eq!(person(&db, &space, "projects", project), anna, "no new key");
 }
+
+/// The winning value of `field` of `object` as the view keeps it, `None`
+/// when nothing wins.
+fn winner(
+    db: &Db,
+    space: &Space,
+    collection: &str,
+    object: ObjectId,
+    field: &str,
+) -> Option<cbor::Value> {
+    let inner = db.lock();
+    let row = inner
+        .view
+        .get(space.id().0, collection, object.0)
+        .unwrap()
+        .unwrap();
+    let Some(FieldState::Basic(state)) = row.fields.get(field) else {
+        panic!("{field} is written");
+    };
+    PersonField.read(state).value.map(|entry| entry.value)
+}
+
+// A clear of a personal field is a plain null, never a sealed one
+// (RFC 0004, "A personal value"; Carsten, 2026-11-12, NOC-244), so it
+// needs neither a person nor a person key (NOC-277).
+#[test]
+fn a_clear_of_a_personal_value_is_a_plain_null_and_reads_unset() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    let project = now(space.create("projects", [("name", Value::from("Anna"))]))
+        .unwrap()
+        .ids[0];
+
+    now(space.update("projects", project, [("name", Value::clear())])).unwrap();
+
+    let won = winner(&db, &space, "projects", project, "name");
+    assert!(
+        matches!(won, None | Some(cbor::Value::Null)),
+        "a plain null, not sealed bytes"
+    );
+    let read = now(space.get("projects", project)).unwrap().unwrap();
+    assert_eq!(read.get::<&str>("name").unwrap(), None);
+}
+
+#[test]
+fn a_clear_of_a_personal_value_needs_no_person() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    let task = now(space.create("tasks", [("title", Value::clear())]))
+        .unwrap()
+        .ids[0];
+    let read = now(space.get("tasks", task)).unwrap().unwrap();
+    assert_eq!(read.get::<&str>("title").unwrap(), None);
+}
+
+#[test]
+fn a_clear_of_a_personal_value_needs_no_person_key() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    let project = now(space.create("projects", [("name", Value::from("Anna"))]))
+        .unwrap()
+        .ids[0];
+    db.lock()
+        .spaces
+        .get_mut(&space.id().0)
+        .unwrap()
+        .person_keys
+        .clear();
+    now(space.update("projects", project, [("name", Value::clear())])).unwrap();
+    let read = now(space.get("projects", project)).unwrap().unwrap();
+    assert_eq!(read.get::<&str>("name").unwrap(), None);
+}

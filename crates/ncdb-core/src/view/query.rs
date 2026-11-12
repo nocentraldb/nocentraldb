@@ -221,7 +221,7 @@ impl View {
     /// The page size a caller that names none should use.
     pub const DEFAULT_PAGE: usize = 50;
     /// The largest page, so that one read holds the database briefly.
-    pub const MAX_PAGE: usize = 500;
+    pub const MAX_PAGE: usize = 1000;
 
     /// One page of the declared index `index` of `collection`, which spans
     /// every space: the rows whose equality prefix holds `equal`, after

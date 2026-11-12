@@ -2,7 +2,8 @@
 //! SDK"): a text, an integer, a float, a boolean or an object id, as the
 //! field's type in the lock asks; a set or many links reads as the list of its
 //! elements and is written with [`Value::add`] and [`Value::remove`], never
-//! whole (RFC 0009, "Field operations per field type"). Its `Debug` output
+//! whole (RFC 0009, "Field operations per field type"). [`Value::clear`]
+//! empties a basic field or a link. Its `Debug` output
 //! prints `[redacted]`: a value is content.
 
 use std::fmt;
@@ -33,6 +34,8 @@ pub(crate) enum Repr {
     /// A plugin field's read value, or a write intent for it (RFC 0011,
     /// "The data a plugin reads and writes").
     Data(Data),
+    /// The clear of a basic field or a link: a set (1) with no value.
+    Clear,
 }
 
 impl Value {
@@ -45,6 +48,14 @@ impl Value {
     /// each that the copy holds.
     pub fn remove<V: Into<Value>>(elements: impl IntoIterator<Item = V>) -> Value {
         Value(Repr::Remove(elements.into_iter().map(Into::into).collect()))
+    }
+
+    /// Clears a basic field or a link, as `null` does in TypeScript: a set
+    /// (1) with no value (RFC 0009, "The Rust SDK"). A clear of a set or of
+    /// many links is `InvalidValue`; a create with a clear leaves the field
+    /// unset.
+    pub fn clear() -> Value {
+        Value(Repr::Clear)
     }
 }
 
@@ -138,7 +149,7 @@ impl From<Data> for Value {
 impl Value {
     /// The value as a change carries it (RFC 0004, "Value rules per
     /// kind"): an object id as its 16 bytes. A list, an addition or a
-    /// removal is no single value.
+    /// removal is no single value, nor is a clear.
     pub(crate) fn to_cbor(&self) -> Option<cbor::Value> {
         Some(match &self.0 {
             Repr::Text(text) => cbor::Value::Text(text.clone()),
@@ -147,7 +158,9 @@ impl Value {
             Repr::Float(x) => cbor::Value::Float(*x),
             Repr::Boolean(b) => cbor::Value::Bool(*b),
             Repr::Id(id) => ncdb_core::link::value(id.0),
-            Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) => return None,
+            Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) | Repr::Clear => {
+                return None;
+            }
         })
     }
 
