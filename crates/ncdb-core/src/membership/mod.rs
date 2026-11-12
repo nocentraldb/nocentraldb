@@ -29,8 +29,9 @@ mod state;
 mod statement;
 
 pub use body::{
-    ACCOUNT_KEY_STATEMENT, ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS,
-    KEY_CHAIN, KEY_ENVELOPE, MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
+    ACCOUNT_KEY_STATEMENT, ACKNOWLEDGEMENT, Action, BodyError, ControlBody, ERASURE_DECISION,
+    Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE, MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED,
+    write,
 };
 pub use certificate::{Certificate, MemberKind};
 pub use current::MergeRotation;
@@ -44,8 +45,8 @@ pub use key_chain::{
     seal_previous_key_with_nonce,
 };
 pub use person_key::{
-    PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff, person_key_commitment,
-    record_hash, sign_record, verify_record,
+    ErasureDecision, PersonKeyEntry, RECORD_CONTEXT, SIGN_OFF_CONTEXT, ShredEntry, SignOff,
+    person_key_commitment, record_hash, sign_record, verify_record,
 };
 pub use person_key_wrap::{
     WRAPPED_PERSON_KEY_LEN, unwrap_person_key, wrap_person_key, wrap_person_key_with_nonce,
