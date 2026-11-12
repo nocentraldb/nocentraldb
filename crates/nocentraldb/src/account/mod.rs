@@ -12,9 +12,13 @@
 //! space: `spaces().list()` leaves it out and `spaces().get` refuses it,
 //! as a space of another model.
 //!
-//! The account's first device creates it when it opens. A device that
-//! joins an account, as a pairing one (NOC-267), creates none: another
-//! device adds it to the account space. Each device then keeps its own
+//! The account's first device creates it with the first app space it
+//! creates ([`create`]): the relay lets only an account it admits create
+//! spaces (NOC-257), and a space the device created shows that the relay
+//! admits its account. A device that joins an account, as a pairing one
+//! (NOC-267), creates none: another device adds it to the account space.
+//! A device that only joined spaces of others keeps no records until it
+//! holds an account space. Each device keeps its own
 //! records current ([`reconcile`]): its member record, and one membership
 //! record per app space it holds, with its role, deleted once it no longer
 //! belongs to the space. A record's id derives from what it records, so a
@@ -295,19 +299,26 @@ fn role_text(role: CoreRole) -> &'static str {
     }
 }
 
+/// Creates the account space, when the device holds none and creates the
+/// account's first: a device that joins an account another device created
+/// creates none, and an agent keeps no account space.
+pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
+    if inner.kind == MemberKind::Device && !inner.joins_account && space(inner).is_none() {
+        crate::space::create_space(inner, id())?;
+    }
+    Ok(())
+}
+
 /// Brings the device's own records in the account space up to date: its
 /// member record, and a membership record for each app space it belongs
-/// to, with its role. A device of an account that has no account space yet
-/// creates it, unless it joins an account another device created. An
-/// agent keeps no records. Writes nothing when the records are current.
+/// to, with its role. Without an account space, and on an agent, it
+/// writes nothing, as it does when the records are current.
 pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if inner.kind != MemberKind::Device {
         return Ok(());
     }
-    let account = match space(inner) {
-        Some(account) => account,
-        None if inner.joins_account => return Ok(()),
-        None => crate::space::create_space(inner, id())?,
+    let Some(account) = space(inner) else {
+        return Ok(());
     };
     // A space whose key the copy does not hold yet takes no write.
     if crate::space::writable_by(inner, account, id()).is_err() {

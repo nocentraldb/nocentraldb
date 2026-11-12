@@ -1,5 +1,6 @@
 //! The account space (RFC 0010, "The account space"; NOC-266): the
-//! account's first device creates it with the model the SDK ships, and
+//! account's first device creates it with the model the SDK ships, with
+//! its first app space, and
 //! records itself and each space it joins or leaves. A second device of
 //! the account, once in the account space, reads the first device's
 //! spaces from it. The account space is no app space: `spaces().list()`
@@ -51,6 +52,11 @@ fn member_id(db: &Db) -> [u8; 32] {
 async fn the_first_device_creates_the_account_space_and_records_itself() {
     let relay = LocalRelay::start().await;
     let a = open(A, &relay.url()).await;
+    assert!(
+        account::space(&lock(&a.inner)).is_none(),
+        "no account space before the first app space"
+    );
+    now(a.spaces().create()).unwrap();
 
     let members = account::members(&lock(&a.inner)).unwrap();
     assert_eq!(members.len(), 1, "{members:?}");
@@ -80,6 +86,8 @@ async fn each_space_the_device_joins_or_leaves_is_recorded() {
     let relay = LocalRelay::start().await;
     let a = open(A, &relay.url()).await;
     let c = open(C, &relay.url()).await;
+    // C creates a space of its own first, and with it its account space.
+    now(c.spaces().create()).unwrap();
     let first = now(a.spaces().create()).unwrap();
     let second = now(a.spaces().create()).unwrap();
 
@@ -115,6 +123,8 @@ async fn a_second_device_reads_the_first_devices_spaces_from_the_account_space()
     let a = open(A, &relay.url()).await;
     let b = open_joining(B, &relay.url()).await;
     let app = now(a.spaces().create()).unwrap();
+    // A joining device creates no account space, not even with a space.
+    now(b.spaces().create()).unwrap();
     now(app.write(|tx| {
         tx.create("tasks", [("title", Value::from("on A"))])?;
         Ok(())

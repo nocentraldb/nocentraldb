@@ -66,7 +66,9 @@ impl Spaces<'_> {
         let mut inner = self.db.lock();
         let model = inner.model_id;
         let space = create_space(&mut inner, model)?;
-        // The account space records the space the device joined.
+        // The account's first space creates the account space, which
+        // records the space the device joined (RFC 0010).
+        crate::account::create(&mut inner)?;
         crate::account::reconcile(&mut inner)?;
         Ok(Space {
             inner: self.db.inner.clone(),
