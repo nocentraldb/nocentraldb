@@ -1,9 +1,11 @@
 # NOC-275: runs the coverage check of the AWS Emulator, what it covers of
 # the operations RFC 0007's AWS backend needs, against one pinned emulator
-# version (NOC-264 point 2). It installs the emulator's signed Debian
+# version (NOC-264 point 2). NOC-270: then runs the AWS backend's tests
+# against the same emulator: the conformance suite of RFC 0007 and the
+# backend's own tests. It installs the emulator's signed Debian
 # package from downloads.aws.com, checks its signature against the AWS key
 # whose fingerprint the emulator's docs give, starts it with telemetry off,
-# and runs crates/ncdb-relay-aws's ignored test against it. The table of
+# and runs crates/ncdb-relay-aws's ignored tests against it. The table of
 # results is the job's summary. It runs on pull requests that touch that
 # crate or this file, and by hand. It is not part of `pnpm gates`, which
 # runs without the emulator. docs/aws-emulator.md says how to run the same
@@ -106,3 +108,20 @@ jobs:
             echo
             cat "$NCDB_EMULATOR_REPORT"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run the AWS backend's tests
+        env:
+          AWS_ENDPOINT_URL: https://127.0.0.1:9297
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_DISABLE_HOST_PREFIX_INJECTION: "true"
+          AWS_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          export AWS_SHARED_CREDENTIALS_FILE=~/.aws/emulator/9297/emulator_credentials
+          export AWS_CONFIG_FILE=~/.aws/emulator/9297/config
+          export SSL_CERT_FILE=~/.aws/emulator/9297/ca.pem
+          cargo test --locked -p ncdb-relay-aws --test conformance --test aws_backend -- --ignored
+
+      - name: The emulator's log, when a step failed
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/emulator.log"
