@@ -23,8 +23,10 @@ fn space(n: u8) -> SpaceId {
     SpaceId([n; 16])
 }
 
-/// A change with id `n` and a frame of `size` bytes that tells it apart.
+/// A change with id `n` and a frame of `size` bytes, at least 4, that tells
+/// it apart.
 fn entry(n: u32, size: usize) -> NewEntry {
+    assert!(size >= 4, "a frame of the tests holds its change number");
     let mut change = [0xC1; 32];
     change[..4].copy_from_slice(&n.to_be_bytes());
     let mut frame = vec![n as u8; size];
@@ -229,7 +231,7 @@ fn the_epoch_is_one_reserved_item_in_spaces() {
     let second = block_on(store.new_epoch()).unwrap();
     assert_eq!(epoch_item(), Some(second.0.to_vec()));
     // The reserved item is no space: a space's head is untouched by it.
-    block_on(store.append(space(1), 0, vec![entry(1, 1)], vec![])).unwrap();
+    block_on(store.append(space(1), 0, vec![entry(1, 8)], vec![])).unwrap();
     assert_eq!(block_on(store.head(space(1))).unwrap(), Some(1));
     assert_eq!(block_on(store.epoch()).unwrap(), second);
 }
