@@ -77,13 +77,20 @@ fn reject_reason(reason: RejectReason) -> &'static str {
 }
 
 /// Inserts a change the log of its space holds as a new entry, with its
-/// state.
-pub(super) fn insert(conn: &Connection, log: &Log, id: ChangeId) -> Result<(), Error> {
+/// state, and with `written_at` when the member wrote it then.
+pub(super) fn insert(
+    conn: &Connection,
+    log: &Log,
+    id: ChangeId,
+    written_at: Option<u64>,
+) -> Result<(), Error> {
     let position = log.position_of(id).expect("the log holds the change");
     let change = log.get(position).expect("the log holds the change");
+    let written_at = written_at.map(|at| i64::try_from(at).unwrap_or(i64::MAX));
     conn.execute(
-        "INSERT INTO log (space_id, change_id, state, frame) VALUES (?1, ?2, '', ?3)",
-        params![log.space().0, id.0, change.bytes()],
+        "INSERT INTO log (space_id, change_id, state, frame, written_at)
+         VALUES (?1, ?2, '', ?3, ?4)",
+        params![log.space().0, id.0, change.bytes(), written_at],
     )?;
     update(conn, log, id)
 }

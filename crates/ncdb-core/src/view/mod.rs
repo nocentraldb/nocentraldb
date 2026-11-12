@@ -26,6 +26,7 @@ mod rebuild;
 mod refold;
 mod relay;
 mod schema;
+mod shreds_held;
 mod state;
 mod stored_lock;
 
@@ -292,9 +293,31 @@ impl View {
     /// SQLite transaction. A duplicate changes nothing. When anything fails,
     /// neither the log nor the view changes.
     pub fn receive(&mut self, bytes: &[u8], checks: &mut impl Checks) -> Result<Appended, Error> {
+        self.receive_at(bytes, checks, None)
+    }
+
+    /// Receives a change the member wrote itself, as [`View::receive`]
+    /// does, and keeps `written_at`, the time it was written in
+    /// milliseconds since the Unix epoch, with it in the log (RFC 0002,
+    /// "On a member"; NOC-231). A duplicate keeps the time it had.
+    pub fn receive_own(
+        &mut self,
+        bytes: &[u8],
+        checks: &mut impl Checks,
+        written_at: u64,
+    ) -> Result<Appended, Error> {
+        self.receive_at(bytes, checks, Some(written_at))
+    }
+
+    fn receive_at(
+        &mut self,
+        bytes: &[u8],
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Appended, Error> {
         let change =
             Change::decode(bytes).map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
-        let result = self.receive_change(&change, bytes, checks);
+        let result = self.receive_change(&change, bytes, checks, written_at);
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -307,9 +330,18 @@ impl View {
         change: &Change,
         bytes: &[u8],
         checks: &mut impl Checks,
+        written_at: Option<u64>,
     ) -> Result<Appended, Error> {
         let tx = self.conn.transaction()?;
-        let appended = append(&tx, &self.model, &mut self.logs, change, bytes, checks)?;
+        let appended = append(
+            &tx,
+            &self.model,
+            &mut self.logs,
+            change,
+            bytes,
+            checks,
+            written_at,
+        )?;
         tx.commit()?;
         Ok(appended)
     }
@@ -324,7 +356,28 @@ impl View {
         frames: &[&[u8]],
         checks: &mut impl Checks,
     ) -> Result<Vec<Appended>, Error> {
-        let result = self.receive_batch(frames, checks);
+        self.receive_all_at(frames, checks, None)
+    }
+
+    /// Receives every frame of `frames`, changes the member wrote itself,
+    /// as [`View::receive_all`] does, and keeps `written_at` with each new
+    /// one, as [`View::receive_own`] does.
+    pub fn receive_all_own(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+        written_at: u64,
+    ) -> Result<Vec<Appended>, Error> {
+        self.receive_all_at(frames, checks, Some(written_at))
+    }
+
+    fn receive_all_at(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Vec<Appended>, Error> {
+        let result = self.receive_batch(frames, checks, written_at);
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -336,6 +389,7 @@ impl View {
         &mut self,
         frames: &[&[u8]],
         checks: &mut impl Checks,
+        written_at: Option<u64>,
     ) -> Result<Vec<Appended>, Error> {
         let changes = frames
             .iter()
@@ -352,6 +406,7 @@ impl View {
                 change,
                 bytes,
                 checks,
+                written_at,
             )?);
         }
         tx.commit()?;
@@ -410,6 +465,7 @@ fn append(
     change: &Change,
     bytes: &[u8],
     checks: &mut impl Checks,
+    written_at: Option<u64>,
 ) -> Result<Appended, Error> {
     let space = change.header().space;
     let log = logs.entry(space).or_insert_with(|| Log::new(space));
@@ -419,7 +475,7 @@ fn append(
     fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
-        log_table::insert(tx, log, change.id())?;
+        log_table::insert(tx, log, change.id(), written_at)?;
         // A passing control change can change the state of others.
         for id in log.take_changed() {
             if id != change.id() {
