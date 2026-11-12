@@ -135,6 +135,11 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
   }
   .install code {
     font-size: var(--t-small);
+    min-width: 0;
+    overflow-x: auto;
+  }
+  .install .btn {
+    flex: none;
   }
   .install code,
   .also code {
@@ -193,25 +198,6 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
 
 <script is:inline>
   (() => {
-    const root = document.querySelector("[data-tabs]");
-    if (!root) return;
-    const tabs = [...root.querySelectorAll("[role=tab]")];
-    const select = (tab) => {
-      for (const t of tabs) {
-        const on = t === tab;
-        t.setAttribute("aria-selected", String(on));
-        t.tabIndex = on ? 0 : -1;
-        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
-      }
-      tab.focus();
-    };
-    tabs.forEach((t, i) => {
-      t.addEventListener("click", () => select(t));
-      t.addEventListener("keydown", (e) => {
-        const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
-        if (d) select(tabs[(i + d + tabs.length) % tabs.length]);
-      });
-    });
     document.querySelectorAll("[data-copy]").forEach((b) =>
       b.addEventListener("click", async () => {
         try {
