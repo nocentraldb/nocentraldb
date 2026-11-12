@@ -1,8 +1,8 @@
 """Writes the pairing answer test vectors of RFC 0010 ("The pairing answer";
 the owner's NOC-273 A, Carsten, 2026-11-12) in this directory, independently
-of the Rust core. The gates do not run this script;
-tests/pairing_answer_vector.rs checks the committed files, natively and in
-wasm32.
+of the Rust core and the SDKs. The gates do not run this script;
+crates/ncdb-core/tests/pairing_answer_vector.rs checks the committed files,
+natively and in wasm32.
 
 Run: python3 -I pairing_answer.py  (needs cbor2==6.2.1 and cryptography==50.0.1)
 
@@ -35,9 +35,11 @@ X25519, HMAC-SHA256 and ChaCha20-Poly1305, so that the ephemeral key can come
 from a fixed ikmE. It is checked against RFC 9180's vector A.2.1, and each
 sealed key is opened with cryptography's own HPKE, a second implementation.
 
-The inputs are those of key_envelope.py: the same recipient, the same account
-key and the same ikmE, so the device answer's sealed key equals
-pairing.enc.hex and pairing.ciphertext.hex.
+The inputs are those of crates/ncdb-core/tests/vectors/key_envelope.py: the
+same recipient, the same account key and the same ikmE, so the device
+answer's sealed key equals that directory's pairing.enc.hex and
+pairing.ciphertext.hex. The recovery key is that of the code whose 128 bits
+are all 0x42.
 """
 
 import base64
@@ -52,6 +54,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 from cryptography.hazmat.primitives.ciphers.aead import ChaCha20Poly1305
 
 HERE = pathlib.Path(__file__).parent
+ENVELOPE = HERE.parent.parent.parent.parent / "crates/ncdb-core/tests/vectors"
 RAW = serialization.Encoding.Raw, serialization.PublicFormat.Raw
 
 KEM_ID, KDF_ID, AEAD_ID = 0x0020, 0x0001, 0x0003
@@ -161,8 +164,8 @@ def answer(kind, link):
     if kind == 1:
         enc, sealed = seal_base(agreement_public, b"nocentraldb/account-key", ACCOUNT_SEED, IKM_E)
         assert suite.decrypt(enc + sealed, agreement_private, info=b"nocentraldb/account-key") == ACCOUNT_SEED
-        assert enc == h((HERE / "pairing.enc.hex").read_text().replace("\n", ""))
-        assert sealed == h((HERE / "pairing.ciphertext.hex").read_text().replace("\n", ""))
+        assert enc == h((ENVELOPE / "pairing.enc.hex").read_text().replace("\n", ""))
+        assert sealed == h((ENVELOPE / "pairing.ciphertext.hex").read_text().replace("\n", ""))
         out += bytes([1]) + enc + sealed
     else:
         out += bytes([0])

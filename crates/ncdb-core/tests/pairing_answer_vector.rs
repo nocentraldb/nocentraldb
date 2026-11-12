@@ -1,7 +1,8 @@
 //! The pairing answer's vectors (RFC 0010, "The pairing answer"):
-//! tests/vectors/pairing_answer.py writes them with its own HPKE, Ed25519
-//! and canonical CBOR, from the inputs of key_envelope.py. The core builds
-//! the same text from the same inputs, and reads and completes it.
+//! docs/rfc/vectors/0010/pairing_answer.py writes them with its own HPKE,
+//! Ed25519 and canonical CBOR, from the inputs of
+//! tests/vectors/key_envelope.py. The core builds the same text from the
+//! same inputs, and reads and completes it.
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).
@@ -13,9 +14,10 @@ use ncdb_core::keys::{MemberKey, RecoveryKey};
 use ncdb_core::membership::{AccountKeyStatement, MemberKind};
 use ncdb_core::pairing::PairingAnswer;
 
-const DEVICE: &str = include_str!("vectors/pairing-answer.device.txt");
-const AGENT: &str = include_str!("vectors/pairing-answer.agent.txt");
-const DEVICE_LINK: &str = include_str!("vectors/pairing-answer.device-link.txt");
+const DEVICE: &str = include_str!("../../../docs/rfc/vectors/0010/pairing-answer.device.txt");
+const AGENT: &str = include_str!("../../../docs/rfc/vectors/0010/pairing-answer.agent.txt");
+const DEVICE_LINK: &str =
+    include_str!("../../../docs/rfc/vectors/0010/pairing-answer.device-link.txt");
 
 fn recovery() -> RecoveryKey {
     RecoveryKey::from_code(&[0x42; 16])

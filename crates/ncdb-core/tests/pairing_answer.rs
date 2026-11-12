@@ -137,7 +137,10 @@ fn a_device_answer_is_284_bytes_and_an_agents_204_and_64_more_with_a_link() {
     .unwrap();
     let text = link.to_string();
     assert!(text.starts_with("ncdb-pair-1:"));
-    assert_eq!(text.len(), "ncdb-pair-1:".len() + (348 * 4).div_ceil(3));
+    assert_eq!(
+        text.len(),
+        "ncdb-pair-1:".len() + (348usize * 4).div_ceil(3)
+    );
 }
 
 #[test]

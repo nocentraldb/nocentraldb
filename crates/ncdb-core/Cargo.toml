@@ -48,6 +48,10 @@ zeroize = { version = "=1.9.1", default-features = false }
 # from the TypeScript module (RFC 0005, NOC-70). The version Cargo.lock
 # already held.
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
+# The pairing answer's text form, unpadded base64url (RFC 0010, "The pairing
+# answer"), strict about padding and trailing bits. The version the Rust SDK
+# already pins for the invitation.
+data-encoding = { version = "=2.11.1", default-features = false, features = ["alloc"] }
 
 # The local view (RFC 0006, "SQLite on each target"): one rusqlite on every
 # target. Natively with SQLite compiled from source (`bundled`), never the
