@@ -196,6 +196,11 @@
     "logs:UntagResource",
     "s3:REST.PUT.OBJECT"
   ],
+  "AWS::Logs::MetricFilter": [
+    "logs:DeleteMetricFilter",
+    "logs:DescribeMetricFilters",
+    "logs:PutMetricFilter"
+  ],
   "AWS::S3::Bucket": [
     "iam:PassRole",
     "s3:CreateBucket",

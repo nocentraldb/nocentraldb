@@ -52,9 +52,11 @@ where
         async move {
             let (handler, sweep) = &*both;
             let now = ncdb_relay_lambda::contract::now();
-            let outcome = invoke(handler, sweep, invocation.payload, now).await;
-            println!("{}", outcome.line);
-            if outcome.failed {
+            let failed = invoke(handler, sweep, invocation.payload, now, &|line| {
+                println!("{line}");
+            })
+            .await;
+            if failed {
                 return Err(Error::from("the orphan sweep failed"));
             }
             let mut response = ApiGatewayProxyResponse::default();

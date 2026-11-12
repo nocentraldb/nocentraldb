@@ -75,23 +75,20 @@ impl Invocation {
     }
 }
 
-/// What an invocation did: its one log line, and whether it failed. Only a
-/// failed sweep fails; the WebSocket API is always answered.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Outcome {
-    /// The log line, as JSON.
-    pub line: String,
-    /// Whether the function reports the invocation as failed to Lambda.
-    pub failed: bool,
-}
-
-/// Handles one invocation at `now`, in milliseconds since the Unix epoch.
+/// Handles one invocation at `now`, in milliseconds since the Unix epoch,
+/// writes its log lines through `log`, and returns whether it failed. Only
+/// a failed sweep fails; the WebSocket API is always answered.
+///
+/// A sweep writes two lines, `{"sweep":"orphans","phase":"start",…}` before
+/// it runs and `…"phase":"end"…` after, so a run Lambda's timeout cut off
+/// shows as a start without an end, which the stack's alarm counts.
 pub async fn invoke<S, C, A, U, W>(
     handler: &Handler<S, C, A, U>,
     sweep: &W,
     payload: Value,
     now: u64,
-) -> Outcome
+    log: &(dyn Fn(&str) + Sync),
+) -> bool
 where
     S: RelayStore,
     C: Connections,
@@ -100,13 +97,16 @@ where
     W: Sweep,
 {
     match Invocation::read(payload) {
-        Ok(Invocation::WebSocket(event)) => Outcome {
-            line: handler.handle(event).await.to_string(),
-            failed: false,
-        },
+        Ok(Invocation::WebSocket(event)) => {
+            log(&handler.handle(event).await.to_string());
+            false
+        }
         Ok(Invocation::SweepOrphans) => {
             let started = Instant::now();
             let cutoff = now.saturating_sub(SWEEP_AGE);
+            log(&format!(
+                "{{\"sweep\":\"orphans\",\"phase\":\"start\",\"cutoff\":{cutoff},\"at\":{now}}}"
+            ));
             let result = sweep.sweep(cutoff).await;
             let ms = started.elapsed().as_millis();
             // A store error's text can name the bucket and keys; the line
@@ -115,17 +115,15 @@ where
                 Ok(deleted) => (format!("\"deleted\":{deleted}"), false),
                 Err(_) => (String::from("\"failed\":true"), true),
             };
-            Outcome {
-                line: format!(
-                    "{{\"sweep\":\"orphans\",\"cutoff\":{cutoff},{detail},\"at\":{now},\"ms\":{ms}}}"
-                ),
-                failed,
-            }
+            log(&format!(
+                "{{\"sweep\":\"orphans\",\"phase\":\"end\",\"cutoff\":{cutoff},{detail},\"at\":{now},\"ms\":{ms}}}"
+            ));
+            failed
         }
-        Err(refused) => Outcome {
-            line: format!("{{\"refused\":\"{refused:?}\"}}"),
-            failed: false,
-        },
+        Err(refused) => {
+            log(&format!("{{\"refused\":\"{refused:?}\"}}"));
+            false
+        }
     }
 }
 

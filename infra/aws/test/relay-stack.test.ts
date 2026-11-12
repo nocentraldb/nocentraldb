@@ -292,6 +292,66 @@ describe("the daily orphan sweep (NOC-290)", () => {
     expect(JSON.parse(target.Input)).toEqual(JSON.parse(input ?? ""));
   });
 
+  test("its log lines count each run's start and end", () => {
+    template.resourceCountIs("AWS::Logs::MetricFilter", 2);
+    const [logs] = Object.keys(template.findResources("AWS::Logs::LogGroup"));
+    for (const [phase, metric] of [
+      ["start", "SweepStarted"],
+      ["end", "SweepEnded"],
+    ]) {
+      template.hasResourceProperties("AWS::Logs::MetricFilter", {
+        LogGroupName: { Ref: logs },
+        FilterPattern: `{ ($.sweep = "orphans") && ($.phase = "${phase}") }`,
+        MetricTransformations: [
+          {
+            MetricNamespace: "NoCentralDb/Relay",
+            MetricName: metric,
+            MetricValue: "1",
+          },
+        ],
+      });
+    }
+  });
+
+  test("a run that started and never ended raises an alarm that mails the owner", () => {
+    const [topic] = Object.keys(template.findResources("AWS::SNS::Topic"));
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      ComparisonOperator: "GreaterThanOrEqualToThreshold",
+      Threshold: 1,
+      EvaluationPeriods: 1,
+      TreatMissingData: "notBreaching",
+      AlarmActions: [{ Ref: topic }],
+      Metrics: Match.arrayWith([
+        Match.objectLike({
+          Expression: "FILL(started, 0) - FILL(ended, 0)",
+          ReturnData: true,
+        }),
+        Match.objectLike({
+          Id: "started",
+          MetricStat: Match.objectLike({
+            Metric: {
+              MetricName: "SweepStarted",
+              Namespace: "NoCentralDb/Relay",
+            },
+            Period: 3600,
+            Stat: "Sum",
+          }),
+        }),
+        Match.objectLike({
+          Id: "ended",
+          MetricStat: Match.objectLike({
+            Metric: {
+              MetricName: "SweepEnded",
+              Namespace: "NoCentralDb/Relay",
+            },
+            Period: 3600,
+            Stat: "Sum",
+          }),
+        }),
+      ]),
+    });
+  });
+
   test("only that rule may invoke the function from EventBridge", () => {
     const [ruleId] = Object.keys(template.findResources("AWS::Events::Rule"));
     const permissions = Object.values(
@@ -328,7 +388,7 @@ describe("alarms and the budget", () => {
   });
 
   test("the function's errors and throttles raise an alarm that mails the owner", () => {
-    template.resourceCountIs("AWS::CloudWatch::Alarm", 2);
+    template.resourceCountIs("AWS::CloudWatch::Alarm", 3);
     template.hasResourceProperties("AWS::SNS::Subscription", {
       Protocol: "email",
       Endpoint: "owner@example.invalid",

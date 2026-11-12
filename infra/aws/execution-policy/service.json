@@ -103,8 +103,10 @@
         "logs:DeleteDataProtectionPolicy",
         "logs:DeleteIndexPolicy",
         "logs:DeleteLogGroup",
+        "logs:DeleteMetricFilter",
         "logs:DeleteRetentionPolicy",
         "logs:DescribeIndexPolicies",
+        "logs:DescribeMetricFilters",
         "logs:DisassociateKmsKey",
         "logs:GetDataProtectionPolicy",
         "logs:ListTagsForResource",
@@ -112,6 +114,7 @@
         "logs:PutDataProtectionPolicy",
         "logs:PutIndexPolicy",
         "logs:PutLogGroupDeletionProtection",
+        "logs:PutMetricFilter",
         "logs:PutRetentionPolicy",
         "logs:TagResource",
         "logs:UntagResource"

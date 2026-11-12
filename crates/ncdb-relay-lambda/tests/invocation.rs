@@ -3,7 +3,9 @@
 //! exactly [`SWEEP_INPUT`], runs the orphan sweep with a cutoff a day back
 //! (RFC 0007, "How large changes go to S3"). No WebSocket event ever
 //! reaches the sweep, not even a message whose text is the schedule's
-//! input, and nothing else does either.
+//! input, and nothing else does either. A sweep logs that it started
+//! before it runs, and that it ended after, so a run the timeout cut off
+//! shows as a start without an end.
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
@@ -19,17 +21,44 @@ const CONNECT: &str = include_str!("../src/harness/events/connect.json");
 const MESSAGE: &str = include_str!("../src/harness/events/message.json");
 const DISCONNECT: &str = include_str!("../src/harness/events/disconnect.json");
 
-/// A sweep that records each cutoff it is asked for, and answers with
-/// `deleted`, or fails when that is `None`.
-struct Recorded {
+/// The log lines an invocation wrote, in order.
+#[derive(Default)]
+struct Log(Mutex<Vec<String>>);
+
+impl Log {
+    fn write(&self, line: &str) {
+        self.0.lock().unwrap().push(line.to_owned());
+    }
+
+    fn lines(&self) -> Vec<Value> {
+        let lines = self.0.lock().unwrap();
+        lines
+            .iter()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    }
+
+    fn last(&self) -> Value {
+        self.lines().pop().expect("no line")
+    }
+}
+
+/// A sweep that records each cutoff it is asked for, and the log lines
+/// written before it ran, and answers with `deleted`, or fails when that is
+/// `None`.
+struct Recorded<'a> {
     cutoffs: Mutex<Vec<u64>>,
+    logged_before: Mutex<Vec<Value>>,
+    log: &'a Log,
     deleted: Option<u32>,
 }
 
-impl Recorded {
-    fn answering(deleted: Option<u32>) -> Recorded {
+impl<'a> Recorded<'a> {
+    fn answering(log: &'a Log, deleted: Option<u32>) -> Recorded<'a> {
         Recorded {
             cutoffs: Mutex::new(Vec::new()),
+            logged_before: Mutex::new(Vec::new()),
+            log,
             deleted,
         }
     }
@@ -39,9 +68,10 @@ impl Recorded {
     }
 }
 
-impl Sweep for Recorded {
+impl Sweep for Recorded<'_> {
     async fn sweep(&self, cutoff: u64) -> Result<u32, StoreError> {
         self.cutoffs.lock().unwrap().push(cutoff);
+        *self.logged_before.lock().unwrap() = self.log.lines();
         self.deleted
             .ok_or_else(|| StoreError("the bucket refused".into()))
     }
@@ -108,58 +138,74 @@ const NOW: u64 = 1_800_000_000_000;
 #[tokio::test]
 async fn the_schedule_s_input_runs_the_sweep_with_a_cutoff_a_day_back() {
     let handler = handler();
-    let sweep = Recorded::answering(Some(3));
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(3));
     let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
 
-    let outcome = invoke(&handler, &sweep, input, NOW).await;
+    let failed = invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
 
     assert_eq!(sweep.cutoffs(), vec![NOW - SWEEP_AGE]);
     assert_eq!(SWEEP_AGE, 24 * 60 * 60 * 1000);
-    assert!(!outcome.failed);
-    let line: Value = serde_json::from_str(&outcome.line).unwrap();
-    assert_eq!(line["sweep"], "orphans");
-    assert_eq!(line["deleted"], 3);
-    assert_eq!(line["cutoff"], NOW - SWEEP_AGE);
+    assert!(!failed);
+    let lines = log.lines();
+    assert_eq!(lines.len(), 2);
+    let (start, end) = (&lines[0], &lines[1]);
+    assert_eq!(start["sweep"], "orphans");
+    assert_eq!(start["phase"], "start");
+    assert_eq!(start["cutoff"], NOW - SWEEP_AGE);
+    assert_eq!(end["sweep"], "orphans");
+    assert_eq!(end["phase"], "end");
+    assert_eq!(end["deleted"], 3);
+    assert_eq!(end["cutoff"], NOW - SWEEP_AGE);
     assert!(handler.connections().is_empty());
 }
 
 #[tokio::test]
 async fn websocket_events_go_to_the_handler_and_never_reach_the_sweep() {
     let handler = handler();
-    let sweep = Recorded::answering(Some(0));
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(0));
     let now = ncdb_relay_lambda::contract::now();
 
     for json in [CONNECT, MESSAGE, DISCONNECT] {
-        let outcome = invoke(&handler, &sweep, websocket(json, now), now).await;
-        assert!(!outcome.failed);
-        let line: Value = serde_json::from_str(&outcome.line).unwrap();
-        assert!(line.get("route").is_some(), "{}", outcome.line);
-        assert!(line.get("sweep").is_none(), "{}", outcome.line);
+        let failed = invoke(&handler, &sweep, websocket(json, now), now, &|l| {
+            log.write(l)
+        })
+        .await;
+        assert!(!failed);
+        let line = log.last();
+        assert!(line.get("route").is_some(), "{line}");
+        assert!(line.get("sweep").is_none(), "{line}");
     }
+    assert_eq!(log.lines().len(), 3);
     assert_eq!(sweep.cutoffs(), Vec::<u64>::new());
 }
 
 #[tokio::test]
 async fn a_message_whose_text_is_the_schedule_s_input_is_only_a_message() {
     let handler = handler();
-    let sweep = Recorded::answering(Some(0));
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(0));
     let now = ncdb_relay_lambda::contract::now();
-    invoke(&handler, &sweep, websocket(CONNECT, now), now).await;
+    invoke(&handler, &sweep, websocket(CONNECT, now), now, &|l| {
+        log.write(l)
+    })
+    .await;
 
     let mut message = websocket(MESSAGE, now);
     message["body"] = json!(SWEEP_INPUT);
     message["isBase64Encoded"] = json!(false);
-    let outcome = invoke(&handler, &sweep, message, now).await;
+    invoke(&handler, &sweep, message, now, &|l| log.write(l)).await;
 
-    let line: Value = serde_json::from_str(&outcome.line).unwrap();
-    assert_eq!(line["route"], "message");
+    assert_eq!(log.last()["route"], "message");
     assert_eq!(sweep.cutoffs(), Vec::<u64>::new());
 }
 
 #[tokio::test]
 async fn any_other_event_is_refused_and_sweeps_nothing() {
     let handler = handler();
-    let sweep = Recorded::answering(Some(0));
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(0));
     let others = [
         json!({"ncdb-relay": "sweep-orphans", "cutoff": 0}),
         json!({"ncdb-relay": "sweep"}),
@@ -178,9 +224,9 @@ async fn any_other_event_is_refused_and_sweeps_nothing() {
     ];
 
     for other in others {
-        let outcome = invoke(&handler, &sweep, other.clone(), NOW).await;
-        let line: Value = serde_json::from_str(&outcome.line).unwrap();
-        assert!(line.get("refused").is_some(), "{other}: {}", outcome.line);
+        invoke(&handler, &sweep, other.clone(), NOW, &|l| log.write(l)).await;
+        let line = log.last();
+        assert!(line.get("refused").is_some(), "{other}: {line}");
     }
     assert_eq!(sweep.cutoffs(), Vec::<u64>::new());
 }
@@ -188,14 +234,33 @@ async fn any_other_event_is_refused_and_sweeps_nothing() {
 #[tokio::test]
 async fn a_failed_sweep_fails_the_invocation_and_logs_no_detail() {
     let handler = handler();
-    let sweep = Recorded::answering(None);
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, None);
     let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
 
-    let outcome = invoke(&handler, &sweep, input, NOW).await;
+    let failed = invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
 
-    assert!(outcome.failed);
-    let line: Value = serde_json::from_str(&outcome.line).unwrap();
-    assert_eq!(line["sweep"], "orphans");
-    assert_eq!(line["failed"], true);
-    assert!(!outcome.line.contains("bucket refused"), "{}", outcome.line);
+    assert!(failed);
+    let end = log.last();
+    assert_eq!(end["sweep"], "orphans");
+    assert_eq!(end["phase"], "end");
+    assert_eq!(end["failed"], true);
+    assert!(!end.to_string().contains("bucket refused"), "{end}");
+}
+
+#[tokio::test]
+async fn a_sweep_logs_its_start_before_it_runs() {
+    // A run the timeout cuts off never logs its end; its start is already
+    // in the log, which the stack's alarm counts.
+    let handler = handler();
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(0));
+    let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
+
+    invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
+
+    let before = sweep.logged_before.lock().unwrap().clone();
+    assert_eq!(before.len(), 1);
+    assert_eq!(before[0]["sweep"], "orphans");
+    assert_eq!(before[0]["phase"], "start");
 }

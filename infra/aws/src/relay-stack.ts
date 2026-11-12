@@ -17,7 +17,8 @@
 // - The bucket: all public access blocked, S3-managed encryption, no
 //   versions, TLS only, uploads deleted after a day, and CORS for any origin
 //   (NOC-245 A).
-// - A rule that runs the orphan sweep once a day (NOC-290).
+// - A rule that runs the orphan sweep once a day, and an alarm when a run
+//   starts and never ends (NOC-290).
 // - Alarms on the function's errors and throttles, and a budget of 20 USD a
 //   month with mails at 50, 80 and 100 percent (NOC-264 point 5).
 
@@ -34,6 +35,7 @@ import { CfnBudget } from "aws-cdk-lib/aws-budgets";
 import {
   Alarm,
   ComparisonOperator,
+  MathExpression,
   TreatMissingData,
 } from "aws-cdk-lib/aws-cloudwatch";
 import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
@@ -51,7 +53,12 @@ import {
   Function as LambdaFunction,
   Runtime,
 } from "aws-cdk-lib/aws-lambda";
-import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import {
+  FilterPattern,
+  LogGroup,
+  MetricFilter,
+  RetentionDays,
+} from "aws-cdk-lib/aws-logs";
 import {
   BlockPublicAccess,
   Bucket,
@@ -232,7 +239,7 @@ export class RelayStack extends Stack {
     owner.addSubscription(new EmailSubscription(props.alarmEmail));
     const alarm = (
       id: string,
-      metric: ReturnType<LambdaFunction["metricErrors"]>,
+      metric: ReturnType<LambdaFunction["metricErrors"]> | MathExpression,
     ) =>
       new Alarm(this, id, {
         metric,
@@ -244,6 +251,32 @@ export class RelayStack extends Stack {
       }).addAlarmAction(new SnsAction(owner));
     alarm("Errors", relay.metricErrors({ period: Duration.minutes(5) }));
     alarm("Throttles", relay.metricThrottles({ period: Duration.minutes(5) }));
+
+    // A sweep logs its start before it runs and its end after; a run that
+    // Lambda's timeout cut off, or that crashed, has a start without an
+    // end. The alarm fires within the hour, before orphans pile up.
+    const sweepPhase = (phase: string, metricName: string) =>
+      new MetricFilter(this, metricName, {
+        logGroup: logs,
+        filterPattern: FilterPattern.all(
+          FilterPattern.stringValue("$.sweep", "=", "orphans"),
+          FilterPattern.stringValue("$.phase", "=", phase),
+        ),
+        metricNamespace: "NoCentralDb/Relay",
+        metricName,
+        metricValue: "1",
+      }).metric({ period: Duration.hours(1), statistic: "Sum" });
+    alarm(
+      "SweepUnfinished",
+      new MathExpression({
+        expression: "FILL(started, 0) - FILL(ended, 0)",
+        usingMetrics: {
+          started: sweepPhase("start", "SweepStarted"),
+          ended: sweepPhase("end", "SweepEnded"),
+        },
+        period: Duration.hours(1),
+      }),
+    );
 
     new CfnBudget(this, "Budget", {
       budget: {

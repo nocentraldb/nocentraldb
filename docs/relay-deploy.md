@@ -169,5 +169,5 @@ RFC 0007 estimates about 10 USD a month for a small team. The stack holds:
 
 - **A budget of 20 USD a month.** It mails `ALARM_EMAIL` at 50, 80 and 100 percent of actual cost.
 - **Two alarms on the function,** one for errors and one for throttles. They mail through SNS.
-- **A daily sweep** at 03:17 UTC, which deletes frames in S3 that no change holds and that are older than a day (RFC 0007, "How large changes go to S3"). Its log line reads `{"sweep":"orphans",…}`. A failed sweep counts as an error of the function, so the error alarm mails you.
+- **A daily sweep** at 03:17 UTC, which deletes frames in S3 that no change holds and that are older than a day (RFC 0007, "How large changes go to S3"). It writes two log lines, `{"sweep":"orphans","phase":"start",…}` and `…"phase":"end"…`. A failed sweep counts as an error of the function, so the error alarm mails you. A third alarm, `SweepUnfinished`, mails you within the hour when a run started and never ended, for example because it ran into the function's 29-second timeout.
 - **The function's logs,** kept 14 days. They hold ids, sizes, codes and times; no content and no keys.
