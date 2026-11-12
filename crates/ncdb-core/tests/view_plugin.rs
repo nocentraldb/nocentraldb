@@ -235,3 +235,68 @@ fn a_model_with_the_plugin_field_registered_hashes_apart_from_one_without() {
     let unregistered = ncdb_core::view::Model::from_lock(&lock).unwrap();
     assert_ne!(registered.hash(), unregistered.hash());
 }
+
+#[test]
+fn a_view_opened_without_the_plugin_parks_the_field_and_folds_it_once_the_plugin_is_registered() {
+    let db = TempDb::new("plugin-registered-later");
+    let lock = lock_with(1, None);
+    let none = Registry::default();
+    let mut view = View::open_with_plugins(&db.0, &lock, &none, checks_for).unwrap();
+    let (space, task) = folded(&mut view, vec![op(64, args(&[(1, 2)]))]);
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded {
+            parked: vec![parked(1, OperationParkReason::UnknownType)],
+        })
+    );
+    drop(view);
+
+    // Registered at the next open: the view migrates, and folds what it
+    // parked (NOC-84).
+    let view = View::open_with_plugins(&db.0, &lock, &registry(), checks_for).unwrap();
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded { parked: vec![] })
+    );
+    assert_eq!(votes(&view, space), Some(Data::Integer(2)));
+    drop(view);
+
+    // Without it again, the field parks again, and with it, folds again.
+    let view = View::open_with_plugins(&db.0, &lock, &none, checks_for).unwrap();
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded {
+            parked: vec![parked(1, OperationParkReason::UnknownType)],
+        })
+    );
+    drop(view);
+    let view = View::open_with_plugins(&db.0, &lock, &registry(), checks_for).unwrap();
+    assert_eq!(votes(&view, space), Some(Data::Integer(2)));
+}
+
+#[test]
+fn the_plugin_field_writes_through_its_code_against_the_stored_state() {
+    let mut view = View::open_in_memory_with_plugins(&lock_with(1, None), &registry()).unwrap();
+    let (space, _) = folded(&mut view, vec![op(64, args(&[(1, 2)]))]);
+    let Some(Field::Plugin(field)) = view.model().field(TASK, VOTES) else {
+        panic!("votes is no plugin field");
+    };
+    let row = view.get(space, TASK, T).unwrap().unwrap();
+    let Some(FieldState::Plugin(state)) = row.fields.get(VOTES) else {
+        panic!("votes holds no plugin state");
+    };
+    let written = field.write(state, &Data::Integer(3)).unwrap();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, ncdb_test_counter::ADD);
+    assert!(field.write(state, &Data::Null).is_err());
+}
+
+#[test]
+fn an_unregistered_field_names_its_type_id_and_rule() {
+    let view = View::open_in_memory(&lock_with(2, None)).unwrap();
+    assert_eq!(
+        view.model().unregistered_type(TASK, VOTES),
+        Some(("test/counter", 2))
+    );
+    assert_eq!(view.model().unregistered_type(TASK, RANK), None);
+}
