@@ -55,6 +55,12 @@ impl AccountKeyStatement {
         statement
     }
 
+    /// The account's first statement: `account_key` is its key number 1,
+    /// signed by `recovery` (RFC 0010, "The recovery code"; NOC-263).
+    pub fn first(recovery: &RecoveryKey, account_key: [u8; 32]) -> AccountKeyStatement {
+        AccountKeyStatement::sign(recovery, account_key, 1)
+    }
+
     /// What the recovery key signs: the SHA-256 hash of the context and the
     /// canonical map of keys 1 to 3.
     pub fn digest(&self) -> [u8; 32] {

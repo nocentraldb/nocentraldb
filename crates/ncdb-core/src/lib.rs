@@ -56,6 +56,7 @@ pub mod pairing;
 pub mod personal;
 pub mod plugins;
 pub mod receive;
+pub mod recovery;
 mod redact;
 pub mod reference;
 pub mod seal;
