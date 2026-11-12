@@ -72,7 +72,7 @@ impl Query {
         self
     }
 
-    /// The page size: 50 unless set, at most 500.
+    /// The page size: 50 unless set, at most 1000; a larger size is `InvalidValue`.
     pub fn take(mut self, n: usize) -> Query {
         self.take = n;
         self
@@ -152,7 +152,7 @@ fn refused(error: QueryError) -> Error {
             ErrorCode::InvalidValue,
             "the query does not give one value per field of the index's equality prefix",
         ),
-        QueryError::PageSize => (ErrorCode::InvalidValue, "the page size is 0 or above 500"),
+        QueryError::PageSize => (ErrorCode::InvalidValue, "the page size is 0 or above 1000"),
         QueryError::Space => (
             ErrorCode::InvalidValue,
             "an index that runs in one space is read with space.find, any other with db.find",
