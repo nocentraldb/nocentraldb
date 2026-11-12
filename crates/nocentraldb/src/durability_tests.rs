@@ -127,3 +127,63 @@ fn unconfirmed_changes_are_at_risk_only_where_the_copy_is_not_persistent() {
     assert!(report(&db, Storage::BestEffort).at_risk);
     assert!(report(&db, Storage::Temporary).at_risk);
 }
+
+/// Confirms every change of `db`'s own in `space`, as a relay would.
+fn confirm_own(db: &Db, space: &Space) {
+    let own = own_changes(db, space);
+    let mut inner = db.lock();
+    for (position, id) in own.iter().enumerate() {
+        inner
+            .view
+            .confirm(space.id().0, *id, position as u64 + 1)
+            .unwrap();
+    }
+}
+
+#[test]
+fn the_oldest_unconfirmed_change_is_dated_when_the_member_wrote_it() {
+    let db = of_account(1, &SigningKey::from_bytes(&[9; 32]));
+    let before = crate::clock::now_millis();
+    let project = space(&db);
+    write(&project);
+    let after = crate::clock::now_millis();
+
+    let at = report(&db, Storage::BestEffort)
+        .oldest_unconfirmed_at
+        .expect("an own change is unconfirmed");
+
+    assert!(before <= at && at <= after, "{before} <= {at} <= {after}");
+    confirm_own(&db, &project);
+    assert_eq!(report(&db, Storage::BestEffort).oldest_unconfirmed_at, None);
+}
+
+#[test]
+fn a_membership_change_of_the_member_is_dated_too() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let admin = of_account(1, &account);
+    let project = space(&admin);
+    confirm_own(&admin, &project);
+    let guest = of_account(2, &account);
+    let before = crate::clock::now_millis();
+
+    now(project
+        .members()
+        .add(&now(guest.invitation()), crate::members::tests::writer()))
+    .unwrap();
+
+    let at = report(&admin, Storage::BestEffort).oldest_unconfirmed_at;
+    assert!(at.is_some_and(|at| at >= before), "{at:?}");
+}
+
+#[test]
+fn another_members_changes_carry_no_date() {
+    let account = SigningKey::from_bytes(&[9; 32]);
+    let (admin, project, member, _) = joined(&account, Role::Writer);
+    write(&project);
+    copy(&admin, &member, &project);
+
+    assert_eq!(
+        report(&member, Storage::BestEffort).oldest_unconfirmed_at,
+        None
+    );
+}
