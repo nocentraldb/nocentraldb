@@ -199,3 +199,21 @@ test("RFC 0009 says how an erased field reads, and names the Rust calls", () => 
   assert.match(rust, /`Create \{ same_person_as/);
   assert.match(rust, /`object\.erased\(\)`/);
 });
+
+test("RFC 0009 refuses a write without the person's key with personKeyNotHeld", () => {
+  const sdk = read(RFC["0009"]);
+  const errors = section(sdk, "errors");
+  const row = errors
+    .split("\n")
+    .find(
+      (l) =>
+        l.startsWith("|") &&
+        (l.split("|")[1] ?? "").includes("`personKeyNotHeld`"),
+    );
+  assert.ok(row, "no personKeyNotHeld row in Errors");
+  assert.match(row, /Carsten, 2026-11-12, NOC-255/);
+  const rust = section(sdk, "the-rust-sdk")
+    .split("\n")
+    .find((l) => l.startsWith("- **Personal fields.**"));
+  assert.match(rust, /`ErrorCode::PersonKeyNotHeld`/);
+});
