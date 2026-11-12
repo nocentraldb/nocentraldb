@@ -1,0 +1,6 @@
+# 2026-11-12 · NOC-232 · The owner decides RFC 0011, plugin field types, its seven points as recommended
+
+- Decided by: Carsten, 2026-11-12, on NOC-232 ("Ich stimme den Vorschlägen zu")
+- Why: a plugin implements a typed `FieldType` trait from `ncdb-plugin`, with `decode_state` and `write` added to RFC 0004's contract, which the core wraps over bytes; one crate is one namespace and exports `plugin()`, and the registry maps a type id and rule to its code; a Rust app hands plugins over with `OpenOptions::plugin`, once per plugin; TypeScript has no plugins in v1, and `ncdb core build` comes next; a type that is not registered opens anyway, parks as `ParkReason::UnknownType`, reads as unset and refuses writes with a new error code, and the build refuses a changed `config`; the harness becomes the public crate `ncdb-harness`.
+- Instead of: a trait over bytes only, or the core's closed enums per app; per-type or link-time registration; one `OpenOptions::plugins` set; wasm modules every core loads at run time, which stays open for later; refusing to open, or refusing only in debug builds; an `ncdb plugin check` command, or a harness run on every registration; a public module inside `ncdb-core`.
+- Topics: rfc-0011, plugins, field-types, api, sdk

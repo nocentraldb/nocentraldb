@@ -14,7 +14,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 - **Computed fields and views.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does. Indexes are declared here (see [Indexes](#indexes)); how a query uses them is RFC 0006's.
 - **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types, and so their entries in `model.lock.json`, belong to later RFCs.
-- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and loaded belongs to the plugin RFC, under the contract of RFC 0004.
+- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and loaded is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004.
 - **The crypto of personal fields.** This RFC says how the schema marks a field as personal and ties it to a person. RFC 0003 encrypts it.
 - **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). That includes moving a field to a new rule version of its type, which RFC 0004 allows only with a migration. Migrations are a later RFC.
 
@@ -406,6 +406,7 @@ Appending options and adding targets are accepted because a task board without a
 | Remove or rename a collection or a field | Changes carry names. Data written under the old name would belong to nothing; an old client would keep writing the old name. Deprecate instead. |
 | Change a field's type | Two clients would merge the same changes by different rules and diverge (principle 2). |
 | Move a field to a new rule version of its type | RFC 0004 allows a new rule version only with a migration that every member runs before the schema uses it. Migrations are a later RFC; until it exists, the build refuses. A new field can use the new rule version at once, and the old field can be deprecated. |
+| Change a plugin field's `config` | A plugin type's `config` is part of its merge rule: two members that fold one field with different options could diverge (principle 2). Add a new field with the new `config`, and deprecate the old one (Carsten, 2026-11-12, NOC-232; [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)). |
 | Remove, rename or reorder an option of a choice | Stored values name options; order may become sort order in views. |
 | Remove a collection from a link's or a reference's `targets` | Existing links would turn from **ok** to **wrong collection**, and references from **ok** to **missing**, on upgraded clients only. |
 | Mark an existing field as personal | The field's earlier values are already in the log in plain form, under the space key only. Destroying a person key would not erase them, and a reader would believe it did (principle 4). Add a new personal field instead. |

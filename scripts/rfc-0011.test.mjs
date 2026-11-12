@@ -145,9 +145,9 @@ test("1: a typed FieldType trait the core wraps, with decode_state and write", (
     text,
     [
       /`FieldType`/,
-      /`decode_state`/,
-      /`write`/,
-      /`configure`/,
+      /`decode_state\(/,
+      /`write\(/,
+      /`configure\(/,
       /round-trip/,
       /below 64/,
       /`UnknownOperation`/,
@@ -331,7 +331,10 @@ test("RFC 0009 takes ParkReason::UnknownType, unknownType and OpenOptions::plugi
   );
   assert.match(names, /`unknownType`/);
   for (const text of [rust, section(sdk, "errors")]) {
-    assert.ok(text.includes(BY_OWNER), "RFC 0009 does not name the decision");
+    assert.ok(
+      text.includes("(Carsten, 2026-11-12, NOC-232"),
+      "RFC 0009 does not name the decision",
+    );
   }
 });
 
@@ -350,5 +353,5 @@ test("History holds one line: the first publication", () => {
     .split("\n")
     .filter((l) => l.startsWith("- "));
   assert.equal(lines.length, 1);
-  assert.match(lines[0], /^- 2026-11-12 · First published .*NOC-235/);
+  assert.match(lines[0], /^- 2026-11-12 · First published\b.*NOC-235/);
 });
