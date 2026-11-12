@@ -59,6 +59,8 @@ mod time;
 mod time_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod tls;
+#[cfg(not(target_arch = "wasm32"))]
+mod transport;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 
@@ -199,7 +201,7 @@ pub(crate) struct SyncState {
     /// current generation is exposed, unless the exposure ends first
     /// (`merge`; RFC 0008, "Two removals that rotate the key at once",
     /// step 5).
-    pub(crate) merges: BTreeMap<CoreSpaceId, std::time::Instant>,
+    pub(crate) merges: BTreeMap<CoreSpaceId, time::Instant>,
     /// The longest delay before a merge rotation: a minute, which the
     /// tests change (`set_merge_delay`).
     pub(crate) merge_delay: std::time::Duration,
