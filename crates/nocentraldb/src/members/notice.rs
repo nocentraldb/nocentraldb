@@ -74,7 +74,6 @@ impl Notice {
         text: "This agent acts for your account in the spaces an admin adds it to. \
                It holds no account key.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_LINKED: Notice = Notice {
         code: NoticeCode::AccountLinked,
         text: "Spaces this database joined before keep its old account. \
