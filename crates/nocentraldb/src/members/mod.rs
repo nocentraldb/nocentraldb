@@ -23,7 +23,7 @@ use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::space::{Space, not_stopped, writable};
 
-mod batch;
+pub(crate) mod batch;
 mod change;
 mod info;
 mod invitation;
