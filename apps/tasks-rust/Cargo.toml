@@ -1,0 +1,31 @@
+[package]
+name = "tasks-rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "An example app: a task list on two devices, synced through a NoCentralDB relay, with the Rust SDK."
+
+[[bin]]
+name = "tasks"
+path = "src/main.rs"
+
+# The public Rust SDK, and nothing else of NoCentralDB: the example shows
+# what a developer can build with it (NOC-237).
+[dependencies]
+nocentraldb.workspace = true
+# The SDK runs its own runtime for syncing, so the app only waits for its
+# futures and streams: a current-thread runtime with timers. The version
+# Cargo.lock already held.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time", "macros"] }
+# The `Stream` of a subscription, as the SDK returns it. The version the SDK
+# pins.
+futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
+
+# The end-to-end test runs the relay server in its own process, from the
+# relay crates, on a temporary database; the app itself never depends on
+# them.
+[dev-dependencies]
+ncdb-relay.workspace = true
+ncdb-relay-server.workspace = true
