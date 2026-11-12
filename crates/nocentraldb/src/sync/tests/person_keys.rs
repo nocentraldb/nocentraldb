@@ -27,12 +27,12 @@ const MEMBER: Who = 2;
 /// A member the admin removes, which rotates the space key.
 const GUEST: Who = 3;
 
-const PERSON: [u8; 16] = [0x9e; 16];
+pub(super) const PERSON: [u8; 16] = [0x9e; 16];
 
 /// The admin announces the person key `committed` of `PERSON` in `space`
 /// with a person-key entry whose record wraps `wrapped`, folds the entry,
 /// and hands the record to syncing to put.
-fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &PersonKey) {
+pub(super) fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &PersonKey) {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -70,7 +70,7 @@ fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &Person
 
 /// Both databases synced, and the space the admin shares with the member
 /// as a writer.
-async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
+pub(super) async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
     let admin = open(ADMIN, &relay.url()).await;
     let member = open(MEMBER, &relay.url()).await;
     let project = now(admin.spaces().create()).unwrap();
@@ -84,7 +84,7 @@ async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
 }
 
 /// The commitment of the person key `PERSON` that `db` holds in `space`.
-fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
+pub(super) fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
     let inner = lock(&db.inner);
     let state = inner.spaces.get(&space)?;
     let key = state.person_keys.get(&PERSON)?;
@@ -92,7 +92,7 @@ fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
 }
 
 /// Whether `db` fetched the records of `space` in its current connection.
-fn fetched(db: &Db, space: CoreSpaceId) -> bool {
+pub(super) fn fetched(db: &Db, space: CoreSpaceId) -> bool {
     let inner = lock(&db.inner);
     inner
         .spaces
