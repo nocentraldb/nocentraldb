@@ -1,0 +1,179 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "TheWebSocketApi",
+      "Effect": "Allow",
+      "Action": [
+        "apigateway:DELETE",
+        "apigateway:GET",
+        "apigateway:PATCH",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:TagResource",
+        "apigateway:UntagResource"
+      ],
+      "Resource": [
+        "arn:aws:apigateway:eu-central-1::/apis",
+        "arn:aws:apigateway:eu-central-1::/apis/*",
+        "arn:aws:apigateway:eu-central-1::/tags/*"
+      ]
+    },
+    {
+      "Sid": "TheFunction",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:AddPermission",
+        "lambda:AssociateRuntimeAlias",
+        "lambda:CreateFunction",
+        "lambda:DeleteFunction",
+        "lambda:DeleteFunctionCodeSigningConfig",
+        "lambda:DeleteFunctionConcurrency",
+        "lambda:GetFunction",
+        "lambda:GetFunctionCodeSigningConfig",
+        "lambda:GetFunctionRecursionConfig",
+        "lambda:GetFunctionScalingConfig",
+        "lambda:GetPolicy",
+        "lambda:GetRuntimeManagementConfig",
+        "lambda:PublishVersion",
+        "lambda:PutFunctionCodeSigningConfig",
+        "lambda:PutFunctionConcurrency",
+        "lambda:PutFunctionRecursionConfig",
+        "lambda:PutFunctionScalingConfig",
+        "lambda:PutRuntimeManagementConfig",
+        "lambda:RemovePermission",
+        "lambda:TagResource",
+        "lambda:UntagResource",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration"
+      ],
+      "Resource": "arn:aws:lambda:eu-central-1:${aws:PrincipalAccount}:function:NoCentralDbRelay-*"
+    },
+    {
+      "Sid": "TheFunctionRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:DeleteRole",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:DeleteRolePolicy",
+        "iam:GetRole",
+        "iam:GetRolePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListRolePolicies",
+        "iam:PutRolePermissionsBoundary",
+        "iam:PutRolePolicy",
+        "iam:TagRole",
+        "iam:UntagRole",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateRole",
+        "iam:UpdateRoleDescription"
+      ],
+      "Resource": "arn:aws:iam::${aws:PrincipalAccount}:role/NoCentralDbRelay-*"
+    },
+    {
+      "Sid": "TheFunctionRoleGetsOnlyTheBasicLambdaPolicy",
+      "Effect": "Allow",
+      "Action": ["iam:AttachRolePolicy", "iam:DetachRolePolicy"],
+      "Resource": "arn:aws:iam::${aws:PrincipalAccount}:role/NoCentralDbRelay-*",
+      "Condition": {
+        "ArnEquals": {
+          "iam:PolicyARN": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        }
+      }
+    },
+    {
+      "Sid": "TheFunctionRoleGoesOnlyToLambda",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::${aws:PrincipalAccount}:role/NoCentralDbRelay-*",
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "TheLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:AssociateKmsKey",
+        "logs:CreateLogDelivery",
+        "logs:CreateLogGroup",
+        "logs:DeleteDataProtectionPolicy",
+        "logs:DeleteIndexPolicy",
+        "logs:DeleteLogGroup",
+        "logs:DeleteRetentionPolicy",
+        "logs:DescribeIndexPolicies",
+        "logs:DisassociateKmsKey",
+        "logs:GetDataProtectionPolicy",
+        "logs:ListTagsForResource",
+        "logs:PutBearerTokenAuthentication",
+        "logs:PutDataProtectionPolicy",
+        "logs:PutIndexPolicy",
+        "logs:PutLogGroupDeletionProtection",
+        "logs:PutRetentionPolicy",
+        "logs:TagResource",
+        "logs:UntagResource"
+      ],
+      "Resource": "arn:aws:logs:eu-central-1:${aws:PrincipalAccount}:log-group:NoCentralDbRelay-*"
+    },
+    {
+      "Sid": "TheAlarms",
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DeleteAlarms",
+        "cloudwatch:ListTagsForResource",
+        "cloudwatch:PutMetricAlarm",
+        "cloudwatch:TagResource",
+        "cloudwatch:UntagResource"
+      ],
+      "Resource": "arn:aws:cloudwatch:eu-central-1:${aws:PrincipalAccount}:alarm:NoCentralDbRelay-*"
+    },
+    {
+      "Sid": "TheAlarmTopic",
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:DeleteTopic",
+        "sns:GetDataProtectionPolicy",
+        "sns:GetSubscriptionAttributes",
+        "sns:GetTopicAttributes",
+        "sns:ListSubscriptionsByTopic",
+        "sns:ListTagsForResource",
+        "sns:PutDataProtectionPolicy",
+        "sns:SetSubscriptionAttributes",
+        "sns:SetTopicAttributes",
+        "sns:Subscribe",
+        "sns:TagResource",
+        "sns:Unsubscribe",
+        "sns:UntagResource"
+      ],
+      "Resource": "arn:aws:sns:eu-central-1:${aws:PrincipalAccount}:NoCentralDbRelay-*"
+    },
+    {
+      "Sid": "TheBudget",
+      "Effect": "Allow",
+      "Action": ["budgets:ModifyBudget", "budgets:ViewBudget"],
+      "Resource": "arn:aws:budgets::${aws:PrincipalAccount}:budget/ncdb-*"
+    },
+    {
+      "Sid": "TheBootstrapVersion",
+      "Effect": "Allow",
+      "Action": "ssm:GetParameters",
+      "Resource": "arn:aws:ssm:eu-central-1:${aws:PrincipalAccount}:parameter/cdk-bootstrap/hnb659fds/version"
+    },
+    {
+      "Sid": "ActionsThatNameNoResource",
+      "Effect": "Allow",
+      "Action": [
+        "application-autoscaling:Describe*",
+        "cloudwatch:DescribeAlarms",
+        "cloudwatch:PutMetricData",
+        "logs:DescribeLogGroups",
+        "logs:DescribeResourcePolicies"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

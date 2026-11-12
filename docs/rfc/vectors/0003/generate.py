@@ -10,7 +10,8 @@ the account key 0x11..., and the member whose two secrets are 0x61... and
 statement, as the SDK's own databases write today; `invitation-statement`
 carries one, signed with number 1 by the recovery key of the same file,
 derived from the recovery code 0xa0, 0xa1, ... 0xaf (RFC 0003, "Recovery
-key").
+key"). `invitation-pairing` is version 2, of the same member waiting to be
+paired as a device: no certificate (Carsten, 2026-11-12, NOC-285).
 
 Each vector is two files: `<name>.txt`, the invitation's text form, and
 `<name>.hex`, its bytes. `fields.txt` lists the fields of both by name. The
@@ -105,8 +106,16 @@ def write(name, data):
     (HERE / f"{name}.txt").write_text(text(data) + "\n")
 
 
+def pairing_invitation():
+    """RFC 0003, "Invitation", version 2: a member waiting to be paired."""
+    data = bytes([2]) + SIGNING + AGREEMENT + bytes([KIND])
+    assert len(data) == 66
+    return data
+
+
 write("invitation", invitation(statement=False))
 write("invitation-statement", invitation(statement=True))
+write("invitation-pairing", pairing_invitation())
 
 fields = {
     "member id": MEMBER_ID,

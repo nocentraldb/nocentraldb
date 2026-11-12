@@ -1,0 +1,10 @@
+# The tools that build the relay's Lambda package (NOC-272), each pinned by
+# version and by the SHA-256 of its Linux x86_64 wheel on PyPI, so a
+# republished file cannot slip in. Installed with
+#   pip install --require-hashes --only-binary ":all:" -r infra/aws/cargo-lambda.txt
+# cargo-lambda cross-compiles for arm64 Lambda with zig, which the ziglang
+# wheel carries.
+cargo-lambda==1.9.2 \
+    --hash=sha256:db2c0b1d53d7ed0055198fd045f641addc91b180b20d794fcf78cc9a9efacb38
+ziglang==0.16.0 \
+    --hash=sha256:9fcda73f62b851dd72a54b710ad40a209896db14cfb13649e62191243556342b
