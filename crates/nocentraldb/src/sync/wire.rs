@@ -87,6 +87,23 @@ pub(crate) fn hello() -> Vec<u8> {
     )
 }
 
+/// The context string in front of the relay id and the nonce of what a
+/// member signs to authenticate a connection (RFC 0007, "Opening a
+/// connection"). The relay's own copy is `ncdb_relay::auth::CONTEXT`; a
+/// native test pins the two digests equal.
+const AUTH_CONTEXT: &[u8] = b"nocentraldb/relay-auth";
+
+/// What the member signs to authenticate a connection: SHA-256 of the
+/// context, the relay id and the relay's nonce.
+pub(crate) fn auth_digest(relay_id: &[u8], nonce: &[u8; 32]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hash = Sha256::new();
+    hash.update(AUTH_CONTEXT);
+    hash.update(relay_id);
+    hash.update(nonce);
+    hash.finalize().into()
+}
+
 pub(crate) fn auth(signing: [u8; 32], agreement: [u8; 32], signature: [u8; 64]) -> Vec<u8> {
     message(
         "auth",

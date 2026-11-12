@@ -160,7 +160,7 @@ impl<T: Transport> Session<'_, T> {
             Answer::Error { code, .. } => return Err(self.failed(code)),
             _ => return Err(lost()),
         };
-        let digest = ncdb_relay::auth::digest(&relay_id, &nonce);
+        let digest = wire::auth_digest(&relay_id, &nonce);
         let auth = with(self.db, |inner| {
             let public = inner.member.key().public();
             let signature = SigningKey::from_bytes(inner.member.signing()).sign(&digest);

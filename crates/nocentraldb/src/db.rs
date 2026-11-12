@@ -34,7 +34,6 @@ use crate::error::{Error, ErrorCode, storage};
 use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::sync;
 use crate::sync::SyncState;
 
@@ -123,7 +122,9 @@ impl OpenOptions {
     /// The one relay the database syncs with (RFC 0009, decision S16), by
     /// its URL: `wss://`, WebSocket over TLS verified against the
     /// platform's trust store, or `ws://` on a local network. [`Db::open`]
-    /// refuses any other URL with `InvalidValue`.
+    /// refuses any other URL with `InvalidValue`. In a browser, the relay
+    /// URL is `wss://`, except for localhost while developing: a page
+    /// served over `https://` cannot open `ws://` (RFC 0009, NOC-245).
     pub fn relay(mut self, url: &str) -> OpenOptions {
         self.relay = Some(url.to_owned());
         self
@@ -181,8 +182,7 @@ pub(crate) struct SpaceState {
     /// fetches them again from the relay.
     pub(crate) person_keys: BTreeMap<[u8; 16], PersonKey>,
     /// Whether the relay's records of the space were fetched in the
-    /// current connection. Read by the session, which is native only.
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    /// current connection. Read by the session.
     pub(crate) person_keys_fetched: bool,
     /// The account keys of the writers whose records failed their checks
     /// in the last fetch, though they signed them
@@ -411,13 +411,6 @@ impl Db {
         placed: Option<Placed>,
     ) -> Result<Db, Error> {
         let place = options.place()?;
-        #[cfg(target_arch = "wasm32")]
-        if options.relay.is_some() {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "syncing with a relay is not built on wasm32 yet",
-            ));
-        }
         if let Some(url) = &options.relay
             && !url.starts_with("wss://")
             && !url.starts_with("ws://")
@@ -480,7 +473,6 @@ impl Db {
         // in a thread, which wasm32 does not start yet.
         #[cfg(not(target_arch = "wasm32"))]
         crate::view_report::start(&inner);
-        #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }

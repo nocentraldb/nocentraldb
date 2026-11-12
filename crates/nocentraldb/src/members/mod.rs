@@ -28,7 +28,6 @@ mod change;
 mod info;
 mod invitation;
 mod leave;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod merge;
 mod notice;
 mod rotate;
