@@ -1,0 +1,11 @@
+[package]
+name = "ncdb-test-counter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "A plugin field type for NoCentralDB's own tests (RFC 0011): a counter whose adds sum up. Not published."
+
+[dependencies]
+ncdb-plugin.workspace = true
