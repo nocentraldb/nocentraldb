@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+# Not published yet, as no crate of the workspace is: publishing, or
+# reserving the name on crates.io, is the owner's to decide.
+publish = false
 description = "What a NoCentralDB plugin field type implements and depends on (RFC 0011): the FieldType trait, Data and the ids of an operation."
 
 # The canonical CBOR of RFC 0002, which the core and a plugin's Data share.
