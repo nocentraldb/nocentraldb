@@ -7,12 +7,16 @@
 //! through [`Model::from_lock`]. It is a working name of the core, not the
 //! SDK's API.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
+
+use ncdb_plugin::{Data, ErasedField, Outcome};
 
 use sha2::{Digest, Sha256};
 
 use crate::basic::{self, BasicValue, Kind};
 use crate::cbor::{self, Key, Value};
+use crate::ids::OperationId;
 use crate::link::{Link, Links};
 pub use crate::model_lock::Scope;
 use crate::model_lock::{Person, Refusal};
@@ -33,6 +37,10 @@ pub struct Model {
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.
     pub indexes: Vec<Index>,
+    /// The fields of each collection that the lock names with a plugin
+    /// type no code implements: their operations park as "unknown type"
+    /// (RFC 0011, "A type that is not registered").
+    pub unregistered: BTreeMap<String, BTreeSet<String>>,
     /// The personal fields, by collection and field, each with whom it is
     /// about (RFC 0005, "Personal fields"). The fold keeps a personal
     /// field's plaintext only while its person key is held and the person
@@ -56,6 +64,55 @@ pub enum Field {
     /// The hidden field `$person` of an object that can be a person (RFC
     /// 0005, "Where the person id is kept").
     Person(PersonField),
+    /// A field of a plugin type, with the code registered for it (RFC
+    /// 0011).
+    Plugin(PluginField),
+}
+
+/// A field of a plugin type: its type id, rule and `config`, and the code
+/// the registry gave it, configured for this field (RFC 0011, "The field
+/// type a plugin implements"). Two are equal when their type id, rule and
+/// `config` are: the code is the one the registry holds for them.
+#[derive(Clone)]
+pub struct PluginField {
+    /// The type id, `<namespace>/<name>`.
+    pub type_id: String,
+    /// The rule version.
+    pub rule: u64,
+    /// The canonical bytes of the field's `config`, empty without one.
+    pub config: Vec<u8>,
+    pub(crate) code: Arc<dyn ErasedField>,
+}
+
+impl PluginField {
+    /// What the app reads from the field's stored state, or `None` for
+    /// bytes the plugin did not write.
+    pub fn read(&self, state: &[u8]) -> Option<Data> {
+        self.code.read(Some(state))
+    }
+
+    /// Where the operation `id` went in the field's stored state, or
+    /// `None` when the state never received it.
+    pub fn outcome(&self, state: &[u8], id: OperationId) -> Option<Outcome> {
+        self.code.outcome(Some(state), id)
+    }
+}
+
+impl PartialEq for PluginField {
+    fn eq(&self, other: &PluginField) -> bool {
+        (&self.type_id, self.rule, &self.config) == (&other.type_id, other.rule, &other.config)
+    }
+}
+
+impl Eq for PluginField {}
+
+impl std::fmt::Debug for PluginField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginField")
+            .field("type_id", &self.type_id)
+            .field("rule", &self.rule)
+            .finish_non_exhaustive()
+    }
 }
 
 /// The merge state of one field, as its field type keeps it.
@@ -65,6 +122,8 @@ pub enum FieldState {
     Basic(basic::State),
     /// The state of a set or of links.
     Set(set::State),
+    /// The state of a plugin field, as the plugin's code encodes it.
+    Plugin(Vec<u8>),
 }
 
 /// A declared index (RFC 0006, "Declared indexes").
@@ -130,6 +189,7 @@ impl Field {
                 FieldState::Basic(basic::State::default())
             }
             Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
+            Field::Plugin(plugin) => FieldState::Plugin(plugin.code.initial()),
         }
     }
 }
@@ -143,6 +203,14 @@ impl Model {
     /// The field type of a field.
     pub fn field(&self, collection: &str, field: &str) -> Option<&Field> {
         self.collections.get(collection)?.get(field)
+    }
+
+    /// Whether the lock names `field` of `collection` with a plugin type
+    /// no code implements.
+    pub fn unregistered(&self, collection: &str, field: &str) -> bool {
+        self.unregistered
+            .get(collection)
+            .is_some_and(|fields| fields.contains(field))
     }
 
     /// The declared index of `collection` with this name.
@@ -234,6 +302,12 @@ impl Field {
             Field::Links(t) => Value::Array(vec![Value::Unsigned(3), collections(&t.collections)]),
             Field::Ref(t) => Value::Array(vec![Value::Unsigned(4), collections(&t.collections)]),
             Field::Person(_) => Value::Array(vec![Value::Unsigned(5)]),
+            Field::Plugin(t) => Value::Array(vec![
+                Value::Unsigned(6),
+                Value::Text(t.type_id.clone()),
+                Value::Unsigned(t.rule),
+                Value::Bytes(t.config.clone()),
+            ]),
         }
     }
 }

@@ -40,9 +40,10 @@ const REJECT: [(RejectReason, &str); 5] = [
     (RejectReason::NoKey, "no_key"),
     (RejectReason::Undecryptable, "undecryptable"),
 ];
-const OPERATION: [(OperationParkReason, &str); 6] = [
+const OPERATION: [(OperationParkReason, &str); 7] = [
     (OperationParkReason::UnknownCollection, "unknown_collection"),
     (OperationParkReason::UnknownField, "unknown_field"),
+    (OperationParkReason::UnknownType, "unknown_type"),
     (OperationParkReason::UnknownKey, "unknown_key"),
     (OperationParkReason::UnknownOperation, "unknown_operation"),
     (OperationParkReason::UnknownArgument, "unknown_argument"),

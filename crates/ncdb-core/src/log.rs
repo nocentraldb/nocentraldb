@@ -125,6 +125,9 @@ pub enum OperationParkReason {
     UnknownCollection,
     /// The member's model does not know the field.
     UnknownField,
+    /// The member's model names the field, and no code implements its
+    /// plugin type and rule (RFC 0011, "A type that is not registered").
+    UnknownType,
     /// The operation carries an unknown "must understand" key.
     UnknownKey,
     /// The field's type does not define the operation's number (RFC 0004,

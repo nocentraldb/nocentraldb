@@ -226,7 +226,8 @@ pub fn decode(bytes: &[u8]) -> Result<Value, DecodeError> {
 
 /// Decodes canonical bytes of a value that sits at `depth` in its change,
 /// such as the header map (depth 2) inside the frame.
-pub(crate) fn decode_at(bytes: &[u8], depth: usize) -> Result<Value, DecodeError> {
+#[doc(hidden)]
+pub fn decode_at(bytes: &[u8], depth: usize) -> Result<Value, DecodeError> {
     let mut decoder = Decoder::new(bytes);
     let value = read(&mut decoder, depth)?;
     if decoder.position() != bytes.len() {
