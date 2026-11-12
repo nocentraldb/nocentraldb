@@ -161,6 +161,7 @@ pub(super) fn entries(
             Ok(Appended::New(_)) => {
                 folded = true;
                 state.drop_shredded();
+                crate::status::note_shreds(view, space, state.checks.resolved())?;
                 sync(inner).folds += 1;
                 if again::check(inner, space)? {
                     sync(inner).wake.send_replace(());

@@ -31,6 +31,10 @@ pub enum NoticeCode {
     /// rotates, the others write under a key it holds (Carsten, 2026-11-11,
     /// NOC-219).
     SpaceLeft,
+    /// An erasure in a space with one account is provisional: the space
+    /// status gives it on every device of the account, not a call
+    /// (Carsten, 2026-11-11, NOC-230).
+    ErasurePending,
 }
 
 impl Notice {
@@ -60,5 +64,14 @@ impl Notice {
         code: NoticeCode::SpaceLeft,
         text: "This member keeps its copy of everything it received before now. \
                Until an admin rotates the space key, the others write under a key it still holds.",
+    };
+
+    /// The notice of a provisional erasure, which
+    /// [`SpaceStatus::provisional_erasures`](crate::SpaceStatus) gives on
+    /// every device of the account (the text: pm, 2026-11-12, NOC-234).
+    pub(crate) const ERASURE_PENDING: Notice = Notice {
+        code: NoticeCode::ErasurePending,
+        text: "Personal data was erased on a device of this account. \
+               The erasure becomes final after 7 days; until then an admin of this account can take it back.",
     };
 }

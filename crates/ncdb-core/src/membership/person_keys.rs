@@ -55,6 +55,12 @@ impl PersonKey {
         }
     }
 
+    /// The member that performed the shred that erased it, whose account
+    /// decides a provisional one.
+    pub fn performer(&self) -> Option<MemberId> {
+        self.performer
+    }
+
     /// Whether the view treats the person's fields as erased: an accepted
     /// shred erased them, and no accepted take-back restored them.
     pub fn erased(&self) -> bool {

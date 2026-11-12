@@ -171,6 +171,7 @@ fn hex(bytes: &[u8; 16]) -> String {
 pub(crate) fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(), Error> {
     let space = change.header().space;
     view.receive(change.bytes(), checks).map_err(storage)?;
+    crate::status::note_shreds(view, space, checks.resolved()).map_err(storage)?;
     match view.state(space, change.id()) {
         Some(State::Folded { parked }) if parked.is_empty() => Ok(()),
         other => panic!("the member's own change was not folded: {other:?}"),

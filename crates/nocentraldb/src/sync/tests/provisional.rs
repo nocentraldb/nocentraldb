@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use ncdb_core::membership::{self, ControlBody, Entry};
 
-use super::person_keys::{PERSON, held, person_key, shared};
+use super::person_keys::{PERSON, fetched, held, person_key, shared};
 use super::support::*;
 use crate::db::{Db, lock};
 use crate::members::{MemberId, NoticeCode};
@@ -52,6 +52,12 @@ async fn every_device_of_the_account_sees_the_provisional_erasure() {
     synced(&admin).await;
     let space = project.id().0;
     eventually("the member holds the person key", || {
+        // A fetch that ran before the record was put finds nothing; a new
+        // connection fetches again.
+        if fetched(&member, space) && held(&member, space).is_none() {
+            relay.proxy.cut();
+            relay.proxy.restore();
+        }
         held(&member, space).is_some()
     })
     .await;
