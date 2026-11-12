@@ -13,7 +13,8 @@ use std::collections::BTreeMap;
 use super::model::{Direction, Field, Index, Invalid, Model};
 use crate::basic::{BasicValue, Kind};
 use crate::link::{Link, Links};
-use crate::model_lock::{self, Element, ModelLock, check};
+use crate::model_lock::{self, Element, ModelLock, Person, check};
+use crate::personal::{PERSON_FIELD, PersonField};
 use crate::reference::Reference;
 use crate::set::Set;
 
@@ -37,6 +38,14 @@ impl Model {
                 .filter_map(|(field, f)| Some((field.clone(), field_type(&f.kind)?)))
                 .collect();
             model.collections.insert(name.clone(), fields);
+            let personal: BTreeMap<String, Person> = collection
+                .fields
+                .iter()
+                .filter_map(|(field, f)| Some((field.clone(), f.personal.clone()?)))
+                .collect();
+            if !personal.is_empty() {
+                model.personal.insert(name.clone(), personal);
+            }
             for (index, i) in &collection.indexes {
                 let keys = i
                     .fields
@@ -51,6 +60,26 @@ impl Model {
                     equality: i.equal as usize,
                     scope: i.scope,
                 });
+            }
+        }
+        // Each collection whose objects can be a person carries `$person`
+        // (RFC 0005, "Where the person id is kept").
+        let persons: Vec<String> = model
+            .personal
+            .iter()
+            .flat_map(|(collection, fields)| {
+                fields.values().flat_map(|person| match person {
+                    Person::Itself => vec![collection.clone()],
+                    Person::Link(link) => match model.field(collection, link) {
+                        Some(Field::Link(link)) => link.collections.iter().cloned().collect(),
+                        _ => Vec::new(),
+                    },
+                })
+            })
+            .collect();
+        for collection in persons {
+            if let Some(fields) = model.collections.get_mut(&collection) {
+                fields.insert(PERSON_FIELD.to_owned(), Field::Person(PersonField));
             }
         }
         model.validate()?;

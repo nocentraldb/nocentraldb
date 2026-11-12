@@ -72,9 +72,9 @@ pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>
         let judgement = judge(&input, &judged, node, &past);
         if judgement.valid && matches!(node.body.entry, Entry::Shred(_)) {
             let members = past.members().map(|(member, _)| member);
-            judged.1.insert(node.id, members.collect());
+            judged.shred_past_members.insert(node.id, members.collect());
         }
-        judged.0.insert(node.id, judgement);
+        judged.judgements.insert(node.id, judgement);
     }
     let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
     let mut resolved = fold(&input, &judged, &all);

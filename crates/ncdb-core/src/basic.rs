@@ -37,6 +37,9 @@ pub(crate) enum Values<'a> {
     ObjectIds,
     /// References, `[space id, object id]`, each 16 bytes.
     References,
+    /// The value of the hidden field `$person`, `{1: person id, 2:
+    /// person-key id}` (RFC 0005, "Where the person id is kept").
+    Persons,
 }
 
 /// The basic value field type: a field of one [`Kind`].
@@ -152,6 +155,7 @@ impl Values<'_> {
             Values::Of(kind) => kind.allows(value),
             Values::ObjectIds => matches!(value, Value::Bytes(id) if id.len() == 16),
             Values::References => crate::reference::target(value).is_some(),
+            Values::Persons => crate::personal::Person::from_value(value).is_some(),
         }
     }
 
@@ -193,7 +197,7 @@ impl Values<'_> {
 
 impl Kind {
     /// Whether `value` is a value of this kind. The empty value is not.
-    fn allows(&self, value: &Value) -> bool {
+    pub(crate) fn allows(&self, value: &Value) -> bool {
         const MAX: u64 = i64::MAX as u64;
         match (self, value) {
             (Kind::Text, Value::Text(_))

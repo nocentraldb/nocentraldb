@@ -15,15 +15,26 @@ use super::Error;
 use super::model::{Field, FieldState, Model};
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
-use crate::basic::Entry;
+use std::collections::BTreeMap;
+
+use crate::basic::{BasicValue, Entry};
 use crate::cbor::Value;
 use crate::change::Operation;
+use crate::field::FieldType;
 use crate::field_op::{Encoding, Origin};
 use crate::ids::{ObjectId, SpaceId};
+use crate::keys::PersonKey;
 use crate::log::OperationParkReason;
 use crate::object::ObjectOperation;
+use crate::personal::{self, Place, Sealed};
 use crate::receive::Fold;
 use crate::reference;
+
+/// The person keys of a space, by person-key id.
+pub(super) type PersonKeys = BTreeMap<[u8; 16], PersonKey>;
+
+/// No person keys: a fold that opens no personal value.
+pub(super) static NO_KEYS: PersonKeys = BTreeMap::new();
 
 /// The fold of one change's operations into the tables of a space's
 /// collections, on the connection of the transaction that appends it.
@@ -34,6 +45,8 @@ pub(super) struct SqlFold<'a> {
     /// The prefix of the tables it folds into: empty for the view's own,
     /// `r_` for a rebuild's staging tables.
     prefix: &'static str,
+    /// The person keys the fold opens the space's personal values with.
+    keys: &'a PersonKeys,
     /// The first error; the fold's calls cannot return one, so the
     /// transaction rolls back after the change.
     error: Option<Error>,
@@ -46,8 +59,14 @@ impl<'a> SqlFold<'a> {
             model,
             space,
             prefix: "",
+            keys: &NO_KEYS,
             error: None,
         }
+    }
+
+    /// The same fold, opening personal values with `keys`.
+    pub(super) fn with_keys(self, keys: &'a PersonKeys) -> SqlFold<'a> {
+        SqlFold { keys, ..self }
     }
 
     /// A fold into a rebuild's staging tables (RFC 0006, "How").
@@ -179,13 +198,31 @@ impl<'a> SqlFold<'a> {
             operation.object,
             field,
         )?;
+        let personal = self.model.person(collection, name).is_some();
         let folded = match (field, state) {
+            (Field::Basic(t), FieldState::Basic(s)) if personal => apply(t, s, operation, origin)
+                .map(|(bytes, read)| {
+                    let place = Place {
+                        space: self.space,
+                        object: operation.object,
+                        person_key: [0; 16],
+                        collection,
+                        field: name,
+                    };
+                    (
+                        bytes,
+                        Some(personal_column(t, place, read.value, self.keys)),
+                    )
+                }),
             (Field::Basic(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
             (Field::Link(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(column_value(read.value)))),
             (Field::Ref(t), FieldState::Basic(s)) => apply(t, s, operation, origin)
                 .map(|(bytes, read)| (bytes, Some(reference_column(read.value)))),
+            (Field::Person(t), FieldState::Basic(s)) => {
+                apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
+            }
             (Field::Set(t), FieldState::Set(s)) => {
                 apply(t, s, operation, origin).map(|(bytes, _)| (bytes, None))
             }
@@ -360,6 +397,83 @@ fn column_value(winner: Option<Entry>) -> Sql {
         Some(entry) => sql_value(entry.value),
         None => Sql::Null,
     }
+}
+
+/// The column value of a personal field's winning write (RFC 0006, "What
+/// the view stores in plaintext"): its sealed value opened with the person
+/// key it names, at `place`, when `keys` hold that key and the value fits
+/// the field's kind. NULL otherwise: no live write, a clear, a key not
+/// held, an erased person, a value that does not open, or one sealed
+/// under a person key that lost (RFC 0009, "How a personal field reads").
+/// `place.person_key` is ignored; the sealed value names it.
+pub(super) fn personal_column(
+    field_type: &BasicValue,
+    mut place: Place<'_>,
+    winner: Option<Entry>,
+    keys: &PersonKeys,
+) -> Sql {
+    let Some(sealed) = winner.and_then(|entry| Sealed::from_value(&entry.value)) else {
+        return Sql::Null;
+    };
+    let Some(key) = keys.get(&sealed.person_key) else {
+        return Sql::Null;
+    };
+    place.person_key = sealed.person_key;
+    match personal::open(key, &place, &sealed.bytes) {
+        Ok(value) if field_type.kind.allows(&value) => sql_value(value),
+        _ => Sql::Null,
+    }
+}
+
+/// Opens every personal field of `space` again with `keys`, from the merge
+/// state each keeps sealed, into its column of `c_<collection>`: after the
+/// keys the view holds for the space changed.
+pub(super) fn open_personal(
+    conn: &Connection,
+    model: &Model,
+    space: SpaceId,
+    keys: &PersonKeys,
+) -> Result<(), Error> {
+    for (collection, fields) in &model.personal {
+        for name in fields.keys() {
+            let Some(Field::Basic(field_type)) = model.field(collection, name) else {
+                continue;
+            };
+            let mut select = conn.prepare(&format!(
+                "SELECT object_id, state FROM {} WHERE space_id = ?1 AND field = ?2",
+                states_in("", collection)
+            ))?;
+            let rows = select
+                .query_map(params![space.0, name], |r| {
+                    Ok((r.get::<_, Vec<u8>>(0)?, r.get::<_, Vec<u8>>(1)?))
+                })?
+                .collect::<Result<Vec<_>, _>>()?;
+            for (object, bytes) in rows {
+                let object = ObjectId(object.try_into().map_err(|_| Error::Corrupt("object id"))?);
+                let winner = field_type.read(&state::basic(&bytes)?).value;
+                let place = Place {
+                    space,
+                    object,
+                    person_key: [0; 16],
+                    collection,
+                    field: name,
+                };
+                conn.execute(
+                    &format!(
+                        "UPDATE {} SET {} = ?3 WHERE space_id = ?1 AND object_id = ?2",
+                        rows_in("", collection),
+                        column(name)
+                    ),
+                    params![
+                        space.0,
+                        object.0,
+                        personal_column(field_type, place, winner, keys)
+                    ],
+                )?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// The column value of a reference's winning write: the target's space id
