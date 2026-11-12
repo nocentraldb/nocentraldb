@@ -4,6 +4,8 @@
 // also kept as a snapshot, so a pull request shows how it changes the
 // deployed infrastructure without credentials (NOC-264, NOC-272).
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { describe, expect, test } from "vitest";
@@ -258,6 +260,47 @@ describe("the function and the API", () => {
   test('its logs are kept 14 days (RFC 0007, "What the relay sees")', () => {
     template.hasResourceProperties("AWS::Logs::LogGroup", {
       RetentionInDays: 14,
+    });
+  });
+});
+
+describe("the daily orphan sweep (NOC-290)", () => {
+  // The function runs the sweep only for exactly this input
+  // (ncdb_relay_lambda::invocation::SWEEP_INPUT).
+  const source = readFileSync(
+    join(
+      import.meta.dirname,
+      "../../../crates/ncdb-relay-lambda/src/invocation.rs",
+    ),
+    "utf8",
+  );
+  const input = /pub const SWEEP_INPUT: &str = r#"(.*)"#;/.exec(source)?.[1];
+
+  test("a rule invokes the function once a day with the sweep's input", () => {
+    expect(input).toBe('{"ncdb-relay":"sweep-orphans"}');
+    template.resourceCountIs("AWS::Events::Rule", 1);
+    const rules = template.findResources("AWS::Events::Rule");
+    const [rule] = Object.values(rules);
+    expect(rule?.Properties.ScheduleExpression).toBe("cron(17 3 * * ? *)");
+    expect(rule?.Properties.State).toBe("ENABLED");
+    expect(rule?.Properties.Targets).toHaveLength(1);
+    const [target] = rule?.Properties.Targets ?? [];
+    const [relay] = Object.keys(
+      template.findResources("AWS::Lambda::Function"),
+    );
+    expect(target.Arn).toEqual({ "Fn::GetAtt": [relay, "Arn"] });
+    expect(JSON.parse(target.Input)).toEqual(JSON.parse(input ?? ""));
+  });
+
+  test("only that rule may invoke the function from EventBridge", () => {
+    const [ruleId] = Object.keys(template.findResources("AWS::Events::Rule"));
+    const permissions = Object.values(
+      template.findResources("AWS::Lambda::Permission"),
+    ).filter((p) => p.Properties.Principal === "events.amazonaws.com");
+    expect(permissions).toHaveLength(1);
+    expect(permissions[0]?.Properties.Action).toBe("lambda:InvokeFunction");
+    expect(permissions[0]?.Properties.SourceArn).toEqual({
+      "Fn::GetAtt": [ruleId, "Arn"],
     });
   });
 });

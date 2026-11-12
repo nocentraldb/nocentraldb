@@ -84,6 +84,18 @@
     "kms:ListAliases",
     "kms:RevokeGrant"
   ],
+  "AWS::Events::Rule": [
+    "events:DeleteRule",
+    "events:DescribeRule",
+    "events:ListTagsForResource",
+    "events:ListTargetsByRule",
+    "events:PutRule",
+    "events:PutTargets",
+    "events:RemoveTargets",
+    "events:TagResource",
+    "events:UntagResource",
+    "iam:PassRole"
+  ],
   "AWS::IAM::Policy": [
     "iam:DeleteGroupPolicy",
     "iam:DeleteRolePolicy",

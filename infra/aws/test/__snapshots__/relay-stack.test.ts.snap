@@ -1220,6 +1220,47 @@ exports[`the template matches its committed snapshot 1`] = `
         "RelayServiceRoleA21B8CED"
       ]
     },
+    "SweepOrphans6B61F257": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "ScheduleExpression": "cron(17 3 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "Relay3F9A082A",
+                "Arn"
+              ]
+            },
+            "Id": "Target0",
+            "Input": "{\\"ncdb-relay\\":\\"sweep-orphans\\"}",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 2
+            }
+          }
+        ]
+      }
+    },
+    "SweepOrphansAllowEventRuleNoCentralDbRelay6215B463E188ADB0": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "Relay3F9A082A",
+            "Arn"
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "SweepOrphans6B61F257",
+            "Arn"
+          ]
+        }
+      }
+    },
     "Alarms04B5A0BF": {
       "Type": "AWS::SNS::Topic"
     },

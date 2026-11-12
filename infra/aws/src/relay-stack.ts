@@ -17,6 +17,7 @@
 // - The bucket: all public access blocked, S3-managed encryption, no
 //   versions, TLS only, uploads deleted after a day, and CORS for any origin
 //   (NOC-245 A).
+// - A rule that runs the orphan sweep once a day (NOC-290).
 // - Alarms on the function's errors and throttles, and a budget of 20 USD a
 //   month with mails at 50, 80 and 100 percent (NOC-264 point 5).
 
@@ -42,6 +43,8 @@ import {
   ProjectionType,
   TableV2,
 } from "aws-cdk-lib/aws-dynamodb";
+import { Rule, RuleTargetInput, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction as LambdaTarget } from "aws-cdk-lib/aws-events-targets";
 import {
   Architecture,
   Code,
@@ -210,6 +213,20 @@ export class RelayStack extends Stack {
     api.addRoute("$connect", { integration });
     api.addRoute("$disconnect", { integration });
     api.addRoute("$default", { integration });
+
+    // The daily orphan sweep (NOC-290; RFC 0007, "How large changes go to
+    // S3"): the function runs it for exactly this input
+    // (ncdb_relay_lambda::invocation::SWEEP_INPUT), at a quiet hour. A
+    // failed sweep fails the invocation, which the error alarm reports.
+    new Rule(this, "SweepOrphans", {
+      schedule: Schedule.cron({ minute: "17", hour: "3" }),
+      targets: [
+        new LambdaTarget(relay, {
+          event: RuleTargetInput.fromObject({ "ncdb-relay": "sweep-orphans" }),
+          retryAttempts: 2,
+        }),
+      ],
+    });
 
     const owner = new Topic(this, "Alarms");
     owner.addSubscription(new EmailSubscription(props.alarmEmail));

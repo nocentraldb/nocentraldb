@@ -249,9 +249,10 @@ describe("CloudFormation's execution policies", () => {
         .filter(
           ([key, value]) =>
             typeof value === "string" &&
-            /^(FunctionName|RoleName|TopicName|BucketName|AlarmName|LogGroupName)$/.test(
+            (/^(FunctionName|RoleName|TopicName|BucketName|AlarmName|LogGroupName)$/.test(
               key,
-            ),
+            ) ||
+              (r.Type === "AWS::Events::Rule" && key === "Name")),
         )
         .map(([key]) => `${r.Type}.${key}`),
     );

@@ -131,6 +131,22 @@
       "Resource": "arn:aws:cloudwatch:eu-central-1:${aws:PrincipalAccount}:alarm:NoCentralDbRelay-*"
     },
     {
+      "Sid": "TheSweepSchedule",
+      "Effect": "Allow",
+      "Action": [
+        "events:DeleteRule",
+        "events:DescribeRule",
+        "events:ListTagsForResource",
+        "events:ListTargetsByRule",
+        "events:PutRule",
+        "events:PutTargets",
+        "events:RemoveTargets",
+        "events:TagResource",
+        "events:UntagResource"
+      ],
+      "Resource": "arn:aws:events:eu-central-1:${aws:PrincipalAccount}:rule/NoCentralDbRelay-*"
+    },
+    {
       "Sid": "TheAlarmTopic",
       "Effect": "Allow",
       "Action": [
