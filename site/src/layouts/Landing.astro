@@ -1,7 +1,8 @@
 ---
 // The landing page shell on the vendored design kit (public/assets, see
 // LICENSE-taste-skill.md): the head, the header and the footer. The sections
-// sit in main: the hero, the scroll scenario, the code and the close.
+// sit in main: the hero, the scroll scenario and the code; the footer holds
+// the close and the footer row.
 import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
 import CodeSection from "../components/CodeSection.astro";
@@ -73,13 +74,17 @@ const links = [
       <Hero />
       <Scenario />
       <CodeSection />
-      <Closing />
     </main>
-    <footer class="footer closing">
+    <footer class="footer closing" aria-labelledby="close-h">
       <div class="wrap">
-        <p>No center. No collisions.</p>
-        <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
-        <a href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
+        <Closing />
+        <div class="closing__links">
+          <div class="footer__legal">
+            <p>No center. No collisions.</p>
+            <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
+            <a href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
+          </div>
+        </div>
       </div>
     </footer>
     <script type="module" src="/assets/system.js"></script>

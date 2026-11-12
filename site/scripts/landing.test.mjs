@@ -56,3 +56,25 @@ test("hero and scenario never say relay, and the drawings can be paused", () => 
 test("the removed sections are gone", () => {
   for (const id of ['id="use-cases"', 'id="live"']) assert.ok(!html.includes(id), id);
 });
+test("the code section shows the task model in five tabs", () => {
+  const code = html.slice(html.indexOf('id="code"'));
+  assert.equal(code.split('role="tab"').length - 1, 5);
+  for (const m of code.matchAll(/role="tab"[^>]*aria-controls="([^"]+)"/g)) assert.ok(code.includes(`id="${m[1]}"`), m[1]);
+  assert.ok(code.includes("byStatusPriority"));
+  assert.ok(!code.includes("nc.collection(\n    {\n      text"), "the chat model is gone");
+  assert.ok(code.includes("The relay is the server from the scenario above."));
+});
+test("the close sits on the yellow ground and links to the docs and the use cases", () => {
+  assert.match(html, /<footer[^>]*class="[^"]*closing/);
+  assert.ok(html.includes("Read the design, then tell us where it breaks"));
+  for (const href of ['href="/docs/"', 'href="/docs/api/"', 'href="/docs/rfcs/"', "docs/use-cases.md", "/discussions"]) assert.ok(html.includes(href), href);
+  assert.ok(html.includes("Initiated by nxsflow."));
+  assert.ok(!html.includes('id="limits"'), "the limits section is gone");
+});
+test("magenta appears once in the page and the stylesheets it loads", () => {
+  // The page's HTML (with its inline <style>) and the /_astro/*.css it links;
+  // the docs' own starlight.css is not loaded here and keeps its --loud.
+  const linked = [...html.matchAll(/<link[^>]*href="\/_astro\/([^"]+\.css)"/g)].map((m) => readFileSync(`site/dist/_astro/${m[1]}`, "utf8"));
+  const all = [html, ...linked].join("");
+  assert.equal(all.split(/ff3d8b/i).length - 1, 1);
+});

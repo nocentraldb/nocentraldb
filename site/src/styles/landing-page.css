@@ -1,6 +1,6 @@
 /* The landing page's own rules on top of the vendored kit (public/assets):
-   the hero's two small lines, the drawing's 4:3 frame, the headline on a short
-   desktop window and the drawings' pause control. Ported from the accepted
+   the hero's two small lines, the drawing's 4:3 frame, a short desktop window
+   and the drawings' pause control. Ported from the accepted
    prototype (docs/superpowers/specs/2026-11-12-landing-page-prototype/build.mjs). */
 
 .hero .status-line,
@@ -36,6 +36,16 @@
   .hero .hero__lead,
   .hero .status-line {
     margin-top: var(--s-4);
+  }
+  /* The code and the close hold more than a short window: they grow past
+     one screen rather than run over the next. */
+  html main > section#code,
+  html footer.closing {
+    height: auto;
+    min-height: 100svh;
+  }
+  footer.closing .closing__cta h2 {
+    font-size: clamp(36px, 7.6svh, 60px);
   }
 }
 
