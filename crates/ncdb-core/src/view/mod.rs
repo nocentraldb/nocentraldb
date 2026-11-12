@@ -39,6 +39,7 @@ use rusqlite::Connection;
 use crate::change::Change;
 use crate::checks::SealChecks;
 use crate::ids::{ChangeId, SpaceId};
+use crate::keys::PersonKey;
 use crate::log::{Appended, Log, State, StateCounts};
 use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
@@ -59,6 +60,9 @@ pub struct View {
     logs: BTreeMap<SpaceId, Log>,
     /// A full rebuild under way (RFC 0006, "How").
     rebuild: Option<rebuild::Rebuild>,
+    /// The person keys each space's personal fields open with, in memory
+    /// only (RFC 0009, "Personal fields").
+    person_keys: BTreeMap<SpaceId, fold::PersonKeys>,
 }
 
 impl fmt::Debug for View {
@@ -238,6 +242,7 @@ impl View {
             model: serving,
             logs,
             rebuild,
+            person_keys: BTreeMap::new(),
         })
     }
 
@@ -282,8 +287,38 @@ impl View {
             let rebuild = self.rebuild.take().expect("a rebuild runs");
             self.model = rebuild.into_model();
             self.logs = log_table::load(&self.conn)?;
+            // The new tables were folded without keys.
+            let tx = self.conn.transaction()?;
+            for (space, keys) in &self.person_keys {
+                fold::open_personal(&tx, &self.model, *space, keys)?;
+            }
+            tx.commit()?;
         }
         Ok(progress)
+    }
+
+    /// Gives the view the person keys of `space` its personal fields open
+    /// with, replacing those it had, and opens or empties every personal
+    /// field of the space at once (RFC 0006, "What the view stores in
+    /// plaintext"; RFC 0009, "How a personal field reads"). The caller
+    /// gives the keys it holds of persons that are not erased: a field
+    /// whose key is left out reads as unset, so leaving out the key of an
+    /// erased person, provisionally or for good, erases its fields from
+    /// the view. The keys stay in memory, never in the database.
+    pub fn set_person_keys(
+        &mut self,
+        space: SpaceId,
+        keys: BTreeMap<[u8; 16], PersonKey>,
+    ) -> Result<(), Error> {
+        let tx = self.conn.transaction()?;
+        fold::open_personal(&tx, &self.model, space, &keys)?;
+        tx.commit()?;
+        if keys.is_empty() {
+            self.person_keys.remove(&space);
+        } else {
+            self.person_keys.insert(space, keys);
+        }
+        Ok(())
     }
 
     /// Receives a frame: appends it to the log of its space, takes it
@@ -334,8 +369,11 @@ impl View {
     ) -> Result<Appended, Error> {
         let tx = self.conn.transaction()?;
         let appended = append(
-            &tx,
-            &self.model,
+            Target {
+                tx: &tx,
+                model: &self.model,
+                person_keys: &self.person_keys,
+            },
             &mut self.logs,
             change,
             bytes,
@@ -400,8 +438,11 @@ impl View {
         let mut appended = Vec::with_capacity(frames.len());
         for (change, bytes) in changes.iter().zip(frames) {
             appended.push(append(
-                &tx,
-                &self.model,
+                Target {
+                    tx: &tx,
+                    model: &self.model,
+                    person_keys: &self.person_keys,
+                },
                 &mut self.logs,
                 change,
                 bytes,
@@ -455,12 +496,19 @@ impl View {
     }
 }
 
+/// Where [`append`] folds: the transaction, the model and the person keys
+/// of each space.
+struct Target<'a> {
+    tx: &'a Connection,
+    model: &'a Model,
+    person_keys: &'a BTreeMap<SpaceId, fold::PersonKeys>,
+}
+
 /// Appends `change` to the log of its space inside the transaction `tx`,
 /// takes it through the steps and folds it, and records in `log` the
 /// changes whose state a passing control change changed.
 fn append(
-    tx: &Connection,
-    model: &Model,
+    target: Target<'_>,
     logs: &mut BTreeMap<SpaceId, Log>,
     change: &Change,
     bytes: &[u8],
@@ -470,7 +518,13 @@ fn append(
     let space = change.header().space;
     let log = logs.entry(space).or_insert_with(|| Log::new(space));
     log.take_changed();
-    let mut fold = fold::SqlFold::new(tx, model, space);
+    let Target {
+        tx,
+        model,
+        person_keys,
+    } = target;
+    let keys = person_keys.get(&space).unwrap_or(&fold::NO_KEYS);
+    let mut fold = fold::SqlFold::new(tx, model, space).with_keys(keys);
     let appended = log.receive(bytes, checks, &mut fold);
     fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;

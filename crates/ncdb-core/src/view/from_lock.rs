@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use super::model::{Direction, Field, Index, Invalid, Model};
 use crate::basic::{BasicValue, Kind};
 use crate::link::{Link, Links};
-use crate::model_lock::{self, Element, ModelLock, check};
+use crate::model_lock::{self, Element, ModelLock, Person, check};
 use crate::reference::Reference;
 use crate::set::Set;
 
@@ -37,6 +37,14 @@ impl Model {
                 .filter_map(|(field, f)| Some((field.clone(), field_type(&f.kind)?)))
                 .collect();
             model.collections.insert(name.clone(), fields);
+            let personal: BTreeMap<String, Person> = collection
+                .fields
+                .iter()
+                .filter_map(|(field, f)| Some((field.clone(), f.personal.clone()?)))
+                .collect();
+            if !personal.is_empty() {
+                model.personal.insert(name.clone(), personal);
+            }
             for (index, i) in &collection.indexes {
                 let keys = i
                     .fields

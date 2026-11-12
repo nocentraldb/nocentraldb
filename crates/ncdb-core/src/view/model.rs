@@ -14,8 +14,8 @@ use sha2::{Digest, Sha256};
 use crate::basic::{self, BasicValue, Kind};
 use crate::cbor::{self, Key, Value};
 use crate::link::{Link, Links};
-use crate::model_lock::Refusal;
 pub use crate::model_lock::Scope;
+use crate::model_lock::{Person, Refusal};
 use crate::reference::Reference;
 use crate::set::{self, Set};
 
@@ -32,6 +32,11 @@ pub struct Model {
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.
     pub indexes: Vec<Index>,
+    /// The personal fields, by collection and field, each with whom it is
+    /// about (RFC 0005, "Personal fields"). The fold keeps a personal
+    /// field's plaintext only while its person key is held and the person
+    /// is not erased (RFC 0006, "What the view stores in plaintext").
+    pub personal: BTreeMap<String, BTreeMap<String, Person>>,
 }
 
 /// A field and its field type (RFC 0004).
@@ -126,6 +131,11 @@ impl Field {
 }
 
 impl Model {
+    /// Whom the field `name` of `collection` is about, if it is personal.
+    pub fn person(&self, collection: &str, name: &str) -> Option<&Person> {
+        self.personal.get(collection)?.get(name)
+    }
+
     /// The field type of a field.
     pub fn field(&self, collection: &str, field: &str) -> Option<&Field> {
         self.collections.get(collection)?.get(field)
