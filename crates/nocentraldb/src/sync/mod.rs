@@ -209,6 +209,11 @@ pub(crate) struct SyncState {
     /// The longest delay before a merge rotation: a minute, which the
     /// tests change (`set_merge_delay`).
     pub(crate) merge_delay: std::time::Duration,
+    /// Whether the delay is the deadline itself rather than the longest
+    /// of a random draw: only a test sets it (`set_merge_delay`), so that
+    /// a delay it sets holds exactly (NOC-284).
+    #[cfg(test)]
+    pub(crate) merge_exact: bool,
     /// How long this device holds a provisional shred before an admin of
     /// the performer's account finalizes it: 7 days, which the tests
     /// change (`finalize`; RFC 0008, "A provisional erasure in a space
@@ -249,6 +254,8 @@ impl SyncState {
             puts: BTreeMap::new(),
             merges: BTreeMap::new(),
             merge_delay: MERGE_DELAY,
+            #[cfg(test)]
+            merge_exact: false,
             finalize_after: FINALIZE_AFTER,
             too_early_retry: TOO_EARLY_RETRY,
             retries: BTreeMap::new(),

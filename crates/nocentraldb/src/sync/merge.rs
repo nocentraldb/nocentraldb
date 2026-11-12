@@ -33,10 +33,11 @@ pub(super) fn due(inner: &mut Inner, now: Instant) -> Vec<SpaceId> {
     };
     sync.merges.retain(|space, _| wanted.contains(space));
     for space in wanted {
-        let delay = sync.merge_delay;
-        sync.merges
-            .entry(space)
-            .or_insert_with(|| now + random_up_to(delay));
+        let delay = match exact(sync) {
+            true => sync.merge_delay,
+            false => random_up_to(sync.merge_delay),
+        };
+        sync.merges.entry(space).or_insert_with(|| now + delay);
     }
     let due: Vec<SpaceId> = sync
         .merges
@@ -75,14 +76,46 @@ fn random_up_to(longest: Duration) -> Duration {
     Duration::from_millis(u64::from_le_bytes(bytes) % (millis + 1))
 }
 
-/// Sets the longest delay before `db` writes a merge rotation, and draws
-/// every pending deadline again under it.
+/// Whether a test set the delay as the deadline itself.
+#[cfg(test)]
+fn exact(sync: &super::SyncState) -> bool {
+    sync.merge_exact
+}
+
+/// Outside the tests the delay is always drawn (RFC 0008, step 5).
+#[cfg(not(test))]
+fn exact(_: &super::SyncState) -> bool {
+    false
+}
+
+/// Sets the delay before `db` writes a merge rotation, as the deadline
+/// itself, not the longest of a random draw, and sets every pending
+/// deadline again: a test that gives an admin an hour knows that it does
+/// not rotate while the test runs, and one that gives zero that it rotates
+/// at once (NOC-284).
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn set_merge_delay(db: &crate::Db, delay: Duration) {
     let mut inner = crate::db::lock(&db.inner);
     if let Some(sync) = inner.sync.as_mut() {
         sync.merge_delay = delay;
+        sync.merge_exact = true;
         sync.merges.clear();
     }
     super::wake(&inner);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Outside the tests, the delay is a random draw from zero up to the
+    /// longest (RFC 0008, step 5), so two admins rarely rotate at once.
+    #[test]
+    fn a_drawn_delay_stays_within_the_longest_and_varies() {
+        let longest = Duration::from_secs(60);
+        let draws: Vec<Duration> = (0..64).map(|_| random_up_to(longest)).collect();
+        assert!(draws.iter().all(|draw| *draw <= longest));
+        assert!(draws.iter().any(|draw| *draw != draws[0]), "{draws:?}");
+        assert_eq!(random_up_to(Duration::ZERO), Duration::ZERO);
+    }
 }

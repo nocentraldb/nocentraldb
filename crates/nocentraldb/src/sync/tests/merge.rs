@@ -4,7 +4,7 @@
 //! every head, with envelopes for the current members only, after a random
 //! delay of up to a minute, unless another admin's merge rotation ends the
 //! exposure first. A writer never rotates. The tests set each database's
-//! longest delay (`set_merge_delay`).
+//! delay as the deadline itself (`set_merge_delay`; NOC-284).
 
 use std::time::Duration;
 
