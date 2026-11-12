@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use ncdb_core::change::{Change, Payload, WriterModel};
 use ncdb_core::checks::SealChecks;
 use ncdb_core::envelope;
-use ncdb_core::ids::ObjectId as CoreObjectId;
+use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
 use ncdb_core::membership::{self, ControlBody, Entry, Genesis, Role};
@@ -64,49 +64,12 @@ impl Spaces<'_> {
     /// random nonce.
     pub async fn create(&self) -> Result<Space, Error> {
         let mut inner = self.db.lock();
-        let member = inner.member.key();
-        let certificate = inner
-            .account
-            .certificate(member.id(), inner.kind)
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorCode::NotAllowed,
-                    "a database waiting to be paired creates no space until its pairing completes",
-                )
-            })?;
-        let nonce = CoreObjectId::random().0;
-        let space = membership::space_id(member.id(), &nonce);
-        let generation = membership::generation_id(space, member.id(), &[]);
-        let key = SpaceKey::generate();
-        let genesis = Genesis {
-            nonce,
-            creator: member.public(),
-            certificate,
-            first_generation: generation,
-            model_id: membership::seal_model_id(&key, space, member.id(), inner.model_id),
-        };
-        let genesis = membership::write(
-            &member,
-            space,
-            1,
-            generation,
-            &ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis)),
-        );
-        let sealed = envelope::seal(&key, space, generation, &member.public())
-            .expect("the member's own key takes an envelope");
-        let own = membership::write(
-            &member,
-            space,
-            2,
-            generation,
-            &ControlBody::new(BTreeSet::from([genesis.id()]), Entry::KeyEnvelope(sealed)),
-        );
-        let mut state = SpaceState::new(space, member);
-        for change in [&genesis, &own] {
-            fold(&mut inner.view, &mut state.checks, change)?;
-        }
-        inner.spaces.insert(space, state);
-        crate::sync::wake(&inner);
+        let model = inner.model_id;
+        let space = create_space(&mut inner, model)?;
+        // The account's first space creates the account space, which
+        // records the space the device joined (RFC 0010).
+        crate::account::create(&mut inner)?;
+        crate::account::reconcile(&mut inner)?;
         Ok(Space {
             inner: self.db.inner.clone(),
             id: SpaceId(space),
@@ -132,20 +95,89 @@ impl Spaces<'_> {
     }
 }
 
+/// Creates a space of the model `model`: writes its genesis and the
+/// member's own key envelope into the log and folds them, on the device.
+/// The member is the space's first admin. The space id derives from the
+/// member and a random nonce. The app's spaces are of its lock's model,
+/// the account space of the model the SDK ships (`crate::account`).
+pub(crate) fn create_space(inner: &mut Inner, model: [u8; 16]) -> Result<CoreSpaceId, Error> {
+    let member = inner.member.key();
+    let certificate = inner
+        .account
+        .certificate(member.id(), inner.kind)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::NotAllowed,
+                "a database waiting to be paired creates no space until its pairing completes",
+            )
+        })?;
+    let nonce = CoreObjectId::random().0;
+    let space = membership::space_id(member.id(), &nonce);
+    let generation = membership::generation_id(space, member.id(), &[]);
+    let key = SpaceKey::generate();
+    let genesis = Genesis {
+        nonce,
+        creator: member.public(),
+        certificate,
+        first_generation: generation,
+        model_id: membership::seal_model_id(&key, space, member.id(), model),
+    };
+    let genesis = membership::write(
+        &member,
+        space,
+        1,
+        generation,
+        &ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis)),
+    );
+    let sealed = envelope::seal(&key, space, generation, &member.public())
+        .expect("the member's own key takes an envelope");
+    let own = membership::write(
+        &member,
+        space,
+        2,
+        generation,
+        &ControlBody::new(BTreeSet::from([genesis.id()]), Entry::KeyEnvelope(sealed)),
+    );
+    let mut state = SpaceState::new(space, member);
+    for change in [&genesis, &own] {
+        fold(&mut inner.view, &mut state.checks, change)?;
+    }
+    inner.spaces.insert(space, state);
+    crate::sync::wake(inner);
+    Ok(space)
+}
+
 /// Whether the member can write into the space `id`: the copy holds it, it
 /// is of the lock's model, and the member holds the key of its current
 /// generation.
 pub(crate) fn writable(inner: &Inner, id: SpaceId) -> Result<(), Error> {
+    writable_by(inner, id.0, inner.model_id)
+}
+
+/// Whether the member can write into the space `id`, of the app's model or
+/// the account space.
+pub(crate) fn writable_or_account(inner: &Inner, id: SpaceId) -> Result<(), Error> {
+    if crate::account::space(inner) == Some(id.0) {
+        return writable_by(inner, id.0, crate::account::id());
+    }
+    writable(inner, id)
+}
+
+/// Whether the member can write into the space `id` as a space of the
+/// model `model`: the app's lock's, or the account space's
+/// (`crate::account`).
+pub(crate) fn writable_by(inner: &Inner, space: CoreSpaceId, model: [u8; 16]) -> Result<(), Error> {
+    let id = SpaceId(space);
     let not_found = || Error::new(ErrorCode::NotFound, format!("the copy holds no space {id}"));
     let state = inner.spaces.get(&id.0).ok_or_else(not_found)?;
     let model_id = state.checks.model_id().ok_or_else(not_found)?;
-    if SpaceModel::of(model_id, inner.model_id) == SpaceModel::Another {
+    if SpaceModel::of(model_id, model) == SpaceModel::Another {
         return Err(Error::new(
             ErrorCode::SpaceOfAnotherModel,
             format!(
                 "the space {id} is of the model {}, the lock is of the model {}",
                 hex(&model_id),
-                hex(&inner.model_id)
+                hex(&model)
             ),
         ));
     }
@@ -233,72 +265,92 @@ impl Space {
         let mut tx = Transaction::new(&model);
         record(&mut tx)?;
         let mut inner = lock(&self.inner);
-        let space = self.id.0;
-        let member = inner.member.key();
-        let no_keys = std::collections::BTreeMap::new();
-        let held = inner
-            .spaces
-            .get(&space)
-            .map_or(&no_keys, |state| &state.person_keys);
-        let mut persons = crate::personal::Persons::new(held);
-        let (operations, ids) = tx.operations(&inner.view, space, member.id(), &mut persons)?;
-        let drawn = persons.drawn;
-        let collections: BTreeSet<String> =
-            operations.iter().map(|op| op.collection.clone()).collect();
-        writable(&inner, self.id)?;
-        not_stopped(&inner, self.id)?;
-        let resolved = inner.spaces[&space].checks.resolved();
-        holds(resolved, member.id(), Role::Writer, "writes content")?;
         // Key 64: the lock this database was opened with wrote the change
         // (RFC 0002, "The writer's model").
         let writer = WriterModel {
             id: inner.model.id,
             version: inner.model.version,
         };
-        let wall = crate::clock::now_millis();
-        let Inner {
-            view,
-            spaces,
-            watchers,
-            ..
-        } = &mut *inner;
-        let state = spaces.get_mut(&space).expect("a writable space is held");
-        // Each person this write drew gets its key first: its person-key
-        // entry, folded before the content that is sealed under it (RFC
-        // 0003, "The person key").
-        let mut records = Vec::new();
-        for drawn in drawn {
-            records.push(person_key(view, state, space, &member, drawn)?);
-        }
-        let next = next::next(view, space, &state.checks, member.id());
-        let generation = next.generation.expect("a writable space has a generation");
-        state.clock.observe(next.seen);
-        let clock = state.clock.now(wall).map_err(|error| {
-            Error::new(
-                ErrorCode::StorageFailed,
-                format!("the space's clock: {error}"),
-            )
-        })?;
-        let mut payload = Payload::new(clock, next.heads, operations);
-        payload.set_writer_model(writer);
-        let key = state
-            .checks
-            .space_key(generation)
-            .expect("a writable space's key is held");
-        let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
-        fold(view, &mut state.checks, &change)?;
-        crate::personal::refresh(view, space, state).map_err(storage)?;
-        touched(watchers, space, &collections);
-        if !records.is_empty() {
-            crate::sync::put_person_keys(&mut inner, space, records);
-        }
-        crate::sync::wake(&inner);
-        Ok(Written {
-            change: ChangeId(change.id()),
-            ids,
+        let id = self.id;
+        write_change(&mut inner, self.id.0, tx, writer, |inner| {
+            writable(inner, id)?;
+            not_stopped(inner, id)
         })
     }
+}
 
+/// Writes what `tx` recorded as one change of `space`, of the model
+/// `writer` names: signed, sealed under the space key, appended and folded
+/// in one SQLite transaction. `allowed` checks that the member may write
+/// into the space, after the transaction's own checks, before anything is
+/// made; the member must be a writer or an admin. Space::write writes the
+/// app's spaces by the app's lock, the account space its records by the
+/// model the SDK ships (`crate::account`).
+pub(crate) fn write_change(
+    inner: &mut Inner,
+    space: CoreSpaceId,
+    tx: Transaction<'_>,
+    writer: WriterModel,
+    allowed: impl FnOnce(&Inner) -> Result<(), Error>,
+) -> Result<Written, Error> {
+    let member = inner.member.key();
+    let no_keys = std::collections::BTreeMap::new();
+    let held = inner
+        .spaces
+        .get(&space)
+        .map_or(&no_keys, |state| &state.person_keys);
+    let mut persons = crate::personal::Persons::new(held);
+    let (operations, ids) = tx.operations(&inner.view, space, member.id(), &mut persons)?;
+    let drawn = persons.drawn;
+    let collections: BTreeSet<String> = operations.iter().map(|op| op.collection.clone()).collect();
+    allowed(inner)?;
+    let resolved = inner.spaces[&space].checks.resolved();
+    holds(resolved, member.id(), Role::Writer, "writes content")?;
+    let wall = crate::clock::now_millis();
+    let Inner {
+        view,
+        spaces,
+        watchers,
+        ..
+    } = inner;
+    let state = spaces.get_mut(&space).expect("a writable space is held");
+    // Each person this write drew gets its key first: its person-key
+    // entry, folded before the content that is sealed under it (RFC
+    // 0003, "The person key").
+    let mut records = Vec::new();
+    for drawn in drawn {
+        records.push(person_key(view, state, space, &member, drawn)?);
+    }
+    let next = next::next(view, space, &state.checks, member.id());
+    let generation = next.generation.expect("a writable space has a generation");
+    state.clock.observe(next.seen);
+    let clock = state.clock.now(wall).map_err(|error| {
+        Error::new(
+            ErrorCode::StorageFailed,
+            format!("the space's clock: {error}"),
+        )
+    })?;
+    let mut payload = Payload::new(clock, next.heads, operations);
+    payload.set_writer_model(writer);
+    let key = state
+        .checks
+        .space_key(generation)
+        .expect("a writable space's key is held");
+    let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
+    fold(view, &mut state.checks, &change)?;
+    crate::personal::refresh(view, space, state).map_err(storage)?;
+    touched(watchers, space, &collections);
+    if !records.is_empty() {
+        crate::sync::put_person_keys(inner, space, records);
+    }
+    crate::sync::wake(inner);
+    Ok(Written {
+        change: ChangeId(change.id()),
+        ids,
+    })
+}
+
+impl Space {
     /// Creates an object in `collection` with `values`, as one change: a
     /// [`write`](Space::write) with one [`create`](Transaction::create)
     /// (RFC 0009, "One write, one change"). The new id is the answer's

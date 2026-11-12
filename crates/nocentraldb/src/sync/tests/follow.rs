@@ -58,7 +58,9 @@ async fn a_write_without_a_relay_yields_the_new_count() {
 
     let status = next(&mut statuses).await;
     assert_eq!(status.connection, Connection::None);
-    assert_eq!(status.unconfirmed, 2);
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    assert_eq!(status.unconfirmed, 5);
 }
 
 #[tokio::test(flavor = "multi_thread")]

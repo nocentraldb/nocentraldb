@@ -53,6 +53,9 @@ pub struct OpenOptions {
     pairing: bool,
     /// The plugins whose field types the core folds (RFC 0011).
     plugins: Vec<Plugin>,
+    /// Whether the database joins an account another device created, as a
+    /// pairing one does (RFC 0010): it creates no account space of its own.
+    joins_account: bool,
     /// The name of a database on OPFS, in a dedicated worker (NOC-175):
     /// crate-internal until the browser export names it (NOC-176).
     #[cfg(target_arch = "wasm32")]
@@ -79,6 +82,7 @@ impl OpenOptions {
             agent: false,
             pairing: false,
             plugins: Vec::new(),
+            joins_account: false,
             #[cfg(target_arch = "wasm32")]
             browser: None,
         }
@@ -94,6 +98,9 @@ impl OpenOptions {
     /// has.
     pub fn pairing(mut self) -> OpenOptions {
         self.pairing = true;
+        // It joins an account another device created: a device of that
+        // account adds it to the account space (RFC 0010).
+        self.joins_account = true;
         self
     }
 
@@ -172,6 +179,15 @@ impl OpenOptions {
         self.relay = Some(url.to_owned());
         self
     }
+
+    /// The database joins an account another device created and creates
+    /// no account space of its own (RFC 0010, "The account space"). Until
+    /// pairing (NOC-267) opens a database this way, only the tests do.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn joins_account(mut self) -> OpenOptions {
+        self.joins_account = true;
+        self
+    }
 }
 
 impl std::fmt::Debug for OpenOptions {
@@ -216,6 +232,9 @@ pub(crate) struct Inner {
     pub(crate) sync: Option<SyncState>,
     /// The followers of the sync status.
     pub(crate) status: crate::sync::Notify,
+    /// Whether the database joins an account another device created: it
+    /// then creates no account space (`crate::account`).
+    pub(crate) joins_account: bool,
 }
 
 /// What the database keeps of one space besides its log: the checks,
@@ -488,8 +507,11 @@ impl Db {
                 format!("the lock is refused: {error}"),
             )
         })?;
+        // The view folds the account space by the model the SDK ships,
+        // beside the app's lock (RFC 0010, "The account space").
         let registry = Registry::new(options.plugins.iter().cloned())
-            .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?;
+            .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?
+            .with_reserved_model(crate::account::lock());
         let _ = &placed;
         let new = || options.new_keys();
         let (mut view, keys, storage, home) = match place {
@@ -519,7 +541,7 @@ impl Db {
                 )
             }
         };
-        let model = Arc::new(view.model().clone());
+        let model = Arc::new(crate::account::app_model(view.model()));
         let spaces: BTreeMap<_, _> = view
             .spaces()
             .map(|space| (space, SpaceState::from_log(&view, space, keys.member.key())))
@@ -547,7 +569,10 @@ impl Db {
             watchers: Vec::new(),
             sync: None,
             status: crate::sync::Notify::default(),
+            joins_account: options.joins_account,
         };
+        let mut inner = inner;
+        crate::account::reconcile(&mut inner)?;
         let inner = Arc::new(Mutex::new(inner));
         // A rebuild of the view runs in the background (RFC 0009, step 4),
         // in a thread, which wasm32 does not start yet.

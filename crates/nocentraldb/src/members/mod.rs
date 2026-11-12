@@ -21,7 +21,7 @@ use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
-use crate::space::{Space, not_stopped, writable};
+use crate::space::{Space, not_stopped};
 
 pub(crate) mod batch;
 mod change;
@@ -133,7 +133,9 @@ impl Members<'_> {
     pub async fn add(&self, invitation: &Invitation, options: AddMember) -> Result<Notice, Error> {
         let mut inner = lock(self.space.inner());
         let space = self.space.id();
-        writable(&inner, space)?;
+        // An app space, or the account space, whose devices the SDK adds
+        // (RFC 0010, "The account space").
+        crate::space::writable_or_account(&inner, space)?;
         not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
         let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;

@@ -122,7 +122,7 @@ mod rebuild {
     /// After the swap: the SDK reads and writes by the view's new model, and
     /// every subscription reads its data again.
     fn swapped(inner: &mut Inner) {
-        inner.model = Arc::new(inner.view.model().clone());
+        inner.model = Arc::new(crate::account::app_model(inner.view.model()));
         let collections: BTreeSet<String> = inner.model.collections.keys().cloned().collect();
         let spaces: Vec<_> = inner.spaces.keys().copied().collect();
         for space in spaces {

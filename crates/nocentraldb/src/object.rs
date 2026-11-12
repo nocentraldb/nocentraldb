@@ -154,7 +154,7 @@ impl Object {
 
 /// The read value of the field `name` of `row`: the winning write, when
 /// the reader's schema allows it.
-fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
+pub(crate) fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
     let state = row.fields.get(name)?;
     match (field, state) {
         (Field::Basic(basic), FieldState::Basic(state)) => {

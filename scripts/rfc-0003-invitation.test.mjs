@@ -4,7 +4,9 @@
 // RFC 0003 gives the layout field by field and what a reader refuses; RFC
 // 0009 points to it; and the committed vectors in docs/rfc/vectors/0003,
 // which generate.py writes with Python, decode as the layout says, here in
-// Node, independently of the generator and of the SDKs.
+// Node, independently of the generator and of the SDKs. Version 2, the
+// invitation of a member waiting to be paired, has no certificate (Carsten,
+// 2026-11-12, NOC-285).
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -86,7 +88,11 @@ test("RFC 0009 points invitation.toString() and nc.invitation(text) to RFC 0003'
 });
 
 test("the vectors' text and bytes are one invitation each", () => {
-  for (const name of ["invitation", "invitation-statement"]) {
+  for (const name of [
+    "invitation",
+    "invitation-statement",
+    "invitation-pairing",
+  ]) {
     assert.deepEqual(decode(file(`${name}.txt`).trim()), hex(`${name}.hex`));
   }
 });
@@ -122,4 +128,33 @@ test("the vector with a statement adds the recovery key, the number and its sign
   assert.deepEqual(bytes.subarray(163, 195), f["recovery key"]);
   assert.deepEqual(bytes.subarray(195, 203), f.number);
   assert.deepEqual(bytes.subarray(203, 267), f["statement signature"]);
+});
+
+test("RFC 0003 gives version 2, the invitation of a member waiting to be paired", () => {
+  const part = section(read(RFC_0003), "invitation");
+  for (const pattern of [
+    /\*\*Version 2: a member waiting to be paired\.\*\*/,
+    /\| 0 \| 1 \| version \| `2` \|/,
+    /\| 65 \| 1 \| kind \|/,
+    /66 bytes/,
+    /`members\.add` refuses it with `invalidCertificate`/,
+    /Version 1 stays as it is/,
+    /NOC-285/,
+  ]) {
+    assert.match(
+      part,
+      pattern,
+      `RFC 0003's Invitation does not say ${pattern}`,
+    );
+  }
+});
+
+test("the version 2 vector holds the keys and the kind and no certificate", () => {
+  const bytes = hex("invitation-pairing.hex");
+  const f = fields();
+  assert.equal(bytes.length, 66);
+  assert.equal(bytes[0], 2, "version 2");
+  assert.deepEqual(bytes.subarray(1, 33), f["signing key"]);
+  assert.deepEqual(bytes.subarray(33, 65), f["agreement key"]);
+  assert.deepEqual(bytes.subarray(65, 66), f.kind);
 });
