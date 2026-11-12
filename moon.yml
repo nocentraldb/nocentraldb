@@ -199,6 +199,20 @@ tasks:
     inputs:
       - "/moon.yml"
       - "/rust-toolchain.toml"
+  site:
+    # NOC-213: the site (site/, its own pnpm project, outside the workspace)
+    # installs from its lockfile, builds, and passes the checks of its built
+    # output (the output test in site/'s scripts folder): the landing page
+    # and the docs, /llms.txt and /llms-full.txt naming nocentraldb.io, a
+    # Markdown copy of every docs page, and the CNAME.
+    # scripts/site-gate.test.mjs asserts this task; the workflow
+    # site-pages.yml runs the same steps before it deploys. The install needs
+    # the network on a cold pnpm store.
+    script: "pnpm --dir site install --frozen-lockfile && pnpm --dir site build && node --test 'site/scripts/*.test.mjs'"
+    inputs:
+      - "/site/**/*"
+      - "!/site/dist/**/*"
+      - "!/site/node_modules/**/*"
   browser-storage:
     # NOC-33: the browser storage probe in Chromium, Firefox and WebKit,
     # through Playwright (scripts/browser-storage/, docs/browser-storage.md).
@@ -257,3 +271,4 @@ tasks:
       - "~:decisions"
       - "~:version"
       - "~:api-report"
+      - "~:site"
