@@ -26,7 +26,7 @@ const ADMIN: Who = 1;
 /// The member who fetches the records.
 const MEMBER: Who = 2;
 /// A member the admin removes, which rotates the space key.
-const GUEST: Who = 3;
+pub(super) const GUEST: Who = 3;
 
 pub(super) const PERSON: [u8; 16] = [0x9e; 16];
 
@@ -239,11 +239,11 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
 }
 
 /// A member of a second account, who signs off the admin's shred.
-const SIGNER: Who = 4;
+pub(super) const SIGNER: Who = 4;
 
 /// The admin writes `entry` into `space` after the control heads, folds it
 /// and wakes syncing. Returns its id.
-fn write(admin: &Db, space: &Space, entry: Entry) -> CoreChangeId {
+pub(super) fn write(admin: &Db, space: &Space, entry: Entry) -> CoreChangeId {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -265,7 +265,11 @@ fn write(admin: &Db, space: &Space, entry: Entry) -> CoreChangeId {
 
 /// The admin shreds `PERSON` in `space`, signed off by `account`. Returns
 /// the shred's id.
-fn shred_signed(admin: &Db, space: &Space, account: &ed25519_dalek::SigningKey) -> CoreChangeId {
+pub(super) fn shred_signed(
+    admin: &Db,
+    space: &Space,
+    account: &ed25519_dalek::SigningKey,
+) -> CoreChangeId {
     let performer = lock(&admin.inner).member.key().id();
     let entry = Entry::Shred(membership::ShredEntry {
         person_key: PERSON,
@@ -276,7 +280,7 @@ fn shred_signed(admin: &Db, space: &Space, account: &ed25519_dalek::SigningKey) 
 
 /// The admin shreds `PERSON` in `space`, signed off by the account of
 /// `SIGNER`, folds the shred and wakes syncing. Returns the shred's id.
-fn shred(admin: &Db, space: &Space) -> CoreChangeId {
+pub(super) fn shred(admin: &Db, space: &Space) -> CoreChangeId {
     shred_signed(admin, space, &space::other_account(1))
 }
 
@@ -286,7 +290,7 @@ fn shred(admin: &Db, space: &Space) -> CoreChangeId {
 /// The admin and the member share a space with a signer of a second
 /// account; the member holds the person key `PERSON`, which the admin then
 /// shreds. Returns the shred's id.
-async fn shredded(relay: &LocalRelay) -> (Db, Db, Space, CoreChangeId) {
+pub(super) async fn shredded(relay: &LocalRelay) -> (Db, Db, Space, CoreChangeId) {
     let (admin, member, project) = shared(relay).await;
     let options = OpenOptions::new(LOCK).in_memory().relay(&relay.url());
     let signer = Db::open_as(
@@ -457,9 +461,9 @@ async fn a_reader_acknowledges_a_shred_as_well() {
 /// How far the relay's clock of the test below is ahead of the real one:
 /// the relay accepts a finalize only 7 days after the shred (RFC 0007,
 /// `too_early`; NOC-234).
-static RELAY_AHEAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub(super) static RELAY_AHEAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-fn relay_now() -> u64 {
+pub(super) fn relay_now() -> u64 {
     crate::clock::now_millis() + RELAY_AHEAD.load(std::sync::atomic::Ordering::SeqCst)
 }
 

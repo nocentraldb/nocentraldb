@@ -15,6 +15,7 @@ mod backoff;
 mod codes;
 mod confirmed;
 mod counts;
+mod erasures;
 mod fake;
 mod follow;
 mod large;
