@@ -33,6 +33,53 @@ fn pending(db: &Db, space: &Space) -> bool {
     sync.merges.contains_key(&space.id().0)
 }
 
+/// Each database's sync status, and the current generation of `space` it
+/// holds with whether it is exposed and whether a merge rotation waits: the
+/// diagnosis of a wait that runs out (NOC-276).
+fn report(dbs: &[(&str, &Db)], space: Option<crate::SpaceId>) -> String {
+    dbs.iter()
+        .map(|(name, db)| {
+            let status = db.sync().current();
+            let inner = crate::db::lock(&db.inner);
+            let state = space.and_then(|space| inner.spaces.get(&space.0));
+            let generation = state.and_then(|state| {
+                let resolved = state.checks.resolved();
+                let generation = resolved.current_generation()?;
+                Some((generation, resolved.exposed(generation)))
+            });
+            let merge = space.is_some_and(|space| {
+                inner
+                    .sync
+                    .as_ref()
+                    .is_some_and(|sync| sync.merges.contains_key(&space.0))
+            });
+            format!(
+                "{name}: {:?}, unconfirmed {}, refused {}, error {:?}; generation (id, exposed) {generation:?}, merge waiting {merge}",
+                status.connection, status.unconfirmed, status.refused, status.error
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n  ")
+}
+
+/// [`synced`] of `db`, which names the call and reports every database of
+/// `dbs` when it runs out.
+async fn synced_named(what: &str, db: &Db, dbs: &[(&str, &Db)], space: Option<crate::SpaceId>) {
+    let start = std::time::Instant::now();
+    loop {
+        let status = db.sync().current();
+        if status.connection == crate::Connection::Connected && status.unconfirmed == 0 {
+            return;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "{what}: not synced in time\n  {}",
+            report(dbs, space)
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
 async fn add(admin: &Space, member: &Db, role: Role) {
     let options = AddMember {
         role,
@@ -92,27 +139,34 @@ async fn two_admins_converge_on_one_generation_that_is_not_exposed() {
     let leaver = open(3, &relay.url()).await;
     crate::sync::set_merge_delay(&first, Duration::ZERO);
     crate::sync::set_merge_delay(&second, Duration::ZERO);
-    synced(&second).await;
-    synced(&leaver).await;
+    let dbs = [("first", &first), ("second", &second), ("leaver", &leaver)];
+    synced_named("second before the space", &second, &dbs, None).await;
+    synced_named("leaver before the space", &leaver, &dbs, None).await;
     let project = now(first.spaces().create()).unwrap();
+    let space = Some(project.id());
     add(&project, &second, Role::Admin).await;
     add(&project, &leaver, Role::Writer).await;
-    synced(&first).await;
+    synced_named("first after the adds", &first, &dbs, space).await;
     let on_second = joined(&second, &project).await;
     let on_leaver = joined(&leaver, &project).await;
     let (before, _) = current(&first, &project).unwrap();
 
     now(on_leaver.leave()).unwrap();
-    synced(&leaver).await;
+    synced_named("leaver after its leave", &leaver, &dbs, space).await;
 
-    eventually(
-        "both admins hold one generation that is not exposed",
-        || {
-            let (a, b) = (current(&first, &project), current(&second, &on_second));
-            a == b && a.is_some_and(|(now, exposed)| now != before && !exposed)
-        },
-    )
-    .await;
+    let start = std::time::Instant::now();
+    loop {
+        let (a, b) = (current(&first, &project), current(&second, &on_second));
+        if a == b && a.is_some_and(|(now, exposed)| now != before && !exposed) {
+            break;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(20),
+            "both admins hold one generation that is not exposed: not in time (before {before})\n  {}",
+            report(&dbs, space)
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
 }
 
 #[tokio::test(flavor = "multi_thread")]
