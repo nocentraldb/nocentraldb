@@ -31,10 +31,9 @@
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
-//! A value is text, an integer, a float, a boolean, an array, or
-//! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list. `null`,
-//! which clears a field in RFC 0009, waits for the Rust SDK to write a
-//! clear; it is refused with `invalidValue` until then.
+//! A value is text, an integer, a float, a boolean, an array,
+//! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
+//! `null`, which clears a basic field or a link (`Value::clear`).
 
 #[cfg(test)]
 mod tests;
@@ -297,7 +296,10 @@ fn field(value: &Value) -> Result<Field, Failed> {
                 _ => return Err(invalid("a map value is {$add: [..]} or {$remove: [..]}")),
             }
         }
-        Value::Null => return Err(invalid("clearing a field is not built yet")),
+        // `null` clears a basic field or a link (RFC 0009, "Field operations
+        // per field type"; Carsten, 2026-11-12, NOC-277); the SDK refuses it
+        // for a set or many links.
+        Value::Null => Field::clear(),
         _ => return Err(invalid("not a value a field takes")),
     })
 }
@@ -321,6 +323,8 @@ fn value_of(field: &Field) -> Value {
         // A plugin field's data passes through as its own CBOR value; how
         // the TypeScript SDK shows it comes with plugin fields there.
         Repr::Data(data) => data.to_value().unwrap_or(Value::Null),
+        // A read never holds a clear; an unset field reads null.
+        Repr::Clear => Value::Null,
     }
 }
 
