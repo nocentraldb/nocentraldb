@@ -25,8 +25,9 @@
 //! - `spaces.list` `{}`: answers `[{"id": id, "role": text|null}]`.
 //! - `write` `{"space": id, "ops": [op]}`, each op one of `{"op":
 //!   "create", "collection": text, "values": map}`, `{"op": "update",
-//!   "collection": text, "id": id, "values": map}` or `{"op": "delete",
-//!   "collection": text, "id": id}`: answers `{"change": id, "ids": [id]}`.
+//!   "collection": text, "id": id, "values": map}`, `{"op": "delete",
+//!   "collection": text, "id": id}` or `{"op": "restore", "collection":
+//!   text, "id": id}`: answers `{"change": id, "ids": [id]}`.
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
@@ -186,7 +187,7 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
         let kind = text(op, "op")?;
         let id = match kind {
             "create" => None,
-            "update" | "delete" => Some(object_id(op, "id")?),
+            "update" | "delete" | "restore" => Some(object_id(op, "id")?),
             other => return Err(invalid(format!("no op {other}"))),
         };
         parsed.push((kind.to_owned(), collection, id, values));
@@ -202,6 +203,7 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
                         tx.create(collection, values)?;
                     }
                     ("update", Some(id)) => tx.update(collection, *id, values)?,
+                    ("restore", Some(id)) => tx.restore(collection, *id)?,
                     (_, Some(id)) => tx.delete(collection, *id)?,
                     _ => unreachable!("parsed above"),
                 }
