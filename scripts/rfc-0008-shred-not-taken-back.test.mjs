@@ -22,9 +22,9 @@ test("the function's rule for the whole set names the first shred not taken back
   assert.match(fn, MARK);
 });
 
-test("the function lists a take-back among the late arrivals that change the state", () => {
-  const fn = part("the-function");
-  const late = fn
+test("a take-back is among the late arrivals that change the state", () => {
+  const changes = part("what-a-new-change-can-change");
+  const late = changes
     .split("\n")
     .filter((l) => l.startsWith("- ") && /take-back/.test(l));
   assert.ok(
@@ -55,7 +55,7 @@ test("a later shred is judged by the rules that hold when it is written", () => 
     .find((l) => l.startsWith("- **Taken back**"));
   assert.match(takenBack, RULES);
   assert.match(takenBack, WHILE);
-  const late = part("the-function")
+  const late = part("what-a-new-change-can-change")
     .split("\n")
     .find((l) =>
       l.startsWith("- a take-back arrives of the shred that took effect"),
