@@ -69,7 +69,9 @@ pub use members::{
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
-pub use status::{ParkReason, Refused, RejectReason, SpaceStatus, SpaceStatusReport};
+pub use status::{
+    ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,
+};
 pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Transaction;
 pub use value::Value;

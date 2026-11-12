@@ -26,6 +26,7 @@ mod rebuild;
 mod refold;
 mod relay;
 mod schema;
+mod shreds_held;
 mod state;
 mod stored_lock;
 
