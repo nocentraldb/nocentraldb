@@ -132,6 +132,7 @@ pub(crate) fn commit(
         state.bad_person_key_records = bad;
         return Err(storage(error));
     }
+    state.drop_shredded();
     for frame in frames {
         let id = Change::decode(frame).expect("received, so decoded").id();
         match view.state(space, id) {
