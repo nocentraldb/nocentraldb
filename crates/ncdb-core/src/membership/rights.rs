@@ -316,7 +316,7 @@ pub(crate) fn seniority(
             continue;
         };
         others.insert(entry.subject);
-        let depth = judged.0.get(&node.id).and_then(|j| j.depth);
+        let depth = judged.judgements.get(&node.id).and_then(|j| j.depth);
         if let Some(depth) = depth.filter(|_| entry.role() == Some(Role::Admin)) {
             let rank = admins.entry(entry.subject).or_insert((depth, node.id));
             *rank = (*rank).min((depth, node.id));
