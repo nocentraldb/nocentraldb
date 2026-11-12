@@ -241,9 +241,9 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
 /// A member of a second account, who signs off the admin's shred.
 const SIGNER: Who = 4;
 
-/// The admin shreds `PERSON` in `space`, signed off by the account of
-/// `SIGNER`, folds the shred and wakes syncing. Returns the shred's id.
-fn shred(admin: &Db, space: &Space) -> CoreChangeId {
+/// The admin writes `entry` into `space` after the control heads, folds it
+/// and wakes syncing. Returns its id.
+fn write(admin: &Db, space: &Space, entry: Entry) -> CoreChangeId {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -251,10 +251,6 @@ fn shred(admin: &Db, space: &Space) -> CoreChangeId {
     let state = spaces.get_mut(&id).expect("the admin holds the space");
     let next = crate::next::next(view, id, &state.checks, member.id());
     let generation = next.generation.expect("a generation");
-    let entry = Entry::Shred(membership::ShredEntry {
-        person_key: PERSON,
-        sign_off: membership::SignOff::sign(&space::other_account(1), id, PERSON, member.id()),
-    });
     let change = membership::write(
         &member,
         id,
@@ -265,6 +261,23 @@ fn shred(admin: &Db, space: &Space) -> CoreChangeId {
     crate::space::fold(view, &mut state.checks, &change).unwrap();
     crate::sync::wake(&inner);
     change.id()
+}
+
+/// The admin shreds `PERSON` in `space`, signed off by `account`. Returns
+/// the shred's id.
+fn shred_signed(admin: &Db, space: &Space, account: &ed25519_dalek::SigningKey) -> CoreChangeId {
+    let performer = lock(&admin.inner).member.key().id();
+    let entry = Entry::Shred(membership::ShredEntry {
+        person_key: PERSON,
+        sign_off: membership::SignOff::sign(account, space.id().0, PERSON, performer),
+    });
+    write(admin, space, entry)
+}
+
+/// The admin shreds `PERSON` in `space`, signed off by the account of
+/// `SIGNER`, folds the shred and wakes syncing. Returns the shred's id.
+fn shred(admin: &Db, space: &Space) -> CoreChangeId {
+    shred_signed(admin, space, &space::other_account(1))
 }
 
 /// A shred is final when accepted (RFC 0008, "A shred is final when
@@ -437,6 +450,52 @@ async fn a_reader_acknowledges_a_shred_as_well() {
 
     eventually("the reader acknowledges the shred", || {
         acknowledgements(&reader, space) == vec![(shred, false), (shred, true)]
+    })
+    .await;
+}
+
+/// A provisional shred (RFC 0008, "A provisional erasure in a space with
+/// one account"; NOC-234) keeps the key: a member that folds it writes
+/// "seen" only and keeps the key. Once the performer's account finalizes
+/// it, the member writes "deleted" and drops the key.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_provisional_shred_is_seen_and_only_deleted_once_finalized() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project) = shared(&relay).await;
+    let key = PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    synced(&admin).await;
+    let space = project.id().0;
+    stored(&relay, space).await;
+    relay.proxy.cut();
+    relay.proxy.restore();
+    eventually("the member holds the person key", || {
+        held(&member, space).is_some()
+    })
+    .await;
+
+    // Both members belong to one account, so the admin's own account signs
+    // off: the shred is provisional.
+    let shred = shred_signed(&admin, &project, &account());
+    synced(&admin).await;
+    eventually("the member writes seen", || {
+        acknowledgements(&member, space) == vec![(shred, false)]
+    })
+    .await;
+    assert!(
+        held(&member, space).is_some(),
+        "a provisional shred keeps the key"
+    );
+
+    let decision = Entry::ErasureDecision(membership::ErasureDecision {
+        shred,
+        finalize: true,
+    });
+    write(&admin, &project, decision);
+    synced(&admin).await;
+    eventually("the member writes deleted and drops the key", || {
+        acknowledgements(&member, space) == vec![(shred, false), (shred, true)]
+            && held(&member, space).is_none()
     })
     .await;
 }
