@@ -193,4 +193,6 @@ The project holds these names on the public registries. The unscoped ones carry 
 | crates.io | `nocentraldb` | placeholder |
 | crates.io | `ncdb-core` | placeholder; the core crate in `crates/ncdb-core` takes it over with its first real release |
 | crates.io | `ncdb` | placeholder |
+| crates.io | `ncdb-plugin` | placeholder; the plugin crate in `crates/ncdb-plugin` takes it over with its first real release |
+| crates.io | `ncdb-harness` | placeholder; the harness crate in `crates/ncdb-harness`, which RFC 0011 plans, takes it over with its first real release |
 

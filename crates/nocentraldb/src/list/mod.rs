@@ -2,6 +2,9 @@
 //! "Spaces" and "Spaces of another model"): each space the copy holds,
 //! with the member's role in it and whether it is of the lock's model.
 
+use futures_core::Stream;
+
+use crate::db::Inner;
 use crate::error::Error;
 use crate::id::SpaceId;
 use crate::members::Role;
@@ -50,21 +53,35 @@ impl Spaces<'_> {
     /// space the member joined is left out until then, as
     /// [`Spaces::get`] answers `NotFound` for it.
     pub async fn list(&self) -> Result<Vec<SpaceInfo>, Error> {
-        let inner = self.db.lock();
-        let member = inner.member.key().id();
-        Ok(inner
-            .spaces
-            .iter()
-            .filter_map(|(&space, state)| {
-                Some(SpaceInfo {
-                    id: SpaceId(space),
-                    role: match crate::sync::stopped(&inner, space) {
-                        true => None,
-                        false => state.checks.resolved().role(member).map(Role::of),
-                    },
-                    model: SpaceModel::of(state.checks.model_id()?, inner.model_id),
-                })
-            })
-            .collect())
+        Ok(list(&self.db.lock()))
     }
+
+    /// Follows the space list (Carsten, 2026-11-12, NOC-241): the stream
+    /// yields the list [`Spaces::list`] gives at once, then each new list
+    /// when a space is added, left or removed, or the member's role in one
+    /// changes, as when another device shares a space with this member. A
+    /// list that did not change is not yielded again. Dropping the stream
+    /// stops it.
+    pub fn subscribe(&self) -> impl Stream<Item = Vec<SpaceInfo>> + Unpin + use<> {
+        crate::sync::follow(&self.db.inner, list)
+    }
+}
+
+/// Every space of `inner` [`Spaces::list`] lists, in the order of their ids.
+fn list(inner: &Inner) -> Vec<SpaceInfo> {
+    let member = inner.member.key().id();
+    inner
+        .spaces
+        .iter()
+        .filter_map(|(&space, state)| {
+            Some(SpaceInfo {
+                id: SpaceId(space),
+                role: match crate::sync::stopped(inner, space) {
+                    true => None,
+                    false => state.checks.resolved().role(member).map(Role::of),
+                },
+                model: SpaceModel::of(state.checks.model_id()?, inner.model_id),
+            })
+        })
+        .collect()
 }
