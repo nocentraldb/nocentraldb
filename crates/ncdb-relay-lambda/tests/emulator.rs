@@ -1,7 +1,8 @@
-//! The `connections` table on DynamoDB keeps the same contract as the
-//! in-memory store, against the AWS Emulator (docs/aws-emulator.md). The
-//! test is ignored unless asked for, and refuses to run against anything
-//! but an emulator on this machine.
+//! Against the AWS Emulator (docs/aws-emulator.md): the `connections` table
+//! on DynamoDB keeps the same contract as the in-memory store. The test is
+//! ignored unless asked for, and refuses to run against anything but an
+//! emulator on this machine. (The emulator serves no WebSocket data plane,
+//! NOC-278: the connection API is tested in `tests/apigw.rs`.)
 
 use aws_config::BehaviorVersion;
 use ncdb_relay_lambda::dynamo::{self, DynamoConnections};

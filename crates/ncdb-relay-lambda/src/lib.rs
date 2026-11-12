@@ -22,6 +22,7 @@
 //! exists (`ncdb-relay-aws`, NOC-270); a `connections` store on DynamoDB
 //! and the client of the real connection API follow (NOC-272).
 
+pub mod apigw;
 pub mod connections;
 pub mod contract;
 pub mod dynamo;

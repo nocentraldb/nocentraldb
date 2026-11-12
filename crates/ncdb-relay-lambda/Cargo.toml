@@ -27,6 +27,9 @@ lambda_runtime = { version = "=1.5.0", default-features = false }
 # version ncdb-relay-aws pins (NOC-264 point 3: the AWS crates live only in
 # the relay's AWS crates). Its calls run on the caller's Tokio runtime.
 aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+# API Gateway's connection API, `@connections`: posts and closes (NOC-264
+# point 3), at the version ncdb-relay-aws's coverage check pins.
+aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
 tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time"] }
 # The challenge's nonce: the platform's secure generator, as in the core.
 getrandom = { version = "=0.4.3", default-features = false }
@@ -65,7 +68,7 @@ aws-config = { version = "=1.13.2", default-features = false, features = ["rt-to
 ncdb-relay-lambda = { workspace = true, features = ["harness"] }
 ncdb-relay-server.workspace = true
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
-tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "io-util"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "io-util", "net"] }
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
 ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }
