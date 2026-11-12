@@ -294,7 +294,10 @@ fn with_votes(config: &str) -> String {
         "votes": {{ "config": {config}, "rule": 1, "type": "acme/counter" }},"#
         ),
     )
-    .replace(r#""plugins": {}"#, r#""plugins": { "acme": { "npm": "@acme/x" } }"#)
+    .replace(
+        r#""plugins": {}"#,
+        r#""plugins": { "acme": { "npm": "@acme/x" } }"#,
+    )
 }
 
 /// RFC 0005, "Refused", and RFC 0011, "A type that is not registered"
@@ -306,8 +309,12 @@ fn a_changed_plugin_config_is_refused_and_builds_nothing() {
         .expect("the first version builds")
         .lock;
 
-    let refusals = build(&draft(&with_votes(r#"{ "step": 2 }"#)), Some(&previous), no_new_id)
-        .unwrap_err();
+    let refusals = build(
+        &draft(&with_votes(r#"{ "step": 2 }"#)),
+        Some(&previous),
+        no_new_id,
+    )
+    .unwrap_err();
 
     assert_eq!(
         refusals,

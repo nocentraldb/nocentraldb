@@ -674,7 +674,9 @@ fn refuses_changing_a_plugin_fields_config() {
         found[0].lines(),
         vec![
             s("tasks.votes: the config of acme/counter changes."),
-            s("The config is part of the type's merge rule: members would merge existing values differently."),
+            s(
+                "The config is part of the type's merge rule: members would merge existing values differently."
+            ),
             s("Add a new field with the new config instead, and deprecate tasks.votes."),
         ]
     );
