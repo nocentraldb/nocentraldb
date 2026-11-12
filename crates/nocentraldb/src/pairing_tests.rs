@@ -15,8 +15,7 @@ use crate::members::{Notice, NoticeCode};
 fn answer() -> PairingAnswer {
     let recovery = RecoveryKey::from_code(&[0x42; 16]);
     let account = SigningKey::from_bytes(&[0x11; 32]);
-    let statement =
-        AccountKeyStatement::sign(&recovery, account.verifying_key().to_bytes(), 1);
+    let statement = AccountKeyStatement::sign(&recovery, account.verifying_key().to_bytes(), 1);
     let member = MemberKey::from_secrets([0x21; 32], [0x22; 32]);
     PairingAnswer(
         ncdb_core::pairing::PairingAnswer::build(
@@ -68,7 +67,10 @@ fn a_text_that_is_not_a_pairing_answer_is_invalid_and_names_no_byte() {
     ] {
         let refused = bad.parse::<PairingAnswer>().unwrap_err();
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{bad}");
-        assert!(refused.to_string().contains("not a pairing answer"), "{refused}");
+        assert!(
+            refused.to_string().contains("not a pairing answer"),
+            "{refused}"
+        );
         assert!(!refused.to_string().contains(&text[12..30]), "{refused}");
     }
 }
