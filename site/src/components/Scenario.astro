@@ -1,0 +1,41 @@
+---
+// The scroll scenario on the kit's pinned-chapters moment (see the kit's
+// moments/_demo/in-page-service.html): four steps, each with its drawing.
+// moment.js moves the four figures into the shared frame while the section is held.
+import { STEPS, scene } from "./scene.mjs";
+---
+
+<section
+  class="section"
+  id="story"
+  style="--h: 2"
+  data-moment="pinned-chapters"
+  data-scene-scope
+  aria-labelledby="story-h"
+>
+  <div class="wrap mo-pc__grid">
+    <div class="mo-pc__text">
+      <h2 id="story-h">One task list on a train, in a home office and with an agent</h2>
+      <ol class="mo-pc__steps">
+        {
+          STEPS.map((step, i) => (
+            <li class="mo-pc__step">
+              <h3>{step.title}</h3>
+              <p>{step.text}</p>
+              <figure class="mo-pc__visual" set:html={scene(i, `s${i}`)} />
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+    <div class="mo-pc__visuals frame">
+      <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-scene-pause hidden>
+        Pause
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+  import "./scene-pause.mjs";
+</script>
