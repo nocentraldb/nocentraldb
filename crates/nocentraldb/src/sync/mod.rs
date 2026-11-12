@@ -178,6 +178,12 @@ pub(crate) struct SyncState {
     /// The spaces the relay said this member may no longer read, until it
     /// says the member was added to them again.
     pub(crate) stopped: BTreeSet<CoreSpaceId>,
+    /// The stopped spaces whose unconfirmed changes are pushed once more:
+    /// the relay confirms those it holds as duplicates, such as a leave
+    /// whose answer was lost, and refuses the rest (RFC 0007, "Push": a
+    /// push is idempotent; NOC-276). A space leaves this set once that
+    /// push is done.
+    pub(crate) flush: BTreeSet<CoreSpaceId>,
     /// The code the relay last stopped a space with, `not_member` or
     /// `removed_member`.
     pub(crate) removed: Option<String>,
@@ -240,6 +246,7 @@ impl SyncState {
             epoch: None,
             cursors: BTreeMap::new(),
             stopped: BTreeSet::new(),
+            flush: BTreeSet::new(),
             removed: None,
             live: BTreeSet::new(),
             heads: BTreeMap::new(),
