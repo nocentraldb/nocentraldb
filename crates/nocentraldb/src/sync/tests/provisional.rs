@@ -98,3 +98,70 @@ async fn no_erasure_no_entry() {
     let (_admin, _member, project) = shared(&relay).await;
     assert!(project.status().current().provisional_erasures.is_empty());
 }
+
+/// How far the relay's clock of the finalize test is ahead of the real one.
+static RELAY_AHEAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn relay_now() -> u64 {
+    crate::clock::now_millis() + RELAY_AHEAD.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+const SEVEN_DAYS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+/// An admin of the performer's account writes the finalize once its device
+/// held the shred for 7 days, here at once (RFC 0008, "Who writes the
+/// finalize"). The relay refuses it as `too_early` until 7 days by its own
+/// clock passed: the SDK keeps it unconfirmed, never refused, and pushes it
+/// again later; once the relay accepts it, the member destroys the key and
+/// the relay deletes the record (pm, NOC-234).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_admin_finalizes_and_retries_a_too_early_finalize() {
+    let relay = LocalRelay::start_with_clock(relay_now).await;
+    let (admin, member, project) = shared(&relay).await;
+    let key = ncdb_core::keys::PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    synced(&admin).await;
+    let space = project.id().0;
+    eventually("the member holds the person key", || {
+        if fetched(&member, space) && held(&member, space).is_none() {
+            relay.proxy.cut();
+            relay.proxy.restore();
+        }
+        held(&member, space).is_some()
+    })
+    .await;
+    crate::sync::set_finalize_after(&admin, Duration::ZERO, Duration::from_millis(200));
+
+    erase(&admin, &project);
+    eventually("the admin writes the finalize", || {
+        let inner = lock(&admin.inner);
+        let key = inner.spaces[&space].checks.resolved().person_key(PERSON);
+        key.is_some_and(|key| key.finalized.is_some())
+    })
+    .await;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(
+        project.status().current().refused.is_empty(),
+        "never refused"
+    );
+    assert!(admin.sync().current().unconfirmed > 0, "kept unconfirmed");
+    assert!(
+        held(&member, space).is_some(),
+        "the relay has no finalize yet"
+    );
+
+    RELAY_AHEAD.store(SEVEN_DAYS, std::sync::atomic::Ordering::SeqCst);
+    eventually("the relay takes the finalize", || {
+        admin.sync().current().unconfirmed == 0
+    })
+    .await;
+    eventually("the member destroys the key", || {
+        held(&member, space).is_none()
+    })
+    .await;
+    assert!(
+        relay.person_keys(space).await.is_empty(),
+        "the record is gone"
+    );
+    assert!(project.status().current().provisional_erasures.is_empty());
+}
