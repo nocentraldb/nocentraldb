@@ -1,0 +1,25 @@
+[package]
+name = "ncdb-harness"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# Not published yet, as no crate of the workspace is: publishing, or
+# reserving the name on crates.io, is the owner's to decide.
+publish = false
+description = "The convergence harness of NoCentralDB (RFC 0011): RFC 0004's checks C1 to C7 for a field type, built in or plugin, natively and on wasm32."
+
+[dependencies]
+ncdb-plugin.workspace = true
+# Generates and shrinks the cases, seeded from a number, never from the OS,
+# so a run is the same natively and on wasm32. The version the core pinned.
+proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
+# The digest of a run's state bytes (C3). The version the core pins.
+sha2 = { version = "=0.11.1", default-features = false }
+
+[dev-dependencies]
+# The test plugin, and broken variants of it, which the harness checks.
+ncdb-test-counter.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.80"
