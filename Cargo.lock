@@ -946,6 +946,7 @@ dependencies = [
  "js-sys",
  "libsqlite3-sys",
  "minicbor",
+ "ncdb-harness",
  "ncdb-plugin",
  "ncdb-test-counter",
  "proptest",
