@@ -42,7 +42,13 @@ cargo test -p ncdb-relay-aws --test emulator_coverage -- --ignored --nocapture
 - **Path-style S3.** The endpoint is an IP address, so S3 requests must carry the bucket in the path. The tests build their S3 client with `force_path_style(true)`.
 - **Host-prefix injection off.** `AWS_DISABLE_HOST_PREFIX_INJECTION` keeps the SDK from sending a request to a host name the emulator does not serve.
 
-The coverage check refuses to run when `AWS_ENDPOINT_URL` is not a loopback address or when real credentials are set, so it never reaches AWS. It prints a table of results, and writes it to the file `NCDB_EMULATOR_REPORT` names, when it is set.
+With the same variables set, the AWS backend's tests run against the emulator: RFC 0007's conformance suite, and the backend's own tests of where a frame is kept, orphans in S3, concurrent appends, the epoch item and the size of one transaction. Each test makes its own tables and bucket under a random prefix and deletes them at its end.
+
+```sh
+cargo test -p ncdb-relay-aws --test conformance --test aws_backend -- --ignored
+```
+
+The coverage check and the backend's tests refuse to run when `AWS_ENDPOINT_URL` is not a loopback address or when real credentials are set, so they never reach AWS. The coverage check prints a table of results, and writes it to the file `NCDB_EMULATOR_REPORT` names, when it is set.
 
 ## What the emulator does not replace
 

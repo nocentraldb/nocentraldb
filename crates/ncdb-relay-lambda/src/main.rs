@@ -6,10 +6,11 @@
 //! It prints each invocation's log line to stdout, which Lambda sends to
 //! CloudWatch Logs.
 //!
-//! **It does not start yet.** The function needs the DynamoDB and S3
-//! backend and the `connections` table (NOC-270) and a client of the real
-//! connection API (NOC-272); until they exist, it says so and exits, and
-//! the handler runs only in the local harness.
+//! **It does not start yet.** Besides the DynamoDB and S3 backend
+//! (`ncdb-relay-aws`, NOC-270), the function needs a `connections` store on
+//! DynamoDB and a client of the real connection API (NOC-272); until they
+//! exist, it says so and exits, and the handler runs only in the local
+//! harness.
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -22,7 +23,7 @@ use ncdb_relay_lambda::{ConnectionApi, Connections, Event, Handler, Urls};
 /// Runs Lambda's loop of invocations around `handler`.
 #[expect(
     dead_code,
-    reason = "the function starts once the AWS backend (NOC-270) and the connection API client (NOC-272) exist"
+    reason = "the function starts once the connections table and the connection API client exist (NOC-272)"
 )]
 async fn serve<S, C, A, U>(handler: Handler<S, C, A, U>) -> Result<(), Error>
 where
@@ -51,7 +52,7 @@ where
 
 fn main() -> ExitCode {
     eprintln!(
-        "ncdb-relay-lambda: not deployable yet: the DynamoDB and S3 backend (NOC-270) \
+        "ncdb-relay-lambda: not deployable yet: the connections table on DynamoDB \
          and the connection API client (NOC-272) are not built"
     );
     ExitCode::FAILURE

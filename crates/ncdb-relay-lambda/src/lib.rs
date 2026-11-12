@@ -18,9 +18,9 @@
 //!
 //! **What this does not do yet.** It runs on the SQLite backend and the
 //! in-memory connections, in tests and in the local harness
-//! (`harness`, with the feature `harness`): the DynamoDB and S3 backend
-//! (NOC-270), the `connections` table, and the client of the real
-//! connection API (NOC-272) follow.
+//! (`harness`, with the feature `harness`). The DynamoDB and S3 backend
+//! exists (`ncdb-relay-aws`, NOC-270); a `connections` store on DynamoDB
+//! and the client of the real connection API follow (NOC-272).
 
 pub mod connections;
 pub mod event;
