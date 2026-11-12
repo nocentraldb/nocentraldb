@@ -433,7 +433,7 @@ const recovered = await nc.open({ model, lock, recover: words });
 - **The recovery code** is handed to the app once, when the account is created, as an object whose string, JSON and debug forms are redacted. The app shows the words and calls `confirm()` once the person stored them.
 - **`db.account.removeMember(memberId)`** removes a lost device or an agent from every space the account administers, as one action on the account ([RFC 0010, "Losing a device"](0010-accounts.md#losing-a-device)).
 
-**The Rust forms and what the calls return** (proposed, NOC-262; the owner has not decided them):
+**The Rust forms and what the calls return** (Carsten, 2026-11-12, NOC-273):
 
 ```rust
 // On the new device or agent:
@@ -467,7 +467,7 @@ if let Some(code) = db.account().recovery_code().await? {
 - **`RecoveryCode`** holds the code until the person stored it. `Display` and `Debug` print `RecoveryCode(redacted)`, it implements no serde trait, so no serializer can put it into a log, and `words()` gives the twelve words as `[&'static str; 12]`, the one way to read them. `confirm(self)` consumes it: the SDK forgets the code and keeps only the recovery key's public half ([RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code)). In TypeScript, `code.words()` is a method and `toString()`, `toJSON()` and Node's inspect give `"RecoveryCode(redacted)"`. A serde form that writes the redacted text was not taken: it would let a code pass through a serializer silently.
 - **When the app gets it.** The first open of a database that is opened neither for pairing nor for recovery creates the account and its code. The SDK keeps the code in the keystore or key file, next to the account key, until `confirm()`. `db.account().recovery_code()` returns `Some(code)` on every open until then and `None` after, so an app that crashed before it showed the code shows it on the next open. Not taken: handing the code only as a return value of the open that created the account, which a crash loses for good; and a notice stream for it, which an app that does not follow it misses.
 
-**The notices of accounts** (proposed, NOC-262), as `NoticeCode` values with their texts:
+**The notices of accounts** (Carsten, 2026-11-12, NOC-273), as `NoticeCode` values with their texts:
 
 | Code | Returned by | Text |
 | --- | --- | --- |
@@ -739,7 +739,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `Erasure`, `ErasureState` | One erasure: `shred`, `state`, `performer`, `performer_account`, `sign_off`, `members`; `Final`, `Provisional`, `TakenBack` | [RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement) |
 | `ErasureMember`, `Acknowledged` | A member of an erasure's audit: `id`, `account`, `current`, `acknowledged`; `Deleted`, `Seen`, `Missing` | [RFC 0008, "Acknowledgement"](0008-membership.md#acknowledgement) |
 | `Notice`, `NoticeCode` | What `Members::add` and the other membership calls return: `code` and `text`, such as `NoticeCode::MemberAdded` or `NoticeCode::RoleSet` | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
-| `OpenOptions::pairing`, `OpenOptions::recover`, `Db::account`, `Account`, `PairKind`, `Paired`, `PairingAnswer`, `Removed`, `RecoveryCode` | Accounts in Rust (proposed, NOC-262) | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
+| `OpenOptions::pairing`, `OpenOptions::recover`, `Db::account`, `Account`, `PairKind`, `Paired`, `PairingAnswer`, `Removed`, `RecoveryCode` | Accounts in Rust (Carsten, 2026-11-12, NOC-273) | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
 | `Transaction` | What a write's closure records on | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
 | `Transaction::create_with`, `Create` | `create` with options: `Create { same_person_as }`, the object of the same person in another space (Carsten, 2026-11-12, NOC-244) | [RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) |
 | `Query`, `Page`, `Cursor`, `page.has_more` | A query, a page, its cursor, and whether more follow | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
