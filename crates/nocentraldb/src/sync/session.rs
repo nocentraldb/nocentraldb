@@ -15,7 +15,7 @@ use tokio::sync::watch;
 use super::time::{self, Instant};
 use super::transport::{self, Transport};
 use super::wire::{self, Answer};
-use super::{Connection, apply, large, merge};
+use super::{Connection, apply, finalize, large, merge};
 use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
@@ -228,7 +228,26 @@ impl<T: Transport> Session<'_, T> {
             for space in due {
                 with(self.db, |inner| merge::write(inner, space))?;
             }
-            let deadline = with(self.db, |inner| merge::next(inner))?;
+            // Finalizes whose 7 days passed on this device are written now,
+            // and finalizes the relay refused as too early are pushed again
+            // (RFC 0008, "A provisional erasure in a space with one
+            // account").
+            let due = with(self.db, |inner| {
+                finalize::due(inner, crate::clock::now_millis())
+            })?;
+            for (space, shred) in due {
+                with(self.db, |inner| finalize::write(inner, space, shred))?;
+            }
+            let again = with(self.db, |inner| {
+                finalize::retries_due(inner, Instant::now())
+            })?;
+            for space in again {
+                self.push(space).await?;
+            }
+            let deadline = with(self.db, |inner| {
+                let finalizes = finalize::next(inner, crate::clock::now_millis(), Instant::now());
+                [merge::next(inner), finalizes].into_iter().flatten().min()
+            })?;
             tokio::select! {
                 answer = self.recv() => self.live(answer?)?,
                 changed = wake.changed() => match changed {
@@ -308,6 +327,11 @@ impl<T: Transport> Session<'_, T> {
     /// Pushes every change of `space` the relay has not confirmed, in
     /// local order, in pushes that each fit one message.
     async fn push(&mut self, space: SpaceId) -> Result<(), End> {
+        // A space whose finalize the relay found too early waits until its
+        // push again is due (`finalize`).
+        if with(self.db, |inner| finalize::waiting(inner, space))? {
+            return Ok(());
+        }
         let unconfirmed =
             with(self.db, |inner| apply::unconfirmed(inner, space))?.map_err(|_| lost())?;
         let (ids, frames): (Vec<_>, Vec<_>) = unconfirmed.into_iter().unzip();
@@ -332,8 +356,10 @@ impl<T: Transport> Session<'_, T> {
                         apply::pushed(inner, space, &batch_ids, results)
                     })?
                     .map_err(|_| lost())?;
-                    if stopped.is_some() {
-                        return Err(lost());
+                    match stopped {
+                        Some(code) if code == apply::TOO_EARLY => return Ok(()),
+                        Some(_) => return Err(lost()),
+                        None => {}
                     }
                 }
                 answer => return self.answer(space, answer),

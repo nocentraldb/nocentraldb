@@ -25,6 +25,7 @@ use crate::space::{Space, not_stopped, writable};
 
 pub(crate) mod batch;
 mod change;
+pub(crate) mod erasure;
 mod info;
 mod invitation;
 mod leave;

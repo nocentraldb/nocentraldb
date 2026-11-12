@@ -28,12 +28,12 @@ const MEMBER: Who = 2;
 /// A member the admin removes, which rotates the space key.
 const GUEST: Who = 3;
 
-const PERSON: [u8; 16] = [0x9e; 16];
+pub(super) const PERSON: [u8; 16] = [0x9e; 16];
 
 /// The admin announces the person key `committed` of `PERSON` in `space`
 /// with a person-key entry whose record wraps `wrapped`, folds the entry,
 /// and hands the record to syncing to put.
-fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &PersonKey) {
+pub(super) fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &PersonKey) {
     let id = space.id().0;
     let mut inner = lock(&admin.inner);
     let member = inner.member.key();
@@ -71,7 +71,7 @@ fn person_key(admin: &Db, space: &Space, committed: &PersonKey, wrapped: &Person
 
 /// Both databases synced, and the space the admin shares with the member
 /// as a writer.
-async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
+pub(super) async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
     let admin = open(ADMIN, &relay.url()).await;
     let member = open(MEMBER, &relay.url()).await;
     let project = now(admin.spaces().create()).unwrap();
@@ -85,7 +85,7 @@ async fn shared(relay: &LocalRelay) -> (Db, Db, Space) {
 }
 
 /// The commitment of the person key `PERSON` that `db` holds in `space`.
-fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
+pub(super) fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
     let inner = lock(&db.inner);
     let state = inner.spaces.get(&space)?;
     let key = state.person_keys.get(&PERSON)?;
@@ -149,7 +149,7 @@ async fn a_record_whose_key_does_not_match_its_commitment_is_not_held() {
 
 /// Waits until the relay stores a person-key record of `space`: the put
 /// follows the push, so `synced` may return before it.
-async fn stored(relay: &LocalRelay, space: CoreSpaceId) {
+pub(super) async fn stored(relay: &LocalRelay, space: CoreSpaceId) {
     let start = std::time::Instant::now();
     while relay.person_keys(space).await.is_empty() {
         assert!(
@@ -346,7 +346,7 @@ async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
 
 /// The acknowledgements `db`'s own member wrote in `space`, in its order:
 /// the shred each names, and whether it says "deleted".
-fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId, bool)> {
+pub(super) fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId, bool)> {
     let inner = lock(&db.inner);
     let me = inner.member.key().id();
     let log = inner.view.log(space).expect("the space's log");

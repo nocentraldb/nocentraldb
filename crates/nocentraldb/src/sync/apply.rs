@@ -20,6 +20,10 @@ use crate::subscribe::touched;
 /// errors"). Every other code is a refusal of the change.
 const TRANSIENT: [&str; 2] = ["unavailable", "rate_limited"];
 
+/// The relay's answer to a finalize that came before its 7 days passed
+/// (RFC 0007, "The errors").
+pub(super) const TOO_EARLY: &str = "too_early";
+
 fn sync(inner: &mut Inner) -> &mut SyncState {
     inner.sync.as_mut().expect("a database that syncs")
 }
@@ -161,6 +165,7 @@ pub(super) fn entries(
             Ok(Appended::New(_)) => {
                 folded = true;
                 state.drop_shredded();
+                crate::status::note_shreds(view, space, state.checks.resolved())?;
                 sync(inner).folds += 1;
                 if again::check(inner, space)? {
                     sync(inner).wake.send_replace(());
@@ -206,7 +211,12 @@ pub(super) fn unconfirmed(
 /// refusal is recorded by the code [`wire::mapped_code`] maps it to, as the
 /// sync status shows it, so the relay's own text never reaches the log
 /// (NOC-188). Returns the transient code that stopped it, after which the
-/// rest stays unconfirmed.
+/// rest stays unconfirmed. A `too_early`, the relay's answer to a finalize
+/// that came before its 7 days passed, is no refusal: the finalize, and
+/// every change after it, stay unconfirmed, since those after it may rest
+/// on it and the relay would refuse them; the space is pushed again later
+/// (RFC 0007, "The errors"; pm, NOC-234). It is returned like a transient
+/// code, but it ends only this space's push.
 pub(super) fn pushed(
     inner: &mut Inner,
     space: SpaceId,
@@ -221,6 +231,12 @@ pub(super) fn pushed(
             Pushed::Rejected(code) => {
                 let code = wire::mapped_code(&code);
                 if TRANSIENT.contains(&code.as_str()) {
+                    return Ok(Some(code));
+                }
+                if code == TOO_EARLY {
+                    let sync = sync(inner);
+                    let at = super::time::Instant::now() + sync.too_early_retry;
+                    sync.retries.entry(space).or_insert(at);
                     return Ok(Some(code));
                 }
                 inner.view.refuse(space, *id, &code)?;
