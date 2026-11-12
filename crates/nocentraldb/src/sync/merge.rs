@@ -9,7 +9,9 @@
 //! deadline, ends the exposure and so cancels this one. Two that cross are
 //! concurrent rotations, and step 5 repeats (step 6).
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use super::time::Instant;
 
 use ncdb_core::ids::SpaceId;
 

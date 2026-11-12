@@ -8,10 +8,11 @@
 //! associated data is `"nocentraldb/browser-key-record"` followed by the
 //! database name's UTF-8 bytes, so the records of one database do not open
 //! as another's. An open that finds neither record draws new keys and
-//! keeps both; one that finds only one of them, or a record that does not
-//! open to a key record of this SDK's format, fails with `StorageFailed`
-//! and never draws new keys over it, as a keystore entry that is gone does
-//! natively ([`super::store::from_store`]).
+//! keeps both, unless the database already exists; one that finds only one
+//! of them, a record that does not open to a key record of this SDK's
+//! format, or neither record for a database that exists, fails with
+//! `StorageFailed` and never draws new keys over it, as a keystore entry
+//! that is gone does natively ([`super::store::from_store`]).
 //!
 //! WebCrypto hands the opened record to the JavaScript engine as an
 //! `ArrayBuffer` before the SDK copies it into its own memory; the SDK then
@@ -65,21 +66,29 @@ pub(crate) trait Records {
 }
 
 /// The keys of the database `name`, from IndexedDB: new keys, kept there,
-/// when it holds none for that name.
+/// when it holds none for that name and the database did not exist.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) async fn load_or_create(name: &str) -> Result<Keys, Error> {
+pub(crate) async fn load_or_create(name: &str, database_existed: bool) -> Result<Keys, Error> {
     let db = indexeddb::IndexedDb::open(name).await?;
-    from_records(&db, name).await
+    from_records(&db, name, database_existed).await
 }
 
 /// The keys of the database `name` from `records`, or new keys, sealed and
-/// kept there, when it holds neither record.
-pub(crate) async fn from_records(records: &impl Records, name: &str) -> Result<Keys, Error> {
+/// kept there, when it holds neither record and the database did not
+/// exist.
+pub(crate) async fn from_records(
+    records: &impl Records,
+    name: &str,
+    database_existed: bool,
+) -> Result<Keys, Error> {
     let Stored {
         wrapping_key,
         record,
     } = records.read().await?;
     match (wrapping_key, record) {
+        (None, None) if database_existed => Err(failed(
+            "the database exists, but IndexedDB holds no keys for it; new keys would open none of its spaces",
+        )),
         (None, None) => {
             let keys = Keys::generate();
             let wrapping_key = generate().await?;

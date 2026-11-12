@@ -309,7 +309,7 @@ Stated plainly (principle 4):
 
 ## The plugin contract
 
-RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, until a plugin RFC says otherwise: plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
+RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
 
 ### What a field type defines
 

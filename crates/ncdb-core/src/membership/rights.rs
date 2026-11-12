@@ -237,7 +237,7 @@ fn decides(node: &Node, decision: &ErasureDecision, past: &Resolved) -> bool {
 /// 2026-11-11, NOC-187). A certificate in the state carries only a
 /// statement that names its own key 1 and verifies (`Certificate::verify`),
 /// and an accepted statement entry only one that verifies.
-fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
+pub(crate) fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
     let recovery_keys = |account: [u8; 32]| -> BTreeSet<[u8; 32]> {
         past.all_statements()
             .filter(|statement| statement.account_key == account)
