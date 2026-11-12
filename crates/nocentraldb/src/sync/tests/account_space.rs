@@ -39,7 +39,7 @@ fn spaces_of(db: &Db, member: [u8; 32]) -> Vec<SpaceId> {
     memberships(db)
         .into_iter()
         .filter(|m| m.member == member)
-        .map(|m| SpaceId(m.space))
+        .map(|m| SpaceId(ncdb_core::ids::SpaceId(m.space)))
         .collect()
 }
 
@@ -135,17 +135,19 @@ async fn a_second_device_reads_the_first_devices_spaces_from_the_account_space()
     now(on_a.members().add(&invitation, options)).unwrap();
     synced(&a).await;
 
+    let shared = account_space(&a).0;
     eventually("B reads A's spaces from the account space", || {
-        account::space(&lock(&b.inner)) == Some(account_space(&a).0)
-            && spaces_of(&b, member_id(&a)) == [app.id()]
+        let held = account::space(&lock(&b.inner));
+        held == Some(shared) && spaces_of(&b, member_id(&a)) == [app.id()]
     })
     .await;
     // B records itself in the account space it joined.
+    let own = member_id(&b);
     eventually("B records itself", || {
-        account::members(&lock(&b.inner))
-            .unwrap()
+        let members = account::members(&lock(&b.inner)).unwrap();
+        members
             .iter()
-            .any(|m| m.member == member_id(&b) && m.kind == Kind::Device)
+            .any(|m| m.member == own && m.kind == Kind::Device)
     })
     .await;
 }
