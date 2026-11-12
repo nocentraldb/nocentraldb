@@ -30,7 +30,7 @@ mod state;
 mod statement;
 
 pub use body::{
-    ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
+    ACCOUNT_KEY_STATEMENT, ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
     MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
 };
 pub use certificate::{Certificate, MemberKind};

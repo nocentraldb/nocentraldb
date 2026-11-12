@@ -19,7 +19,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::cbor;
+use crate::cbor::{self, Value};
 use crate::change::{Change, Header};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 
@@ -32,6 +32,7 @@ use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
 use super::stable::{self, Stability};
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
+use super::statement::AccountKeyStatement;
 
 /// The control state of a space: what `resolve` computes. Its `Debug`
 /// output shows ids, roles and verdicts, never content.
@@ -52,6 +53,8 @@ pub struct Resolved {
     heads: BTreeSet<u64>,
     current: Option<u64>,
     person_keys: PersonKeys,
+    /// The accepted account key statement entries, by change id.
+    statements: BTreeMap<ChangeId, AccountKeyStatement>,
 }
 
 /// Folds the control changes of `space` among `changes` into its control
@@ -156,6 +159,23 @@ impl Resolved {
     /// accepted genesis or add entry.
     pub(crate) fn certificates(&self) -> impl Iterator<Item = &super::Certificate> + '_ {
         self.members.0.values().map(|state| &state.certificate)
+    }
+
+    /// The statements of the accepted account key statement entries, in
+    /// the order of their change ids (RFC 0008, "Account key statement
+    /// entry").
+    pub fn statements(&self) -> impl Iterator<Item = &AccountKeyStatement> + '_ {
+        self.statements.values()
+    }
+
+    /// Every account key statement of the state: those the certificates of
+    /// current and former members carry, and those of the accepted
+    /// statement entries.
+    pub(crate) fn all_statements(&self) -> impl Iterator<Item = &AccountKeyStatement> + '_ {
+        let certified = self
+            .certificates()
+            .filter_map(|certificate| certificate.statement.as_deref());
+        certified.chain(self.statements())
     }
 
     /// The order of step 4, of the changes that take part in the fold.
@@ -272,6 +292,10 @@ impl Resolved {
             self.current,
         );
         entries.push((8, self.person_keys.to_value()));
+        let statements = self.statements.iter().map(|(id, statement)| {
+            Value::Array(vec![fields::bytes(&id.0), statement.to_value()])
+        });
+        entries.push((9, Value::Array(statements.collect())));
         cbor::encode(&fields::map(entries))
     }
 }
@@ -311,6 +335,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         heads: BTreeSet::new(),
         current: None,
         person_keys: PersonKeys::default(),
+        statements: BTreeMap::new(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
     // The genesis with the lowest change id; the others fold nothing.
@@ -389,6 +414,9 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         } else {
             apply(members, node);
             keys.apply(node);
+            if let Entry::AccountKeyStatement(statement) = &node.body.entry {
+                resolved.statements.insert(node.id, statement.clone());
+            }
             members.settle(saw);
             if node.membership().is_some_and(|m| m.cutoff().is_some()) {
                 accepted_revocations.push(node.id);
