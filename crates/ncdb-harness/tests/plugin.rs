@@ -12,8 +12,7 @@ use std::collections::BTreeMap;
 
 use ncdb_harness::{Author, Config, Generator, Member, PluginOp, PluginState, Property, check};
 use ncdb_plugin::{
-    ConfigError, Data, FieldType, InvalidIntent, OperationId, Origin, Outcome, ParkReason,
-    Written,
+    ConfigError, Data, FieldType, InvalidIntent, OperationId, Origin, Outcome, ParkReason, Written,
 };
 use ncdb_test_counter::{ADD, Counter};
 use proptest::prelude::*;
@@ -39,7 +38,10 @@ impl<T: FieldType + Default> Generator<PluginState<T>> for Adds {
 
     fn malformed(&self) -> Option<BoxedStrategy<PluginOp>> {
         Some(
-            (60u64..70, proptest::collection::btree_map(0u64..4, any::<i8>(), 0..3))
+            (
+                60u64..70,
+                proptest::collection::btree_map(0u64..4, any::<i8>(), 0..3),
+            )
                 .prop_map(|(number, arguments)| PluginOp {
                     number,
                     arguments: arguments
@@ -86,10 +88,7 @@ macro_rules! counter_like {
             }
             fn state_bytes(&self, state: &Self::State) -> Vec<u8> {
                 let adds = state.iter().map(|(id, n)| {
-                    Data::Array(vec![
-                        Data::Bytes(id.change.0.to_vec()),
-                        Data::Integer(*n),
-                    ])
+                    Data::Array(vec![Data::Bytes(id.change.0.to_vec()), Data::Integer(*n)])
                 });
                 Data::Array(adds.collect()).encode().unwrap()
             }
@@ -134,9 +133,16 @@ macro_rules! counter_like {
                 Data::Integer(state.iter().map(|(_, n)| *n).sum())
             }
             fn outcome(&self, state: &Self::State, id: OperationId) -> Option<Outcome> {
-                state.iter().any(|(i, _)| *i == id).then_some(Outcome::Visible)
+                state
+                    .iter()
+                    .any(|(i, _)| *i == id)
+                    .then_some(Outcome::Visible)
             }
-            fn write(&self, _state: &Self::State, intent: &Data) -> Result<Vec<Written>, InvalidIntent> {
+            fn write(
+                &self,
+                _state: &Self::State,
+                intent: &Data,
+            ) -> Result<Vec<Written>, InvalidIntent> {
                 Counter.write(&Default::default(), intent)
             }
         }
