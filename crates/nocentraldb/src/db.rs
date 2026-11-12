@@ -13,7 +13,7 @@
 //! certificate is drawn per database, until the accounts RFC designs
 //! accounts (RFC 0003, decision 17).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -165,6 +165,10 @@ pub(crate) struct SpaceState {
     /// current connection. Read by the session, which is native only.
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     pub(crate) person_keys_fetched: bool,
+    /// The account keys of the writers whose records failed their checks
+    /// in the last fetch, though they signed them
+    /// (`crate::sync::person_keys`). In memory only, as the person keys.
+    pub(crate) bad_person_key_records: BTreeSet<[u8; 32]>,
 }
 
 impl SpaceState {
@@ -175,6 +179,7 @@ impl SpaceState {
             clock: Clock::new(),
             person_keys: BTreeMap::new(),
             person_keys_fetched: false,
+            bad_person_key_records: BTreeSet::new(),
         }
     }
 
@@ -254,7 +259,9 @@ fn open_at(
         (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
-    let checks = |space| SealChecks::new(space, keys.member.key());
+    // The view keeps the checks while a rebuild runs (NOC-156).
+    let member = keys.member.clone();
+    let checks = move |space| SealChecks::new(space, member.key());
     let view = View::open_with(&file, lock, checks).map_err(view_error)?;
     Ok((view, keys))
 }
@@ -386,6 +393,10 @@ impl Db {
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        // A rebuild of the view runs in the background (RFC 0009, step 4),
+        // in a thread, which wasm32 does not start yet.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::view_report::start(&inner);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);

@@ -13,7 +13,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
 use super::model::{Field, FieldState, Model};
-use super::schema::{column, rows, states};
+use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
 use crate::basic::Entry;
 use crate::cbor::Value;
@@ -31,6 +31,9 @@ pub(super) struct SqlFold<'a> {
     conn: &'a Connection,
     model: &'a Model,
     space: SpaceId,
+    /// The prefix of the tables it folds into: empty for the view's own,
+    /// `r_` for a rebuild's staging tables.
+    prefix: &'static str,
     /// The first error; the fold's calls cannot return one, so the
     /// transaction rolls back after the change.
     error: Option<Error>,
@@ -42,8 +45,25 @@ impl<'a> SqlFold<'a> {
             conn,
             model,
             space,
+            prefix: "",
             error: None,
         }
+    }
+
+    /// A fold into a rebuild's staging tables (RFC 0006, "How").
+    pub(super) fn staged(conn: &'a Connection, model: &'a Model, space: SpaceId) -> SqlFold<'a> {
+        SqlFold {
+            prefix: STAGING,
+            ..SqlFold::new(conn, model, space)
+        }
+    }
+
+    fn rows(&self, collection: &str) -> String {
+        rows_in(self.prefix, collection)
+    }
+
+    fn states(&self, collection: &str) -> String {
+        states_in(self.prefix, collection)
     }
 
     /// The first error the fold met, if any: the transaction must then
@@ -74,7 +94,7 @@ impl<'a> SqlFold<'a> {
             &format!(
                 "INSERT INTO {} (space_id, object_id, field, state) VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT DO UPDATE SET state = excluded.state",
-                states(collection)
+                self.states(collection)
             ),
             params![self.space.0, object.0, field, bytes],
         )?;
@@ -83,7 +103,7 @@ impl<'a> SqlFold<'a> {
             self.conn.execute(
                 &format!(
                     "UPDATE {} SET {} = ?3 WHERE space_id = ?1 AND object_id = ?2",
-                    rows(collection),
+                    self.rows(collection),
                     column(field)
                 ),
                 params![self.space.0, object.0, read],
@@ -98,7 +118,7 @@ impl<'a> SqlFold<'a> {
         let inserted = self.conn.execute(
             &format!(
                 "INSERT INTO {} (space_id, object_id) VALUES (?1, ?2) ON CONFLICT DO NOTHING",
-                rows(collection)
+                self.rows(collection)
             ),
             params![self.space.0, object.0],
         )?;
@@ -113,7 +133,10 @@ impl<'a> SqlFold<'a> {
         let bytes: Option<Vec<u8>> = self
             .conn
             .query_row(
-                "SELECT state FROM objects WHERE space_id = ?1 AND object_id = ?2",
+                &format!(
+                    "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                    objects_in(self.prefix)
+                ),
                 params![self.space.0, object.0],
                 |r| r.get(0),
             )
@@ -131,7 +154,7 @@ impl<'a> SqlFold<'a> {
         self.conn.execute(
             &format!(
                 "UPDATE {} SET deleted = ?3 WHERE space_id = ?1 AND object_id = ?2",
-                rows(collection)
+                self.rows(collection)
             ),
             params![self.space.0, object.0, deleted],
         )?;
@@ -149,6 +172,7 @@ impl<'a> SqlFold<'a> {
         let field = self.model.field(collection, name).expect("a known field");
         let state = load(
             self.conn,
+            self.prefix,
             self.space,
             collection,
             name,
@@ -188,8 +212,11 @@ impl<'a> SqlFold<'a> {
         let was_deleted = state.object().is_deleted();
         state.insert(operation.clone());
         self.conn.execute(
-            "INSERT INTO objects (space_id, object_id, state) VALUES (?1, ?2, ?3)
-             ON CONFLICT DO UPDATE SET state = excluded.state",
+            &format!(
+                "INSERT INTO {} (space_id, object_id, state) VALUES (?1, ?2, ?3)
+                 ON CONFLICT DO UPDATE SET state = excluded.state",
+                objects_in(self.prefix)
+            ),
             params![self.space.0, object.0, state.bytes()],
         )?;
         // A delete or a restore takes the object's rows out of the
@@ -222,7 +249,7 @@ impl SqlFold<'_> {
         self.conn.execute(
             &format!(
                 "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
-                states(collection)
+                self.states(collection)
             ),
             params![self.space.0, object.0, field],
         )?;
@@ -230,7 +257,7 @@ impl SqlFold<'_> {
             self.conn.execute(
                 &format!(
                     "UPDATE {} SET {} = NULL WHERE space_id = ?1 AND object_id = ?2",
-                    rows(collection),
+                    self.rows(collection),
                     column(field)
                 ),
                 params![self.space.0, object.0],
@@ -244,7 +271,10 @@ impl SqlFold<'_> {
     fn clear_object_state(&self, object: ObjectId) -> Result<(), Error> {
         let was_deleted = self.object(object)?.object().is_deleted();
         self.conn.execute(
-            "DELETE FROM objects WHERE space_id = ?1 AND object_id = ?2",
+            &format!(
+                "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
+                objects_in(self.prefix)
+            ),
             params![self.space.0, object.0],
         )?;
         for collection in self.model.collections.keys() {
@@ -263,7 +293,7 @@ impl SqlFold<'_> {
         let has_state: bool = self.conn.query_row(
             &format!(
                 "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
-                states(collection)
+                self.states(collection)
             ),
             params![self.space.0, object.0],
             |r| r.get(0),
@@ -272,7 +302,7 @@ impl SqlFold<'_> {
             self.conn.execute(
                 &format!(
                     "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
-                    rows(collection)
+                    self.rows(collection)
                 ),
                 params![self.space.0, object.0],
             )?;
@@ -284,6 +314,7 @@ impl SqlFold<'_> {
 /// The merge state of a field, empty when nobody wrote it.
 pub(super) fn load(
     conn: &Connection,
+    prefix: &str,
     space: SpaceId,
     collection: &str,
     field_name: &str,
@@ -294,7 +325,7 @@ pub(super) fn load(
         .query_row(
             &format!(
                 "SELECT state FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
-                states(collection)
+                states_in(prefix, collection)
             ),
             params![space.0, object.0, field_name],
             |r| r.get(0),

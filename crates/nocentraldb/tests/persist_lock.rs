@@ -96,6 +96,8 @@ fn an_older_lock_parks_what_it_does_not_know_and_the_newer_one_folds_it_again() 
 
     {
         let db = now(Db::open(options(&dir, LOCK))).unwrap();
+        // The older lock rebuilds the view in the background (NOC-156).
+        support::rebuilt(&db);
         let atlas = now(db.spaces().get(space)).unwrap();
         let read = now(atlas.get("projects", project)).unwrap().unwrap();
         assert_eq!(read.get::<&str>("name").unwrap(), Some("Atlas"));

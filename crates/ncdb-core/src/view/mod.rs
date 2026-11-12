@@ -22,6 +22,7 @@ mod migrate;
 pub mod model;
 mod query;
 mod read;
+mod rebuild;
 mod refold;
 mod relay;
 mod schema;
@@ -45,13 +46,18 @@ use crate::tips::Tips;
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
+pub use rebuild::RebuildProgress;
 
 /// A member's local view: its database, its model and the log of each of
 /// its spaces.
 pub struct View {
     conn: Connection,
+    /// The model the view's tables were folded by, which reads and new
+    /// changes use; during a rebuild, the old one.
     model: Model,
     logs: BTreeMap<SpaceId, Log>,
+    /// A full rebuild under way (RFC 0006, "How").
+    rebuild: Option<rebuild::Rebuild>,
 }
 
 impl fmt::Debug for View {
@@ -168,14 +174,18 @@ impl View {
     }
 
     /// Opens the view as [`View::open`] does, and when the lock check
-    /// accepts a change of the view's model, folds the whole log again by
-    /// the new model, with the checks `checks` gives for each space, before
-    /// it returns (RFC 0006, "Rebuilding the view"). If anything fails, the
-    /// database stays as it was.
-    pub fn open_with<C: Checks>(
+    /// accepts a change of the view's model, brings the view to the new
+    /// model with the checks `checks` gives for each space (RFC 0006,
+    /// "Rebuilding the view"). An additive change migrates the view in
+    /// place. A full rebuild starts in the background when the model the
+    /// view was folded by is known: the view then keeps serving by it, and
+    /// [`View::rebuild_step`] runs the rebuild. Otherwise the whole log is
+    /// folded again before it returns. If anything fails, the database
+    /// stays as it was.
+    pub fn open_with<C: Checks + Send + 'static>(
         path: &Path,
         lock: &ModelLock,
-        checks: impl FnMut(SpaceId) -> C,
+        checks: impl FnMut(SpaceId) -> C + Send + 'static,
     ) -> Result<View, Error> {
         View::with(Connection::open(path)?, lock, Some(checks))
     }
@@ -189,35 +199,90 @@ impl View {
         )
     }
 
-    fn with<C: Checks>(
+    fn with<C: Checks + Send + 'static>(
         conn: Connection,
         lock: &ModelLock,
-        checks: Option<impl FnMut(SpaceId) -> C>,
+        checks: Option<impl FnMut(SpaceId) -> C + Send + 'static>,
     ) -> Result<View, Error> {
         let model = Model::from_lock(lock).map_err(Error::Invalid)?;
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
-        match schema::open(&tx, &model, lock)? {
+        // A rebuild cut off by a close starts again (NOC-227).
+        schema::drop_staging(&tx)?;
+        let mut serving = model;
+        let mut rebuild = None;
+        match schema::open(&tx, &serving, lock)? {
             schema::Fit::Current => {}
             schema::Fit::Migrate(additions) => {
-                migrate::run(&tx, &model, &additions, log_table::load(&tx)?, checks)?;
+                migrate::run(&tx, &serving, &additions, log_table::load(&tx)?, checks)?;
             }
-            schema::Fit::Refold => {
+            schema::Fit::Refold(Some(old)) if checks.is_some() => {
+                let mut checks = checks.expect("checked above");
+                let factory: rebuild::Factory = Box::new(move |space| Box::new(checks(space)));
+                rebuild = Some(rebuild::Rebuild::start(&tx, serving, factory)?);
+                serving = *old;
+            }
+            schema::Fit::Refold(_) => {
                 let checks = checks.ok_or(Error::Model)?;
-                refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+                refold::run(&tx, &serving, &log_table::load(&tx)?, checks)?;
             }
         }
-        query::check(&tx, &model.indexes)?;
+        query::check(&tx, &serving.indexes)?;
         let logs = log_table::load(&tx)?;
         tx.commit()?;
-        Ok(View { conn, model, logs })
+        Ok(View {
+            conn,
+            model: serving,
+            logs,
+            rebuild,
+        })
     }
 
-    /// The model the view folds by.
+    /// The model the view folds by: during a rebuild, the one its tables
+    /// were folded by, until the rebuild swaps in the new ones.
     pub fn model(&self) -> &Model {
         &self.model
+    }
+
+    /// How far a rebuild is, or `None` when none runs.
+    pub fn rebuild_progress(&self) -> Option<RebuildProgress> {
+        Some(self.rebuild.as_ref()?.progress(&self.logs))
+    }
+
+    /// Folds up to `frames` more frames of the log into a rebuild's staging
+    /// tables, in a transaction of their own, and says how far it is then.
+    /// When the rebuild has reached the end of every space's log, the same
+    /// transaction swaps the new tables in; the view then folds by the new
+    /// model, and this gives `None`, as it does when no rebuild runs.
+    pub fn rebuild_step(&mut self, frames: usize) -> Result<Option<RebuildProgress>, Error> {
+        let Some(rebuild) = self.rebuild.as_mut() else {
+            return Ok(None);
+        };
+        let tx = self.conn.transaction()?;
+        let step = rebuild.fold(&tx, &self.logs, frames).and_then(|()| {
+            let progress = rebuild.progress(&self.logs);
+            if progress.folded < progress.total {
+                return Ok(Some(progress));
+            }
+            rebuild.swap(&tx).map(|()| None)
+        });
+        let progress =
+            match step.and_then(|progress| tx.commit().map(|()| progress).map_err(Error::from)) {
+                Ok(progress) => progress,
+                Err(error) => {
+                    // The transaction rolled back; the rebuild starts again.
+                    rebuild.restart(&self.conn)?;
+                    return Err(error);
+                }
+            };
+        if progress.is_none() {
+            let rebuild = self.rebuild.take().expect("a rebuild runs");
+            self.model = rebuild.into_model();
+            self.logs = log_table::load(&self.conn)?;
+        }
+        Ok(progress)
     }
 
     /// Receives a frame: appends it to the log of its space, takes it

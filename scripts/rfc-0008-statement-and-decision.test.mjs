@@ -95,7 +95,7 @@ test("the fold supersedes an older account key, and a finalize wins over a take-
   assert.match(fn, /An account key K is \*\*superseded\*\*/);
   assert.match(
     fn,
-    /An add that did not see an account key statement entry is rejected/,
+    /An add concurrent with an account key statement entry, neither in the other's causal past, is rejected/,
   );
   assert.match(
     fn,
