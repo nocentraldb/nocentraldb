@@ -390,35 +390,55 @@ impl Session<'_> {
         }
     }
 
-    /// Puts the person-key records of `space` this member wrote, after the
-    /// changes that announce them (RFC 0007, `put-person-keys`). A record
-    /// the relay refuses with `bad_record` is dropped, the whole request
-    /// with it, since the relay stores none of them; any other answer
-    /// keeps them for the next connection.
+    /// Puts the person-key records of `space` this member wrote, once the
+    /// relay confirmed the changes that announce them (RFC 0007,
+    /// `put-person-keys`; `person_keys::ready`); the others wait for a
+    /// later push. A record the relay refuses with `bad_record` is
+    /// dropped, the whole request with it, since the relay stores none of
+    /// them; any other answer, or a connection that ends first, keeps them
+    /// for the next connection.
     async fn put_person_keys(&mut self, space: SpaceId) -> Result<(), End> {
         let records = with(self.db, |inner| {
-            inner
+            let waiting = inner
                 .sync
                 .as_mut()
                 .and_then(|sync| sync.puts.remove(&space))
-                .unwrap_or_default()
+                .unwrap_or_default();
+            let (send, keep) = super::person_keys::ready(inner, space, waiting);
+            if let Some(sync) = inner.sync.as_mut()
+                && !keep.is_empty()
+            {
+                sync.puts.entry(space).or_default().extend(keep);
+            }
+            send
         })?;
         if records.is_empty() {
             return Ok(());
         }
+        let keep = |records: Vec<wire::Record>| {
+            with(self.db, |inner| {
+                if let Some(sync) = inner.sync.as_mut() {
+                    sync.puts.entry(space).or_default().extend(records);
+                }
+            })
+        };
         let req = self.req();
-        self.send(wire::put_person_keys(req, space, &records))
-            .await?;
-        match self.ask(req).await? {
-            Answer::Other { .. } => Ok(()),
-            Answer::Error { code, .. } if code == "bad_record" => Ok(()),
-            answer => {
-                with(self.db, |inner| {
-                    if let Some(sync) = inner.sync.as_mut() {
-                        sync.puts.entry(space).or_default().extend(records);
-                    }
-                })?;
+        let answer = match self.send(wire::put_person_keys(req, space, &records)).await {
+            Ok(()) => self.ask(req).await,
+            Err(end) => Err(end),
+        };
+        match answer {
+            Ok(Answer::Other { .. }) => Ok(()),
+            Ok(Answer::Error { code, .. }) if code == "bad_record" => Ok(()),
+            Ok(answer) => {
+                keep(records)?;
                 self.answer(space, answer)
+            }
+            Err(end) => {
+                // Kept for the next connection; `with` fails only once the
+                // database is gone, when nothing is left to keep them for.
+                let _ = keep(records);
+                Err(end)
             }
         }
     }
