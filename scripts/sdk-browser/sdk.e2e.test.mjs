@@ -47,13 +47,23 @@ const page = async (context) => {
 
 /** The page's model: the test lock's tasks, as the app declares them. */
 const MODEL = `nc.model({
-  tasks: nc.collection({
-    title: nc.string(),
-    priority: nc.int(),
-    estimate: nc.float(),
-    urgent: nc.boolean(),
-    tags: nc.set(nc.string()),
-  }),
+  tasks: nc.collection(
+    {
+      title: nc.string(),
+      status: nc.oneOf(["open", "done"]),
+      priority: nc.int(),
+      estimate: nc.float(),
+      urgent: nc.boolean(),
+      tags: nc.set(nc.string()),
+    },
+    {
+      indexes: {
+        byPriority: nc.index(["priority"]),
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        open: nc.index(["status", "priority"], { equal: 1, scope: "space" }),
+      },
+    },
+  ),
 })`;
 
 test("opens, writes, reads, closes and reopens the database on OPFS", async () => {
@@ -177,4 +187,111 @@ test("errors are nc.Error with RFC 0009's codes", async () => {
     { isError: true, code: "notFound", name: "nc.Error" },
     { isError: true, code: "invalidValue", name: "nc.Error" },
   ]);
+});
+
+// NOC-176 slice 2: queries and subscriptions (RFC 0009, "Queries and
+// indexes", "Subscribe").
+test("db.find and space.find page through an index", async () => {
+  const { page: opened } = await page();
+  const found = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "queries" });
+      const project = await db.spaces.create();
+      const other = await db.spaces.create();
+      await project.write((tx) => {
+        for (const [priority, status] of [
+          [3, "open"],
+          [1, "open"],
+          [2, "done"],
+        ]) {
+          tx.create(model.tasks, { priority, status });
+        }
+      });
+      await other.create(model.tasks, { priority: 4, status: "open" });
+      const query = model.tasks.indexes.byPriority.take(2);
+      const first = await db.find(query);
+      const second = await db.find(query.after(first.cursor));
+      const open = await db.find(
+        model.tasks.indexes.byStatusPriority.equal("open"),
+      );
+      const inProject = await project.find(
+        model.tasks.indexes.open.equal("open"),
+      );
+      const cursorText = String(first.cursor);
+      await db.close();
+      const priorities = (p) => p.items.map((item) => item.priority);
+      return {
+        first: priorities(first),
+        firstMore: first.hasMore,
+        second: priorities(second),
+        secondMore: second.hasMore,
+        open: priorities(open),
+        inProject: priorities(inProject),
+        spaces: new Set(open.items.map((item) => item.$space)).size,
+        cursorText,
+      };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(found, {
+    first: [1, 2],
+    firstMore: true,
+    second: [3, 4],
+    secondMore: false,
+    open: [1, 3, 4],
+    inProject: [1, 3],
+    spaces: 2,
+    cursorText: "[redacted]",
+  });
+});
+
+test("subscriptions re-run after a write, until stopped", async () => {
+  const { page: opened } = await page();
+  const seen = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "subscriptions" });
+      const project = await db.spaces.create();
+      const pages = [];
+      const objects = [];
+      const until = (check) =>
+        new Promise((resolve, reject) => {
+          const start = Date.now();
+          const poll = () => {
+            if (check()) return resolve();
+            if (Date.now() - start > 5000)
+              return reject(new Error("no update"));
+            setTimeout(poll, 10);
+          };
+          poll();
+        });
+      const stop = db.subscribe(model.tasks.indexes.byPriority, (p) =>
+        pages.push(p.items.map((item) => item.title)),
+      );
+      await until(() => pages.length === 1);
+      const { ids } = await project.create(model.tasks, {
+        title: "a",
+        priority: 1,
+      });
+      await until(() => pages.length === 2);
+      const stopOne = project.subscribe(model.tasks, ids[0], (task) =>
+        objects.push(task?.title),
+      );
+      await until(() => objects.length === 1);
+      await project.update(model.tasks, ids[0], { title: "b" });
+      await until(() => objects.length === 2 && pages.length === 3);
+      stop();
+      stopOne();
+      await project.create(model.tasks, { title: "c", priority: 2 });
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await db.close();
+      return { pages, objects };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(seen.pages, [[], ["a"], ["b"]]);
+  assert.deepEqual(seen.objects, ["a", "b"]);
 });
