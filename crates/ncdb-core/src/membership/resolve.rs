@@ -285,6 +285,9 @@ impl Resolved {
 #[derive(Clone, Copy)]
 pub(crate) struct Judgement {
     pub(crate) valid: bool,
+    /// For a valid shred: whether the performer's own account signed it
+    /// off, so that it is provisional (RFC 0008, "Shred entry").
+    pub(crate) provisional: bool,
     /// For a valid grant of admin: its depth (step 2).
     pub(crate) depth: Option<u64>,
 }
@@ -296,6 +299,10 @@ pub(crate) struct Judged(pub(crate) BTreeMap<ChangeId, Judgement>);
 impl Judged {
     pub(crate) fn valid(&self, id: ChangeId) -> bool {
         self.0.get(&id).is_some_and(|j| j.valid)
+    }
+
+    pub(crate) fn provisional(&self, id: ChangeId) -> bool {
+        self.0.get(&id).is_some_and(|j| j.provisional)
     }
 }
 
@@ -412,8 +419,13 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     reject_duplicate_generations(&mut resolved.verdicts, &folded);
     resolved.heads = current::heads(&resolved.generations, &resolved.verdicts, &folded);
     resolved.current = current::current(&resolved.heads, &resolved.generations, &resolved.order);
-    resolved.person_keys =
-        person_keys::settle(&resolved.order, &folded, &mut resolved.verdicts, saw);
+    resolved.person_keys = person_keys::settle(
+        &resolved.order,
+        &folded,
+        &mut resolved.verdicts,
+        saw,
+        |id| judged.provisional(id),
+    );
     resolved
 }
 
@@ -446,20 +458,22 @@ fn apply_order(
             Verdict::Rejected(Rejection::Superseded(*entry))
         } else if let Some(by) = accepted_revocations
             .iter()
+            .filter(|_| !final_when_valid(node))
             .find(|r| rights::excludes(folded[r], node, &input.nodes, judged))
         {
             // Reported before a missing right, which the exclusion explains.
             Verdict::Rejected(Rejection::Excluded(*by))
-        } else if !is_shred(node) && members.role(node.author) < Some(rights::needed(node)) {
-            // A shred needs only to be valid when written (RFC 0008, "A
-            // shred is final when accepted"); every other change also needs
-            // the right in the state so far.
+        } else if !final_when_valid(node) && members.role(node.author) < Some(rights::needed(node))
+        {
+            // A shred, and a finalize, need only to be valid when written
+            // (RFC 0008, "A shred is final when accepted"); every other
+            // change also needs the right in the state so far.
             Verdict::Rejected(Rejection::NoRight)
         } else if !keys.admits(node) {
             Verdict::Rejected(Rejection::Commitment)
         } else {
             apply(&mut members, node);
-            keys.apply(node);
+            keys.apply(node, judged.provisional(node.id));
             if let Entry::AccountKeyStatement(statement) = &node.body.entry {
                 resolved.statements.insert(node.id, statement.clone());
             }
@@ -524,10 +538,15 @@ fn concurrent_adds(
     found
 }
 
-/// Whether `node` is a shred entry, which step 5 accepts when it is valid
-/// when written.
-fn is_shred(node: &Node) -> bool {
-    matches!(node.body.entry, Entry::Shred(_))
+/// Whether `node` is a shred entry or an erasure decision that finalizes,
+/// which step 5 accepts when it is valid when written: conditions 2 and 3
+/// do not apply to it (RFC 0008, "The function", step 5).
+fn final_when_valid(node: &Node) -> bool {
+    match &node.body.entry {
+        Entry::Shred(_) => true,
+        Entry::ErasureDecision(decision) => decision.finalize,
+        _ => false,
+    }
 }
 
 /// Whether an accepted grant is lost (RFC 0008, "Concurrent add and remove
@@ -622,6 +641,7 @@ fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved) -> Judgem
     if node.is_genesis() {
         return Judgement {
             valid: true,
+            provisional: false,
             depth: Some(0),
         };
     }
@@ -641,5 +661,17 @@ fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved) -> Judgem
         }
         _ => None,
     };
-    Judgement { valid, depth }
+    let provisional = valid
+        && match &node.body.entry {
+            Entry::Shred(shred) => {
+                rights::signed_off(input.space, node, shred, past)
+                    == Some(rights::SignedOff::Provisional)
+            }
+            _ => false,
+        };
+    Judgement {
+        valid,
+        provisional,
+        depth,
+    }
 }
