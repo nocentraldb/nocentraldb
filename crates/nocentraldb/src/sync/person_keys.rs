@@ -52,7 +52,7 @@ pub(crate) enum Outcome {
     /// does not unwrap, or its key does not match the commitment.
     Bad([u8; 32]),
     /// The record was not checked to the end: the log does not announce
-    /// it, its key was shredded, its writer is unknown or did not sign it,
+    /// it, its key was destroyed, its writer is unknown or did not sign it,
     /// or the member lacks its generation's key.
     Ignored,
 }
@@ -72,7 +72,7 @@ pub(crate) fn accept(state: &mut SpaceState, space: SpaceId, record: &Record) ->
         .contains(&(record.generation, record_hash(&record.wrapped)));
     let Some(commitment) = person
         .commitment
-        .filter(|_| person.shred.is_none() && announced)
+        .filter(|_| !person.destroyed() && announced)
     else {
         return Outcome::Ignored;
     };

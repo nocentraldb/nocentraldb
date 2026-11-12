@@ -408,7 +408,9 @@ impl Checked {
         let effects = records.into_iter().map(Effect::Member).collect();
         let shredded = resolved
             .person_keys()
-            .filter(|(_, key)| key.shred.is_some())
+            // A provisional shred keeps the record until an accepted
+            // finalize (RFC 0008, "A shred is final when accepted").
+            .filter(|(_, key)| key.destroyed())
             .map(|(id, _)| id)
             .collect();
         Checked {
