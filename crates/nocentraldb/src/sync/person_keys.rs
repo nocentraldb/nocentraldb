@@ -43,6 +43,53 @@ pub(crate) fn put(inner: &mut Inner, space: SpaceId, records: Vec<Record>) {
     }
 }
 
+/// What a person-key entry announces of its record: the person-key id, the
+/// generation and the record's hash.
+type Announced = ([u8; 16], u64, [u8; 32]);
+
+/// Splits the waiting `records` of `space` into those a session puts now
+/// and those it keeps: a record waits while the relay has not confirmed
+/// the person-key entry that announces it, since the relay refuses with
+/// `bad_record`, and stores none of the request, a record whose entry its
+/// log does not hold yet. An entry the member wrote while a push was on the
+/// wire reaches the relay with the next push. A record no entry announces
+/// is put, and the relay's refusal drops it.
+pub(crate) fn ready(
+    inner: &Inner,
+    space: SpaceId,
+    records: Vec<Record>,
+) -> (Vec<Record>, Vec<Record>) {
+    let Some(log) = inner.view.log(space) else {
+        return (records, Vec::new());
+    };
+    let entries: Vec<(Announced, ncdb_core::ids::ChangeId)> = log
+        .after(ncdb_core::log::Position::START)
+        .filter_map(|(_, change)| {
+            let body = ncdb_core::membership::ControlBody::decode(&change.header().payload).ok()?;
+            match body.entry {
+                ncdb_core::membership::Entry::PersonKey(entry) => Some((
+                    (entry.person_key, entry.generation, entry.record_hash),
+                    change.id(),
+                )),
+                _ => None,
+            }
+        })
+        .collect();
+    records.into_iter().partition(|record| {
+        let announced = (
+            record.person_key,
+            record.generation,
+            record_hash(&record.wrapped),
+        );
+        let mut changes = entries
+            .iter()
+            .filter(|(key, _)| *key == announced)
+            .peekable();
+        changes.peek().is_none()
+            || changes.any(|(_, change)| inner.view.relay_position(space, *change).is_some())
+    })
+}
+
 /// What [`accept`] did with a record.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Outcome {
