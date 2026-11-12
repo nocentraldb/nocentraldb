@@ -37,7 +37,11 @@ export const build = () => {
 
 /** The package built before, as the workflow's image uses it; fails at once when it is missing. */
 export const prebuilt = () => {
-  for (const file of ["index.js", "worker.js", "wasm/nocentraldb_wasm_bg.wasm"]) {
+  for (const file of [
+    "index.js",
+    "worker.js",
+    "wasm/nocentraldb_wasm_bg.wasm",
+  ]) {
     if (!existsSync(join(DIST, file))) {
       throw new Error(`${join(DIST, file)} is missing: run build.mjs first`);
     }

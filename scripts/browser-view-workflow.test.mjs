@@ -127,9 +127,9 @@ runWorkflowChecks({
           (s) => s.run?.includes("docker run") && s.run.includes(SDK_TESTS),
         );
         assert.ok(build >= 0, "the TypeScript SDK is not built on the runner");
-        assert.equal(
-          all[build].if,
-          "${{ !cancelled() }}",
+        assert.match(
+          all[build].if ?? "",
+          /^\$\{\{ !cancelled\(\) \}\}$/,
           "a failed build above skips the TypeScript SDK's build",
         );
         assert.ok(test > build, "its tests do not run after its build");
