@@ -7,10 +7,6 @@
 #[path = "backend/fresh.rs"]
 mod fresh;
 
-#[allow(dead_code)]
-#[path = "emulator/common.rs"]
-mod common;
-
 use std::time::Duration;
 
 use aws_sdk_s3::presigning::PresigningConfig;
@@ -58,7 +54,7 @@ fn an_upload_put_through_its_presigned_url_is_taken() {
     let put = aws
         .runtime
         .block_on(
-            common::https()
+            fresh::common::https()
                 .put(presigned.uri())
                 .body(frame.clone())
                 .send(),
