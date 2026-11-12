@@ -335,6 +335,7 @@ log
 ├── relay refusal    the relay's error code, or null
 ├── state            folded, parked or rejected
 ├── reason           why parked or rejected, or null
+├── written at       integer, milliseconds since the Unix epoch when the member wrote the change, or null
 └── frame            the exact bytes of the change, as received or written
 ```
 
@@ -343,6 +344,8 @@ The log is a table in the SQLite database of the local view, so appending a chan
 The state of an entry is local and may change: parked becomes folded after an upgrade, and rejected becomes folded when the control change it lacked arrives (see [Rejected changes](#rejected-changes)). The state and the reason follow from the frames the member holds and its `model.lock.json`, never from the relay's answer. The frame never changes.
 
 A change the member writes itself enters the log at once, folded and without a relay position. It is in the member's view before it leaves the device, and the member keeps working without a relay (island mode). When the relay accepts it, the member records the relay position. When the relay refuses it, the member records the refusal and the change stays folded (see [A change the relay refuses after the member folded it](#a-change-the-relay-refuses-after-the-member-folded-it)).
+
+The member also keeps when it wrote each of its own changes, `written at`, in milliseconds since the Unix epoch by its own clock, so the SDK can say how old the oldest change is that exists only on this device ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). It is null for every change it received, and for one it wrote before the log kept the time; a duplicate keeps the time it had. The column is additive: a database from before gains it, null in every row, and the view format version stays 2, as for the stored lock (Carsten, 2026-11-12, NOC-231). Reading the time from the change itself was not taken: the clock in a sealed payload is the member's to open, but a control change carries none.
 
 | Rejected | Why |
 | --- | --- |

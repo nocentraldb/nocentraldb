@@ -49,6 +49,37 @@ impl View {
         Ok(refused)
     }
 
+    /// When the member wrote the change `id` of `space`, in milliseconds
+    /// since the Unix epoch: `None` for a change it received, or one it
+    /// wrote before the log kept the time (NOC-231).
+    pub fn written_at(&self, space: SpaceId, id: ChangeId) -> Option<u64> {
+        self.conn
+            .query_row(
+                "SELECT written_at FROM log WHERE space_id = ?1 AND change_id = ?2",
+                params![space.0, id.0],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()
+            .ok()
+            .flatten()
+            .flatten()
+            .map(|at| u64::try_from(at).unwrap_or(0))
+    }
+
+    /// The time of the oldest change the member wrote that has no relay
+    /// position, in any space: what would be lost first if the copy were
+    /// deleted now (RFC 0006, "What the SDK reports"). A change the relay
+    /// refused counts, since it exists only on this device.
+    pub fn oldest_unconfirmed_own(&self) -> Result<Option<u64>, Error> {
+        let oldest: Option<i64> = self.conn.query_row(
+            "SELECT MIN(written_at) FROM log
+             WHERE written_at IS NOT NULL AND relay_position IS NULL",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(oldest.map(|at| u64::try_from(at).unwrap_or(0)))
+    }
+
     /// The relay position of a change, once the relay confirmed it.
     pub fn relay_position(&self, space: SpaceId, id: ChangeId) -> Option<u64> {
         self.conn

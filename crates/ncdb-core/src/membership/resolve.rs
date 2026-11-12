@@ -249,6 +249,19 @@ impl Resolved {
         self.person_keys.0.get(&id)
     }
 
+    /// Whether the members `a` and `b`, current or former, belong to one
+    /// account: their certificates name one account key, or the state's
+    /// statements attach one recovery key to both (RFC 0008, "Roles and
+    /// rights"). False when either is unknown.
+    pub fn same_account(&self, a: MemberId, b: MemberId) -> bool {
+        match (self.member(a), self.member(b)) {
+            (Some(a), Some(b)) => {
+                rights::same_account(self, a.certificate.account_key, b.certificate.account_key)
+            }
+            _ => false,
+        }
+    }
+
     /// The person keys of the space, by person-key id.
     pub fn person_keys(&self) -> impl Iterator<Item = ([u8; 16], &PersonKey)> + '_ {
         self.person_keys.0.iter().map(|(id, key)| (*id, key))
