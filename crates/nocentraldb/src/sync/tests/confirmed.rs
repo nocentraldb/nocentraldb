@@ -62,7 +62,9 @@ async fn a_refused_change_is_not_confirmed() {
     let db = open(ME, &relay.url()).await;
     let space = db.spaces().create().await.unwrap();
     let written = write(&space).await;
-    eventually("refused", || db.sync().current().refused == 3).await;
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    eventually("refused", || db.sync().current().refused == 6).await;
 
     assert!(!db.sync().is_confirmed(written.change));
     let waited = tokio::time::timeout(

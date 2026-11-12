@@ -58,6 +58,7 @@ fn a_new_database_holds_nothing_unconfirmed_and_is_not_at_risk() {
 fn the_members_own_changes_are_unconfirmed_until_the_relay_confirms_them() {
     let db = of_account(1, &SigningKey::from_bytes(&[9; 32]));
     let project = space(&db);
+    confirm_account(&db);
     write(&project);
     let own = own_changes(&db, &project);
     assert!(
@@ -88,6 +89,7 @@ fn the_members_own_changes_are_unconfirmed_until_the_relay_confirms_them() {
 fn a_change_the_relay_refused_stays_unconfirmed() {
     let db = of_account(1, &SigningKey::from_bytes(&[9; 32]));
     let project = space(&db);
+    confirm_account(&db);
     let own = own_changes(&db, &project);
     {
         let mut inner = db.lock();
@@ -129,6 +131,31 @@ fn unconfirmed_changes_are_at_risk_only_where_the_copy_is_not_persistent() {
 }
 
 /// Confirms every change of `db`'s own in `space`, as a relay would.
+/// The relay confirms every own change of the account space, which the
+/// device created with its first app space (RFC 0010, "The account space"),
+/// so that a test counts the changes of its app space alone.
+fn confirm_account(db: &Db) {
+    let mut inner = db.lock();
+    let Some(account) = crate::account::space(&inner) else {
+        return;
+    };
+    let me = inner.member.key().id();
+    let own: Vec<_> = inner
+        .view
+        .log(account)
+        .expect("the account space's log")
+        .after(ncdb_core::log::Position::START)
+        .filter(|(_, change)| change.header().author == me)
+        .map(|(_, change)| change.id())
+        .collect();
+    for (position, id) in own.iter().enumerate() {
+        inner
+            .view
+            .confirm(account, *id, position as u64 + 1)
+            .unwrap();
+    }
+}
+
 fn confirm_own(db: &Db, space: &Space) {
     let own = own_changes(db, space);
     let mut inner = db.lock();
@@ -145,6 +172,7 @@ fn the_oldest_unconfirmed_change_is_dated_when_the_member_wrote_it() {
     let db = of_account(1, &SigningKey::from_bytes(&[9; 32]));
     let before = crate::clock::now_millis();
     let project = space(&db);
+    confirm_account(&db);
     write(&project);
     let after = crate::clock::now_millis();
 
@@ -162,6 +190,7 @@ fn a_membership_change_of_the_member_is_dated_too() {
     let account = SigningKey::from_bytes(&[9; 32]);
     let admin = of_account(1, &account);
     let project = space(&admin);
+    confirm_account(&admin);
     confirm_own(&admin, &project);
     let guest = of_account(2, &account);
     let before = crate::clock::now_millis();

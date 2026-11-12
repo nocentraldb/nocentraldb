@@ -76,17 +76,19 @@ async fn without_a_relay_every_write_counts_and_a_reopen_reads_them_back() {
     assert_eq!(counted(&db, "opening"), (0, 0));
 
     let space = db.spaces().create().await.unwrap();
-    assert_eq!(counted(&db, "creating a space"), (2, 0));
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    assert_eq!(counted(&db, "creating a space"), (5, 0));
     write(&space, "one").await;
     write(&space, "two").await;
-    assert_eq!(counted(&db, "two writes"), (4, 0));
+    assert_eq!(counted(&db, "two writes"), (7, 0));
     drop((space, db));
 
     let db = open_at(&dir, None).await;
-    assert_eq!(counted(&db, "a reopen"), (4, 0));
+    assert_eq!(counted(&db, "a reopen"), (7, 0));
     let space = db.spaces().get(only_space(&db)).await.unwrap();
     write(&space, "three").await;
-    assert_eq!(counted(&db, "a write after the reopen"), (5, 0));
+    assert_eq!(counted(&db, "a write after the reopen"), (8, 0));
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -118,9 +120,11 @@ async fn refusals_move_changes_from_unconfirmed_to_refused() {
     let space = db.spaces().create().await.unwrap();
     write(&space, "refused").await;
 
-    eventually("refused", || db.sync().current().refused == 3).await;
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    eventually("refused", || db.sync().current().refused == 6).await;
 
-    assert_eq!(counted(&db, "the relay refused every change"), (0, 3));
+    assert_eq!(counted(&db, "the relay refused every change"), (0, 6));
 }
 
 #[tokio::test(flavor = "multi_thread")]
