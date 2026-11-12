@@ -46,6 +46,25 @@ test("the provisional erasure says a later shred erases again with its own 7 day
   assert.match(provisional, MARK);
 });
 
+test("a later shred is judged by the rules that hold when it is written", () => {
+  const RULES = /by the rules that hold when it is written/;
+  const WHILE = /while the space has one account/;
+  const provisional = part("a-provisional-erasure-in-a-space-with-one-account");
+  const takenBack = provisional
+    .split("\n")
+    .find((l) => l.startsWith("- **Taken back**"));
+  assert.match(takenBack, RULES);
+  assert.match(takenBack, WHILE);
+  const late = part("the-function")
+    .split("\n")
+    .find((l) =>
+      l.startsWith("- a take-back arrives of the shred that took effect"),
+    );
+  assert.match(late, RULES);
+  assert.match(late, WHILE);
+  assert.doesNotMatch(read(RFC), /since the space still has one account/);
+});
+
 test("RFC 0008 no longer states the old rule", () => {
   const text = read(RFC);
   assert.doesNotMatch(text, /the second changes nothing/);
