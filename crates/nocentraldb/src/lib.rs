@@ -59,6 +59,8 @@ mod agent_tests;
 mod durability_tests;
 #[cfg(test)]
 mod personal_write_tests;
+#[cfg(test)]
+mod restore_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]
