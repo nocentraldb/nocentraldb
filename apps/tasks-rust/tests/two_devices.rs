@@ -147,14 +147,14 @@ fn relay_binary() -> PathBuf {
     profile.join(format!("ncdb-relay{}", std::env::consts::EXE_SUFFIX))
 }
 
-/// Starts `ncdb-relay` on a fresh SQLite database in `dir`, on a free local
-/// port, letting the account `invitation` names create spaces, as README
-/// step 3 does; the relay, and the URL the devices sync with.
-fn relay(dir: &Path, invitation: &str) -> (Relay, String) {
+/// Starts `ncdb-relay` on the SQLite database in `dir`, on `listen`,
+/// letting the account `invitation` names create spaces, as README step 3
+/// does; the relay, and the URL the devices sync with.
+fn relay(dir: &Path, invitation: &str, listen: &str) -> (Relay, String) {
     let mut child = Command::new(relay_binary())
         .arg("--database")
         .arg(dir.join("relay.sqlite"))
-        .args(["--listen", "127.0.0.1:0", "--allow-invitation", invitation])
+        .args(["--listen", listen, "--allow-invitation", invitation])
         .stdout(Stdio::piped())
         .spawn()
         .expect("ncdb-relay starts");
@@ -177,7 +177,7 @@ fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
     // relay lets the first device's account create spaces.
     let laptop = Device::new(&dir.0, "laptop", "ws://127.0.0.1:9");
     let (laptop_invitation, _) = invitation(&laptop);
-    let (_relay, url) = relay(&dir.0, &laptop_invitation);
+    let (running, url) = relay(&dir.0, &laptop_invitation, "127.0.0.1:0");
     let laptop = Device::new(&dir.0, "laptop", &url);
     let phone = Device::new(&dir.0, "phone", &url);
 
@@ -220,6 +220,47 @@ fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
             "the laptop never saw it done:\n{list}"
         );
         laptop.run(&["sync"]);
+    }
+
+    // Offline: with the relay stopped, each device writes to its own copy,
+    // says so, and succeeds (README step 6).
+    drop(running);
+    for (device, title) in [
+        (&laptop, "Offline on the laptop"),
+        (&phone, "Offline on the phone"),
+    ] {
+        let output = device.try_run(&["add", &space, title]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "add offline failed: {stderr}");
+        assert!(
+            stderr.contains("saved on this device; the relay does not hold it yet"),
+            "{stderr}"
+        );
+        assert!(device.run(&["list"]).contains(&format!("[ ] {title}")));
+    }
+
+    // The relay back on the same database and address: sync brings both
+    // devices to the same list.
+    let listen = url.strip_prefix("ws://").expect("a ws:// URL");
+    let (_running, _) = relay(&dir.0, &laptop_invitation, listen);
+    laptop.run(&["sync"]);
+    phone.run(&["sync"]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let (on_laptop, on_phone) = (laptop.run(&["list"]), phone.run(&["list"]));
+        let both = |list: &str| {
+            list.contains("Offline on the laptop") && list.contains("Offline on the phone")
+        };
+        if both(&on_laptop) && both(&on_phone) {
+            assert_eq!(on_laptop, on_phone);
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the devices never converged:\n{on_laptop}\n{on_phone}"
+        );
+        laptop.run(&["sync"]);
+        phone.run(&["sync"]);
     }
 
     let status = phone.run(&["status", &space]);
