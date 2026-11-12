@@ -19,9 +19,9 @@ use crate::db::SpaceState;
 use crate::error::{Error, ErrorCode, storage};
 
 /// The code of a write whose person has a key this device does not hold
-/// yet, as after a reconnect before the person keys are fetched. A
-/// placeholder: what such a write does is open with the owner (NOC-255).
-const KEY_NOT_HELD: ErrorCode = ErrorCode::NotAllowed;
+/// yet, as after a reconnect before the person keys are fetched (Carsten,
+/// 2026-11-12, NOC-255).
+const KEY_NOT_HELD: ErrorCode = ErrorCode::PersonKeyNotHeld;
 
 /// A person whose key this write draws.
 pub(crate) struct Drawn {
@@ -126,4 +126,23 @@ pub(crate) fn open_keys(state: &SpaceState) -> BTreeMap<[u8; 16], PersonKey> {
         .filter(|(id, _)| resolved.person_key(**id).is_none_or(|key| !key.erased()))
         .map(|(id, key)| (*id, key.clone()))
         .collect()
+}
+
+/// Gives the view the person keys of `space` it opens personal fields
+/// with, when they changed: after a fetch of the person keys, a shred, an
+/// erasure decision or a write that drew a key (RFC 0006, "What the view
+/// stores in plaintext": the fold erases an erased person's fields from
+/// the view at once).
+pub(crate) fn refresh(
+    view: &mut View,
+    space: CoreSpaceId,
+    state: &mut SpaceState,
+) -> Result<(), ncdb_core::view::Error> {
+    let keys = open_keys(state);
+    let ids: std::collections::BTreeSet<[u8; 16]> = keys.keys().copied().collect();
+    if ids != state.opened {
+        view.set_person_keys(space, keys)?;
+        state.opened = ids;
+    }
+    Ok(())
 }
