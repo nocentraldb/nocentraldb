@@ -109,7 +109,7 @@ pub(crate) fn held_person(
         .and_then(|mut row| row.fields.remove(PERSON_FIELD))
         .and_then(|state| match state {
             FieldState::Basic(state) => PersonField.read(&state).value,
-            FieldState::Set(_) => None,
+            FieldState::Set(_) | FieldState::Plugin(_) => None,
         })
         .filter(|entry| entry.known)
         .and_then(|entry| Person::from_value(&entry.value)))

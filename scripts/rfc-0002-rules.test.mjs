@@ -312,8 +312,9 @@ test("every example equals the committed vector of the generator, and every vect
 
 test("no core file calls the nesting limit or the clock's carry pending the owner", () => {
   for (const path of [
-    "crates/ncdb-core/src/cbor.rs",
+    "crates/ncdb-plugin/src/cbor.rs",
     "crates/ncdb-core/src/clock.rs",
+    "crates/ncdb-plugin/src/clock.rs",
     "crates/ncdb-core/tests/depth.rs",
     "crates/ncdb-core/tests/clock.rs",
   ]) {
