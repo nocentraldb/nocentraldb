@@ -148,3 +148,5 @@ export declare const index: (fields: readonly (string | {
 }) => Index;
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
+// file: worker.d.ts
+export {};
