@@ -4,6 +4,9 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+# Not published yet, as no crate of the workspace is: publishing, or
+# reserving the name on crates.io, is the owner's to decide.
+publish = false
 description = "The convergence harness of NoCentralDB (RFC 0011): RFC 0004's checks C1 to C7 for a field type, built in or plugin, natively and on wasm32."
 
 [dependencies]
