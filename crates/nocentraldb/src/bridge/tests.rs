@@ -322,3 +322,102 @@ fn a_request_that_is_not_one_fails_with_invalid_value_and_id_0() {
     let error = field(&answer, "error").expect("an error");
     assert_eq!(field(error, "code"), Some(&text("invalidValue")));
 }
+
+/// Writes one op into `space` and answers the write.
+fn write_one(bridge: &mut Bridge, space: &Value, op: Value) -> Value {
+    ok(
+        bridge,
+        "write",
+        map(&[("space", space.clone()), ("ops", Value::Array(vec![op]))]),
+    )
+}
+
+fn get_task(bridge: &mut Bridge, space: &Value, id: &str) -> Value {
+    ok(
+        bridge,
+        "get",
+        map(&[
+            ("space", space.clone()),
+            ("collection", text("tasks")),
+            ("id", text(id)),
+        ]),
+    )
+}
+
+// The TypeScript SDK draws a created object's id on the device, so that
+// `tx.create` returns it at once (RFC 0009, "One write, one change"); the
+// create op carries it.
+#[test]
+fn a_create_with_an_id_creates_the_object_with_that_id() {
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let id = "00112233445566778899aabbccddeeff";
+    let written = write_one(
+        &mut bridge,
+        &space,
+        map(&[
+            ("op", text("create")),
+            ("collection", text("tasks")),
+            ("id", text(id)),
+            ("values", map(&[("title", text("Mine"))])),
+        ]),
+    );
+    assert_eq!(field(&written, "ids"), Some(&Value::Array(vec![text(id)])));
+    let read = get_task(&mut bridge, &space, id);
+    assert_eq!(field(&read, "$id"), Some(&text(id)));
+}
+
+#[test]
+fn a_create_with_an_id_that_is_not_one_is_refused() {
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let op = map(&[
+        ("op", text("create")),
+        ("collection", text("tasks")),
+        ("id", text("not hex")),
+    ]);
+    let refused = code(
+        &mut bridge,
+        "write",
+        map(&[("space", space), ("ops", Value::Array(vec![op]))]),
+    );
+    assert_eq!(refused, "invalidValue");
+}
+
+// Canonical CBOR writes 2.0 as the integer 2, so a whole number reaches
+// the bridge as an integer; for a float field it is the float.
+#[test]
+fn a_whole_number_written_to_a_float_field_reads_as_a_float() {
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let id = "00112233445566778899aabbccddeef0";
+    write_one(
+        &mut bridge,
+        &space,
+        map(&[
+            ("op", text("create")),
+            ("collection", text("tasks")),
+            ("id", text(id)),
+            ("values", map(&[("estimate", Value::Unsigned(2))])),
+        ]),
+    );
+    let read = get_task(&mut bridge, &space, id);
+    let fields = field(&read, "fields").expect("its fields");
+    assert_eq!(field(fields, "estimate"), Some(&Value::Float(2.0)));
+}
+
+// An error carries the fingerprint of the account it concerns, twelve
+// blocks of five digits (RFC 0009, "Errors"; Carsten, 2026-11-12, NOC-274).
+#[test]
+fn an_error_with_a_fingerprint_answers_it_as_text() {
+    use crate::error::{Error, ErrorCode};
+    use crate::members::Fingerprint;
+    let error = Error::new(ErrorCode::UnknownAccount, "confirm it")
+        .with_fingerprint(Fingerprint([7; 32]));
+    let fingerprint = error.fingerprint().expect("set").to_string();
+    let answer = super::failure_of(3, &error.into());
+    let error = field(&answer, "error").expect("an error");
+    assert_eq!(field(error, "code"), Some(&text("unknownAccount")));
+    assert_eq!(field(error, "fingerprint"), Some(&text(&fingerprint)));
+    assert_eq!(fingerprint.split(' ').count(), 12);
+}
