@@ -632,7 +632,9 @@ fn a_cursor_of_a_closed_database_is_of_another_model() {
     );
     tasks(&mut bridge, &[(5, "open"), (6, "open")]);
     // A cursor of the new database takes a handle the old one never had.
-    let fresh = field(&find(&mut bridge, &query, None), "cursor").unwrap().clone();
+    let fresh = field(&find(&mut bridge, &query, None), "cursor")
+        .unwrap()
+        .clone();
     assert_ne!(fresh, cursor);
     let mut after = query.to_vec();
     after.push(("after", cursor));

@@ -116,6 +116,11 @@ impl Events {
     pub fn is_closed(&self) -> bool {
         self.0.is_closed()
     }
+
+    /// Whether `other` follows the same database as these events.
+    pub fn same(&self, other: &Events) -> bool {
+        self.0.same(&other.0)
+    }
 }
 
 /// Why a call failed: RFC 0009's code, a message and, for

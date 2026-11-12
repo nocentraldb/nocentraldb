@@ -85,7 +85,10 @@ fn the_core_gives_the_events_of_the_open_database() {
     let events = core.events().expect("the open database's events");
     now(core.answer(request(2, "spaces.create", map(&[]))));
     let first = core.events().expect("still open");
-    assert!(first.same(&events), "the same feed while the database is open");
+    assert!(
+        first.same(&events),
+        "the same feed while the database is open"
+    );
     now(core.answer(request(3, "close", map(&[]))));
     assert!(events.is_closed());
 }

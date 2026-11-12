@@ -101,6 +101,11 @@ impl FoldFeed {
     pub(crate) fn is_closed(&self) -> bool {
         self.state().closed
     }
+
+    /// Whether `other` is this feed.
+    pub(crate) fn same(&self, other: &FoldFeed) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 /// The stream [`Db::subscribe`] and [`Space::subscribe`] return.
