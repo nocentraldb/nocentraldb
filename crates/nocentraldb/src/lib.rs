@@ -56,6 +56,8 @@ pub use db::{Db, OpenOptions};
 mod agent_tests;
 #[cfg(test)]
 mod durability_tests;
+#[cfg(test)]
+mod personal_write_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]
