@@ -105,9 +105,30 @@ mod browser {
         now.unwrap_or_else(js_sys::Date::now)
     }
 
-    /// Waits for `duration`, through the global's `setTimeout`.
+    /// Waits for at least `duration` by [`Instant`].
     pub(crate) async fn sleep(duration: Duration) {
-        let millis = duration.as_millis().min(i32::MAX as u128) as f64;
+        sleep_until(Instant::now() + duration).await;
+    }
+
+    /// Waits until `deadline` has passed by [`Instant`]. A timer of the
+    /// global's `setTimeout` may fire a little before its delay by
+    /// `performance.now()`, as Node's does, so the wait goes on until the
+    /// deadline has passed, with each timer rounded up to whole
+    /// milliseconds.
+    pub(crate) async fn sleep_until(deadline: Instant) {
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return;
+            }
+            timer(left).await;
+        }
+    }
+
+    /// One timer of the global's `setTimeout` for `duration`, rounded up to
+    /// whole milliseconds.
+    async fn timer(duration: Duration) {
+        let millis = duration.as_micros().div_ceil(1000).min(i32::MAX as u128) as f64;
         let promise = Promise::new(&mut |resolve, _| {
             let global = js_sys::global();
             let set_timeout = Reflect::get(&global, &JsValue::from_str("setTimeout"))
@@ -123,11 +144,6 @@ mod browser {
             }
         });
         let _ = JsFuture::from(promise).await;
-    }
-
-    /// Waits until `deadline`.
-    pub(crate) async fn sleep_until(deadline: Instant) {
-        sleep(deadline.saturating_duration_since(Instant::now())).await;
     }
 
     /// The output of `future`, or [`Elapsed`] when it does not end within
