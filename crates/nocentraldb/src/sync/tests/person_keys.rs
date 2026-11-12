@@ -303,10 +303,6 @@ async fn shredded(relay: &LocalRelay) -> (Db, Db, Space, CoreChangeId) {
         fingerprint: Some(invitation.fingerprint()),
     };
     now(project.members().add(&invitation, options)).unwrap();
-    // The admin's session must be idle before the record is queued: a
-    // record queued while a sync of the space is past its push goes out
-    // before its entry, and the relay refuses it (NOC-206's put path).
-    synced(&admin).await;
     let key = PersonKey::generate();
     person_key(&admin, &project, &key, &key);
     synced(&admin).await;
