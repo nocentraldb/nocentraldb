@@ -162,10 +162,13 @@ fn a_write_creates_and_a_get_reads_it_back() {
     assert_eq!(field(fields, "title"), Some(&text("Write the bridge")));
     assert_eq!(field(fields, "priority"), Some(&Value::Unsigned(2)));
     assert_eq!(field(fields, "urgent"), Some(&Value::Bool(true)));
-    assert_eq!(
-        field(fields, "tags"),
-        Some(&Value::Array(vec![text("rust"), text("ts")]))
-    );
+    // A set reads in its own order, which a set does not promise.
+    let Some(Value::Array(tags)) = field(fields, "tags") else {
+        panic!("{fields:?}")
+    };
+    let mut tags: Vec<&str> = tags.iter().map(as_text).collect();
+    tags.sort_unstable();
+    assert_eq!(tags, ["rust", "ts"]);
 }
 
 #[test]
@@ -279,7 +282,8 @@ fn errors_carry_rfc_0009s_codes() {
             ])]),
         ),
     ]);
-    assert_eq!(code(&mut bridge, "write", bad_field), "invalidValue");
+    // The SDK refuses a field the collection does not have with notFound.
+    assert_eq!(code(&mut bridge, "write", bad_field), "notFound");
     assert_eq!(code(&mut bridge, "frobnicate", map(&[])), "invalidValue");
     assert_eq!(
         code(

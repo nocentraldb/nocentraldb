@@ -49,6 +49,12 @@ impl std::fmt::Debug for Object {
 }
 
 impl Object {
+    /// Every field of the collection, with its value when it is set; for
+    /// the TypeScript SDK's bridge (NOC-176).
+    pub(crate) fn fields(&self) -> &BTreeMap<String, Option<Value>> {
+        &self.fields
+    }
+
     /// The object id.
     pub fn id(&self) -> ObjectId {
         self.id
