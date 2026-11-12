@@ -169,6 +169,44 @@ async fn two_admins_converge_on_one_generation_that_is_not_exposed() {
     }
 }
 
+/// How long until `db`'s merge rotation of `space` is due, if one waits.
+fn due_in(db: &Db, space: &Space) -> Option<Duration> {
+    let inner = crate::db::lock(&db.inner);
+    let deadline = *inner.sync.as_ref()?.merges.get(&space.id().0)?;
+    Some(deadline.saturating_duration_since(crate::sync::time::Instant::now()))
+}
+
+/// The delay a test sets is the deadline itself, not the longest of a
+/// random draw (NOC-284): an admin a test gives an hour never rotates while
+/// the test runs. Drawn at random up to an hour, its deadline fell within
+/// the two seconds `a_writer_never_rotates` waits about once in 1,800 runs,
+/// and the writer then held the admin's new generation.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_delay_a_test_sets_is_the_deadline() {
+    let relay = LocalRelay::start().await;
+    let admin = open(1, &relay.url()).await;
+    let leaver = open(3, &relay.url()).await;
+    crate::sync::set_merge_delay(&admin, AN_HOUR);
+    synced(&leaver).await;
+    let project = now(admin.spaces().create()).unwrap();
+    add(&project, &leaver, Role::Writer).await;
+    synced(&admin).await;
+    let on_leaver = joined(&leaver, &project).await;
+
+    now(on_leaver.leave()).unwrap();
+    synced(&leaver).await;
+    eventually("the admin has a merge rotation pending", || {
+        pending(&admin, &project)
+    })
+    .await;
+
+    let due = due_in(&admin, &project).expect("a deadline");
+    assert!(
+        due > AN_HOUR - Duration::from_secs(60),
+        "the deadline is {due:?} away, not an hour"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_writer_never_rotates() {
     let relay = LocalRelay::start().await;
