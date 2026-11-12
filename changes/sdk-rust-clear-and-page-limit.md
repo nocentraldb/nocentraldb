@@ -9,7 +9,7 @@ The Rust SDK could not clear a field: a written text, number or link stayed unti
 
 ## Use
 
-Clear a basic field or a link with `Value::clear()`; it reads unset afterwards. A create with a clear leaves the field unset; a clear of a set or of many links fails with `InvalidValue`:
+Clear a basic field or a link with `Value::clear()`; it reads unset afterwards. A create with a clear leaves the field unset. A clear of a personal field writes a plain null, so it needs no person and no person key. A clear of a set or of many links fails with `InvalidValue`:
 
 ```rust
 project.update("tasks", task, [("title", Value::clear()), ("project", Value::clear())]).await?;

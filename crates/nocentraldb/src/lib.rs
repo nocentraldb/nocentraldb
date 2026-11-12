@@ -56,13 +56,13 @@ pub use db::{Db, OpenOptions};
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
-mod durability_tests;
-#[cfg(test)]
-mod personal_write_tests;
-#[cfg(test)]
 mod clear_tests;
 #[cfg(test)]
+mod durability_tests;
+#[cfg(test)]
 mod page_limit_tests;
+#[cfg(test)]
+mod personal_write_tests;
 #[cfg(test)]
 mod restore_tests;
 #[cfg(test)]
