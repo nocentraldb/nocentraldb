@@ -15,6 +15,7 @@
 use std::fmt;
 
 use sqlite_wasm_rs::WasmOsCallback;
+use sqlite_wasm_rs::vfs::VfsFilesManager;
 use sqlite_wasm_vfs::sahpool::{self, OpfsSAHError, OpfsSAHPoolCfg};
 use wasm_bindgen::JsCast;
 use web_sys::DedicatedWorkerGlobalScope;
@@ -66,6 +67,42 @@ pub async fn install() -> Result<Storage, InstallError> {
     match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
         Ok(_) => Ok(Storage::Opfs),
         Err(error) if opfs_is_missing(&error) => Ok(Storage::Memory),
+        Err(error) => Err(InstallError::Opfs(error)),
+    }
+}
+
+/// Whether a database file exists at `path` on OPFS, in the pool
+/// [`install`] makes the default VFS, which it installs or reuses; `false`
+/// where OPFS is missing, since a copy in memory is gone with its worker.
+/// It fails as `install` does: outside a dedicated Web Worker, or when the
+/// pool cannot be opened.
+pub async fn exists(path: &str) -> Result<bool, InstallError> {
+    if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
+        return Err(InstallError::NotInWorker);
+    }
+    match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
+        Ok(pool) => pool.contains(path).map_err(InstallError::Opfs),
+        Err(error) if opfs_is_missing(&error) => Ok(false),
+        Err(error) => Err(InstallError::Opfs(error)),
+    }
+}
+
+/// Makes room in the pool for `slots` more files beyond those it holds, as
+/// a database with its journal needs two (RFC 0006, "Where a database
+/// lives"; NOC-231): the pool grows when it has fewer. Nothing where OPFS
+/// is missing. It fails as `install` does.
+pub async fn reserve(slots: usize) -> Result<(), InstallError> {
+    if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
+        return Err(InstallError::NotInWorker);
+    }
+    match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
+        Ok(pool) => {
+            let files = pool.len().map_err(InstallError::Opfs)?;
+            pool.ensure_capacity(files + slots)
+                .await
+                .map_err(InstallError::Opfs)
+        }
+        Err(error) if opfs_is_missing(&error) => Ok(()),
         Err(error) => Err(InstallError::Opfs(error)),
     }
 }

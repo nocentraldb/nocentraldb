@@ -145,7 +145,7 @@ async fn the_wrapping_key_is_aes_gcm_256_for_encrypt_and_decrypt_and_cannot_be_e
 async fn the_first_open_draws_keys_and_keeps_them_sealed_under_a_new_wrapping_key() {
     let store = Memory::default();
 
-    let keys = from_records(&store, "default").await.unwrap();
+    let keys = from_records(&store, "default", false).await.unwrap();
 
     assert_eq!(store.writes.get(), 1);
     let key = store.wrapping_key.borrow().clone().expect("a wrapping key");
@@ -158,12 +158,28 @@ async fn the_first_open_draws_keys_and_keeps_them_sealed_under_a_new_wrapping_ke
 #[test]
 async fn a_second_open_reads_the_same_keys_and_writes_nothing() {
     let store = Memory::default();
-    let first = from_records(&store, "default").await.unwrap();
+    let first = from_records(&store, "default", false).await.unwrap();
 
-    let second = from_records(&store, "default").await.unwrap();
+    let second = from_records(&store, "default", true).await.unwrap();
 
     assert!(same(&first, &second));
     assert_eq!(store.writes.get(), 1);
+}
+
+/// A database whose file exists, but whose keys are gone, as after the
+/// browser cleared IndexedDB alone: new keys would open none of its spaces
+/// (NOC-175; the native keystore's rule, `keys::store::from_store`).
+#[test]
+async fn a_database_that_exists_without_its_keys_fails_and_draws_no_keys() {
+    let store = Memory::default();
+
+    let refused = from_records(&store, "default", true)
+        .await
+        .err()
+        .expect("refused");
+
+    assert_eq!(refused.code(), ErrorCode::StorageFailed);
+    assert_eq!(store.writes.get(), 0);
 }
 
 #[test]
@@ -171,7 +187,7 @@ async fn a_wrapping_key_without_its_record_fails_and_draws_no_keys() {
     let store = Memory::default();
     *store.wrapping_key.borrow_mut() = Some(generate().await.unwrap());
 
-    let refused = from_records(&store, "default")
+    let refused = from_records(&store, "default", false)
         .await
         .err()
         .expect("refused");
@@ -190,7 +206,7 @@ async fn a_record_without_its_wrapping_key_fails_and_draws_no_keys() {
             .unwrap(),
     );
 
-    let refused = from_records(&store, "default")
+    let refused = from_records(&store, "default", false)
         .await
         .err()
         .expect("refused");
@@ -210,7 +226,7 @@ async fn a_record_that_does_not_open_fails_and_draws_no_keys() {
             .unwrap(),
     );
 
-    let refused = from_records(&store, "default")
+    let refused = from_records(&store, "default", false)
         .await
         .err()
         .expect("refused");
@@ -222,9 +238,12 @@ async fn a_record_that_does_not_open_fails_and_draws_no_keys() {
 #[test]
 async fn the_records_of_another_database_name_do_not_open() {
     let store = Memory::default();
-    from_records(&store, "default").await.unwrap();
+    from_records(&store, "default", false).await.unwrap();
 
-    let refused = from_records(&store, "other").await.err().expect("refused");
+    let refused = from_records(&store, "other", true)
+        .await
+        .err()
+        .expect("refused");
 
     assert_eq!(refused.code(), ErrorCode::StorageFailed);
     assert_eq!(store.writes.get(), 1);
@@ -237,7 +256,7 @@ async fn a_record_that_opens_to_another_format_fails() {
     *store.record.borrow_mut() = Some(seal(&key, "default", &[0; 113]).await.unwrap());
     *store.wrapping_key.borrow_mut() = Some(key);
 
-    let refused = from_records(&store, "default")
+    let refused = from_records(&store, "default", false)
         .await
         .err()
         .expect("refused");
@@ -251,8 +270,8 @@ async fn a_record_that_opens_to_another_format_fails() {
 async fn indexeddb_a_database_opened_twice_reads_the_same_keys() {
     let name = fresh("twice");
 
-    let first = load_or_create(&name).await.unwrap();
-    let second = load_or_create(&name).await.unwrap();
+    let first = load_or_create(&name, false).await.unwrap();
+    let second = load_or_create(&name, true).await.unwrap();
 
     assert!(same(&first, &second));
 }
@@ -261,7 +280,7 @@ async fn indexeddb_a_database_opened_twice_reads_the_same_keys() {
 #[ignore = "needs IndexedDB: the sdk-keys job of browser-view.yml runs it in Chromium"]
 async fn indexeddb_holds_the_wrapping_key_and_the_sealed_record_under_their_names() {
     let name = fresh("layout");
-    let keys = load_or_create(&name).await.unwrap();
+    let keys = load_or_create(&name, false).await.unwrap();
 
     // The layout NOC-210 A gives: the database `nocentraldb/<name>`, its
     // object store `keys`, and the two records under these keys.
@@ -280,7 +299,7 @@ async fn indexeddb_holds_the_wrapping_key_and_the_sealed_record_under_their_name
 #[ignore = "needs IndexedDB: the sdk-keys job of browser-view.yml runs it in Chromium"]
 async fn indexeddb_a_database_whose_record_is_gone_does_not_draw_new_keys() {
     let name = fresh("gone");
-    load_or_create(&name).await.unwrap();
+    load_or_create(&name, false).await.unwrap();
     IndexedDb::open(&name)
         .await
         .unwrap()
@@ -288,7 +307,7 @@ async fn indexeddb_a_database_whose_record_is_gone_does_not_draw_new_keys() {
         .await
         .unwrap();
 
-    let refused = load_or_create(&name).await.err().expect("refused");
+    let refused = load_or_create(&name, true).await.err().expect("refused");
 
     assert_eq!(refused.code(), ErrorCode::StorageFailed);
     assert_eq!(
@@ -300,8 +319,8 @@ async fn indexeddb_a_database_whose_record_is_gone_does_not_draw_new_keys() {
 #[test]
 #[ignore = "needs IndexedDB: the sdk-keys job of browser-view.yml runs it in Chromium"]
 async fn indexeddb_two_database_names_hold_different_keys() {
-    let first = load_or_create(&fresh("one")).await.unwrap();
-    let second = load_or_create(&fresh("two")).await.unwrap();
+    let first = load_or_create(&fresh("one"), false).await.unwrap();
+    let second = load_or_create(&fresh("two"), false).await.unwrap();
 
     assert!(!same(&first, &second));
 }

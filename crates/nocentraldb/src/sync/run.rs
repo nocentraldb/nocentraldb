@@ -173,7 +173,7 @@ async fn sleep(
     wake: &mut watch::Receiver<()>,
     pause: &mut watch::Receiver<bool>,
 ) -> Slept {
-    let sleep = tokio::time::sleep(wait);
+    let sleep = super::time::sleep(wait);
     tokio::pin!(sleep);
     loop {
         tokio::select! {
