@@ -30,9 +30,10 @@
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
-//! A value is text, an integer, a float, a boolean, an array, `null` to
-//! clear a field, or `{"$add": [..]}` / `{"$remove": [..]}` for a set or a
-//! link list.
+//! A value is text, an integer, a float, a boolean, an array, or
+//! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list. `null`,
+//! which clears a field in RFC 0009, waits for the Rust SDK to write a
+//! clear; it is refused with `invalidValue` until then.
 
 #[cfg(test)]
 mod tests;
