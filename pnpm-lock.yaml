@@ -188,6 +188,12 @@ importers:
         specifier: 2.9.1
         version: 2.9.1
 
+  apps/tasks-rust:
+    dependencies:
+      '@nocentraldb/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   packages/sdk: {}
 
 packages:
