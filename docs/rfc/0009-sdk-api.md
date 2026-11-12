@@ -95,6 +95,8 @@ await db.close();
 
 **No persistent storage** is not an error. A browser copy opens as `best-effort` or, where OPFS is missing, as `temporary` in memory, and `db.durability` reports it ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
 
+**The relay URL in a browser** is `wss://`, except for `ws://localhost` while developing: a page served over `https://` cannot open a `ws://` connection, and the browser refuses it. The SDK adds no rule of its own; a `ws://` URL the browser refuses leaves the database offline.
+
 **`db.close()`** ends the relay connection, the subscriptions and, in a browser, the tab's ownership of the database, so another tab can take it over. Every write that resolved is already committed, so closing loses nothing; unconfirmed changes stay in the log and are pushed on the next open ([RFC 0007, "Island mode"](0007-relay.md#island-mode)). Every call on a closed database fails with `closed`.
 
 ## Write

@@ -126,6 +126,8 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
 
+The relay accepts a connection from any `Origin`. A browser sends one with every WebSocket, and any app's website may reach a relay: the signature above decides which member a connection acts as, and the membership decides what it may do. A list of allowed origins on the relay was not taken: it adds setup and decides nothing the signature does not.
+
 ![Opening a connection: the member sends hello with its versions and client string; the relay answers challenge with its version, relay id, a nonce and the limits; the member signs the relay id and the nonce with its member signing key and sends auth with its two public keys and the signature; the relay computes the member id, verifies the signature and answers welcome with the member id, the relay epoch and the member's spaces; the member pulls and then subscribes to each space; later, when an admin's membership entry adds the member to a space, the relay sends added and the member pulls and subscribes to that space](0007-opening-a-connection.svg)
 
 The member key is the only authentication the protocol requires, and the only one our AWS backend uses: no new party learns who the members are, no token can be stolen and replayed, and the SDK already holds the key. Bearer tokens from an identity service, such as Cognito or OAuth, were not taken: they add a party that knows every member's identity and can mint access. A relay backend is an adapter, and a developer who builds their own adapter on top of ours can put an authentication step of their own in front of the connection, for example Cognito or their company's single sign-on. That step decides who may open a connection at all; the challenge above still decides which member the connection acts as, and the membership checks still decide what it may do. Such a step adds a party that learns who connects, which the developer then names in their own list of what their server sees.
@@ -216,6 +218,8 @@ member → relay   push      {req, space, frames: [{upload: id}]}
 ```
 
 The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
+
+The upload and download URLs answer CORS for any origin, the browser's preflight of the `PUT` included, so an app in a browser reaches them with `fetch()`. A URL is a one-time capability, valid for minutes, and carries no cookie, so an origin gains nothing by it that the URL's holder did not already have. Refusing large changes in the browser was not taken: a large paste would then sync from every device but a browser.
 
 ### Liveness
 
@@ -512,6 +516,7 @@ Different spaces spread across partitions by their random ids, so spaces never c
 - The relay writes the S3 object **before** the DynamoDB transaction. If the transaction fails, the object is an orphan, which a daily sweep deletes; a `log` item never points to a missing object.
 - Uploads go to `uploads/<upload id>` through a presigned PUT URL that expires after 15 minutes, with the size fixed in the signature. The relay checks the frame, copies it to its `frames/` key and deletes the upload. A lifecycle rule deletes uploads older than one day.
 - Downloads are presigned GET URLs, valid for 5 minutes, so large frames never pass through Lambda on the way out.
+- The bucket's CORS rule lets any origin `PUT` to `uploads/` and `GET` from `frames/`, so a browser can use the presigned URLs ([Large changes](#large-changes)).
 - The bucket blocks all public access. S3's default server-side encryption is on, which protects nothing the frame's own encryption does not, but costs nothing.
 
 All frames in S3 were not taken: an S3 PUT costs more than the DynamoDB write for a 1 KiB change, and every pull would need one GET per change. All frames in DynamoDB were not taken either: items stop at 400 KB, and a large frame costs two write units per KB in a transaction.
