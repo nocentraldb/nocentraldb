@@ -4,20 +4,160 @@
 //! until the person stored it, and the pairing answer a device of the
 //! account hands a new device or an agent.
 //!
-//! **What this does not do yet.** Where a device keeps its recovery code
-//! and its account key statement, and the invitation of a database opened
-//! for pairing, wait on the owner (NOC-285); so do `db.account()` and its
-//! calls, which store them.
+//! The database keeps its account state and the code in its key record
+//! (`crate::keys`), and keeps it again when the person confirms the code
+//! and when a pairing completes.
+//!
+//! **What this does not do yet.** `pair` for a device adds it to no space
+//! yet and lists none: that needs the account space's records (NOC-266),
+//! and comes with recovery and `remove_member`. Pairing a database that has
+//! an account of its own, which links its account, comes with them too.
 
 use std::fmt;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
+use ncdb_core::membership::MemberKind;
 use ncdb_core::pairing::{self as core, CheckError};
 use ncdb_core::recovery::{RecoveryCode as CoreCode, WORD_LIST};
 
+use crate::db::{Db, Inner, lock};
 use crate::error::{Error, ErrorCode};
 use crate::id::SpaceId;
-use crate::members::Notice;
+use crate::keys::{self, Keys};
+use crate::members::invitation::Form;
+use crate::members::{Invitation, Notice};
+
+/// The account of a database, from [`Db::account`]: a handle, as
+/// [`Db::spaces`] is.
+pub struct Account<'a> {
+    pub(crate) db: &'a Db,
+}
+
+impl Account<'_> {
+    /// The account's recovery code while the person has not confirmed they
+    /// stored it, and `None` after (RFC 0009, "Accounts and devices"). The
+    /// first open that creates an account creates its code, as does the
+    /// next open of a database from before accounts; a database opened for
+    /// pairing has none.
+    pub async fn recovery_code(&self) -> Result<Option<RecoveryCode>, Error> {
+        let inner = self.db.lock();
+        Ok(inner.code.clone().map(|code| RecoveryCode {
+            code,
+            db: Some(self.db.inner.clone()),
+        }))
+    }
+
+    /// Answers the invitation of a database waiting to be paired, as a
+    /// device or an agent of this account, on a device that holds the
+    /// account key (RFC 0010, "Adding a device or an agent to an
+    /// account"). Pair a device only after a person scanned its code or
+    /// compared its fingerprint on both screens: the answer carries the
+    /// account key. A database that holds no account key, an agent or one
+    /// waiting to be paired itself, is refused with `NotAllowed`, as is an
+    /// invitation whose member already has an account; an invitation that
+    /// asks to be paired as the other kind is `InvalidValue`.
+    pub async fn pair(&self, kind: PairKind, invitation: &Invitation) -> Result<Paired, Error> {
+        let inner = self.db.lock();
+        let keys::Account::Holds { key, statement } = &inner.account else {
+            return Err(Error::new(
+                ErrorCode::NotAllowed,
+                "this database holds no account key, so it pairs nobody",
+            ));
+        };
+        let asked = match &invitation.form {
+            Form::Waiting(asked) => *asked,
+            Form::Certified(_) => {
+                return Err(Error::new(
+                    ErrorCode::NotAllowed,
+                    "the invitation's member already has an account: linking it is not built yet",
+                ));
+            }
+        };
+        let kind = kind.member_kind();
+        if asked != kind {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                "the invitation asks to be paired as the other kind",
+            ));
+        }
+        let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, None)
+            .map_err(|_| {
+                Error::new(
+                    ErrorCode::InvalidValue,
+                    "the account key cannot be sealed to the invitation's member",
+                )
+            })?;
+        Ok(Paired {
+            answer: PairingAnswer(answer),
+            added: Vec::new(),
+            ask_admins: Vec::new(),
+        })
+    }
+
+    /// Completes the pairing of this database with the answer a device of
+    /// the account gave: it checks that the answer is this member's and
+    /// that the account's statement and certificate hold, keeps the
+    /// certificate and, for a device, the account key, and returns
+    /// `DevicePaired` or `AgentPaired`. An answer that does not hold is
+    /// `InvalidCertificate` and changes nothing; a database that is not
+    /// waiting to be paired is `NotAllowed`.
+    pub async fn complete_pairing(&self, answer: &PairingAnswer) -> Result<Vec<Notice>, Error> {
+        let (keys, home, notice) = {
+            let inner = self.db.lock();
+            if !matches!(inner.account, keys::Account::None) {
+                return Err(Error::new(
+                    ErrorCode::NotAllowed,
+                    "this database is not waiting to be paired",
+                ));
+            }
+            if answer.0.kind() != inner.kind {
+                return Err(check_error(CheckError::Certificate));
+            }
+            let paired = answer
+                .0
+                .complete(&inner.member.key(), None)
+                .map_err(check_error)?;
+            let statement = *paired
+                .certificate
+                .statement
+                .clone()
+                .expect("a completed answer carries the statement");
+            let (account, notice) = match paired.account {
+                Some(key) => (
+                    keys::Account::Holds { key, statement },
+                    Notice::DEVICE_PAIRED,
+                ),
+                None => (
+                    keys::Account::Agent {
+                        certificate_signature: paired.certificate.signature,
+                        statement,
+                    },
+                    Notice::AGENT_PAIRED,
+                ),
+            };
+            let keys = Keys {
+                member: inner.member.clone(),
+                account,
+                code: None,
+                upgraded: false,
+            };
+            (keys, inner.home.clone(), notice)
+        };
+        home.save(&keys).await?;
+        lock(&self.db.inner).account = keys.account;
+        Ok(vec![notice])
+    }
+}
+
+impl PairKind {
+    fn member_kind(self) -> MemberKind {
+        match self {
+            PairKind::Device => MemberKind::Device,
+            PairKind::Agent => MemberKind::Agent,
+        }
+    }
+}
 
 /// What a device of the account pairs: a person's device, which receives
 /// the account key, or an agent, which receives a certificate only.
@@ -92,12 +232,15 @@ pub(crate) fn check_error(why: CheckError) -> Error {
 /// to read it.
 pub struct RecoveryCode {
     code: CoreCode,
+    /// The database that keeps the code, which `confirm` tells to forget
+    /// it.
+    db: Option<Arc<Mutex<Inner>>>,
 }
 
 impl RecoveryCode {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(code: CoreCode) -> RecoveryCode {
-        RecoveryCode { code }
+        RecoveryCode { code, db: None }
     }
 
     /// The twelve words, from the BIP-39 English list, for the person to
@@ -112,6 +255,28 @@ impl RecoveryCode {
                 .expect("a recovery code's words are on the list");
         }
         out
+    }
+
+    /// Confirms that the person stored the code: the database forgets it
+    /// and keeps only the recovery key's public half, in its statement
+    /// (RFC 0010, "The recovery code"). Every later open returns no code.
+    pub async fn confirm(self) -> Result<(), Error> {
+        let Some(db) = self.db else {
+            return Ok(());
+        };
+        let (keys, home) = {
+            let inner = lock(&db);
+            let keys = Keys {
+                member: inner.member.clone(),
+                account: inner.account.clone(),
+                code: None,
+                upgraded: false,
+            };
+            (keys, inner.home.clone())
+        };
+        home.save(&keys).await?;
+        lock(&db).code = None;
+        Ok(())
     }
 }
 

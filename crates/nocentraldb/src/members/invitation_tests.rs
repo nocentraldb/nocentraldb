@@ -53,7 +53,7 @@ fn the_vector_without_a_statement_reads_field_by_field() {
     assert_eq!(invitation.key.signing.to_vec(), field("signing key"));
     assert_eq!(invitation.key.agreement.to_vec(), field("agreement key"));
     assert_eq!(invitation.key.id().0.to_vec(), field("member id"));
-    let certificate = &invitation.certificate;
+    let certificate = invitation.certificate().unwrap();
     assert_eq!(certificate.account_key.to_vec(), field("account key"));
     assert_eq!(certificate.member, invitation.key.id());
     assert_eq!(certificate.kind, MemberKind::Device);
@@ -70,15 +70,24 @@ fn the_vector_without_a_statement_reads_field_by_field() {
 fn the_vector_with_a_statement_reads_its_recovery_key_number_and_signature() {
     let invitation: Invitation = STATEMENT.trim().parse().unwrap();
 
-    let statement = invitation.certificate.statement.as_deref().unwrap();
+    let statement = invitation
+        .certificate()
+        .unwrap()
+        .statement
+        .as_deref()
+        .unwrap();
     assert_eq!(statement.recovery_key.to_vec(), field("recovery key"));
-    assert_eq!(statement.account_key, invitation.certificate.account_key);
+    assert_eq!(
+        statement.account_key,
+        invitation.certificate().unwrap().account_key
+    );
     assert_eq!(statement.number.to_be_bytes().to_vec(), field("number"));
     assert_eq!(statement.signature.to_vec(), field("statement signature"));
     assert!(
         invitation
-            .certificate
-            .verify(&invitation.certificate.account_key)
+            .certificate()
+            .unwrap()
+            .verify(&invitation.certificate().unwrap().account_key)
     );
 }
 

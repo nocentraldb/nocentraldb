@@ -7,6 +7,11 @@
 //! the owner's NOC-141 A, Carsten, 2026-11-10). The layout holds only what
 //! a reader cannot rebuild: the member id, certificate key 4 and the
 //! statement's account key are derived, so no two fields can disagree.
+//!
+//! A database waiting to be paired has no certificate yet: its invitation
+//! is version 2, its two public keys and the kind it asks to be paired as,
+//! 66 bytes, which only pairing accepts (RFC 0003, "Invitation"; Carsten,
+//! 2026-11-12, NOC-285).
 
 use std::str::FromStr;
 
@@ -22,6 +27,10 @@ use crate::error::{Error, ErrorCode};
 const PREFIX: &str = "ncdb-invite-1:";
 /// The layout's version byte.
 const VERSION: u8 = 1;
+/// The version of the invitation of a member waiting to be paired, and
+/// its length.
+const WAITING_VERSION: u8 = 2;
+const WAITING: usize = 66;
 /// The length of the layout without a statement, and with one.
 const PLAIN: usize = 163;
 const WITH_STATEMENT: usize = 267;
@@ -37,7 +46,17 @@ const WITH_STATEMENT: usize = 267;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Invitation {
     pub(crate) key: MemberPublicKey,
-    pub(crate) certificate: Certificate,
+    pub(crate) form: Form,
+}
+
+/// What an invitation carries besides the member's keys.
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) enum Form {
+    /// The certificate its account signed: version 1.
+    Certified(Certificate),
+    /// No certificate yet: a member waiting to be paired as this kind,
+    /// version 2.
+    Waiting(MemberKind),
 }
 
 /// The fingerprint of an account, which a person compares once before an
@@ -94,35 +113,88 @@ impl std::fmt::Display for Fingerprint {
 }
 
 impl Invitation {
-    /// The invitation of the database's own member.
+    /// The invitation of the database's own member: version 2 while it
+    /// waits to be paired.
     pub(crate) fn of(inner: &Inner) -> Invitation {
         let member = inner.member.key();
+        let form = match inner.account.certificate(member.id(), inner.kind) {
+            Some(certificate) => Form::Certified(certificate),
+            None => Form::Waiting(inner.kind),
+        };
         Invitation {
             key: member.public(),
-            certificate: Certificate::sign(&inner.account, member.id(), inner.kind),
+            form,
         }
     }
 
-    /// The fingerprint of the account that certified the member.
+    /// The fingerprint of the account that certified the member. An
+    /// invitation of a member waiting to be paired has no account yet: its
+    /// fingerprint is the member's own, over its signing key, which a
+    /// person may compare on both screens before pairing it.
     pub fn fingerprint(&self) -> Fingerprint {
-        Fingerprint(self.certificate.account_key)
+        match &self.form {
+            Form::Certified(certificate) => Fingerprint::of(certificate),
+            Form::Waiting(_) => Fingerprint(self.key.signing),
+        }
+    }
+
+    /// The certificate of a certified invitation, for the tests that spoil
+    /// one.
+    #[cfg(test)]
+    pub(crate) fn certificate_mut(&mut self) -> &mut Certificate {
+        match &mut self.form {
+            Form::Certified(certificate) => certificate,
+            Form::Waiting(_) => panic!("the invitation has no certificate"),
+        }
+    }
+
+    /// The certificate, unless the member waits to be paired.
+    pub(crate) fn certificate(&self) -> Option<&Certificate> {
+        match &self.form {
+            Form::Certified(certificate) => Some(certificate),
+            Form::Waiting(_) => None,
+        }
+    }
+}
+
+impl Fingerprint {
+    /// The fingerprint of the account that signed `certificate`: over its
+    /// statement's recovery key, the account's identity, or over the
+    /// account key of a certificate without a statement (RFC 0003,
+    /// "Account fingerprint").
+    pub(crate) fn of(certificate: &Certificate) -> Fingerprint {
+        match certificate.statement.as_deref() {
+            Some(statement) => Fingerprint(statement.recovery_key),
+            None => Fingerprint(certificate.account_key),
+        }
     }
 }
 
 impl Invitation {
     /// The layout of RFC 0003, "Invitation".
     fn bytes(&self) -> Vec<u8> {
-        let certificate = &self.certificate;
+        let kind = |kind: MemberKind| match kind {
+            MemberKind::Device => 1,
+            MemberKind::Agent => 2,
+            MemberKind::SubAgent => unreachable!("a database's member is a device or an agent"),
+        };
+        let certificate = match &self.form {
+            Form::Certified(certificate) => certificate,
+            Form::Waiting(waiting) => {
+                let mut bytes = Vec::with_capacity(WAITING);
+                bytes.push(WAITING_VERSION);
+                bytes.extend_from_slice(&self.key.signing);
+                bytes.extend_from_slice(&self.key.agreement);
+                bytes.push(kind(*waiting));
+                return bytes;
+            }
+        };
         let mut bytes = Vec::with_capacity(WITH_STATEMENT);
         bytes.push(VERSION);
         bytes.extend_from_slice(&self.key.signing);
         bytes.extend_from_slice(&self.key.agreement);
         bytes.extend_from_slice(&certificate.account_key);
-        bytes.push(match certificate.kind {
-            MemberKind::Device => 1,
-            MemberKind::Agent => 2,
-            MemberKind::SubAgent => unreachable!("a database's member is a device or an agent"),
-        });
+        bytes.push(kind(certificate.kind));
         bytes.extend_from_slice(&certificate.signature);
         match certificate.statement.as_deref() {
             None => bytes.push(0),
@@ -139,18 +211,31 @@ impl Invitation {
     /// Reads the layout: its shape, not its signatures.
     fn read(bytes: &[u8]) -> Result<Invitation, &'static str> {
         let version = *bytes.first().ok_or("it is empty")?;
+        let at = |offset: usize| -> [u8; 32] { bytes[offset..offset + 32].try_into().unwrap() };
+        let kind = |byte: u8| match byte {
+            1 => Ok(MemberKind::Device),
+            2 => Ok(MemberKind::Agent),
+            _ => Err("its kind is neither a device nor an agent"),
+        };
+        if version == WAITING_VERSION {
+            if bytes.len() != WAITING {
+                return Err("its length is not that of version 2");
+            }
+            return Ok(Invitation {
+                key: MemberPublicKey {
+                    signing: at(1),
+                    agreement: at(33),
+                },
+                form: Form::Waiting(kind(bytes[65])?),
+            });
+        }
         if version != VERSION {
             return Err("its version is unknown");
         }
         if bytes.len() < PLAIN {
             return Err("it is too short");
         }
-        let at = |offset: usize| -> [u8; 32] { bytes[offset..offset + 32].try_into().unwrap() };
-        let kind = match bytes[97] {
-            1 => MemberKind::Device,
-            2 => MemberKind::Agent,
-            _ => return Err("its kind is neither a device nor an agent"),
-        };
+        let kind = kind(bytes[97])?;
         let account_key = at(65);
         let statement = match (bytes[162], bytes.len()) {
             (0, PLAIN) => None,
@@ -181,7 +266,10 @@ impl Invitation {
             signature: bytes[98..162].try_into().unwrap(),
             statement,
         };
-        Ok(Invitation { key, certificate })
+        Ok(Invitation {
+            key,
+            form: Form::Certified(certificate),
+        })
     }
 }
 
@@ -196,7 +284,8 @@ impl std::fmt::Display for Invitation {
 /// refused with `InvalidValue`: another prefix, anything but unpadded
 /// base64url, an unknown version, a kind other than a device or an agent,
 /// a statement byte other than 0 or 1, a length that does not match it, or
-/// account key number 0.
+/// account key number 0. Version 2, of a member waiting to be paired, is
+/// read too; only pairing accepts it.
 impl FromStr for Invitation {
     type Err = Error;
 

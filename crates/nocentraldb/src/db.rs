@@ -17,7 +17,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use ed25519_dalek::SigningKey;
 use ncdb_core::change::Kind;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::clock::Clock;
@@ -49,6 +48,9 @@ pub struct OpenOptions {
     path: Option<PathBuf>,
     key_file: Option<PathBuf>,
     agent: bool,
+    /// Whether a new database waits to be paired with a device of an
+    /// account (RFC 0010).
+    pairing: bool,
     /// The plugins whose field types the core folds (RFC 0011).
     plugins: Vec<Plugin>,
     /// The name of a database on OPFS, in a dedicated worker (NOC-175):
@@ -75,9 +77,32 @@ impl OpenOptions {
             path: None,
             key_file: None,
             agent: false,
+            pairing: false,
             plugins: Vec::new(),
             #[cfg(target_arch = "wasm32")]
             browser: None,
+        }
+    }
+
+    /// Opens a new database for pairing (RFC 0009, "Accounts and devices";
+    /// RFC 0010, "Adding a device or an agent to an account"): it draws its
+    /// member key and no account, and its invitation carries no
+    /// certificate yet, which only [`Account::pair`](crate::Account::pair)
+    /// on a device of the account accepts. [`Account::complete_pairing`](crate::Account::complete_pairing)
+    /// then makes it a device or, with [`agent`](OpenOptions::agent), an
+    /// agent of that account. A database that exists keeps the account it
+    /// has.
+    pub fn pairing(mut self) -> OpenOptions {
+        self.pairing = true;
+        self
+    }
+
+    /// The keys of a new database: a member key and no account when it
+    /// waits to be paired, a new account and its recovery code otherwise.
+    fn new_keys(&self) -> Keys {
+        match self.pairing {
+            true => Keys::pairing(),
+            false => Keys::generate(),
         }
     }
 
@@ -173,7 +198,13 @@ pub(crate) struct Inner {
     pub(crate) model: Arc<Model>,
     pub(crate) model_id: [u8; 16],
     pub(crate) member: Secrets,
-    pub(crate) account: SigningKey,
+    /// What the database holds of its account: the account key, an
+    /// agent's certificate, or nothing while it waits to be paired.
+    pub(crate) account: keys::Account,
+    /// The recovery code, until the person confirmed they stored it.
+    pub(crate) code: Option<ncdb_core::recovery::RecoveryCode>,
+    /// Where the key record lives, to keep it again when it changes.
+    pub(crate) home: keys::Home,
     /// What the account certifies the member as: a device or an agent.
     pub(crate) kind: MemberKind,
     /// Where the copy is stored, for the durability report.
@@ -320,7 +351,8 @@ fn open_at(
     store: &Store<'_>,
     lock: &ModelLock,
     registry: &Registry,
-) -> Result<(View, Keys), Error> {
+    new: impl FnOnce() -> Keys,
+) -> Result<(View, Keys, keys::Home), Error> {
     let store = match key_file {
         Some(_) => None,
         None => Some(store().map_err(keys::store::unavailable)?),
@@ -329,16 +361,24 @@ fn open_at(
         .map_err(|error| keys::io("the database directory cannot be created", &error))?;
     let file = dir.join(DATABASE_FILE);
     let existed = exists(&file)?;
-    let keys = match (&key_file, &store) {
-        (Some(key_file), _) => keys::from_file(key_file, existed)?,
-        (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
+    let (keys, home) = match (key_file, store) {
+        (Some(key_file), _) => (
+            keys::from_file(&key_file, existed, new)?,
+            keys::Home::File(key_file),
+        ),
+        (None, Some(store)) => {
+            let keys = keys::from_store(store.as_ref(), &dir, existed, new)?;
+            let user = keys::store::user(&dir)?;
+            let store = std::sync::Arc::from(store);
+            (keys, keys::Home::Store { store, user })
+        }
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
     // The view keeps the checks while a rebuild runs (NOC-156).
     let member = keys.member.clone();
     let checks = move |space| SealChecks::new(space, member.key());
     let view = View::open_with_plugins(&file, lock, registry, checks).map_err(view_error)?;
-    Ok((view, keys))
+    Ok((view, keys, home))
 }
 
 /// Whether the database file exists.
@@ -388,7 +428,7 @@ impl Db {
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
         #[cfg(target_arch = "wasm32")]
         if let Place::Browser { name } = options.place()? {
-            let placed = crate::browser::place(&name).await?;
+            let placed = crate::browser::place(&name, || options.new_keys()).await?;
             return Db::open_placed(options, None, &keys::store::platform, Some(placed));
         }
         Db::open_with(options, None, &keys::store::platform)
@@ -402,18 +442,17 @@ impl Db {
     }
 
     /// Opens the database of the member with these secrets, of this
-    /// account, as the sync tests need it.
+    /// account, as the sync tests need it. Its recovery code derives from
+    /// the account key, so that databases opened with one account key are
+    /// one account.
     #[cfg(test)]
     pub(crate) async fn open_as(
         options: OpenOptions,
         signing: [u8; 32],
         agreement: [u8; 32],
-        account: SigningKey,
+        account: ed25519_dalek::SigningKey,
     ) -> Result<Db, Error> {
-        let keys = Keys {
-            member: Secrets::new(signing, agreement),
-            account,
-        };
+        let keys = Keys::of_account(Secrets::new(signing, agreement), account);
         Db::open_with(options, Some(keys), &keys::store::platform)
     }
 
@@ -452,16 +491,17 @@ impl Db {
         let registry = Registry::new(options.plugins.iter().cloned())
             .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?;
         let _ = &placed;
-        let (mut view, keys, storage) = match place {
+        let new = || options.new_keys();
+        let (mut view, keys, storage, home) = match place {
             Place::Memory => {
                 let view =
                     View::open_in_memory_with_plugins(&lock, &registry).map_err(view_error)?;
-                let keys = given.unwrap_or_else(Keys::generate);
-                (view, keys, Storage::Temporary)
+                let keys = given.unwrap_or_else(new);
+                (view, keys, Storage::Temporary, keys::Home::Memory)
             }
             Place::Path { dir, key_file } => {
-                let (view, keys) = open_at(dir, key_file, store, &lock, &registry)?;
-                (view, keys, Storage::Persistent)
+                let (view, keys, home) = open_at(dir, key_file, store, &lock, &registry, new)?;
+                (view, keys, Storage::Persistent, home)
             }
             #[cfg(target_arch = "wasm32")]
             Place::Browser { .. } => {
@@ -471,7 +511,12 @@ impl Db {
                 let view =
                     View::open_with_plugins(Path::new(&placed.path), &lock, &registry, checks)
                         .map_err(view_error)?;
-                (view, placed.keys, placed.storage)
+                (
+                    view,
+                    placed.keys,
+                    placed.storage,
+                    keys::Home::Browser(placed.name),
+                )
             }
         };
         let model = Arc::new(view.model().clone());
@@ -491,6 +536,8 @@ impl Db {
             model_id: lock.model.id.0,
             member: keys.member,
             account: keys.account,
+            code: keys.code,
+            home,
             kind: match options.agent {
                 true => MemberKind::Agent,
                 false => MemberKind::Device,
@@ -518,6 +565,12 @@ impl Db {
     pub(crate) fn durability(&self) -> crate::durability::Durability {
         let inner = lock(&self.inner);
         crate::durability::durability(&inner, inner.storage)
+    }
+
+    /// The account of this database (RFC 0009, "Accounts and devices"):
+    /// its recovery code until the person stored it, and pairing.
+    pub fn account(&self) -> crate::Account<'_> {
+        crate::Account { db: self }
     }
 
     /// The spaces of the member.

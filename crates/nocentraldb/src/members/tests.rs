@@ -125,11 +125,11 @@ fn spoiled(spoil: impl FnOnce(&mut super::Invitation)) -> super::Invitation {
 fn an_invitation_whose_certificate_does_not_hold_is_refused() {
     let admin = database();
     let project = space(&admin);
-    let forged = spoiled(|invitation| invitation.certificate.signature[0] ^= 1);
+    let forged = spoiled(|invitation| invitation.certificate_mut().signature[0] ^= 1);
     let other = now(database().invitation());
     let of_another_member = spoiled(|invitation| invitation.key = other.key);
     let of_a_sub_agent = spoiled(|invitation| {
-        invitation.certificate.kind = ncdb_core::membership::MemberKind::SubAgent;
+        invitation.certificate_mut().kind = ncdb_core::membership::MemberKind::SubAgent;
     });
 
     for invitation in [forged, of_another_member, of_a_sub_agent] {
@@ -243,7 +243,7 @@ pub(crate) fn regrant(
         action: Action::Add {
             role: Role::Writer.into(),
             key: invitation.key,
-            certificate: Box::new(invitation.certificate.clone()),
+            certificate: Box::new(invitation.certificate().unwrap().clone()),
             from_generation: fresh,
         },
     });
@@ -317,17 +317,19 @@ fn a_member_is_not_added_again_and_a_former_member_is() {
 }
 
 /// A fingerprint shows as RFC 0010 gives it ("The fingerprint"): SHA-256
-/// over `"nocentraldb/account-fingerprint"` and the account key, read as a
-/// big-endian integer mod 10^60, in twelve blocks of five digits. The
-/// vectors were computed with Python's `hashlib` and `cryptography`.
+/// over `"nocentraldb/account-fingerprint"` and the key, read as a
+/// big-endian integer mod 10^60, in twelve blocks of five digits; over the
+/// recovery key of an account's statement, and over the account key of a
+/// certificate without one. The vectors were computed with Python's
+/// `hashlib` and `cryptography`.
 #[test]
 fn a_fingerprint_shows_as_sixty_digits_in_twelve_blocks_of_five() {
     let account = SigningKey::from_bytes(&[9; 32]);
-    let invitation = now(of_account(1, &account).invitation());
+    let without_statement = super::Fingerprint(account.verifying_key().to_bytes());
     let zero_padded = super::Fingerprint([7; 32]);
 
     assert_eq!(
-        invitation.fingerprint().to_string(),
+        without_statement.to_string(),
         "16133 87624 73902 00999 15789 51045 80380 30084 28047 86277 74087 14820"
     );
     assert_eq!(

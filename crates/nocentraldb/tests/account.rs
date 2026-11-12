@@ -14,7 +14,7 @@ use support::{LOCK, TempDir, now};
 fn at(dir: &TempDir, name: &str) -> OpenOptions {
     OpenOptions::new(LOCK)
         .path(dir.join(name))
-        .key_file(dir.join(format!("{name}.keys")))
+        .key_file(dir.join(&format!("{name}.keys")))
 }
 
 fn open(options: OpenOptions) -> Db {
@@ -148,27 +148,6 @@ fn a_device_paired_by_text_holds_the_account_key() {
 }
 
 #[test]
-fn a_database_with_an_account_of_its_own_is_linked_when_it_pairs() {
-    let dir = TempDir::new("pair-link");
-    let laptop = open(at(&dir, "laptop"));
-    let tablet = open(at(&dir, "tablet"));
-    assert_ne!(
-        now(tablet.invitation()).fingerprint(),
-        now(laptop.invitation()).fingerprint()
-    );
-    assert_eq!(
-        pair(&laptop, &tablet, PairKind::Device),
-        [NoticeCode::DevicePaired, NoticeCode::AccountLinked]
-    );
-    assert_eq!(
-        now(tablet.invitation()).fingerprint(),
-        now(laptop.invitation()).fingerprint()
-    );
-    // Its own code is gone with its own account.
-    assert!(code(&tablet).is_none());
-}
-
-#[test]
 fn an_answer_for_another_database_is_refused_and_changes_nothing() {
     let dir = TempDir::new("pair-other");
     let laptop = open(at(&dir, "laptop"));
@@ -196,4 +175,57 @@ fn a_text_that_is_not_a_pairing_answer_is_invalid() {
         let refused = text.parse::<PairingAnswer>().unwrap_err();
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{text}");
     }
+}
+
+#[test]
+fn a_database_waiting_to_be_paired_shows_version_2_and_joins_no_space() {
+    let dir = TempDir::new("waiting");
+    let new = open(at(&dir, "phone").pairing());
+    let invitation = now(new.invitation());
+    let text = invitation.to_string();
+    // 66 bytes, as unpadded base64url after the prefix.
+    assert_eq!(text.len(), "ncdb-invite-1:".len() + 88);
+    assert_eq!(text.parse::<nocentraldb::Invitation>().unwrap(), invitation);
+    // It creates no space, and an admin cannot add it to one.
+    let refused = now(new.spaces().create()).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+    let admin = open(at(&dir, "laptop"));
+    let project = now(admin.spaces().create()).unwrap();
+    let options = nocentraldb::AddMember {
+        role: nocentraldb::Role::Writer,
+        fingerprint: Some(invitation.fingerprint()),
+    };
+    let refused = now(project.members().add(&invitation, options)).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidCertificate);
+}
+
+#[test]
+fn an_invitation_that_asks_for_the_other_kind_is_invalid() {
+    let dir = TempDir::new("other-kind");
+    let laptop = open(at(&dir, "laptop"));
+    let agent = open(at(&dir, "agent").pairing().agent());
+    let refused = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(agent.invitation())))
+    .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+}
+
+#[test]
+fn a_paired_device_creates_spaces_under_the_accounts_certificate() {
+    let dir = TempDir::new("paired-space");
+    let laptop = open(at(&dir, "laptop"));
+    let phone = open(at(&dir, "phone").pairing());
+    assert_eq!(
+        pair(&laptop, &phone, PairKind::Device),
+        [NoticeCode::DevicePaired]
+    );
+    let project = now(phone.spaces().create()).unwrap();
+    // The laptop's account is the phone's: it adds the laptop without a
+    // fingerprint.
+    let options = nocentraldb::AddMember {
+        role: nocentraldb::Role::Writer,
+        fingerprint: None,
+    };
+    now(project.members().add(&now(laptop.invitation()), options)).unwrap();
 }
