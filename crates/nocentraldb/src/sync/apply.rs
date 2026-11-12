@@ -235,7 +235,7 @@ pub(super) fn pushed(
                 }
                 if code == TOO_EARLY {
                     let sync = sync(inner);
-                    let at = std::time::Instant::now() + sync.too_early_retry;
+                    let at = super::time::Instant::now() + sync.too_early_retry;
                     sync.retries.entry(space).or_insert(at);
                     return Ok(Some(code));
                 }

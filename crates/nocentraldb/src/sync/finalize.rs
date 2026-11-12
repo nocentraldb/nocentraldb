@@ -13,7 +13,9 @@
 //! refusal: the finalize stays unconfirmed, and the space is pushed again
 //! an hour later, until the relay accepts it.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use super::time::Instant;
 
 use ncdb_core::ids::{ChangeId, SpaceId};
 

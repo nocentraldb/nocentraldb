@@ -3,7 +3,9 @@
 //! The layout is internal to the core and not a stable format (RFC 0006,
 //! decision 2); only the `log` table follows RFC 0002, "The log on disk".
 //! `confirmed_accounts` is no part of the view: it holds what a person
-//! confirmed, which no fold computes (`super::accounts`). Nor is
+//! confirmed, which no fold computes (`super::accounts`). The `log`'s
+//! `written_at` came later (NOC-231): a database from before gains it on
+//! open, `NULL` in every row, and keeps its format version. Nor is
 //! `shreds_held`: when this device first held each shred
 //! (`super::shreds_held`).
 
@@ -28,6 +30,7 @@ CREATE TABLE IF NOT EXISTS log (
     state TEXT NOT NULL,
     reason TEXT,
     frame BLOB NOT NULL,
+    written_at INTEGER,
     UNIQUE (space_id, change_id)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS parked (
@@ -58,6 +61,21 @@ CREATE TABLE IF NOT EXISTS objects (
     PRIMARY KEY (space_id, object_id)
 ) STRICT;
 ";
+
+/// Adds `written_at` to the `log` of a database from before it (NOC-231):
+/// additive, so its rows read `NULL` and a core that does not know the
+/// column ignores it.
+fn add_written_at(conn: &Connection) -> Result<(), Error> {
+    let has: bool = conn.query_row(
+        "SELECT EXISTS (SELECT 1 FROM pragma_table_info('log') WHERE name = 'written_at')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has {
+        conn.execute_batch("ALTER TABLE log ADD COLUMN written_at INTEGER;")?;
+    }
+    Ok(())
+}
 
 /// An SQL identifier, quoted, so that any collection or field name is one.
 pub(super) fn quote(name: &str) -> String {
@@ -178,6 +196,7 @@ pub(super) fn meta(conn: &Connection, key: &str) -> Result<Option<String>, Error
 /// whether the tables were folded by `model`.
 pub(super) fn open(conn: &Connection, model: &Model, lock: &ModelLock) -> Result<Fit, Error> {
     conn.execute_batch(FIXED)?;
+    add_written_at(conn)?;
     let hash = hex(&model.hash());
     match meta(conn, "format")? {
         None => {
