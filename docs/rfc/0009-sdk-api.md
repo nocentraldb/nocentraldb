@@ -70,6 +70,7 @@ const db = await nc.open({
   model,                              // the TypeScript model: types and handles
   lock,                               // model.lock.json: the rules the core folds by
   relay: "wss://relay.example.com",   // optional; without it, the database stays local
+  name: "default",                    // in a browser, which database; "default" if left out
   persistentStorage: "on-open",       // RFC 0006; or "on-request"
   warnings: true,                     // RFC 0006
 });
@@ -90,6 +91,8 @@ await db.close();
 - **Opened with neither `path` nor `inMemory`,** it is refused with `invalidValue`: the app must say where its data lives, so no data lands where the app did not say. In memory by default would be safe for tests, but an app that forgets its path loses its data silently; the platform's app data directory by default would be convenient, but is not where the SDK keeps a database ([The Rust SDK](#the-rust-sdk)).
 - **With no platform keystore reachable and no `keyFile`,** it fails with `keyStoreUnavailable`, whose message names the `keyFile` option. A headless machine often has no keystore, and the code tells the developer what to do, while a key reaches disk only in a file the app chose. A key file in the database's directory, made without being asked, was not taken, because a key on disk that nobody chose is the risk RFC 0003 avoids ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key)); nor was `storageFailed`, which needs no new code but does not tell the developer what to do.
 - **Node.js only.** The browser has no path, and keeps its key as [RFC 0006, "What the view stores in plaintext"](0006-local-view.md#what-the-view-stores-in-plaintext) says.
+
+**In a browser,** `name` names the database: 1 to 64 characters of `a`–`z`, `0`–`9`, `-` and `_`, `"default"` when the app leaves it out, and any other name fails with `invalidValue` ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). The SDK runs the core in a dedicated worker it starts itself. `@nocentraldb/sdk` ships the worker script and the core's WebAssembly module in its build output, and finds them with `new URL(..., import.meta.url)`, which bundlers such as Vite resolve, so the app passes no URL (Carsten, 2026-11-12, NOC-274). An option that names the worker's URL was not taken: every app would have to copy files the package already carries.
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
@@ -275,7 +278,7 @@ const firstFive = await db.find(model.tasks.indexes.byPriorityDesc.take(5));
 A query is written from handles of the model and passed to `db.find`: it is the chain RFC 0001 shows for views, TypeScript checks the equality values against the index, and a view will be queried the same way. An options object, `db.find(model.tasks, { index: "byStatusPriority", equal: ["open"], limit: 50 })`, was not taken.
 
 - `.equal(...values)` fixes the index's leading fields, as many as its `equal` declares, no more and no fewer; TypeScript checks the count and the types ([RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes)).
-- `.take(n)` sets the page size, 50 by default, up to the maximum RFC 0006 leaves to the implementation.
+- `.take(n)` sets the page size, 50 by default and at most 1000; a larger `n` fails with `invalidValue`, in both SDKs (Carsten, 2026-11-12, NOC-274).
 - `.after(cursor)` starts after a page's cursor. A cursor from another model, or another index, fails with `cursorOfAnotherModel`, and the app starts from the first page ([RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages)).
 - `db.find(query)` returns `items` in index order, the `cursor` after the last item, and `hasMore`. Every item carries `$space`, because an index spans every space of the member ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)).
 - Queries skip deleted objects, and the index does not hold them; `space.get` returns a deleted object with `$deleted: true`. An app almost never lists deleted objects, and filtering in the app reads rows it throws away. A deletion can be undone ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)), so `get` still finds the object to restore it. Returning deleted objects from queries, flagged, with the app filtering, was not taken.
@@ -490,7 +493,7 @@ An unknown relay code is shown as `unknown_error` because a faulty or hostile re
 
 ## Errors
 
-The SDK throws one error class, `nc.Error`, with a string `code` and the ids it concerns. Codes are easy to match on in both SDKs, map one to one to Rust's `ErrorCode`, and keep the API surface small; a class per error was not taken. An error never carries content, a key or a personal field: "Decryption failed for change C in space S, generation 4" is the model ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
+The SDK throws one error class, `nc.Error`, with a string `code`, the ids it concerns in `ids`, each as text, and, for `unknownAccount`, the account's fingerprint in `fingerprint`, a plain string of the twelve blocks (Carsten, 2026-11-12, NOC-274). Codes are easy to match on in both SDKs, map one to one to Rust's `ErrorCode`, and keep the API surface small; a class per error was not taken. An error never carries content, a key or a personal field: "Decryption failed for change C in space S, generation 4" is the model ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)).
 
 | Code | Thrown by | When |
 | --- | --- | --- |
@@ -563,9 +566,11 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 
 | Name | What it is | Builds on |
 | --- | --- | --- |
-| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` (`"request"`), `recover`, and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Named in RFC 0006 with `model`, `persistentStorage`, `warnings`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `pairing`, `recover`: [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `nc.open` | Opens this member's database; options `model`, `lock`, `relay`, `name` (in a browser, (Carsten, 2026-11-12, NOC-274)), `persistentStorage` (`"on-open"`, the default this RFC names, or `"on-request"`), `warnings`, `subAgent`, `pairing` (`"request"`), `recover`, and in Node.js only `path`, `keyFile`, `inMemory`, `agent` | Named in RFC 0006 with `model`, `persistentStorage`, `warnings`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports); `lock`: [RFC 0005](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device); `pairing`, `recover`: [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account); `path`, `keyFile`, `inMemory`, `agent`: [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
 | `db.close` | Closes the database | [RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers) |
-| `nc.Error` | The one error class, with `code` | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
+| `nc.Error` | The one error class, with `code`, `ids` and `fingerprint` (Carsten, 2026-11-12, NOC-274) | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
+
+| `Db`, `Space`, `Tx`, `Invitation`, `Page<T>`, `Query<T>`, `Notice`, `SyncStatus`, `SpaceStatus`, `Durability` | The TypeScript types of a database, a space, a transaction, an invitation, a page and a query of `T`, a notice, and the three reports (Carsten, 2026-11-12, NOC-274) | `Invitation`: [RFC 0003, "Invitation"](0003-keys-and-cryptography.md#invitation); `Durability`: [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
 
 **Write:**
 
