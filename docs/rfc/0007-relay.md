@@ -274,6 +274,8 @@ The relay runs every check below in its core, the same on every backend, before 
 | The change is not already in the log. | The change id, which the relay computes from the frame (RFC 0002). | A hash of the bytes. |
 | The reader may read the space. | The membership table, on every pull, subscribe, keys and person-keys request. | As above. |
 
+**A change the log already holds.** The relay looks for the change id first. When the log holds it and the change's author is the uploader, the answer is `duplicate`, before the uploader and membership checks. A member whose own leave was appended, but whose answer was lost, then gets the position it pushed for, as "Push" promises: a push is idempotent (NOC-276). The author already holds the change, so it learns only the position its first push would have told it. When the uploader is not the author, the uploader must be a current member first, so a former member learns nothing about other members' changes, not even whether the relay holds them.
+
 What the relay **does not** check, because it cannot without reading content, and what follows from that:
 
 - **Whether a sealed payload decrypts**, or what it says. A member that writes garbage under a valid signature gets it appended. Every other member detects it on decryption, keeps it marked as rejected, and the signature names the author (RFC 0003).
