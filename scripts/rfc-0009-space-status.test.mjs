@@ -2,9 +2,10 @@
 // recommendation) as RFC 0009 records it (NOC-195): the Rust names of the
 // per-space status. `space.status()` returns a `SpaceStatusReport` with
 // `current()` and `subscribe()`; `current()` gives a `SpaceStatus` with the
-// eleven values of "Sync and status" in snake case and their types; the
-// reasons and the refused changes are their own types (the waiting shreds
-// left with the owner's NOC-224: a shred is final when accepted); and the
+// twelve values of "Sync and status" in snake case and their types; the
+// reasons, the refused changes and the provisional erasures are their own
+// types (the waiting shreds left with the owner's NOC-224: a shred is final
+// when accepted; the provisional erasures came with NOC-230); and the
 // status names no member by its `MemberId`, which the owner made public for
 // the member calls on NOC-203 (Carsten, 2026-11-11) while the status stays as
 // NOC-193 decided. Like every choice in the fresh texts, it stands
@@ -39,7 +40,7 @@ test("Sync and status points to the Rust names of the space status", () => {
   assert.match(sync, /`SpaceStatus`/);
 });
 
-test("the Rust SDK names the space status report and its eleven values with their types", () => {
+test("the Rust SDK names the space status report and its twelve values with their types", () => {
   const text = bullet("- **The space status.**");
   for (const pattern of [
     /`space\.status\(\)` returns a `SpaceStatusReport`/,
@@ -61,7 +62,10 @@ test("the Rust SDK names the space status report and its eleven values with thei
     /`equivocations: Vec<ChangeId>`/,
     /`exposed: bool`/,
     /`waiting_for_key: bool`/,
-    /eleven values/,
+    /`provisional_erasures: Vec<ProvisionalErasure>`/,
+    /`ProvisionalErasure \{ change: ChangeId, age: Duration, can_undo: bool \}`/,
+    /`NoticeCode::ErasurePending`/,
+    /twelve values/,
     /another model/,
   ]) {
     assert.match(

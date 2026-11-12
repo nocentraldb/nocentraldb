@@ -22,7 +22,7 @@ pub(crate) const MAX_PUSH: usize = 32;
 const OVERHEAD: usize = 1024;
 
 /// The error codes RFC 0007 lists ("The errors").
-const CODES: [&str; 19] = [
+const CODES: [&str; 20] = [
     "unsupported_version",
     "unauthenticated",
     "not_member",
@@ -36,6 +36,7 @@ const CODES: [&str; 19] = [
     "bad_signature",
     "author_not_member",
     "membership_rule",
+    "too_early",
     "epoch_changed",
     "bad_record",
     "compacted",
