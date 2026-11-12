@@ -25,6 +25,7 @@ use crate::next;
 use crate::object::Object;
 use crate::subscribe::touched;
 use crate::tx::Transaction;
+use crate::value::Value;
 
 /// The spaces of the member, from [`Db::spaces`].
 #[derive(Debug)]
@@ -287,6 +288,42 @@ impl Space {
             change: ChangeId(change.id()),
             ids,
         })
+    }
+
+    /// Creates an object in `collection` with `values`, as one change: a
+    /// [`write`](Space::write) with one [`create`](Transaction::create)
+    /// (RFC 0009, "One write, one change"). The new id is the answer's
+    /// only id.
+    pub async fn create<'v>(
+        &self,
+        collection: &str,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+    ) -> Result<Written, Error> {
+        self.write(|tx| tx.create(collection, values).map(|_| ()))
+            .await
+    }
+
+    /// Writes `values` to the object `id` of `collection`, as one change:
+    /// a [`write`](Space::write) with one [`update`](Transaction::update).
+    pub async fn update<'v>(
+        &self,
+        collection: &str,
+        id: ObjectId,
+        values: impl IntoIterator<Item = (&'v str, Value)>,
+    ) -> Result<Written, Error> {
+        self.write(|tx| tx.update(collection, id, values)).await
+    }
+
+    /// Deletes the object `id` of `collection`, as one change: a
+    /// [`write`](Space::write) with one [`delete`](Transaction::delete).
+    pub async fn delete(&self, collection: &str, id: ObjectId) -> Result<Written, Error> {
+        self.write(|tx| tx.delete(collection, id)).await
+    }
+
+    /// Restores the deleted object `id` of `collection`, as one change: a
+    /// [`write`](Space::write) with one [`restore`](Transaction::restore).
+    pub async fn restore(&self, collection: &str, id: ObjectId) -> Result<Written, Error> {
+        self.write(|tx| tx.restore(collection, id)).await
     }
 
     /// Reads the object `id` of `collection` in this space, or `None` when
