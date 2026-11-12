@@ -75,6 +75,36 @@ pub async fn lambda(config: &aws_config::SdkConfig) -> (Outcome, Outcome) {
         Ok(_) => Outcome::Supported,
         Err(error) => return (failed(&error), Outcome::Differs("no function".into())),
     };
+    // A new function is `Pending` until AWS has set it up, and AWS refuses
+    // to invoke it until then with `ResourceConflictException`: wait for
+    // `Active`, as a deployment does.
+    let mut state = String::new();
+    for _ in 0..60 {
+        match client
+            .get_function_configuration()
+            .function_name("relay")
+            .send()
+            .await
+        {
+            Ok(out) => {
+                state = out
+                    .state()
+                    .map(|s| s.as_str().to_owned())
+                    .unwrap_or_default();
+                if state == "Active" {
+                    break;
+                }
+            }
+            Err(error) => return (create, failed(&error)),
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    if state != "Active" {
+        return (
+            create,
+            Outcome::Differs(format!("the function stays {state:?}, never Active")),
+        );
+    }
     let invoke = match client
         .invoke()
         .function_name("relay")

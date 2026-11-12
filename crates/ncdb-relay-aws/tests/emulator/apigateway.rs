@@ -3,6 +3,10 @@
 
 use super::common::{Outcome, failed};
 
+/// A connection id in API Gateway's form, 16 characters of base64 ending in
+/// `=`, of a connection that never existed.
+const GONE: &str = "L0SM9cOFvHcCIhw=";
+
 /// A WebSocket API with a stage; returns its id.
 pub async fn websocket_api(api: &aws_sdk_apigatewayv2::Client) -> (Outcome, Option<String>) {
     let created = api
@@ -37,7 +41,7 @@ pub async fn connections(config: &aws_config::SdkConfig) -> (Outcome, Outcome) {
     let client = aws_sdk_apigatewaymanagement::Client::new(config);
     let post = match client
         .post_to_connection()
-        .connection_id("gone=")
+        .connection_id(GONE)
         .data(aws_sdk_apigatewaymanagement::primitives::Blob::new(
             b"entry".to_vec(),
         ))
@@ -54,12 +58,7 @@ pub async fn connections(config: &aws_config::SdkConfig) -> (Outcome, Outcome) {
         Err(error) => failed(&error),
         Ok(_) => Outcome::Differs("a post to an unknown connection succeeded".into()),
     };
-    let delete = match client
-        .delete_connection()
-        .connection_id("gone=")
-        .send()
-        .await
-    {
+    let delete = match client.delete_connection().connection_id(GONE).send().await {
         Err(error)
             if error
                 .as_service_error()
