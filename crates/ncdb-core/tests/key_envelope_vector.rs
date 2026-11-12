@@ -2,7 +2,8 @@
 //! tests/vectors/key_envelope.py writes one with an implementation of
 //! RFC 9180 from Python's cryptography primitives, which it checks against
 //! RFC 9180's vector A.2.1 and opens with cryptography's own HPKE. The suite
-//! itself runs RFC 9180's vector A.2.1 here, as RFC 0003 decision 3 asks.
+//! itself runs RFC 9180's vector A.2.1 here, as RFC 0003 asks
+//! ("Primitives").
 
 // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
 // this routes #[test] there, so every test runs on both targets (NOC-10).

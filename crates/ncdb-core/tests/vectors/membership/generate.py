@@ -1,4 +1,5 @@
-"""Writes the test vectors of RFC 0008's genesis and membership entries
+"""Writes the test vectors of RFC 0008's genesis, membership entries,
+account key statement entry and erasure decision
 (docs/rfc/0008-membership.md, "The control bodies") in this directory,
 independently of the Rust core: with cbor2 (6.2.1, canonical mode) for the
 bytes, hashlib for the hashes, cryptography's Ed25519 and HKDF, and PyNaCl's
@@ -233,6 +234,28 @@ STATEMENT = {
 CREATOR_CERT_WITH_STATEMENT = {**CREATOR_CERT, 6: STATEMENT}
 SUB_AGENT_CERT_WITH_STATEMENT = {**SUB_AGENT_CERT, 6: STATEMENT}
 
+# RFC 0008, "Account key statement entry" (entry type 7; Carsten,
+# 2026-11-11, NOC-187): after a lost device, the recovery key names a second
+# account key with number 2, and a member carries that statement into the
+# space. Key 8 holds the statement map as RFC 0003 defines it.
+ACCOUNT_2 = Ed25519PrivateKey.from_private_bytes(bytes([0x12] * 32))
+ACCOUNT_2_PUBLIC = raw(ACCOUNT_2.public_key())
+statement_2_fields = {1: RECOVERY_PUBLIC, 2: ACCOUNT_2_PUBLIC, 3: 2}
+STATEMENT_2 = {
+    **statement_2_fields,
+    4: RECOVERY.sign(sha256(b"nocentraldb/account-key-statement" + enc(statement_2_fields))),
+}
+statement_entry = {1: 7, 3: [ADD_ID], 8: STATEMENT_2}
+
+# RFC 0008, "Erasure decision" (entry type 8; Carsten, 2026-11-11, NOC-230):
+# key 8 names the provisional shred entry by its change id, key 9 says
+# whether the decision finalizes it (true) or takes it back (false). The
+# shred's change id is a placeholder here, 0x5d repeated; the decision
+# depends on the shred, so key 3 lists it.
+SHRED_ID = bytes([0x5D] * 32)
+finalize = {1: 8, 3: [SHRED_ID], 8: SHRED_ID, 9: True}
+take_back = {1: 8, 3: [SHRED_ID], 8: SHRED_ID, 9: False}
+
 write("recovery-public", RECOVERY_PUBLIC)
 write("statement", enc(STATEMENT))
 write("certificate-with-statement", enc(CREATOR_CERT_WITH_STATEMENT))
@@ -255,3 +278,7 @@ write("second-generation", SECOND_GENERATION.to_bytes(8, "big"))
 write("key-chain-previous", PREVIOUS_FIELD)
 write("key-chain.body", enc(key_chain))
 write("person-key-wrapped", PERSON_KEY_WRAPPED)
+write("statement-2", enc(STATEMENT_2))
+write("statement-entry.body", enc(statement_entry))
+write("erasure-decision-finalize.body", enc(finalize))
+write("erasure-decision-take-back.body", enc(take_back))

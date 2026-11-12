@@ -1,4 +1,5 @@
-//! Pushing again a change the relay refused (RFC 0008, M19; RFC 0002, "A
+//! Pushing again a change the relay refused (RFC 0008, "How the relay
+//! applies the rules"; RFC 0002, "A
 //! change the relay refuses after the member folded it"). The relay
 //! refuses `ME`'s write because of a revocation, and `ME`'s own fold
 //! rejects it too. A concurrent removal of the revoking admin, by a senior

@@ -53,7 +53,8 @@ Membership rules decide how permissions behave, which GENESIS.md asks us to tell
 - **Revocations win.** A revocation wins over a concurrent grant. A removed or demoted member regains a right only through a grant that saw the revocation. That grant also starts a new key generation, so writes made in between never count.
 - **One order, computed from the set.** Every member puts its control changes into one order computed from the changes alone, and applies them in that order. The order of arrival never matters. Seniority settles cycles of concurrent revocations.
 - **Concurrent rotations merge.** A generation id is derived from its rotation, so two rotations never share one. When a member that is no longer in the space may hold the current generation, the next admin that notices rotates again.
-- **A shred is final when accepted.** Its verdict reads only its causal past, so no revocation undoes it. Members destroy the person key and the relay deletes its record as soon as they accept the shred, and the view treats the person's fields as erased at once (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
+- **A shred is final when accepted.** Its verdict reads only its causal past, so no revocation undoes it. Members destroy the person key and the relay deletes its record as soon as they accept the shred, and the view treats the person's fields as erased at once (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). One exception: in a space with one account, that account signs off its own erasure, which stays provisional for 7 days and can be taken back until an erasure decision finalizes it (see [A provisional erasure in a space with one account](#a-provisional-erasure-in-a-space-with-one-account)).
+- **A newer account key reaches the fold.** After a lost device, a member carries the account's newer account key statement into the space, and the fold then refuses adds and sign-offs under the older account key (see [Account key statement entry](#account-key-statement-entry)).
 - **The relay runs the same code** over the control changes it holds. Where it holds fewer changes than a member, the members decide (see [How the relay applies the rules](#how-the-relay-applies-the-rules)).
 
 ## The first change of a space
@@ -95,6 +96,7 @@ Rights are per space. Every member of a space holds its keys and a full copy (RF
 | --- | --- | --- | --- |
 | Receive key envelopes and read the whole space | yes | yes | yes |
 | Acknowledge a shred entry | yes | yes | yes |
+| Carry an account key statement into the space | yes | yes | yes |
 | Leave the space, or lower its own role | yes | yes | yes |
 | Write sealed changes: content and work orders | | yes | yes |
 | Write person-key entries | | yes | yes |
@@ -102,9 +104,10 @@ Rights are per space. Every member of a space holds its keys and a full copy (RF
 | Add members; raise or lower another member's role; remove members | | | yes |
 | Rotate the space key: write key chain entries and key envelopes | | | yes |
 | Sign off an erasure, through its account | | only when the performer's account is the only admin account | yes |
+| Finalize or take back a provisional erasure | | | only an admin of the performer's account |
 
 - **Who may write what is checked per change**, by members and the relay alike. Each control change type needs one right (see [The control bodies](#the-control-bodies)). A sealed change needs the right to write sealed changes.
-- **The sign-off of an erasure** comes from an account, not a member (RFC 0003). The account must hold an admin member in the space, in the state of the shred entry's causal past. It must not be the account of the member that performs the erasure. One exception (Carsten, 2026-11-11, NOC-228): when exactly one account holds an admin member in that state, and it is the performer's account, another account that holds a writer member there may sign off; readers may not. A team whose one admin performs the erasure can then still erase, with a second person's approval, and a reader still approves none. A space whose members all belong to one account has no second account, so it cannot sign off an erasure under this rule. An erasure cannot be undone, and a reader's account should not approve one, so any account with a member in the space, other than the performer's, was not taken. "Account" here means the account's identity, its recovery key, which the account key statement in a certificate names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). The fold compares accounts so that a statement can only block a sign-off, never enable one (Carsten, 2026-11-11, NOC-201): the sign-off's account key and the performer's are one account when they are equal, or when any certificate in the shred's causal past, of a current or a former member, the performer's included, attaches the same recovery key to each. Key 6 sits outside the certificate's signature, so whoever writes an add can attach a statement; comparing by recovery key alone was not taken, because a statement attached to a second certificate of the performer's own account key would then make that account "another account", able to sign off its own erasure, and an erasure cannot be undone. Waiting for the statement entry that carries a newer account key statement into a space (NOC-187) was not taken either. Until that entry exists, a person's account keys before and after a recovery count as two accounts unless a certificate in the space attaches the same recovery key to both; that is no weaker than comparing account keys.
+- **The sign-off of an erasure** comes from an account, not a member (RFC 0003). The account must hold an admin member in the space, in the state of the shred entry's causal past. It must not be the account of the member that performs the erasure. One exception (Carsten, 2026-11-11, NOC-228): when exactly one account holds an admin member in that state, and it is the performer's account, another account that holds a writer member there may sign off; readers may not. A team whose one admin performs the erasure can then still erase, with a second person's approval, and a reader still approves none. A space whose members all belong to one account has no second account. There the performer's own account may sign off its erasure, on one condition: the erasure is provisional for 7 days and can be taken back until then (Carsten, 2026-11-11, NOC-228, NOC-230; see [A provisional erasure in a space with one account](#a-provisional-erasure-in-a-space-with-one-account)). An erasure cannot be undone, and a reader's account should not approve one, so any account with a member in the space, other than the performer's, was not taken. "Account" here means the account's identity, its recovery key, which the account key statement in a certificate names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). The fold compares accounts so that a statement can only block a sign-off, never enable one (Carsten, 2026-11-11, NOC-201): the sign-off's account key and the performer's are one account when they are equal, or when any certificate in the shred's causal past, of a current or a former member, the performer's included, attaches the same recovery key to each. Key 6 sits outside the certificate's signature, so whoever writes an add can attach a statement; comparing by recovery key alone was not taken, because a statement attached to a second certificate of the performer's own account key would then make that account "another account", able to sign off its own erasure, and an erasure cannot be undone. Waiting for the statement entry that carries a newer account key statement into a space (NOC-187) was not taken either. Until that entry exists, a person's account keys before and after a recovery count as two accounts unless a certificate in the space attaches the same recovery key to both; that is no weaker than comparing account keys.
 - **A reader cannot write content**, but it can read everything, and its device can leak what it read. The reader role limits writes, not knowledge (principle 4). Typical readers are adapters (RFC 0007), dashboards and auditors.
 - **Agents hold roles like every member.** The SDK adds an agent as a writer unless the app asks for another role, because most agents in RFC 0001's examples write; the SDK's notice says the role in plain words in every case. Reader, unless the app asks for more, was not taken: every writing agent would become a two-step setup. No default was not taken either: the safest, but every call grows for the common case. A sub-agent in an ad-hoc space (RFC 0003) is a writer there, and its parent is the admin.
 - **A space can lose its last admin**, when the last admin leaves or admins remove each other at the same time. The SDK refuses to let the last admin leave, but it cannot prevent the concurrent case. A space without an admin keeps working for content, but nobody can change its membership or rotate its key. That the most senior writer becomes admin automatically was not taken: it would give the role to someone who was never chosen for it.
@@ -142,6 +145,8 @@ Key 3 means what payload key 3 means in RFC 0002: the author's heads when it wro
 | 4 | Person-key entry | writer |
 | 5 | Shred entry | writer, plus an admin account's sign-off |
 | 6 | Acknowledgement | reader |
+| 7 | Account key statement entry | reader (Carsten, 2026-11-11, NOC-187) |
+| 8 | Erasure decision | admin, of the provisional shred's performer's account (Carsten, 2026-11-11, NOC-230) |
 
 Other entry types are reserved. A member that meets one keeps the change, parked, as RFC 0002 does for every [change it does not understand](0002-change-and-log-format.md#versioning-old-clients-keep-what-they-do-not-understand). Keys 8 to 63 of a body are "must understand", keys from 64 up "may ignore", as in RFC 0002's maps.
 
@@ -277,7 +282,7 @@ shred entry (entry type 5)
                           person-key id and the performer's member id
 ```
 
-The performer is the shred entry's author, a writer. The sign-off is valid when its account holds an admin member in the state of the shred's causal past, and that account is not the account of the performer's certificate, compared by account key and by recovery key as [Roles and rights](#roles-and-rights) says. When exactly one account holds an admin member in that state, and it is the performer's account, a sign-off whose account holds a writer member there is valid too; readers may not sign off (Carsten, 2026-11-11, NOC-228). The shred entry names no work order: the relay must not learn which sealed change was a work order (RFC 0001). The work order, inside its sealed change, names the shred entry instead.
+The performer is the shred entry's author, a writer. The sign-off is valid when its account holds an admin member in the state of the shred's causal past, and that account is not the account of the performer's certificate, compared by account key and by recovery key as [Roles and rights](#roles-and-rights) says. When exactly one account holds an admin member in that state, and it is the performer's account, a sign-off whose account holds a writer member there is valid too; readers may not sign off (Carsten, 2026-11-11, NOC-228). When every member in that state belongs to the performer's account, the performer's own account may sign off, and the shred is **provisional** (Carsten, 2026-11-11, NOC-228, NOC-230; see [A provisional erasure in a space with one account](#a-provisional-erasure-in-a-space-with-one-account)). A sign-off by an account key that is superseded in the shred's causal past is not valid (see [Account key statement entry](#account-key-statement-entry)). The shred entry names no work order: the relay must not learn which sealed change was a work order (RFC 0001). The work order, inside its sealed change, names the shred entry instead.
 
 ### Acknowledgement
 
@@ -289,11 +294,75 @@ acknowledgement (entry type 6)
 
 A member writes two acknowledgements per shred, both as soon as it accepts the shred. The first, with `deleted` false, says it accepted it. The second, with `deleted` true, follows once it deleted its copy of the key, which it does at once (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). The audit's evidence of erasure is the second kind. A further acknowledgement of the same kind, for the same shred by the same member, changes nothing. An acknowledgement by a member whose rights are revoked above the cutoff is rejected like any of its changes. The audit then shows that member as never having confirmed.
 
+### Account key statement entry
+
+```text
+account key statement entry (entry type 7)
+└── 8  statement          the account key statement of RFC 0010, as a CBOR map:
+                          1 recovery key, 2 account key, 3 number, 4 signature
+```
+
+It carries a newer account key statement into a space, so that the fold itself refuses an older account key after a lost device ([RFC 0010, "Losing a device"](0010-accounts.md#losing-a-device)). The statement proves itself: the recovery key signs it under its own context string ([RFC 0003, "Account key statement"](0003-keys-and-cryptography.md#account-key-statement)), so the entry adds no signature beyond the change's own. Any member may carry it, a reader too, so that a space whose only member of the account was the lost device still learns it from another member (Carsten, 2026-11-11, NOC-187). Only members of the same account writing it was not taken, because such a space would never learn the newer key from the fold. Neither was an entry without the recovery key, which would save 32 bytes but make every member look the key up in certificates; nor an entry that carries a whole new certificate, since a certificate stays fixed in the entry that admitted its member (RFC 0010).
+
+It is **valid when written** when, in its causal past:
+
+- the statement's signature verifies under its recovery key;
+- the recovery key is one that the certificate of a current or a former member names, so the account has a stake in the space;
+- its number is higher than the number of every statement for that recovery key in the causal past, in certificates and in statement entries alike.
+
+Two entries with the same number written concurrently are both valid. If they name the same account key, that is the same fact twice. If they name different account keys, someone who holds the recovery code made two statements, and both count. A later entry with the same or a lower number is not valid when written. What it changes is in [The function](#the-function), steps 1 and 5. A member already admitted under an older certificate stays a member: removing the lost device stays [RFC 0010's](0010-accounts.md#losing-a-device) `removeMember`. The entry costs about 140 bytes per space each time an account changes its account key.
+
+**Example.** The account of the test vectors below changes its account key after a lost device: the recovery key names the account key of the Ed25519 secret `0x12` repeated, with number 2, and a member writes that statement into the space after the add. In CBOR diagnostic notation:
+
+```text
+{1: 7, 3: [h'087b89e7…dcc581a'], 8: {1: h'90e506d6…d438d743', 2: h'204040e3…67877c21', 3: 2, 4: h'5f1a43b3…6c59c80c'}}
+```
+
+The body is 180 bytes; the statement in key 8 is 140:
+
+```text
+a3010703815820087b89e732c9ca0c89af393851752b287291599108dc6c82ea
+f934134dcc581a08a401582090e506d6c805585c4901c7b7cd36405df43b0cb4
+678fc9afb7378af4d438d743025820204040e364c10f2bec9c1fe500a1cd4c24
+7c89d650a01ed7e82caba867877c2103020458405f1a43b37dbd4ef73ef9f5b8
+0532c5a0162426a1185cdd8d24ac2e56eb8c62a7d46296698e6617a6696fc434
+8dd4180f8640f522e7252654cfa6fc4f6c59c80c
+```
+
+### Erasure decision
+
+```text
+erasure decision (entry type 8)
+├── 8  shred              change id of the provisional shred entry
+└── 9  final              bool: true finalizes the erasure, false takes it back
+```
+
+It ends a provisional erasure, either way (see [A provisional erasure in a space with one account](#a-provisional-erasure-in-a-space-with-one-account)). Its author must be an admin, in the state of the entry's causal past, of the account that performed the shred, and the shred must be provisional and in the causal past (Carsten, 2026-11-11, NOC-230). Any admin of the space was not taken: an account that joins later should neither take back nor finalize an erasure it never signed off. Two entry types, one to take back and one to finalize, were not taken: they would need the same check twice.
+
+**Example.** A decision on the shred entry whose change id is `0x5d` repeated, a placeholder, with the shred as its control dependency. To finalize, 76 bytes:
+
+```text
+{1: 8, 3: [h'5d5d…5d5d'], 8: h'5d5d…5d5d', 9: true}
+a40108038158205d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+5d5d5d5d5d5d5d0858205d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+5d5d5d5d5d5d5d5d5d5d09f5
+```
+
+To take it back, the same body with `9: false`, which changes the last byte from `f5` to `f4`:
+
+```text
+a40108038158205d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+5d5d5d5d5d5d5d0858205d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d
+5d5d5d5d5d5d5d5d5d5d09f4
+```
+
+**Test vectors.** `crates/ncdb-core/tests/vectors/membership/generate.py` writes the bodies above with independent libraries (cbor2 in canonical mode and cryptography's Ed25519), beside the vectors of the genesis and the membership entries: `statement-2.hex`, `statement-entry.body.hex`, `erasure-decision-finalize.body.hex` and `erasure-decision-take-back.body.hex`. The add before them is the vector `add`, whose change id is `087b89e7…dcc581a`; the recovery key is the vectors' `recovery-public`.
+
 ### What this RFC uses from RFC 0003
 
 RFC 0003 defines the formats of what keys sign and derive ([RFC 0003, "Formats of what keys sign and derive"](0003-keys-and-cryptography.md#formats-of-what-keys-sign-and-derive)). This RFC uses them as they are:
 
-- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id, and carries the account key statement. The account key signs a device's or an agent's certificate. A member that checks a certificate checks the chain from the account's identity: the statement against the recovery key it names, then the certificate against the account key the statement names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). RFC 0010 also decided that a control entry will carry a newer account key statement into a space, so that the fold refuses certificates and sign-offs by an older account key. That entry is still to be designed (NOC-187); until it is, an honest member's SDK makes the check before it writes, as [RFC 0010, "Losing a device"](0010-accounts.md#losing-a-device) says. A sub-agent's certificate is signed by its parent's member signing key, under its own context string (`"nocentraldb/sub-agent-cert"`), because a parent agent does not hold the account key and must not. Its key 1 still carries the parent's account key, for attribution. A member that checks a sub-agent's certificate, in an add entry or a genesis, checks the chain: the parent's own certificate, which must be of kind agent or sub-agent and name the same account key. The parent's certificate must be in this space's control changes, in the genesis or add entry that made the parent a member, so the check reads only the control set. In RFC 0003's ad-hoc space the parent is the creator, so it always is. An add entry whose sub-agent's parent is not a member in the state of the add's causal past is not valid when written. For the sign-off below, a sub-agent counts as its parent's account. The account key, as for every other kind, was not taken for a sub-agent: a parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space").
+- **The member certificate** names the account key, the member id, the kind (device, agent or sub-agent) and, for a sub-agent, the parent member id, and carries the account key statement. The account key signs a device's or an agent's certificate. A member that checks a certificate checks the chain from the account's identity: the statement against the recovery key it names, then the certificate against the account key the statement names ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). RFC 0010 also decided that a control entry carries a newer account key statement into a space, so that the fold refuses certificates and sign-offs by an older account key: the [account key statement entry](#account-key-statement-entry) (Carsten, 2026-11-11, NOC-187). A sub-agent's certificate is signed by its parent's member signing key, under its own context string (`"nocentraldb/sub-agent-cert"`), because a parent agent does not hold the account key and must not. Its key 1 still carries the parent's account key, for attribution. A member that checks a sub-agent's certificate, in an add entry or a genesis, checks the chain: the parent's own certificate, which must be of kind agent or sub-agent and name the same account key. The parent's certificate must be in this space's control changes, in the genesis or add entry that made the parent a member, so the check reads only the control set. In RFC 0003's ad-hoc space the parent is the creator, so it always is. An add entry whose sub-agent's parent is not a member in the state of the add's causal past is not valid when written. For the sign-off below, a sub-agent counts as its parent's account. The account key, as for every other kind, was not taken for a sub-agent: a parent agent never holds the account key and must not (RFC 0003, "Sub-agents get an ad-hoc space").
 - **The account sign-off** names the space id, the person-key id and the performer's member id, with the account key and its signature.
 - **The key-chain subkey** is the HKDF-SHA256 subkey of the new generation's key that encrypts the previous keys in a key chain entry.
 
@@ -315,7 +384,7 @@ They are **local checks**. A member that finds a wrong key reports it, with the 
 
 Let S be the set of control changes of a space that a holder has, each with a valid signature and a canonical body, and the genesis chosen as above. The control state is `resolve(S)`, in five steps.
 
-**1. Validity in the causal past.** A control change c is *valid when written* if `resolve` of its causal past gives its author the right its entry type needs, and c's own rules hold in that state. The own rules are: an add's subject is not a member, and a re-grant saw the revocation and names a fresh generation; an envelope's recipient is a member and its generation exists; a key chain entry's previous generations exist and its generation id matches; a person-key entry repeats the commitment of its id; a shred names a person key that exists and carries a valid sign-off. The causal past is a smaller set, so the definition is well-founded. A control dependency the holder does not hold is a gap. The SDK reports it and asks for it (RFC 0002), and the causal past then counts only what the holder holds.
+**1. Validity in the causal past.** A control change c is *valid when written* if `resolve` of its causal past gives its author the right its entry type needs, and c's own rules hold in that state. The own rules are: an add's subject is not a member, and a re-grant saw the revocation and names a fresh generation; an envelope's recipient is a member and its generation exists; a key chain entry's previous generations exist and its generation id matches; a person-key entry repeats the commitment of its id; a shred names a person key that exists and carries a valid sign-off; an account key statement entry holds the rules of [its section](#account-key-statement-entry); an erasure decision names a provisional shred in its causal past, its author is an admin of that shred's performer's account, a finalize holds no take-back of the shred in its causal past, and a take-back holds no finalize of it. An add is not valid when written if its subject's certificate names an account key that is superseded in its causal past, and a shred is not valid when written if its sign-off's account key is (Carsten, 2026-11-11, NOC-187). An account key K is **superseded** in a set of control changes when the set holds a statement for a recovery key R that names K with number n, in a certificate's key 6 or in a statement entry, and a statement for R with a number higher than n. The causal past is a smaller set, so the definition is well-founded. A control dependency the holder does not hold is a gap. The SDK reports it and asks for it (RFC 0002), and the causal past then counts only what the holder holds.
 
 **2. Seniority.** A total order on member ids:
 
@@ -348,14 +417,16 @@ A cycle arises when concurrent revocations exclude each other. The first revocat
 2. its author holds the right in the state so far: the accepted changes before it in the order;
 3. no accepted revocation before it in the order excludes it.
 
-A shred entry is the exception: it is accepted when it is valid when written, and conditions 2 and 3 do not apply to it (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* with its reason, and changes nothing. Two rules apply to the whole set rather than to the order:
+A shred entry, and an erasure decision that finalizes, are the exceptions: each is accepted when it is valid when written, and conditions 2 and 3 do not apply to it (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). An accepted change updates the state. A rejected change stays in the log in RFC 0002's state *rejected* with its reason, and changes nothing. These rules apply to the whole set rather than to the order:
 
 - A person-key entry that a shred of the same person-key id did not see is rejected when S holds an accepted shred for that id, wherever the entry falls in the order. A shred therefore wins over a concurrent re-wrap.
 - Of two accepted shreds of one person-key id, the first in the order takes effect, and the second changes nothing.
+- An add that did not see an account key statement entry is rejected when that entry is accepted in S and supersedes the account key the add's certificate names, wherever the add falls in the order (Carsten, 2026-11-11, NOC-187). An add written by a thief before it learnt of the newer statement therefore loses to it on every copy. Rejecting an add is reversible: the subject's changes are un-folded, and nothing is destroyed. Refusing only adds whose causal past holds the newer statement was not taken, because a concurrent add would still pass.
+- A take-back is rejected when S holds an accepted finalize of the same shred, wherever it falls in the order: a finalize wins over every concurrent take-back (Carsten, 2026-11-11, NOC-230). Of several finalizes, or several take-backs, of one shred, the first changes the state, and the others change nothing.
 
 **Roles.** A membership entry that sets role r is a grant of r, and caps at r every grant of the same subject that did not see it. An add or set role sets its role; a remove sets "none". A member's role is the highest role among its accepted grants, each lowered to the lowest cap that an accepted entry not seen by that grant puts on it. A grant therefore loses to a concurrent removal or demotion, and a raise to a concurrent lower raise. It keeps the rights it gives over every entry it saw, so a re-grant that saw the revocation stands. Every cap is a revocation in step 3, with the capping entry's cutoff. The changes a member made under the higher role above that cutoff are therefore excluded wherever they land in the order, and the rule for sealed changes applies the same caps.
 
-**The state** holds, per member id: its public keys and certificate, its role, its accepted grants with their from generations, and its accepted revocations with their cutoffs. Per generation: its id, its previous generations, its envelopes, and which member ids may hold it (see [Two removals that rotate the key at once](#two-removals-that-rotate-the-key-at-once)). Per person-key id: its commitment, its newest record's generation and hash, and whether a shred destroyed it, with its acknowledgements. The state has a canonical encoding: equal states encode to equal bytes, which is what the convergence harness compares (RFC 0004, C1).
+**The state** holds, per member id: its public keys and certificate, its role, its accepted grants with their from generations, and its accepted revocations with their cutoffs. Per generation: its id, its previous generations, its envelopes, and which member ids may hold it (see [Two removals that rotate the key at once](#two-removals-that-rotate-the-key-at-once)). Per person-key id: its commitment, its newest record's generation and hash, and whether a shred destroyed it, with its acknowledgements, or whether a provisional shred awaits its decision, was taken back or was finalized. The state has a canonical encoding: equal states encode to equal bytes, which is what the convergence harness compares (RFC 0004, C1).
 
 ### Sealed changes
 
@@ -385,9 +456,11 @@ The fold does not need to be incremental. A space holds few control changes, hun
 - a shred arrives that a person-key entry did not see;
 - a change arrives that moves which of two shreds of one person-key id comes first in the order, which changes only which of them the state names, since both are accepted and destroy the same key;
 - an equivocated genesis with a lower change id arrives late, and becomes the genesis (see [How the relay and members recognise it](#how-the-relay-and-members-recognise-it));
-- a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (see [Generation ids](#generation-ids)).
+- a key chain entry arrives that names the same generation id as an accepted one, and both are rejected (see [Generation ids](#generation-ids));
+- an account key statement entry arrives that an add did not see, and supersedes the account key of the add's certificate, so the add is rejected (see [Account key statement entry](#account-key-statement-entry));
+- a finalize arrives that a take-back of the same provisional shred did not see, so the take-back is rejected and the erasure is final (see [A provisional erasure in a space with one account](#a-provisional-erasure-in-a-space-with-one-account)).
 
-**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its effects follow at once, and they can all be undone. The one effect that cannot, destroying a person key, belongs to a shred, and a shred never loses its verdict once it is accepted (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). Un-folding is allowed because without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
+**Un-folding.** A later control change can make a check fail that a change has already passed, in exactly the ways listed above. A sealed change then moves from folded to rejected, and RFC 0006 un-folds it ([Control changes and changes that wait for them](0006-local-view.md#control-changes-and-changes-that-wait-for-them), "Un-folding"). A control change that loses its verdict is recomputed through `resolve`; its effects follow at once, and they can all be undone. The one effect that cannot, destroying a person key, belongs to a shred, or to the finalize of a provisional one, and neither loses its verdict once it is accepted (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). Un-folding is allowed because without it, a revocation that arrives late could not undo what a stolen device wrote meanwhile.
 
 Every such change has to be concurrent with the change whose verdict flips, or with one of the changes it rests on. Members see verdicts change while concurrent control changes are still arriving, and the SDK reports each change. That is the price of island mode under every option.
 
@@ -414,13 +487,42 @@ The view can always be recomputed, so un-folding a change costs nothing but work
 | --- | --- |
 | Shred entry | The fold treats the person's fields as erased on every member (RFC 0003, step 4). The member writes its "seen" acknowledgement, deletes its copy of the person key and writes its "deleted" acknowledgement. The relay deletes the person-key record. |
 | Key envelope | The member unwraps the key into its keystore and can decrypt. If the envelope is rejected later, the member keeps the key only to read changes already accepted under it, and never writes with it. |
-| Membership entry, key chain entry, person-key entry, acknowledgement | They change the control state; the relay changes whom it serves. Nothing irreversible. |
+| Provisional shred entry | The fold treats the person's fields as erased on every member. The member writes its "seen" acknowledgement and keeps the person key; the relay keeps the record. |
+| Erasure decision that finalizes | What a shred entry does, for its provisional shred: the member deletes its copy of the person key and writes its "deleted" acknowledgement, and the relay deletes the record. |
+| Erasure decision that takes back | The fold reads the person's fields again. Nothing irreversible: a concurrent finalize that arrives later erases them again. |
+| Membership entry, key chain entry, person-key entry, acknowledgement, account key statement entry | They change the control state; the relay changes whom it serves. Nothing irreversible. |
 
 A member that is offline destroys the key when it syncs and accepts the shred. Until then it holds the key, as RFC 0003 says of every device that has not come back.
 
 **The price.** A concurrent revocation of the performer no longer stops an erasure: the shred stands even when a revocation the performer did not see removed it. The sign-off is the whole defence. A second account, which holds an admin member in the shred's causal past, signed off this performer and this person key (see [Shred entry](#shred-entry)). A thief with a stolen writer device therefore cannot erase without that account. A thief who also controls such an account can erase a person's data for good: a loss of data, not a leak, and such a pair can already remove members.
 
 **Waiting until the shred is stable was not taken**, which was this RFC's earlier rule. A shred was stable once every admin and former admin had written a control change after seeing it, or was bounded by a stable revocation, and its key was destroyed only then. That rule holds only against admins that are honest or already revoked. An admin device that is stolen and not yet removed can still reject a stable shred: by a new change whose dependencies and cutoff leave the shred out, which nobody can check, or by an equivocation under a sequence the rule already counted, which is inside every cutoff (NOC-224; the harness pins both, NOC-226). The wait also let one lost admin device keep a key alive for as long as it stayed away. Two repairs were not taken either: refusing a second change under a counted sequence, because holders differ in what they call stable, so the state would split; and treating an admin's equivocation as a revocation of that admin, because the device chooses where to fork and can exclude a grant the shred rests on.
+
+### A provisional erasure in a space with one account
+
+In a space whose members all belong to one account, no second account can sign off an erasure. There the performer's own account signs off, and the erasure is **provisional** for 7 days: the person shows as erased at once and can be restored, and only then is the erasure final (Carsten, 2026-11-11, NOC-228, NOC-230). Every other erasure stays final when accepted.
+
+**Final is a change in the log, not a timer.** Control changes carry no clock (see [The control bodies](#the-control-bodies)), so no two copies agree on "7 days after the shred", and destroying the key is the one effect that cannot be undone. A provisional erasure therefore becomes final only through an [erasure decision](#erasure-decision) that finalizes it. Members destroy the key, and the relay deletes the record, only once they accept that decision. The decision is ordered and convergent like every control change.
+
+- **Who writes the finalize.** The SDK of a device of the performer's account writes it, as an admin of the space, once that device has held the provisional shred for 7 days by its own clock.
+- **The relay's gate.** The relay refuses a finalize that arrives less than 7 days, by the relay's own clock, after it accepted the shred, with the code `too_early`; the SDK tries again later ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)). A thief with a device of the account therefore cannot finalize at once. In island mode, without the relay, the 7 days rest on the device's own clock.
+- **The take-back.** Within the 7 days, an admin of the performer's account takes the erasure back with an erasure decision whose key 9 is false. The person's fields are then read again on every member.
+
+**Convergence.** A provisional shred has three outcomes, each a function of the set of control changes:
+
+- **Final** when S holds an accepted finalize of it. A finalize is accepted when it is valid when written, so no change that can still arrive rejects it, as for a shred.
+- **Taken back** when S holds an accepted take-back of it and no accepted finalize.
+- **Provisional** otherwise.
+
+A take-back that arrives after a device destroyed the key can only be concurrent with the finalize that device accepted, and a finalize wins over every concurrent take-back ([The function](#the-function), step 5). Every copy therefore ends final. No copy destroys a key without an accepted finalize, so a device's 7 days running out decides nothing on its own. A take-back accepted before a concurrent finalize arrives is overturned by it: the view erases the fields again, which only the view changes, since the key still exists.
+
+**While provisional,** the view treats the person's fields as erased, members keep the person key and the relay keeps its record. The SDK reports each provisional erasure in the space status, with its age on the device and whether the device's account may take it back. Every device of the account, not only the performer's, gets a notice when it first holds a provisional shred, which names the performing device and the 7 days ([RFC 0009, "Sync and status"](0009-sdk-api.md#sync-and-status)). An app must show it: it is how the account's owner sees, on another device, an erasure by a stolen one, while it can still be taken back.
+
+**A second account joins within the 7 days.** The erasure stays provisional and finalizes as before: its sign-off was valid in its causal past, the same reading as a shred's. The new account sees it in its status, but may neither take it back nor finalize it. An erasure that lapses unless the new account signs it off was not taken: a thief could then cancel one by adding a member. Neither was refusing to add an account while an erasure is provisional, which would block a team for up to 7 days.
+
+**What this costs.** A wire change: the erasure decision, entry type 8. The relay keeps when it accepted each provisional shred, one row per shred, and answers a new code. If no device of the account comes back online, the erasure stays provisional and the key is never destroyed: safe for the data, not for the erasure, and the status shows it. Older cores reject a shred that the performer's own account signed off, so they show the person's data until they are upgraded and never destroy the key early. Copies agree once every member runs a core that knows the rule.
+
+**Not taken.** Each device counting 7 days and deleting the key on its own: copies would diverge for good when a take-back arrives after one device deleted its key. The relay alone telling members that an erasure is final: members would take an irreversible step on the relay's word, with no signed record in the log, and island mode would never finalize. A person confirming each finalize: it would not meet "final after 7 days" without a person.
 
 ### Concurrent add and remove of one member
 
@@ -495,7 +597,9 @@ The control state is treated like a field type under RFC 0004's plugin contract.
 | M-C9 | Exposure counts every envelope. | Rejected rotations and envelopes from removed admins, delivered to some copies only. Once a merge rotation is accepted, no one outside the state may hold the current generation in any copy that holds those envelopes. |
 | M-C10 | Shreds are ordered. | Two shreds of one id, and shreds concurrent with re-wraps. Exactly one shred takes effect, and no re-wrap it did not see is accepted. |
 | M-C11 | The relay agrees. | After every delivery, the relay simulator's membership table equals `resolve` of its own log. Every change it refused is one that the members also reject for the same S, or one listed in [How the relay applies the rules](#how-the-relay-applies-the-rules). |
-| M-C12 | The checks fire. | Broken fixtures the harness must reject: add wins for membership; arrival order instead of the computed order; a revocation without its cutoff; seniority by arrival; a re-grant without a fresh generation; exposure that counts only accepted envelopes; a revocation that excludes a shred. |
+| M-C12 | The checks fire. | Broken fixtures the harness must reject: add wins for membership; arrival order instead of the computed order; a revocation without its cutoff; seniority by arrival; a re-grant without a fresh generation; exposure that counts only accepted envelopes; a revocation that excludes a shred; a take-back that wins over a concurrent finalize; an add whose superseded account key is accepted. |
+| M-C13 | A finalize wins over every concurrent take-back. | Provisional shreds with finalizes and take-backs from several devices of the account, concurrent and in sequence, delivered in any order. Every copy reaches the same outcome, no copy destroys a key without an accepted finalize, and none restores a person whose key a copy destroyed (Carsten, 2026-11-11, NOC-230). |
+| M-C14 | A newer account key statement wins over a concurrent add. | Account key statement entries concurrent with adds whose certificates name the superseded account key, and with sign-offs by it. Every such add is rejected on every copy in any order; a sign-off is judged by its shred's causal past only (Carsten, 2026-11-11, NOC-187). |
 
 ## How the relay applies the rules
 
@@ -507,7 +611,8 @@ The relay holds no key. It does hold every accepted control change of a space, a
 - **A sealed change** is accepted by the rule in [Sealed changes](#sealed-changes), which needs only its header: author, author sequence and generation id.
 - **The uploader** must be a current member (RFC 0007).
 - **A person-key record** needs its person-key entry. It replaces the stored record when its generation is the stored record's generation or descends from it, because generation ids that carry a tag have no "newer" ([RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
-- **A shred's record deletion** happens as soon as the relay accepts the shred entry, by the same rule as on a member (see [A shred is final when accepted](#a-shred-is-final-when-accepted)).
+- **A shred's record deletion** happens as soon as the relay accepts the shred entry, by the same rule as on a member (see [A shred is final when accepted](#a-shred-is-final-when-accepted)). For a provisional shred, it happens once the relay accepts the erasure decision that finalizes it.
+- **A finalize that comes too early** is refused with `too_early` when it arrives less than 7 days, by the relay's clock, after the relay accepted its provisional shred. The relay keeps that time per provisional shred ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks); Carsten, 2026-11-11, NOC-230). This is the one check the members cannot repeat, since they share no clock. The members still decide whether the erasure is final; the gate only delays what the relay accepts.
 
 Where the relay and the members can disagree, and who decides:
 
@@ -528,7 +633,8 @@ The relay decides nothing the members cannot check. It can refuse a change the m
 - **Who saw what.** Through the control dependencies: which control changes each admin had seen when it wrote, so how up to date each admin was, and which admins acted on separate islands.
 - **Accounts across spaces.** The account key and its statement in each member certificate, so which devices and agents belong to one person or organisation, in every space the relay serves.
 - **The sub-agent tree.** Which member is a sub-agent of which parent, from the certificates.
-- **Erasure approvers.** Which accounts sign off erasures, and in which spaces.
+- **Erasure approvers.** Which accounts sign off erasures, and in which spaces; which erasures were provisional, and when each was taken back or finalized.
+- **Account key changes.** From account key statement entries, when an account changed its account key, which RFC 0010 already lists.
 - **The generation graph.** When concurrent rotations happened, and which merge rotations followed.
 
 It still learns no content, no space name and no model id, which the genesis seals.
@@ -557,7 +663,8 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 - **Payload keys.** A control body keeps key 1 as the entry type and key 3 as the dependencies, and leaves key 2, the clock, absent ([RFC 0002, "Key generation, suite and kind"](0002-change-and-log-format.md#key-generation-suite-and-kind)).
 - **Pushing again.** A member pushes a change the relay refused again once its own fold accepts it ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)).
 - **Concurrent rotations** get derived generation ids, exposure and the merge rotation ([RFC 0003, "Removing a member and rotating the space key"](0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key)).
-- **The sign-off** of an erasure comes from an account with an admin member in the space, or with a writer member when the performer's account is the only admin account ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- **The sign-off** of an erasure comes from an account with an admin member in the space, or with a writer member when the performer's account is the only admin account, or, provisionally for 7 days, from the performer's own account when it is the space's only account ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)).
+- **Account key statements** reach the fold through the account key statement entry, as RFC 0010 decided ([RFC 0010, "Losing a device"](0010-accounts.md#losing-a-device)).
 - **Formats.** RFC 0003 defines the member certificate, the account sign-off and the key-chain subkey, and this RFC uses them, including the sub-agent certificate its parent signs ([What this RFC uses from RFC 0003](#what-this-rfc-uses-from-rfc-0003)).
 - **The person-key entry** carries RFC 0003's commitment and RFC 0007's record hash and generation ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key); [RFC 0007, "Keys and the person-key store"](0007-relay.md#keys-and-the-person-key-store)).
 - **The relay's membership table** holds roles, grants with their from generations, revocations with their cutoffs and the generation graph. The relay checks author sequences against cutoffs, replaces a person-key record only with the same or a descendant generation, and deletes a record as soon as it accepts its shred ([RFC 0007, "What the relay checks"](0007-relay.md#what-the-relay-checks)).
@@ -573,7 +680,7 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | How does a space start? | With a genesis by its creator, naming the creator's keys and certificate and the first generation; the space id derives from the creator and a nonce. |
 | Which roles exist? | Reader, writer and admin, per space. |
 | Who may change membership? | Admins. Every member may leave. |
-| Who signs off an erasure? | Another account that holds an admin member in the space; when the performer's account is the only admin account, another account with a writer member. |
+| Who signs off an erasure? | Another account that holds an admin member in the space; when the performer's account is the only admin account, another account with a writer member; in a space with one account, that account itself, and the erasure stays provisional for 7 days. |
 | What do control changes carry? | An entry type, the control dependencies and the fields of their type, readable by the relay; no clock. |
 | What may the fold read? | Control bodies and headers only. Wrong keys and failed decryption are local reports. |
 | How does the membership state converge? | One order computed from the set: causal order, revocations first, edges added by seniority, then the rules applied in that order. |
@@ -581,7 +688,8 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | Two rotations at once? | Two generations with derived, distinct ids; the next admin that sees exposure rotates again. |
 | A removed member that keeps writing? | Its changes above the cutoff are rejected by every member and refused by the relay; equivocations inside the cutoff are reported, not rejected. |
 | A member raised again? | Only its changes under a fresh generation count. |
-| When is a person key destroyed? | As soon as a member or the relay accepts the shred: its verdict reads only its causal past, so no revocation undoes it. |
+| When is a person key destroyed? | As soon as a member or the relay accepts the shred: its verdict reads only its causal past, so no revocation undoes it. A provisional shred's key is destroyed once an erasure decision finalizes it, which the relay accepts no sooner than 7 days after the shred. |
+| What happens after a lost device? | A member carries the account's newer account key statement into the space; the fold then refuses adds and sign-offs under the superseded account key. |
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
 | Groups? | None: withdrawn by the owner (Carsten, 2026-11-09); a later RFC may bring them back. |
 

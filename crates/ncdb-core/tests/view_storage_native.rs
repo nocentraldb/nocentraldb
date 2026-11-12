@@ -1,10 +1,11 @@
 //! The local view on SQLite, natively only (NOC-69; RFC 0006, "Desktop and
 //! mobile"): what holds on desktop and mobile and not in the browser.
 //!
-//! - WAL mode with `synchronous = FULL` is decision 7 for a file on a
-//!   device. The browser runs one connection on `opfs-sahpool`, which has
-//!   no shared-memory WAL (RFC 0006, "SQLite on each target"); the browser
-//!   test (`scripts/browser-view/`) reports the journal mode it gets there.
+//! - WAL mode with `synchronous = FULL` is what RFC 0006 ("Desktop and mobile")
+//!   takes for a file on a device. The browser runs one connection on
+//!   `opfs-sahpool`, which has no shared-memory WAL (RFC 0006, "SQLite on each
+//!   target"); the browser test (`scripts/browser-view/`) reports the journal
+//!   mode it gets there.
 //! - The crash in the middle of a fold is a caught panic, and a panic on
 //!   wasm32 aborts the test binary.
 #![cfg(not(target_arch = "wasm32"))]
