@@ -404,3 +404,44 @@ async fn a_member_that_folds_a_shred_acknowledges_it_seen_then_deleted_once() {
         "a second fold writes nothing new"
     );
 }
+
+/// Every role acknowledges a shred (RFC 0008, "Roles and rights"): a
+/// reader writes "seen" and "deleted" too.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_reader_acknowledges_a_shred_as_well() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project) = shared(&relay).await;
+    let reader = open(GUEST, &relay.url()).await;
+    let options = AddMember {
+        role: Role::Reader,
+        fingerprint: None,
+    };
+    now(project.members().add(&now(reader.invitation()), options)).unwrap();
+    synced(&admin).await;
+    drop(member);
+    let signer_options = OpenOptions::new(LOCK).in_memory().relay(&relay.url());
+    let signer = Db::open_as(
+        signer_options,
+        [SIGNER; 32],
+        [SIGNER ^ 0x80; 32],
+        space::other_account(1),
+    )
+    .await
+    .expect("the test lock opens");
+    let invitation = now(signer.invitation());
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: Some(invitation.fingerprint()),
+    };
+    now(project.members().add(&invitation, options)).unwrap();
+    let key = PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    let shred = shred(&admin, &project);
+    synced(&admin).await;
+    let space = project.id().0;
+
+    eventually("the reader acknowledges the shred", || {
+        acknowledgements(&reader, space) == vec![(shred, false), (shred, true)]
+    })
+    .await;
+}
