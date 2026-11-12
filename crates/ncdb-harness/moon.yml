@@ -1,0 +1,19 @@
+language: rust
+layer: library
+
+# The harness runs in the browser (GENESIS.md, principle 7), so its gates
+# build it for wasm32-unknown-unknown and run its tests there, next to the
+# native tasks inherited from .moon/tasks/rust.yml. Deps of `gates` merge
+# with the inherited ones.
+tasks:
+  build-wasm:
+    command: "cargo build --locked -p $project --target wasm32-unknown-unknown"
+  test-wasm:
+    # Cargo runs each wasm test binary through wasm-bindgen-test-runner, in
+    # Node, which repo:wasm-runner installs at its pinned version.
+    command: "cargo test --locked -p $project --target wasm32-unknown-unknown"
+    deps: ["repo:wasm-runner"]
+    env:
+      CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
+  gates:
+    deps: ["~:build-wasm", "~:test-wasm"]

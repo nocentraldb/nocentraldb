@@ -962,6 +962,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ncdb-harness"
+version = "0.1.0"
+dependencies = [
+ "ncdb-plugin",
+ "ncdb-test-counter",
+ "proptest",
+ "sha2 0.11.1",
+ "wasm-bindgen-test",
+]
+
+[[package]]
 name = "ncdb-plugin"
 version = "0.1.0"
 dependencies = [
