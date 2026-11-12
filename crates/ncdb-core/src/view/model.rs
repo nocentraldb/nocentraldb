@@ -47,6 +47,31 @@ pub struct Model {
     /// field's plaintext only while its person key is held and the person
     /// is not erased (RFC 0006, "What the view stores in plaintext").
     pub personal: BTreeMap<String, BTreeMap<String, Person>>,
+    /// The model the SDK ships beside the app's lock, the account space's
+    /// (RFC 0010, "The account space"), when the database folds one: its
+    /// collections sit among the app's, each under its name with
+    /// [`RESERVED`] in front, and a space whose genesis names its id folds
+    /// by them alone.
+    pub reserved: Option<Reserved>,
+}
+
+/// What the view keeps of a shipped model besides its collections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Reserved {
+    /// Its `model.id`, which the genesis of each of its spaces names.
+    pub id: [u8; 16],
+    /// Its `model.version`.
+    pub version: u64,
+}
+
+/// What the view puts in front of a shipped model's collection names: a
+/// name that starts with `$` is reserved for the core, so no app declares
+/// one (RFC 0005, "Names"; RFC 0010, "The account space").
+pub const RESERVED: &str = "$";
+
+/// The name the view holds a shipped model's collection under.
+pub fn reserved_name(collection: &str) -> String {
+    format!("{RESERVED}{collection}")
 }
 
 /// A field and its field type (RFC 0004).
@@ -182,6 +207,9 @@ pub enum Invalid {
     UnsortableKey(String),
     /// The index fixes more keys with equality than it has.
     Equality(String),
+    /// The shipped model has the `model.id` of the app's lock, so a space
+    /// could not say which of the two it folds by.
+    ReservedId,
 }
 
 impl Field {
@@ -298,7 +326,16 @@ impl Model {
                 ])
             })
             .collect();
-        let model = Value::Array(vec![Value::Map(collections), Value::Array(indexes)]);
+        let mut model = vec![Value::Map(collections), Value::Array(indexes)];
+        // A model without a shipped one hashes as it did before there were
+        // shipped models, so the views it folded stay current.
+        if let Some(reserved) = &self.reserved {
+            model.push(Value::Array(vec![
+                Value::Bytes(reserved.id.to_vec()),
+                Value::Unsigned(reserved.version),
+            ]));
+        }
+        let model = Value::Array(model);
         Sha256::digest(cbor::encode(&model)).into()
     }
 }

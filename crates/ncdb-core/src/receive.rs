@@ -151,6 +151,14 @@ pub trait Fold {
     /// The `model.id` of the member's lock: a change whose payload key 64
     /// names another is parked whole (RFC 0002, "The writer's model").
     fn model_id(&self) -> [u8; 16];
+    /// Takes the model a space's genesis names, when the member can read
+    /// it, and says whether the fold folds that space: by default only a
+    /// space of [`Fold::model_id`]. A fold that also holds the model the
+    /// SDK ships (RFC 0010, "The account space") folds a space of that
+    /// model by it, and [`Fold::model_id`] then names it.
+    fn select_model(&mut self, space_model: Option<[u8; 16]>) -> bool {
+        space_model.is_none_or(|model| model == self.model_id())
+    }
     /// Whether the member's model knows the collection.
     fn knows_collection(&self, collection: &str) -> bool;
     /// Whether the member's model knows the field of the collection.
@@ -299,11 +307,9 @@ fn check(
         Err(stop) => return (stop.into(), None),
     };
     // A space of another model is never folded, whatever the change says
-    // of itself (NOC-57).
-    if checks
-        .space_model_id()
-        .is_some_and(|model| model != fold.model_id())
-    {
+    // of itself (NOC-57). The fold takes the space's model here, the
+    // app's or the one the SDK ships (NOC-266).
+    if !fold.select_model(checks.space_model_id()) {
         return (State::Parked(ParkReason::AnotherModel), None);
     }
     if payload.format != Payload::FORMAT {

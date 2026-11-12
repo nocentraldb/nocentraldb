@@ -197,7 +197,10 @@ fn a_view_opened_again_with_the_shipped_model_folds_its_spaces() {
     receive(&mut view, space, &changes);
     drop(view);
 
-    let view = View::open_with_plugins(&db.0, &lock(), &shipping(), checks_for).unwrap();
+    // The shipped model folds the view again: in a rebuild, which serves
+    // the old tables until it is done (RFC 0006, "Rebuilding the view").
+    let mut view = View::open_with_plugins(&db.0, &lock(), &shipping(), checks_for).unwrap();
+    while view.rebuild_step(64).unwrap().is_some() {}
 
     assert!(matches!(
         view.state(space, content.id()),
