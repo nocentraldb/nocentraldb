@@ -18,6 +18,7 @@ ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.1.0" }
 ncdb-test-counter = { path = "crates/ncdb-test-counter", version = "=0.1.0" }
 ncdb-relay = { path = "crates/ncdb-relay", version = "=0.1.0" }
 ncdb-relay-server = { path = "crates/ncdb-relay-server", version = "=0.1.0" }
+ncdb-relay-lambda = { path = "crates/ncdb-relay-lambda", version = "=0.1.0" }
 nocentraldb = { path = "crates/nocentraldb", version = "=0.1.0" }
 
 # Debug and test builds keep only line tables, not full debug info: panics

@@ -1,0 +1,22 @@
+{
+  "requestContext": {
+    "routeKey": "$default",
+    "messageId": "Q7mXOc2pFiACFbQ=",
+    "eventType": "MESSAGE",
+    "extendedRequestId": "Q7mXOFpUliAFvdA=",
+    "requestTime": "29/Oct/2026:14:05:22 +0000",
+    "messageDirection": "IN",
+    "stage": "prod",
+    "connectedAt": 1793369121000,
+    "requestTimeEpoch": 1793369122177,
+    "identity": {
+      "sourceIp": "192.0.2.10"
+    },
+    "requestId": "Q7mXOFpUliAFvdA=",
+    "domainName": "abcdef1234.execute-api.eu-central-1.amazonaws.com",
+    "connectionId": "Q7mXJdJpFiACFbQ=",
+    "apiId": "abcdef1234"
+  },
+  "body": "owFlaGVsbG8DgQEEa25jZGItcnMvMC4x",
+  "isBase64Encoded": true
+}
