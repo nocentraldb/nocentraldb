@@ -89,7 +89,10 @@ fn a_random_nonce_seals_differently_and_opens() {
     let one = personal::seal(&key(), &place("name"), &value());
     let two = personal::seal(&key(), &place("name"), &value());
     assert_ne!(one, two);
-    assert_eq!(personal::open(&key(), &place("name"), &one).unwrap(), value());
+    assert_eq!(
+        personal::open(&key(), &place("name"), &one).unwrap(),
+        value()
+    );
 }
 
 #[test]
