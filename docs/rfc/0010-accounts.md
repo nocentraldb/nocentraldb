@@ -141,9 +141,42 @@ On pairing, the account key passes neither through the relay nor through the acc
 
 **Which spaces a new device joins.** The SDK adds a new device to every space where a device of the account is an admin, with the role the account's devices hold there, and returns one notice per space, because it changes who can read ([GENESIS.md, "What it must never do"](../../factory/GENESIS.md#what-it-must-never-do)). A person expects their new phone to show their data, so the app does not have to add it space by space. Where no device of the account is an admin, the SDK lists the spaces, and the app asks those spaces' admins with the new device's invitation, which their SDK accepts without a fingerprint check, because the account is known to it. Other admins' SDKs do not admit a certified device of a known account on their own: that would let a certificate admit a member without any admin deciding, which RFC 0008 never allows. An agent joins no space automatically: it gets the spaces its task needs and no more.
 
+### The pairing answer
+
+The answer travels as text, as the invitation does: the prefix `ncdb-pair-1:` followed by base64url, without padding, of the bytes below, which a QR code or a copy-paste carries (proposed, NOC-262; the owner has not decided it). It is a fixed layout, as [RFC 0003, "Invitation"](0003-keys-and-cryptography.md#invitation) is, for the same reasons: compact enough for a QR code and one way to write each answer.
+
+| Offset | Length | Field | Bytes |
+| --- | --- | --- | --- |
+| 0 | 1 | version | `1` |
+| 1 | 1 | kind | key 3 of the certificate: `1` device or `2` agent |
+| 2 | 32 | account key | key 1 of the certificate |
+| 34 | 64 | certificate signature | key 5 of the certificate |
+| 98 | 32 | recovery key | key 1 of the account key statement |
+| 130 | 8 | number | key 3 of the statement, big-endian, at least 1 |
+| 138 | 64 | statement signature | key 4 of the statement |
+| 202 | 1 | sealed key | `0` for an agent; `1` for a device, and the two fields below follow |
+| 203 | 32 | HPKE encapsulated key | the sender's ephemeral X25519 public key |
+| 235 | 48 | sealed account key | the 32-byte Ed25519 seed of the account key and the 16-byte tag, sealed as [RFC 0003, "Pairing answer"](0003-keys-and-cryptography.md#pairing-answer) says |
+| then | 1 | link | `0`, or `1` when the invitation carried another account's certificate, and the field below follows |
+| then | 64 | link signature | the account key's half of the [link statement](#the-link-statement) |
+
+A device's answer is 284 bytes and an agent's 204, 64 more each with a link: about 391 and 284 characters as text, 476 and 370 with a link. The new device rebuilds the rest: its member id, which is key 2 of the certificate, from its own keys, and the statement's key 2 from the certificate's key 1. It refuses the text with `invalidValue`, and reads nothing from it, when the prefix is not `ncdb-pair-1:`, the rest is not unpadded base64url, the version is not one it knows, the kind is not `1` or `2`, the sealed key byte does not match the kind, the number is 0, or the length is not the one the bytes give. Completing the pairing then checks the certificate against its own member id and the statement against the recovery key, and refuses one that does not hold with `invalidCertificate`. A CBOR map was not taken, as for the invitation: the certificate's own map would carry its keys a second time, and the text needs a prefix anyway. Nor was an answer without the statement, which the device would have to fetch from somewhere before its certificate means anything.
+
 ### The account space
 
 The account's devices need records they share: which devices and agents the account certified, which spaces each device belongs to, which accounts are linked into it, and the account key statements. They live in an **account space**: an ordinary space under RFC 0008, created by the account's first device, whose members are the account's devices, each an admin. Its model is one the SDK ships. It needs no new format: its genesis, its adds and its key envelopes are RFC 0008's, and its records are sealed content the relay cannot read. With no shared record, each device would know only what it did itself: `removeMember` could not find the spaces of a lost device it is not in, and a new device could not learn which spaces to ask for. The cost is that the relay sees one more space per account and when devices join it.
+
+**Its model** is one the SDK ships, with its own `model.lock.json` and a `model.id` of its own that every account space's genesis names, so the account spaces of different apps and versions are one space for one account (proposed, NOC-262; the owner has not decided it). Its collections, each object sealed as any content is:
+
+| Collection | Fields | What an object is |
+| --- | --- | --- |
+| `members` | `memberId` (string, 64 hex digits), `kind` (choice: `device`, `agent`), `removed` (boolean) | A device or an agent the account certified. |
+| `memberships` | `member` (link to `members`), `space` (string, 32 hex digits), `role` (choice: `reader`, `writer`, `admin`) | That a member of the account belongs to a space, with its role, which each device writes when it joins or leaves one. |
+| `links` | `account` (string, 64 hex digits, the old account key), `statement` (string, base64url of the [link statement](#the-link-statement)) | An account drawn per database that is part of this one. |
+| `statements` | `number` (int), `statement` (string, base64url of the canonical [account key statement](0003-keys-and-cryptography.md#account-key-statement)) | Each account key statement of the account. |
+| `wrappedKeys` | `member` (link to `members`), `number` (int), `sealed` (string, base64url of the HPKE encapsulated key and the sealed seed) | A new account key, sealed to one device as a pairing answer seals it. |
+
+Ids and sealed bytes are strings because RFC 0005 has no field type for bytes. The database folds the account space by this model and the app's spaces by the app's: the view holds the tables of both, under names an app cannot declare, since a collection name that starts with `$` is reserved for the core ([RFC 0005, "Names"](0005-schema-and-model-lock.md#names)), and the account space's genesis names the shipped `model.id`, which the database accepts beside the lock's. The app reads the account space only through `db.account()`. Two other ways were not taken: merging the account collections into the app's own model, which would give every app a different account model, so the devices of two apps could not share one account space; and keeping the account's records outside the view, in tables of the SDK's own, which would be a second fold to build and test.
 
 Its content never holds the account key or the recovery code in a form its members can read. Content is sealed under the space key, so every device that joins later would walk the key chain back ([RFC 0003, "Sharing a space key with a new member"](0003-keys-and-cryptography.md#sharing-a-space-key-with-a-new-member)) and read every account key the account ever had, and an append-only log never forgets one. When a new account key must reach the remaining devices ([Losing a device](#losing-a-device)), the account space carries it wrapped with HPKE to each device's agreement key, as a key envelope wraps a space key, so that only that device opens it.
 
@@ -155,6 +188,20 @@ Until this RFC is built, each database has an account of its own ([RFC 0003, "Th
 2. **Both account keys sign a link statement**, "account X is part of account Y", which the account space keeps. The old key's signature shows that the holder of X agreed; nobody else can link X into their account.
 3. **The old account key is deleted** from the database's keystore or key file. Nobody can make a new certificate in the old account's name. An agent that drew its own account key keeps none: after linking, it holds an agent certificate of the account it joined, as any agent does.
 4. **New spaces and new adds use the new certificate.**
+
+### The link statement
+
+```text
+link statement (CBOR map, canonical)
+├── 1 old account key       32 bytes, the per-database account's key
+├── 2 recovery key          32 bytes, the identity of the account it joins
+├── 3 old key signature     64 bytes: the old account key signs
+│                           H("nocentraldb/account-link" || canonical map of keys 1 and 2)
+├── 4 statement             map, the account key statement that names key 5's signer
+└── 5 account key signature 64 bytes: the account key that key 4 names signs the same input
+```
+
+Both keys sign the same input under the context string `"nocentraldb/account-link"`, so neither signature can pass as any other signature of either key (proposed, NOC-262; the owner has not decided it). The account key's half travels in the [pairing answer](#the-pairing-answer), signed by the device that pairs; the old key's half is signed by the joining database when it completes the pairing, just before it deletes the old key. A device then writes the whole statement into the account space. An agent keeps it, and its invitations carry it, so that a device of the account writes it the next time it adds the agent to a space. A member checks the statement against the recovery key, through key 4, and against the old account key. One signature by the old key alone was not taken: then anybody could claim another account as theirs. Nor was a link statement for devices only, with an agent's old account simply retired: other members would then show an agent's old memberships as an unknown account.
 
 **Memberships already written** keep the old certificate, because RFC 0008's entries are fixed (see [What a member certificate means for RFC 0008](#what-a-member-certificate-means-for-rfc-0008)). They stay as written: the person's own SDK shows them as one account through the link statement, and an invitation carries the link statements of its account, so that other members' SDKs can show "linked to" next to the old fingerprint. This is local display only: the fold and the relay keep counting the old account as an account of its own, for the sign-off of an erasure and for the allowlist of who may create a space on a relay. That limit, two accounts in the fold for one person, is no weaker than what anybody can do by drawing a second account. Leaving them as written costs no rotation and changes no format. To re-add each such member with the new certificate, where the account administers the space, would cost one rotation per space, and a new membership action that replaces a member's certificate would change RFC 0008's control bodies.
 
