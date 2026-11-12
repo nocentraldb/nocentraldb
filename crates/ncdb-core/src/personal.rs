@@ -21,8 +21,11 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 use zeroize::Zeroizing;
 
+use crate::basic::{self, Values, Write};
 use crate::cbor::{self, Key, Value};
-use crate::ids::{ObjectId, SpaceId};
+use crate::clock::Hlc;
+use crate::field::{FieldType, Outcome};
+use crate::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use crate::keys::{self, PersonKey};
 use crate::seal::{NONCE_LEN, TAG_LEN};
 
@@ -235,5 +238,50 @@ impl Person {
             person: id(map.get(&Key::Unsigned(1)))?,
             person_key: id(map.get(&Key::Unsigned(2)))?,
         })
+    }
+}
+
+/// The field type of the hidden field [`PERSON_FIELD`]: a basic value whose
+/// values are [`Person`]s (RFC 0005, "Where the person id is kept").
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PersonField;
+
+impl PersonField {
+    /// A new write of `person`, or a clear with `None`, which replaces
+    /// what `state` holds: the winner and every conflict.
+    pub fn set(
+        &self,
+        state: &basic::State,
+        id: OperationId,
+        author: MemberId,
+        stamp: Hlc,
+        person: Option<Person>,
+    ) -> Write {
+        let value = person.map_or(Value::Null, |person| person.to_value());
+        Values::Persons
+            .set(state, id, author, stamp, value)
+            .expect("a person or the empty value is the field's value")
+    }
+}
+
+impl FieldType for PersonField {
+    type State = basic::State;
+    type Operation = Write;
+    type Read = basic::Read;
+
+    fn apply(&self, state: &mut basic::State, op: &Write) {
+        state.insert(op);
+    }
+
+    fn state_bytes(&self, state: &basic::State) -> Vec<u8> {
+        state.bytes()
+    }
+
+    fn read(&self, state: &basic::State) -> basic::Read {
+        Values::Persons.read(state)
+    }
+
+    fn outcome(&self, state: &basic::State, id: OperationId) -> Option<Outcome> {
+        state.outcome(id)
     }
 }
