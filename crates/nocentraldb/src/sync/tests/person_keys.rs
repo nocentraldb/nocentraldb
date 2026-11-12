@@ -92,15 +92,6 @@ fn held(db: &Db, space: CoreSpaceId) -> Option<[u8; 32]> {
     Some(key.commitment(space, PERSON))
 }
 
-/// Whether `db` fetched the records of `space` in its current connection.
-fn fetched(db: &Db, space: CoreSpaceId) -> bool {
-    let inner = lock(&db.inner);
-    inner
-        .spaces
-        .get(&space)
-        .is_some_and(|state| state.person_keys_fetched)
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn a_member_fetches_and_holds_the_person_key_another_member_put() {
     let relay = LocalRelay::start().await;
@@ -113,13 +104,14 @@ async fn a_member_fetches_and_holds_the_person_key_another_member_put() {
 
     let space = project.id().0;
     let commitment = key.commitment(space, PERSON);
+    // The member may have fetched before the admin's put reached the
+    // relay: once the relay stores the record, one reconnect fetches it.
+    // Reconnecting in a loop while the old connection's fetch still counts
+    // kept cutting the new one before it could fetch.
+    stored(&relay, space).await;
+    relay.proxy.cut();
+    relay.proxy.restore();
     eventually("the member holds the person key", || {
-        // A reconnect fetches the records again; the member may have
-        // fetched before the admin's put reached the relay.
-        if fetched(&member, space) && held(&member, space).is_none() {
-            relay.proxy.cut();
-            relay.proxy.restore();
-        }
         held(&member, space) == Some(commitment)
     })
     .await;
@@ -298,15 +290,18 @@ async fn shredded(relay: &LocalRelay) -> (Db, Db, Space, CoreChangeId) {
         fingerprint: Some(invitation.fingerprint()),
     };
     now(project.members().add(&invitation, options)).unwrap();
+    // The admin's session must be idle before the record is queued: a
+    // record queued while a sync of the space is past its push goes out
+    // before its entry, and the relay refuses it (NOC-206's put path).
+    synced(&admin).await;
     let key = PersonKey::generate();
     person_key(&admin, &project, &key, &key);
     synced(&admin).await;
     let space = project.id().0;
+    stored(relay, space).await;
+    relay.proxy.cut();
+    relay.proxy.restore();
     eventually("the member holds the person key", || {
-        if fetched(&member, space) && held(&member, space).is_none() {
-            relay.proxy.cut();
-            relay.proxy.restore();
-        }
         held(&member, space).is_some()
     })
     .await;
