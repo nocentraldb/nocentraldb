@@ -76,7 +76,7 @@ fn decisions(s: &mut Space, shred: &Change, rng: &mut Rng) -> (Vec<Change>, BTre
     let mut finalizes = BTreeSet::new();
     for _ in 0..=rng.below(4) {
         let author = DECIDERS[rng.below(DECIDERS.len())];
-        let finalize = rng.next() % 2 == 0;
+        let finalize = rng.next().is_multiple_of(2);
         let after = match rng.below(made.len() + 1) {
             0 => shred.clone(),
             i => made[i - 1].clone(),
@@ -137,9 +137,7 @@ fn m_c13_every_copy_reaches_the_same_outcome_and_a_destroyed_key_stays_destroyed
                     !now || accepts_a_finalize(&state, &order[..n], &finalizes),
                     "seed {seed}: a key destroyed without an accepted finalize"
                 );
-                let erased = state
-                    .person_key(person(1))
-                    .is_some_and(|key| key.erased());
+                let erased = state.person_key(person(1)).is_some_and(|key| key.erased());
                 assert!(
                     !now || erased,
                     "seed {seed}: a copy shows a person whose key it destroyed"
