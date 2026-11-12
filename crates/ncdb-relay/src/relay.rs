@@ -33,6 +33,11 @@ pub const PAGE_BYTES: u64 = 4 * 1024 * 1024;
 /// The largest frame the relay accepts: 16 MiB (RFC 0007, "Large changes").
 pub const MAX_FRAME: usize = 16 * 1024 * 1024;
 
+/// How long after accepting a provisional shred the relay first accepts an
+/// erasure decision that finalizes it: 7 days, in the clock's milliseconds
+/// (RFC 0007, "What the relay checks"; Carsten, 2026-11-11, NOC-230).
+pub const FINALIZE_AFTER: u64 = 7 * 24 * 60 * 60 * 1000;
+
 /// What a relay deployment configures.
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -336,7 +341,45 @@ impl<S: RelayStore> Relay<S> {
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
+        self.not_too_early(space, change, &resolved).await?;
         Ok(Checked::new(&resolved, &before))
+    }
+
+    /// Refuses with `too_early` an erasure decision that finalizes a
+    /// provisional shred less than [`FINALIZE_AFTER`], by the relay's clock,
+    /// after the relay accepted that shred: its "accepted at" in the log
+    /// (RFC 0007, "What the relay checks"; Carsten, 2026-11-11, NOC-230).
+    /// A take-back needs no wait.
+    async fn not_too_early(
+        &self,
+        space: SpaceId,
+        change: &Change,
+        resolved: &membership::Resolved,
+    ) -> Result<(), ErrorCode> {
+        let Entry::ErasureDecision(decision) = control_body(change)?.entry else {
+            return Ok(());
+        };
+        let provisional = resolved
+            .person_keys()
+            .any(|(_, key)| key.shred == Some(decision.shred) && key.provisional);
+        if !decision.finalize || !provisional {
+            return Ok(());
+        }
+        let Some(position) = self.store.find(space, decision.shred).await? else {
+            return Err(ErrorCode::Unavailable);
+        };
+        let shred = self
+            .store
+            .read_controls(space, position - 1, 1)
+            .await?
+            .into_iter()
+            .find(|entry| entry.change == decision.shred)
+            .ok_or(ErrorCode::Unavailable)?;
+        let now = (self.config.clock)();
+        match now.saturating_sub(shred.accepted_at) < FINALIZE_AFTER {
+            true => Err(ErrorCode::TooEarly),
+            false => Ok(()),
+        }
     }
 
     /// The space's control changes, in position order. It loads no sealed
@@ -408,7 +451,9 @@ impl Checked {
         let effects = records.into_iter().map(Effect::Member).collect();
         let shredded = resolved
             .person_keys()
-            .filter(|(_, key)| key.shred.is_some())
+            // A provisional shred keeps the record until an accepted
+            // finalize (RFC 0008, "A shred is final when accepted").
+            .filter(|(_, key)| key.destroyed())
             .map(|(id, _)| id)
             .collect();
         Checked {

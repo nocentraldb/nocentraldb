@@ -14,6 +14,7 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 | [0008](0008-membership.md) | Membership, roles and the first change of a space |
 | [0009](0009-sdk-api.md) | The SDK API for apps |
 | [0010](0010-accounts.md) | Accounts: the account key, the recovery code, adding and linking devices |
+| [0011](0011-plugin-field-types.md) | Plugin field types: how a field type is written, registered and loaded |
 
 ## Giving feedback
 

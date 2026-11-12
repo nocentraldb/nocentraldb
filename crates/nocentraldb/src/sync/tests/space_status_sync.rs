@@ -26,9 +26,13 @@ async fn next(stream: &mut (impl Stream<Item = SpaceStatus> + Unpin)) -> SpaceSt
 async fn a_space_pulled_to_the_relays_head_completed_its_initial_sync() {
     let relay = LocalRelay::start().await;
     let db = open(ME, &relay.url()).await;
+    // Paused, the session can neither push nor pull the new space before
+    // the first assertion, which it could under load.
+    db.sync().pause().await;
     let space = db.spaces().create().await.unwrap();
     assert!(!space.status().current().initial_sync_complete);
 
+    db.sync().resume().await;
     synced(&db).await;
     eventually("the initial sync", || {
         space.status().current().initial_sync_complete

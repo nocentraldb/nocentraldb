@@ -61,6 +61,15 @@ pub enum Rejection {
     /// A person-key entry that the accepted shred with this change id, of
     /// the same person key, did not see (RFC 0008, step 5).
     Shredded(ChangeId),
+    /// An add concurrent with the accepted account key statement entry
+    /// with this change id, which supersedes the account key the add's
+    /// certificate names (RFC 0008, step 5; Carsten, 2026-11-11, NOC-187).
+    Superseded(ChangeId),
+    /// A take-back of a provisional shred for which the set holds the
+    /// accepted finalize with this change id: a finalize wins over every
+    /// concurrent take-back (RFC 0008, step 5; Carsten, 2026-11-11,
+    /// NOC-230).
+    Finalized(ChangeId),
 }
 
 /// One member of the state, current or former.
@@ -270,6 +279,14 @@ pub(crate) fn fields(
                 Value::Unsigned(rejection_code(Rejection::Shredded(by))),
                 id(&by),
             ]),
+            Some(Rejection::Superseded(by)) => Value::Array(vec![
+                Value::Unsigned(rejection_code(Rejection::Superseded(by))),
+                id(&by),
+            ]),
+            Some(Rejection::Finalized(by)) => Value::Array(vec![
+                Value::Unsigned(rejection_code(Rejection::Finalized(by))),
+                id(&by),
+            ]),
             Some(other) => Value::Unsigned(rejection_code(other)),
             None => Value::Null,
         };
@@ -300,5 +317,7 @@ fn rejection_code(rejection: Rejection) -> u64 {
         Rejection::DuplicateGeneration => 10,
         Rejection::Commitment => 11,
         Rejection::Shredded(_) => 12,
+        Rejection::Superseded(_) => 13,
+        Rejection::Finalized(_) => 14,
     }
 }

@@ -201,7 +201,10 @@ fn an_older_lock_opens_the_database_as_an_old_client() {
     let db = TempDb::new("lock-rollback");
     let (space, task) = written(&db, &lock());
 
-    let view = View::open_with(&db.0, &older(), checks_for).unwrap();
+    let mut view = View::open_with(&db.0, &older(), checks_for).unwrap();
+    // The view was folded by the stored lock's model, so the older lock
+    // rebuilds it in the background (NOC-156); run it to its end.
+    while view.rebuild_step(100).unwrap().is_some() {}
 
     assert_eq!(view.state(space, task), Some(parked_rank()));
     assert!(!ranked(&view, space));

@@ -6,19 +6,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use ed25519_dalek::{Signer, SigningKey};
-use futures_util::{SinkExt, StreamExt};
 use ncdb_core::ids::SpaceId;
-use tokio::net::TcpStream;
 use tokio::sync::watch;
-use tokio_tungstenite::tungstenite::Message;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
+use super::time::{self, Instant};
+use super::transport::{self, Transport};
 use super::wire::{self, Answer};
-use super::{Connection, apply, large, merge};
+use super::{Connection, apply, finalize, large, merge};
 use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
@@ -47,7 +44,7 @@ const ANSWER: Duration = if cfg!(test) {
 /// Waits until `deadline`, or forever without one.
 async fn until(deadline: Option<Instant>) {
     match deadline {
-        Some(deadline) => tokio::time::sleep_until(deadline.into()).await,
+        Some(deadline) => time::sleep_until(deadline).await,
         None => std::future::pending().await,
     }
 }
@@ -79,10 +76,8 @@ pub(super) enum End {
     },
 }
 
-type Ws = WebSocketStream<MaybeTlsStream<TcpStream>>;
-
-struct Session<'a> {
-    ws: Ws,
+struct Session<'a, T: Transport> {
+    ws: T,
     db: &'a Weak<Mutex<Inner>>,
     epoch: [u8; 16],
     next_req: u64,
@@ -93,7 +88,18 @@ struct Session<'a> {
     gaps: BTreeSet<SpaceId>,
     /// Whether every space was pulled, pushed and subscribed once.
     progress: bool,
+    /// For each space whose log names a person key the member does not
+    /// hold, when to fetch the person keys again and the wait after that
+    /// (`person_keys::missing`).
+    refetch: BTreeMap<SpaceId, (Instant, Duration)>,
 }
+
+/// How long after a fetch that left a named person key missing the
+/// session fetches again, the first time; each later wait doubles, up to
+/// [`IDLE`]. A record follows its entry, which its writer pushed first,
+/// so it is usually there a moment later (RFC 0007, "Keys and the
+/// person-key store").
+const REFETCH: Duration = Duration::from_millis(250);
 
 /// The connection ended. An error code that stops syncing is reported by
 /// [`Session::failed`]; whether the session made progress is filled in
@@ -131,19 +137,7 @@ pub(super) async fn session(
     url: &str,
     wake: &mut watch::Receiver<()>,
 ) -> End {
-    // RFC 0007's largest message, on every backend; a larger one ends the
-    // connection instead of being read.
-    let config = WebSocketConfig::default()
-        .max_message_size(Some(wire::MAX_MESSAGE))
-        .max_frame_size(Some(wire::MAX_MESSAGE));
-    // `wss://` verifies the relay against the platform's trust store.
-    let Some(tls) = super::tls::config() else {
-        return lost();
-    };
-    let connector = tokio_tungstenite::Connector::Rustls(tls);
-    let connect =
-        tokio_tungstenite::connect_async_tls_with_config(url, Some(config), false, Some(connector));
-    let Ok(Ok((ws, _))) = tokio::time::timeout(CONNECT, connect).await else {
+    let Ok(Some(ws)) = time::timeout(CONNECT, transport::connect(url)).await else {
         return lost();
     };
     let mut session = Session {
@@ -155,6 +149,7 @@ pub(super) async fn session(
         subscribed: BTreeSet::new(),
         gaps: BTreeSet::new(),
         progress: false,
+        refetch: BTreeMap::new(),
     };
     if let Err(end) = session.authenticate().await {
         return end;
@@ -168,7 +163,7 @@ pub(super) async fn session(
     }
 }
 
-impl Session<'_> {
+impl<T: Transport> Session<'_, T> {
     /// hello, challenge, auth, welcome.
     async fn authenticate(&mut self) -> Result<(), End> {
         self.send(wire::hello()).await?;
@@ -245,7 +240,53 @@ impl Session<'_> {
             for space in due {
                 with(self.db, |inner| merge::write(inner, space))?;
             }
-            let deadline = with(self.db, |inner| merge::next(inner))?;
+            // Finalizes whose 7 days passed on this device are written now,
+            // and finalizes the relay refused as too early are pushed again
+            // (RFC 0008, "A provisional erasure in a space with one
+            // account").
+            let due = with(self.db, |inner| {
+                finalize::due(inner, crate::clock::now_millis())
+            })?;
+            for (space, shred) in due {
+                with(self.db, |inner| finalize::write(inner, space, shred))?;
+            }
+            let again = with(self.db, |inner| {
+                finalize::retries_due(inner, Instant::now())
+            })?;
+            for space in again {
+                self.push(space).await?;
+            }
+            // A person key the log names but the member does not hold, as
+            // after an entry that announced a new person, is fetched again
+            // (RFC 0009, "How a personal field reads": the object reads
+            // again once the key arrives).
+            let missing = with(self.db, |inner| {
+                self.subscribed
+                    .iter()
+                    .copied()
+                    .filter(|space| super::person_keys::missing(inner, *space))
+                    .collect::<BTreeSet<_>>()
+            })?;
+            self.refetch.retain(|space, _| missing.contains(space));
+            for space in missing {
+                let now = Instant::now();
+                match self.refetch.get(&space).copied() {
+                    Some((at, _)) if at > now => {}
+                    previous => {
+                        self.fetch_person_keys(space).await?;
+                        let wait = previous.map_or(REFETCH, |(_, wait)| (wait * 2).min(IDLE));
+                        self.refetch.insert(space, (Instant::now() + wait, wait));
+                    }
+                }
+            }
+            let refetch = self.refetch.values().map(|(at, _)| *at).min();
+            let deadline = with(self.db, |inner| {
+                let finalizes = finalize::next(inner, crate::clock::now_millis(), Instant::now());
+                [merge::next(inner), finalizes, refetch]
+                    .into_iter()
+                    .flatten()
+                    .min()
+            })?;
             tokio::select! {
                 answer = self.recv() => self.live(answer?)?,
                 changed = wake.changed() => match changed {
@@ -253,7 +294,7 @@ impl Session<'_> {
                     Err(_) => return Err(End::Dropped),
                 },
                 () = until(deadline) => {}
-                () = tokio::time::sleep(IDLE) => {
+                () = time::sleep(IDLE) => {
                     let req = self.req();
                     self.send(wire::ping(req)).await?;
                     self.ask(req).await?;
@@ -325,6 +366,11 @@ impl Session<'_> {
     /// Pushes every change of `space` the relay has not confirmed, in
     /// local order, in pushes that each fit one message.
     async fn push(&mut self, space: SpaceId) -> Result<(), End> {
+        // A space whose finalize the relay found too early waits until its
+        // push again is due (`finalize`).
+        if with(self.db, |inner| finalize::waiting(inner, space))? {
+            return Ok(());
+        }
         let unconfirmed =
             with(self.db, |inner| apply::unconfirmed(inner, space))?.map_err(|_| lost())?;
         let (ids, frames): (Vec<_>, Vec<_>) = unconfirmed.into_iter().unzip();
@@ -349,8 +395,10 @@ impl Session<'_> {
                         apply::pushed(inner, space, &batch_ids, results)
                     })?
                     .map_err(|_| lost())?;
-                    if stopped.is_some() {
-                        return Err(lost());
+                    match stopped {
+                        Some(code) if code == apply::TOO_EARLY => return Ok(()),
+                        Some(_) => return Err(lost()),
+                        None => {}
                     }
                 }
                 answer => return self.answer(space, answer),
@@ -390,35 +438,55 @@ impl Session<'_> {
         }
     }
 
-    /// Puts the person-key records of `space` this member wrote, after the
-    /// changes that announce them (RFC 0007, `put-person-keys`). A record
-    /// the relay refuses with `bad_record` is dropped, the whole request
-    /// with it, since the relay stores none of them; any other answer
-    /// keeps them for the next connection.
+    /// Puts the person-key records of `space` this member wrote, once the
+    /// relay confirmed the changes that announce them (RFC 0007,
+    /// `put-person-keys`; `person_keys::ready`); the others wait for a
+    /// later push. A record the relay refuses with `bad_record` is
+    /// dropped, the whole request with it, since the relay stores none of
+    /// them; any other answer, or a connection that ends first, keeps them
+    /// for the next connection.
     async fn put_person_keys(&mut self, space: SpaceId) -> Result<(), End> {
         let records = with(self.db, |inner| {
-            inner
+            let waiting = inner
                 .sync
                 .as_mut()
                 .and_then(|sync| sync.puts.remove(&space))
-                .unwrap_or_default()
+                .unwrap_or_default();
+            let (send, keep) = super::person_keys::ready(inner, space, waiting);
+            if let Some(sync) = inner.sync.as_mut()
+                && !keep.is_empty()
+            {
+                sync.puts.entry(space).or_default().extend(keep);
+            }
+            send
         })?;
         if records.is_empty() {
             return Ok(());
         }
+        let keep = |records: Vec<wire::Record>| {
+            with(self.db, |inner| {
+                if let Some(sync) = inner.sync.as_mut() {
+                    sync.puts.entry(space).or_default().extend(records);
+                }
+            })
+        };
         let req = self.req();
-        self.send(wire::put_person_keys(req, space, &records))
-            .await?;
-        match self.ask(req).await? {
-            Answer::Other { .. } => Ok(()),
-            Answer::Error { code, .. } if code == "bad_record" => Ok(()),
-            answer => {
-                with(self.db, |inner| {
-                    if let Some(sync) = inner.sync.as_mut() {
-                        sync.puts.entry(space).or_default().extend(records);
-                    }
-                })?;
+        let answer = match self.send(wire::put_person_keys(req, space, &records)).await {
+            Ok(()) => self.ask(req).await,
+            Err(end) => Err(end),
+        };
+        match answer {
+            Ok(Answer::Other { .. }) => Ok(()),
+            Ok(Answer::Error { code, .. }) if code == "bad_record" => Ok(()),
+            Ok(answer) => {
+                keep(records)?;
                 self.answer(space, answer)
+            }
+            Err(end) => {
+                // Kept for the next connection; `with` fails only once the
+                // database is gone, when nothing is left to keep them for.
+                let _ = keep(records);
+                Err(end)
             }
         }
     }
@@ -456,10 +524,15 @@ impl Session<'_> {
             }
         }
         with(self.db, |inner| {
-            if let Some(state) = inner.spaces.get_mut(&space) {
-                state.person_keys_fetched = true;
-            }
-        })
+            let crate::db::Inner { view, spaces, .. } = inner;
+            let Some(state) = spaces.get_mut(&space) else {
+                return Ok(());
+            };
+            state.person_keys_fetched = true;
+            // The fetched keys open the space's personal fields.
+            crate::personal::refresh(view, space, state)
+        })?
+        .map_err(|_| lost())
     }
 
     /// Handles an answer about `space` that is not the one asked for: an
@@ -546,10 +619,7 @@ impl Session<'_> {
         let inner = self.db.upgrade().ok_or(End::Dropped)?;
         running(&lock(&inner))?;
         drop(inner);
-        self.ws
-            .send(Message::Binary(message.into()))
-            .await
-            .map_err(|_| lost())
+        self.ws.send(message).await.map_err(|_| lost())
     }
 
     /// The answer to the request `req`; what arrives before it is handled
@@ -565,28 +635,23 @@ impl Session<'_> {
                 self.live(answer)?;
             }
         };
-        tokio::time::timeout(ANSWER, answer)
+        time::timeout(ANSWER, answer)
             .await
             .unwrap_or_else(|_| Err(lost()))
     }
 
     /// The next message, within [`ANSWER`].
     async fn answer_in_time(&mut self) -> Result<Answer, End> {
-        tokio::time::timeout(ANSWER, self.recv())
+        time::timeout(ANSWER, self.recv())
             .await
             .unwrap_or_else(|_| Err(lost()))
     }
 
     /// The next message from the relay.
     async fn recv(&mut self) -> Result<Answer, End> {
-        loop {
-            match self.ws.next().await {
-                Some(Ok(Message::Binary(bytes))) => {
-                    return wire::decode(&bytes).map_err(|_| lost());
-                }
-                Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => {}
-                _ => return Err(lost()),
-            }
+        match self.ws.recv().await {
+            Some(bytes) => wire::decode(&bytes).map_err(|_| lost()),
+            None => Err(lost()),
         }
     }
 }

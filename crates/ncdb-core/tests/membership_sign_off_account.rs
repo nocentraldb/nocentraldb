@@ -9,6 +9,11 @@
 //! (pm, within NOC-201 A). A certificate in the state carries only a
 //! statement that names its own key 1 and verifies, so each attaches its
 //! recovery key to its own account key.
+//!
+//! When the sign-off's account is the performer's, and every member of
+//! the shred's causal past belongs to that one account, the shred is
+//! valid all the same, but provisional (Carsten, 2026-11-11, NOC-230):
+//! [`PROVISIONAL`] stands for that outcome.
 
 #[path = "support/space.rs"]
 mod space;
@@ -21,9 +26,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use ed25519_dalek::SigningKey;
 use ncdb_core::change::Change;
 use ncdb_core::keys::RecoveryKey;
-use ncdb_core::membership::{
-    AccountKeyStatement, Certificate, MemberKind, Rejection, Role, Verdict, resolve,
-};
+use ncdb_core::membership::{AccountKeyStatement, Certificate, MemberKind, Role, Verdict, resolve};
 
 use space::{Space, account, id, other_account, person};
 
@@ -37,7 +40,23 @@ const CAROL: u8 = 3;
 const ERIN: u8 = 5;
 
 const ACCEPTED: Option<&Verdict> = Some(&Verdict::Accepted);
-const NOT_VALID: Option<&Verdict> = Some(&Verdict::Rejected(Rejection::NotValidWhenWritten));
+
+/// A shred accepted as provisional: the sign-off's account is the
+/// performer's, and every member belongs to it.
+const PROVISIONAL: Outcome = (Some(Verdict::Accepted), true);
+/// A shred accepted as final.
+const FINAL: Outcome = (Some(Verdict::Accepted), false);
+
+/// A shred's verdict, and whether it is provisional.
+type Outcome = (Option<Verdict>, bool);
+
+/// The outcome of `shred` in `state`.
+fn outcome(state: &ncdb_core::membership::Resolved, shred: &Change) -> Outcome {
+    let provisional = state
+        .person_key(person(1))
+        .is_some_and(|key| key.provisional);
+    (state.verdict(shred.id()).copied(), provisional)
+}
 
 /// A statement under recovery code `code` that names `account`'s key.
 fn statement(code: u8, account: &SigningKey) -> AccountKeyStatement {
@@ -55,7 +74,7 @@ fn certified(who: u8, account: &SigningKey, code: u8) -> Certificate {
 /// in a space where Carol, admin of the second account, carries a
 /// statement under `carol`, and Erin, admin of the first account, under
 /// `erin`. The verdict of the shred.
-fn sign_off(carol: u8, erin: u8) -> Option<Verdict> {
+fn sign_off(carol: u8, erin: u8) -> Outcome {
     let mut s = Space::new(ALICE);
     let genesis = s.genesis.clone();
     let bob = s.add(ALICE, BOB, Role::Writer, &[&genesis]);
@@ -78,23 +97,23 @@ fn sign_off(carol: u8, erin: u8) -> Option<Verdict> {
     let all: Vec<&Change> = vec![&genesis, &bob, &carol, &erin, &entry, &shred];
     let state = resolve(s.space, all);
     assert_eq!(state.verdict(erin.id()), ACCEPTED);
-    let verdict = state.verdict(shred.id()).copied();
-    if verdict == ACCEPTED.copied() {
+    if state.verdict(shred.id()) == ACCEPTED {
         assert_eq!(state.person_key(person(1)).unwrap().shred, Some(shred.id()));
     }
-    verdict
+    outcome(&state, &shred)
 }
 
 #[test]
 fn two_account_keys_under_different_recovery_keys_are_two_accounts() {
-    assert_eq!(sign_off(7, 8).as_ref(), ACCEPTED);
+    assert_eq!(sign_off(7, 8), FINAL);
 }
 
 #[test]
 fn two_account_keys_under_one_recovery_key_are_one_account() {
     // After a recovery, one person's old and new account keys: the second
-    // account's admin is the performer's own account.
-    assert_eq!(sign_off(7, 7).as_ref(), NOT_VALID);
+    // account's admin is the performer's own account. Every member then
+    // belongs to one account, so the own sign-off makes it provisional.
+    assert_eq!(sign_off(7, 7), PROVISIONAL);
 }
 
 /// Bob, the performer, carries a statement under recovery code 7; Carol,
@@ -102,7 +121,7 @@ fn two_account_keys_under_one_recovery_key_are_one_account() {
 /// account, carries `frank` and is removed before the shred if
 /// `frank_removed`. The verdict of Bob's shred signed off by the second
 /// account.
-fn with_bob_and_frank(carol: u8, frank: Option<(u8, bool)>, bob: Option<u8>) -> Option<Verdict> {
+fn with_bob_and_frank(carol: u8, frank: Option<(u8, bool)>, bob: Option<u8>) -> Outcome {
     const FRANK: u8 = 6;
     let mut s = Space::new(ALICE);
     let genesis = s.genesis.clone();
@@ -144,27 +163,21 @@ fn with_bob_and_frank(carol: u8, frank: Option<(u8, bool)>, bob: Option<u8>) -> 
     let entry = s.person_key(BOB, 1, 0xc1, &[&last]);
     let shred = s.shred(BOB, 1, &other_account(1), &[&entry]);
     all.extend([entry, shred.clone()]);
-    resolve(s.space, all.iter()).verdict(shred.id()).copied()
+    outcome(&resolve(s.space, all.iter()), &shred)
 }
 
 #[test]
 fn the_performers_own_statement_counts() {
     // Bob is a writer, not an admin, but his certificate attaches recovery
     // code 7 to the first account, and Carol's attaches it to the second.
-    assert_eq!(with_bob_and_frank(7, None, Some(7)).as_ref(), NOT_VALID);
-    assert_eq!(with_bob_and_frank(7, None, Some(8)).as_ref(), ACCEPTED);
+    assert_eq!(with_bob_and_frank(7, None, Some(7)), PROVISIONAL);
+    assert_eq!(with_bob_and_frank(7, None, Some(8)), FINAL);
 }
 
 #[test]
 fn a_former_admins_statement_counts() {
     // Frank, an admin of the first account under recovery code 7, is
     // removed before the shred; his certificate still names the account.
-    assert_eq!(
-        with_bob_and_frank(7, Some((7, true)), None).as_ref(),
-        NOT_VALID
-    );
-    assert_eq!(
-        with_bob_and_frank(7, Some((8, true)), None).as_ref(),
-        ACCEPTED
-    );
+    assert_eq!(with_bob_and_frank(7, Some((7, true)), None), PROVISIONAL);
+    assert_eq!(with_bob_and_frank(7, Some((8, true)), None), FINAL);
 }

@@ -4,23 +4,27 @@
 //! [`SpaceStatusReport`], whose `current()` gives a [`SpaceStatus`] and
 //! whose `subscribe()` follows it.
 //!
-//! **What this does not report yet.** RFC 0009 lists more than this
-//! status holds. `shreds_waiting` needs the stability of a shred (RFC
-//! 0008, M20 and M21), which the core does not compute yet. The struct is
-//! `#[non_exhaustive]`, so each field comes when it is built, instead of
-//! a field that always reads empty and claims nothing waits.
+//! It reports no waiting shreds: a shred is final when accepted, so none
+//! waits (RFC 0008, "A shred is final when accepted"; RFC 0009, "Sync and
+//! status"). It reports the provisional erasures of a space with one
+//! account instead, each with its age on this device, which counts from
+//! when this device first held the shred: the view keeps that time
+//! ([`note_shreds`]; the owner's NOC-218 A). The struct is
+//! `#[non_exhaustive]`, so a field added later breaks no app.
 
 mod reasons;
 
 use std::collections::BTreeMap;
+use std::time::Duration;
 
 use futures_core::Stream;
 use ncdb_core::ids::SpaceId as CoreSpaceId;
-use ncdb_core::membership::Verdict;
+use ncdb_core::membership::{Resolved, Role as CoreRole, Verdict};
+use ncdb_core::view::{Error as ViewError, View};
 
 use crate::db::Inner;
 use crate::id::ChangeId;
-use crate::members::{Fingerprint, Role};
+use crate::members::{Fingerprint, MemberId, Notice, Role};
 use crate::space::Space;
 
 pub use reasons::{ParkReason, RejectReason};
@@ -91,6 +95,32 @@ pub struct SpaceStatus {
     /// key"; the owner decided the name on NOC-222). The member ignores
     /// such a record.
     pub bad_person_key_records: Vec<Fingerprint>,
+    /// The erasures of the space that are still provisional, in change id
+    /// order: in a space whose members all belong to one account, the
+    /// performer's own account signed the shred off, and no finalize or
+    /// take-back is accepted yet (RFC 0008, "A provisional erasure in a
+    /// space with one account"; Carsten, 2026-11-11, NOC-230). Every device
+    /// of the account sees them, and an app must show them.
+    pub provisional_erasures: Vec<ProvisionalErasure>,
+}
+
+/// A provisional erasure of a space with one account (RFC 0009, "Sync and
+/// status").
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct ProvisionalErasure {
+    /// The shred entry.
+    pub change: ChangeId,
+    /// How long ago this device first held the shred.
+    pub age: Duration,
+    /// Whether this device may take the erasure back: it is an admin of
+    /// the space and belongs to the performer's account.
+    pub can_undo: bool,
+    /// The member that wrote the shred, so that an app can show which
+    /// device erased (pm, 2026-11-12, NOC-234).
+    pub performer: MemberId,
+    /// The notice [`NoticeCode::ErasurePending`](crate::NoticeCode).
+    pub notice: Notice,
 }
 
 /// One of this member's changes the relay refused.
@@ -176,6 +206,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         exposed: false,
         waiting_for_key: false,
         bad_person_key_records: Vec::new(),
+        provisional_erasures: Vec::new(),
     };
     let Some(state) = inner.spaces.get(&space) else {
         return status;
@@ -199,6 +230,20 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         .iter()
         .map(|account| Fingerprint(*account))
         .collect();
+    let now = crate::clock::now_millis();
+    status.provisional_erasures = pending(resolved)
+        .map(|(shred, performer)| {
+            let held_at = inner.view.shred_held_at(space, shred).ok().flatten();
+            ProvisionalErasure {
+                change: ChangeId(shred),
+                age: Duration::from_millis(now.saturating_sub(held_at.unwrap_or(now))),
+                can_undo: resolved.role(me) == Some(CoreRole::Admin)
+                    && resolved.same_account(me, performer),
+                performer: MemberId(performer),
+                notice: Notice::ERASURE_PENDING,
+            }
+        })
+        .collect();
     status.newest_model = inner
         .view
         .newest_model(space, &state.checks)
@@ -208,4 +253,34 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         status.waiting_for_key = status.role.is_some() && state.checks.space_key(current).is_none();
     }
     status
+}
+
+/// The provisional shreds of a space that no accepted decision ended yet,
+/// with their performers, in change id order.
+pub(crate) fn pending(
+    resolved: &Resolved,
+) -> impl Iterator<Item = (ncdb_core::ids::ChangeId, ncdb_core::ids::MemberId)> + '_ {
+    let mut pending: Vec<_> = resolved
+        .person_keys()
+        .filter(|(_, key)| key.provisional && key.finalized.is_none() && key.taken_back.is_none())
+        .filter_map(|(_, key)| Some((key.shred?, key.performer()?)))
+        .collect();
+    pending.sort();
+    pending.into_iter()
+}
+
+/// Notes in the view, with the current time, every provisional shred of
+/// `space` that this device holds, so that its age, and the 7 days after
+/// which a device of the account finalizes it, count from when this device
+/// first held it; a shred noted before keeps its time (NOC-218 A).
+pub(crate) fn note_shreds(
+    view: &mut View,
+    space: CoreSpaceId,
+    resolved: &Resolved,
+) -> Result<(), ViewError> {
+    let now = crate::clock::now_millis();
+    for (shred, _) in pending(resolved) {
+        view.note_shred_held(space, shred, now)?;
+    }
+    Ok(())
 }

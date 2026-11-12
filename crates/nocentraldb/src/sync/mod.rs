@@ -35,9 +35,13 @@
 // On wasm32 only the counts of `apply` are read until the browser syncs
 // (NOC-175); the rest serves the connection, which is native only.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+pub(crate) mod acknowledge;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod again;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
+#[cfg(not(target_arch = "wasm32"))]
+mod finalize;
 #[cfg(not(target_arch = "wasm32"))]
 mod http;
 #[cfg(not(target_arch = "wasm32"))]
@@ -46,13 +50,21 @@ mod large;
 mod merge;
 mod pause;
 mod person_keys;
+#[cfg(test)]
+mod person_keys_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 #[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+mod time;
+#[cfg(test)]
+mod time_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod tls;
+#[cfg(not(target_arch = "wasm32"))]
+mod transport;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 
@@ -63,6 +75,8 @@ use tokio::sync::watch;
 
 use crate::db::{Db, Inner};
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) use finalize::set_finalize_after;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
@@ -151,6 +165,15 @@ fn status(inner: &Inner) -> SyncStatus {
 /// (RFC 0008, "Two removals that rotate the key at once", step 5).
 const MERGE_DELAY: std::time::Duration = std::time::Duration::from_secs(60);
 
+/// How long a device of the performer's account holds a provisional shred
+/// before it finalizes it: 7 days (RFC 0008, "A provisional erasure in a
+/// space with one account").
+const FINALIZE_AFTER: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
+/// How long after a `too_early` refusal the SDK pushes the finalize again:
+/// an hour, since the device cannot read the relay's clock (pm, NOC-234).
+const TOO_EARLY_RETRY: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
 /// What a database that syncs keeps of its relay. On wasm32 nothing syncs
 /// yet (NOC-175), so a database there never holds one.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -193,10 +216,21 @@ pub(crate) struct SyncState {
     /// current generation is exposed, unless the exposure ends first
     /// (`merge`; RFC 0008, "Two removals that rotate the key at once",
     /// step 5).
-    pub(crate) merges: BTreeMap<CoreSpaceId, std::time::Instant>,
+    pub(crate) merges: BTreeMap<CoreSpaceId, time::Instant>,
     /// The longest delay before a merge rotation: a minute, which the
     /// tests change (`set_merge_delay`).
     pub(crate) merge_delay: std::time::Duration,
+    /// How long this device holds a provisional shred before an admin of
+    /// the performer's account finalizes it: 7 days, which the tests
+    /// change (`finalize`; RFC 0008, "A provisional erasure in a space
+    /// with one account").
+    pub(crate) finalize_after: std::time::Duration,
+    /// How long after a `too_early` refusal the finalize is pushed again:
+    /// an hour, which the tests change (pm, NOC-234).
+    pub(crate) too_early_retry: std::time::Duration,
+    /// When each space whose finalize the relay refused as `too_early` is
+    /// pushed again (`finalize`).
+    pub(crate) retries: BTreeMap<CoreSpaceId, time::Instant>,
     /// Tells the sync thread that the database wrote; dropped with the
     /// database, which ends the thread.
     wake: watch::Sender<()>,
@@ -227,6 +261,9 @@ impl SyncState {
             puts: BTreeMap::new(),
             merges: BTreeMap::new(),
             merge_delay: MERGE_DELAY,
+            finalize_after: FINALIZE_AFTER,
+            too_early_retry: TOO_EARLY_RETRY,
+            retries: BTreeMap::new(),
             wake,
             pause,
             halted: false,

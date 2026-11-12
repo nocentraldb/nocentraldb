@@ -309,7 +309,7 @@ Stated plainly (principle 4):
 
 ## The plugin contract
 
-RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, until a plugin RFC says otherwise: plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
+RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
 
 ### What a field type defines
 
@@ -441,7 +441,7 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 
 **The value.** Any value of RFC 0002's profile, inside the depth limit below. Whether it fits the field's kind, such as a text in an integer field, an option the reader's schema does not list, or a link target that is not 16 bytes, is not a question of encoding. The operation is applied, and the field type decides how the read shows the value, as this RFC does for choices ("unknown option") and as NOC-16 does for a value of the wrong kind (kept on arrival). A link target that is not a 16-byte byte string names no object, so it resolves as **missing**.
 
-**A personal value.** The personal fields RFC decides where the sealed personal value sits. RFC 0002 puts it in key 5; with arguments in key 5, the natural place is argument 1, which leaves `replaces` readable to members, not to the relay.
+**A personal value.** A write to a personal field is a set whose argument 1 is the sealed personal value, `{1: person-key id, 2: sealed value}`, and whose argument 2 is `replaces`, as for any basic value, so the merge rule stays this RFC's and `replaces` stays readable to members, not to the relay (Carsten, 2026-11-12, NOC-244; [RFC 0003, "Personal value"](0003-keys-and-cryptography.md#personal-value)). Clearing the field writes a plain `null` as argument 1: it shows only that the field is empty, never what it held, and needs no person key. The sealed value directly in key 5, with `replaces` inside the ciphertext, was not taken: a member without the key could not merge; nor was a sealed `null`, which would hide that the field was cleared but needs the person key, so a person whose key is gone could not be cleared.
 
 **An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a transaction on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
 

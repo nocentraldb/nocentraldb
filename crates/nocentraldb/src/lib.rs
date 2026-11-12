@@ -27,9 +27,13 @@
 //! 0007), and [`Db::sync`] reports how far; see [`Db`] for what the SDK
 //! leaves out.
 
+#[cfg(target_arch = "wasm32")]
+mod browser;
 mod clock;
 mod db;
+mod durability;
 mod encode;
+mod erasures;
 mod error;
 mod id;
 mod keys;
@@ -37,6 +41,7 @@ mod list;
 mod members;
 mod next;
 mod object;
+mod personal;
 mod query;
 mod space;
 mod status;
@@ -44,15 +49,21 @@ mod subscribe;
 mod sync;
 mod tx;
 mod value;
+mod view_report;
 
 pub use db::{Db, OpenOptions};
 
 #[cfg(test)]
 mod agent_tests;
+#[cfg(test)]
+mod durability_tests;
+#[cfg(test)]
+mod personal_write_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]
 mod writer_model_tests;
+pub use erasures::{Acknowledged, Erasure, ErasureMember, ErasureState, Erasures};
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
 pub use list::{SpaceInfo, SpaceModel};
@@ -63,7 +74,11 @@ pub use members::{
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
-pub use status::{ParkReason, Refused, RejectReason, SpaceStatus, SpaceStatusReport};
+pub use status::{
+    ParkReason, ProvisionalErasure, Refused, RejectReason, SpaceStatus, SpaceStatusReport,
+};
 pub use sync::{Connection, SyncReport, SyncStatus};
+pub use tx::Create;
 pub use tx::Transaction;
 pub use value::Value;
+pub use view_report::{RebuildProgress, ViewReport, ViewStatus};

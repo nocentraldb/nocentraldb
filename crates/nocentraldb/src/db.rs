@@ -29,6 +29,7 @@ use ncdb_core::model_lock::ModelLock;
 use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
 
+use crate::durability::Storage;
 use crate::error::{Error, ErrorCode, storage};
 use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
@@ -47,6 +48,10 @@ pub struct OpenOptions {
     path: Option<PathBuf>,
     key_file: Option<PathBuf>,
     agent: bool,
+    /// The name of a database on OPFS, in a dedicated worker (NOC-175):
+    /// crate-internal until the browser export names it (NOC-176).
+    #[cfg(target_arch = "wasm32")]
+    browser: Option<String>,
 }
 
 /// The name of the database's SQLite file in the directory of
@@ -67,7 +72,19 @@ impl OpenOptions {
             path: None,
             key_file: None,
             agent: false,
+            #[cfg(target_arch = "wasm32")]
+            browser: None,
         }
+    }
+
+    /// Opens the database named `name` on OPFS, in a dedicated worker
+    /// (RFC 0006, "The browser"; NOC-231): crate-internal until the
+    /// browser export names it (NOC-176).
+    #[cfg(target_arch = "wasm32")]
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn browser(mut self, name: &str) -> OpenOptions {
+        self.browser = Some(name.to_owned());
+        self
     }
 
     /// Marks the member as an agent in the certificate its account signs,
@@ -140,6 +157,8 @@ pub(crate) struct Inner {
     pub(crate) account: SigningKey,
     /// What the account certifies the member as: a device or an agent.
     pub(crate) kind: MemberKind,
+    /// Where the copy is stored, for the durability report.
+    pub(crate) storage: crate::durability::Storage,
     /// Each space the member created or was added to.
     pub(crate) spaces: BTreeMap<CoreSpaceId, SpaceState>,
     pub(crate) watchers: Vec<Watcher>,
@@ -169,9 +188,24 @@ pub(crate) struct SpaceState {
     /// in the last fetch, though they signed them
     /// (`crate::sync::person_keys`). In memory only, as the person keys.
     pub(crate) bad_person_key_records: BTreeSet<[u8; 32]>,
+    /// The ids of the person keys the view opens the space's personal
+    /// fields with (`crate::personal::refresh`). In memory only.
+    pub(crate) opened: BTreeSet<[u8; 16]>,
 }
 
 impl SpaceState {
+    /// Drops every person key the space's state names as destroyed: a
+    /// shred is final when accepted, and a provisional one once an accepted
+    /// erasure decision finalizes it, so the member destroys its copy then
+    /// (RFC 0008, "A shred is final when accepted"). A provisional shred
+    /// alone keeps the key. A destroyed key is never held again, since its
+    /// records are not accepted (`crate::sync::person_keys`).
+    pub(crate) fn drop_shredded(&mut self) {
+        let resolved = self.checks.resolved();
+        self.person_keys
+            .retain(|id, _| resolved.person_key(*id).is_none_or(|key| !key.destroyed()));
+    }
+
     /// A space the database holds no change of yet.
     pub(crate) fn new(space: CoreSpaceId, member: MemberKey) -> SpaceState {
         SpaceState {
@@ -180,6 +214,7 @@ impl SpaceState {
             person_keys: BTreeMap::new(),
             person_keys_fetched: false,
             bad_person_key_records: BTreeSet::new(),
+            opened: BTreeSet::new(),
         }
     }
 
@@ -208,6 +243,11 @@ enum Place {
         dir: PathBuf,
         key_file: Option<PathBuf>,
     },
+    /// A database at a name on OPFS, which `Db::open` prepares first.
+    #[cfg(target_arch = "wasm32")]
+    Browser {
+        name: String,
+    },
 }
 
 impl OpenOptions {
@@ -215,6 +255,15 @@ impl OpenOptions {
     /// or memory together with a path or a key file (RFC 0009, S27).
     fn place(&self) -> Result<Place, Error> {
         let invalid = |message: &str| Err(Error::new(ErrorCode::InvalidValue, message));
+        #[cfg(target_arch = "wasm32")]
+        if let Some(name) = &self.browser {
+            if self.path.is_some() || self.in_memory || self.key_file.is_some() {
+                return invalid(
+                    "the options name a browser database together with a path, a key file or in_memory(); name one place",
+                );
+            }
+            return Ok(Place::Browser { name: name.clone() });
+        }
         match (&self.path, self.in_memory) {
             (Some(_), true) => invalid("the options name both a path and in_memory(); name one"),
             (None, true) if self.key_file.is_some() => invalid(
@@ -231,6 +280,13 @@ impl OpenOptions {
         }
     }
 }
+
+/// A browser database `Db::open` prepared; none exists natively.
+#[cfg(target_arch = "wasm32")]
+type Placed = crate::browser::Placed;
+/// A browser database `Db::open` prepared; none exists natively.
+#[cfg(not(target_arch = "wasm32"))]
+enum Placed {}
 
 /// What gives the keystore a database at a path keeps its keys in: the
 /// platform's, or a test's.
@@ -259,7 +315,9 @@ fn open_at(
         (None, Some(store)) => keys::from_store(store.as_ref(), &dir, existed)?,
         (None, None) => unreachable!("a database without a key file has a keystore"),
     };
-    let checks = |space| SealChecks::new(space, keys.member.key());
+    // The view keeps the checks while a rebuild runs (NOC-156).
+    let member = keys.member.clone();
+    let checks = move |space| SealChecks::new(space, member.key());
     let view = View::open_with(&file, lock, checks).map_err(view_error)?;
     Ok((view, keys))
 }
@@ -309,6 +367,11 @@ impl Db {
     /// `StorageFailed`. With a relay, the database starts syncing in the
     /// background.
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
+        #[cfg(target_arch = "wasm32")]
+        if let Place::Browser { name } = options.place()? {
+            let placed = crate::browser::place(&name).await?;
+            return Db::open_placed(options, None, &keys::store::platform, Some(placed));
+        }
         Db::open_with(options, None, &keys::store::platform)
     }
 
@@ -340,6 +403,17 @@ impl Db {
         given: Option<Keys>,
         store: &Store<'_>,
     ) -> Result<Db, Error> {
+        Db::open_placed(options, given, store, None)
+    }
+
+    /// Opens the database at the place the options name; a browser
+    /// database comes `placed` already, since preparing it waits.
+    fn open_placed(
+        options: OpenOptions,
+        given: Option<Keys>,
+        store: &Store<'_>,
+        placed: Option<Placed>,
+    ) -> Result<Db, Error> {
         let place = options.place()?;
         #[cfg(target_arch = "wasm32")]
         if options.relay.is_some() {
@@ -363,18 +437,38 @@ impl Db {
                 format!("the lock is refused: {error}"),
             )
         })?;
-        let (view, keys) = match place {
+        let _ = &placed;
+        let (mut view, keys, storage) = match place {
             Place::Memory => {
                 let view = View::open_in_memory(&lock).map_err(view_error)?;
-                (view, given.unwrap_or_else(Keys::generate))
+                let keys = given.unwrap_or_else(Keys::generate);
+                (view, keys, Storage::Temporary)
             }
-            Place::Path { dir, key_file } => open_at(dir, key_file, store, &lock)?,
+            Place::Path { dir, key_file } => {
+                let (view, keys) = open_at(dir, key_file, store, &lock)?;
+                (view, keys, Storage::Persistent)
+            }
+            #[cfg(target_arch = "wasm32")]
+            Place::Browser { .. } => {
+                let placed = placed.expect("Db::open prepares a browser database first");
+                let member = placed.keys.member.clone();
+                let checks = move |space| SealChecks::new(space, member.key());
+                let view =
+                    View::open_with(Path::new(&placed.path), &lock, checks).map_err(view_error)?;
+                (view, placed.keys, placed.storage)
+            }
         };
         let model = Arc::new(view.model().clone());
-        let spaces = view
+        let spaces: BTreeMap<_, _> = view
             .spaces()
             .map(|space| (space, SpaceState::from_log(&view, space, keys.member.key())))
             .collect();
+        // A shred held before this device kept when (NOC-218) starts its
+        // age now.
+        for (space, state) in &spaces {
+            crate::status::note_shreds(&mut view, *space, state.checks.resolved())
+                .map_err(view_error)?;
+        }
         let inner = Inner {
             view,
             model,
@@ -385,17 +479,30 @@ impl Db {
                 true => MemberKind::Agent,
                 false => MemberKind::Device,
             },
+            storage,
             spaces,
             watchers: Vec::new(),
             sync: None,
             status: crate::sync::Notify::default(),
         };
         let inner = Arc::new(Mutex::new(inner));
+        // A rebuild of the view runs in the background (RFC 0009, step 4),
+        // in a thread, which wasm32 does not start yet.
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::view_report::start(&inner);
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }
         Ok(Db { inner })
+    }
+
+    /// What this copy would lose if it were deleted now (RFC 0006, "What
+    /// the SDK reports"): crate-internal until NOC-176 names it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn durability(&self) -> crate::durability::Durability {
+        let inner = lock(&self.inner);
+        crate::durability::durability(&inner, inner.storage)
     }
 
     /// The spaces of the member.

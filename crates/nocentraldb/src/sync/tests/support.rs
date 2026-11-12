@@ -57,9 +57,24 @@ impl LocalRelay {
         LocalRelay::with(BTreeSet::new()).await
     }
 
+    /// A relay whose clock is `clock`, in milliseconds since the Unix
+    /// epoch, so that a test can move it, as for RFC 0007's `too_early`.
+    pub async fn start_with_clock(clock: fn() -> u64) -> LocalRelay {
+        let allowed = BTreeSet::from([account().verifying_key().to_bytes()]);
+        let dir = TempDir::new();
+        let addr = serve(&dir, allowed.clone(), Some(clock)).await;
+        let proxy = Proxy::start(addr).await;
+        LocalRelay {
+            addr,
+            dir,
+            proxy,
+            allowed,
+        }
+    }
+
     async fn with(allowed: BTreeSet<[u8; 32]>) -> LocalRelay {
         let dir = TempDir::new();
-        let addr = serve(&dir, allowed.clone()).await;
+        let addr = serve(&dir, allowed.clone(), None).await;
         let proxy = Proxy::start(addr).await;
         LocalRelay {
             addr,
@@ -87,7 +102,7 @@ impl LocalRelay {
     pub async fn restore(&mut self, backup: TempDir) {
         let store = SqliteStore::open(&backup.database()).expect("the backup opens");
         store.new_epoch().await.expect("a new epoch");
-        self.addr = serve(&backup, self.allowed.clone()).await;
+        self.addr = serve(&backup, self.allowed.clone(), None).await;
         self.proxy.lead_to(self.addr);
         self.dir = backup;
     }
@@ -127,9 +142,16 @@ impl LocalRelay {
 }
 
 /// A relay server on the database in `dir`; its address.
-async fn serve(dir: &TempDir, allowed: BTreeSet<[u8; 32]>) -> SocketAddr {
+async fn serve(
+    dir: &TempDir,
+    allowed: BTreeSet<[u8; 32]>,
+    clock: Option<fn() -> u64>,
+) -> SocketAddr {
     let store = SqliteStore::open(&dir.database()).expect("the relay's database opens");
     let mut config = Config::new(allowed);
+    if let Some(clock) = clock {
+        config.clock = clock;
+    }
     config.max_frame = ncdb_relay_server::MAX_FRAME;
     let server = Server::bind("127.0.0.1:0", Relay::new(store, config), RELAY_ID)
         .await
@@ -203,7 +225,12 @@ impl Proxy {
 /// The database of the simulated member `who`, of the simulated account,
 /// syncing with the relay at `url`.
 pub async fn open(who: Who, url: &str) -> Db {
-    let options = OpenOptions::new(LOCK).in_memory().relay(url);
+    open_with(who, url, LOCK).await
+}
+
+/// [`open`] with the lock `lock`.
+pub async fn open_with(who: Who, url: &str, lock: &str) -> Db {
+    let options = OpenOptions::new(lock).in_memory().relay(url);
     Db::open_as(options, [who; 32], [who ^ 0x80; 32], account())
         .await
         .expect("the test lock opens")

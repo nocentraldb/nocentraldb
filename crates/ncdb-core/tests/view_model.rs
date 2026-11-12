@@ -66,6 +66,8 @@ fn the_view_model_holds_the_model_id_version_collections_fields_and_indexes_of_t
         ],
         version: 2,
         collections: [("task".to_owned(), task), ("project".to_owned(), project)].into(),
+        // This lock has no personal field.
+        personal: Default::default(),
         indexes: vec![
             index("project", "byName", &[("name", Ascending)], 0),
             index("task", "byName", &[("title", Ascending)], 0),

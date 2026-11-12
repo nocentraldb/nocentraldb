@@ -22,9 +22,11 @@ mod migrate;
 pub mod model;
 mod query;
 mod read;
+mod rebuild;
 mod refold;
 mod relay;
 mod schema;
+mod shreds_held;
 mod state;
 mod stored_lock;
 
@@ -37,6 +39,7 @@ use rusqlite::Connection;
 use crate::change::Change;
 use crate::checks::SealChecks;
 use crate::ids::{ChangeId, SpaceId};
+use crate::keys::PersonKey;
 use crate::log::{Appended, Log, State, StateCounts};
 use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
@@ -45,13 +48,21 @@ use crate::tips::Tips;
 pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
+pub use rebuild::RebuildProgress;
 
 /// A member's local view: its database, its model and the log of each of
 /// its spaces.
 pub struct View {
     conn: Connection,
+    /// The model the view's tables were folded by, which reads and new
+    /// changes use; during a rebuild, the old one.
     model: Model,
     logs: BTreeMap<SpaceId, Log>,
+    /// A full rebuild under way (RFC 0006, "How").
+    rebuild: Option<rebuild::Rebuild>,
+    /// The person keys each space's personal fields open with, in memory
+    /// only (RFC 0009, "Personal fields").
+    person_keys: BTreeMap<SpaceId, fold::PersonKeys>,
 }
 
 impl fmt::Debug for View {
@@ -168,14 +179,18 @@ impl View {
     }
 
     /// Opens the view as [`View::open`] does, and when the lock check
-    /// accepts a change of the view's model, folds the whole log again by
-    /// the new model, with the checks `checks` gives for each space, before
-    /// it returns (RFC 0006, "Rebuilding the view"). If anything fails, the
-    /// database stays as it was.
-    pub fn open_with<C: Checks>(
+    /// accepts a change of the view's model, brings the view to the new
+    /// model with the checks `checks` gives for each space (RFC 0006,
+    /// "Rebuilding the view"). An additive change migrates the view in
+    /// place. A full rebuild starts in the background when the model the
+    /// view was folded by is known: the view then keeps serving by it, and
+    /// [`View::rebuild_step`] runs the rebuild. Otherwise the whole log is
+    /// folded again before it returns. If anything fails, the database
+    /// stays as it was.
+    pub fn open_with<C: Checks + Send + 'static>(
         path: &Path,
         lock: &ModelLock,
-        checks: impl FnMut(SpaceId) -> C,
+        checks: impl FnMut(SpaceId) -> C + Send + 'static,
     ) -> Result<View, Error> {
         View::with(Connection::open(path)?, lock, Some(checks))
     }
@@ -189,35 +204,121 @@ impl View {
         )
     }
 
-    fn with<C: Checks>(
+    fn with<C: Checks + Send + 'static>(
         conn: Connection,
         lock: &ModelLock,
-        checks: Option<impl FnMut(SpaceId) -> C>,
+        checks: Option<impl FnMut(SpaceId) -> C + Send + 'static>,
     ) -> Result<View, Error> {
         let model = Model::from_lock(lock).map_err(Error::Invalid)?;
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
         let tx = conn.unchecked_transaction()?;
-        match schema::open(&tx, &model, lock)? {
+        // A rebuild cut off by a close starts again (NOC-227).
+        schema::drop_staging(&tx)?;
+        let mut serving = model;
+        let mut rebuild = None;
+        match schema::open(&tx, &serving, lock)? {
             schema::Fit::Current => {}
             schema::Fit::Migrate(additions) => {
-                migrate::run(&tx, &model, &additions, log_table::load(&tx)?, checks)?;
+                migrate::run(&tx, &serving, &additions, log_table::load(&tx)?, checks)?;
             }
-            schema::Fit::Refold => {
+            schema::Fit::Refold(Some(old)) if checks.is_some() => {
+                let mut checks = checks.expect("checked above");
+                let factory: rebuild::Factory = Box::new(move |space| Box::new(checks(space)));
+                rebuild = Some(rebuild::Rebuild::start(&tx, serving, factory)?);
+                serving = *old;
+            }
+            schema::Fit::Refold(_) => {
                 let checks = checks.ok_or(Error::Model)?;
-                refold::run(&tx, &model, &log_table::load(&tx)?, checks)?;
+                refold::run(&tx, &serving, &log_table::load(&tx)?, checks)?;
             }
         }
-        query::check(&tx, &model.indexes)?;
+        query::check(&tx, &serving.indexes)?;
         let logs = log_table::load(&tx)?;
         tx.commit()?;
-        Ok(View { conn, model, logs })
+        Ok(View {
+            conn,
+            model: serving,
+            logs,
+            rebuild,
+            person_keys: BTreeMap::new(),
+        })
     }
 
-    /// The model the view folds by.
+    /// The model the view folds by: during a rebuild, the one its tables
+    /// were folded by, until the rebuild swaps in the new ones.
     pub fn model(&self) -> &Model {
         &self.model
+    }
+
+    /// How far a rebuild is, or `None` when none runs.
+    pub fn rebuild_progress(&self) -> Option<RebuildProgress> {
+        Some(self.rebuild.as_ref()?.progress(&self.logs))
+    }
+
+    /// Folds up to `frames` more frames of the log into a rebuild's staging
+    /// tables, in a transaction of their own, and says how far it is then.
+    /// When the rebuild has reached the end of every space's log, the same
+    /// transaction swaps the new tables in; the view then folds by the new
+    /// model, and this gives `None`, as it does when no rebuild runs.
+    pub fn rebuild_step(&mut self, frames: usize) -> Result<Option<RebuildProgress>, Error> {
+        let Some(rebuild) = self.rebuild.as_mut() else {
+            return Ok(None);
+        };
+        let tx = self.conn.transaction()?;
+        let step = rebuild.fold(&tx, &self.logs, frames).and_then(|()| {
+            let progress = rebuild.progress(&self.logs);
+            if progress.folded < progress.total {
+                return Ok(Some(progress));
+            }
+            rebuild.swap(&tx).map(|()| None)
+        });
+        let progress =
+            match step.and_then(|progress| tx.commit().map(|()| progress).map_err(Error::from)) {
+                Ok(progress) => progress,
+                Err(error) => {
+                    // The transaction rolled back; the rebuild starts again.
+                    rebuild.restart(&self.conn)?;
+                    return Err(error);
+                }
+            };
+        if progress.is_none() {
+            let rebuild = self.rebuild.take().expect("a rebuild runs");
+            self.model = rebuild.into_model();
+            self.logs = log_table::load(&self.conn)?;
+            // The new tables were folded without keys.
+            let tx = self.conn.transaction()?;
+            for (space, keys) in &self.person_keys {
+                fold::open_personal(&tx, &self.model, *space, keys)?;
+            }
+            tx.commit()?;
+        }
+        Ok(progress)
+    }
+
+    /// Gives the view the person keys of `space` its personal fields open
+    /// with, replacing those it had, and opens or empties every personal
+    /// field of the space at once (RFC 0006, "What the view stores in
+    /// plaintext"; RFC 0009, "How a personal field reads"). The caller
+    /// gives the keys it holds of persons that are not erased: a field
+    /// whose key is left out reads as unset, so leaving out the key of an
+    /// erased person, provisionally or for good, erases its fields from
+    /// the view. The keys stay in memory, never in the database.
+    pub fn set_person_keys(
+        &mut self,
+        space: SpaceId,
+        keys: BTreeMap<[u8; 16], PersonKey>,
+    ) -> Result<(), Error> {
+        let tx = self.conn.transaction()?;
+        fold::open_personal(&tx, &self.model, space, &keys)?;
+        tx.commit()?;
+        if keys.is_empty() {
+            self.person_keys.remove(&space);
+        } else {
+            self.person_keys.insert(space, keys);
+        }
+        Ok(())
     }
 
     /// Receives a frame: appends it to the log of its space, takes it
@@ -227,9 +328,31 @@ impl View {
     /// SQLite transaction. A duplicate changes nothing. When anything fails,
     /// neither the log nor the view changes.
     pub fn receive(&mut self, bytes: &[u8], checks: &mut impl Checks) -> Result<Appended, Error> {
+        self.receive_at(bytes, checks, None)
+    }
+
+    /// Receives a change the member wrote itself, as [`View::receive`]
+    /// does, and keeps `written_at`, the time it was written in
+    /// milliseconds since the Unix epoch, with it in the log (RFC 0002,
+    /// "On a member"; NOC-231). A duplicate keeps the time it had.
+    pub fn receive_own(
+        &mut self,
+        bytes: &[u8],
+        checks: &mut impl Checks,
+        written_at: u64,
+    ) -> Result<Appended, Error> {
+        self.receive_at(bytes, checks, Some(written_at))
+    }
+
+    fn receive_at(
+        &mut self,
+        bytes: &[u8],
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Appended, Error> {
         let change =
             Change::decode(bytes).map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
-        let result = self.receive_change(&change, bytes, checks);
+        let result = self.receive_change(&change, bytes, checks, written_at);
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -242,9 +365,21 @@ impl View {
         change: &Change,
         bytes: &[u8],
         checks: &mut impl Checks,
+        written_at: Option<u64>,
     ) -> Result<Appended, Error> {
         let tx = self.conn.transaction()?;
-        let appended = append(&tx, &self.model, &mut self.logs, change, bytes, checks)?;
+        let appended = append(
+            Target {
+                tx: &tx,
+                model: &self.model,
+                person_keys: &self.person_keys,
+            },
+            &mut self.logs,
+            change,
+            bytes,
+            checks,
+            written_at,
+        )?;
         tx.commit()?;
         Ok(appended)
     }
@@ -259,7 +394,28 @@ impl View {
         frames: &[&[u8]],
         checks: &mut impl Checks,
     ) -> Result<Vec<Appended>, Error> {
-        let result = self.receive_batch(frames, checks);
+        self.receive_all_at(frames, checks, None)
+    }
+
+    /// Receives every frame of `frames`, changes the member wrote itself,
+    /// as [`View::receive_all`] does, and keeps `written_at` with each new
+    /// one, as [`View::receive_own`] does.
+    pub fn receive_all_own(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+        written_at: u64,
+    ) -> Result<Vec<Appended>, Error> {
+        self.receive_all_at(frames, checks, Some(written_at))
+    }
+
+    fn receive_all_at(
+        &mut self,
+        frames: &[&[u8]],
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Vec<Appended>, Error> {
+        let result = self.receive_batch(frames, checks, written_at);
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -271,6 +427,7 @@ impl View {
         &mut self,
         frames: &[&[u8]],
         checks: &mut impl Checks,
+        written_at: Option<u64>,
     ) -> Result<Vec<Appended>, Error> {
         let changes = frames
             .iter()
@@ -281,12 +438,16 @@ impl View {
         let mut appended = Vec::with_capacity(frames.len());
         for (change, bytes) in changes.iter().zip(frames) {
             appended.push(append(
-                &tx,
-                &self.model,
+                Target {
+                    tx: &tx,
+                    model: &self.model,
+                    person_keys: &self.person_keys,
+                },
                 &mut self.logs,
                 change,
                 bytes,
                 checks,
+                written_at,
             )?);
         }
         tx.commit()?;
@@ -335,26 +496,40 @@ impl View {
     }
 }
 
+/// Where [`append`] folds: the transaction, the model and the person keys
+/// of each space.
+struct Target<'a> {
+    tx: &'a Connection,
+    model: &'a Model,
+    person_keys: &'a BTreeMap<SpaceId, fold::PersonKeys>,
+}
+
 /// Appends `change` to the log of its space inside the transaction `tx`,
 /// takes it through the steps and folds it, and records in `log` the
 /// changes whose state a passing control change changed.
 fn append(
-    tx: &Connection,
-    model: &Model,
+    target: Target<'_>,
     logs: &mut BTreeMap<SpaceId, Log>,
     change: &Change,
     bytes: &[u8],
     checks: &mut impl Checks,
+    written_at: Option<u64>,
 ) -> Result<Appended, Error> {
     let space = change.header().space;
     let log = logs.entry(space).or_insert_with(|| Log::new(space));
     log.take_changed();
-    let mut fold = fold::SqlFold::new(tx, model, space);
+    let Target {
+        tx,
+        model,
+        person_keys,
+    } = target;
+    let keys = person_keys.get(&space).unwrap_or(&fold::NO_KEYS);
+    let mut fold = fold::SqlFold::new(tx, model, space).with_keys(keys);
     let appended = log.receive(bytes, checks, &mut fold);
     fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
-        log_table::insert(tx, log, change.id())?;
+        log_table::insert(tx, log, change.id(), written_at)?;
         // A passing control change can change the state of others.
         for id in log.take_changed() {
             if id != change.id() {

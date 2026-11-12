@@ -23,8 +23,10 @@ use crate::db::{Inner, lock};
 use crate::error::{Error, ErrorCode, storage};
 use crate::space::{Space, not_stopped, writable};
 
-mod batch;
+pub(crate) mod batch;
 mod change;
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) mod erasure;
 mod info;
 mod invitation;
 mod leave;
@@ -32,6 +34,7 @@ mod leave;
 pub(crate) mod merge;
 mod notice;
 mod rotate;
+mod statement;
 
 use batch::Batch;
 
@@ -310,6 +313,8 @@ mod relay_tests;
 mod remove_tests;
 #[cfg(test)]
 mod rotate_tests;
+#[cfg(test)]
+mod statement_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]

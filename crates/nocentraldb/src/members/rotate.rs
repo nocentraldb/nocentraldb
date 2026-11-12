@@ -73,7 +73,7 @@ fn live(state: &SpaceState) -> impl Iterator<Item = ([u8; 16], [u8; 32])> + '_ {
         .checks
         .resolved()
         .person_keys()
-        .filter(|(_, key)| key.shred.is_none())
+        .filter(|(_, key)| !key.destroyed())
         .filter_map(|(id, key)| key.commitment.map(|commitment| (id, commitment)))
 }
 
