@@ -61,7 +61,10 @@ impl Site<'_> {
         let invalid = || self.invalid();
         match (field, state, intent) {
             (Field::Basic(basic), FieldState::Basic(state), Intent::Set(value)) => {
-                let value = value.to_cbor().ok_or_else(invalid)?;
+                let value = match value.0 {
+                    Repr::Clear => cbor::Value::Null,
+                    _ => value.to_cbor().ok_or_else(invalid)?,
+                };
                 let mut write = basic
                     .set(state, id, author, stamp, value)
                     .map_err(|_| invalid())?;
@@ -79,7 +82,10 @@ impl Site<'_> {
                 Ok(vec![self.operation(basic, &write)])
             }
             (Field::Link(link), FieldState::Basic(state), Intent::Set(value)) => {
-                let target = Some(self.target(value)?);
+                let target = match value.0 {
+                    Repr::Clear => None,
+                    _ => Some(self.target(value)?),
+                };
                 let write = link
                     .set(state, id, author, stamp, self.space, target)
                     .map_err(|_| invalid())?;
