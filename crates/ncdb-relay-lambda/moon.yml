@@ -8,6 +8,9 @@ layer: application
 tasks:
   test-sdk-sync:
     command: "cargo test --locked -p nocentraldb --lib sync::tests"
+    # After the SDK's own tests, not beside them: the sync suite's waits
+    # are timed, and two copies at once double the load (NOC-276).
+    deps: ["nocentraldb:test"]
     env:
       NCDB_TEST_RELAY: "lambda"
   gates:
