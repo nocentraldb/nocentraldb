@@ -28,10 +28,12 @@ import { scene } from "./scene.mjs";
           Apache-2.0.
         </p>
       </div>
-      <div class="span-6 start-7">
+      <div class="span-6 start-7 hero__media">
         <div class="scene-frame" data-scene-scope>
           <Fragment set:html={scene(0, "hero")} />
-          <button class="scene-pause" type="button" aria-pressed="false" data-scene-pause>Pause</button>
+          <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-scene-pause>
+            Pause
+          </button>
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@
 // each hold the same three tasks, a cloud server sits between them. One pure
 // function returns the SVG as a string in four states. Colours and type live in
 // site/src/styles/scene.css, on the classes used here.
-// Ported from the accepted prototype (docs/superpowers/specs/2026-11-12-landing-page-prototype/build.mjs).
+// Ported from the prototype the owner accepted on 2026-11-12 (its generator is in the git history).
 
 const W = 230;
 const X = { train: 20, home: 285, agent: 550 };

@@ -1,0 +1,17 @@
+[
+  {
+    "check": "copy-headings",
+    "target": "h2#story-h",
+    "reason": "owner's decision, 2026-11-12: the scenario's heading and its four step titles are the spec's fixed copy; they name the places and the steps a stranger follows, not a product part"
+  },
+  {
+    "check": "no-visual",
+    "target": "section#code",
+    "reason": "owner's decision, 2026-11-12: the code section shows the five SDK calls in tabs (spec, The page, row 3), and that code is its picture; the kit's own code fragment needs ui.js, which is over the repository's 700-line file limit"
+  },
+  {
+    "check": "hero-lines",
+    "target": "section.hero h1",
+    "reason": "owner's decision, 2026-11-12: the hero was chosen in the accepted prototype, not dealt; its headline is the owner's own 67 characters, set on four lines at 1440 and 390"
+  }
+]

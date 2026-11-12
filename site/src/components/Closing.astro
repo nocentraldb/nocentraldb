@@ -1,6 +1,7 @@
 ---
-// The close: row 1 of footer.closing (Landing.astro), flooded yellow on the
-// kit's .ground-brand, with the way into the docs, the feedback button and the use cases.
+// The close: row 1 of footer.closing (Landing.astro), which is flooded yellow
+// edge to edge (the kit's .ground-brand on the footer itself), with the way into
+// the docs, the feedback button and the use cases.
 const docs = [
   ["Getting started", "Install, describe a model, open a database.", "/docs/"],
   ["Concepts", "Spaces, the relay, convergence, shredding.", "/docs/concepts/spaces/"],
@@ -9,7 +10,7 @@ const docs = [
 ];
 ---
 
-<div class="closing__cta ground-brand">
+<div class="closing__cta">
   <div class="section-head">
     <h2 id="close-h">Read the design, then tell us where it breaks</h2>
   </div>
@@ -24,17 +25,13 @@ const docs = [
     }
   </div>
   <div class="btn-row close-actions">
-    <a class="btn btn--primary btn--xl" href="https://github.com/nocentraldb/nocentraldb/discussions">Share your feedback</a>
+    <a class="btn btn--primary" href="https://github.com/nocentraldb/nocentraldb/discussions">Share your feedback</a>
     <a class="link" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/use-cases.md">See the use cases</a>
   </div>
 </div>
 
 <style>
-  /* The yellow runs edge to edge, from the footer's top to the footer row:
-     a spread shadow in the ground's colour, cut to the close's own band. */
   .closing__cta {
-    box-shadow: 0 0 0 100vmax var(--bg);
-    clip-path: inset(calc(-1 * var(--padt)) -100vmax calc(-1 * var(--s-8)) -100vmax);
     justify-content: space-between;
   }
   .closing__cta h2 {
@@ -46,8 +43,8 @@ const docs = [
   .closing__cta .btn--primary {
     color: var(--p-ink);
   }
-  /* near-black cards on the yellow ground */
-  /* the cards' own gap, not the footer's link-column gap (.footer .grid) */
+  /* near-black cards on the yellow ground, with the cards' own gap, not the
+     footer's link-column gap (.footer .grid) */
   .closing__cta > .doc-cards.grid {
     align-content: start;
     row-gap: var(--card-gap);
@@ -67,14 +64,30 @@ const docs = [
     align-items: center;
     gap: var(--s-4) var(--s-7);
   }
-  @media (min-width: 640px) and (max-width: 1023px) {
+  /* two by two below a desktop, so the close stays one screen on a phone */
+  @media (max-width: 1023px) {
     .doc-cards > .card {
       grid-column: auto / span 6;
     }
   }
   @media (max-width: 639px) {
+    .closing__cta {
+      gap: var(--s-5);
+    }
+    .closing__cta h2 {
+      font-size: var(--t-h2);
+    }
+    .close-actions {
+      row-gap: var(--s-2);
+    }
+    .close-actions .btn {
+      width: 100%;
+    }
     .doc-cards h3 {
-      font-size: 20px;
+      font-size: 18px;
+    }
+    .doc-cards .card {
+      --c-pad: var(--s-4);
     }
   }
 </style>

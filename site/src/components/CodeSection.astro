@@ -1,6 +1,7 @@
 ---
 // Install, then five calls on the task model, from the README's "Code examples"
-// (RFC 0009). The tabs are the kit's (.tabs, .tab); the snippets keep the
+// (RFC 0009). On a phone the section is two screens (the kit's .g2m): the words,
+// then the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
 // README's statements, a few dropped for length.
 import { Code } from "astro:components";
 
@@ -14,7 +15,6 @@ const tabs = [
 export const model = nc.model({
   people: nc.collection({
     name: nc.string().personal({ person: "self" }),
-    email: nc.string().personal({ person: "self" }),
   }),
   tasks: nc.collection(
     {
@@ -22,7 +22,6 @@ export const model = nc.model({
       status: nc.oneOf(["open", "in_progress", "done"]),
       priority: nc.int(),
       assignee: nc.link("people"),
-      dependsOn: nc.links("tasks"),
     },
     {
       indexes: {
@@ -75,7 +74,7 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
 ];
 ---
 
-<section class="section" id="code" aria-labelledby="code-h">
+<section class="section g2m" id="code" aria-labelledby="code-h">
   <div class="wrap grid code-grid">
     <div class="span-5">
       <div class="section-head">
@@ -84,12 +83,12 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
       </div>
       <div class="install">
         <code>npm install @nocentraldb/sdk</code>
-        <button type="button" class="btn btn--secondary btn--sm" data-copy="npm install @nocentraldb/sdk">Copy</button>
+        <button type="button" class="btn btn--secondary" data-copy="npm install @nocentraldb/sdk">Copy</button>
       </div>
       <p class="also">Rust: <code>cargo add nocentraldb</code></p>
     </div>
 
-    <div class="span-7 start-6 code-tabs" data-tabs>
+    <div class="span-6 start-7 code-tabs">
       <div class="tabs" role="tablist" aria-label="Code for the task list">
         {
           tabs.map((t, i) => (
@@ -123,23 +122,15 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
   .code-grid {
     align-content: start;
   }
+  /* the install line on the column's left line, its Copy button after it */
   .install {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--s-3);
-    max-width: 480px;
-    padding: 6px 6px 6px var(--s-5);
-    border-radius: 999px;
-    background: var(--surface);
+    gap: var(--s-3) var(--s-5);
   }
   .install code {
-    font-size: var(--t-small);
-    min-width: 0;
-    overflow-x: auto;
-  }
-  .install .btn {
-    flex: none;
+    font-size: var(--t-body);
   }
   .install code,
   .also code {
@@ -152,20 +143,44 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     font-size: var(--t-small);
   }
   .note {
-    margin: var(--s-5) 0 var(--s-4);
+    margin: var(--s-4) 0;
     color: var(--muted);
-    min-height: 2lh;
+  }
+  /* the selected tab is its word in the ink over a 2px line: the kit's sliding
+     indicator (motion.js) drawn as that line, not as one more filled pill */
+  .code-tabs .tab[aria-selected="true"] {
+    color: var(--ink);
+  }
+  .code-tabs :global(.m-tab-ind) {
+    top: calc(var(--h, 0px) - 2px);
+    height: 2px;
+    border-radius: 2px;
+  }
+  /* every panel in one cell, the hidden ones kept out of sight and out of reach:
+     the section is as tall as its tallest panel, whichever tab is open */
+  .code-tabs {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+  }
+  .code-tabs > [role="tabpanel"] {
+    grid-row: 2;
+    grid-column: 1;
+  }
+  .code-tabs > [role="tabpanel"][hidden] {
+    display: block;
+    visibility: hidden;
   }
   [role="tabpanel"] :global(pre) {
     margin: 0;
-    padding: var(--s-5) var(--s-6);
+    padding: var(--s-5);
     border-radius: var(--r-lg);
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.5;
-    overflow-x: auto;
-    /* the Model snippet's height: every panel the same, so the frame never resizes */
-    min-height: calc(22lh + 2 * var(--s-5));
+    /* a long line wraps inside the panel rather than run past its edge */
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
     /* code in ink and muted only, never the accent */
     --astro-code-background: var(--ncdb-surface);
     --astro-code-foreground: var(--ncdb-ink);
@@ -179,6 +194,16 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     --astro-code-token-punctuation: var(--ncdb-muted);
     --astro-code-token-link: var(--ncdb-ink);
   }
+  /* the brand's mono in the code too (the browser gives <code> its own monospace) */
+  [role="tabpanel"] :global(pre code) {
+    font-family: inherit;
+  }
+  /* a wrapped line goes on 4ch in, so it reads as the rest of its statement */
+  [role="tabpanel"] :global(pre .line) {
+    display: inline-block;
+    padding-left: 4ch;
+    text-indent: -4ch;
+  }
   @media (max-width: 1023px) {
     .code-grid > * {
       grid-column: 1 / -1;
@@ -187,11 +212,26 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
       margin-top: var(--s-7);
     }
   }
+  /* a short desktop window (1440x670): the code a little denser, so the section stays one screen */
+  @media (max-height: 780px) and (min-width: 1024px) {
+    [role="tabpanel"] :global(pre) {
+      padding: var(--s-4) var(--s-5);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+  }
   @media (max-width: 639px) {
     [role="tabpanel"] :global(pre) {
       padding: var(--s-4);
       font-size: 12px;
-      min-height: 0;
+    }
+    /* the five tabs in one row at 390, closer together; a narrower phone wraps them */
+    .code-tabs .tabs {
+      justify-content: space-between;
+      gap: var(--s-1);
+    }
+    .code-tabs .tab {
+      padding: 0 var(--s-2);
     }
   }
 </style>

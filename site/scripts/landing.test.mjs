@@ -78,3 +78,21 @@ test("magenta appears once in the page and the stylesheets it loads", () => {
   const all = [html, ...linked].join("");
   assert.equal(all.split(/ff3d8b/i).length - 1, 1);
 });
+test("the close's yellow is the footer's own ground, edge to edge", () => {
+  assert.match(html, /<footer[^>]*class="[^"]*closing[^"]*ground-brand/);
+  assert.ok(!html.includes("100vmax"), "no spread-shadow band");
+});
+test("each pause control keeps one name and says its state with aria-pressed", () => {
+  const buttons = [...html.matchAll(/<button[^>]*data-scene-pause[^>]*>/g)].map((m) => m[0]);
+  assert.equal(buttons.length, 2);
+  for (const b of buttons) {
+    assert.match(b, /aria-label="Pause the animation"/);
+    assert.match(b, /aria-pressed="false"/);
+  }
+});
+test("below a desktop the header opens its links from a menu button", () => {
+  assert.match(html, /<button class="nav__toggle"[^>]*aria-expanded="false"[^>]*aria-label="Menu"/);
+});
+test("the code tabs are wired by the kit alone, without a dead data-tabs hook", () => {
+  assert.ok(!html.includes("data-tabs"));
+});

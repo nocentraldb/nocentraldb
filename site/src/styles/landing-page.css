@@ -1,7 +1,8 @@
-/* The landing page's own rules on top of the vendored kit (public/assets):
-   the hero's two small lines, the drawing's 4:3 frame, a short desktop window
-   and the drawings' pause control. Ported from the accepted
-   prototype (docs/superpowers/specs/2026-11-12-landing-page-prototype/build.mjs). */
+/* The landing page's own rules on top of the vendored kit (public/assets): the
+   hero's two small lines, the drawing's 4:3 frame, the header's links on the right
+   line, the drawings at rest, a short desktop window and the drawings' pause
+   control. The drawing's look follows the prototype the owner accepted on
+   2026-11-12 (its generator is in the git history). */
 
 .hero .status-line,
 .hero .fact-line {
@@ -16,6 +17,14 @@
   margin-top: var(--s-2);
 }
 
+/* On a desktop the header's four links end on the wrap's right line, like every
+   section's content (below 1024 they are the menu's sheet, top to bottom). */
+@media (min-width: 1024px) {
+  .nav__links {
+    justify-content: flex-end;
+  }
+}
+
 /* The drawing's frame: 4:3 on the surface tone, in the hero and in the scenario. */
 .scene-frame {
   position: relative;
@@ -26,6 +35,71 @@
 }
 [data-moment="pinned-chapters"] .mo-pc__visual {
   background: var(--ncdb-surface);
+}
+/* In the hero the frame fills the kit's .hero__media: beside the words as tall as
+   they run, stacked under them what the first screen leaves; the drawing sits whole
+   and centred inside it. */
+.hero .scene-frame {
+  aspect-ratio: auto;
+  height: 100%;
+}
+/* A phone: the words a little closer and the headline a step smaller, so the
+   drawing keeps a strip of the first screen (at rest there, scene-pause.mjs). */
+@media (max-width: 639px) {
+  .hero h1 {
+    font-size: 32px;
+  }
+  .hero .hero__text > .hero__kicker + h1 {
+    margin-top: var(--s-3);
+  }
+  .hero .hero__text > .hero__lead {
+    margin-top: var(--s-4);
+  }
+  .hero .hero__text > .btn-row {
+    margin-top: var(--s-5);
+  }
+  .hero .status-line {
+    margin-top: var(--s-4);
+  }
+  .hero .status-line,
+  .hero .fact-line {
+    max-width: none;
+  }
+  .hero .hero__media {
+    min-height: 150px;
+    margin-top: var(--s-4);
+  }
+}
+
+/* The scenario at rest (tablets, phones, short screens): each step's drawing whole in
+   a frame the kit's rows allow (at most 30svh from 640px, 16:9 at 26svh on a phone),
+   and the section exactly the two screens its --h names. */
+[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
+  aspect-ratio: 4 / 3;
+}
+@media (min-width: 640px) {
+  [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
+    max-height: 30svh;
+  }
+}
+@media (max-width: 639px) {
+  [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
+    aspect-ratio: 16 / 9;
+    max-height: 26svh;
+  }
+}
+main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
+  min-height: calc(var(--h, 1) * 100svh);
+}
+/* what the two screens leave goes between the steps, not under the last one */
+#story[data-moment="pinned-chapters"]:not(.is-live) > .mo-pc__grid {
+  align-content: stretch;
+}
+#story[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__text {
+  grid-template-rows: auto 1fr;
+}
+#story[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__steps {
+  align-content: space-between;
 }
 
 /* A short desktop window (1440x670): the headline follows the window height. */
@@ -49,20 +123,36 @@
   }
 }
 
-/* Pause and Play, at the bottom right of each drawing's frame, above the figures. */
+/* A phone: the close and the footer row a little closer, so footer.closing stays
+   one screen. */
+@media (max-width: 639px) {
+  footer.closing > .wrap {
+    row-gap: var(--s-6);
+  }
+  footer.closing .footer__legal {
+    row-gap: var(--s-2);
+  }
+}
+
+/* Pause, at the bottom right of each drawing's frame, above the figures: filled
+   in the ink while it holds the drawing (aria-pressed). */
 button.scene-pause[data-scene-pause] {
   position: absolute;
   right: 12px;
   bottom: 12px;
   z-index: 6;
-  min-height: 36px;
-  padding: 0 14px;
+  min-height: 44px;
+  padding: 0 var(--s-4);
   border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
   border-radius: 999px;
   background: var(--bg);
   color: var(--ink);
   font: var(--ncdb-weight-emphasis) var(--t-small) var(--font-text);
   cursor: pointer;
+}
+button.scene-pause[data-scene-pause][aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
 }
 button.scene-pause[data-scene-pause][hidden] {
   display: none;
