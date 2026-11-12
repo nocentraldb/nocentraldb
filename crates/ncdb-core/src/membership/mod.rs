@@ -25,7 +25,6 @@ mod person_key_wrap;
 mod person_keys;
 mod resolve;
 mod rights;
-mod stable;
 mod state;
 mod statement;
 
@@ -53,6 +52,5 @@ pub use person_key_wrap::{
 };
 pub use person_keys::PersonKey;
 pub use resolve::{Resolved, resolve};
-pub use stable::Stability;
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
 pub use statement::AccountKeyStatement;
