@@ -1,0 +1,141 @@
+# NOC-272: builds the relay's Lambda package and deploys the relay to AWS,
+# as the owner decided on NOC-264 (point 4 B). The owner set up the trust
+# between GitHub Actions and the account NoCentralDb-Prod once, with OIDC
+# (docs/relay-deploy.md). From then on, every merge to main that changes the
+# relay's infrastructure or the crates its function is built from deploys
+# it. No long-lived AWS key exists anywhere, and no agent holds AWS
+# credentials.
+#
+# - build: on pull requests and on main. It builds the function's arm64
+#   package with cargo-lambda, pinned by version and hash, and has no AWS
+#   access at all. A pull request's infrastructure diff is the committed
+#   template snapshot, which `pnpm gates` checks (infra/aws/test); it gets
+#   no credentials, not even to read (pm, NOC-272 answer C).
+# - deploy: on a push to main only, never on a pull request or a fork,
+#   through the GitHub environment `aws-prod`, which allows only main. It
+#   assumes the deploy role with the job's OIDC token, builds the package
+#   again in its own job, shows `cdk diff`, then runs `cdk deploy`.
+#
+# Every action is pinned by commit SHA. scripts/relay-deploy-workflow.test.mjs
+# asserts this file.
+name: relay-deploy
+
+on:
+  pull_request:
+    paths:
+      - "infra/aws/**"
+      - "crates/ncdb-core/**"
+      - "crates/ncdb-relay/**"
+      - "crates/ncdb-relay-aws/**"
+      - "crates/ncdb-relay-lambda/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "rust-toolchain.toml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/relay-deploy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "infra/aws/**"
+      - "crates/ncdb-core/**"
+      - "crates/ncdb-relay/**"
+      - "crates/ncdb-relay-aws/**"
+      - "crates/ncdb-relay-lambda/**"
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "rust-toolchain.toml"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/relay-deploy.yml"
+
+permissions:
+  contents: read
+
+# One deploy at a time; a running deploy is never cancelled, so the stack
+# is never left half updated by this workflow.
+concurrency:
+  group: relay-deploy-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # The function's package, as cargo-lambda builds it.
+  LAMBDA_PACKAGE: target/lambda/ncdb-relay-lambda
+  CDK_DISABLE_CLI_TELEMETRY: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust toolchain from rust-toolchain.toml, with the arm64 Linux target
+        run: |
+          rustup toolchain install --no-self-update
+          rustup target add aarch64-unknown-linux-gnu
+
+      - name: cargo-lambda and zig, pinned by hash
+        run: pip install --require-hashes --only-binary ":all:" -r infra/aws/cargo-lambda.txt
+
+      - name: Build the function's package
+        run: cargo lambda build --locked --release --arm64 -p ncdb-relay-lambda --features aws --bin ncdb-relay-lambda
+
+      - name: The package holds bootstrap
+        run: test -x "$LAMBDA_PACKAGE/bootstrap"
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: aws-prod
+    permissions:
+      contents: read
+      id-token: write
+    # The deployment's values, from the environment's variables; none is a
+    # secret. They reach the shell as variables, never spliced into it.
+    env:
+      RELAY_ID: ${{ vars.RELAY_ID }}
+      ALLOWED_ACCOUNTS: ${{ vars.ALLOWED_ACCOUNTS }}
+      ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Rust toolchain from rust-toolchain.toml, with the arm64 Linux target
+        run: |
+          rustup toolchain install --no-self-update
+          rustup target add aarch64-unknown-linux-gnu
+
+      - name: cargo-lambda and zig, pinned by hash
+        run: pip install --require-hashes --only-binary ":all:" -r infra/aws/cargo-lambda.txt
+
+      - name: Build the function's package
+        run: cargo lambda build --locked --release --arm64 -p ncdb-relay-lambda --features aws --bin ncdb-relay-lambda
+
+      # proto, then moon, Node and pnpm as .prototools pins them, as in ci.yml.
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
+      - run: pnpm install --frozen-lockfile
+
+      - name: Assume the deploy role through OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-central-1
+
+      - name: Show what changes
+        working-directory: infra/aws
+        run: >-
+          pnpm exec cdk diff --no-notices
+          -c relayId="$RELAY_ID"
+          -c allowedAccounts="$ALLOWED_ACCOUNTS"
+          -c alarmEmail="$ALARM_EMAIL"
+          -c lambdaPackage="$GITHUB_WORKSPACE/$LAMBDA_PACKAGE"
+
+      - name: Deploy
+        working-directory: infra/aws
+        run: >-
+          pnpm exec cdk deploy --no-notices --require-approval never
+          -c relayId="$RELAY_ID"
+          -c allowedAccounts="$ALLOWED_ACCOUNTS"
+          -c alarmEmail="$ALARM_EMAIL"
+          -c lambdaPackage="$GITHUB_WORKSPACE/$LAMBDA_PACKAGE"
