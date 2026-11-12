@@ -350,7 +350,7 @@ async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
 
 /// The acknowledgements `db`'s own member wrote in `space`, in its order:
 /// the shred each names, and whether it says "deleted".
-fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId, bool)> {
+pub(super) fn acknowledgements(db: &Db, space: CoreSpaceId) -> Vec<(CoreChangeId, bool)> {
     let inner = lock(&db.inner);
     let me = inner.member.key().id();
     let log = inner.view.log(space).expect("the space's log");
