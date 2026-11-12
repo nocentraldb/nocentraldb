@@ -1,8 +1,6 @@
-//! The relay re-checks a waiting shred's stability (RFC 0008, "Effects that
-//! wait until a change is stable") only when
-//! an append can change it: a control change, or a change of a member that
-//! holds or held the admin role. A writer's sealed change cannot, and does
-//! not make the relay read and resolve the log again.
+//! A shred is final when accepted (RFC 0008, "A shred is final when
+//! accepted"), so no sealed change, a writer's or an admin's, makes the
+//! relay read and resolve the log again for a shred.
 
 mod support;
 
@@ -48,8 +46,8 @@ fn record(space: SpaceId, generation: u64) -> PersonKeyRecord {
     }
 }
 
-/// A space whose writer shredded person 1's key, whose record is stored;
-/// the shred waits for both admins.
+/// A space whose writer shredded person 1's key after its record was
+/// stored.
 fn waiting() -> (Relay<Store>, TempDir, Space, Change) {
     let dir = TempDir::new();
     let relay = Relay::new(Counting::new(dir.store()), config());
@@ -87,32 +85,14 @@ fn a_writers_sealed_change_does_not_make_the_relay_read_the_log() {
     let sealed = space.sealed(WRITER, Vec::new());
     accepted(&relay, WRITER, &sealed);
     assert_eq!(relay.store().take_reads(), 0);
-    assert_eq!(stored(&relay, space.space), 1);
+    assert_eq!(stored(&relay, space.space), 0);
 }
 
 #[test]
-fn an_admins_sealed_change_makes_the_relay_check_again() {
-    // It can close a gap in the admin's run, so the relay checks.
+fn an_admins_sealed_change_does_not_make_the_relay_read_the_log_either() {
     let (relay, _dir, mut space, _) = waiting();
     relay.store().take_reads();
     let sealed = space.sealed(CREATOR, Vec::new());
     accepted(&relay, CREATOR, &sealed);
-    assert!(relay.store().take_reads() > 0);
-}
-
-/// The relay still checks once the shred becomes stable, but keeps the
-/// record until NOC-224 is settled (NOC-225).
-#[test]
-fn the_record_stays_once_the_shred_is_stable() {
-    let (relay, _dir, mut space, shred) = waiting();
-    let sealed = space.sealed(WRITER, Vec::new());
-    accepted(&relay, WRITER, &sealed);
-    let by_creator = space.envelope(CREATOR, WRITER, &[&shred]);
-    accepted(&relay, CREATOR, &by_creator);
-    assert_eq!(stored(&relay, space.space), 1);
-    relay.store().take_reads();
-    let by_second = space.envelope(SECOND, WRITER, &[&shred]);
-    accepted(&relay, SECOND, &by_second);
-    assert!(relay.store().take_reads() > 0, "the relay checked");
-    assert_eq!(stored(&relay, space.space), 1);
+    assert_eq!(relay.store().take_reads(), 0);
 }

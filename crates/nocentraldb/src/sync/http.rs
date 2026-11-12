@@ -1,18 +1,18 @@
 //! A small, strict HTTP/1.1 client for the upload and download URLs of
 //! large changes (RFC 0007, "Large changes"): one request per connection,
-//! `Connection: close`. It refuses what it does not need: a response head
+//! `Connection: close`, over TLS for `https://` (`super::tls`) or plain
+//! for `http://`. It refuses what it does not need: a response head
 //! longer than [`MAX_HEAD`], a response without `Content-Length` or with
 //! `Transfer-Encoding`, a redirect or any other status than success, and a
 //! body other than the declared size. A download reads exactly the size the
 //! relay announced and nothing after it.
-//!
-//! **What this does not do yet.** `https://` URLs fail as unsupported: TLS
-//! comes with `wss://` (NOC-121, second part).
 
 use std::time::Duration;
 
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use rustls::pki_types::ServerName;
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
+use tokio_rustls::TlsConnector;
 
 /// The largest frame the relay accepts: 16 MiB (RFC 0007, "Large
 /// changes").
@@ -33,7 +33,7 @@ const TRANSFER: Duration = if cfg!(test) {
 /// token.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Failed {
-    /// Not an `http://` URL.
+    /// Not an `http://` or `https://` URL.
     Unsupported,
     /// The connection failed, or the request took longer than [`TRANSFER`].
     Network,
@@ -90,9 +90,23 @@ async fn timed<T>(
         .unwrap_or(Err(Failed::Network))
 }
 
-/// The authority (`host:port`) and the path of an `http://` URL.
-fn split(url: &str) -> Result<(String, &str), Failed> {
-    let rest = url.strip_prefix("http://").ok_or(Failed::Unsupported)?;
+/// Where a URL leads: over TLS or not, the host as TLS names it, the
+/// authority (`host:port`) and the path.
+#[derive(Debug, PartialEq, Eq)]
+struct Target<'a> {
+    tls: bool,
+    host: String,
+    authority: String,
+    path: &'a str,
+}
+
+/// The target of an `http://` or `https://` URL with a path.
+fn split(url: &str) -> Result<Target<'_>, Failed> {
+    let (tls, rest) = match (url.strip_prefix("https://"), url.strip_prefix("http://")) {
+        (Some(rest), _) => (true, rest),
+        (None, Some(rest)) => (false, rest),
+        (None, None) => return Err(Failed::Unsupported),
+    };
     if rest.bytes().any(|b| b.is_ascii_control() || b == b' ') {
         return Err(Failed::Unsupported);
     }
@@ -101,16 +115,53 @@ fn split(url: &str) -> Result<(String, &str), Failed> {
     if authority.is_empty() || authority.contains('@') {
         return Err(Failed::Unsupported);
     }
-    let authority = match authority.rsplit_once(':') {
-        Some((_, port)) if !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()) => {
-            authority.to_owned()
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port))
+            if !port.is_empty()
+                && port.bytes().all(|b| b.is_ascii_digit())
+                && (!host.starts_with('[') || host.ends_with(']')) =>
+        {
+            (host, port.parse::<u16>().map_err(|_| Failed::Unsupported)?)
         }
         _ if authority.starts_with('[') && !authority.ends_with(']') => {
             return Err(Failed::Unsupported);
         }
-        _ => format!("{authority}:80"),
+        _ => (authority, if tls { 443 } else { 80 }),
     };
-    Ok((authority, path))
+    if host.is_empty() {
+        return Err(Failed::Unsupported);
+    }
+    Ok(Target {
+        tls,
+        host: host
+            .trim_start_matches('[')
+            .trim_end_matches(']')
+            .to_owned(),
+        authority: format!("{host}:{port}"),
+        path,
+    })
+}
+
+/// A connection to a URL's server, over TLS or not.
+trait Stream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T: AsyncRead + AsyncWrite + Unpin + Send> Stream for T {}
+
+/// Connects to `target`, over TLS when it asks for it, verifying the
+/// server against the platform's trust store.
+async fn connect(target: &Target<'_>) -> Result<Box<dyn Stream>, Failed> {
+    let stream = TcpStream::connect(&target.authority)
+        .await
+        .map_err(|_| Failed::Network)?;
+    if !target.tls {
+        return Ok(Box::new(stream));
+    }
+    let config = super::tls::config().ok_or(Failed::Network)?;
+    let name = ServerName::try_from(target.host.clone()).map_err(|_| Failed::Unsupported)?;
+    let tls = TlsConnector::from(config)
+        .connect(name, stream)
+        .await
+        .map_err(|_| Failed::Network)?;
+    Ok(Box::new(tls))
 }
 
 /// Sends one request and reads its response head: the status, the
@@ -119,13 +170,13 @@ async fn exchange(
     method: &str,
     url: &str,
     body: &[u8],
-) -> Result<(u16, Option<u64>, TcpStream, Vec<u8>), Failed> {
-    let (authority, path) = split(url)?;
-    let mut stream = TcpStream::connect(&authority)
-        .await
-        .map_err(|_| Failed::Network)?;
+) -> Result<(u16, Option<u64>, Box<dyn Stream>, Vec<u8>), Failed> {
+    let target = split(url)?;
+    let mut stream = connect(&target).await?;
     let head = format!(
-        "{method} {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        "{method} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        target.path,
+        target.authority,
         body.len()
     );
     stream
@@ -133,6 +184,7 @@ async fn exchange(
         .await
         .map_err(|_| Failed::Network)?;
     stream.write_all(body).await.map_err(|_| Failed::Network)?;
+    stream.flush().await.map_err(|_| Failed::Network)?;
     let mut buf = Vec::with_capacity(1024);
     let end = loop {
         if let Some(end) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
@@ -287,21 +339,45 @@ mod tests {
     }
 
     #[test]
-    fn only_plain_http_urls_with_a_path_are_read() {
-        assert_eq!(split("https://relay.example/x"), Err(Failed::Unsupported));
+    fn only_http_and_https_urls_with_a_path_are_read() {
+        assert_eq!(split("ftp://relay.example/x"), Err(Failed::Unsupported));
         assert_eq!(split("http://relay.example"), Err(Failed::Unsupported));
         assert_eq!(
             split("http://user@relay.example/x"),
             Err(Failed::Unsupported)
         );
         assert_eq!(split("http://relay.example/x y"), Err(Failed::Unsupported));
+        let target = |tls, host: &str, authority: &str, path| Target {
+            tls,
+            host: host.to_owned(),
+            authority: authority.to_owned(),
+            path,
+        };
         assert_eq!(
             split("http://relay.example/frames/ab"),
-            Ok(("relay.example:80".to_owned(), "/frames/ab"))
+            Ok(target(
+                false,
+                "relay.example",
+                "relay.example:80",
+                "/frames/ab"
+            ))
+        );
+        assert_eq!(
+            split("https://relay.example/frames/ab"),
+            Ok(target(
+                true,
+                "relay.example",
+                "relay.example:443",
+                "/frames/ab"
+            ))
         );
         assert_eq!(
             split("http://127.0.0.1:7700/x"),
-            Ok(("127.0.0.1:7700".to_owned(), "/x"))
+            Ok(target(false, "127.0.0.1", "127.0.0.1:7700", "/x"))
+        );
+        assert_eq!(
+            split("https://[::1]:8443/x"),
+            Ok(target(true, "::1", "[::1]:8443", "/x"))
         );
     }
 }

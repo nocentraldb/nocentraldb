@@ -46,7 +46,13 @@ keyring-core = { version = "=1.0.1", default-features = false }
 # a later slice builds (NOC-175).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "=1.54.1", default-features = false, features = ["rt", "net", "sync", "time", "macros"] }
-tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake"] }
+# TLS for `wss://` and the `https://` URLs of large changes (NOC-121):
+# rustls on the ring provider, with the platform's root certificates read
+# by rustls-native-certs, for the WebSocket and for the HTTP client.
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect", "handshake", "rustls-tls-native-roots"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = { version = "=0.8.5", default-features = false }
+tokio-rustls = { version = "=0.26.6", default-features = false, features = ["ring"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
 # What the member signs to authenticate a connection, as the relay checks
 # it (RFC 0003, decision 13).

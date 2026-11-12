@@ -8,7 +8,7 @@
 //! synchronous inside the worker (RFC 0006, "The same fold code on every
 //! target"). Where OPFS is missing, as in a private window of Firefox or
 //! WebKit, SQLite's in-memory VFS stays the default, and the copy is
-//! temporary (RFC 0006, decision 12).
+//! temporary (RFC 0006, "The browser").
 //!
 //! [`View::open`]: super::View::open
 
@@ -38,7 +38,7 @@ pub enum InstallError {
     /// synchronous access handles never exist (RFC 0006, "The browser").
     NotInWorker,
     /// OPFS exists, and the pool on it could not be opened: for example,
-    /// another tab's worker holds it (RFC 0006, decision 4).
+    /// another tab's worker holds it (RFC 0006, "The browser").
     Opfs(OpfsSAHError),
 }
 
@@ -58,7 +58,7 @@ impl std::error::Error for InstallError {}
 /// Makes `opfs-sahpool` SQLite's default VFS in this worker, so that a
 /// view opened afterwards lives on OPFS; a second call reuses the pool.
 /// Where OPFS is missing, it leaves the in-memory VFS as the default and
-/// returns [`Storage::Memory`] (RFC 0006, decision 12).
+/// returns [`Storage::Memory`] (RFC 0006, "The browser").
 pub async fn install() -> Result<Storage, InstallError> {
     if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
         return Err(InstallError::NotInWorker);
