@@ -376,3 +376,23 @@ fn the_key_record_vectors_read_as_their_state_and_write_back() {
     };
     assert_eq!(a.to_bytes(), b.to_bytes(), "the same account key");
 }
+
+/// A recovered account key's statement is numbered the larger of one more
+/// than the highest number the device learned, none on a new device, and
+/// the current time in Unix seconds (Carsten, 2026-11-12, NOC-285), and is
+/// signed by the code's recovery key.
+#[test]
+fn a_recovered_account_key_is_numbered_by_the_time_and_signed_by_the_recovery_key() {
+    let code = ncdb_core::recovery::RecoveryCode::from_bits([0xa0; 16]);
+    for (now, number) in [(1_800_000_000, 1_800_000_000), (0, 1)] {
+        let keys = Keys::recovered(&code, now);
+        let Account::Holds { key, statement } = &keys.account else {
+            panic!("a recovered database holds the new account key");
+        };
+        assert_eq!(statement.number, number);
+        assert_eq!(statement.recovery_key, code.recovery_key().public());
+        assert_eq!(statement.account_key, key.verifying_key().to_bytes());
+        assert!(statement.verify());
+        assert!(keys.code.is_none(), "the person holds the code");
+    }
+}

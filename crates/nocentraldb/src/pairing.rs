@@ -51,6 +51,13 @@ impl Account<'_> {
         }))
     }
 
+    /// `AccountRecovered` when this open recovered the account from its
+    /// recovery code ([`OpenOptions::recover`](crate::OpenOptions::recover)),
+    /// and `None` on every other open.
+    pub async fn recovered(&self) -> Result<Option<Notice>, Error> {
+        Ok(self.db.lock().recovered)
+    }
+
     /// Answers the invitation of a database waiting to be paired, as a
     /// device or an agent of this account, on a device that holds the
     /// account key (RFC 0010, "Adding a device or an agent to an
