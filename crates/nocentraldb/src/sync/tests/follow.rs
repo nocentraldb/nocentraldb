@@ -110,9 +110,13 @@ async fn the_stream_follows_a_reconnect_and_the_push_it_confirms() {
     assert_ne!(waiting.connection, Connection::Connected);
 
     relay.proxy.restore();
-    until(&mut statuses, |s| s.connection == Connection::Connected).await;
-    let confirmed = until(&mut statuses, |s| s.unconfirmed == 0).await;
-    assert_eq!(confirmed.connection, Connection::Connected);
+    // The stream yields the whole status, not each step: on a loaded
+    // machine the reconnect and the confirmation can land in one status, so
+    // the test waits for both at once (NOC-259).
+    until(&mut statuses, |s| {
+        s.connection == Connection::Connected && s.unconfirmed == 0
+    })
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread")]
