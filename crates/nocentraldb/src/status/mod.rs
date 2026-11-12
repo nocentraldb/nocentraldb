@@ -4,11 +4,10 @@
 //! [`SpaceStatusReport`], whose `current()` gives a [`SpaceStatus`] and
 //! whose `subscribe()` follows it.
 //!
-//! **What this does not report yet.** RFC 0009 lists more than this
-//! status holds. `shreds_waiting` needs the stability of a shred (RFC
-//! 0008, M20 and M21), which the core does not compute yet. The struct is
-//! `#[non_exhaustive]`, so each field comes when it is built, instead of
-//! a field that always reads empty and claims nothing waits.
+//! It reports no waiting shreds: a shred is final when accepted, so none
+//! waits (RFC 0008, "A shred is final when accepted"; RFC 0009, "Sync and
+//! status"). The struct is `#[non_exhaustive]`, so a field added later
+//! breaks no app.
 
 mod reasons;
 

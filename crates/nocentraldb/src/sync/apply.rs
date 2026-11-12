@@ -160,6 +160,7 @@ pub(super) fn entries(
         match view.receive(&entry.frame, &mut state.checks) {
             Ok(Appended::New(_)) => {
                 folded = true;
+                state.drop_shredded();
                 sync(inner).folds += 1;
                 if again::check(inner, space)? {
                     sync(inner).wake.send_replace(());
