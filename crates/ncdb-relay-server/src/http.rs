@@ -14,11 +14,12 @@
 //! A token is 32 random bytes in hex. Each connection serves one request
 //! and closes. Every check goes through the relay core.
 //!
-//! Both URLs answer CORS for any origin (RFC 0007, "Large changes";
-//! Carsten, 2026-11-12, NOC-245), so an app in a browser reaches them with
-//! `fetch()`: every answer allows any origin to read it, and `OPTIONS` on
-//! either path answers the browser's preflight. A URL is a one-time
-//! capability and carries no cookie, so no origin gains anything by it.
+//! Both URLs answer CORS for any origin (RFC 0007, "Large changes", as
+//! NOC-245 recommends for the owner's answer), so an app in a browser
+//! reaches them with `fetch()`: every answer allows any origin to read it,
+//! and `OPTIONS` on either path answers the browser's preflight. A URL is
+//! a one-time capability and carries no cookie, so no origin gains
+//! anything by it.
 
 use std::sync::Arc;
 use std::time::Duration;
