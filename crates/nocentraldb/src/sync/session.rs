@@ -344,6 +344,11 @@ impl Session<'_> {
     /// Pushes every change of `space` the relay has not confirmed, in
     /// local order, in pushes that each fit one message.
     async fn push(&mut self, space: SpaceId) -> Result<(), End> {
+        // A space whose finalize the relay found too early waits until its
+        // push again is due (`finalize`).
+        if with(self.db, |inner| finalize::waiting(inner, space))? {
+            return Ok(());
+        }
         let unconfirmed =
             with(self.db, |inner| apply::unconfirmed(inner, space))?.map_err(|_| lost())?;
         let (ids, frames): (Vec<_>, Vec<_>) = unconfirmed.into_iter().unzip();
@@ -368,8 +373,10 @@ impl Session<'_> {
                         apply::pushed(inner, space, &batch_ids, results)
                     })?
                     .map_err(|_| lost())?;
-                    if stopped.is_some() {
-                        return Err(lost());
+                    match stopped {
+                        Some(code) if code == apply::TOO_EARLY => return Ok(()),
+                        Some(_) => return Err(lost()),
+                        None => {}
                     }
                 }
                 answer => return self.answer(space, answer),

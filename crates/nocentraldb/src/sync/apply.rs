@@ -20,6 +20,10 @@ use crate::subscribe::touched;
 /// errors"). Every other code is a refusal of the change.
 const TRANSIENT: [&str; 2] = ["unavailable", "rate_limited"];
 
+/// The relay's answer to a finalize that came before its 7 days passed
+/// (RFC 0007, "The errors").
+pub(super) const TOO_EARLY: &str = "too_early";
+
 fn sync(inner: &mut Inner) -> &mut SyncState {
     inner.sync.as_mut().expect("a database that syncs")
 }
@@ -208,9 +212,11 @@ pub(super) fn unconfirmed(
 /// sync status shows it, so the relay's own text never reaches the log
 /// (NOC-188). Returns the transient code that stopped it, after which the
 /// rest stays unconfirmed. A `too_early`, the relay's answer to a finalize
-/// that came before its 7 days passed, is no refusal: the change stays
-/// unconfirmed, and the space is pushed again later (RFC 0007, "The
-/// errors"; pm, NOC-234).
+/// that came before its 7 days passed, is no refusal: the finalize, and
+/// every change after it, stay unconfirmed, since those after it may rest
+/// on it and the relay would refuse them; the space is pushed again later
+/// (RFC 0007, "The errors"; pm, NOC-234). It is returned like a transient
+/// code, but it ends only this space's push.
 pub(super) fn pushed(
     inner: &mut Inner,
     space: SpaceId,
@@ -227,11 +233,11 @@ pub(super) fn pushed(
                 if TRANSIENT.contains(&code.as_str()) {
                     return Ok(Some(code));
                 }
-                if code == "too_early" {
+                if code == TOO_EARLY {
                     let sync = sync(inner);
                     let at = std::time::Instant::now() + sync.too_early_retry;
                     sync.retries.entry(space).or_insert(at);
-                    continue;
+                    return Ok(Some(code));
                 }
                 inner.view.refuse(space, *id, &code)?;
                 again::refused(inner, space, *id);

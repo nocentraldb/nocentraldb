@@ -136,10 +136,8 @@ async fn the_admin_finalizes_and_retries_a_too_early_finalize() {
     })
     .await;
     tokio::time::sleep(Duration::from_secs(1)).await;
-    assert!(
-        project.status().current().refused.is_empty(),
-        "never refused"
-    );
+    let refused = project.status().current().refused;
+    assert!(refused.is_empty(), "never refused: {refused:?}");
     assert!(admin.sync().current().unconfirmed > 0, "kept unconfirmed");
     assert!(
         held(&member, space).is_some(),

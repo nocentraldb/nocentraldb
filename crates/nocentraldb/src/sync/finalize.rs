@@ -58,10 +58,24 @@ pub(super) fn next(inner: &Inner, now: u64, instant: Instant) -> Option<Instant>
     finalizes.chain(sync.retries.values().copied()).min()
 }
 
-/// Writes the finalize of `shred` in `space`, if it is still wanted. The
-/// write wakes the session, which pushes it.
+/// Writes the finalize of `shred` in `space`, if it is still wanted, and
+/// then what this member owes for it: the member folded its own finalize,
+/// destroyed its copy of the key, and acknowledges the shred as deleted
+/// at once rather than with the next change it receives (RFC 0008,
+/// "Acknowledgement"; NOC-238). The writes wake the session, which pushes
+/// them.
 pub(super) fn write(inner: &mut Inner, space: SpaceId, shred: ChangeId) {
-    let _ = erasure::finalize(inner, space, shred);
+    if erasure::finalize(inner, space, shred).unwrap_or(false) {
+        let _ = super::acknowledge::acknowledge(inner, space);
+    }
+}
+
+/// Whether `space` waits for its push again after a `too_early`.
+pub(super) fn waiting(inner: &Inner, space: SpaceId) -> bool {
+    inner
+        .sync
+        .as_ref()
+        .is_some_and(|sync| sync.retries.contains_key(&space))
 }
 
 /// The spaces whose push again is due as of `now`, which lose their
