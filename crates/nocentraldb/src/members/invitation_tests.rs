@@ -152,3 +152,33 @@ fn a_text_that_does_not_follow_the_layout_is_an_invalid_value() {
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{case}");
     }
 }
+
+const PAIRING: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation-pairing.txt");
+
+#[test]
+fn the_version_2_vector_reads_as_a_member_waiting_to_be_paired_and_writes_back() {
+    let invitation: Invitation = PAIRING.trim().parse().unwrap();
+
+    assert_eq!(invitation.key.signing.to_vec(), field("signing key"));
+    assert_eq!(invitation.key.agreement.to_vec(), field("agreement key"));
+    assert!(invitation.certificate().is_none());
+    assert!(matches!(
+        invitation.form,
+        super::invitation::Form::Waiting(MemberKind::Device)
+    ));
+    assert_eq!(invitation.to_string(), PAIRING.trim());
+}
+
+#[test]
+fn a_version_2_text_of_another_length_or_kind_is_refused() {
+    let mut bytes = vec![2u8];
+    bytes.extend([0x11; 64]);
+    for (bad, why) in [
+        (bytes.clone(), "too short"),
+        ([bytes.clone(), vec![1, 0]].concat(), "too long"),
+        ([bytes.clone(), vec![3]].concat(), "another kind"),
+    ] {
+        let refused = text_of(&bad).parse::<Invitation>().unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{why}");
+    }
+}

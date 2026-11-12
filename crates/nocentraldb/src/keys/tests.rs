@@ -322,3 +322,57 @@ fn the_platform_keystore_keeps_the_keys_where_one_is_reachable() {
     platform.delete(&user).unwrap();
     found.unwrap();
 }
+
+/// The key records RFC 0003 gives (docs/rfc/vectors/0003/key_record.py):
+/// each reads as its state, and is written back byte for byte.
+#[test]
+fn the_key_record_vectors_read_as_their_state_and_write_back() {
+    fn hex(text: &str) -> Vec<u8> {
+        let text: String = text.split_whitespace().collect();
+        (0..text.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&text[i..i + 2], 16).unwrap())
+            .collect()
+    }
+    const DIR: &str = "../../docs/rfc/vectors/0003/";
+    let read = |state: &str| -> Vec<u8> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(DIR)
+            .join(format!("key-record.{state}.hex"));
+        hex(&std::fs::read_to_string(path).unwrap())
+    };
+    let member = Secrets::new([0x61; 32], [0x62; 32]).key().id();
+    for state in ["pairing", "device", "device-code", "agent"] {
+        let record = read(state);
+        let keys = Keys::decode(&record).unwrap_or_else(|| panic!("{state} reads"));
+        assert!(!keys.upgraded, "{state}");
+        assert_eq!(keys.member.key().id(), member, "{state}");
+        assert!(*keys.encode() == record, "{state} is written back the same");
+        let certificate = keys.account.certificate(member, MemberKind::Device);
+        match state {
+            "pairing" => assert!(certificate.is_none()),
+            "agent" => {
+                let certificate = certificate.unwrap();
+                assert_eq!(certificate.kind, MemberKind::Agent);
+                assert!(certificate.verify(&certificate.account_key));
+            }
+            _ => {
+                let certificate = certificate.unwrap();
+                assert!(certificate.verify(&certificate.account_key));
+                assert_eq!(certificate.statement.as_ref().unwrap().number, 1);
+            }
+        }
+        assert_eq!(keys.code.is_some(), state == "device-code", "{state}");
+    }
+    // Format 1 reads, with a new code for its account key, and is marked
+    // to be written again.
+    let old = Keys::decode(&read("format-1")).unwrap();
+    assert!(old.upgraded && old.code.is_some());
+    let device = Keys::decode(&read("device")).unwrap();
+    let (Account::Holds { key: a, .. }, Account::Holds { key: b, .. }) =
+        (&old.account, &device.account)
+    else {
+        panic!("both hold the account key");
+    };
+    assert_eq!(a.to_bytes(), b.to_bytes(), "the same account key");
+}
