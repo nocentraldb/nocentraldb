@@ -47,7 +47,10 @@ use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 use crate::tips::Tips;
 
-pub use model::{Direction, Field, FieldState, Index, Invalid, Model, PluginField, Scope};
+pub use model::{
+    Direction, Field, FieldState, Index, Invalid, Model, PluginField, RESERVED, Reserved, Scope,
+    reserved_name,
+};
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 pub use rebuild::RebuildProgress;
@@ -551,7 +554,9 @@ fn append(
         person_keys,
     } = target;
     let keys = person_keys.get(&space).unwrap_or(&fold::NO_KEYS);
-    let mut fold = fold::SqlFold::new(tx, model, space).with_keys(keys);
+    let mut fold = fold::SqlFold::new(tx, model, space)
+        .with_keys(keys)
+        .for_space(checks.space_model_id());
     let appended = log.receive(bytes, checks, &mut fold);
     fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;

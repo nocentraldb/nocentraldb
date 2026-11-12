@@ -56,6 +56,11 @@ impl Additions {
         if old.indexes.iter().any(|index| !new.indexes.contains(index)) {
             return None;
         }
+        // Another shipped model, or one where there was none, folds the view
+        // again: its spaces' changes were parked as of another model.
+        if old.reserved != new.reserved {
+            return None;
+        }
         for (collection, fields) in &new.collections {
             match old.collections.get(collection) {
                 None => {
@@ -136,7 +141,8 @@ pub(super) fn run<C: Checks>(
             let Ok(payload) = space_checks.open_folded(&change) else {
                 continue;
             };
-            let mut fold = SqlFold::new(conn, model, *space);
+            let mut fold =
+                SqlFold::new(conn, model, *space).for_space(space_checks.space_model_id());
             let mut still = Vec::new();
             for operation in parked {
                 let position = operation.position;

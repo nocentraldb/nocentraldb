@@ -12,7 +12,7 @@ use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::Error;
-use super::model::{Field, FieldState, Model};
+use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
@@ -48,6 +48,10 @@ pub(super) struct SqlFold<'a> {
     prefix: &'static str,
     /// The person keys the fold opens the space's personal values with.
     keys: &'a PersonKeys,
+    /// Whether the space folds by the model the SDK ships: its collections
+    /// are then the model's `$` ones, under the names its changes give
+    /// without the `$` (NOC-266).
+    shipped: bool,
     /// The first error; the fold's calls cannot return one, so the
     /// transaction rolls back after the change.
     error: Option<Error>,
@@ -61,6 +65,7 @@ impl<'a> SqlFold<'a> {
             space,
             prefix: "",
             keys: &NO_KEYS,
+            shipped: false,
             error: None,
         }
     }
@@ -68,6 +73,27 @@ impl<'a> SqlFold<'a> {
     /// The same fold, opening personal values with `keys`.
     pub(super) fn with_keys(self, keys: &'a PersonKeys) -> SqlFold<'a> {
         SqlFold { keys, ..self }
+    }
+
+    /// The same fold, for a space whose genesis names `space_model`, when
+    /// the member can read it: it folds by the shipped model when the
+    /// space is of it, and by the app's otherwise.
+    pub(super) fn for_space(mut self, space_model: Option<[u8; 16]>) -> SqlFold<'a> {
+        self.select_model(space_model);
+        self
+    }
+
+    /// The view's name of a collection a change of the space names: the
+    /// shipped model's `$` name in a space of that model; the name itself
+    /// in a space of the app's, where no name with `$` is the app's.
+    fn name(&self, collection: &str) -> Option<String> {
+        if self.shipped {
+            Some(reserved_name(collection))
+        } else if collection.starts_with(RESERVED) {
+            None
+        } else {
+            Some(collection.to_owned())
+        }
     }
 
     /// A fold into a rebuild's staging tables (RFC 0006, "How").
@@ -269,9 +295,12 @@ impl<'a> SqlFold<'a> {
                 self.mark_deleted(collection, object, deleted)?;
             }
         }
-        // A create puts the object into the table of its collection.
+        // A create puts the object into the table of its collection, when
+        // the space's model has it: a space of the app's model never
+        // reaches a `$` table, nor a space of the shipped model the app's.
         if let ObjectOperation::Create(create) = operation
             && self.model.collections.contains_key(&create.collection)
+            && self.shipped == create.collection.starts_with(RESERVED)
         {
             self.row(&create.collection, object)?;
         }
@@ -515,25 +544,56 @@ pub(super) fn sql_value(value: Value) -> Sql {
 
 impl Fold for SqlFold<'_> {
     fn model_id(&self) -> [u8; 16] {
-        self.model.id
+        match (self.shipped, self.model.reserved) {
+            (true, Some(reserved)) => reserved.id,
+            _ => self.model.id,
+        }
+    }
+
+    fn select_model(&mut self, space_model: Option<[u8; 16]>) -> bool {
+        let shipped = self.model.reserved.map(|reserved| reserved.id);
+        match space_model {
+            Some(model) if Some(model) == shipped => {
+                self.shipped = true;
+                true
+            }
+            Some(model) if model != self.model.id => false,
+            _ => {
+                self.shipped = false;
+                true
+            }
+        }
     }
 
     fn knows_collection(&self, collection: &str) -> bool {
-        self.model.collections.contains_key(collection)
+        self.name(collection)
+            .is_some_and(|name| self.model.collections.contains_key(&name))
     }
 
     fn knows_field(&self, collection: &str, field: &str) -> bool {
-        self.model.field(collection, field).is_some()
+        self.name(collection)
+            .is_some_and(|name| self.model.field(&name, field).is_some())
     }
 
     fn unregistered(&self, collection: &str, field: &str) -> bool {
-        self.model.unregistered(collection, field)
+        self.name(collection)
+            .is_some_and(|name| self.model.unregistered(&name, field))
     }
 
     fn fold(&mut self, origin: Origin, operation: &Operation) -> Result<(), OperationParkReason> {
         if self.error.is_some() {
             return Ok(());
         }
+        let renamed;
+        let operation = match self.name(&operation.collection) {
+            Some(name) if name != operation.collection => {
+                let mut op = operation.clone();
+                op.collection = name;
+                renamed = op;
+                &renamed
+            }
+            _ => operation,
+        };
         match self.fold_field(origin, operation) {
             Ok(folded) => folded,
             Err(error) => {
@@ -545,14 +605,29 @@ impl Fold for SqlFold<'_> {
 
     fn fold_object(&mut self, object: ObjectId, operation: &ObjectOperation) {
         if self.error.is_none() {
-            let result = self.fold_object_operation(object, operation);
+            let operation = match operation {
+                // A create names its collection as the change does; the
+                // object's state keeps the view's name of it.
+                ObjectOperation::Create(create) => {
+                    let mut create = create.clone();
+                    create.collection = self
+                        .name(&create.collection)
+                        .unwrap_or_else(|| create.collection.clone());
+                    ObjectOperation::Create(create)
+                }
+                other => other.clone(),
+            };
+            let result = self.fold_object_operation(object, &operation);
             self.keep(result);
         }
     }
 
     fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str) {
-        if self.error.is_none() && self.model.field(collection, field).is_some() {
-            let result = self.clear_field_state(collection, field, object);
+        let Some(collection) = self.name(collection) else {
+            return;
+        };
+        if self.error.is_none() && self.model.field(&collection, field).is_some() {
+            let result = self.clear_field_state(&collection, field, object);
             self.keep(result);
         }
     }

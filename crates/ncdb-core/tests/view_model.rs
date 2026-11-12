@@ -68,6 +68,8 @@ fn the_view_model_holds_the_model_id_version_collections_fields_and_indexes_of_t
         collections: [("task".to_owned(), task), ("project".to_owned(), project)].into(),
         // This lock has no personal field.
         personal: Default::default(),
+        // A model of a lock alone folds no shipped model (NOC-266).
+        reserved: None,
         indexes: vec![
             index("project", "byName", &[("name", Ascending)], 0),
             index("task", "byName", &[("title", Ascending)], 0),
