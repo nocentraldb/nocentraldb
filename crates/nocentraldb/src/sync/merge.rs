@@ -77,7 +77,7 @@ fn random_up_to(longest: Duration) -> Duration {
 
 /// Sets the longest delay before `db` writes a merge rotation, and draws
 /// every pending deadline again under it.
-#[cfg(test)]
+#[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn set_merge_delay(db: &crate::Db, delay: Duration) {
     let mut inner = crate::db::lock(&db.inner);
     if let Some(sync) = inner.sync.as_mut() {

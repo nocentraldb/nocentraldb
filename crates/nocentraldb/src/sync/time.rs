@@ -71,6 +71,7 @@ mod browser {
         }
 
         /// How long ago this was.
+        #[cfg_attr(not(test), allow(dead_code))]
         pub(crate) fn elapsed(&self) -> Duration {
             Instant::now().saturating_duration_since(*self)
         }
