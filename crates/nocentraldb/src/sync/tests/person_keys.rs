@@ -492,6 +492,8 @@ async fn a_provisional_shred_is_seen_and_only_deleted_once_finalized() {
         "a provisional shred keeps the key"
     );
 
+    // The relay accepts the finalize only 7 days, by its own clock, after
+    // it accepted the shred (RFC 0007, `too_early`).
     RELAY_AHEAD.store(7 * 24 * 60 * 60 * 1000, std::sync::atomic::Ordering::SeqCst);
     let decision = Entry::ErasureDecision(membership::ErasureDecision {
         shred,
