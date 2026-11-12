@@ -16,7 +16,7 @@ use ncdb_core::membership::{
 };
 
 use super::support::*;
-use crate::db::{Db, lock};
+use crate::db::{Db, OpenOptions, lock};
 use crate::members::{AddMember, Fingerprint, MemberId, Role};
 use crate::space::Space;
 
@@ -243,4 +243,89 @@ async fn a_rotation_re_wraps_the_person_key_and_the_relay_keeps_the_new_record()
         held(&member, space) == Some(commitment)
     })
     .await;
+}
+
+/// A member of a second account, who signs off the admin's shred.
+const SIGNER: Who = 4;
+
+/// The admin shreds `PERSON` in `space`, signed off by the account of
+/// `SIGNER`, folds the shred and wakes syncing.
+fn shred(admin: &Db, space: &Space) {
+    let id = space.id().0;
+    let mut inner = lock(&admin.inner);
+    let member = inner.member.key();
+    let crate::db::Inner { view, spaces, .. } = &mut *inner;
+    let state = spaces.get_mut(&id).expect("the admin holds the space");
+    let next = crate::next::next(view, id, &state.checks, member.id());
+    let generation = next.generation.expect("a generation");
+    let entry = Entry::Shred(membership::ShredEntry {
+        person_key: PERSON,
+        sign_off: membership::SignOff::sign(&space::other_account(1), id, PERSON, member.id()),
+    });
+    let change = membership::write(
+        &member,
+        id,
+        next.sequence,
+        generation,
+        &ControlBody::new(crate::members::control_heads(view, id), entry),
+    );
+    crate::space::fold(view, &mut state.checks, &change).unwrap();
+    crate::sync::wake(&inner);
+}
+
+/// A shred is final when accepted (RFC 0008, "A shred is final when
+/// accepted"; NOC-229): a member that holds the person key drops it as
+/// soon as it folds the shred, and the relay holds no record of it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_member_drops_the_person_key_as_soon_as_it_folds_its_shred() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project) = shared(&relay).await;
+    let options = OpenOptions::new(LOCK).in_memory().relay(&relay.url());
+    let signer = Db::open_as(
+        options,
+        [SIGNER; 32],
+        [SIGNER ^ 0x80; 32],
+        space::other_account(1),
+    )
+    .await
+    .expect("the test lock opens");
+    let invitation = now(signer.invitation());
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: Some(invitation.fingerprint()),
+    };
+    now(project.members().add(&invitation, options)).unwrap();
+    let key = PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    synced(&admin).await;
+    let space = project.id().0;
+    eventually("the member holds the person key", || {
+        if fetched(&member, space) && held(&member, space).is_none() {
+            relay.proxy.cut();
+            relay.proxy.restore();
+        }
+        held(&member, space).is_some()
+    })
+    .await;
+
+    shred(&admin, &project);
+    synced(&admin).await;
+
+    eventually("the member folds the shred", || {
+        let inner = lock(&member.inner);
+        inner.spaces[&space]
+            .checks
+            .resolved()
+            .person_key(PERSON)
+            .is_some_and(|key| key.shred.is_some())
+    })
+    .await;
+    eventually("the member drops the person key", || {
+        held(&member, space).is_none()
+    })
+    .await;
+    assert!(
+        relay.person_keys(space).await.is_empty(),
+        "the relay deleted the record"
+    );
 }

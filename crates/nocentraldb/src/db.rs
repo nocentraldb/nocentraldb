@@ -172,6 +172,20 @@ pub(crate) struct SpaceState {
 }
 
 impl SpaceState {
+    /// Drops every person key the space's state names as shredded: a
+    /// shred is final when accepted, so the member destroys its copy at
+    /// once (RFC 0008, "A shred is final when accepted"). The key is never
+    /// held again, since a record of a shredded key is not accepted
+    /// (`crate::sync::person_keys`).
+    pub(crate) fn drop_shredded(&mut self) {
+        let resolved = self.checks.resolved();
+        self.person_keys.retain(|id, _| {
+            resolved
+                .person_key(*id)
+                .is_none_or(|key| key.shred.is_none())
+        });
+    }
+
     /// A space the database holds no change of yet.
     pub(crate) fn new(space: CoreSpaceId, member: MemberKey) -> SpaceState {
         SpaceState {

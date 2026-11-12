@@ -14,7 +14,7 @@
 //! dependencies chosen apart from the first one's. RFC 0002 keeps and folds
 //! both changes of an equivocation, so every copy must still agree on the
 //! state, on every control change's verdict, on the membership verdict of
-//! every sealed change, and on which control changes are stable.
+//! every sealed change. A shred a copy accepted stays accepted (M-C8).
 
 mod support;
 
@@ -132,20 +132,6 @@ impl Copy {
             .unwrap_or(0)
     }
 
-    /// The highest n such that the copy holds every change of `member`,
-    /// sealed ones too, from sequence 1 to n: the run RFC 0008's stability
-    /// reads. An equivocation adds no sequence, so it never lengthens it.
-    fn held(&self, member: MemberId) -> u64 {
-        let own: BTreeSet<u64> = base()
-            .2
-            .iter()
-            .chain(self.changes.values())
-            .filter(|c| c.header().author == member)
-            .map(|c| c.header().sequence)
-            .collect();
-        (1..).take_while(|n| own.contains(n)).last().unwrap_or(0)
-    }
-
     /// The shred entries the copy accepts.
     fn accepted_shreds(&self) -> BTreeSet<ChangeId> {
         let resolved = self.resolved();
@@ -159,11 +145,6 @@ impl Copy {
             .map(Change::id)
             .filter(|id| resolved.verdict(*id) == Some(&Verdict::Accepted))
             .collect()
-    }
-
-    /// Every change the copy holds, the base's included.
-    fn all(&self) -> impl Iterator<Item = &Change> {
-        base().2.iter().chain(self.changes.values())
     }
 }
 
@@ -206,7 +187,6 @@ impl Mergeable for Copy {
     fn read(&self) -> Read {
         let resolved = self.resolved();
         let current = resolved.current_generation();
-        let stability = resolved.stability(self.all(), |m| self.held(m));
         Read {
             members: resolved.members().collect(),
             current,
@@ -217,11 +197,6 @@ impl Mergeable for Copy {
                 .values()
                 .filter(|c| c.header().kind == Kind::SEALED && resolved.admits(c.header()))
                 .map(Change::id)
-                .collect(),
-            stable: self
-                .all()
-                .map(Change::id)
-                .filter(|id| stability.is_stable(*id))
                 .collect(),
         }
     }
@@ -240,9 +215,8 @@ impl Mergeable for Copy {
 }
 
 /// What the SDK reads of a copy: its members, its current generation and
-/// whether that is exposed, the heads a merge rotation would list, the
-/// sealed changes the membership rule admits, and the control changes that
-/// are stable for a holder of exactly the copy's changes.
+/// whether that is exposed, the heads a merge rotation would list, and the
+/// sealed changes the membership rule admits.
 #[derive(Debug, PartialEq)]
 struct Read {
     members: Vec<(MemberId, Role)>,
@@ -250,7 +224,6 @@ struct Read {
     exposed: bool,
     heads: BTreeSet<u64>,
     admitted: BTreeSet<ChangeId>,
-    stable: BTreeSet<ChangeId>,
 }
 
 /// What a member does next, before its view decides the details.
@@ -472,7 +445,7 @@ fn m_c1_the_same_control_changes_resolve_to_the_same_state_in_any_order() {
 /// NOC-226: members, admins included, equivocate with control and sealed
 /// changes, under dependencies chosen apart from the first change's. Every
 /// copy that holds the same changes still reaches the same state, the same
-/// verdicts, the same sealed verdicts and the same stable changes.
+/// verdicts and the same sealed verdicts.
 #[test]
 fn m_c1_equivocations_of_control_and_sealed_changes_converge_in_any_order() {
     let config = Config {

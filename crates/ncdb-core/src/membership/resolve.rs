@@ -30,7 +30,6 @@ use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::person_keys::{self, PersonKey, PersonKeys};
 use super::rights;
-use super::stable::{self, Stability};
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 use super::statement::AccountKeyStatement;
 
@@ -99,25 +98,6 @@ fn seen(input: &Input, members: &Members) -> BTreeMap<ChangeId, BTreeSet<ChangeI
 }
 
 impl Resolved {
-    /// Which accepted control changes are stable for a holder that holds
-    /// `changes` (the same changes this state was resolved from), and which
-    /// members block each waiting shred (RFC 0008, "Effects that wait until
-    /// a change is stable"). `held(m)` is the highest author sequence n such
-    /// that the holder holds every change of member m, sealed ones too, from
-    /// 1 to n.
-    pub fn stability<'a>(
-        &self,
-        changes: impl IntoIterator<Item = &'a Change>,
-        held: impl Fn(MemberId) -> u64,
-    ) -> Stability {
-        stable::compute(
-            &Input::new(self.space, changes),
-            &self.members,
-            &self.verdicts,
-            held,
-        )
-    }
-
     /// The genesis the state starts from.
     pub fn genesis(&self) -> Option<ChangeId> {
         self.genesis
