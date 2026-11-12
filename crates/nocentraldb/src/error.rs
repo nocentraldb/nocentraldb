@@ -36,6 +36,13 @@ pub enum ErrorCode {
     NotFound,
     /// A value does not fit the field's kind.
     InvalidValue,
+    /// A personal field's person link is unset, so the value has no person
+    /// to be sealed for (RFC 0009, "Personal fields").
+    NoPerson,
+    /// A personal field's person has a person key this device does not
+    /// hold yet; retry once syncing has fetched it (Carsten, 2026-11-12,
+    /// NOC-255).
+    PersonKeyNotHeld,
     /// The space's genesis names another `model.id` than the lock's; the
     /// message names both.
     SpaceOfAnotherModel,

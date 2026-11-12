@@ -188,6 +188,9 @@ pub(crate) struct SpaceState {
     /// in the last fetch, though they signed them
     /// (`crate::sync::person_keys`). In memory only, as the person keys.
     pub(crate) bad_person_key_records: BTreeSet<[u8; 32]>,
+    /// The ids of the person keys the view opens the space's personal
+    /// fields with (`crate::personal::refresh`). In memory only.
+    pub(crate) opened: BTreeSet<[u8; 16]>,
 }
 
 impl SpaceState {
@@ -211,6 +214,7 @@ impl SpaceState {
             person_keys: BTreeMap::new(),
             person_keys_fetched: false,
             bad_person_key_records: BTreeSet::new(),
+            opened: BTreeSet::new(),
         }
     }
 
@@ -434,7 +438,7 @@ impl Db {
             )
         })?;
         let _ = &placed;
-        let (view, keys, storage) = match place {
+        let (mut view, keys, storage) = match place {
             Place::Memory => {
                 let view = View::open_in_memory(&lock).map_err(view_error)?;
                 let keys = given.unwrap_or_else(Keys::generate);
@@ -455,10 +459,16 @@ impl Db {
             }
         };
         let model = Arc::new(view.model().clone());
-        let spaces = view
+        let spaces: BTreeMap<_, _> = view
             .spaces()
             .map(|space| (space, SpaceState::from_log(&view, space, keys.member.key())))
             .collect();
+        // A shred held before this device kept when (NOC-218) starts its
+        // age now.
+        for (space, state) in &spaces {
+            crate::status::note_shreds(&mut view, *space, state.checks.resolved())
+                .map_err(view_error)?;
+        }
         let inner = Inner {
             view,
             model,

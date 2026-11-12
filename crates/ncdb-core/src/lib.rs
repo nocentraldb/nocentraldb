@@ -53,6 +53,7 @@ pub mod membership;
 pub mod model_lock;
 pub mod object;
 pub mod pairing;
+pub mod personal;
 pub mod plugins;
 pub mod receive;
 mod redact;

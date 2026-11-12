@@ -10,7 +10,9 @@ use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
 use ncdb_core::set;
 use ncdb_core::view::{Field, FieldState, Row};
 
-use crate::db::Inner;
+use ncdb_core::personal::{self, Place, Sealed};
+
+use crate::db::{Inner, SpaceState};
 use crate::error::{Error, ErrorCode, storage};
 use crate::id::{ObjectId, SpaceId};
 use crate::value::{Repr, Value};
@@ -23,6 +25,11 @@ pub struct Object {
     deleted: bool,
     /// Every field of the collection, with its value when it is set.
     fields: BTreeMap<String, Option<Value>>,
+    /// The person id of `$person`, when the object is a person (RFC 0005,
+    /// "Identifying the person").
+    person: Option<[u8; 16]>,
+    /// The names of its personal fields whose person is erased.
+    erased: Vec<String>,
 }
 
 impl std::fmt::Debug for Object {
@@ -74,6 +81,19 @@ impl Object {
         }
     }
 
+    /// The names of the object's personal fields whose person is erased,
+    /// provisionally or for good: each reads as unset (RFC 0009, "How a
+    /// personal field reads"; `$erased` in TypeScript). A field whose key
+    /// this device does not hold yet reads as unset too, but is not named.
+    pub fn erased(&self) -> &[String] {
+        &self.erased
+    }
+
+    /// The person id of the object, when it is a person.
+    pub(crate) fn person_id(&self) -> Option<[u8; 16]> {
+        self.person
+    }
+
     /// Reads `object` of `collection` in `space` from the view, or `None`
     /// when the copy holds no create of it in that collection.
     pub(crate) fn read(
@@ -91,15 +111,42 @@ impl Object {
             return Ok(None);
         }
         let model = &inner.model.collections[collection];
+        let state = inner.spaces.get(&space);
+        let mut erased = Vec::new();
         let fields = model
             .iter()
-            .map(|(name, field)| (name.clone(), value(field, &row, name)))
+            .filter(|(name, _)| !name.starts_with('$'))
+            .map(|(name, field)| {
+                if inner.model.person(collection, name).is_none() {
+                    return (name.clone(), value(field, &row, name));
+                }
+                let place = Place {
+                    space,
+                    object,
+                    person_key: [0; 16],
+                    collection,
+                    field: name,
+                };
+                let read = personal_value(field, &row, place, state);
+                if let Personal::Erased = read {
+                    erased.push(name.clone());
+                }
+                let value = match read {
+                    Personal::Value(value) => value,
+                    Personal::Erased => None,
+                };
+                (name.clone(), value)
+            })
             .collect();
+        let person = crate::personal::held_person(&inner.view, space, collection, object)?
+            .map(|person| person.person);
         Ok(Some(Object {
             id: ObjectId(object),
             space: SpaceId(space),
             deleted: row.object.is_deleted(),
             fields,
+            person,
+            erased,
         }))
     }
 }
@@ -121,6 +168,57 @@ fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
         (Field::Links(links), FieldState::Set(state)) => Some(list(links.read(state), true)),
         _ => None,
     }
+}
+
+/// What a personal field reads.
+enum Personal {
+    /// Its value, or `None`: unset, cleared, its key not held yet, or a
+    /// value that does not open.
+    Value(Option<Value>),
+    /// Its person is erased.
+    Erased,
+}
+
+/// The read value of the personal field at `place` of `row`: the winning
+/// write opened with the person key it names, which `state` holds (RFC
+/// 0009, "How a personal field reads").
+fn personal_value(
+    field: &Field,
+    row: &Row,
+    mut place: Place<'_>,
+    state: Option<&SpaceState>,
+) -> Personal {
+    let (Field::Basic(basic), Some(FieldState::Basic(written))) =
+        (field, row.fields.get(place.field))
+    else {
+        return Personal::Value(None);
+    };
+    let Some(sealed) = basic
+        .read(written)
+        .value
+        .and_then(|entry| Sealed::from_value(&entry.value))
+    else {
+        return Personal::Value(None);
+    };
+    let Some(state) = state else {
+        return Personal::Value(None);
+    };
+    let resolved = state.checks.resolved();
+    if resolved
+        .person_key(sealed.person_key)
+        .is_some_and(|key| key.erased())
+    {
+        return Personal::Erased;
+    }
+    let Some(key) = state.person_keys.get(&sealed.person_key) else {
+        return Personal::Value(None);
+    };
+    place.person_key = sealed.person_key;
+    let value = personal::open(key, &place, &sealed.bytes)
+        .ok()
+        .filter(|value| basic.kind.allows(value))
+        .and_then(|value| Value::from_cbor(&value, false));
+    Personal::Value(value)
 }
 
 /// The elements of a set or of many links, in the order of their canonical

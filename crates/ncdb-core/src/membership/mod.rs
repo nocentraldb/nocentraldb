@@ -19,6 +19,7 @@ mod fields;
 mod generations;
 mod genesis;
 mod input;
+mod judge;
 mod key_chain;
 mod person_key;
 mod person_key_wrap;
@@ -51,7 +52,7 @@ pub use person_key::{
 pub use person_key_wrap::{
     WRAPPED_PERSON_KEY_LEN, unwrap_person_key, wrap_person_key, wrap_person_key_with_nonce,
 };
-pub use person_keys::PersonKey;
+pub use person_keys::{EarlierShred, PersonKey};
 pub use resolve::{Resolved, resolve};
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
 pub use statement::AccountKeyStatement;

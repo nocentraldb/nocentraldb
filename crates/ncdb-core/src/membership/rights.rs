@@ -11,8 +11,9 @@ use super::body::{ACKNOWLEDGEMENT, Action, Entry, MembershipEntry, Role};
 use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
+use super::judge::Judged;
 use super::person_key::{ErasureDecision, ShredEntry};
-use super::resolve::{Judged, Resolved};
+use super::resolve::Resolved;
 use super::statement::AccountKeyStatement;
 
 /// The right a change's author needs. A membership entry needs admin,
@@ -237,7 +238,7 @@ fn decides(node: &Node, decision: &ErasureDecision, past: &Resolved) -> bool {
 /// 2026-11-11, NOC-187). A certificate in the state carries only a
 /// statement that names its own key 1 and verifies (`Certificate::verify`),
 /// and an accepted statement entry only one that verifies.
-fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
+pub(crate) fn same_account(past: &Resolved, a: [u8; 32], b: [u8; 32]) -> bool {
     let recovery_keys = |account: [u8; 32]| -> BTreeSet<[u8; 32]> {
         past.all_statements()
             .filter(|statement| statement.account_key == account)
@@ -315,7 +316,7 @@ pub(crate) fn seniority(
             continue;
         };
         others.insert(entry.subject);
-        let depth = judged.0.get(&node.id).and_then(|j| j.depth);
+        let depth = judged.judgements.get(&node.id).and_then(|j| j.depth);
         if let Some(depth) = depth.filter(|_| entry.role() == Some(Role::Admin)) {
             let rank = admins.entry(entry.subject).or_insert((depth, node.id));
             *rank = (*rank).min((depth, node.id));

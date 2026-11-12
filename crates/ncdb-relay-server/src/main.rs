@@ -1,14 +1,18 @@
 //! `ncdb-relay`: the relay server on the SQLite backend, run locally.
 //!
 //! ```text
-//! ncdb-relay --database <path> [--listen <address>] [--public-url <url>] [--allow-account <hex>]...
+//! ncdb-relay --database <path> [--listen <address>] [--public-url <url>]
+//!            [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:…>]...
 //! ```
 //!
 //! It serves plain WebSocket (`ws://`) on `--listen`, by default
 //! `127.0.0.1:7700`, which must be a loopback address; TLS, which RFC 0007
 //! requires on the network, is left to a proxy on the same host. `--allow-account` names, as 64 hex digits,
 //! an account key whose members may create spaces (RFC 0007, "What the
-//! relay checks"). `--public-url` is where members reach the server's
+//! relay checks"). `--allow-invitation` names that account by a member's
+//! invitation text instead, which an app gets from the SDK without ever
+//! seeing a key (NOC-239 A); a text that is not an invitation stops the
+//! relay at start. Both may be given more than once. `--public-url` is where members reach the server's
 //! upload and download URLs for large changes, such as
 //! `https://relay.example.com` behind a TLS proxy; by default `http://` and
 //! the address it listens on.
@@ -24,8 +28,19 @@ use ncdb_relay::Relay;
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay_server::{Server, config};
 
+mod invitation;
+
 const USAGE: &str = "usage: ncdb-relay --database <path> [--listen <address>] [--public-url <url>] \
-     [--allow-account <hex>]...";
+     [--allow-account <hex>]... [--allow-invitation <ncdb-invite-1:...>]...";
+
+/// Why the command line is refused.
+#[derive(Debug, PartialEq, Eq)]
+enum Refused {
+    /// It does not follow the usage.
+    Usage,
+    /// An `--allow-invitation` text is not an invitation, for this reason.
+    Invitation(&'static str),
+}
 
 /// What the command line asks for.
 struct Args {
@@ -35,23 +50,26 @@ struct Args {
     allowed: BTreeSet<[u8; 32]>,
 }
 
-fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
+fn parse(mut args: impl Iterator<Item = String>) -> Result<Args, Refused> {
     let (mut database, mut listen, mut allowed) = (None, None, BTreeSet::new());
     let mut public_url = None;
     while let Some(arg) = args.next() {
-        let value = args.next()?;
+        let value = args.next().ok_or(Refused::Usage)?;
         match arg.as_str() {
             "--database" => database = Some(PathBuf::from(value)),
             "--listen" => listen = Some(value),
             "--public-url" => public_url = Some(value),
             "--allow-account" => {
-                allowed.insert(account(&value)?);
+                allowed.insert(account(&value).ok_or(Refused::Usage)?);
             }
-            _ => return None,
+            "--allow-invitation" => {
+                allowed.insert(invitation::account_key(&value).map_err(Refused::Invitation)?);
+            }
+            _ => return Err(Refused::Usage),
         }
     }
-    Some(Args {
-        database: database?,
+    Ok(Args {
+        database: database.ok_or(Refused::Usage)?,
         listen: listen.unwrap_or_else(|| "127.0.0.1:7700".to_owned()),
         public_url,
         allowed,
@@ -91,9 +109,16 @@ fn relay_id(database: &Path) -> Result<[u8; 16], String> {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let Some(args) = parse(std::env::args().skip(1)) else {
-        eprintln!("{USAGE}");
-        return ExitCode::from(2);
+    let args = match parse(std::env::args().skip(1)) {
+        Ok(args) => args,
+        Err(Refused::Usage) => {
+            eprintln!("{USAGE}");
+            return ExitCode::from(2);
+        }
+        Err(Refused::Invitation(why)) => {
+            eprintln!("ncdb-relay: --allow-invitation: not an invitation: {why}");
+            return ExitCode::from(2);
+        }
     };
     match run(args).await {
         Ok(()) => ExitCode::SUCCESS,

@@ -53,6 +53,7 @@ pub struct SpaceKey(Zeroizing<[u8; 32]>);
 /// person per space, which encrypts that person's personal fields. It lives
 /// in the space's person-key store, wrapped under a generation of the space
 /// key (`membership::wrap_person_key`), never in the log.
+#[derive(Clone)]
 pub struct PersonKey(Zeroizing<[u8; 32]>);
 
 impl MemberKey {

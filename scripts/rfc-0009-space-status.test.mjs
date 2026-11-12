@@ -63,7 +63,8 @@ test("the Rust SDK names the space status report and its twelve values with thei
     /`exposed: bool`/,
     /`waiting_for_key: bool`/,
     /`provisional_erasures: Vec<ProvisionalErasure>`/,
-    /`ProvisionalErasure \{ change: ChangeId, age: Duration, can_undo: bool \}`/,
+    // NOC-234: performer and notice join the decided fields (pm).
+    /`ProvisionalErasure \{ change: ChangeId, age: Duration, can_undo: bool, performer: MemberId, notice: Notice \}`/,
     /`NoticeCode::ErasurePending`/,
     /twelve values/,
     /another model/,
