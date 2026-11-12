@@ -1,12 +1,10 @@
 # The vendored design kit
 
-The files in this folder (`system.css`, `system.js`, `ui/cards.css`, `motion/`, `layout/`, `moments/`) are copied unchanged
-from the design kit of tasteskill 2.5.1 (https://github.com/Leonxlnx/taste-skill). Change them there and copy them again;
-never edit them here.
+The files under `site/public/assets/` (`system.css`, `system.js`, `ui/cards.css`, `motion/`, `layout/layout.css`, `moments/`) are copied unchanged from the design kit of tasteskill 2.5.1, source github.com/Leonxlnx/taste-skill. Change them there and copy them again; never edit them here. The upstream license follows verbatim.
 
-## MIT License
+MIT License
 
-Copyright (c) the taste-skill authors (https://github.com/Leonxlnx/taste-skill)
+Copyright (c) 2026 Leonxlnx
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
