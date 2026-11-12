@@ -85,6 +85,18 @@ fn recorded(json: &str) -> Event {
     Event::from_request(&request).unwrap()
 }
 
+/// A recorded event, as if API Gateway sent it now on a connection opened
+/// now: the recorded times are weeks old, and a connection's record
+/// expires 2 hours after it opened.
+fn live(json: &str) -> Event {
+    let now = ncdb_relay_lambda::contract::now();
+    Event {
+        at: now,
+        connected_at: now,
+        ..recorded(json)
+    }
+}
+
 /// The posts, decoded.
 fn posts(api: &Recording) -> Vec<(String, Value)> {
     let posts = api.posts.lock().unwrap();
@@ -162,13 +174,13 @@ fn an_event_without_a_connection_or_a_type_is_not_one() {
 #[tokio::test]
 async fn connect_then_hello_answers_a_challenge_and_disconnect_forgets() {
     let (handler, _dir) = handler();
-    let line = handler.handle(recorded(CONNECT)).await;
+    let line = handler.handle(live(CONNECT)).await;
     assert_eq!(line.route, Route::Connect);
     let stored = handler.connections().get(RECORDED).await.unwrap().unwrap();
     assert_eq!(stored.stage, Stage::Hello);
-    assert_eq!(stored.expires_at, 1_793_369_121_000 + MAX_CONNECTION_AGE);
+    assert_eq!(stored.expires_at, stored.connected_at + MAX_CONNECTION_AGE);
 
-    let line = handler.handle(recorded(MESSAGE)).await;
+    let line = handler.handle(live(MESSAGE)).await;
     assert_eq!(line.kind, Some("hello"));
     let posts = posts(handler_api(&handler));
     assert_eq!(posts.len(), 1);
@@ -177,14 +189,14 @@ async fn connect_then_hello_answers_a_challenge_and_disconnect_forgets() {
     let stored = handler.connections().get(RECORDED).await.unwrap().unwrap();
     assert!(matches!(stored.stage, Stage::Auth { .. }));
 
-    handler.handle(recorded(DISCONNECT)).await;
+    handler.handle(live(DISCONNECT)).await;
     assert!(handler.connections().is_empty());
 }
 
 #[tokio::test]
 async fn a_message_on_a_connection_without_a_record_is_refused_and_closed() {
     let (handler, _dir) = handler();
-    let line = handler.handle(recorded(MESSAGE)).await;
+    let line = handler.handle(live(MESSAGE)).await;
     let posts = posts(handler_api(&handler));
     assert_eq!(posts.len(), 1);
     assert_eq!(kind(&posts[0].1), "error");
@@ -196,11 +208,11 @@ async fn a_message_on_a_connection_without_a_record_is_refused_and_closed() {
 #[tokio::test]
 async fn a_text_message_before_auth_closes_the_connection() {
     let (handler, _dir) = handler();
-    handler.handle(recorded(CONNECT)).await;
+    handler.handle(live(CONNECT)).await;
     let text = MESSAGE
         .replace("\"isBase64Encoded\": true", "\"isBase64Encoded\": false")
         .replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "hello");
-    handler.handle(recorded(&text)).await;
+    handler.handle(live(&text)).await;
     let posts = posts(handler_api(&handler));
     assert_eq!(code(&posts[0].1), "unauthenticated");
     assert_eq!(*handler_api(&handler).closed.lock().unwrap(), [RECORDED]);
@@ -210,13 +222,13 @@ async fn a_text_message_before_auth_closes_the_connection() {
 #[tokio::test]
 async fn a_post_to_a_gone_connection_forgets_it() {
     let (handler, _dir) = handler();
-    handler.handle(recorded(CONNECT)).await;
+    handler.handle(live(CONNECT)).await;
     handler_api(&handler)
         .gone
         .lock()
         .unwrap()
         .push(RECORDED.to_owned());
-    let line = handler.handle(recorded(MESSAGE)).await;
+    let line = handler.handle(live(MESSAGE)).await;
     assert_eq!(line.posts, 0);
     assert!(handler.connections().is_empty());
 }
@@ -224,8 +236,8 @@ async fn a_post_to_a_gone_connection_forgets_it() {
 #[tokio::test]
 async fn the_log_line_names_sizes_and_never_the_message() {
     let (handler, _dir) = handler();
-    handler.handle(recorded(CONNECT)).await;
-    let line = handler.handle(recorded(MESSAGE)).await;
+    handler.handle(live(CONNECT)).await;
+    let line = handler.handle(live(MESSAGE)).await;
     assert_eq!(line.bytes_in, 24);
     assert_eq!(line.posts, 1);
     let text = line.to_string();
@@ -257,4 +269,9 @@ async fn the_log_line_names_sizes_and_never_the_message() {
 
 fn handler_api(handler: &Tested) -> &Recording {
     handler.api()
+}
+
+#[tokio::test]
+async fn the_memory_store_keeps_the_connections_contract() {
+    ncdb_relay_lambda::contract::run(&MemoryConnections::default(), "memory").await;
 }

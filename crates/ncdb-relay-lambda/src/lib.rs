@@ -23,6 +23,8 @@
 //! and the client of the real connection API follow (NOC-272).
 
 pub mod connections;
+pub mod contract;
+pub mod dynamo;
 pub mod event;
 pub mod handler;
 #[cfg(feature = "harness")]

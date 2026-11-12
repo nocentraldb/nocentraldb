@@ -2203,6 +2203,8 @@ dependencies = [
 name = "ncdb-relay-lambda"
 version = "0.1.0"
 dependencies = [
+ "aws-config",
+ "aws-sdk-dynamodb",
  "aws_lambda_events",
  "base64 0.22.1",
  "ed25519-dalek",

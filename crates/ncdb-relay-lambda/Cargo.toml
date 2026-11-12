@@ -23,6 +23,11 @@ aws_lambda_events = { version = "=1.2.1", default-features = false, features = [
 # Lambda's runtime API: the binary's loop of invocations (the owner's tick,
 # NOC-271). Only src/main.rs uses it.
 lambda_runtime = { version = "=1.5.0", default-features = false }
+# The `connections` table on DynamoDB (RFC 0007, "Tables and keys"), the
+# version ncdb-relay-aws pins (NOC-264 point 3: the AWS crates live only in
+# the relay's AWS crates). Its calls run on the caller's Tokio runtime.
+aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time"] }
 # The challenge's nonce: the platform's secure generator, as in the core.
 getrandom = { version = "=0.4.3", default-features = false }
 # API Gateway hands a binary message to Lambda in base64. Already in the
@@ -32,7 +37,7 @@ base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 # API Gateway, events read through serde_json as Lambda reads them, and a
 # small HTTP listener for the URLs of large changes. All already in the
 # tree, at the versions the relay server and aws_lambda_events use.
-tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "net", "sync", "time", "io-util"], optional = true }
+# (The harness's Tokio features come with the feature below.)
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"], optional = true }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"], optional = true }
 httparse = { version = "=1.10.1", default-features = false, features = ["std"], optional = true }
@@ -45,12 +50,18 @@ harness = [
     "dep:futures-util",
     "dep:httparse",
     "dep:serde_json",
-    "dep:tokio",
+    "tokio/rt-multi-thread",
+    "tokio/net",
+    "tokio/sync",
+    "tokio/io-util",
 ]
 
 # The tests talk to the gateway with the relay server's own test client
 # (crates/ncdb-relay-server/tests/support), as a member would.
 [dev-dependencies]
+# The AWS SDK's configuration, which reads the emulator's endpoint,
+# credentials file and region from the environment (docs/aws-emulator.md).
+aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client", "credentials-process"] }
 ncdb-relay-lambda = { workspace = true, features = ["harness"] }
 ncdb-relay-server.workspace = true
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
