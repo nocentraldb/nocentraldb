@@ -53,6 +53,7 @@ pub mod object;
 pub mod pairing;
 pub mod personal;
 pub mod receive;
+pub mod recovery;
 mod redact;
 pub mod reference;
 pub mod seal;

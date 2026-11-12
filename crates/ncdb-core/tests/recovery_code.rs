@@ -18,7 +18,13 @@ use sha2::{Digest, Sha256};
 
 macro_rules! vector {
     ($name:literal, $file:literal) => {
-        include_str!(concat!("../../../docs/rfc/vectors/0010/", $name, ".", $file)).trim()
+        include_str!(concat!(
+            "../../../docs/rfc/vectors/0010/",
+            $name,
+            ".",
+            $file
+        ))
+        .trim()
     };
 }
 
@@ -89,7 +95,9 @@ fn the_recovery_key_and_its_fingerprint_match_the_vectors() {
 
 #[test]
 fn the_first_statement_has_number_1_and_matches_the_vectors() {
-    let account = SigningKey::from_bytes(&[0x11; 32]).verifying_key().to_bytes();
+    let account = SigningKey::from_bytes(&[0x11; 32])
+        .verifying_key()
+        .to_bytes();
     for vector in vectors() {
         let key = RecoveryCode::parse(vector.words).unwrap().recovery_key();
         let statement = AccountKeyStatement::first(&key, account);
@@ -140,6 +148,9 @@ fn debug_shows_no_word_and_no_byte() {
     }
     assert!(!shown.contains("7f") && !shown.contains("127"), "{shown}");
 
-    let error = RecoveryCode::parse("legal winner thank year wave sausage worth useful legal winner thank secretword");
-    assert!(!format!("{error:?} {}", error.unwrap_err()).contains("secretword"));
+    let error = RecoveryCode::parse(
+        "legal winner thank year wave sausage worth useful legal winner thank secretword",
+    )
+    .unwrap_err();
+    assert!(!format!("{error:?} {error}").contains("secretword"));
 }
