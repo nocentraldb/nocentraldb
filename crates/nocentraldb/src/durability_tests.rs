@@ -187,3 +187,34 @@ fn another_members_changes_carry_no_date() {
         None
     );
 }
+
+const LOCK: &str = include_str!("../tests/model/model.lock.json");
+
+#[test]
+fn a_database_in_memory_is_a_temporary_copy() {
+    let db = now(Db::open(crate::OpenOptions::new(LOCK).in_memory())).unwrap();
+
+    assert_eq!(db.durability().storage, Storage::Temporary);
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_database_at_a_path_is_a_persistent_copy() {
+    let dir = std::env::temp_dir().join(format!(
+        "ncdb-durability-{}",
+        crate::keys::random()[..8]
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
+    ));
+    let options = crate::OpenOptions::new(LOCK)
+        .path(&dir)
+        .key_file(dir.with_extension("keys"));
+
+    let db = now(Db::open(options)).unwrap();
+
+    assert_eq!(db.durability().storage, Storage::Persistent);
+    drop(db);
+    let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_file(dir.with_extension("keys"));
+}

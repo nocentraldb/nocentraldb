@@ -146,3 +146,63 @@ async fn opfs_each_database_reserves_its_two_slots_in_the_pool() {
         open_view(&placed);
     }
 }
+
+const DB_LOCK: &str = LOCK;
+
+#[test]
+fn a_browser_name_together_with_another_place_is_refused() {
+    use crate::{Db, OpenOptions};
+    let both = OpenOptions::new(DB_LOCK).browser("default").in_memory();
+    let refused = now_ready(Db::open(both)).err().expect("refused");
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+}
+
+/// The result of a future that does not wait, as an open refused before
+/// anything opens.
+fn now_ready<F: std::future::Future>(future: F) -> F::Output {
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    match std::pin::pin!(future).poll(&mut cx) {
+        std::task::Poll::Ready(output) => output,
+        std::task::Poll::Pending => panic!("the open waited"),
+    }
+}
+
+#[test]
+#[ignore = "needs OPFS in a dedicated worker: the sdk-keys step of browser-view.yml runs it in Chromium"]
+async fn opfs_a_database_opened_at_a_name_keeps_its_data_and_its_member_across_opens() {
+    use crate::{Db, OpenOptions, Value};
+    let name = fresh("db");
+    let db = Db::open(OpenOptions::new(DB_LOCK).browser(&name))
+        .await
+        .unwrap();
+    let member = db.invitation().await.to_string();
+    let project = db.spaces().create().await.unwrap();
+    let written = project
+        .write(|tx| {
+            tx.create("tasks", [("title", Value::from("on OPFS"))])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let report = db.durability();
+    assert_eq!(report.storage, Storage::BestEffort);
+    assert!(report.unconfirmed > 0 && report.at_risk);
+    assert!(report.oldest_unconfirmed_at.is_some());
+    let space = project.id();
+    drop(project);
+    drop(db);
+
+    let db = Db::open(OpenOptions::new(DB_LOCK).browser(&name))
+        .await
+        .unwrap();
+
+    assert_eq!(db.invitation().await.to_string(), member);
+    let project = db.spaces().get(space).await.unwrap();
+    assert!(
+        project
+            .get("tasks", written.ids[0])
+            .await
+            .unwrap()
+            .is_some()
+    );
+}
