@@ -54,7 +54,7 @@ async fn shared(relay: &LocalRelay) -> Shared {
     synced(&admin).await;
 
     // The member stays connected: the relay tells it that it was added
-    // (RFC 0007, "Subscribe", decision R13).
+    // (RFC 0007, "Subscribe").
     let mut on_member = Err(());
     eventually("the member holds the admin's task", || {
         on_member = now(member.spaces().get(on_admin.id())).map_err(|_| ());
@@ -170,7 +170,8 @@ async fn a_removed_member_added_again_syncs_the_space_again() {
     })
     .await;
 
-    // The admin rotates and adds the member again (RFC 0008, M5); the
+    // The admin rotates and adds the member again (RFC 0008, "Membership
+    // entry"); the
     // changes reach the relay through a raw connection of its member key.
     let [rotation, add] = regrant(&shared.admin, &shared.on_admin, &shared.invitation);
     let mut client = relay.client(ADMIN).await;

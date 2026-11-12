@@ -1,6 +1,7 @@
 //! What syncing changes in the database, under its lock: the spaces it
 //! syncs, the relay's epoch, the entries it pulled and the results of a
-//! push (RFC 0007, "Island mode"; RFC 0002, D12).
+//! push (RFC 0007, "Island mode"; RFC 0002, "A change the relay
+//! refuses after the member folded it").
 
 use std::collections::BTreeMap;
 
@@ -90,7 +91,7 @@ pub(super) fn welcome(
 }
 
 /// What `added` says: this member was added to `space` while connected
-/// (RFC 0007, decision R13). A space the database does not hold yet is
+/// (RFC 0007, "Subscribe"). A space the database does not hold yet is
 /// joined, as from `welcome`; a space the relay had stopped is synced
 /// again, and once no space stays stopped the sync status no longer
 /// reports the removal. Returns whether the session must pull, push and
@@ -183,7 +184,7 @@ pub(super) fn entries(
 /// The changes of `space` the relay has neither confirmed nor refused, in
 /// local order: this member's own and those it received from others. A
 /// refused change the fold newly accepted since, after a control change
-/// the member wrote itself, is among them (RFC 0008, M19).
+/// the member wrote itself, is among them (RFC 0008, "How the relay applies the rules").
 pub(super) fn unconfirmed(
     inner: &mut Inner,
     space: SpaceId,

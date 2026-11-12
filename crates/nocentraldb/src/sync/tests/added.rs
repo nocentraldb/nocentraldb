@@ -1,7 +1,6 @@
-//! A member added while it is connected (RFC 0007, "Subscribe", decision
-//! R13): the relay sends `added`, and the member pulls, pushes and
-//! subscribes to the space as it does for a space named in `welcome`,
-//! without connecting again.
+//! A member added while it is connected (RFC 0007, "Subscribe"): the relay
+//! sends `added`, and the member pulls, pushes and subscribes to the space as
+//! it does for a space named in `welcome`, without connecting again.
 
 use super::support::*;
 use crate::members::{AddMember, Role};

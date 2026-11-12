@@ -1,0 +1,7 @@
+# 2026-11-11 · NOC-229 · "Exactly one admin account" is counted by RFC 0008's account comparison, and needs at least one admin
+
+- Decided by: coding agent (NOC-229), carrying out the owner's NOC-228, question 2 A (Carsten, 2026-11-11)
+- Why: the rule lets another account's writer sign off when exactly one account holds an admin member in the state of the shred's causal past and it is the performer's account. The core counts it as: there is at least one admin, and every admin's account is the performer's account by `same_account`, the comparison RFC 0008 uses for every sign-off (equal account keys, or a recovery key that certificates of the causal past attach to both, NOC-201). So a person whose admin devices carry two account keys of one recovery key still counts as one account, as everywhere else. A space with no admin left is not "one admin account": with no admin, every admin is vacuously the performer's, which would let any writer of another account approve an erasure in a space nobody administers. Readers never sign off, and the signer's own account must still differ from the performer's.
+- Instead of: counting distinct account keys, which would let a person's second account key after a recovery make "two admin accounts" and refuse the writer; letting the exception hold in a space without an admin.
+- What this does not do: it does not touch a space whose members all belong to one account (NOC-230).
+- Topics: membership, rfc-0008, erasure, sign-off

@@ -1,5 +1,5 @@
 //! A space the member was added to, through `db.spaces.get` (RFC 0009,
-//! "Spaces"; RFC 0006, decision 1): once its genesis and its key arrive,
+//! "Spaces"; RFC 0006, "Where the view lives"): once its genesis and its key arrive,
 //! the member writes into it like into a space it created, after the
 //! heads of its log (RFC 0002, "Dependencies"). A space of another model is
 //! `spaceOfAnotherModel`, and one whose key has not arrived `notFound`

@@ -199,7 +199,7 @@ pub(crate) fn remove(
 }
 
 /// The admin adds the member of `invitation` again as a writer, after its
-/// removal (RFC 0008, decision M5): it rotates to a fresh generation and
+/// removal (RFC 0008, "Membership entry"): it rotates to a fresh generation and
 /// grants the member the right to write from it. The SDK does not rotate
 /// yet, so the key chain entry carries stand-ins for the previous key,
 /// which `resolve` does not open. Neither change is folded into the
@@ -301,7 +301,8 @@ fn a_member_that_was_removed_may_not_add_one() {
 }
 
 /// A member is refused with `AlreadyMember`; a former member is added
-/// again, after a rotation (RFC 0008, M5; NOC-154 point 2).
+/// again, after a rotation (RFC 0008, "Membership entry"; NOC-154 point
+/// 2).
 #[test]
 fn a_member_is_not_added_again_and_a_former_member_is() {
     let account = SigningKey::from_bytes(&[9; 32]);

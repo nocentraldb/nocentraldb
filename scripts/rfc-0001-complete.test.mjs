@@ -72,11 +72,12 @@ test("the relay bullet links both lists of what the relay sees, and what it read
   assert.match(relay, /account/);
 });
 
-test("Shred and audit destroys the key once every admin device has seen the erasure", () => {
-  assert.match(
-    bullet("Shred and audit."),
-    /once every admin device of the space has seen the erasure/,
-  );
+test("Shred and audit destroys the key as soon as a member accepts the erasure", () => {
+  // RFC 0008 as merged in #220: a shred is final when accepted (NOC-224).
+  const shred = bullet("Shred and audit.");
+  assert.match(shred, /as soon as it accepts the erasure/);
+  assert.ok(links(shred, "0008-membership.md#a-shred-is-final-when-accepted"));
+  assert.doesNotMatch(shred, /every admin device/);
 });
 
 test("an evicted browser loses its member key and is paired again as a new device", () => {
