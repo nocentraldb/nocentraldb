@@ -1,0 +1,60 @@
+[package]
+name = "ncdb-relay-lambda"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The NoCentralDB relay as one AWS Lambda function behind an API Gateway WebSocket API (RFC 0007, \"The AWS backend\")."
+
+[[bin]]
+name = "ncdb-relay-lambda"
+path = "src/main.rs"
+
+# The function runs natively only, in Lambda on arm64. It checks nothing
+# itself: every request goes through the relay core of ncdb-relay. Every
+# dependency is pinned to one exact version.
+[dependencies]
+ncdb-core.workspace = true
+ncdb-relay.workspace = true
+# The event types of API Gateway's WebSocket API, as Lambda delivers them
+# (the owner's tick, NOC-271).
+aws_lambda_events = { version = "=1.2.1", default-features = false, features = ["apigw"] }
+# Lambda's runtime API: the binary's loop of invocations (the owner's tick,
+# NOC-271). Only src/main.rs uses it.
+lambda_runtime = { version = "=1.5.0", default-features = false }
+# The challenge's nonce: the platform's secure generator, as in the core.
+getrandom = { version = "=0.4.3", default-features = false }
+# API Gateway hands a binary message to Lambda in base64. Already in the
+# tree through aws_lambda_events and lambda_runtime; the same pinned version.
+base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
+# The local harness (feature `harness`): a WebSocket listener that plays
+# API Gateway, events read through serde_json as Lambda reads them, and a
+# small HTTP listener for the URLs of large changes. All already in the
+# tree, at the versions the relay server and aws_lambda_events use.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "net", "sync", "time", "io-util"], optional = true }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"], optional = true }
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"], optional = true }
+httparse = { version = "=1.10.1", default-features = false, features = ["std"], optional = true }
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"], optional = true }
+
+[features]
+# The local harness, for this crate's tests and the SDK's sync suite.
+harness = [
+    "dep:tokio-tungstenite",
+    "dep:futures-util",
+    "dep:httparse",
+    "dep:serde_json",
+    "dep:tokio",
+]
+
+# The tests talk to the gateway with the relay server's own test client
+# (crates/ncdb-relay-server/tests/support), as a member would.
+[dev-dependencies]
+ncdb-relay-lambda = { workspace = true, features = ["harness"] }
+ncdb-relay-server.workspace = true
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "io-util"] }
+tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["connect"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"] }
+ed25519-dalek = { version = "=2.2.0", default-features = false, features = ["alloc", "fast", "zeroize"] }

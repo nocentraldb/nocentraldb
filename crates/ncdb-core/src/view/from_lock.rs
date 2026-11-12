@@ -11,11 +11,11 @@
 //! is not registered").
 //! Computed fields and views have no place in the view yet either.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_plugin::Data;
 
-use super::model::{Direction, Field, Index, Invalid, Model, PluginField};
+use super::model::{Direction, Field, Index, Invalid, Model, PluginField, Reserved, reserved_name};
 use crate::basic::{BasicValue, Kind};
 use crate::link::{Link, Links};
 use crate::model_lock::{self, Element, ModelLock, Person, check};
@@ -109,8 +109,62 @@ impl Model {
                 fields.insert(PERSON_FIELD.to_owned(), Field::Person(PersonField));
             }
         }
+        if let Some(shipped) = registry.reserved_model() {
+            let shipped = Model::from_lock_with(shipped, &registry.plugins_only())?;
+            if shipped.id == model.id {
+                return Err(Invalid::ReservedId);
+            }
+            model.reserve(shipped);
+        }
         model.validate()?;
         Ok(model)
+    }
+
+    /// Takes in a shipped model's collections, fields, indexes and
+    /// personal fields, each collection under its [`reserved_name`], with
+    /// the links of its fields renamed alike.
+    fn reserve(&mut self, shipped: Model) {
+        let rename = |targets: &BTreeSet<String>| -> BTreeSet<String> {
+            targets.iter().map(|t| reserved_name(t)).collect()
+        };
+        for (collection, fields) in shipped.collections {
+            let fields = fields
+                .into_iter()
+                .map(|(name, field)| {
+                    let field = match field {
+                        Field::Link(mut link) => {
+                            link.collections = rename(&link.collections);
+                            Field::Link(link)
+                        }
+                        Field::Links(mut links) => {
+                            links.collections = rename(&links.collections);
+                            Field::Links(links)
+                        }
+                        Field::Ref(mut reference) => {
+                            reference.collections = rename(&reference.collections);
+                            Field::Ref(reference)
+                        }
+                        other => other,
+                    };
+                    (name, field)
+                })
+                .collect();
+            self.collections.insert(reserved_name(&collection), fields);
+        }
+        for (collection, fields) in shipped.unregistered {
+            self.unregistered.insert(reserved_name(&collection), fields);
+        }
+        for (collection, fields) in shipped.personal {
+            self.personal.insert(reserved_name(&collection), fields);
+        }
+        for mut index in shipped.indexes {
+            index.collection = reserved_name(&index.collection);
+            self.indexes.push(index);
+        }
+        self.reserved = Some(Reserved {
+            id: shipped.id,
+            version: shipped.version,
+        });
     }
 }
 
