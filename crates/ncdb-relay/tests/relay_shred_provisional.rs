@@ -3,10 +3,13 @@
 //! account, the performer's own account signs off, and the shred is
 //! provisional. The relay keeps the person key's record while the shred is
 //! provisional or taken back, and deletes it once it accepts an erasure
-//! decision that finalizes it. The 7 days the relay waits for a finalize
-//! (`too_early`) are not checked here.
+//! decision that finalizes it, which it accepts no sooner than 7 days, by
+//! its own clock, after it accepted the shred: an earlier finalize is
+//! refused with `too_early` (RFC 0007, "What the relay checks").
 
 mod support;
+
+use std::cell::Cell;
 
 use ncdb_core::change::Change;
 use ncdb_core::ids::SpaceId;
@@ -14,9 +17,29 @@ use ncdb_core::membership::{self, Entry, ErasureDecision, Role};
 use ncdb_relay::conformance::block_on;
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::store::{PersonKeyId, PersonKeyRecord};
-use ncdb_relay::{Pushed, Relay};
+use ncdb_relay::{ErrorCode, Pushed, Relay};
 use support::space::{Space, account, id, key, person, wrapped};
-use support::{push, push_one, relay};
+use support::{TempDir, config, push, push_one};
+
+thread_local! {
+    /// The relay's clock in these tests, which they move. Each test runs
+    /// on its own thread, so the tests do not share it.
+    static NOW: Cell<u64> = const { Cell::new(1_700_000_000_000) };
+}
+
+/// 7 days, in the relay clock's milliseconds.
+const SEVEN_DAYS: u64 = 7 * 24 * 60 * 60 * 1000;
+
+fn relay() -> (Relay<SqliteStore>, TempDir) {
+    let dir = TempDir::new();
+    let mut config = config();
+    config.clock = || NOW.get();
+    (Relay::new(dir.store(), config), dir)
+}
+
+fn later(ms: u64) {
+    NOW.set(NOW.get() + ms);
+}
 
 /// The creator, an admin of the one account.
 const CREATOR: u8 = 0;
@@ -81,9 +104,44 @@ fn a_provisional_shred_keeps_the_record_until_a_finalize_is_accepted() {
     accepted(&relay, WRITER, &shred);
     assert_eq!(stored(&relay, space.space), [person(1)], "provisional");
 
+    later(SEVEN_DAYS);
     let finalize = decide(&mut space, &shred, true);
     accepted(&relay, CREATOR, &finalize);
     assert!(stored(&relay, space.space).is_empty(), "finalized");
+}
+
+#[test]
+fn a_finalize_before_7_days_is_refused_too_early_and_accepted_once_they_passed() {
+    let (relay, _dir, mut space, held) = held();
+    let shred = space.shred(WRITER, 1, &account(), &[&held[2]]);
+    accepted(&relay, WRITER, &shred);
+    let finalize = decide(&mut space, &shred, true);
+
+    later(SEVEN_DAYS - 1);
+    assert_eq!(
+        push_one(&relay, CREATOR, &finalize),
+        Pushed::Rejected(ErrorCode::TooEarly)
+    );
+    assert_eq!(ErrorCode::TooEarly.code(), "too_early");
+    assert_eq!(
+        stored(&relay, space.space),
+        [person(1)],
+        "still provisional"
+    );
+
+    // The same change, pushed again once 7 days have passed.
+    later(1);
+    accepted(&relay, CREATOR, &finalize);
+    assert!(stored(&relay, space.space).is_empty());
+}
+
+#[test]
+fn a_take_back_needs_no_wait() {
+    let (relay, _dir, mut space, held) = held();
+    let shred = space.shred(WRITER, 1, &account(), &[&held[2]]);
+    accepted(&relay, WRITER, &shred);
+    let take_back = decide(&mut space, &shred, false);
+    accepted(&relay, CREATOR, &take_back);
 }
 
 #[test]
