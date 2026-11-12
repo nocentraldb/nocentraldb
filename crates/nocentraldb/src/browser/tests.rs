@@ -153,7 +153,9 @@ const DB_LOCK: &str = LOCK;
 fn a_browser_name_together_with_another_place_is_refused() {
     use crate::{Db, OpenOptions};
     let both = OpenOptions::new(DB_LOCK).browser("default").in_memory();
-    let refused = now_ready(Db::open(both)).err().expect("refused");
+    let Err(refused) = now_ready(Db::open(both)) else {
+        panic!("a browser name together with in_memory() opened");
+    };
     assert_eq!(refused.code(), ErrorCode::InvalidValue);
 }
 
