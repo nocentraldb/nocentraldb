@@ -109,7 +109,8 @@ impl Rebuild {
             while budget > 0 && staged.taken < live.len() {
                 let position = Position(staged.taken as u64 + 1);
                 let change = live.get(position).expect("the log holds its positions");
-                let mut fold = SqlFold::staged(conn, &self.model, *space);
+                let mut fold = SqlFold::staged(conn, &self.model, *space)
+                    .for_space(staged.checks.space_model_id());
                 let received = staged
                     .log
                     .receive(change.bytes(), &mut staged.checks, &mut fold);

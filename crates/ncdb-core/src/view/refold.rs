@@ -39,7 +39,7 @@ pub(super) fn run<C: Checks>(
         let mut log = Log::new(*space);
         let mut checks = checks(*space);
         for (_, change) in old.after(Position::START) {
-            let mut fold = SqlFold::new(conn, model, *space);
+            let mut fold = SqlFold::new(conn, model, *space).for_space(checks.space_model_id());
             let received = log.receive(change.bytes(), &mut checks, &mut fold);
             fold.finish()?;
             received.map_err(Error::Receive)?;
