@@ -466,10 +466,12 @@ fn priorities(page: &Value) -> Vec<u64> {
     };
     items
         .iter()
-        .map(|item| match field(field(item, "fields").unwrap(), "priority") {
-            Some(Value::Unsigned(n)) => *n,
-            other => panic!("{other:?}"),
-        })
+        .map(
+            |item| match field(field(item, "fields").unwrap(), "priority") {
+                Some(Value::Unsigned(n)) => *n,
+                other => panic!("{other:?}"),
+            },
+        )
         .collect()
 }
 

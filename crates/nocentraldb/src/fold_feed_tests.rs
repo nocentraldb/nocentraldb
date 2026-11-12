@@ -44,7 +44,10 @@ fn the_feed_wakes_a_waiter_when_a_fold_lands() {
 
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
     let mut waiting = Box::pin(feed.wait());
-    assert!(waiting.as_mut().poll(&mut cx).is_pending(), "nothing folded yet");
+    assert!(
+        waiting.as_mut().poll(&mut cx).is_pending(),
+        "nothing folded yet"
+    );
     now(project.create("tasks", [("title", Value::from("b"))])).unwrap();
     assert!(waiting.as_mut().poll(&mut cx).is_ready(), "a fold wakes it");
 }
