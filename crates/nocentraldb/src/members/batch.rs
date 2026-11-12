@@ -111,7 +111,8 @@ impl Batch {
     }
 }
 
-/// Receives the member's own `frames` into `space` in one transaction, and
+/// Receives the member's own `frames` into `space` in one transaction, with
+/// the time they were written (NOC-231), and
 /// checks that each was folded. When the batch is not received, the log
 /// holds none of it, and the space's checks, which learned its control
 /// changes as they were received, are read again from the log.
@@ -122,7 +123,8 @@ pub(crate) fn commit(
     space: SpaceId,
     frames: &[&[u8]],
 ) -> Result<(), Error> {
-    if let Err(error) = view.receive_all(frames, &mut state.checks) {
+    let written_at = crate::clock::now_millis();
+    if let Err(error) = view.receive_all_own(frames, &mut state.checks, written_at) {
         let held = std::mem::take(&mut state.person_keys);
         *state = SpaceState::from_log(view, space, secrets.key());
         state.person_keys = held;
