@@ -136,6 +136,7 @@ impl<'a> Transaction<'a> {
     /// Records the creation of an object as [`Transaction::create`] does,
     /// at `id`, an id the caller drew: the TypeScript SDK draws it on the
     /// device so that its `tx.create` returns it at once (NOC-176).
+    #[cfg(any(test, feature = "bridge"))]
     pub(crate) fn create_at<'v>(
         &mut self,
         collection: &str,
