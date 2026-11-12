@@ -56,7 +56,7 @@ mod run;
 mod session;
 mod status;
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-mod time;
+pub(crate) mod time;
 #[cfg(test)]
 mod time_tests;
 #[cfg(not(target_arch = "wasm32"))]
