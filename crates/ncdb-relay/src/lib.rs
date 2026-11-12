@@ -10,8 +10,10 @@
 //! are [`record`], the one test suite every backend passes is
 //! [`conformance`], and the first backend, SQLite, is [`sqlite`].
 //!
-//! The network server, with RFC 0007's messages and subscriptions, is the
-//! crate `ncdb-relay-server`.
+//! RFC 0007's messages as bytes are [`wire`], and one `entries` message of
+//! a pull or a subscription is [`page`]: every deployment speaks them, the
+//! WebSocket server of the crate `ncdb-relay-server` and the Lambda
+//! function on AWS alike.
 //!
 //! The `keys`, `person-keys` and `put-person-keys` requests of "Keys and the
 //! person-key store" are [`Relay::keys`], [`Relay::person_keys`] and
@@ -34,11 +36,13 @@ pub mod conformance;
 mod error;
 mod keys;
 mod large;
+pub mod page;
 pub mod record;
 mod relay;
 mod shred;
 pub mod sqlite;
 pub mod store;
+pub mod wire;
 
 pub use error::ErrorCode;
 pub use keys::Keys;

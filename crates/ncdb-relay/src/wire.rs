@@ -8,13 +8,25 @@
 
 use std::collections::BTreeMap;
 
+use crate::store::{Entry, Epoch, PersonKeyId, PersonKeyRecord, Position};
+use crate::{ErrorCode, Keys, Pushed};
 use ncdb_core::cbor::{self, Key, Value};
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_core::keys::MemberPublicKey;
-use ncdb_relay::store::{Entry, Epoch, PersonKeyId, PersonKeyRecord, Position};
-use ncdb_relay::{ErrorCode, Keys, Pushed};
 
-use crate::{MAX_MESSAGE, MAX_PUSH};
+/// The largest message, in bytes, on every backend (RFC 0007, "Transport
+/// and encoding").
+pub const MAX_MESSAGE: usize = 128 * 1024;
+
+/// The most frames one push carries (RFC 0007, "Transport and encoding").
+pub const MAX_PUSH: usize = 32;
+
+/// The largest frame an entry carries inline: one whose entry still fits
+/// into one `entries` message. A larger one comes as a download URL.
+pub const MAX_INLINE: usize = MAX_MESSAGE - 1024;
+
+/// The protocol versions this relay speaks.
+pub const VERSIONS: [u64; 1] = [1];
 
 /// A request a member sends.
 #[derive(Debug, PartialEq, Eq)]
@@ -91,6 +103,24 @@ pub enum Request {
         /// The request id.
         req: u64,
     },
+}
+
+impl Request {
+    /// The request id, if the request has one.
+    pub fn req(&self) -> Option<u64> {
+        match self {
+            Request::Hello { .. } | Request::Auth { .. } => None,
+            Request::Push { req, .. }
+            | Request::Pull(Cursor { req, .. })
+            | Request::Subscribe(Cursor { req, .. })
+            | Request::Unsubscribe { req, .. }
+            | Request::Upload { req, .. }
+            | Request::Keys { req, .. }
+            | Request::PersonKeys { req, .. }
+            | Request::PutPersonKeys { req, .. }
+            | Request::Ping { req } => Some(*req),
+        }
+    }
 }
 
 /// One frame of a push.
@@ -418,7 +448,7 @@ pub fn item_size(item: &Item) -> usize {
 /// many that is. Each entry is `{1: position, 2: accepted at, 3: frame}`,
 /// or `{1: position, 2: accepted at, 3: {1: url, 2: size}}` for a frame
 /// that comes as a download. The first entry always fits: an entry carries
-/// no frame larger than [`crate::MAX_INLINE`].
+/// no frame larger than [`MAX_INLINE`].
 pub fn entries(
     req: Option<u64>,
     space: SpaceId,
