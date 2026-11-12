@@ -30,8 +30,8 @@ mod state;
 mod statement;
 
 pub use body::{
-    ACCOUNT_KEY_STATEMENT, ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS, KEY_CHAIN, KEY_ENVELOPE,
-    MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
+    ACCOUNT_KEY_STATEMENT, ACKNOWLEDGEMENT, Action, BodyError, ControlBody, Entry, GENESIS,
+    KEY_CHAIN, KEY_ENVELOPE, MEMBERSHIP, MembershipEntry, PERSON_KEY, Role, SHRED, write,
 };
 pub use certificate::{Certificate, MemberKind};
 pub use current::MergeRotation;

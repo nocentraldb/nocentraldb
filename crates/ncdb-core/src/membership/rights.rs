@@ -12,8 +12,8 @@ use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
 use super::person_key::ShredEntry;
-use super::statement::AccountKeyStatement;
 use super::resolve::{Judged, Resolved};
+use super::statement::AccountKeyStatement;
 
 /// The right a change's author needs. A membership entry needs admin,
 /// except a member's own leave (reader) or lowering of its own role (the
@@ -94,7 +94,11 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
         } => {
             let former = past.member(*subject).is_some();
             past.role(*subject).is_none()
-                && !superseded(past, certificate.account_key, certificate.statement.as_deref())
+                && !superseded(
+                    past,
+                    certificate.account_key,
+                    certificate.statement.as_deref(),
+                )
                 && (!former || fresh(past, node.author, *subject, *from_generation))
                 && certificate.member == *subject
                 && match certificate.kind {

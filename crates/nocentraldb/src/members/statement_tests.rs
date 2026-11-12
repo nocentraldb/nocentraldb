@@ -88,7 +88,11 @@ fn a_statement_the_space_already_holds_or_an_older_one_writes_nothing() {
     let account = SigningKey::from_bytes(&[9; 32]);
     let (_, member, _) = held(&account);
     // The certificate in the space carries number 1 already.
-    assert!(now(member.carry_statement(&statement(&account, 1))).unwrap().is_empty());
+    assert!(
+        now(member.carry_statement(&statement(&account, 1)))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 #[test]

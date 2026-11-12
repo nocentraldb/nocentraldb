@@ -32,6 +32,7 @@ mod leave;
 pub(crate) mod merge;
 mod notice;
 mod rotate;
+mod statement;
 
 use batch::Batch;
 
@@ -304,14 +305,14 @@ mod known_tests;
 mod leave_tests;
 #[cfg(test)]
 mod list_tests;
-#[cfg(test)]
-mod statement_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
 #[cfg(test)]
 mod remove_tests;
 #[cfg(test)]
 mod rotate_tests;
+#[cfg(test)]
+mod statement_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
