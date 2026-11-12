@@ -193,7 +193,7 @@ impl Values<'_> {
 
 impl Kind {
     /// Whether `value` is a value of this kind. The empty value is not.
-    fn allows(&self, value: &Value) -> bool {
+    pub(crate) fn allows(&self, value: &Value) -> bool {
         const MAX: u64 = i64::MAX as u64;
         match (self, value) {
             (Kind::Text, Value::Text(_))
