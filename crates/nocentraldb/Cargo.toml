@@ -11,6 +11,9 @@ description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, r
 # the local view on SQLite. The view is native only, so is this crate.
 [dependencies]
 ncdb-core.workspace = true
+# What a plugin field type implements, and Data, which its fields read and
+# write as (RFC 0011).
+ncdb-plugin.workspace = true
 # The `Stream` a subscription returns (RFC 0009, "The Rust SDK"). The version
 # Cargo.lock already held.
 futures-core = { version = "=0.3.34", default-features = false, features = ["std"] }
@@ -86,6 +89,10 @@ zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = fal
 
 # The sync tests run the relay server on SQLite locally and talk to it as a
 # simulated member would. Natively only: they need sockets and threads.
+# The test plugin, test/counter (RFC 0011).
+[dev-dependencies]
+ncdb-test-counter.workspace = true
+
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 ncdb-relay-server.workspace = true
 # With NCDB_TEST_RELAY=lambda, the sync tests run against the relay's

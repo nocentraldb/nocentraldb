@@ -137,6 +137,7 @@ impl Object {
                 };
                 (name.clone(), value)
             })
+            .chain(unregistered(&inner.model, collection))
             .collect();
         let person = crate::personal::held_person(&inner.view, space, collection, object)?
             .map(|person| person.person);
@@ -166,8 +167,19 @@ fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
         }
         (Field::Set(set), FieldState::Set(state)) => Some(list(set.read(state), false)),
         (Field::Links(links), FieldState::Set(state)) => Some(list(links.read(state), true)),
+        (Field::Plugin(plugin), FieldState::Plugin(state)) => plugin.read(state).map(Value::from),
         _ => None,
     }
+}
+
+/// The plugin fields of `collection` whose type no plugin implements: each
+/// reads as unset (RFC 0011, "A type that is not registered").
+fn unregistered<'a>(
+    model: &'a ncdb_core::view::Model,
+    collection: &str,
+) -> impl Iterator<Item = (String, Option<Value>)> + 'a {
+    let fields = model.unregistered.get(collection).into_iter().flatten();
+    fields.map(|(name, _)| (name.clone(), None))
 }
 
 /// What a personal field reads.

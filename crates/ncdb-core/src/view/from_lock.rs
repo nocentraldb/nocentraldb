@@ -11,7 +11,7 @@
 //! is not registered").
 //! Computed fields and views have no place in the view yet either.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use ncdb_plugin::Data;
 
@@ -50,11 +50,16 @@ impl Model {
                 .iter()
                 .filter_map(|(field, f)| Some((field.clone(), field_type(f, registry)?)))
                 .collect();
-            let unregistered: BTreeSet<String> = collection
+            let unregistered: BTreeMap<String, (String, u64)> = collection
                 .fields
-                .keys()
-                .filter(|field| !fields.contains_key(*field))
-                .cloned()
+                .iter()
+                .filter(|(field, _)| !fields.contains_key(*field))
+                .filter_map(|(field, f)| match &f.kind {
+                    model_lock::Kind::Plugin { type_id, .. } => {
+                        Some((field.clone(), (type_id.clone(), f.rule)))
+                    }
+                    _ => None,
+                })
                 .collect();
             if !unregistered.is_empty() {
                 model.unregistered.insert(name.clone(), unregistered);
