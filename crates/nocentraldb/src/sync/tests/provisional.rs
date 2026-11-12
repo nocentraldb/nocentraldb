@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use ncdb_core::membership::{self, ControlBody, Entry};
 
-use super::person_keys::{PERSON, acknowledgements, held, person_key, shared, stored};
+use super::person_keys::{PERSON, acknowledgements, held, person_key, shared, stored, write};
 use super::support::*;
 use crate::db::{Db, lock};
 use crate::members::{MemberId, NoticeCode};
@@ -169,4 +169,69 @@ async fn the_admin_finalizes_and_retries_a_too_early_finalize() {
         "the record is gone"
     );
     assert!(project.status().current().provisional_erasures.is_empty());
+}
+
+/// `admin` takes back `shred` in `space`.
+fn take_back(admin: &Db, space: &Space, shred: crate::ChangeId) {
+    let decision = Entry::ErasureDecision(membership::ErasureDecision {
+        shred: shred.0,
+        finalize: false,
+    });
+    write(admin, space, decision);
+}
+
+/// Of two shreds of one person key, the first not taken back takes effect
+/// (Carsten, 2026-11-12, NOC-242): after a take-back, the status lists the
+/// later shred as the provisional erasure, not the one taken back.
+#[tokio::test(flavor = "multi_thread")]
+async fn after_a_take_back_the_status_lists_the_later_shred() {
+    let relay = LocalRelay::start().await;
+    let (admin, _member, project) = shared(&relay).await;
+    crate::sync::set_finalize_after(&admin, Duration::from_secs(3600), Duration::from_secs(3600));
+    let key = ncdb_core::keys::PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    let first = erase(&admin, &project);
+    take_back(&admin, &project, first);
+    assert!(project.status().current().provisional_erasures.is_empty());
+
+    let second = erase(&admin, &project);
+
+    let pending = project.status().current().provisional_erasures;
+    let changes: Vec<_> = pending.iter().map(|erasure| erasure.change).collect();
+    assert_eq!(changes, vec![second]);
+}
+
+/// The SDK finalizes the later shred, the one that took effect, once its 7
+/// days passed on the device; the shred taken back stays taken back.
+#[tokio::test(flavor = "multi_thread")]
+async fn after_a_take_back_the_admin_finalizes_the_later_shred() {
+    let relay = LocalRelay::start_with_clock(relay_now).await;
+    let (admin, _member, project) = shared(&relay).await;
+    crate::sync::set_finalize_after(
+        &admin,
+        Duration::from_secs(3600),
+        Duration::from_millis(200),
+    );
+    let key = ncdb_core::keys::PersonKey::generate();
+    person_key(&admin, &project, &key, &key);
+    let space = project.id().0;
+    let first = erase(&admin, &project);
+    take_back(&admin, &project, first);
+    let second = erase(&admin, &project);
+
+    crate::sync::set_finalize_after(&admin, Duration::ZERO, Duration::from_millis(200));
+
+    eventually("the admin finalizes the later shred", || {
+        let inner = lock(&admin.inner);
+        let resolved = inner.spaces[&space].checks.resolved();
+        resolved.person_key(PERSON).is_some_and(|key| {
+            key.shred == Some(second.0)
+                && key.finalized.is_some()
+                && key
+                    .earlier
+                    .first()
+                    .is_some_and(|e| e.id == first.0 && e.taken_back.is_some())
+        })
+    })
+    .await;
 }

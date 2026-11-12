@@ -471,6 +471,7 @@ fn apply_order(
                 node,
                 judged.provisional(node.id),
                 &judged.past_members(node.id),
+                &BTreeSet::new(),
             );
             if let Entry::AccountKeyStatement(statement) = &node.body.entry {
                 resolved.statements.insert(node.id, statement.clone());
