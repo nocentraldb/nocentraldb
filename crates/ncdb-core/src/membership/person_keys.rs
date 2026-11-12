@@ -1,12 +1,13 @@
 //! The person keys of the control state (RFC 0008, "The state"): per
 //! person-key id its commitment, the records its accepted person-key
-//! entries announce, and the shred that destroyed it, with the two rules of
+//! entries announce, and the shred that erased it, provisionally or for
+//! good, with the decision that ended a provisional one; and the rules of
 //! step 5 that apply to the whole set ("The function").
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cbor::Value;
-use crate::ids::ChangeId;
+use crate::ids::{ChangeId, MemberId};
 
 use super::body::Entry;
 use super::fields;
@@ -26,8 +27,47 @@ pub struct PersonKey {
     /// The records the accepted person-key entries of its id announce: the
     /// generation each is wrapped under, and its record hash.
     pub records: BTreeSet<(u64, [u8; 32])>,
-    /// The accepted shred that destroyed it, the first in the order.
+    /// The accepted shred that erased it, the first in the order.
     pub shred: Option<ChangeId>,
+    /// Whether that shred is provisional: the performer's own account
+    /// signed it off, in a space whose members all belonged to it (RFC
+    /// 0008, "A provisional erasure in a space with one account").
+    pub provisional: bool,
+    /// The first accepted erasure decision that finalizes that shred.
+    pub finalized: Option<ChangeId>,
+    /// The first accepted erasure decision that takes that shred back. None
+    /// is accepted once the set holds an accepted finalize.
+    pub taken_back: Option<ChangeId>,
+    /// The member that performed that shred, whose account decides it.
+    pub(crate) performer: Option<MemberId>,
+}
+
+impl PersonKey {
+    fn new() -> PersonKey {
+        PersonKey {
+            commitment: None,
+            records: BTreeSet::new(),
+            shred: None,
+            provisional: false,
+            finalized: None,
+            taken_back: None,
+            performer: None,
+        }
+    }
+
+    /// Whether the view treats the person's fields as erased: an accepted
+    /// shred erased them, and no accepted take-back restored them.
+    pub fn erased(&self) -> bool {
+        self.shred.is_some() && self.taken_back.is_none()
+    }
+
+    /// Whether members destroy the person key and the relay deletes its
+    /// record: a shred is final, or a provisional one is finalized. A
+    /// provisional shred alone never destroys the key (RFC 0008, "A shred is
+    /// final when accepted").
+    pub fn destroyed(&self) -> bool {
+        self.shred.is_some() && (!self.provisional || self.finalized.is_some())
+    }
 }
 
 /// The person keys, by person-key id.
@@ -54,26 +94,43 @@ impl PersonKeys {
 
     /// What an accepted change does to the person keys: the first entry of
     /// an id creates it, every entry adds its record, and the first shred
-    /// destroys it, and keeps its id in the state even when no accepted entry
-    /// of the id is left.
-    pub(crate) fn apply(&mut self, node: &Node) {
+    /// erases it, provisionally when `provisional` says so, and keeps its id
+    /// in the state even when no accepted entry of the id is left. The first
+    /// decision of each kind on that shred records itself; a decision on
+    /// another shred of the id changes nothing.
+    pub(crate) fn apply(&mut self, node: &Node, provisional: bool) {
         match &node.body.entry {
             Entry::PersonKey(entry) => {
-                let key = self.0.entry(entry.person_key).or_insert(PersonKey {
-                    commitment: None,
-                    records: BTreeSet::new(),
-                    shred: None,
-                });
+                let key = self
+                    .0
+                    .entry(entry.person_key)
+                    .or_insert_with(PersonKey::new);
                 key.commitment.get_or_insert(entry.commitment);
                 key.records.insert((entry.generation, entry.record_hash));
             }
             Entry::Shred(shred) => {
-                let key = self.0.entry(shred.person_key).or_insert(PersonKey {
-                    commitment: None,
-                    records: BTreeSet::new(),
-                    shred: None,
-                });
-                key.shred.get_or_insert(node.id);
+                let key = self
+                    .0
+                    .entry(shred.person_key)
+                    .or_insert_with(PersonKey::new);
+                if key.shred.is_none() {
+                    key.shred = Some(node.id);
+                    key.provisional = provisional;
+                    key.performer = Some(node.author);
+                }
+            }
+            Entry::ErasureDecision(decision) => {
+                let key = self
+                    .0
+                    .values_mut()
+                    .find(|key| key.shred == Some(decision.shred) && key.provisional);
+                if let Some(key) = key {
+                    let slot = match decision.finalize {
+                        true => &mut key.finalized,
+                        false => &mut key.taken_back,
+                    };
+                    slot.get_or_insert(node.id);
+                }
             }
             _ => {}
         }
@@ -90,6 +147,9 @@ impl PersonKeys {
                 key.commitment.map_or(Value::Null, |c| fields::bytes(&c)),
                 Value::Array(records.collect()),
                 key.shred.map_or(Value::Null, |s| fields::bytes(&s.0)),
+                Value::Bool(key.provisional),
+                key.finalized.map_or(Value::Null, |s| fields::bytes(&s.0)),
+                key.taken_back.map_or(Value::Null, |s| fields::bytes(&s.0)),
             ])
         });
         Value::Array(keys.collect())
@@ -98,14 +158,18 @@ impl PersonKeys {
 
 /// The rules of step 5 for the whole set, after the order is applied: a
 /// person-key entry that an accepted shred of its id did not see is
-/// rejected, wherever it falls in the order. Returns the person keys of the
-/// changes accepted then, applied in the order. `saw(a, b)` is whether `b`
-/// is in `a`'s causal past.
+/// rejected, wherever it falls in the order; and a take-back of a
+/// provisional shred is rejected when the set holds an accepted finalize of
+/// it, the first in the order (Carsten, 2026-11-11, NOC-230). Returns the
+/// person keys of the changes accepted then, applied in the order.
+/// `saw(a, b)` is whether `b` is in `a`'s causal past, and
+/// `provisional(shred)` whether a shred is provisional.
 pub(crate) fn settle(
     order: &[ChangeId],
     nodes: &BTreeMap<ChangeId, &Node>,
     verdicts: &mut BTreeMap<ChangeId, Verdict>,
     saw: impl Fn(ChangeId, ChangeId) -> bool,
+    provisional: impl Fn(ChangeId) -> bool,
 ) -> PersonKeys {
     let accepted =
         |verdicts: &BTreeMap<ChangeId, Verdict>, id| verdicts.get(id) == Some(&Verdict::Accepted);
@@ -126,9 +190,28 @@ pub(crate) fn settle(
             verdicts.insert(*id, Verdict::Rejected(Rejection::Shredded(*shred)));
         }
     }
+    let mut finalizes: BTreeMap<ChangeId, ChangeId> = BTreeMap::new();
+    for id in order.iter().filter(|id| accepted(verdicts, id)) {
+        if let Entry::ErasureDecision(decision) = &nodes[id].body.entry
+            && decision.finalize
+        {
+            finalizes.entry(decision.shred).or_insert(*id);
+        }
+    }
+    for id in order {
+        let Entry::ErasureDecision(decision) = &nodes[id].body.entry else {
+            continue;
+        };
+        let finalize = finalizes
+            .get(&decision.shred)
+            .filter(|_| !decision.finalize);
+        if let Some(finalize) = finalize.filter(|_| accepted(verdicts, id)) {
+            verdicts.insert(*id, Verdict::Rejected(Rejection::Finalized(*finalize)));
+        }
+    }
     let mut keys = PersonKeys::default();
     for id in order.iter().filter(|id| accepted(verdicts, id)) {
-        keys.apply(nodes[id]);
+        keys.apply(nodes[id], provisional(*id));
     }
     keys
 }

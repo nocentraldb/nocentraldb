@@ -388,8 +388,10 @@ fn a_sign_off_is_judged_by_its_shreds_causal_past_only() {
 /// under [`CODE`], shreds person 1's key, signed off by Carol's account,
 /// an admin certified by `carol` without a statement. With `entry`, Alice
 /// first carries the statement that `carol` is that recovery key's account
-/// key with number 2. The shred's verdict.
-fn shred_with_carol(carol_key: &SigningKey, entry: bool) -> Option<Verdict> {
+/// key with number 2. The shred's verdict, and whether it is provisional:
+/// a sign-off by the performer's own account in a space whose members all
+/// belong to it (Carsten, 2026-11-11, NOC-230).
+fn shred_with_carol(carol_key: &SigningKey, entry: bool) -> (Option<Verdict>, bool) {
     let mut s = Space::new(ALICE);
     let genesis = s.genesis.clone();
     let bob = s.add_certified(
@@ -423,14 +425,26 @@ fn shred_with_carol(carol_key: &SigningKey, entry: bool) -> Option<Verdict> {
     all.extend([&carol, &key, &shred]);
     let state = resolve(s.space, all);
     assert_eq!(state.verdict(carol.id()), ACCEPTED);
-    state.verdict(shred.id()).cloned()
+    let provisional = state
+        .person_key(space::person(1))
+        .is_some_and(|key| key.provisional);
+    (state.verdict(shred.id()).cloned(), provisional)
 }
 
 #[test]
 fn a_statement_entry_makes_two_account_keys_one_account_for_a_sign_off() {
     let carol = other_account(7);
-    assert_eq!(shred_with_carol(&carol, false).as_ref(), ACCEPTED);
-    assert_eq!(shred_with_carol(&carol, true).as_ref(), NOT_VALID);
+    // Without the entry, Carol's account is another account: final.
+    assert_eq!(
+        shred_with_carol(&carol, false),
+        (Some(Verdict::Accepted), false)
+    );
+    // With it, Carol's account key is Bob's account's new key, so every
+    // member belongs to one account: the own sign-off is provisional.
+    assert_eq!(
+        shred_with_carol(&carol, true),
+        (Some(Verdict::Accepted), true)
+    );
 }
 
 #[test]

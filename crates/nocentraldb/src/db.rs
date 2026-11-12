@@ -191,18 +191,16 @@ pub(crate) struct SpaceState {
 }
 
 impl SpaceState {
-    /// Drops every person key the space's state names as shredded: a
-    /// shred is final when accepted, so the member destroys its copy at
-    /// once (RFC 0008, "A shred is final when accepted"). The key is never
-    /// held again, since a record of a shredded key is not accepted
-    /// (`crate::sync::person_keys`).
+    /// Drops every person key the space's state names as destroyed: a
+    /// shred is final when accepted, and a provisional one once an accepted
+    /// erasure decision finalizes it, so the member destroys its copy then
+    /// (RFC 0008, "A shred is final when accepted"). A provisional shred
+    /// alone keeps the key. A destroyed key is never held again, since its
+    /// records are not accepted (`crate::sync::person_keys`).
     pub(crate) fn drop_shredded(&mut self) {
         let resolved = self.checks.resolved();
-        self.person_keys.retain(|id, _| {
-            resolved
-                .person_key(*id)
-                .is_none_or(|key| key.shred.is_none())
-        });
+        self.person_keys
+            .retain(|id, _| resolved.person_key(*id).is_none_or(|key| !key.destroyed()));
     }
 
     /// A space the database holds no change of yet.
