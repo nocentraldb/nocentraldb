@@ -255,12 +255,32 @@ pub(super) fn pushed(
 
 /// Stops syncing `space`: the relay said, with `code`, that this member
 /// may not read it. The member keeps its copy (RFC 0007, `removed_member`),
-/// and the sync status reports the code.
+/// and the sync status reports the code. A space that was not stopped
+/// before has its unconfirmed changes pushed once more ([`flushing`]).
 pub(super) fn stop(inner: &mut Inner, space: SpaceId, code: String) {
     let sync = sync(inner);
-    sync.stopped.insert(space);
+    if sync.stopped.insert(space) {
+        sync.flush.insert(space);
+    }
     sync.live.remove(&space);
     sync.removed = Some(code);
+}
+
+/// The stopped spaces whose unconfirmed changes wait to be pushed once
+/// more: a change the relay appended though its answer was lost, as a
+/// leave can be, is confirmed then as a duplicate, and the others are
+/// refused, so none waits for a confirmation that cannot come (NOC-276).
+pub(super) fn flushing(inner: &Inner) -> Vec<SpaceId> {
+    inner
+        .sync
+        .as_ref()
+        .map(|sync| sync.flush.iter().copied().collect())
+        .unwrap_or_default()
+}
+
+/// Records that the push of a stopped space's unconfirmed changes is done.
+pub(super) fn flushed(inner: &mut Inner, space: SpaceId) {
+    sync(inner).flush.remove(&space);
 }
 
 /// Records that the subscription to `space` caught up with the relay's

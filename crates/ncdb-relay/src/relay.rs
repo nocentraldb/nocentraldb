@@ -232,8 +232,19 @@ impl<S: RelayStore> Relay<S> {
             let (expected_head, checked) = match self.store.head(space).await? {
                 None => (0, self.check_genesis(uploader, &change)?),
                 Some(head) => {
+                    // A push is idempotent (RFC 0007, "Push"): a change the
+                    // log holds is a duplicate. Its own author learns that
+                    // even after the change ended its membership, as its
+                    // leave does, when the answer to the first push was lost
+                    // (NOC-276); anyone else must be a current member first.
+                    let held = self.store.find(space, change.id()).await?;
+                    if let Some(position) = held
+                        && header.author == uploader
+                    {
+                        return Ok((Pushed::Duplicate(position), Vec::new()));
+                    }
                     self.check_uploader(uploader, space).await?;
-                    if let Some(position) = self.store.find(space, change.id()).await? {
+                    if let Some(position) = held {
                         return Ok((Pushed::Duplicate(position), Vec::new()));
                     }
                     (head, self.check_change(space, &change).await?)
