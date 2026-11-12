@@ -235,3 +235,143 @@ fn a_model_with_the_plugin_field_registered_hashes_apart_from_one_without() {
     let unregistered = ncdb_core::view::Model::from_lock(&lock).unwrap();
     assert_ne!(registered.hash(), unregistered.hash());
 }
+
+#[test]
+fn a_view_opened_without_the_plugin_parks_the_field_and_folds_it_once_the_plugin_is_registered() {
+    let db = TempDb::new("plugin-registered-later");
+    let lock = lock_with(1, None);
+    let none = Registry::default();
+    let mut view = View::open_with_plugins(&db.0, &lock, &none, checks_for).unwrap();
+    let (space, task) = folded(&mut view, vec![op(64, args(&[(1, 2)]))]);
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded {
+            parked: vec![parked(1, OperationParkReason::UnknownType)],
+        })
+    );
+    drop(view);
+
+    // Registered at the next open: the view migrates, and folds what it
+    // parked (NOC-84).
+    let view = View::open_with_plugins(&db.0, &lock, &registry(), checks_for).unwrap();
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded { parked: vec![] })
+    );
+    assert_eq!(votes(&view, space), Some(Data::Integer(2)));
+    drop(view);
+
+    // Without it again, the field parks again, and with it, folds again.
+    let view = View::open_with_plugins(&db.0, &lock, &none, checks_for).unwrap();
+    assert_eq!(
+        view.state(space, task.id()),
+        Some(State::Folded {
+            parked: vec![parked(1, OperationParkReason::UnknownType)],
+        })
+    );
+    drop(view);
+    let view = View::open_with_plugins(&db.0, &lock, &registry(), checks_for).unwrap();
+    assert_eq!(votes(&view, space), Some(Data::Integer(2)));
+}
+
+#[test]
+fn the_plugin_field_writes_through_its_code_against_the_stored_state() {
+    let mut view = View::open_in_memory_with_plugins(&lock_with(1, None), &registry()).unwrap();
+    let (space, _) = folded(&mut view, vec![op(64, args(&[(1, 2)]))]);
+    let Some(Field::Plugin(field)) = view.model().field(TASK, VOTES) else {
+        panic!("votes is no plugin field");
+    };
+    let row = view.get(space, TASK, T).unwrap().unwrap();
+    let Some(FieldState::Plugin(state)) = row.fields.get(VOTES) else {
+        panic!("votes holds no plugin state");
+    };
+    let written = field.write(state, &Data::Integer(3)).unwrap();
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].0, ncdb_test_counter::ADD);
+    assert!(field.write(state, &Data::Null).is_err());
+}
+
+#[test]
+fn an_unregistered_field_names_its_type_id_and_rule() {
+    let view = View::open_in_memory(&lock_with(2, None)).unwrap();
+    assert_eq!(
+        view.model().unregistered_type(TASK, VOTES),
+        Some(("test/counter", 2))
+    );
+    assert_eq!(view.model().unregistered_type(TASK, RANK), None);
+}
+
+/// The control changes of a space where A, its creator, made B a writer,
+/// then the task's create by A and the counter's adds by A and B, each in a
+/// change of its own: the space, the control changes and the data changes.
+fn adds_by_two_members() -> (SpaceId, Vec<Change>, Vec<Change>) {
+    let mut space = Space::new(A);
+    let genesis = space.genesis.clone();
+    let add = space.add(A, B, Role::Writer, &[&genesis]);
+    let envelope = space.envelope(A, B, &[&add]);
+    let data = vec![
+        space.sealed(A, vec![field_op::create(T, TASK)]),
+        space.sealed(A, vec![op(64, args(&[(1, 2)]))]),
+        space.sealed(B, vec![op(64, args(&[(1, 3)]))]),
+        space.sealed(A, vec![op(64, args(&[(1, 5)]))]),
+        space.sealed(B, vec![op(64, args(&[(1, 7)]))]),
+    ];
+    (space.space, vec![genesis, add, envelope], data)
+}
+
+fn receive(view: &mut View, space: SpaceId, changes: &[&Change]) {
+    let mut checks = checks_for(space);
+    for change in changes {
+        view.receive(change.bytes(), &mut checks).unwrap();
+    }
+}
+
+#[test]
+fn views_that_receive_a_plugin_fields_changes_in_any_order_converge_once_the_plugin_is_registered()
+{
+    let lock = lock_with(1, None);
+    let (space, control, data) = adds_by_two_members();
+    let control: Vec<&Change> = control.iter().collect();
+    let in_order: Vec<&Change> = data.iter().collect();
+    let reversed: Vec<&Change> = data.iter().rev().collect();
+    let interleaved: Vec<&Change> = [2, 4, 0, 3, 1].iter().map(|&i| &data[i]).collect();
+
+    // One view with the plugin from the start.
+    let mut first = View::open_in_memory_with_plugins(&lock, &registry()).unwrap();
+    receive(&mut first, space, &control);
+    receive(&mut first, space, &in_order);
+
+    // One that receives them in reverse: the adds before the create, B's
+    // before A's.
+    let mut second = View::open_in_memory_with_plugins(&lock, &registry()).unwrap();
+    receive(&mut second, space, &control);
+    receive(&mut second, space, &reversed);
+
+    // One that receives half while the plugin is not registered, so those
+    // park, and the rest once it is registered at the next open (NOC-84).
+    let db = TempDb::new("plugin-any-order");
+    let none = Registry::default();
+    let mut third = View::open_with_plugins(&db.0, &lock, &none, checks_for).unwrap();
+    receive(&mut third, space, &control);
+    receive(&mut third, space, &interleaved[..3]);
+    assert_eq!(votes(&third, space), None);
+    assert_eq!(
+        third.state(space, data[2].id()),
+        Some(State::Folded {
+            parked: vec![parked(0, OperationParkReason::UnknownType)],
+        })
+    );
+    drop(third);
+    let mut third = View::open_with_plugins(&db.0, &lock, &registry(), checks_for).unwrap();
+    receive(&mut third, space, &interleaved[3..]);
+
+    for view in [&first, &second, &third] {
+        assert_eq!(votes(view, space), Some(Data::Integer(17)));
+        for change in &data {
+            assert_eq!(
+                view.state(space, change.id()),
+                Some(State::Folded { parked: vec![] })
+            );
+        }
+    }
+}

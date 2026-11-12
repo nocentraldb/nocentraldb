@@ -7,10 +7,10 @@
 //! through [`Model::from_lock`]. It is a working name of the core, not the
 //! SDK's API.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use ncdb_plugin::{Data, ErasedField, Outcome};
+use ncdb_plugin::{Data, ErasedField, Outcome, WriteError, Written};
 
 use sha2::{Digest, Sha256};
 
@@ -38,9 +38,10 @@ pub struct Model {
     /// The declared indexes.
     pub indexes: Vec<Index>,
     /// The fields of each collection that the lock names with a plugin
-    /// type no code implements: their operations park as "unknown type"
-    /// (RFC 0011, "A type that is not registered").
-    pub unregistered: BTreeMap<String, BTreeSet<String>>,
+    /// type no code implements, each with that type id and rule: their
+    /// operations park as "unknown type" (RFC 0011, "A type that is not
+    /// registered").
+    pub unregistered: BTreeMap<String, BTreeMap<String, (String, u64)>>,
     /// The personal fields, by collection and field, each with whom it is
     /// about (RFC 0005, "Personal fields"). The fold keeps a personal
     /// field's plaintext only while its person key is held and the person
@@ -95,6 +96,14 @@ impl PluginField {
     /// `None` when the state never received it.
     pub fn outcome(&self, state: &[u8], id: OperationId) -> Option<Outcome> {
         self.code.outcome(Some(state), id)
+    }
+
+    /// The operations, each a number and its arguments, that carry out
+    /// `intent` against the field's stored state, as the plugin's `write`
+    /// makes them; or why not (RFC 0011, "The field type a plugin
+    /// implements").
+    pub fn write(&self, state: &[u8], intent: &Data) -> Result<Vec<Written>, WriteError> {
+        self.code.write(Some(state), intent)
     }
 }
 
@@ -208,9 +217,14 @@ impl Model {
     /// Whether the lock names `field` of `collection` with a plugin type
     /// no code implements.
     pub fn unregistered(&self, collection: &str, field: &str) -> bool {
-        self.unregistered
-            .get(collection)
-            .is_some_and(|fields| fields.contains(field))
+        self.unregistered_type(collection, field).is_some()
+    }
+
+    /// The type id and rule the lock names for `field` of `collection`,
+    /// when no code implements them.
+    pub fn unregistered_type(&self, collection: &str, field: &str) -> Option<(&str, u64)> {
+        let (type_id, rule) = self.unregistered.get(collection)?.get(field)?;
+        Some((type_id.as_str(), *rule))
     }
 
     /// The declared index of `collection` with this name.

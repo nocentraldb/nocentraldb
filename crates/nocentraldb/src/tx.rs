@@ -182,15 +182,24 @@ impl<'a> Transaction<'a> {
         })?;
         values
             .into_iter()
-            .map(
-                |(name, value)| match fields.contains_key(name) && !name.starts_with('$') {
+            .map(|(name, value)| {
+                if let Some((type_id, rule)) = self.model.unregistered_type(collection, name) {
+                    return Err(Error::new(
+                        ErrorCode::UnknownType,
+                        format!(
+                            "the field {name} of {collection} has the plugin type {type_id}, \
+                             rule {rule}, which no plugin given to OpenOptions::plugin implements"
+                        ),
+                    ));
+                }
+                match fields.contains_key(name) && !name.starts_with('$') {
                     true => Ok((name.to_owned(), value)),
                     false => Err(Error::new(
                         ErrorCode::NotFound,
                         format!("the collection {collection} has no field {name}"),
                     )),
-                },
-            )
+                }
+            })
             .collect()
     }
 

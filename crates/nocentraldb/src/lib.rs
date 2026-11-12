@@ -75,6 +75,7 @@ pub use members::{
     AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
     NoticeCode, Role,
 };
+pub use ncdb_plugin::Data;
 pub use object::Object;
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};

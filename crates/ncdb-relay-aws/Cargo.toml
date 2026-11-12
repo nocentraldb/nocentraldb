@@ -1,0 +1,29 @@
+[package]
+name = "ncdb-relay-aws"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The relay's AWS backend (RFC 0007), for now only the check of what the AWS Emulator covers."
+
+# The AWS backend lives in this crate alone, so no other crate links the AWS
+# SDK (NOC-264). For now it holds only the coverage check of the AWS
+# Emulator (NOC-275): tests/emulator_coverage.rs, which runs only against an
+# emulator on this machine (docs/aws-emulator.md). Every dependency is pinned
+# to one exact version, and all of them are dev-dependencies: nothing here is
+# built into another crate yet.
+[dependencies]
+
+[dev-dependencies]
+# The AWS SDK for Rust: its configuration reads the emulator's endpoint,
+# credentials file and region from the environment.
+aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client", "credentials-process"] }
+aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-s3 = { version = "=1.159.0", default-features = false, features = ["rt-tokio", "default-https-client", "sigv4a"] }
+aws-sdk-apigatewayv2 = { version = "=1.125.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-lambda = { version = "=1.158.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+# A plain HTTPS client for the presigned URLs, which no SDK client sends.
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time"] }
