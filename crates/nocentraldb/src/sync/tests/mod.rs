@@ -10,6 +10,7 @@
 #[path = "../../../../ncdb-relay-server/tests/support/mod.rs"]
 mod relay_support;
 
+mod account_space;
 mod added;
 mod auth;
 mod backoff;
@@ -22,6 +23,7 @@ mod follow;
 mod large;
 mod list;
 mod live;
+mod lost_answer;
 mod members;
 mod merge;
 mod newest_model;

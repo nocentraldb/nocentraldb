@@ -67,12 +67,16 @@ impl Spaces<'_> {
     }
 }
 
-/// Every space of `inner` [`Spaces::list`] lists, in the order of their ids.
+/// Every space of `inner` [`Spaces::list`] lists, in the order of their ids:
+/// the account space is no app space, so it is left out (RFC 0010, "The
+/// account space").
 fn list(inner: &Inner) -> Vec<SpaceInfo> {
     let member = inner.member.key().id();
+    let account = crate::account::id();
     inner
         .spaces
         .iter()
+        .filter(|(_, state)| state.checks.model_id() != Some(account))
         .filter_map(|(&space, state)| {
             Some(SpaceInfo {
                 id: SpaceId(space),

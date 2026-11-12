@@ -58,7 +58,9 @@ async fn the_status_counts_own_changes_the_relay_has_not_confirmed() {
         db.sync().current().connection == Connection::Offline
     })
     .await;
-    assert_eq!(db.sync().current().unconfirmed, 3);
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    assert_eq!(db.sync().current().unconfirmed, 6);
     relay.proxy.restore();
     synced(&db).await;
     assert_eq!(relay.log(space.id().0).await.len(), 3);
@@ -74,7 +76,9 @@ async fn a_database_without_a_relay_reports_none_and_counts_every_change() {
 
     let status = db.sync().current();
     assert_eq!(status.connection, Connection::None);
-    assert_eq!(status.unconfirmed, 2);
+    // The first space brings the account space: its genesis, the
+    // creator's envelope and the device's records (RFC 0010).
+    assert_eq!(status.unconfirmed, 5);
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -94,7 +98,8 @@ async fn a_refused_change_is_reported_not_thrown() {
     let mut status = db.sync().current();
     eventually("refused", || {
         status = db.sync().current();
-        status.refused == 3
+        // The space's 3 changes and the account space's 3 (RFC 0010).
+        status.refused == 6
     })
     .await;
     assert_eq!(status.unconfirmed, 0);
