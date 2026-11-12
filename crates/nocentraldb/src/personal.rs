@@ -19,8 +19,8 @@ use crate::db::SpaceState;
 use crate::error::{Error, ErrorCode, storage};
 
 /// The code of a write whose person has a key this device does not hold
-/// yet, as after a reconnect before the person keys are fetched. Not yet
-/// decided (NOC-244, P3): it is a refusal, and only its code is open.
+/// yet, as after a reconnect before the person keys are fetched. A
+/// placeholder: what such a write does is open with the owner (NOC-255).
 const KEY_NOT_HELD: ErrorCode = ErrorCode::NotAllowed;
 
 /// A person whose key this write draws.
