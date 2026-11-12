@@ -48,6 +48,8 @@ mod large;
 mod merge;
 mod pause;
 mod person_keys;
+#[cfg(test)]
+mod person_keys_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod run;
 #[cfg(not(target_arch = "wasm32"))]
