@@ -1,0 +1,36 @@
+[package]
+name = "ncdb-relay-aws"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "The relay's AWS backend (RFC 0007): DynamoDB and S3 behind the relay core's backend interface."
+
+# The AWS backend lives in this crate alone, so no other crate links the AWS
+# SDK (NOC-264). Every dependency is pinned to one exact version. The SDK
+# clients come from the caller, already configured, so the crate itself
+# needs no configuration loader (aws-config is a dev-dependency).
+[dependencies]
+ncdb-core.workspace = true
+ncdb-relay.workspace = true
+# The log, the membership table, the person-key store, uploads and tokens
+# (RFC 0007, "Tables and keys"), and frames above 8 KiB and uploads in S3.
+aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-s3 = { version = "=1.159.0", default-features = false, features = ["rt-tokio", "default-https-client", "sigv4a"] }
+# The SDK runs on Tokio; the backend runs each call on the caller's runtime,
+# so its futures run on any executor, and backs off between retries.
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time"] }
+# A new relay epoch: 16 bytes from the platform's secure generator.
+getrandom = { version = "=0.4.3", default-features = false }
+
+[dev-dependencies]
+# The AWS SDK for Rust: its configuration reads the emulator's endpoint,
+# credentials file and region from the environment.
+aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client", "credentials-process"] }
+aws-sdk-apigatewayv2 = { version = "=1.125.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-lambda = { version = "=1.158.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+# A plain HTTPS client for the presigned URLs, which no SDK client sends.
+reqwest = { version = "=0.13.5", default-features = false, features = ["rustls"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time"] }

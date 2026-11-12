@@ -21,7 +21,7 @@ use std::fmt;
 
 use crate::cbor::{self, DecodeError, Key, Value};
 use crate::clock::Hlc;
-use crate::ids::{ChangeId, MemberId, ObjectId, OperationId, SpaceId};
+use crate::ids::{self, ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use crate::redact::Size;
 pub use crate::writer_model::{WriterModel, WrongShape};
 
@@ -648,7 +648,7 @@ impl Change {
         signature: Vec<u8>,
     ) -> Change {
         let version = u8::try_from(Change::FRAME_VERSION).expect("the frame version is 1");
-        let id = ChangeId::compute(version, &header_bytes);
+        let id = ids::change_id(version, &header_bytes);
         Change {
             bytes,
             header,

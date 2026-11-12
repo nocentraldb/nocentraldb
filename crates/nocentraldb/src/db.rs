@@ -26,15 +26,16 @@ use ncdb_core::keys::{MemberKey, PersonKey};
 use ncdb_core::log::{Position, State};
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
+use ncdb_core::plugins::Registry;
 use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
+use ncdb_plugin::Plugin;
 
 use crate::durability::Storage;
 use crate::error::{Error, ErrorCode, storage};
 use crate::keys::{self, Keys, SecretStore, Secrets};
 use crate::space::Spaces;
 use crate::subscribe::Watcher;
-#[cfg(not(target_arch = "wasm32"))]
 use crate::sync;
 use crate::sync::SyncState;
 
@@ -48,6 +49,8 @@ pub struct OpenOptions {
     path: Option<PathBuf>,
     key_file: Option<PathBuf>,
     agent: bool,
+    /// The plugins whose field types the core folds (RFC 0011).
+    plugins: Vec<Plugin>,
     /// The name of a database on OPFS, in a dedicated worker (NOC-175):
     /// crate-internal until the browser export names it (NOC-176).
     #[cfg(target_arch = "wasm32")]
@@ -72,6 +75,7 @@ impl OpenOptions {
             path: None,
             key_file: None,
             agent: false,
+            plugins: Vec::new(),
             #[cfg(target_arch = "wasm32")]
             browser: None,
         }
@@ -120,10 +124,25 @@ impl OpenOptions {
         self
     }
 
+    /// Hands `plugin`'s field types to the core, as a plugin's crate
+    /// exports them from `plugin()`; call it once per plugin (RFC 0011,
+    /// "Handing plugins to the core"). A plugin field of the lock folds
+    /// through its code; one whose type and rule no plugin given here
+    /// implements parks, and a write to it is refused with `UnknownType`.
+    /// A plugin the lock does not name is ignored. [`Db::open`] refuses two
+    /// plugins of one namespace, or a plugin of the namespace `ncdb`, with
+    /// `InvalidValue`.
+    pub fn plugin(mut self, plugin: Plugin) -> OpenOptions {
+        self.plugins.push(plugin);
+        self
+    }
+
     /// The one relay the database syncs with (RFC 0009, decision S16), by
     /// its URL: `wss://`, WebSocket over TLS verified against the
     /// platform's trust store, or `ws://` on a local network. [`Db::open`]
-    /// refuses any other URL with `InvalidValue`.
+    /// refuses any other URL with `InvalidValue`. In a browser, the relay
+    /// URL is `wss://`, except for localhost while developing: a page
+    /// served over `https://` cannot open `ws://` (RFC 0009, NOC-245).
     pub fn relay(mut self, url: &str) -> OpenOptions {
         self.relay = Some(url.to_owned());
         self
@@ -181,8 +200,7 @@ pub(crate) struct SpaceState {
     /// fetches them again from the relay.
     pub(crate) person_keys: BTreeMap<[u8; 16], PersonKey>,
     /// Whether the relay's records of the space were fetched in the
-    /// current connection. Read by the session, which is native only.
-    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    /// current connection. Read by the session.
     pub(crate) person_keys_fetched: bool,
     /// The account keys of the writers whose records failed their checks
     /// in the last fetch, though they signed them
@@ -301,6 +319,7 @@ fn open_at(
     key_file: Option<PathBuf>,
     store: &Store<'_>,
     lock: &ModelLock,
+    registry: &Registry,
 ) -> Result<(View, Keys), Error> {
     let store = match key_file {
         Some(_) => None,
@@ -318,7 +337,7 @@ fn open_at(
     // The view keeps the checks while a rebuild runs (NOC-156).
     let member = keys.member.clone();
     let checks = move |space| SealChecks::new(space, member.key());
-    let view = View::open_with(&file, lock, checks).map_err(view_error)?;
+    let view = View::open_with_plugins(&file, lock, registry, checks).map_err(view_error)?;
     Ok((view, keys))
 }
 
@@ -415,13 +434,6 @@ impl Db {
         placed: Option<Placed>,
     ) -> Result<Db, Error> {
         let place = options.place()?;
-        #[cfg(target_arch = "wasm32")]
-        if options.relay.is_some() {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "syncing with a relay is not built on wasm32 yet",
-            ));
-        }
         if let Some(url) = &options.relay
             && !url.starts_with("wss://")
             && !url.starts_with("ws://")
@@ -437,15 +449,18 @@ impl Db {
                 format!("the lock is refused: {error}"),
             )
         })?;
+        let registry = Registry::new(options.plugins.iter().cloned())
+            .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?;
         let _ = &placed;
         let (mut view, keys, storage) = match place {
             Place::Memory => {
-                let view = View::open_in_memory(&lock).map_err(view_error)?;
+                let view =
+                    View::open_in_memory_with_plugins(&lock, &registry).map_err(view_error)?;
                 let keys = given.unwrap_or_else(Keys::generate);
                 (view, keys, Storage::Temporary)
             }
             Place::Path { dir, key_file } => {
-                let (view, keys) = open_at(dir, key_file, store, &lock)?;
+                let (view, keys) = open_at(dir, key_file, store, &lock, &registry)?;
                 (view, keys, Storage::Persistent)
             }
             #[cfg(target_arch = "wasm32")]
@@ -454,7 +469,8 @@ impl Db {
                 let member = placed.keys.member.clone();
                 let checks = move |space| SealChecks::new(space, member.key());
                 let view =
-                    View::open_with(Path::new(&placed.path), &lock, checks).map_err(view_error)?;
+                    View::open_with_plugins(Path::new(&placed.path), &lock, &registry, checks)
+                        .map_err(view_error)?;
                 (view, placed.keys, placed.storage)
             }
         };
@@ -490,7 +506,6 @@ impl Db {
         // in a thread, which wasm32 does not start yet.
         #[cfg(not(target_arch = "wasm32"))]
         crate::view_report::start(&inner);
-        #[cfg(not(target_arch = "wasm32"))]
         if let Some(url) = options.relay {
             sync::start(&inner, url);
         }

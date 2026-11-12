@@ -246,7 +246,8 @@ tasks:
       cache: false
   sdk-keys:
     # NOC-175 slice 2: the Rust SDK's keys in IndexedDB in a dedicated
-    # worker in Chromium through Playwright (scripts/sdk-keys/). Not part
+    # worker in Chromium through Playwright (scripts/sdk-keys/), and its
+    # syncing there with the local relay server, which it starts. Not part
     # of `gates`, for the reasons of browser-storage above; the workflow
     # browser-view.yml runs it in CI. Never cached: its result depends on
     # the installed browser.
@@ -255,6 +256,8 @@ tasks:
     inputs:
       - "/scripts/sdk-keys/**/*"
       - "/crates/nocentraldb/**/*"
+      - "/crates/ncdb-relay/**/*"
+      - "/crates/ncdb-relay-server/**/*"
       - "/Cargo.toml"
       - "/Cargo.lock"
       - "/package.json"

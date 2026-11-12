@@ -10,6 +10,9 @@ publish = false
 # (RFC 0003, NOC-15). Every dependency is pinned to one
 # exact version.
 [dependencies]
+# What a plugin field type implements, and the ids, clock values and
+# canonical CBOR the core shares with it (RFC 0011).
+ncdb-plugin.workspace = true
 # The CBOR tokens of the canonical encoding; the profile's restrictions are
 # checked in src/cbor.rs.
 minicbor = { version = "=2.3.1", default-features = false, features = ["alloc"] }
@@ -75,6 +78,10 @@ web-sys = { version = "=0.3.107", default-features = false, features = ["std", "
 libsqlite3-sys = { version = "=0.39.1", default-features = false }
 
 [dev-dependencies]
+# The test plugin, test/counter, which the view folds (RFC 0011).
+ncdb-test-counter.workspace = true
+# The convergence harness every field type is checked by (RFC 0011).
+ncdb-harness.workspace = true
 # The convergence harness (tests/support/convergence.rs) generates and shrinks
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).

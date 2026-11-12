@@ -8,17 +8,9 @@
 
 use crate::ids::OperationId;
 
-/// Where a received operation went. Every received operation has exactly
-/// one outcome, the same on every copy that holds the same operations.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Outcome {
-    /// It is visible in the read value.
-    Visible,
-    /// The operation with this id, whose author had seen it, replaced it.
-    Replaced(OperationId),
-    /// It lost, and the app can read that it lost.
-    Lost,
-}
+/// Where a received operation went. It lives in `ncdb-plugin`, since a
+/// plugin's outcome gives it too (RFC 0011).
+pub use ncdb_plugin::Outcome;
 
 /// A field type: the merge rule of one kind of field. A value of it is the
 /// field as the schema declares it; the state is kept apart, one per field

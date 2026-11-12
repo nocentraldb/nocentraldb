@@ -20,6 +20,7 @@ mod from_lock;
 mod log_table;
 mod migrate;
 pub mod model;
+mod plugin;
 mod query;
 mod read;
 mod rebuild;
@@ -30,6 +31,7 @@ mod shreds_held;
 mod state;
 mod stored_lock;
 
+use crate::plugins::Registry;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::Path;
@@ -45,7 +47,7 @@ use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 use crate::tips::Tips;
 
-pub use model::{Direction, Field, FieldState, Index, Invalid, Model, Scope};
+pub use model::{Direction, Field, FieldState, Index, Invalid, Model, PluginField, Scope};
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 pub use rebuild::RebuildProgress;
@@ -174,6 +176,7 @@ impl View {
         View::with(
             Connection::open(path)?,
             lock,
+            &Registry::default(),
             None::<fn(SpaceId) -> SealChecks>,
         )
     }
@@ -192,14 +195,37 @@ impl View {
         lock: &ModelLock,
         checks: impl FnMut(SpaceId) -> C + Send + 'static,
     ) -> Result<View, Error> {
-        View::with(Connection::open(path)?, lock, Some(checks))
+        View::open_with_plugins(path, lock, &Registry::default(), checks)
+    }
+
+    /// Opens the view as [`View::open_with`] does, with the plugin field
+    /// types `registry` holds (RFC 0011): the lock's plugin fields get
+    /// their code before the view folds anything, and one whose type and
+    /// rule the registry does not hold parks as an unknown type.
+    pub fn open_with_plugins<C: Checks + Send + 'static>(
+        path: &Path,
+        lock: &ModelLock,
+        registry: &Registry,
+        checks: impl FnMut(SpaceId) -> C + Send + 'static,
+    ) -> Result<View, Error> {
+        View::with(Connection::open(path)?, lock, registry, Some(checks))
     }
 
     /// Opens a view in a new database in memory, which nothing keeps.
     pub fn open_in_memory(lock: &ModelLock) -> Result<View, Error> {
+        View::open_in_memory_with_plugins(lock, &Registry::default())
+    }
+
+    /// Opens a view in memory, as [`View::open_in_memory`] does, with the
+    /// plugin field types `registry` holds.
+    pub fn open_in_memory_with_plugins(
+        lock: &ModelLock,
+        registry: &Registry,
+    ) -> Result<View, Error> {
         View::with(
             Connection::open_in_memory()?,
             lock,
+            registry,
             None::<fn(SpaceId) -> SealChecks>,
         )
     }
@@ -207,9 +233,10 @@ impl View {
     fn with<C: Checks + Send + 'static>(
         conn: Connection,
         lock: &ModelLock,
+        registry: &Registry,
         checks: Option<impl FnMut(SpaceId) -> C + Send + 'static>,
     ) -> Result<View, Error> {
-        let model = Model::from_lock(lock).map_err(Error::Invalid)?;
+        let model = Model::from_lock_with(lock, registry).map_err(Error::Invalid)?;
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
@@ -218,7 +245,7 @@ impl View {
         schema::drop_staging(&tx)?;
         let mut serving = model;
         let mut rebuild = None;
-        match schema::open(&tx, &serving, lock)? {
+        match schema::open(&tx, &serving, lock, registry)? {
             schema::Fit::Current => {}
             schema::Fit::Migrate(additions) => {
                 migrate::run(&tx, &serving, &additions, log_table::load(&tx)?, checks)?;

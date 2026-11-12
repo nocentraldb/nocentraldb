@@ -38,6 +38,10 @@ pub enum ParkReason {
     /// An operation names a field the app's lock does not know (RFC 0005,
     /// "Data from a newer model").
     UnknownField,
+    /// An operation names a field whose plugin type and rule no plugin the
+    /// app registered implements (RFC 0011, "A type that is not
+    /// registered").
+    UnknownType,
     /// An operation carries an unknown "must understand" key (RFC 0002,
     /// step 7). The name waits for the owner's answer on NOC-199.
     UnknownKey,
@@ -94,6 +98,7 @@ pub(crate) fn park_operation(reason: CoreOperationReason) -> Option<ParkReason> 
     Some(match reason {
         CoreOperationReason::UnknownCollection => ParkReason::UnknownCollection,
         CoreOperationReason::UnknownField => ParkReason::UnknownField,
+        CoreOperationReason::UnknownType => ParkReason::UnknownType,
         CoreOperationReason::UnknownKey => ParkReason::UnknownKey,
         CoreOperationReason::UnknownOperation => ParkReason::UnknownOperation,
         CoreOperationReason::UnknownArgument => ParkReason::UnknownArgument,
@@ -139,6 +144,7 @@ mod tests {
         let operations = [
             O::UnknownCollection,
             O::UnknownField,
+            O::UnknownType,
             O::UnknownKey,
             O::UnknownOperation,
             O::UnknownArgument,

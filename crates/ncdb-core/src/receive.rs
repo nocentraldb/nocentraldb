@@ -155,6 +155,12 @@ pub trait Fold {
     fn knows_collection(&self, collection: &str) -> bool;
     /// Whether the member's model knows the field of the collection.
     fn knows_field(&self, collection: &str, field: &str) -> bool;
+    /// Whether the member's model names the field of the collection with
+    /// a plugin type no code implements (RFC 0011, "A type that is not
+    /// registered"). Only a fold that reads a lock knows; others say no.
+    fn unregistered(&self, _collection: &str, _field: &str) -> bool {
+        false
+    }
     /// Folds one operation on a field the model knows into the view, after
     /// decoding it with the field type's [`field_op::Encoding`], or says
     /// why it is parked.
@@ -360,7 +366,10 @@ pub(crate) fn understand(
     if let Some(field) = &operation.field
         && !fold.knows_field(&operation.collection, field)
     {
-        return Err(OperationParkReason::UnknownField);
+        return Err(match fold.unregistered(&operation.collection, field) {
+            true => OperationParkReason::UnknownType,
+            false => OperationParkReason::UnknownField,
+        });
     }
     if operation.extensions().must_understand() {
         return Err(OperationParkReason::UnknownKey);

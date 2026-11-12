@@ -208,3 +208,8 @@ async fn opfs_a_database_opened_at_a_name_keeps_its_data_and_its_member_across_o
             .is_some()
     );
 }
+
+/// Syncing from the browser, under this module so the harness's filter
+/// `browser::tests::` runs it.
+#[path = "sync_tests.rs"]
+mod sync;

@@ -6,9 +6,13 @@ How this repository is laid out, how to set up its tools, and the gates every ch
 
 ```
 crates/ncdb-core/     Rust core (placeholder)
+crates/ncdb-plugin/   what a plugin field type implements and depends on (RFC 0011): the FieldType trait, Data, the ids of an operation, Plugin
+crates/ncdb-harness/  the convergence harness (RFC 0011): RFC 0004's checks C1 to C7 for a field type, built in or plugin
+crates/ncdb-test-counter/  a plugin for the tests, test/counter (RFC 0011); not published
 crates/ncdb/          the command line ncdb: ncdb model build and ncdb model check (RFC 0005)
 crates/ncdb-relay/    the relay core: RFC 0007's checks, the backend interface, its conformance suite and the SQLite backend
 crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over the relay core, and the ncdb-relay binary that runs it locally on SQLite
+crates/ncdb-relay-aws/     the relay's AWS backend on DynamoDB and S3, and the check of what the AWS Emulator covers (docs/aws-emulator.md)
 crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
 apps/                 applications (empty for now)
@@ -77,14 +81,20 @@ A third workflow, `release` (`.github/workflows/release.yml`), is not a pull-req
 
 `pnpm gates:dev` (`moon run :gates`) is the cached inner loop for development: moon skips tasks whose inputs are unchanged and replays their cached result. It never counts as verification.
 
+**Disk space.** Debug and test builds keep only line tables (`debug = "line-tables-only"` in the workspace `Cargo.toml`), so panics still name file and line while a full `pnpm gates` stays near 15 GiB of `target/` instead of filling a small disk; when space runs out anyway, `cargo clean -p <crate>` frees one crate, `cargo clean --target wasm32-unknown-unknown` frees the wasm builds under `target/wasm32-unknown-unknown/`, and `cargo clean` frees everything (NOC-279).
+
 What each project's `gates` task runs:
 
 | Project | Tasks |
 | --- | --- |
 | Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`), `build-wasm` (`cargo build --locked --target wasm32-unknown-unknown`: the crate builds for the browser target, so it uses nothing the browser lacks), `test-wasm` (`cargo test --locked --target wasm32-unknown-unknown`: its tests pass as WebAssembly, run in Node by `wasm-bindgen-test-runner`) |
+| Rust plugin crate (`ncdb-plugin`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: every plugin runs natively and in the browser, so the crate does too |
+| Rust harness (`ncdb-harness`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: a plugin's author runs it natively and on wasm32 (C3) |
+| Rust test plugin (`ncdb-test-counter`) | `format-check`, `lint` and `test` as for `ncdb-core`; the core's tests run it on wasm32, so it has no wasm tasks of its own |
 | Rust command line (`ncdb`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run `ncdb model build` and `ncdb model check` on TypeScript schemas, so they need Node.js 24 on PATH); it runs natively only, so it has no wasm tasks |
 | Rust relay core (`ncdb-relay`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests run the backend conformance suite against SQLite in temporary directories); the relay runs natively only, so it has no wasm tasks |
 | Rust relay server (`ncdb-relay-server`) | `format-check`, `lint` and `test` as for `ncdb-core` (its tests start the server, and the `ncdb-relay` binary, on SQLite in temporary directories and talk to it over local WebSocket connections); it runs natively only, so it has no wasm tasks |
+| Rust relay AWS backend (`ncdb-relay-aws`) | `format-check`, `lint` and `test` as for `ncdb-core`; its unit tests run as any crate's; its tests against the AWS Emulator (the coverage check, the conformance suite and the backend's own) are ignored unless an emulator runs (`docs/aws-emulator.md`), and the CI job `aws-emulator` runs them; native only, so it has no wasm tasks |
 | Rust SDK (`nocentraldb`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`, except that `test-wasm` runs only the library's in-memory tests (`--lib`): its sync, relay, keystore and reopen tests need sockets, threads, a file system or a keystore and stay native (NOC-175) |
 | TypeScript projects (`sdk`) | `format-check` and `lint` (`biome check --error-on-warnings .`), `typecheck` (`tsc --noEmit`), `test` (`vitest run`) |
 | Root project (`repo`) | `format-check` (Biome on the root JSON/YAML config, `moon.yml`, `.moon/` and `scripts/`), `pins` (`node scripts/check-pins.mjs`), `file-size` (`node scripts/check-file-size.mjs`: no tracked code or test file is longer than the limit in the row "Largest code or test file" of `factory/CONFIG.md`), `test` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`, both patterns quoted so Node expands them itself: the tests of check-pins, `ci-workflow.test.mjs`, which parses `ci.yml`, the `gates` script, `pnpm-workspace.yaml` and `.github/dependabot.yml` and asserts the CI contract described above, `changes-workflow.test.mjs` and the three `release-workflow*.test.mjs`, which assert the contracts of `changes.yml` and `release.yml`, `contributor-kit.test.mjs`, which checks the issue and discussion forms, the pull request template and the links of the contributor kit, and that this table and the uncached commands below list every task the gate runs, and the tests of the release tooling under `scripts/release/`, among them a `set-version` test that runs `cargo` in a two-crate fixture and `index.test.mjs`, which holds the committed `release-notes/index.json` to its shape), `fragments` (`node scripts/release/check-fragments.mjs`: every change fragment under `changes/` follows the schema in [docs/release-management.md](release-management.md#writing-a-change-fragment)), `decisions` (`node scripts/decisions.mjs --check`: every decision file in `factory/decisions/` has a well-formed name, heading and fields, and every `Supersedes:` names a file that exists; `pnpm decisions` reads the same folder), `version` (`node scripts/release/check-version.mjs`: `Cargo.toml` `[workspace.package]` holds a plain `X.Y.Z`, every crate inherits it, dependencies between workspace crates are pinned to it in `[workspace.dependencies]`, and every workspace `package.json` and `Cargo.lock` carry it; see [Versioning](release-management.md#versioning)), `api-report` (`node scripts/release/api-report.mjs`: the TypeScript SDK's public declarations, regenerated with `tsc`, equal the committed `packages/sdk/etc/api-report.d.ts`), `wasm-runner` (`cargo install wasm-bindgen-cli --version =0.2.130 --locked --root target/tools`: installs the runner that `test-wasm` needs, at the `wasm-bindgen` version `Cargo.lock` holds; a cold run builds `wasm-bindgen-cli` once, which takes about a minute, and later runs reuse it from the cached `target/`), `site` (`pnpm --dir site install --frozen-lockfile`, `pnpm --dir site build`, then `node --test 'site/scripts/*.test.mjs'`: the site, its own pnpm project, installs from its lockfile and builds, and its built output holds the landing page and the docs, `/llms.txt` and `/llms-full.txt` naming `https://nocentraldb.io/`, a Markdown copy of every docs page and the `CNAME`; `.github/workflows/site-pages.yml` runs the same steps before it deploys the site to GitHub Pages); `rust-toolchain` runs before every Rust task and before `test` and `wasm-runner` |
@@ -99,6 +109,19 @@ moon run ncdb-core:lint --force
 moon run ncdb-core:test --force
 moon run ncdb-core:build-wasm --force
 moon run ncdb-core:test-wasm --force
+moon run ncdb-plugin:format-check --force
+moon run ncdb-plugin:lint --force
+moon run ncdb-plugin:test --force
+moon run ncdb-plugin:build-wasm --force
+moon run ncdb-plugin:test-wasm --force
+moon run ncdb-harness:format-check --force
+moon run ncdb-harness:lint --force
+moon run ncdb-harness:test --force
+moon run ncdb-harness:build-wasm --force
+moon run ncdb-harness:test-wasm --force
+moon run ncdb-test-counter:format-check --force
+moon run ncdb-test-counter:lint --force
+moon run ncdb-test-counter:test --force
 moon run ncdb:format-check --force
 moon run ncdb:lint --force
 moon run ncdb:test --force
@@ -108,6 +131,9 @@ moon run ncdb-relay:test --force
 moon run ncdb-relay-server:format-check --force
 moon run ncdb-relay-server:lint --force
 moon run ncdb-relay-server:test --force
+moon run ncdb-relay-aws:format-check --force
+moon run ncdb-relay-aws:lint --force
+moon run ncdb-relay-aws:test --force
 moon run nocentraldb:format-check --force
 moon run nocentraldb:lint --force
 moon run nocentraldb:test --force

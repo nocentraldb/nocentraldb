@@ -25,12 +25,10 @@ use crate::space::{Space, not_stopped, writable};
 
 pub(crate) mod batch;
 mod change;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod erasure;
 mod info;
 mod invitation;
 mod leave;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) mod merge;
 mod notice;
 mod rotate;

@@ -403,24 +403,6 @@ impl<S: RelayStore + 'static> Connection<S> {
     }
 }
 
-impl Request {
-    /// The request id, if the request has one.
-    fn req(&self) -> Option<u64> {
-        match self {
-            Request::Hello { .. } | Request::Auth { .. } => None,
-            Request::Push { req, .. }
-            | Request::Pull(Cursor { req, .. })
-            | Request::Subscribe(Cursor { req, .. })
-            | Request::Unsubscribe { req, .. }
-            | Request::Upload { req, .. }
-            | Request::Keys { req, .. }
-            | Request::PersonKeys { req, .. }
-            | Request::PutPersonKeys { req, .. }
-            | Request::Ping { req } => Some(*req),
-        }
-    }
-}
-
 /// The results of a push, and the members it made current: the relay core
 /// checks and appends the frames, in order, each inline or taken from its
 /// upload (RFC 0007, "Large changes"). An upload id that is not 16 bytes

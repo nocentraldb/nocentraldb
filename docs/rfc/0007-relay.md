@@ -126,6 +126,8 @@ relay  → member  welcome    {member id, relay epoch, spaces: [space ids this m
 
 A connection proves possession of a member key, nothing more. Whether that member may read or write a space is checked per request, against the space's membership, every time.
 
+The relay accepts a connection from any `Origin`. A browser sends one with every WebSocket, and any app's website may reach a relay: the signature above decides which member a connection acts as, and the membership decides what it may do. A list of allowed origins on the relay was not taken: it adds setup and decides nothing the signature does not.
+
 ![Opening a connection: the member sends hello with its versions and client string; the relay answers challenge with its version, relay id, a nonce and the limits; the member signs the relay id and the nonce with its member signing key and sends auth with its two public keys and the signature; the relay computes the member id, verifies the signature and answers welcome with the member id, the relay epoch and the member's spaces; the member pulls and then subscribes to each space; later, when an admin's membership entry adds the member to a space, the relay sends added and the member pulls and subscribes to that space](0007-opening-a-connection.svg)
 
 The member key is the only authentication the protocol requires, and the only one our AWS backend uses: no new party learns who the members are, no token can be stolen and replayed, and the SDK already holds the key. Bearer tokens from an identity service, such as Cognito or OAuth, were not taken: they add a party that knows every member's identity and can mint access. A relay backend is an adapter, and a developer who builds their own adapter on top of ours can put an authentication step of their own in front of the connection, for example Cognito or their company's single sign-on. That step decides who may open a connection at all; the challenge above still decides which member the connection acts as, and the membership checks still decide what it may do. Such a step adds a party that learns who connects, which the developer then names in their own list of what their server sees.
@@ -216,6 +218,8 @@ member → relay   push      {req, space, frames: [{upload: id}]}
 ```
 
 The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads.
+
+The upload and download URLs answer CORS for any origin, the browser's preflight of the `PUT` included, so an app in a browser reaches them with `fetch()`. A URL is a one-time capability, valid for minutes, and carries no cookie, so an origin gains nothing by it that the URL's holder did not already have. Refusing large changes in the browser was not taken: a large paste would then sync from every device but a browser.
 
 ### Liveness
 
@@ -465,6 +469,7 @@ member ──WebSocket──▶ API Gateway (WebSocket API)
                       DynamoDB                  S3 bucket "frames"
                       (log, changes, spaces,    (frames above 8 KiB,
                        members, person keys,     uploads)
+                       uploads, tokens,
                        connections)
                           │
                           └──▶ API Gateway connection API: live entries to subscribers,
@@ -477,7 +482,7 @@ member ──WebSocket──▶ API Gateway (WebSocket API)
 | --- | --- | --- |
 | API Gateway, WebSocket API | Terminates TLS and WebSockets, holds the connections, invokes Lambda for each message, and lets Lambda send to any connection. | No server to run, and nothing to pay while nobody is connected. |
 | Lambda | Runs the relay core, one invocation per incoming message. Rust on arm64, 256 MB. | The same core as every other deployment; pays per message. |
-| DynamoDB, on-demand | Holds the log, the membership table, the person-key store and the connection table. | Conditional transactions give dense positions and atomic effects; no capacity to plan; point-in-time recovery. |
+| DynamoDB, on-demand | Holds the log, the membership table, the person-key store, uploads and download tokens, and the connection table. | Conditional transactions give dense positions and atomic effects; no capacity to plan; point-in-time recovery. |
 | S3 | Holds frames above 8 KiB and uploads. | Large items are cheaper there, and DynamoDB items stop at 400 KB. |
 | CloudWatch | Logs (ids, sizes, codes, times; no content and no keys; retention as in [What the relay sees](#what-the-relay-sees)), metrics, alarms, and a budget alarm. | Built in. |
 
@@ -491,9 +496,11 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | --- | --- | --- | --- | --- |
 | `log` | space id | position | change id, accepted at, author member id, kind, frame (inline) or S3 key and size | One item per change. A pull is one `Query` on the space from `position > after`, in order. |
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
-| `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch. |
-| `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id answers "which spaces is this member in". The space's generation graph is one item per generation under the same space id. |
+| `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch: its key is the 5 bytes `epoch`, which no space id of 16 bytes can be (Carsten, 2026-11-12, #275). |
+| `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id, `by_member`, sorted by space id and carrying `current`, answers "which spaces is this member in" in id order and leaves out former members without reading the table (Carsten, 2026-11-12, #275). The space's generation graph is one item per generation under the same space id. |
 | `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, "The person key"; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only once the relay accepted its shred entry (RFC 0008, "A shred is final when accepted"). |
+| `uploads` | upload id | — | token, space id, member id, size, expires at, filled, `ttl` | One item per upload a member began ([Large changes](#large-changes)), read consistently by the id a push names (Carsten, 2026-11-12, #275). A fill marks it filled on the condition that it is not; a push takes it on the condition that it is filled and of that member and space. Each new upload deletes what expired, and the `ttl` attribute, in seconds, lets DynamoDB delete what no such sweep reached. |
+| `tokens` | token | — | the upload it names, or the space id, position and expiry of a download; `ttl` | One item per upload or download URL, read consistently by the token the URL carries (Carsten, 2026-11-12, #275). The `ttl` attribute, in seconds, works as in `uploads`. |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers, and a global secondary index on member id finds a member's connections, to send `added`. TTL removes what a missed `$disconnect` leaves behind. An operator who keeps connection records keeps them after the connection ends, for the period it chose. |
 
 An append of n changes is one `TransactWriteItems` with 2n + 1 items, plus effects: the conditional update of the head in `spaces`, and for each change a put in `log` and a put in `changes`, each with `attribute_not_exists`. DynamoDB allows 100 items per transaction, so a push of 32 changes fits with room for effects. A transaction that fails on the head condition is retried by the core after re-reading the head; a transaction that fails on a change id tells the core which change is a duplicate.
@@ -508,10 +515,12 @@ Different spaces spread across partitions by their random ids, so spaces never c
 
 ### How large changes go to S3
 
+- Every id in an S3 key is written in lowercase hex, as in the relay's logs, which is safe in any key (Carsten, 2026-11-12, #275).
 - A frame above **8 KiB** is stored in S3 under `frames/<space id>/<change id>`, and its `log` item holds the key and the size. Below 8 KiB, the frame sits inline in the item. At current prices, a transactional DynamoDB write costs about as much per 4 KiB as one S3 PUT. Reads tip the balance further towards inline, because every member that pulls a frame from S3 pays for a GET, so the line sits at 8 KiB. Nearly every change stays inline (padding keeps most changes under 1 KiB), while large pastes go to S3. The threshold is a setting of the AWS backend, not part of the protocol.
 - The relay writes the S3 object **before** the DynamoDB transaction. If the transaction fails, the object is an orphan, which a daily sweep deletes; a `log` item never points to a missing object.
 - Uploads go to `uploads/<upload id>` through a presigned PUT URL that expires after 15 minutes, with the size fixed in the signature. The relay checks the frame, copies it to its `frames/` key and deletes the upload. A lifecycle rule deletes uploads older than one day.
 - Downloads are presigned GET URLs, valid for 5 minutes, so large frames never pass through Lambda on the way out.
+- The bucket's CORS rule lets any origin `PUT` to `uploads/` and `GET` from `frames/`, so a browser can use the presigned URLs ([Large changes](#large-changes)).
 - The bucket blocks all public access. S3's default server-side encryption is on, which protects nothing the frame's own encryption does not, but costs nothing.
 
 All frames in S3 were not taken: an S3 PUT costs more than the DynamoDB write for a 1 KiB change, and every pull would need one GET per change. All frames in DynamoDB were not taken either: items stop at 400 KB, and a large frame costs two write units per KB in a transaction.
