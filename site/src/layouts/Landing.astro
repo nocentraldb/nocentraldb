@@ -1,5 +1,8 @@
 ---
-// The landing page, in the NoCentralDB brand (nxsflow/brand, commit 38abcfc).
+// The landing page shell on the vendored design kit (public/assets, see
+// LICENSE-taste-skill.md): the head, the header and the footer. The sections
+// sit in main; Hero, UseCases, LiveExample, CodeSection and Closing stay there
+// until the scroll scenario replaces them.
 import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
 import CodeSection from "../components/CodeSection.astro";
@@ -7,53 +10,77 @@ import Hero from "../components/Hero.astro";
 import LiveExample from "../components/LiveExample.astro";
 import UseCases from "../components/UseCases.astro";
 import "../styles/tokens.css";
-import "../styles/landing.css";
+import "../styles/kit-tokens.css";
 
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
 const logo = wordmark.replace(
   "<svg ",
   '<svg role="img" aria-label="NoCentralDB" ',
 );
+const description =
+  "Each person and each agent reads and writes a full copy on their own machine. The changes sync encrypted through a server that can't read them.";
+const links = [
+  ["How it works", "#story"],
+  ["Code", "#code"],
+  ["Docs", "/docs/"],
+  ["GitHub", "https://github.com/nocentraldb/nocentraldb"],
+];
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" data-type="software" data-radius="soft" data-buttons="pill" data-motion>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>NoCentralDB: a local-first database for people and agents</title>
-    <meta
-      name="description"
-      content="Everyone works on their own copy, under their own keys. The relay in the middle can't read a thing."
-    />
+    <meta name="description" content={description} />
+    <meta name="site-kind" content="software" />
+    <meta name="page-type" content="software" />
     <meta name="theme-color" content="#111110" />
     <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="/assets/system.css" />
+    <link rel="stylesheet" href="/assets/ui/cards.css" />
+    <link rel="stylesheet" href="/assets/motion/motion.css" />
+    <link rel="stylesheet" href="/assets/layout/layout.css" />
     <script is:inline>
+      document.documentElement.classList.add("m-enter");
+      setTimeout(() => document.documentElement.classList.add("m-enter-done"), 700);
+      document.documentElement.classList.add("mo-js");
+      setTimeout(() => document.documentElement.classList.add("mo-safe"), 2500);
       if (new URLSearchParams(location.search).has("shot")) document.documentElement.dataset.shot = "";
     </script>
   </head>
   <body>
-    <nav class="nav" aria-label="Main">
-      <div class="wrap">
-        <a class="logo" href="/" set:html={logo} />
-        <ul>
-          <li class="hide-s"><a class="link" href="#use-cases">Use cases</a></li>
-          <li class="hide-s"><a class="link" href="#code">Code</a></li>
-          <li><a class="link" href="/docs/">Docs</a></li>
-          <li><a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a></li>
-        </ul>
+    <header class="nav">
+      <div class="wrap nav__bar">
+        <a class="skip-link" href="#top">Skip to content</a>
+        <a class="nav__logo" href="#top" set:html={logo} />
+        <nav class="nav__links" aria-label="Main">
+          {links.map(([label, href]) => (
+            <div class="nav__item"><a class="nav__link" href={href}>{label}</a></div>
+          ))}
+        </nav>
       </div>
-    </nav>
-    <main>
+    </header>
+    <main id="top">
       <Hero />
       <UseCases />
       <LiveExample />
       <CodeSection />
       <Closing />
     </main>
+    <footer class="footer closing">
+      <div class="wrap">
+        <p>No center. No collisions.</p>
+        <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
+        <a href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
+      </div>
+    </footer>
+    <script type="module" src="/assets/system.js"></script>
+    <script type="module" src="/assets/motion/motion.js"></script>
   </body>
 </html>

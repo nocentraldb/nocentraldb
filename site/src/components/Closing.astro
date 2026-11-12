@@ -1,6 +1,6 @@
 ---
 // Who it is not for and what it does not do (BRAND.md "Not for", GENESIS
-// principle 4), the way into the docs, and the footer with the endorsement line.
+// principle 4), the way into the docs. The footer with the endorsement line is the page shell's, in Landing.astro.
 const limits = [
   [
     "The relay sees metadata.",
@@ -74,14 +74,6 @@ const docs = [
   </div>
 </section>
 
-<footer>
-  <div class="wrap foot">
-    <p class="tagline">No center. No collisions.</p>
-    <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
-    <a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
-  </div>
-</footer>
-
 <style>
   .limits-grid {
     display: grid;
@@ -132,23 +124,6 @@ const docs = [
   }
   .feedback {
     margin-top: 40px;
-  }
-  footer {
-    padding: 40px 0 56px;
-    background: var(--ncdb-surface);
-  }
-  .foot {
-    display: flex;
-    gap: 24px;
-    align-items: center;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    font-size: var(--ncdb-text-small);
-  }
-  .tagline {
-    font-family: var(--ncdb-font-heading);
-    font-weight: var(--ncdb-weight-heading);
-    font-size: var(--ncdb-text-body);
   }
   @media (max-width: 900px) {
     .limits-grid {
