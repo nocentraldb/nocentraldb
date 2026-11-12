@@ -10,6 +10,7 @@ description = "The NoCentralDB relay as one AWS Lambda function behind an API Ga
 [[bin]]
 name = "ncdb-relay-lambda"
 path = "src/main.rs"
+required-features = ["aws"]
 
 # The function runs natively only, in Lambda on arm64. It checks nothing
 # itself: every request goes through the relay core of ncdb-relay. Every
@@ -20,29 +21,33 @@ ncdb-relay.workspace = true
 # The event types of API Gateway's WebSocket API, as Lambda delivers them
 # (the owner's tick, NOC-271).
 aws_lambda_events = { version = "=1.2.1", default-features = false, features = ["apigw"] }
+# What follows up to the challenge's nonce is the feature `aws` only: the
+# function on AWS. The SDK's sync suite, which runs the handler through the
+# harness, compiles none of it.
+#
 # Lambda's runtime API: the binary's loop of invocations (the owner's tick,
 # NOC-271). Only src/main.rs uses it.
-lambda_runtime = { version = "=1.5.0", default-features = false }
+lambda_runtime = { version = "=1.5.0", default-features = false, optional = true }
 # The `connections` table on DynamoDB (RFC 0007, "Tables and keys"), the
 # version ncdb-relay-aws pins (NOC-264 point 3: the AWS crates live only in
 # the relay's AWS crates). Its calls run on the caller's Tokio runtime.
-aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-dynamodb = { version = "=1.139.0", default-features = false, features = ["rt-tokio", "default-https-client"], optional = true }
 # The AWS backend: DynamoDB and S3 behind the relay core's backend
 # interface (NOC-270), which the function runs on, and its S3 key names.
-ncdb-relay-aws.workspace = true
+ncdb-relay-aws = { workspace = true, optional = true }
 # The presigned S3 URLs of large changes (RFC 0007, "How large changes go
 # to S3"), at the version ncdb-relay-aws pins.
-aws-sdk-s3 = { version = "=1.159.0", default-features = false, features = ["rt-tokio", "default-https-client", "sigv4a"] }
+aws-sdk-s3 = { version = "=1.159.0", default-features = false, features = ["rt-tokio", "default-https-client", "sigv4a"], optional = true }
 # API Gateway's connection API, `@connections`: posts and closes (NOC-264
 # point 3), at the version ncdb-relay-aws's coverage check pins.
-aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-sdk-apigatewaymanagement = { version = "=1.122.0", default-features = false, features = ["rt-tokio", "default-https-client"], optional = true }
 # The runtime the function runs on: Lambda's loop, and the AWS clients'
 # calls. The version Cargo.lock already holds.
-tokio = { version = "=1.54.1", default-features = false, features = ["rt", "rt-multi-thread", "macros", "time"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time"] }
 # The AWS SDK's configuration: in Lambda, the function role's credentials
 # and the region from the environment. The version ncdb-relay-aws's tests
 # pin.
-aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client"] }
+aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client"], optional = true }
 # The challenge's nonce: the platform's secure generator, as in the core.
 getrandom = { version = "=0.4.3", default-features = false }
 # API Gateway hands a binary message to Lambda in base64. Already in the
@@ -59,6 +64,18 @@ httparse = { version = "=1.10.1", default-features = false, features = ["std"], 
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"], optional = true }
 
 [features]
+# The function on AWS: the binary, the AWS backend, the `connections`
+# table, the connection API and presigned S3 URLs.
+aws = [
+    "dep:lambda_runtime",
+    "dep:aws-sdk-dynamodb",
+    "dep:ncdb-relay-aws",
+    "dep:aws-sdk-s3",
+    "dep:aws-sdk-apigatewaymanagement",
+    "dep:aws-config",
+    "tokio/rt-multi-thread",
+    "tokio/macros",
+]
 # The local harness, for this crate's tests and the SDK's sync suite.
 harness = [
     "dep:tokio-tungstenite",
@@ -77,7 +94,7 @@ harness = [
 # The AWS SDK's configuration with the emulator's credentials file
 # (docs/aws-emulator.md).
 aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client", "credentials-process"] }
-ncdb-relay-lambda = { workspace = true, features = ["harness"] }
+ncdb-relay-lambda = { workspace = true, features = ["harness", "aws"] }
 ncdb-relay-server.workspace = true
 serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "time", "io-util", "net"] }
