@@ -304,6 +304,8 @@ mod known_tests;
 mod leave_tests;
 #[cfg(test)]
 mod list_tests;
+#[cfg(test)]
+mod statement_tests;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod relay_tests;
 #[cfg(test)]
