@@ -1,7 +1,7 @@
 //! Following the sync report (RFC 0009, "Sync and status"):
 //! `db.sync().subscribe()` yields the status at once, and again whenever
-//! it changes, the connection, the counts and the error alike; a status
-//! that did not change is not yielded twice.
+//! it changes, the connection, the counts and the error alike, through a
+//! reconnect too; a status that did not change is not yielded twice.
 
 use std::time::Duration;
 
@@ -81,6 +81,38 @@ async fn the_stream_follows_the_connection_and_the_counts() {
 
     relay.proxy.cut();
     until(&mut statuses, |s| s.connection == Connection::Offline).await;
+}
+
+/// A subscriber sees the connection come back after the relay was out of
+/// reach, and the change written meanwhile confirmed on the reconnect
+/// (NOC-240).
+#[tokio::test(flavor = "multi_thread")]
+async fn the_stream_follows_a_reconnect_and_the_push_it_confirms() {
+    let relay = LocalRelay::start().await;
+    let db = open(ME, &relay.url()).await;
+    let space = db.spaces().create().await.unwrap();
+    let mut statuses = db.sync().subscribe();
+    until(&mut statuses, |s| {
+        s.connection == Connection::Connected && s.unconfirmed == 0
+    })
+    .await;
+
+    relay.proxy.cut();
+    until(&mut statuses, |s| s.connection == Connection::Offline).await;
+    space
+        .write(|tx| {
+            tx.create("tasks", [("title", Value::from("written offline"))])?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    let waiting = until(&mut statuses, |s| s.unconfirmed == 1).await;
+    assert_ne!(waiting.connection, Connection::Connected);
+
+    relay.proxy.restore();
+    until(&mut statuses, |s| s.connection == Connection::Connected).await;
+    let confirmed = until(&mut statuses, |s| s.unconfirmed == 0).await;
+    assert_eq!(confirmed.connection, Connection::Connected);
 }
 
 #[tokio::test(flavor = "multi_thread")]
