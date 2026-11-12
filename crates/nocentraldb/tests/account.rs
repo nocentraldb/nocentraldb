@@ -1,0 +1,199 @@
+//! Accounts in the Rust SDK (RFC 0010, "The recovery code" and "Adding a
+//! device or an agent to an account"; RFC 0009, "Accounts and devices";
+//! the owner's NOC-273 A, Carsten, 2026-11-12): the account's first open
+//! hands the app its recovery code until `confirm()`, and a device of the
+//! account pairs a new device or an agent by text, with `pair` and
+//! `complete_pairing`.
+
+mod support;
+
+use nocentraldb::{Db, ErrorCode, NoticeCode, OpenOptions, PairKind, PairingAnswer, RecoveryCode};
+use support::{LOCK, TempDir, now};
+
+/// A database at `dir` with its keys in a key file there.
+fn at(dir: &TempDir, name: &str) -> OpenOptions {
+    OpenOptions::new(LOCK)
+        .path(dir.join(name))
+        .key_file(dir.join(format!("{name}.keys")))
+}
+
+fn open(options: OpenOptions) -> Db {
+    now(Db::open(options)).unwrap()
+}
+
+fn code(db: &Db) -> Option<RecoveryCode> {
+    now(db.account().recovery_code()).unwrap()
+}
+
+/// Pairs `new` with the account of `device` by text, as kind `kind`, and
+/// returns the notices of `complete_pairing`.
+fn pair(device: &Db, new: &Db, kind: PairKind) -> Vec<NoticeCode> {
+    let invitation = now(new.invitation()).to_string().parse().unwrap();
+    let paired = now(device.account().pair(kind, &invitation)).unwrap();
+    let answer: PairingAnswer = paired.answer.to_string().parse().unwrap();
+    now(new.account().complete_pairing(&answer))
+        .unwrap()
+        .into_iter()
+        .map(|notice| notice.code)
+        .collect()
+}
+
+#[test]
+fn the_first_open_hands_the_recovery_code_until_it_is_confirmed() {
+    let dir = TempDir::new("recovery-code");
+    let words = {
+        let db = open(at(&dir, "laptop"));
+        let code = code(&db).expect("the first open creates the code");
+        let words = code.words();
+        assert_eq!(words.len(), 12);
+        words
+    };
+    // Every open shows it again until the person confirms they stored it.
+    let db = open(at(&dir, "laptop"));
+    let code = code(&db).expect("the code stays until confirm()");
+    assert_eq!(code.words(), words);
+    now(code.confirm()).unwrap();
+    assert!(self::code(&db).is_none());
+    drop(db);
+    let db = open(at(&dir, "laptop"));
+    assert!(
+        self::code(&db).is_none(),
+        "confirm() forgets the code for good"
+    );
+    // The key file no longer holds the words, and never held them as text.
+    let keys = std::fs::read(dir.join("laptop.keys")).unwrap();
+    assert!(!String::from_utf8_lossy(&keys).contains(words[0]));
+}
+
+#[test]
+fn the_recovery_code_is_redacted_in_display_and_debug() {
+    let db = open(OpenOptions::new(LOCK).in_memory());
+    let code = code(&db).unwrap();
+    assert_eq!(format!("{code}"), "RecoveryCode(redacted)");
+    assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
+    for word in code.words() {
+        assert!(!format!("{code} {code:?}").contains(word));
+    }
+}
+
+#[test]
+fn a_database_opened_for_pairing_has_no_recovery_code_and_cannot_pair() {
+    let dir = TempDir::new("pairing-no-code");
+    let new = open(at(&dir, "phone").pairing());
+    assert!(code(&new).is_none());
+    let other = open(at(&dir, "agent").pairing().agent());
+    let invitation = now(other.invitation());
+    let refused = now(new.account().pair(PairKind::Agent, &invitation)).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
+
+#[test]
+fn an_agent_paired_by_text_gets_a_certificate_and_no_account_key() {
+    let dir = TempDir::new("pair-agent");
+    let laptop = open(at(&dir, "laptop"));
+    let agent = open(at(&dir, "agent").pairing().agent());
+    let invitation = now(agent.invitation());
+    let paired = now(laptop.account().pair(PairKind::Agent, &invitation)).unwrap();
+    assert!(paired.added.is_empty() && paired.ask_admins.is_empty());
+    let answer: PairingAnswer = paired.answer.to_string().parse().unwrap();
+    let notices = now(agent.account().complete_pairing(&answer)).unwrap();
+    assert_eq!(
+        notices.iter().map(|notice| notice.code).collect::<Vec<_>>(),
+        [NoticeCode::AgentPaired]
+    );
+    // It acts for the laptop's account...
+    assert_eq!(
+        now(agent.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // ...holds no account key, so it pairs nobody, also after a reopen.
+    drop(agent);
+    let agent = open(at(&dir, "agent"));
+    let other = open(at(&dir, "other").pairing().agent());
+    let refused = now(agent
+        .account()
+        .pair(PairKind::Agent, &now(other.invitation())))
+    .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+    assert!(code(&agent).is_none());
+}
+
+#[test]
+fn a_device_paired_by_text_holds_the_account_key() {
+    let dir = TempDir::new("pair-device");
+    let laptop = open(at(&dir, "laptop"));
+    let phone = open(at(&dir, "phone").pairing());
+    assert_eq!(
+        pair(&laptop, &phone, PairKind::Device),
+        [NoticeCode::DevicePaired]
+    );
+    assert_eq!(
+        now(phone.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // The code stays on the device that created the account.
+    assert!(code(&phone).is_none());
+    drop(phone);
+    // After a reopen, the phone holds the account key: it pairs an agent.
+    let phone = open(at(&dir, "phone"));
+    let agent = open(at(&dir, "agent").pairing().agent());
+    assert_eq!(
+        pair(&phone, &agent, PairKind::Agent),
+        [NoticeCode::AgentPaired]
+    );
+    assert_eq!(
+        now(agent.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+}
+
+#[test]
+fn a_database_with_an_account_of_its_own_is_linked_when_it_pairs() {
+    let dir = TempDir::new("pair-link");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    assert_ne!(
+        now(tablet.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    assert_eq!(
+        pair(&laptop, &tablet, PairKind::Device),
+        [NoticeCode::DevicePaired, NoticeCode::AccountLinked]
+    );
+    assert_eq!(
+        now(tablet.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // Its own code is gone with its own account.
+    assert!(code(&tablet).is_none());
+}
+
+#[test]
+fn an_answer_for_another_database_is_refused_and_changes_nothing() {
+    let dir = TempDir::new("pair-other");
+    let laptop = open(at(&dir, "laptop"));
+    let phone = open(at(&dir, "phone").pairing());
+    let thief = open(at(&dir, "thief").pairing());
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(phone.invitation())))
+    .unwrap();
+    let refused = now(thief.account().complete_pairing(&paired.answer)).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidCertificate);
+    // The thief is still no device of the account.
+    assert_ne!(
+        now(thief.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // The phone still completes it.
+    let notices = now(phone.account().complete_pairing(&paired.answer)).unwrap();
+    assert_eq!(notices[0].code, NoticeCode::DevicePaired);
+}
+
+#[test]
+fn a_text_that_is_not_a_pairing_answer_is_invalid() {
+    for text in ["", "ncdb-pair-1:", "ncdb-invite-1:AAAA", "ncdb-pair-1:!!"] {
+        let refused = text.parse::<PairingAnswer>().unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{text}");
+    }
+}
