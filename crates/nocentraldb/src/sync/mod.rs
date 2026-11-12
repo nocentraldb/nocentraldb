@@ -1,7 +1,9 @@
 //! Syncing with one relay (RFC 0009, "Sync and status"; RFC 0007, "The
 //! protocol" and "Island mode"). A database opened with
 //! [`OpenOptions::relay`](crate::OpenOptions::relay) syncs on a thread of
-//! its own, with a tokio runtime of its own, so the app needs none. Every
+//! its own, with a tokio runtime of its own, so the app needs none; in the
+//! browser, on the event loop of the page or worker that opened it, over
+//! the browser's WebSocket (`transport`; NOC-175). Every
 //! call of the app stays on the device; syncing only folds what it pulls
 //! and records what the relay answered, and reports it in
 //! [`Db::sync`].
@@ -19,7 +21,7 @@
 //! when the member's own fold newly accepts it (RFC 0008, M19); `large`
 //! carries a change too large for one message through the relay's upload
 //! and download URLs (RFC 0007, "Large changes"), with the small HTTP/1.1
-//! client of `http`.
+//! client of `http`, or in the browser with `fetch()` (`http_browser`).
 //!
 //! **What this does not do yet.** The per-space `status` of RFC 0009 is
 //! not built: the relay's refusals are recorded per change in the log, by
@@ -30,42 +32,32 @@
 //! WebSocket over TLS (`wss://`) or, on a local network, without it
 //! (`ws://`); its upload and download URLs likewise over `https://` or
 //! `http://`. TLS verifies the relay against the platform's trust store
-//! (`tls`).
+//! (`tls`), or in the browser against the browser's.
 
-// On wasm32 only the counts of `apply` are read until the browser syncs
-// (NOC-175); the rest serves the connection, which is native only.
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) mod acknowledge;
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod again;
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod apply;
-#[cfg(not(target_arch = "wasm32"))]
 mod finalize;
 #[cfg(not(target_arch = "wasm32"))]
 mod http;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(target_arch = "wasm32")]
+#[path = "http_browser.rs"]
+mod http;
 mod large;
-#[cfg(not(target_arch = "wasm32"))]
 mod merge;
 mod pause;
 mod person_keys;
 #[cfg(test)]
 mod person_keys_tests;
-#[cfg(not(target_arch = "wasm32"))]
 mod run;
-#[cfg(not(target_arch = "wasm32"))]
 mod session;
 mod status;
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
-mod time;
+pub(crate) mod time;
 #[cfg(test)]
 mod time_tests;
 #[cfg(not(target_arch = "wasm32"))]
 mod tls;
-#[cfg(not(target_arch = "wasm32"))]
 mod transport;
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 mod wire;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -81,7 +73,6 @@ pub(crate) use finalize::set_finalize_after;
 pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use person_keys::put as put_person_keys;
-#[cfg(not(target_arch = "wasm32"))]
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
 pub(crate) use wire::Record;
@@ -174,9 +165,7 @@ const FINALIZE_AFTER: std::time::Duration = std::time::Duration::from_secs(7 * 2
 /// an hour, since the device cannot read the relay's clock (pm, NOC-234).
 const TOO_EARLY_RETRY: std::time::Duration = std::time::Duration::from_secs(60 * 60);
 
-/// What a database that syncs keeps of its relay. On wasm32 nothing syncs
-/// yet (NOC-175), so a database there never holds one.
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+/// What a database that syncs keeps of its relay.
 pub(crate) struct SyncState {
     pub(crate) connection: Connection,
     pub(crate) epoch_changed: bool,
@@ -242,7 +231,6 @@ pub(crate) struct SyncState {
     pub(crate) halted: bool,
 }
 
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 impl SyncState {
     fn new(wake: watch::Sender<()>, pause: watch::Sender<bool>) -> SyncState {
         SyncState {
