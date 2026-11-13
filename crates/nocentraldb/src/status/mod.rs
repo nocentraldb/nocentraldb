@@ -158,6 +158,18 @@ impl SpaceStatusReport<'_> {
     }
 }
 
+#[cfg(any(test, feature = "bridge"))]
+impl SpaceStatusReport<'_> {
+    /// The status now, and a [`Watch`](crate::sync::Watch) of it from now
+    /// on, for the bridge's events (NOC-176).
+    pub(crate) fn watch(&self) -> (SpaceStatus, crate::sync::Watch<SpaceStatus>) {
+        let space = self.space.id().0;
+        crate::sync::watch(self.space.inner(), move |inner: &Inner| {
+            status(inner, space)
+        })
+    }
+}
+
 /// The status of `space` in the database `inner`.
 fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
     let me = inner.member.key().id();

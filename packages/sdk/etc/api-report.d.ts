@@ -1,5 +1,7 @@
 // file: db.d.ts
 import type { Infer, model } from "./nc.ts";
+import type { SpaceStatus } from "./status.ts";
+import type { SyncStatus } from "./sync.ts";
 type AnyCollection = Parameters<typeof model>[0][string];
 type Id = string;
 interface Elements<E> {
@@ -47,6 +49,10 @@ export interface Tx {
 }
 export interface Space {
     readonly id: Id;
+    readonly status: {
+        current(): SpaceStatus;
+        subscribe(listener: (status: SpaceStatus) => void): Stop;
+    };
     write(record: (tx: Tx) => void): Promise<Written>;
     create<C extends AnyCollection>(collection: C, values: Values<C>): Promise<Written>;
     update<C extends AnyCollection>(collection: C, id: Id, values: Values<C>): Promise<Written>;
@@ -72,6 +78,14 @@ export interface Db {
     readonly changes: {
         subscribe(listener: (change: Change) => void): Stop;
     };
+    readonly sync: {
+        current(): SyncStatus;
+        subscribe(listener: (status: SyncStatus) => void): Stop;
+        pause(): Promise<void>;
+        resume(): Promise<void>;
+        isConfirmed(change: string): Promise<boolean>;
+        confirmed(change: string): Promise<void>;
+    };
     close(): Promise<void>;
 }
 interface OpenOptions {
@@ -95,6 +109,8 @@ export declare class NcError extends Error {
 export declare function name(): string;
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export * as nc from "./nc.ts";
+export type { SpaceStatus } from "./status.ts";
+export type { SyncStatus } from "./sync.ts";
 // file: nc.d.ts
 import type { Query } from "./db.ts";
 interface Value<T = unknown, D extends boolean = false> {
@@ -196,3 +212,43 @@ export declare const index: <const K extends readonly (string | {
 }) => Index<Names<K>, N>;
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
+// file: status.d.ts
+export interface SpaceStatus {
+    readonly role: "reader" | "writer" | "admin" | "removed";
+    readonly initialSyncComplete: boolean;
+    readonly behind: number;
+    readonly gaps: readonly string[];
+    readonly parked: Readonly<Record<string, number>>;
+    readonly newestModel?: number;
+    readonly rejected: Readonly<Record<string, number>>;
+    readonly refused: readonly {
+        readonly change: string;
+        readonly code: string;
+    }[];
+    readonly lostGrants: readonly string[];
+    readonly equivocations: readonly string[];
+    readonly exposed: boolean;
+    readonly waitingForKey: boolean;
+    readonly badPersonKeyRecords: readonly string[];
+    readonly provisionalErasures: readonly ProvisionalErasure[];
+}
+interface ProvisionalErasure {
+    readonly change: string;
+    readonly age: number;
+    readonly canUndo: boolean;
+    readonly performer: string;
+    readonly notice: {
+        readonly code: string;
+        readonly text: string;
+    };
+}
+export {};
+// file: sync.d.ts
+export interface SyncStatus {
+    readonly connection: "connected" | "connecting" | "offline" | "paused" | "none";
+    readonly relay?: string;
+    readonly unconfirmed: number;
+    readonly refused: number;
+    readonly epochChanged: boolean;
+    readonly error?: string;
+}

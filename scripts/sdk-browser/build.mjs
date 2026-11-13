@@ -1,10 +1,11 @@
 // Builds the TypeScript SDK the browser test imports (NOC-176 slice 1):
 // packages/sdk's own build, which compiles the core to WebAssembly, runs
-// wasm-bindgen and emits packages/sdk/dist/. The workflow browser-view.yml
+// wasm-bindgen and emits packages/sdk/dist/. Slice 4 syncs with the local
+// relay server, which it builds into target/sdk-browser/ncdb-relay. The workflow browser-view.yml
 // builds on the runner this way and runs the test in Playwright's image,
 // which has no Rust (NOC-221).
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,8 +22,26 @@ export const LOCK = join(
   "model.lock.json",
 );
 
-/** Builds packages/sdk/dist. */
+/** The local relay server the sync tests start. */
+export const RELAY = join(ROOT, "target", "sdk-browser", "ncdb-relay");
+
+/** Builds the local relay server into RELAY. */
+const buildRelay = () => {
+  const result = spawnSync(
+    "cargo",
+    ["build", "--locked", "-p", "ncdb-relay-server", "--bin", "ncdb-relay"],
+    { cwd: ROOT, stdio: ["ignore", "inherit", "inherit"] },
+  );
+  if (result.status !== 0) {
+    throw new Error(`cargo build of ncdb-relay failed (${result.status})`);
+  }
+  mkdirSync(dirname(RELAY), { recursive: true });
+  copyFileSync(join(ROOT, "target", "debug", "ncdb-relay"), RELAY);
+};
+
+/** Builds packages/sdk/dist and the local relay server. */
 export const build = () => {
+  buildRelay();
   const result = spawnSync(
     process.execPath,
     [join(ROOT, "packages", "sdk", "build.mjs")],
@@ -45,6 +64,9 @@ export const prebuilt = () => {
     if (!existsSync(join(DIST, file))) {
       throw new Error(`${join(DIST, file)} is missing: run build.mjs first`);
     }
+  }
+  if (!existsSync(RELAY)) {
+    throw new Error(`${RELAY} is missing: run build.mjs first`);
   }
 };
 

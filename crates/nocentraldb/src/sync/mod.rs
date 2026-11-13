@@ -75,6 +75,8 @@ pub(crate) use merge::set_merge_delay;
 pub(crate) use person_keys::put as put_person_keys;
 pub(crate) use run::start;
 pub(crate) use status::{Notify, follow};
+#[cfg(any(test, feature = "bridge"))]
+pub(crate) use status::{Watch, watch};
 pub(crate) use wire::Record;
 
 /// The state of the relay connection (RFC 0009, "Sync and status").

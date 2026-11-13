@@ -153,13 +153,12 @@ async fn forward(events: Events, listener: Rc<RefCell<Option<js_sys::Function>>>
         if events.is_closed() {
             return;
         }
-        let Some(bytes) = events.take() else {
-            continue;
-        };
-        if let Some(listener) = listener.borrow().as_ref() {
-            let bytes = js_sys::Uint8Array::from(bytes.as_slice());
-            // A listener that throws loses this event, not the next ones.
-            let _ = listener.call1(&wasm_bindgen::JsValue::NULL, &bytes);
+        for bytes in events.take() {
+            if let Some(listener) = listener.borrow().as_ref() {
+                let bytes = js_sys::Uint8Array::from(bytes.as_slice());
+                // A listener that throws loses this event, not the next ones.
+                let _ = listener.call1(&wasm_bindgen::JsValue::NULL, &bytes);
+            }
         }
     }
 }
