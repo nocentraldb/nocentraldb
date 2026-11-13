@@ -12,6 +12,9 @@
 // NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
 // (scripts/sdk-browser/), its package built on the runner, whenever a pull
 // request touches the TypeScript SDK or the crate its core is built from.
+//
+// The example app apps/tasks-ts: the same job runs it in Chromium, on the
+// SDK built above, whenever a pull request touches the app or the SDK.
 import assert from "node:assert/strict";
 import {
   imageChecks,
@@ -27,6 +30,7 @@ const KEYS_BUILD = "node scripts/sdk-keys/build.mjs";
 const KEYS_TESTS = "scripts/sdk-keys/*.test.mjs";
 const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
 const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
+const APP_TESTS = "apps/tasks-ts/e2e/*.e2e.mjs";
 
 runWorkflowChecks({
   files: load(".github/workflows/browser-view.yml"),
@@ -170,6 +174,51 @@ runWorkflowChecks({
           const all = jobSteps(ctx);
           all.splice(
             all.findIndex((s) => s.run?.includes(SDK_TESTS)),
+            1,
+          );
+        },
+      },
+    },
+    {
+      name: "the example app runs in the image on the SDK built on the runner, on app and SDK changes",
+      check: (ctx) => {
+        const all = steps(ctx);
+        const build = all.findIndex((s) => s.run?.includes(SDK_BUILD));
+        const test = all.findIndex(
+          (s) => s.run?.includes("docker run") && s.run.includes(APP_TESTS),
+        );
+        assert.ok(test >= 0, "the example app does not run");
+        assert.ok(test > build, "it does not run after the SDK's build");
+        assert.match(
+          all[test].if ?? "",
+          /^\$\{\{ !cancelled\(\) \}\}$/,
+          "a failed step above skips the example app",
+        );
+        const run = all[test].run;
+        assert.match(run, /"\$PLAYWRIGHT_IMAGE"/);
+        assert.match(run, /SDK_BROWSER_PREBUILT=1/);
+        const paths = ctx.workflow.on?.pull_request?.paths ?? [];
+        for (const path of ["apps/tasks-ts/**", "packages/sdk/**"]) {
+          assert.ok(paths.includes(path), `changes of ${path} do not run it`);
+        }
+      },
+      mutants: {
+        "the example app rebuilds the SDK in the image": (ctx) => {
+          const run = jobSteps(ctx).find((s) => s.run?.includes(APP_TESTS));
+          run.run = run.run.replace("SDK_BROWSER_PREBUILT=1", "X=1");
+        },
+        "the example app skipped after a failure above": (ctx) => {
+          const step = jobSteps(ctx).find((s) => s.run?.includes(APP_TESTS));
+          delete step.if;
+        },
+        "app changes do not run it": (ctx) => {
+          const paths = ctx.workflow.on.pull_request.paths;
+          paths.splice(paths.indexOf("apps/tasks-ts/**"), 1);
+        },
+        "no example app at all": (ctx) => {
+          const all = jobSteps(ctx);
+          all.splice(
+            all.findIndex((s) => s.run?.includes(APP_TESTS)),
             1,
           );
         },
