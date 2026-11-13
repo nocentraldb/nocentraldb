@@ -4,6 +4,8 @@
 // also kept as a snapshot, so a pull request shows how it changes the
 // deployed infrastructure without credentials (NOC-264, NOC-272).
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
 import { CURRENTLY_RECOMMENDED_FLAGS } from "aws-cdk-lib/cx-api";
@@ -269,6 +271,107 @@ describe("the function and the API", () => {
   });
 });
 
+describe("the daily orphan sweep (NOC-290)", () => {
+  // The function runs the sweep only for exactly this input
+  // (ncdb_relay_lambda::invocation::SWEEP_INPUT).
+  const source = readFileSync(
+    join(
+      import.meta.dirname,
+      "../../../crates/ncdb-relay-lambda/src/invocation.rs",
+    ),
+    "utf8",
+  );
+  const input = /pub const SWEEP_INPUT: &str = r#"(.*)"#;/.exec(source)?.[1];
+
+  test("a rule invokes the function once a day with the sweep's input", () => {
+    expect(input).toBe('{"ncdb-relay":"sweep-orphans"}');
+    template.resourceCountIs("AWS::Events::Rule", 1);
+    const rules = template.findResources("AWS::Events::Rule");
+    const [rule] = Object.values(rules);
+    expect(rule?.Properties.ScheduleExpression).toBe("cron(17 3 * * ? *)");
+    expect(rule?.Properties.State).toBe("ENABLED");
+    expect(rule?.Properties.Targets).toHaveLength(1);
+    const [target] = rule?.Properties.Targets ?? [];
+    const [relay] = Object.keys(
+      template.findResources("AWS::Lambda::Function"),
+    );
+    expect(target.Arn).toEqual({ "Fn::GetAtt": [relay, "Arn"] });
+    expect(JSON.parse(target.Input)).toEqual(JSON.parse(input ?? ""));
+  });
+
+  test("its log lines count each run's start and end", () => {
+    template.resourceCountIs("AWS::Logs::MetricFilter", 2);
+    const [logs] = Object.keys(template.findResources("AWS::Logs::LogGroup"));
+    for (const [phase, metric] of [
+      ["start", "SweepStarted"],
+      ["end", "SweepEnded"],
+    ]) {
+      template.hasResourceProperties("AWS::Logs::MetricFilter", {
+        LogGroupName: { Ref: logs },
+        FilterPattern: `{ ($.sweep = "orphans") && ($.phase = "${phase}") }`,
+        MetricTransformations: [
+          {
+            MetricNamespace: "NoCentralDb/Relay",
+            MetricName: metric,
+            MetricValue: "1",
+          },
+        ],
+      });
+    }
+  });
+
+  test("a run that started and never ended raises an alarm that mails the owner", () => {
+    const [topic] = Object.keys(template.findResources("AWS::SNS::Topic"));
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      ComparisonOperator: "GreaterThanOrEqualToThreshold",
+      Threshold: 1,
+      EvaluationPeriods: 1,
+      TreatMissingData: "notBreaching",
+      AlarmActions: [{ Ref: topic }],
+      Metrics: Match.arrayWith([
+        Match.objectLike({
+          Expression: "FILL(started, 0) - FILL(ended, 0)",
+          ReturnData: true,
+        }),
+        Match.objectLike({
+          Id: "started",
+          MetricStat: Match.objectLike({
+            Metric: {
+              MetricName: "SweepStarted",
+              Namespace: "NoCentralDb/Relay",
+            },
+            Period: 3600,
+            Stat: "Sum",
+          }),
+        }),
+        Match.objectLike({
+          Id: "ended",
+          MetricStat: Match.objectLike({
+            Metric: {
+              MetricName: "SweepEnded",
+              Namespace: "NoCentralDb/Relay",
+            },
+            Period: 3600,
+            Stat: "Sum",
+          }),
+        }),
+      ]),
+    });
+  });
+
+  test("only that rule may invoke the function from EventBridge", () => {
+    const [ruleId] = Object.keys(template.findResources("AWS::Events::Rule"));
+    const permissions = Object.values(
+      template.findResources("AWS::Lambda::Permission"),
+    ).filter((p) => p.Properties.Principal === "events.amazonaws.com");
+    expect(permissions).toHaveLength(1);
+    expect(permissions[0]?.Properties.Action).toBe("lambda:InvokeFunction");
+    expect(permissions[0]?.Properties.SourceArn).toEqual({
+      "Fn::GetAtt": [ruleId, "Arn"],
+    });
+  });
+});
+
 describe("alarms and the budget", () => {
   test("a budget of 20 USD a month mails at 50, 80 and 100 percent (NOC-264 point 5)", () => {
     template.hasResourceProperties("AWS::Budgets::Budget", {
@@ -292,7 +395,7 @@ describe("alarms and the budget", () => {
   });
 
   test("the function's errors and throttles raise an alarm that mails the owner", () => {
-    template.resourceCountIs("AWS::CloudWatch::Alarm", 2);
+    template.resourceCountIs("AWS::CloudWatch::Alarm", 3);
     template.hasResourceProperties("AWS::SNS::Subscription", {
       Protocol: "email",
       Endpoint: "owner@example.invalid",
