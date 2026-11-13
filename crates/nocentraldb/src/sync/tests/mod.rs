@@ -24,6 +24,7 @@ mod large;
 mod list;
 mod live;
 mod lost_answer;
+mod lost_device;
 mod members;
 mod merge;
 mod newest_model;

@@ -27,6 +27,8 @@
 //! An agent keeps no account space: it holds an agent certificate of an
 //! account, and the account's devices record it.
 
+mod remove;
+
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
