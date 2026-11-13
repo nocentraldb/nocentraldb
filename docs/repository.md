@@ -21,6 +21,7 @@ apps/tasks-rust/       the example app on the Rust SDK: a task list on two devic
 apps/tasks-ts/         the example app on the TypeScript SDK: a task list in the browser, its lists live queries; its Chromium test runs in browser-view.yml
 docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/repository.md          this page: the layout, the tools and the gates
+docs/getting-started.md     the getting-started guide for the Rust SDK; the doc tests of `nocentraldb` compile its Rust snippets
 docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram

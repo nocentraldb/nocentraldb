@@ -641,3 +641,39 @@ fn a_cursor_of_a_closed_database_is_of_another_model() {
     let refused = code(&mut bridge, "find", map(&[("query", map(&after))]));
     assert_eq!(refused, "cursorOfAnotherModel");
 }
+
+// db.changes (RFC 0009, "Subscribe"): the folded event names, per
+// collection, the ids a fold touched and whether it was this member's own
+// write, "local", or one sync brought, "remote".
+#[test]
+fn a_folded_event_names_the_ids_a_write_touched_as_local() {
+    let mut bridge = opened();
+    let events = bridge.events().expect("events once open");
+    let space = tasks(&mut bridge, &[]);
+    events.take();
+    let id = "00112233445566778899aabbccddee01";
+    write_one(
+        &mut bridge,
+        &space,
+        map(&[
+            ("op", text("create")),
+            ("collection", text("tasks")),
+            ("id", text(id)),
+            ("values", map(&[("title", text("x"))])),
+        ]),
+    );
+    let message = cbor::decode(&events.take().expect("an event")).unwrap();
+    let Some(Value::Array(folds)) = field(&message, "folds") else {
+        panic!("{message:?}")
+    };
+    let Some(Value::Array(changes)) = field(&folds[0], "changes") else {
+        panic!("{message:?}")
+    };
+    assert_eq!(changes.len(), 1, "{changes:?}");
+    assert_eq!(field(&changes[0], "collection"), Some(&text("tasks")));
+    assert_eq!(
+        field(&changes[0], "ids"),
+        Some(&Value::Array(vec![text(id)]))
+    );
+    assert_eq!(field(&changes[0], "origin"), Some(&text("local")));
+}

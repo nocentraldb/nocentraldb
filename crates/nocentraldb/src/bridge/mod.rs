@@ -82,8 +82,9 @@ pub struct Events(FoldFeed);
 
 impl Events {
     /// The folds since the last take as one message, `{"event": "folded",
-    /// "folds": [{"space": id, "collections": [text]}]}`; `None` when
-    /// nothing folded.
+    /// "folds": [{"space": id, "collections": [text], "changes":
+    /// [{"collection": text, "ids": [id], "origin": "local" | "remote"}]}]}`;
+    /// `None` when nothing folded.
     pub fn take(&self) -> Option<Vec<u8>> {
         let folds = self.0.take();
         if folds.is_empty() {
@@ -91,13 +92,34 @@ impl Events {
         }
         let folds = folds
             .into_iter()
-            .map(|(space, collections)| {
+            .map(|fold| {
+                let changes = fold
+                    .changes
+                    .into_iter()
+                    .map(|changed| {
+                        entries([
+                            ("collection", Value::Text(changed.collection)),
+                            (
+                                "ids",
+                                Value::Array(
+                                    changed
+                                        .ids
+                                        .iter()
+                                        .map(|id| Value::Text(id.to_string()))
+                                        .collect(),
+                                ),
+                            ),
+                            ("origin", Value::Text(changed.origin.name().into())),
+                        ])
+                    })
+                    .collect();
                 entries([
-                    ("space", Value::Text(space.to_string())),
+                    ("space", Value::Text(fold.space.to_string())),
                     (
                         "collections",
-                        Value::Array(collections.into_iter().map(Value::Text).collect()),
+                        Value::Array(fold.collections.into_iter().map(Value::Text).collect()),
                     ),
+                    ("changes", Value::Array(changes)),
                 ])
             })
             .collect();

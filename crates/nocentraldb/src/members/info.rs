@@ -4,24 +4,13 @@
 //! certificate, its role and whether it is this member. The id is what
 //! [`Members::remove`] and [`Members::set_role`] take.
 
-use ncdb_core::ids;
 use ncdb_core::membership;
 
 use super::{Fingerprint, Members, Role};
 use crate::db::lock;
 use crate::error::{Error, ErrorCode};
 
-/// A member of a space, as [`Members::list`] gives it. It is opaque: it
-/// compares, orders and hashes, but has no text form yet, and its `Debug`
-/// shows no bytes.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct MemberId(pub(crate) ids::MemberId);
-
-impl std::fmt::Debug for MemberId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("MemberId(..)")
-    }
-}
+pub use crate::id::MemberId;
 
 /// What a member is, from its certificate (RFC 0003, "The account key").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

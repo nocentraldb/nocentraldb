@@ -135,7 +135,7 @@ mod tests {
             BTreeSet::from([[0xaa; 32], [0xbb; 32]])
         );
         assert_eq!(settings.names.log, "ncdb-prod-log");
-        assert_eq!(settings.names.tokens, "ncdb-prod-tokens");
+        assert_eq!(settings.names.uploads, "ncdb-prod-uploads");
         assert_eq!(settings.names.bucket, "ncdb-prod-frames-123456789012");
         assert_eq!(settings.connections, "ncdb-prod-connections");
     }
