@@ -158,3 +158,40 @@ fn mark_removed(inner: &mut Inner, account: CoreSpaceId, lost: ids::MemberId) ->
     tx.update(MEMBERS, ObjectId(object), [("removed", Value::from(true))])?;
     super::write(inner, account, tx)
 }
+
+/// Removes each member whose record in the account space says `removed`
+/// from every app space this device administers where it is still a
+/// member, which rotates each key: the spaces the device that ran the
+/// removal is not in. A space this device cannot write into or rotate
+/// keeps the member, and the next reconcile tries again.
+pub(super) fn remove_marked(inner: &mut Inner) -> Result<(), Error> {
+    let me = inner.member.key().id();
+    let marked: Vec<ids::MemberId> = member_rows(inner)?
+        .into_values()
+        .filter(|m| m.removed && m.member != me.0)
+        .map(|m| ids::MemberId(m.member))
+        .collect();
+    if marked.is_empty() {
+        return Ok(());
+    }
+    let app = inner.model_id;
+    let held: Vec<CoreSpaceId> = inner
+        .spaces
+        .iter()
+        .filter(|(_, state)| state.checks.model_id() == Some(app))
+        .filter(|(_, state)| state.checks.resolved().role(me) == Some(CoreRole::Admin))
+        .map(|(space, _)| *space)
+        .collect();
+    for space in held {
+        for lost in &marked {
+            if !held_member(inner, space, *lost)
+                || not_stopped(inner, SpaceId(space)).is_err()
+                || crate::members::rotatable(&inner.spaces[&space]).is_err()
+            {
+                continue;
+            }
+            let _ = remove_member(inner, space, *lost);
+        }
+    }
+    Ok(())
+}
