@@ -1,0 +1,41 @@
+/* Wires the vendored design kit (public/assets/system.css) to the brand tokens
+   in tokens.css: the kit's --p-* palette and type variables take their values
+   from the --ncdb-* roles. Loaded after system.css and tokens.css.
+   Dark page: --p-action, the yellow, is the one accent. */
+:root {
+  --p-bg: var(--ncdb-bg);
+  --p-surface: var(--ncdb-surface);
+  --p-ink: var(--ncdb-ink);
+  --p-muted: var(--ncdb-muted);
+  --p-accent: var(--ncdb-accent);
+  --p-accent-ink: var(--ncdb-accent-ink);
+  --p-action: var(--ncdb-accent);
+  --p-action-ink: var(--ncdb-accent-ink);
+
+  /* The light inverse: the page's ink on its ground, for bands and the footer. */
+  --p-inv-bg: var(--ncdb-ink);
+  --p-inv-surface: color-mix(in srgb, var(--ncdb-ink) 88%, var(--ncdb-bg));
+  --p-inv-ink: var(--ncdb-bg);
+  --p-inv-muted: color-mix(in srgb, var(--ncdb-ink) 33%, var(--ncdb-bg));
+  --p-inv-accent: var(--ncdb-bg);
+  --p-inv-accent-ink: var(--ncdb-ink);
+  --p-inv-action: var(--ncdb-bg);
+  --p-inv-action-ink: var(--ncdb-ink);
+
+  --font-display: var(--ncdb-font-heading);
+  --font-text: var(--ncdb-font-body);
+  --font-mono: var(--ncdb-font-mono);
+  --display-weight: var(--ncdb-weight-heading);
+  --display-tracking: -0.015em;
+  --display-tracking-xl: -0.015em;
+}
+
+body {
+  font-weight: var(--ncdb-weight-body);
+}
+
+.nav__logo svg {
+  display: block;
+  width: auto;
+  height: 44px;
+}
