@@ -67,14 +67,16 @@ fn a_removed_member_is_not_listed() {
     assert!(members[0].is_self);
 }
 
-/// The id prints no key bytes: it is opaque until it gets a text form.
+/// The id prints as its text form, 64 lowercase hex digits: a hash of the
+/// member's public keys, which every invitation carries (Carsten,
+/// 2026-11-13, NOC-298).
 #[test]
-fn a_member_id_is_opaque_in_debug() {
+fn a_member_id_prints_its_text_form_in_debug() {
     let account = SigningKey::from_bytes(&[9; 32]);
     let admin = of_account(1, &account);
     let project = space(&admin);
 
     let id = listed(&admin, &project)[0].id;
 
-    assert_eq!(format!("{id:?}"), "MemberId(..)");
+    assert_eq!(format!("{id:?}"), format!("MemberId({id})"));
 }
