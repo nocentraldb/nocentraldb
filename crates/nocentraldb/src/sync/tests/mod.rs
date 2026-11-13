@@ -38,6 +38,7 @@ mod push_again;
 mod reconnect;
 mod refusals;
 mod removed;
+mod renewed_key;
 mod reopen;
 mod rotation;
 mod space_status;

@@ -28,6 +28,10 @@
 //! account, and the account's devices record it.
 
 mod remove;
+mod renew;
+
+#[cfg_attr(not(test), allow(unused_imports))]
+pub(crate) use renew::{new_key, renew, wrapped_to};
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
