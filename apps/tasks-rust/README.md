@@ -19,10 +19,11 @@ It uses only the public Rust SDK (`nocentraldb`). Each run opens the device's da
 
 ## 1. The schema and its lock
 
-Install the JavaScript packages first, once: the schema build needs them.
+Install the JavaScript packages first, once, and build the TypeScript of `@nocentraldb/sdk`: the schema build imports the package from its build output, `packages/sdk/dist/`.
 
 ```sh
 pnpm install
+node packages/sdk/build.mjs --ts-only
 ```
 
 The schema is `apps/tasks-rust/model.ts`: one collection, `tasks`, with a `title` and a `status` of `open` or `done`, and one index, `byStatus`, which a list reads. The app reads only the lock built from it, `apps/tasks-rust/model.lock.json`, which is checked in.

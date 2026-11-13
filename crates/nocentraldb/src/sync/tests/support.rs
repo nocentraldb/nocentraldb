@@ -73,7 +73,7 @@ impl LocalRelay {
         }
     }
 
-    async fn with(allowed: BTreeSet<[u8; 32]>) -> LocalRelay {
+    pub async fn with(allowed: BTreeSet<[u8; 32]>) -> LocalRelay {
         let dir = TempDir::new();
         let addr = serve(&dir, allowed.clone(), None).await;
         let proxy = Proxy::start(addr).await;
