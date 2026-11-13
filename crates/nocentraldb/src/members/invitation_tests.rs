@@ -53,7 +53,7 @@ fn the_vector_without_a_statement_reads_field_by_field() {
     assert_eq!(invitation.key.signing.to_vec(), field("signing key"));
     assert_eq!(invitation.key.agreement.to_vec(), field("agreement key"));
     assert_eq!(invitation.key.id().0.to_vec(), field("member id"));
-    let certificate = &invitation.certificate;
+    let certificate = invitation.certificate().unwrap();
     assert_eq!(certificate.account_key.to_vec(), field("account key"));
     assert_eq!(certificate.member, invitation.key.id());
     assert_eq!(certificate.kind, MemberKind::Device);
@@ -70,15 +70,24 @@ fn the_vector_without_a_statement_reads_field_by_field() {
 fn the_vector_with_a_statement_reads_its_recovery_key_number_and_signature() {
     let invitation: Invitation = STATEMENT.trim().parse().unwrap();
 
-    let statement = invitation.certificate.statement.as_deref().unwrap();
+    let statement = invitation
+        .certificate()
+        .unwrap()
+        .statement
+        .as_deref()
+        .unwrap();
     assert_eq!(statement.recovery_key.to_vec(), field("recovery key"));
-    assert_eq!(statement.account_key, invitation.certificate.account_key);
+    assert_eq!(
+        statement.account_key,
+        invitation.certificate().unwrap().account_key
+    );
     assert_eq!(statement.number.to_be_bytes().to_vec(), field("number"));
     assert_eq!(statement.signature.to_vec(), field("statement signature"));
     assert!(
         invitation
-            .certificate
-            .verify(&invitation.certificate.account_key)
+            .certificate()
+            .unwrap()
+            .verify(&invitation.certificate().unwrap().account_key)
     );
 }
 
@@ -142,4 +151,53 @@ fn a_text_that_does_not_follow_the_layout_is_an_invalid_value() {
 
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{case}");
     }
+}
+
+const PAIRING: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation-pairing.txt");
+
+#[test]
+fn the_version_2_vector_reads_as_a_member_waiting_to_be_paired_and_writes_back() {
+    let invitation: Invitation = PAIRING.trim().parse().unwrap();
+
+    assert_eq!(invitation.key.signing.to_vec(), field("signing key"));
+    assert_eq!(invitation.key.agreement.to_vec(), field("agreement key"));
+    assert!(invitation.certificate().is_none());
+    assert!(matches!(
+        invitation.form,
+        super::invitation::Form::Waiting(MemberKind::Device)
+    ));
+    assert_eq!(invitation.to_string(), PAIRING.trim());
+}
+
+#[test]
+fn a_version_2_text_of_another_length_or_kind_is_refused() {
+    let mut bytes = vec![2u8];
+    bytes.extend([0x11; 64]);
+    for (bad, why) in [
+        (bytes.clone(), "too short"),
+        ([bytes.clone(), vec![1, 0]].concat(), "too long"),
+        ([bytes.clone(), vec![3]].concat(), "another kind"),
+    ] {
+        let refused = text_of(&bad).parse::<Invitation>().unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{why}");
+    }
+}
+
+/// A member waiting to be paired has no account: its fingerprint is SHA-256
+/// over `"nocentraldb/member-fingerprint"` and its member id, as twelve
+/// blocks of five digits (Carsten, 2026-11-13, NOC-288). The
+/// digits were computed with Python's `hashlib`.
+#[test]
+fn a_waiting_members_fingerprint_is_over_its_member_id_and_never_an_accounts() {
+    let invitation: Invitation = PAIRING.trim().parse().unwrap();
+    assert_eq!(
+        invitation.fingerprint().to_string(),
+        "77045 61455 55361 23528 60888 57309 13884 34254 87150 48756 49352 12443"
+    );
+    let id: [u8; 32] = field("member id").try_into().unwrap();
+    assert_ne!(
+        invitation.fingerprint(),
+        super::Fingerprint::account(id),
+        "the same bytes under the account context are another fingerprint"
+    );
 }

@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use ncdb_core::envelope;
 use ncdb_core::ids::{ChangeId, SpaceId};
-use ncdb_core::membership::{self, Action, Entry, MembershipEntry, Resolved};
+use ncdb_core::membership::{self, Action, Certificate, Entry, MembershipEntry, Resolved};
 use ncdb_core::view::View;
 
 use crate::db::{Inner, lock};
@@ -28,7 +28,7 @@ mod change;
 pub(crate) use change::remove as remove_member;
 pub(crate) mod erasure;
 mod info;
-mod invitation;
+pub(crate) mod invitation;
 mod leave;
 pub(crate) mod merge;
 mod notice;
@@ -141,7 +141,7 @@ impl Members<'_> {
         not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
         let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;
-        certified(invitation)?;
+        let certificate = certified(invitation)?.clone();
         let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner {
@@ -163,7 +163,7 @@ impl Members<'_> {
                 action: Action::Add {
                     role: options.role.into(),
                     key: invitation.key,
-                    certificate: Box::new(invitation.certificate.clone()),
+                    certificate: Box::new(certificate),
                     from_generation: batch.generation,
                 },
             }),
@@ -178,7 +178,7 @@ impl Members<'_> {
         );
         let records = batch.commit(view, state, secrets)?;
         if confirming {
-            confirm(view, &invitation.certificate.account_key)?;
+            confirm(view, &invitation.fingerprint().0)?;
         }
         crate::sync::put_person_keys(&mut inner, space.0, records);
         crate::sync::wake(&inner);
@@ -235,8 +235,13 @@ fn allowed(
 /// invitation's keys as a device or an agent, and its account signed it.
 /// A sub-agent's certificate is signed by its parent when it is added
 /// (RFC 0008, "What this RFC uses from RFC 0003"), which is not built.
-fn certified(invitation: &Invitation) -> Result<(), Error> {
-    let certificate = &invitation.certificate;
+fn certified(invitation: &Invitation) -> Result<&Certificate, Error> {
+    let Some(certificate) = invitation.certificate() else {
+        return Err(Error::new(
+            ErrorCode::InvalidCertificate,
+            "the invitation's member waits to be paired and has no certificate yet",
+        ));
+    };
     let holds = certificate.member == invitation.key.id()
         && matches!(
             certificate.kind,
@@ -244,7 +249,7 @@ fn certified(invitation: &Invitation) -> Result<(), Error> {
         )
         && certificate.verify(&certificate.account_key);
     match holds {
-        true => Ok(()),
+        true => Ok(certificate),
         false => Err(Error::new(
             ErrorCode::InvalidCertificate,
             "the invitation's certificate does not hold",
@@ -267,7 +272,8 @@ fn known(
         .account_confirmed_at(&account.0)
         .map_err(storage)?
         .is_some();
-    if account.0 == inner.account.verifying_key().to_bytes() || confirmed {
+    let own = Invitation::of(inner).fingerprint();
+    if account == own || confirmed {
         return Ok(false);
     }
     if fingerprint == Some(account) {

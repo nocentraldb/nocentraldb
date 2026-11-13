@@ -1,0 +1,8 @@
+{
+  "app": "node bin/relay.ts",
+  "versionReporting": false,
+  "cli-telemetry": false,
+  "context": {
+    "@aws-cdk/core:newStyleStackSynthesis": true
+  }
+}
