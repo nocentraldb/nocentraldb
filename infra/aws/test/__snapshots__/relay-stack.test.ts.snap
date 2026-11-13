@@ -979,6 +979,47 @@ exports[`the template matches its committed snapshot 1`] = `
         "RelayServiceRoleA21B8CED"
       ]
     },
+    "SweepOrphans6B61F257": {
+      "Type": "AWS::Events::Rule",
+      "Properties": {
+        "ScheduleExpression": "cron(17 3 * * ? *)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Arn": {
+              "Fn::GetAtt": [
+                "Relay3F9A082A",
+                "Arn"
+              ]
+            },
+            "Id": "Target0",
+            "Input": "{\\"ncdb-relay\\":\\"sweep-orphans\\"}",
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 2
+            }
+          }
+        ]
+      }
+    },
+    "SweepOrphansAllowEventRuleNoCentralDbRelay6215B463E188ADB0": {
+      "Type": "AWS::Lambda::Permission",
+      "Properties": {
+        "Action": "lambda:InvokeFunction",
+        "FunctionName": {
+          "Fn::GetAtt": [
+            "Relay3F9A082A",
+            "Arn"
+          ]
+        },
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "SweepOrphans6B61F257",
+            "Arn"
+          ]
+        }
+      }
+    },
     "Alarms04B5A0BF": {
       "Type": "AWS::SNS::Topic"
     },
@@ -1040,6 +1081,83 @@ exports[`the template matches its committed snapshot 1`] = `
         "Namespace": "AWS/Lambda",
         "Period": 300,
         "Statistic": "Sum",
+        "Threshold": 1,
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "SweepStartedEFEE986A": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterPattern": "{ ($.sweep = \\"orphans\\") && ($.phase = \\"start\\") }",
+        "LogGroupName": {
+          "Ref": "Logs6819BB44"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "SweepStarted",
+            "MetricNamespace": "NoCentralDb/Relay",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SweepEnded7591A2F4": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterPattern": "{ ($.sweep = \\"orphans\\") && ($.phase = \\"end\\") }",
+        "LogGroupName": {
+          "Ref": "Logs6819BB44"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "SweepEnded",
+            "MetricNamespace": "NoCentralDb/Relay",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SweepUnfinishedFF4E7581": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "EvaluationPeriods": 1,
+        "Metrics": [
+          {
+            "Expression": "FILL(started, 0) - FILL(ended, 0)",
+            "Id": "expr_1",
+            "ReturnData": true
+          },
+          {
+            "Id": "started",
+            "MetricStat": {
+              "Metric": {
+                "MetricName": "SweepStarted",
+                "Namespace": "NoCentralDb/Relay"
+              },
+              "Period": 3600,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          },
+          {
+            "Id": "ended",
+            "MetricStat": {
+              "Metric": {
+                "MetricName": "SweepEnded",
+                "Namespace": "NoCentralDb/Relay"
+              },
+              "Period": 3600,
+              "Stat": "Sum"
+            },
+            "ReturnData": false
+          }
+        ],
         "Threshold": 1,
         "TreatMissingData": "notBreaching"
       }

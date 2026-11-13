@@ -48,6 +48,10 @@ tokio = { version = "=1.54.1", default-features = false, features = ["rt", "time
 # and the region from the environment. The version ncdb-relay-aws's tests
 # pin.
 aws-config = { version = "=1.13.2", default-features = false, features = ["rt-tokio", "default-https-client"], optional = true }
+# An invocation's event as JSON, to tell API Gateway's events from the
+# daily sweep's (NOC-290). Already in the tree through aws_lambda_events,
+# at the version the relay server uses.
+serde_json = { version = "=1.0.154", default-features = false, features = ["std"] }
 # The challenge's nonce: the platform's secure generator, as in the core.
 getrandom = { version = "=0.4.3", default-features = false }
 # API Gateway hands a binary message to Lambda in base64. Already in the
@@ -61,7 +65,6 @@ base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 tokio-tungstenite = { version = "=0.30.0", default-features = false, features = ["handshake"], optional = true }
 futures-util = { version = "=0.3.34", default-features = false, features = ["sink", "std"], optional = true }
 httparse = { version = "=1.10.1", default-features = false, features = ["std"], optional = true }
-serde_json = { version = "=1.0.154", default-features = false, features = ["std"], optional = true }
 
 [features]
 # The function on AWS: the binary, the AWS backend, the `connections`
@@ -81,7 +84,6 @@ harness = [
     "dep:tokio-tungstenite",
     "dep:futures-util",
     "dep:httparse",
-    "dep:serde_json",
     "tokio/rt-multi-thread",
     "tokio/net",
     "tokio/sync",
