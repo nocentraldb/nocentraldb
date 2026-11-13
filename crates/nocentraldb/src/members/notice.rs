@@ -80,7 +80,6 @@ impl Notice {
         text: "Spaces this database joined before keep its old account. \
                Other members see it as linked to yours.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_RECOVERED: Notice = Notice {
         code: NoticeCode::AccountRecovered,
         text: "Your account is back with a new account key. \

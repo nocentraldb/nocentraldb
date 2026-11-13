@@ -154,6 +154,28 @@ impl Keys {
         }
     }
 
+    /// The keys of a new database that recovers the account of `code` (RFC
+    /// 0010, "The recovery code"): a member key and a new account key, with
+    /// the statement the recovery key signs, numbered the larger of one
+    /// more than the highest number the device learned, none on a new
+    /// device, and the current time in Unix seconds (Carsten, 2026-11-12,
+    /// NOC-285). The recovery key is dropped with `code`.
+    pub(crate) fn recovered(code: &RecoveryCode, now_secs: u64) -> Keys {
+        let key = SigningKey::from_bytes(&random());
+        let number = now_secs.max(1);
+        let statement =
+            AccountKeyStatement::sign(&code.recovery_key(), key.verifying_key().to_bytes(), number);
+        Keys {
+            member: Secrets {
+                signing: random(),
+                agreement: random(),
+            },
+            account: Account::Holds { key, statement },
+            code: None,
+            upgraded: false,
+        }
+    }
+
     /// The keys of a new database opened for pairing: a member key and no
     /// account yet.
     pub(crate) fn pairing() -> Keys {

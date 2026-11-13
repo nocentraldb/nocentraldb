@@ -73,7 +73,7 @@ impl LocalRelay {
         }
     }
 
-    async fn with(allowed: BTreeSet<[u8; 32]>) -> LocalRelay {
+    pub async fn with(allowed: BTreeSet<[u8; 32]>) -> LocalRelay {
         let dir = TempDir::new();
         let addr = serve(&dir, allowed.clone(), None).await;
         let proxy = Proxy::start(addr).await;
@@ -293,8 +293,23 @@ pub async fn push(client: &mut Client, changes: &[&Change]) {
     for result in results {
         assert!(
             super::relay_support::get(&result, 1).is_some(),
-            "refused: {result:?}"
+            "not appended: {}",
+            outcome(&result)
         );
+    }
+}
+
+/// A push result as RFC 0007 gives it: key 1 is the position of an
+/// append, key 2 the position of a duplicate, key 3 the code of a
+/// refusal.
+fn outcome(result: &ncdb_core::cbor::Value) -> String {
+    use super::relay_support::get;
+    if let Some(position) = get(result, 2) {
+        return format!("a duplicate, at {position:?}");
+    }
+    match get(result, 3) {
+        Some(ncdb_core::cbor::Value::Text(code)) => format!("refused with {code}"),
+        _ => format!("{result:?}"),
     }
 }
 

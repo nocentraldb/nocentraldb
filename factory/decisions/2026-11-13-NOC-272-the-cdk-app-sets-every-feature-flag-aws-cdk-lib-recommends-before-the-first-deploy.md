@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-272 · The CDK app sets every feature flag aws-cdk-lib recommends, before the first deploy
+
+- Decided by: Carsten, 2026-11-13, on #293
+- Why: each CDK feature flag changes some construct's default. A flag set after the first deploy can change or replace a deployed resource; one set before costs nothing. `infra/aws/cdk.json` therefore holds all 89 flags of aws-cdk-lib 2.274.0's `CURRENTLY_RECOMMENDED_FLAGS`, which is what `cdk init` writes for a new project. The tests synthesize with the same context (`test/support.ts`, `flags()`), and one test fails when `cdk.json` lacks a recommended flag, for example after an upgrade of aws-cdk-lib. In the template the flags change one resource: the function role's policy, whose 18 statements become 3 (`@aws-cdk/aws-iam:minimizePolicies`), granting the same 141 pairs of action and resource. CloudFormation's execution policy needs no change.
+- Instead of: leaving the flags unset, which keeps CDK's legacy defaults and would make setting them later a change to deployed resources; or setting only the flags that change this stack today, which leaves the others to change a resource the stack gains later.
+- Topics: relay, aws, cdk, infra
