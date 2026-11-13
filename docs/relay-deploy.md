@@ -117,7 +117,7 @@ It reads the key without checking the invitation. The local relay does check it:
 
 ## 2. The first deploy
 
-The first deploy runs when a change to the relay reaches `main`, for example the merge that brings this runbook.
+The first deploy runs when a change to the relay reaches `main` after you finished the setup above. Before that, the `deploy` job finds no `AWS_DEPLOY_ROLE_ARN` in `aws-prod`, skips every step with a notice and stays green, and nothing is deployed; the merge that brings this runbook is such a run. To deploy once the setup is done, re-run the latest `relay-deploy` run on `main`, or merge the next change to the relay.
 
 1. Watch the workflow `relay-deploy`. Its `deploy` job waits for the environment `aws-prod`, shows `cdk diff`, then deploys.
 2. Confirm the SNS subscription mail that AWS sends to `ALARM_EMAIL`. Until you confirm it, the alarms send nothing.

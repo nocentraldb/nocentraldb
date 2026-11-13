@@ -211,6 +211,66 @@ runWorkflowChecks({
       },
     },
     {
+      name: "before the owner's one-time setup the deploy skips with a notice, and stays green",
+      check: (ctx) => {
+        const steps = job(ctx, "deploy").steps ?? [];
+        const ready = steps.findIndex((s) => s.id === "ready");
+        assert.ok(ready >= 0, "no step with the id ready");
+        const check = steps[ready];
+        assert.equal(check.env?.ROLE, gh("vars.AWS_DEPLOY_ROLE_ARN"));
+        assert.match(check.run ?? "", /if \[ -z "\$ROLE" \]/);
+        assert.match(check.run ?? "", /::notice /);
+        assert.match(check.run ?? "", /ready=false/);
+        assert.match(check.run ?? "", /ready=true/);
+        assert.ok(
+          !/exit 1/.test(check.run ?? ""),
+          "the check must not fail the job",
+        );
+        const later = steps.filter(
+          (s, i) => i !== ready && !s.uses?.startsWith("actions/checkout@"),
+        );
+        const assume = steps.findIndex((s) =>
+          s.uses?.startsWith("aws-actions/configure-aws-credentials@"),
+        );
+        assert.ok(ready < assume, "the check comes before the OIDC step");
+        for (const s of later) {
+          assert.equal(
+            s.if,
+            "steps.ready.outputs.ready == 'true'",
+            `${s.name ?? s.uses ?? s.run} runs before the setup`,
+          );
+        }
+      },
+      mutants: {
+        "no check": (ctx) => {
+          ctx.workflow.jobs.deploy.steps =
+            ctx.workflow.jobs.deploy.steps.filter((s) => s.id !== "ready");
+        },
+        "the OIDC step runs anyway": (ctx) => {
+          for (const s of ctx.workflow.jobs.deploy.steps) {
+            if (s.uses?.startsWith("aws-actions/configure-aws-credentials@")) {
+              delete s.if;
+            }
+          }
+        },
+        "the deploy runs anyway": (ctx) => {
+          for (const s of ctx.workflow.jobs.deploy.steps) {
+            if (s.run?.includes("cdk deploy")) {
+              delete s.if;
+            }
+          }
+        },
+        "the check fails red": (ctx) => {
+          for (const s of ctx.workflow.jobs.deploy.steps) {
+            if (s.id === "ready") {
+              s.run =
+                'if [ -z "$ROLE" ]; then echo "::notice ::x"; echo ready=false; echo ready=true; exit 1; fi';
+            }
+          }
+        },
+      },
+    },
+    {
       name: "the deployment's values reach the shell as variables, never spliced into it",
       check: (ctx) => {
         for (const [id, j] of Object.entries(workflow(ctx).jobs)) {

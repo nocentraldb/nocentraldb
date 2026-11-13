@@ -15,6 +15,8 @@
 #   through the GitHub environment `aws-prod`, which allows only main. It
 #   assumes the deploy role with the job's OIDC token, builds the package
 #   again in its own job, shows `cdk diff`, then runs `cdk deploy`.
+#   Until the owner's one-time setup gives the environment its role, the job
+#   skips every step with a notice and stays green.
 #
 # Every action is pinned by commit SHA. scripts/relay-deploy-workflow.test.mjs
 # asserts this file.
@@ -98,31 +100,54 @@ jobs:
       ALLOWED_ACCOUNTS: ${{ vars.ALLOWED_ACCOUNTS }}
       ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
     steps:
+      # Before the owner's one-time setup (docs/relay-deploy.md), the
+      # environment has no role to assume: the job says so and skips every
+      # step, so a merge to main stays green and deploys nothing.
+      - name: Is the one-time setup done?
+        id: ready
+        env:
+          ROLE: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+        run: |
+          if [ -z "$ROLE" ]; then
+            echo "::notice title=relay-deploy skipped::The environment aws-prod has no AWS_DEPLOY_ROLE_ARN yet. Do the one-time setup in docs/relay-deploy.md; nothing was deployed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.ready.outputs.ready == 'true'
 
       - name: Rust toolchain from rust-toolchain.toml, with the arm64 Linux target
+        if: steps.ready.outputs.ready == 'true'
         run: |
           rustup toolchain install --no-self-update
           rustup target add aarch64-unknown-linux-gnu
 
       - name: cargo-lambda and zig, pinned by hash
+        if: steps.ready.outputs.ready == 'true'
         run: pip install --require-hashes --only-binary ":all:" -r infra/aws/cargo-lambda.txt
 
       - name: Build the function's package
+        if: steps.ready.outputs.ready == 'true'
         run: cargo lambda build --locked --release --arm64 -p ncdb-relay-lambda --features aws --bin ncdb-relay-lambda
 
       # proto, then moon, Node and pnpm as .prototools pins them, as in ci.yml.
       - name: Install proto and the tools in .prototools
+        if: steps.ready.outputs.ready == 'true'
         run: bash scripts/install-toolchain.sh
       - run: pnpm install --frozen-lockfile
+        if: steps.ready.outputs.ready == 'true'
 
       - name: Assume the deploy role through OIDC
+        if: steps.ready.outputs.ready == 'true'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
           aws-region: eu-central-1
 
       - name: Show what changes
+        if: steps.ready.outputs.ready == 'true'
         working-directory: infra/aws
         run: >-
           pnpm exec cdk diff --no-notices
@@ -132,6 +157,7 @@ jobs:
           -c lambdaPackage="$GITHUB_WORKSPACE/$LAMBDA_PACKAGE"
 
       - name: Deploy
+        if: steps.ready.outputs.ready == 'true'
         working-directory: infra/aws
         run: >-
           pnpm exec cdk deploy --no-notices --require-approval never
