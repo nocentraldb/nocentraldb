@@ -1,6 +1,7 @@
 //! What the AWS backend does beyond the conformance suite (RFC 0007, "The
 //! AWS backend"; NOC-270): where a frame is kept by its size, the orphan a
-//! failed append leaves in S3 and the sweep that deletes it, appends from
+//! failed append leaves in S3 and the sweep that deletes it, a sweep that
+//! resumes across runs (NOC-293), appends from
 //! several handles with frames on both sides of the line, the reserved
 //! epoch item, and the limit of one transaction. Ignored unless an AWS
 //! Emulator runs on this machine (docs/aws-emulator.md); the CI job
@@ -17,7 +18,7 @@ use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::conformance::{Backend, block_on};
 use ncdb_relay::store::{AppendOutcome, Effect, MemberRecord, NewEntry, RelayStore};
-use ncdb_relay_aws::{EPOCH_ITEM, INLINE_LIMIT, frame_key};
+use ncdb_relay_aws::{EPOCH_ITEM, INLINE_LIMIT, SWEEP_ITEM, SweepBudget, SweepOutcome, frame_key};
 
 fn space(n: u8) -> SpaceId {
     SpaceId([n; 16])
@@ -145,6 +146,78 @@ fn a_failed_append_leaves_an_orphan_in_s3_which_the_sweep_deletes() {
     assert!(object_exists(&aws, &held));
     let read = block_on(store.read(space(1), 0, 10)).unwrap();
     assert_eq!(read[1].frame, kept.frame);
+}
+
+/// Writes an object under `frames/` that no change holds: what a failed
+/// append leaves behind.
+fn put_orphan(aws: &Aws, key: &str) {
+    let s3 = aws.s3();
+    aws.runtime
+        .block_on(
+            s3.put_object()
+                .bucket(&aws.names.bucket)
+                .key(key)
+                .body(vec![0u8; 16].into())
+                .send(),
+        )
+        .expect("the orphan is written");
+}
+
+#[test]
+#[ignore = "needs the AWS Emulator"]
+fn a_sweep_that_visits_fewer_objects_than_the_bucket_holds_resumes_until_its_pass_completes() {
+    // NOC-293: a run of the Lambda stops before its timeout; the next run
+    // continues where it stopped, so a pass finishes however many frames
+    // the bucket holds. A budget of a few objects stands in for 29 seconds.
+    let aws = fresh();
+    let store = aws.connect();
+    let kept = entry(1, INLINE_LIMIT * 2);
+    block_on(store.append(space(1), 0, vec![kept.clone()], vec![])).unwrap();
+    let held = frame_key(space(1), kept.change);
+    let orphans: Vec<String> = (10..17u32)
+        .map(|n| frame_key(space(2), entry(n, 4).change))
+        .collect();
+    for key in &orphans {
+        put_orphan(&aws, key);
+    }
+    let cutoff = now_ms() + 60_000;
+    let start = now_ms();
+    let budget = SweepBudget::visits(3);
+
+    let mut deleted = 0;
+    let mut runs = 0;
+    loop {
+        runs += 1;
+        assert!(runs <= 4, "8 objects at 3 a run take 3 runs");
+        let run = block_on(store.sweep_orphans_run(cutoff, start, budget)).unwrap();
+        assert!(run.visited <= 3, "a run visits at most its budget");
+        deleted += run.deleted;
+        match run.outcome {
+            SweepOutcome::Paused => continue,
+            SweepOutcome::Completed => break,
+            SweepOutcome::Skipped => panic!("a pass with a cursor never skips"),
+        }
+    }
+    assert_eq!(runs, 3);
+    assert_eq!(deleted, 7);
+    for key in &orphans {
+        assert!(!object_exists(&aws, key), "{key} is swept");
+    }
+    assert!(object_exists(&aws, &held), "a change's frame is kept");
+
+    // A completed pass is not started again within the day; a day later
+    // a new pass runs from the start.
+    let hour = 60 * 60 * 1000;
+    let soon = block_on(store.sweep_orphans_run(cutoff, start + hour, budget)).unwrap();
+    assert_eq!(soon.outcome, SweepOutcome::Skipped);
+    assert_eq!((soon.visited, soon.deleted), (0, 0));
+    let next_day = block_on(store.sweep_orphans_run(cutoff, start + 24 * hour, budget)).unwrap();
+    assert_eq!(next_day.outcome, SweepOutcome::Completed);
+    assert_eq!((next_day.visited, next_day.deleted), (1, 0));
+    // The cursor is the reserved item SWEEP_ITEM in `spaces`, which no
+    // space id can be.
+    assert_eq!(SWEEP_ITEM, b"sweep");
+    assert_eq!(block_on(store.head(space(1))).unwrap(), Some(1));
 }
 
 fn now_ms() -> u64 {

@@ -9,11 +9,14 @@
 
 use std::collections::BTreeSet;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::store::{Entry, RelayStore, StoreError, Token, UploadId};
 use ncdb_relay::{Config, ErrorCode, Relay};
-use ncdb_relay_lambda::invocation::{SWEEP_AGE, SWEEP_INPUT, Sweep, invoke};
+use ncdb_relay_lambda::invocation::{
+    Pass, SWEEP_AGE, SWEEP_INPUT, SWEEP_MARGIN, Sweep, Swept, invoke,
+};
 use ncdb_relay_lambda::{ConnectionApi, Handler, MemoryConnections, Posted, Urls};
 use serde_json::{Value, json};
 
@@ -43,23 +46,31 @@ impl Log {
     }
 }
 
-/// A sweep that records each cutoff it is asked for, and the log lines
-/// written before it ran, and answers with `deleted`, or fails when that is
-/// `None`.
+/// A sweep that records each cutoff, now and deadline it is given, and the
+/// log lines written before it ran, and answers with `deleted` in a pass
+/// that ends as `pass`, or fails when `deleted` is `None`.
 struct Recorded<'a> {
     cutoffs: Mutex<Vec<u64>>,
+    deadlines: Mutex<Vec<(u64, Instant)>>,
     logged_before: Mutex<Vec<Value>>,
     log: &'a Log,
     deleted: Option<u32>,
+    pass: Pass,
 }
 
 impl<'a> Recorded<'a> {
     fn answering(log: &'a Log, deleted: Option<u32>) -> Recorded<'a> {
+        Recorded::ending(log, deleted, Pass::Completed)
+    }
+
+    fn ending(log: &'a Log, deleted: Option<u32>, pass: Pass) -> Recorded<'a> {
         Recorded {
             cutoffs: Mutex::new(Vec::new()),
+            deadlines: Mutex::new(Vec::new()),
             logged_before: Mutex::new(Vec::new()),
             log,
             deleted,
+            pass,
         }
     }
 
@@ -69,11 +80,17 @@ impl<'a> Recorded<'a> {
 }
 
 impl Sweep for Recorded<'_> {
-    async fn sweep(&self, cutoff: u64) -> Result<u32, StoreError> {
+    async fn sweep(&self, cutoff: u64, now: u64, deadline: Instant) -> Result<Swept, StoreError> {
         self.cutoffs.lock().unwrap().push(cutoff);
+        self.deadlines.lock().unwrap().push((now, deadline));
         *self.logged_before.lock().unwrap() = self.log.lines();
-        self.deleted
-            .ok_or_else(|| StoreError("the bucket refused".into()))
+        let deleted = self
+            .deleted
+            .ok_or_else(|| StoreError("the bucket refused".into()))?;
+        Ok(Swept {
+            deleted,
+            pass: self.pass,
+        })
     }
 }
 
@@ -135,6 +152,11 @@ fn websocket(json: &str, now: u64) -> Value {
 
 const NOW: u64 = 1_800_000_000_000;
 
+/// An invocation's deadline, as Lambda gives it: 29 seconds from now.
+fn deadline() -> Instant {
+    Instant::now() + Duration::from_secs(29)
+}
+
 #[tokio::test]
 async fn the_schedule_s_input_runs_the_sweep_with_a_cutoff_a_day_back() {
     let handler = handler();
@@ -142,7 +164,7 @@ async fn the_schedule_s_input_runs_the_sweep_with_a_cutoff_a_day_back() {
     let sweep = Recorded::answering(&log, Some(3));
     let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
 
-    let failed = invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
+    let failed = invoke(&handler, &sweep, input, NOW, deadline(), &|l| log.write(l)).await;
 
     assert_eq!(sweep.cutoffs(), vec![NOW - SWEEP_AGE]);
     assert_eq!(SWEEP_AGE, 24 * 60 * 60 * 1000);
@@ -168,9 +190,14 @@ async fn websocket_events_go_to_the_handler_and_never_reach_the_sweep() {
     let now = ncdb_relay_lambda::contract::now();
 
     for json in [CONNECT, MESSAGE, DISCONNECT] {
-        let failed = invoke(&handler, &sweep, websocket(json, now), now, &|l| {
-            log.write(l)
-        })
+        let failed = invoke(
+            &handler,
+            &sweep,
+            websocket(json, now),
+            now,
+            deadline(),
+            &|l| log.write(l),
+        )
         .await;
         assert!(!failed);
         let line = log.last();
@@ -187,15 +214,23 @@ async fn a_message_whose_text_is_the_schedule_s_input_is_only_a_message() {
     let log = Log::default();
     let sweep = Recorded::answering(&log, Some(0));
     let now = ncdb_relay_lambda::contract::now();
-    invoke(&handler, &sweep, websocket(CONNECT, now), now, &|l| {
-        log.write(l)
-    })
+    invoke(
+        &handler,
+        &sweep,
+        websocket(CONNECT, now),
+        now,
+        deadline(),
+        &|l| log.write(l),
+    )
     .await;
 
     let mut message = websocket(MESSAGE, now);
     message["body"] = json!(SWEEP_INPUT);
     message["isBase64Encoded"] = json!(false);
-    invoke(&handler, &sweep, message, now, &|l| log.write(l)).await;
+    invoke(&handler, &sweep, message, now, deadline(), &|l| {
+        log.write(l)
+    })
+    .await;
 
     assert_eq!(log.last()["route"], "message");
     assert_eq!(sweep.cutoffs(), Vec::<u64>::new());
@@ -224,7 +259,10 @@ async fn any_other_event_is_refused_and_sweeps_nothing() {
     ];
 
     for other in others {
-        invoke(&handler, &sweep, other.clone(), NOW, &|l| log.write(l)).await;
+        invoke(&handler, &sweep, other.clone(), NOW, deadline(), &|l| {
+            log.write(l)
+        })
+        .await;
         let line = log.last();
         assert!(line.get("refused").is_some(), "{other}: {line}");
     }
@@ -238,7 +276,7 @@ async fn a_failed_sweep_fails_the_invocation_and_logs_no_detail() {
     let sweep = Recorded::answering(&log, None);
     let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
 
-    let failed = invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
+    let failed = invoke(&handler, &sweep, input, NOW, deadline(), &|l| log.write(l)).await;
 
     assert!(failed);
     let end = log.last();
@@ -257,10 +295,49 @@ async fn a_sweep_logs_its_start_before_it_runs() {
     let sweep = Recorded::answering(&log, Some(0));
     let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
 
-    invoke(&handler, &sweep, input, NOW, &|l| log.write(l)).await;
+    invoke(&handler, &sweep, input, NOW, deadline(), &|l| log.write(l)).await;
 
     let before = sweep.logged_before.lock().unwrap().clone();
     assert_eq!(before.len(), 1);
     assert_eq!(before[0]["sweep"], "orphans");
     assert_eq!(before[0]["phase"], "start");
+}
+
+#[tokio::test]
+async fn the_sweep_stops_its_margin_before_the_invocation_s_deadline() {
+    // NOC-293: a run that stops before Lambda's timeout logs its end and
+    // stores its cursor; one cut off by the timeout would do neither.
+    let handler = handler();
+    let log = Log::default();
+    let sweep = Recorded::answering(&log, Some(0));
+    let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
+    let at = deadline();
+
+    invoke(&handler, &sweep, input, NOW, at, &|l| log.write(l)).await;
+
+    assert_eq!(SWEEP_MARGIN, Duration::from_secs(5));
+    let given = sweep.deadlines.lock().unwrap().clone();
+    assert_eq!(given, vec![(NOW, at - SWEEP_MARGIN)]);
+}
+
+#[tokio::test]
+async fn the_end_line_says_how_the_pass_stands() {
+    for (pass, name) in [
+        (Pass::Paused, "paused"),
+        (Pass::Completed, "completed"),
+        (Pass::Skipped, "skipped"),
+    ] {
+        let handler = handler();
+        let log = Log::default();
+        let sweep = Recorded::ending(&log, Some(2), pass);
+        let input: Value = serde_json::from_str(SWEEP_INPUT).unwrap();
+
+        let failed = invoke(&handler, &sweep, input, NOW, deadline(), &|l| log.write(l)).await;
+
+        assert!(!failed, "a paused or skipped run is no failure");
+        let end = log.last();
+        assert_eq!(end["phase"], "end");
+        assert_eq!(end["pass"], name);
+        assert_eq!(end["deleted"], 2);
+    }
 }
