@@ -406,3 +406,63 @@ test("space.status gives a new space's status, and its handles share it", async 
   assert.deepEqual(result.seen, ["admin"]);
   assert.deepEqual(errors, []);
 });
+
+// NOC-176 slice 4b: invitations and members (RFC 0009, "Invitations and
+// members"), between two members, each in its own browser context: the
+// databases of one origin share one OPFS pool, which one worker holds.
+test("an admin adds a member by invitation once its fingerprint is confirmed, re-roles and removes it", async () => {
+  const { page: other, errors: otherErrors } = await page();
+  const own = await other.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "other" });
+      const invitation = await db.invitation();
+      await db.close();
+      return { text: String(invitation), fingerprint: invitation.fingerprint };
+    },
+    { lock, MODEL },
+  );
+  const { page: admin, errors } = await page();
+  const seen = await admin.evaluate(
+    async ({ lock, MODEL, text }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "admin" });
+      const project = await db.spaces.create();
+      const invitation = nc.invitation(text);
+      const seen = {};
+      seen.unconfirmed = await project.members
+        .add(invitation, { role: "writer" })
+        .then(
+          () => "added",
+          (error) => ({ code: error.code, fingerprint: error.fingerprint }),
+        );
+      seen.added = (
+        await project.members.add(invitation, {
+          role: "writer",
+          fingerprint: seen.unconfirmed.fingerprint,
+        })
+      ).notice.code;
+      const them = (await project.members.list()).find((m) => !m.self);
+      seen.listed = { kind: them.kind, role: them.role, id: them.id.length };
+      seen.lowered = (
+        await project.members.setRole(them.id, "reader")
+      ).notice.code;
+      seen.removed = (await project.members.remove(them.id)).notice.code;
+      seen.left = (await project.members.list()).length;
+      await db.close();
+      return seen;
+    },
+    { lock, MODEL, text: own.text },
+  );
+  assert.equal(seen.unconfirmed.code, "unknownAccount");
+  assert.equal(seen.unconfirmed.fingerprint, own.fingerprint);
+  assert.equal(seen.added, "memberAdded");
+  assert.deepEqual(seen.listed, { kind: "device", role: "writer", id: 64 });
+  assert.equal(seen.lowered, "roleSet");
+  assert.equal(seen.removed, "memberRemoved");
+  assert.equal(seen.left, 1);
+  assert.deepEqual(otherErrors, []);
+  assert.deepEqual(errors, []);
+});
