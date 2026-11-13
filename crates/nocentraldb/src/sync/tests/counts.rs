@@ -53,10 +53,7 @@ async fn write(space: &Space, title: &str) {
 async fn open_at(dir: &TempDir, url: Option<&str>) -> Db {
     let key_file = dir.0.join("member.key");
     if !key_file.exists() {
-        let keys = Keys {
-            member: Secrets::new([ME; 32], [ME ^ 0x80; 32]),
-            account: account(),
-        };
+        let keys = Keys::of_account(Secrets::new([ME; 32], [ME ^ 0x80; 32]), account());
         std::fs::write(&key_file, keys.encode()).unwrap();
     }
     let options = OpenOptions::new(LOCK)

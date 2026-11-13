@@ -192,13 +192,25 @@ fn erasure(resolved: &Resolved, shred: Shred<'_>) -> Option<Erasure> {
         state: shred.state,
         performer: MemberId(shred.performer),
         performer_account: account(resolved, shred.performer)?,
-        sign_off: Fingerprint(shred.sign_off),
+        sign_off: of_account_key(resolved, shred.sign_off),
         members,
     })
+}
+
+/// The fingerprint of the account whose key is `key`: over the recovery
+/// key a current member's certificate of that account states, or over the
+/// key itself when none states one (RFC 0003, "Account fingerprint").
+pub(crate) fn of_account_key(resolved: &Resolved, key: [u8; 32]) -> Fingerprint {
+    resolved
+        .members()
+        .filter_map(|(id, _)| resolved.member(id))
+        .map(|state| &state.certificate)
+        .find(|certificate| certificate.account_key == key && certificate.statement.is_some())
+        .map_or(Fingerprint::account(key), Fingerprint::of)
 }
 
 /// The fingerprint of a current or former member's account.
 fn account(resolved: &Resolved, member: ncdb_core::ids::MemberId) -> Option<Fingerprint> {
     let state = resolved.member(member)?;
-    Some(Fingerprint(state.certificate.account_key))
+    Some(Fingerprint::of(&state.certificate))
 }
