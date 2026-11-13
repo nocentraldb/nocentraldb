@@ -207,3 +207,18 @@ test("closing a follower ends only its own connection", async () => {
   expect(first.log).toEqual(["open"]);
   expect((await ask(first.core, "spaces.list")).ok).toEqual([]);
 });
+
+test("a follower's open names the owner's relay, which serves every tab", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK, relay: "ws://owner" });
+  const second = await tab();
+  const answer = await ask(second.core, "open", {
+    lock: LOCK,
+    relay: "ws://follower",
+  });
+  expect(answer.ok).toEqual({
+    sync: { connection: "none" },
+    relay: "ws://owner",
+  });
+});

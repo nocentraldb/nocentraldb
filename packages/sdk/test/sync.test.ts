@@ -187,3 +187,24 @@ test("its types are RFC 0009's", async () => {
   expectTypeOf(db.sync.isConfirmed).returns.toEqualTypeOf<Promise<boolean>>();
   expectTypeOf(db.sync.confirmed).returns.toEqualTypeOf<Promise<void>>();
 });
+
+test("in a tab that reaches another tab's database, current() names the owner's relay", async () => {
+  const { core } = fake({ ...OFFLINE });
+  const reached: Core = {
+    ...core,
+    call: async (bytes) => {
+      const answer = decode(await core.call(bytes)) as {
+        id: number;
+        ok?: Record<string, unknown>;
+      };
+      const { call } = decode(bytes) as { call: string };
+      return encode(
+        call === "open"
+          ? { ...answer, ok: { ...answer.ok, relay: "ws://owner" } }
+          : answer,
+      );
+    },
+  };
+  const db = await connect(reached, { model, lock, relay });
+  expect(db.sync.current().relay).toBe("ws://owner");
+});
