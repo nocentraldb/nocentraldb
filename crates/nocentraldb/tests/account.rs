@@ -340,3 +340,107 @@ fn an_agent_with_an_account_of_its_own_is_not_linked_yet() {
     .unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotAllowed);
 }
+
+// Linking an account drawn per database (RFC 0010, "Linking accounts drawn
+// per database"; NOC-269): a database opened with an account of its own
+// pairs into the person's account.
+
+/// Where the account secret sits in a key record of format 2 that holds
+/// the account key: after the 16-byte magic, the format byte, the two
+/// 32-byte member secrets and the account byte, which is 1.
+const ACCOUNT_SECRET: std::ops::Range<usize> = 82..114;
+
+fn key_file(dir: &TempDir, name: &str) -> Vec<u8> {
+    std::fs::read(dir.join(&format!("{name}.keys"))).unwrap()
+}
+
+/// The fingerprint `db` lists itself with in `space`.
+fn own_account(space: &nocentraldb::Space) -> nocentraldb::Fingerprint {
+    now(space.members().list())
+        .unwrap()
+        .into_iter()
+        .find(|member| member.is_self)
+        .expect("the database is a member of its own space")
+        .account
+}
+
+#[test]
+fn linking_deletes_the_old_account_key_from_the_key_file() {
+    let dir = TempDir::new("link-key-file");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    let before = key_file(&dir, "tablet");
+    assert_eq!(before[81], 1, "the tablet holds an account key of its own");
+    let old = before[ACCOUNT_SECRET].to_vec();
+    assert_ne!(old, key_file(&dir, "laptop")[ACCOUNT_SECRET]);
+
+    assert_eq!(
+        pair(&laptop, &tablet, PairKind::Device),
+        [NoticeCode::DevicePaired, NoticeCode::AccountLinked]
+    );
+    // The key file holds the person's account key in its place.
+    let after = key_file(&dir, "tablet");
+    assert_eq!(
+        after[ACCOUNT_SECRET],
+        key_file(&dir, "laptop")[ACCOUNT_SECRET]
+    );
+    // No file the tablet keeps holds the old account secret any more.
+    for entry in std::fs::read_dir(dir.join("")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_file() {
+            let bytes = std::fs::read(&path).unwrap();
+            assert!(
+                !bytes
+                    .windows(old.len())
+                    .any(|window| window == old.as_slice()),
+                "{} still holds the old account secret",
+                path.display()
+            );
+        }
+    }
+    // A reopen reads the person's account from the key file.
+    drop(tablet);
+    let tablet = open(at(&dir, "tablet"));
+    assert_eq!(
+        now(tablet.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+}
+
+#[test]
+fn a_space_from_before_the_link_keeps_the_old_account_and_takes_writes() {
+    let dir = TempDir::new("link-old-space");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    let old_fingerprint = now(tablet.invitation()).fingerprint();
+    let before = now(tablet.spaces().create()).unwrap();
+    assert_eq!(own_account(&before), old_fingerprint);
+
+    pair(&laptop, &tablet, PairKind::Device);
+    // The fold still counts the old account as an account of its own: the
+    // membership written before the link keeps the old certificate.
+    assert_ne!(old_fingerprint, now(laptop.invitation()).fingerprint());
+    assert_eq!(own_account(&before), old_fingerprint);
+    // And the tablet still writes there, as the member it was.
+    now(before.write(|tx| {
+        tx.create("projects", [("name", nocentraldb::Value::from("After"))])?;
+        Ok(())
+    }))
+    .unwrap();
+}
+
+#[test]
+fn a_space_created_after_the_link_carries_the_persons_account() {
+    let dir = TempDir::new("link-new-space");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    pair(&laptop, &tablet, PairKind::Device);
+    let after = now(tablet.spaces().create()).unwrap();
+    assert_eq!(own_account(&after), now(laptop.invitation()).fingerprint());
+    // The laptop's account is the tablet's: it joins without a fingerprint.
+    let options = nocentraldb::AddMember {
+        role: nocentraldb::Role::Writer,
+        fingerprint: None,
+    };
+    now(after.members().add(&now(laptop.invitation()), options)).unwrap();
+}
