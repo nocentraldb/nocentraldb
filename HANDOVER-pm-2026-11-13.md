@@ -61,3 +61,4 @@ Next one 2026-11-14 06:00 Berlin, by the existing trigger trig_01JZqmrybFyHj4M2F
 - pm triggers recreated for this session: hourly tick `trig_01SU2e5pXF42t5sozxKPJyhq`, daily note `trig_0138s2nw5JewokGFZapnLaYm`. The old ones are deleted.
 - Noka, v9jp, uWo4 and rT1G were told to report to this session.
 - Still open, because Linear did not connect: the option-B decision ticket (Done), the rT1G docs ticket (send rT1G its number), the NOC-295 note, NOC-299 Done.
+- Linear done by a helper session (2026-11-13 ~16:00 UTC): NOC-300 (owner's GitHub permissions, needs-owner), NOC-301 (option B, Done), NOC-302 (rT1G's getting-started docs, In Progress), comment on NOC-295, NOC-299 Done.
