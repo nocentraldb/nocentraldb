@@ -1,4 +1,4 @@
-/* Copied unchanged from nxsflow/brand, commit 38abcfc, tokens/nocentraldb.css (NOC-211).
+/* Copied from nxsflow/brand, commit 74bf76f, tokens/nocentraldb.css, and formatted by Biome.
    Change it there and copy it again; never edit it here. */
 /* NoCentralDB tokens (endorsed brand), generated from BRAND.md, section "NoCentralDB (endorsed)" */
 /* Dark theme only. Separate from the family tokens on purpose: never mix --ncdb-* with --nxs-*. */
@@ -17,8 +17,9 @@
   --ncdb-surface-2: #26261f;
   --ncdb-ink: #ecebe4;
   --ncdb-muted: #a3a299;
-  --ncdb-accent: #f2dc4b; /* safety yellow: primary action, live state, focus; under 5 % of a screen */
+  --ncdb-accent: #f2dc4b; /* safety yellow: primary action, focus, data that changes in a drawing; under 5 % of a screen, or the ground of one flooded section */
   --ncdb-accent-ink: #111110;
+  --ncdb-loud: #ff3d8b; /* hot magenta: only inside an animated drawing, the mark of a live connection */
   --ncdb-glow-1: rgba(242, 220, 75, 0.28); /* hover only */
   --ncdb-glow-2: rgba(242, 220, 75, 0.12); /* hover only */
 

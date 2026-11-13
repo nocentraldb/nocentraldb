@@ -23,7 +23,9 @@ use std::thread::{self, Thread};
 use ncdb_core::change::Kind;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 
+mod guest;
 mod large;
+pub use guest::*;
 pub use large::*;
 
 use crate::store::{
@@ -100,6 +102,7 @@ macro_rules! conformance_suite {
             expired_uploads_and_downloads_are_swept,
             control_entries_are_read_alone,
             a_bounded_read_stops_before_its_byte_budget,
+            an_account_records_one_guest_space,
         );
     };
     (@tests $fresh:path; $attrs:tt; $($name:ident),* $(,)?) => {
