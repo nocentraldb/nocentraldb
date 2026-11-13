@@ -126,6 +126,80 @@ async fn an_agent_joins_no_space_when_it_is_paired() {
     assert!(paired.added.is_empty() && paired.ask_admins.is_empty());
 }
 
+/// A device with an account of its own.
+const TABLET: Who = 4;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_tablet_with_an_account_of_its_own_is_linked_and_its_link_reaches_the_account_space() {
+    let tablet_account = ed25519_dalek::SigningKey::from_bytes(&[0x44; 32]);
+    let old_key = tablet_account.verifying_key().to_bytes();
+    let relay = LocalRelay::with(std::collections::BTreeSet::from([
+        account().verifying_key().to_bytes(),
+        old_key,
+    ]))
+    .await;
+    let laptop = open(LAPTOP, &relay.url()).await;
+    let project = now(laptop.spaces().create()).unwrap();
+    let tablet = Db::open_as(
+        OpenOptions::new(LOCK).in_memory().relay(&relay.url()),
+        [TABLET; 32],
+        [TABLET ^ 0x80; 32],
+        tablet_account,
+    )
+    .await
+    .unwrap();
+    let before = now(tablet.invitation()).fingerprint();
+
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(tablet.invitation())))
+    .unwrap();
+    let added: Vec<_> = paired.added.iter().map(|(space, _)| *space).collect();
+    assert_eq!(added, [project.id()]);
+    let notices: Vec<_> = now(tablet.account().complete_pairing(&paired.answer))
+        .unwrap()
+        .into_iter()
+        .map(|notice| notice.code)
+        .collect();
+    assert_eq!(
+        notices,
+        [NoticeCode::DevicePaired, NoticeCode::AccountLinked]
+    );
+    let after = now(tablet.invitation()).fingerprint();
+    assert_eq!(after, now(laptop.invitation()).fingerprint());
+    assert_ne!(after, before);
+    synced(&laptop).await;
+
+    // The tablet writes the whole link statement into the account space,
+    // which the laptop reads.
+    eventually("the laptop's account space holds the tablet's link", || {
+        crate::account::links(&crate::db::lock(&laptop.inner))
+            .unwrap()
+            .iter()
+            .any(|link| link.old_account_key == old_key && link.verify())
+    })
+    .await;
+    // Once the relay holds it, the tablet forgets its pending row; the
+    // next fold, here of the laptop's task, reaches the account space.
+    now(project.write(|tx| {
+        tx.create("tasks", [("title", Value::from("Linked"))])?;
+        Ok(())
+    }))
+    .unwrap();
+    synced(&laptop).await;
+    eventually(
+        "the tablet forgets the link once the relay holds it",
+        || {
+            crate::db::lock(&tablet.inner)
+                .view
+                .pending_links()
+                .unwrap()
+                .is_empty()
+        },
+    )
+    .await;
+}
+
 /// A guest: a member of another account's space, whose own account the
 /// relay does not let create spaces.
 const GUEST: Who = 5;

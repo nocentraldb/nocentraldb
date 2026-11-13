@@ -28,6 +28,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 use crate::cbor::{self, Key, Value};
+use crate::change::ChangeError;
 use crate::envelope::{self, EnvelopeError};
 use crate::keys::{self, MemberKey, MemberPublicKey};
 use crate::membership::{AccountKeyStatement, Certificate, MemberKind};
@@ -515,3 +516,109 @@ impl fmt::Display for CheckError {
 impl std::error::Error for BuildError {}
 impl std::error::Error for ReadError {}
 impl std::error::Error for CheckError {}
+
+/// A link statement (RFC 0010, "The link statement"): a per-database
+/// account, `old_account_key`, is part of the account whose identity is
+/// `recovery_key`. The old key and the account key `statement` names both
+/// sign [`link_digest`]. Its keys and signatures are public, so its
+/// `Debug` output names none of them.
+#[derive(Clone, PartialEq, Eq)]
+pub struct LinkStatement {
+    /// Key 1: the per-database account's key.
+    pub old_account_key: [u8; 32],
+    /// Key 2: the recovery key of the account it joins.
+    pub recovery_key: [u8; 32],
+    /// Key 3: the old key's signature.
+    pub old_signature: [u8; 64],
+    /// Key 4: the statement that names the account key of key 5.
+    pub statement: AccountKeyStatement,
+    /// Key 5: the account key's signature, as a pairing answer carries it.
+    pub account_signature: [u8; 64],
+}
+
+impl LinkStatement {
+    /// The whole statement: `old` signs the joining database's half, beside
+    /// the account key's half from the pairing answer and the statement
+    /// that names that account key.
+    pub fn sign(
+        old: &SigningKey,
+        statement: &AccountKeyStatement,
+        account_signature: [u8; 64],
+    ) -> LinkStatement {
+        let old_account_key = old.verifying_key().to_bytes();
+        let digest = link_digest(&old_account_key, &statement.recovery_key);
+        LinkStatement {
+            old_account_key,
+            recovery_key: statement.recovery_key,
+            old_signature: old.sign(&digest).to_bytes(),
+            statement: statement.clone(),
+            account_signature,
+        }
+    }
+
+    /// Whether it holds: the statement is of key 2's recovery key and
+    /// verifies, and both halves verify, strictly, with the old key and
+    /// with the account key the statement names.
+    pub fn verify(&self) -> bool {
+        let digest = link_digest(&self.old_account_key, &self.recovery_key);
+        let holds = |key: &[u8; 32], signature: &[u8; 64]| {
+            VerifyingKey::from_bytes(key).is_ok_and(|key| {
+                key.verify_strict(&digest, &Signature::from_bytes(signature))
+                    .is_ok()
+            })
+        };
+        self.statement.recovery_key == self.recovery_key
+            && self.statement.verify()
+            && holds(&self.old_account_key, &self.old_signature)
+            && holds(&self.statement.account_key, &self.account_signature)
+    }
+
+    /// The canonical bytes of the statement's map.
+    pub fn encode(&self) -> Vec<u8> {
+        let bytes = |bytes: &[u8]| Value::Bytes(bytes.to_vec());
+        cbor::encode(&Value::Map(BTreeMap::from([
+            (Key::Unsigned(1), bytes(&self.old_account_key)),
+            (Key::Unsigned(2), bytes(&self.recovery_key)),
+            (Key::Unsigned(3), bytes(&self.old_signature)),
+            (Key::Unsigned(4), self.statement.to_value()),
+            (Key::Unsigned(5), bytes(&self.account_signature)),
+        ])))
+    }
+
+    /// Decodes canonical bytes of the map: all five keys, of their lengths,
+    /// and no other.
+    pub fn decode(bytes: &[u8]) -> Result<LinkStatement, ChangeError> {
+        let Value::Map(mut map) = cbor::decode(bytes)? else {
+            return Err(ChangeError::InvalidValue(0));
+        };
+        let mut take = |key: u64| {
+            map.remove(&Key::Unsigned(key))
+                .ok_or(ChangeError::InvalidValue(key))
+        };
+        fn fixed<const N: usize>(key: u64, value: Value) -> Result<[u8; N], ChangeError> {
+            match value {
+                Value::Bytes(bytes) => bytes.try_into().map_err(|_| ChangeError::InvalidValue(key)),
+                _ => Err(ChangeError::InvalidValue(key)),
+            }
+        }
+        let link = LinkStatement {
+            old_account_key: fixed(1, take(1)?)?,
+            recovery_key: fixed(2, take(2)?)?,
+            old_signature: fixed(3, take(3)?)?,
+            statement: AccountKeyStatement::from_value(take(4)?)?,
+            account_signature: fixed(5, take(5)?)?,
+        };
+        match map.is_empty() {
+            true => Ok(link),
+            false => Err(ChangeError::InvalidValue(6)),
+        }
+    }
+}
+
+impl fmt::Debug for LinkStatement {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LinkStatement")
+            .field("number", &self.statement.number)
+            .finish_non_exhaustive()
+    }
+}

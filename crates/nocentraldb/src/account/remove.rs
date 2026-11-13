@@ -170,7 +170,7 @@ fn mark_removed(inner: &mut Inner, account: CoreSpaceId, lost: ids::MemberId) ->
     }
     let mut tx = Transaction::reserved(model());
     tx.update(MEMBERS, ObjectId(object), [("removed", Value::from(true))])?;
-    super::write(inner, account, tx)
+    super::write(inner, account, tx).map(drop)
 }
 
 /// Removes each member whose record in the account space says `removed`

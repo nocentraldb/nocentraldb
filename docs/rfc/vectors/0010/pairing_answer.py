@@ -40,6 +40,10 @@ same recipient, the same account key and the same ikmE, so the device
 answer's sealed key equals that directory's pairing.enc.hex and
 pairing.ciphertext.hex. The recovery key is that of the code whose 128 bits
 are all 0x42.
+
+It also writes link-statement.hex, the canonical CBOR map of the whole link
+statement whose account key half the linked device answer carries, with the
+old account key's half (seed 0x33 * 32).
 """
 
 import base64
@@ -181,6 +185,21 @@ device = answer(1, False)
 agent = answer(2, False)
 device_link = answer(1, True)
 assert (len(device), len(agent), len(device_link)) == (284, 204, 348)
+
+# The whole link statement (RFC 0010, "The link statement"): the old
+# account key signs the same input as the account key's half above.
+old_signature = sign(OLD_ACCOUNT_SEED, b"nocentraldb/account-link", {1: old_account_key, 2: recovery_key})
+link_statement = cbor2.dumps(
+    {
+        1: old_account_key,
+        2: recovery_key,
+        3: old_signature,
+        4: {1: recovery_key, 2: account_key, 3: NUMBER, 4: statement_signature},
+        5: link_signature,
+    },
+    canonical=True,
+)
+(HERE / "link-statement.hex").write_text(link_statement.hex() + "\n")
 
 (HERE / "pairing-answer.device.txt").write_text(text(device) + "\n")
 (HERE / "pairing-answer.agent.txt").write_text(text(agent) + "\n")

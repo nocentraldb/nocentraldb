@@ -20,6 +20,7 @@ mod from_lock;
 mod log_table;
 mod migrate;
 pub mod model;
+mod pending_links;
 mod plugin;
 mod query;
 mod read;
