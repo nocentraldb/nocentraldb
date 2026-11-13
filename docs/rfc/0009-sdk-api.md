@@ -480,7 +480,7 @@ if let Some(code) = db.account().recovery_code().await? {
 | `DevicePaired` | `complete_pairing` of a device | "This device now holds your account key. Keep your recovery code: it is the way back if you lose every device." |
 | `AgentPaired` | `complete_pairing` of an agent | "This agent acts for your account in the spaces an admin adds it to. It holds no account key." |
 | `AccountLinked` | `complete_pairing` of a database that had its own account | "Spaces this database joined before keep its old account. Other members see it as linked to yours." |
-| `AccountRecovered` | the open that recovers an account | "Your account is back with a new account key. Your spaces come back when one of their members adds this device." |
+| `AccountRecovered` | `db.account().recovered()`, on the open that recovered the account (Carsten, 2026-11-13, NOC-289) | "Your account is back with a new account key. Your spaces come back when one of their members adds this device." |
 | `AccountKeyRenewed` | `remove_member` | "Your account has a new account key. Members that have not learnt it yet still accept the old one." |
 
 Reusing `MemberAdded` for the automatic adds was not taken: its text speaks of a member someone chose to add, not of the person's own device.
@@ -689,6 +689,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `erasurePending` | The notice of a provisional erasure, which the space status gives on every device of the account, not a call (Carsten, 2026-11-11, NOC-230), with the text "Personal data was erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back." (pm, 2026-11-12, NOC-234) | [RFC 0008, "A provisional erasure in a space with one account"](0008-membership.md#a-provisional-erasure-in-a-space-with-one-account) |
 | `db.account.pair`, `db.account.completePairing`, `db.account.removeMember` | Pairing a device or an agent, and removing a lost one | [RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account) |
 | `confirm` | Confirms that the person stored the recovery code | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
+| `db.account().recovered()` | `AccountRecovered` on the open that recovered the account, else `None`; the open returns a `Db`, so a method gives the notice (Carsten, 2026-11-13, NOC-289) | [RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code) |
 
 **Sync and status:**
 
