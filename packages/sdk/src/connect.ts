@@ -11,6 +11,7 @@ import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import { Cursor, queryState } from "./query.ts";
+import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
@@ -202,6 +203,69 @@ export const connect = async (
   const isConfirmed = async (change: string) =>
     (await ask("sync.isConfirmed", { change })) === true;
 
+  // Each space's newest status and who follows it, shared by every handle
+  // of the space: the core answers `space.status` with it, and sends a
+  // `spaceStatus` event whenever it changes.
+  const statuses = new Map<
+    Id,
+    { status: SpaceStatus; listeners: Set<(status: SpaceStatus) => void> }
+  >();
+  const spaceStatusOf = (raw: unknown): SpaceStatus => {
+    const given = (raw ?? {}) as Record<string, unknown>;
+    const list = <T>(value: unknown) =>
+      (Array.isArray(value) ? value : []) as T[];
+    const counts = (value: unknown) =>
+      Object.fromEntries(
+        Object.entries((value ?? {}) as Record<string, unknown>).map(
+          ([reason, count]) => [reason, Number(count)],
+        ),
+      );
+    return {
+      role: (given.role ?? "removed") as SpaceStatus["role"],
+      initialSyncComplete: given.initialSyncComplete === true,
+      behind: Number(given.behind ?? 0),
+      gaps: list<string>(given.gaps),
+      parked: counts(given.parked),
+      ...(typeof given.newestModel === "number"
+        ? { newestModel: given.newestModel }
+        : {}),
+      rejected: counts(given.rejected),
+      refused: list<{ change: string; code: string }>(given.refused),
+      lostGrants: list<string>(given.lostGrants),
+      equivocations: list<string>(given.equivocations),
+      exposed: given.exposed === true,
+      waitingForKey: given.waitingForKey === true,
+      badPersonKeyRecords: list<string>(given.badPersonKeyRecords),
+      provisionalErasures: list<SpaceStatus["provisionalErasures"][number]>(
+        given.provisionalErasures,
+      ).map((erasure) => ({ ...erasure, age: Number(erasure.age) })),
+    };
+  };
+  const statusChanged = (id: Id, raw: unknown) => {
+    const entry = statuses.get(id);
+    if (entry === undefined) return;
+    entry.status = spaceStatusOf(raw);
+    for (const listener of [...entry.listeners]) {
+      try {
+        listener(entry.status);
+      } catch {
+        // A listener that throws loses this status, and the others still
+        // get it.
+      }
+    }
+  };
+  /** A handle of the space `id`, with its status, which the core follows from now on. */
+  const handleOf = async (id: Id): Promise<Space> => {
+    const raw = await ask("space.status", { space: id });
+    const entry = statuses.get(id);
+    if (entry === undefined) {
+      statuses.set(id, { status: spaceStatusOf(raw), listeners: new Set() });
+    } else {
+      entry.status = spaceStatusOf(raw);
+    }
+    return space(id);
+  };
+
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
@@ -216,6 +280,10 @@ export const connect = async (
     };
     if (message.event === "sync") {
       synced(message.status);
+      return;
+    }
+    if (message.event === "spaceStatus") {
+      statusChanged((message as { space: Id }).space, message.status);
       return;
     }
     if (message.event !== "folded" || !message.folds) return;
@@ -465,6 +533,18 @@ export const connect = async (
         write((tx) => tx.delete(collection, object)),
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
+      status: {
+        current: () => (statuses.get(id) as { status: SpaceStatus }).status,
+        subscribe: (listener) => {
+          const entry = statuses.get(id);
+          if (entry === undefined || closed) return () => {};
+          entry.listeners.add(listener);
+          listener(entry.status);
+          return () => {
+            entry.listeners.delete(listener);
+          };
+        },
+      },
       get: (collection, object) => get(id, collection, object) as never,
       find: (query) => find(query, id),
       subscribe: ((
@@ -499,9 +579,9 @@ export const connect = async (
 
   return {
     spaces: {
-      create: async () => space((await ask("spaces.create", {})) as string),
+      create: async () => handleOf((await ask("spaces.create", {})) as string),
       get: async (id) =>
-        space((await ask("spaces.get", { space: id })) as string),
+        handleOf((await ask("spaces.get", { space: id })) as string),
       list: async () =>
         (await ask("spaces.list", {})) as unknown as SpaceEntry[],
     },
@@ -564,6 +644,7 @@ export const connect = async (
         subscriptions.clear();
         changeListeners.clear();
         syncListeners.clear();
+        for (const entry of statuses.values()) entry.listeners.clear();
         for (const waiter of syncWaiters) {
           waiter.reject(new NcError("closed", "the database is closed"));
         }

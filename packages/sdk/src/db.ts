@@ -11,6 +11,7 @@
 import { connectWorker } from "./connect.ts";
 import { SetElements } from "./elements.ts";
 import type { Infer, model } from "./nc.ts";
+import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 
 /** A collection handle of the model, such as `model.tasks`. */
@@ -110,6 +111,13 @@ export interface Tx {
 export interface Space {
   /** The space id, 32 lowercase hex digits. */
   readonly id: Id;
+  /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
+  readonly status: {
+    /** The report as it is now. */
+    current(): SpaceStatus;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (status: SpaceStatus) => void): Stop;
+  };
   /** Records the writes of `record` and turns them into one change of this space. */
   write(record: (tx: Tx) => void): Promise<Written>;
   /** A write with one create. */
