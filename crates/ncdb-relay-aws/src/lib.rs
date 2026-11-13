@@ -305,5 +305,4 @@ impl RelayStore for AwsStore {
     ) -> impl Future<Output = Result<Option<Vec<u8>>, StoreError>> + Send {
         self.run(move |aws| async move { uploads::take_upload(&aws, space, member, id).await })
     }
-
 }
