@@ -30,8 +30,8 @@ use rusqlite::{
 
 use crate::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, UPLOAD_KEPT_AFTER_EXPIRY,
-    Upload, UploadId,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, TokenUrls,
+    UPLOAD_KEPT_AFTER_EXPIRY, Upload, UploadId,
 };
 
 mod schema;
@@ -540,6 +540,26 @@ impl RelayStore for SqliteStore {
         tx.commit().map_err(failed("begin upload"))
     }
 
+    async fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        self.connection()
+            .query_row(
+                "DELETE FROM uploads
+                 WHERE id = ?1 AND space = ?2 AND member = ?3 AND frame IS NOT NULL
+                 RETURNING frame",
+                params![id.0, space.0, member.0],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()
+            .map_err(failed("take upload"))
+    }
+}
+
+impl TokenUrls for SqliteStore {
     async fn upload(&self, token: Token) -> Result<Option<(Upload, bool)>, StoreError> {
         let row = self
             .connection()
@@ -583,24 +603,6 @@ impl RelayStore for SqliteStore {
             )
             .map_err(failed("fill upload"))?;
         Ok(filled == 1)
-    }
-
-    async fn take_upload(
-        &self,
-        space: SpaceId,
-        member: MemberId,
-        id: UploadId,
-    ) -> Result<Option<Vec<u8>>, StoreError> {
-        self.connection()
-            .query_row(
-                "DELETE FROM uploads
-                 WHERE id = ?1 AND space = ?2 AND member = ?3 AND frame IS NOT NULL
-                 RETURNING frame",
-                params![id.0, space.0, member.0],
-                |row| row.get::<_, Vec<u8>>(0),
-            )
-            .optional()
-            .map_err(failed("take upload"))
     }
 
     async fn begin_download(

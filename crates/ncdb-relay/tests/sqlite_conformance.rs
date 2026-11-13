@@ -34,3 +34,4 @@ fn fresh() -> Sqlite {
 }
 
 ncdb_relay::conformance_suite!(fresh);
+ncdb_relay::token_urls_conformance_suite!(fresh);
