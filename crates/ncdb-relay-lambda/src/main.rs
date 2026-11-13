@@ -37,7 +37,7 @@ where
     S: RelayStore + 'static,
     C: Connections + 'static,
     A: ConnectionApi + 'static,
-    U: Urls + 'static,
+    U: Urls<S> + 'static,
 {
     let handler = Arc::new(handler);
     lambda_runtime::run(service_fn(

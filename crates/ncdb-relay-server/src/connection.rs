@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_relay::store::{RelayStore, UploadId};
+use ncdb_relay::store::{TokenUrls, UploadId};
 use ncdb_relay::{ErrorCode, PushFrame, Pushed, Relay, auth};
 use tokio::net::TcpStream;
 use tokio::sync::{OwnedSemaphorePermit, mpsc};
@@ -72,7 +72,7 @@ enum State {
 ///
 /// `handshake` is the connection's place among the server's handshakes; it
 /// is given back when the member is sent `welcome`.
-pub(crate) async fn serve<S: RelayStore + 'static>(
+pub(crate) async fn serve<S: TokenUrls + 'static>(
     stream: TcpStream,
     shared: Arc<Shared<S>>,
     handshake: OwnedSemaphorePermit,
@@ -188,7 +188,7 @@ impl<S> Drop for Connection<S> {
     }
 }
 
-impl<S: RelayStore + 'static> Connection<S> {
+impl<S: TokenUrls + 'static> Connection<S> {
     /// The step of the opening this connection stands at.
     fn step(&self) -> Step {
         match self.state {
@@ -407,7 +407,7 @@ impl<S: RelayStore + 'static> Connection<S> {
 /// checks and appends the frames, in order, each inline or taken from its
 /// upload (RFC 0007, "Large changes"). An upload id that is not 16 bytes
 /// names no upload: malformed.
-async fn push<S: RelayStore + 'static>(
+async fn push<S: TokenUrls + 'static>(
     relay: Arc<Relay<S>>,
     member: MemberId,
     space: SpaceId,

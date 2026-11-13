@@ -1,7 +1,7 @@
 //! The backend's tables and bucket, as RFC 0007 lays them out ("Tables and
 //! keys", "How large changes go to S3"): every table on demand, binary ids
 //! and numeric positions, the index of `members` on member id, a TTL on
-//! uploads and tokens, and the lifecycle rule that deletes uploads after a
+//! uploads, and the lifecycle rule that deletes uploads after a
 //! day. [`create`] makes them, for the tests and for a relay on one
 //! machine; a deployment makes the same with its own tooling. [`delete`]
 //! removes them with everything in them.
@@ -55,7 +55,6 @@ fn tables(names: &Names) -> Vec<(&str, Vec<Key>)> {
             vec![binary("space", Hash), binary("id", Range)],
         ),
         (&names.uploads, vec![binary("id", Hash)]),
-        (&names.tokens, vec![binary("token", Hash)]),
     ]
 }
 
@@ -100,7 +99,7 @@ pub async fn create(
     for table in tables(names).into_iter().map(|(table, _)| table) {
         active(db, table).await?;
     }
-    for table in [&names.uploads, &names.tokens] {
+    for table in [&names.uploads] {
         db.update_time_to_live()
             .table_name(table)
             .time_to_live_specification(
@@ -239,4 +238,28 @@ pub async fn delete(
         .await
         .map_err(failed("delete the bucket"))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_backend_creates_six_tables_and_no_tokens_table() {
+        // NOC-295 A: behind API Gateway the URLs of large changes are
+        // presigned S3 URLs, so the backend keeps no tokens (NOC-303).
+        let names = Names::with_prefix("p-");
+        let created: Vec<&str> = tables(&names).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(
+            created,
+            [
+                "p-log",
+                "p-changes",
+                "p-spaces",
+                "p-members",
+                "p-person-keys",
+                "p-uploads"
+            ]
+        );
+    }
 }

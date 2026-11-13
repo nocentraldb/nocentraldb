@@ -29,8 +29,8 @@ const template = synth();
 
 type Key = [name: string, type: "B" | "N" | "S", kind: "HASH" | "RANGE"];
 
-/// RFC 0007's tables ("Tables and keys"), NOC-270's `uploads` and
-/// `tokens`, and the `connections` table of the Lambda crate.
+/// RFC 0007's tables ("Tables and keys"), NOC-270's `uploads`, and the
+/// `connections` table of the Lambda crate.
 const tables: Record<string, { keys: Key[]; ttl?: string }> = {
   log: {
     keys: [
@@ -58,7 +58,6 @@ const tables: Record<string, { keys: Key[]; ttl?: string }> = {
     ],
   },
   uploads: { keys: [["id", "B", "HASH"]], ttl: "ttl" },
-  tokens: { keys: [["token", "B", "HASH"]], ttl: "ttl" },
   connections: {
     keys: [
       ["connection", "S", "HASH"],
@@ -69,8 +68,8 @@ const tables: Record<string, { keys: Key[]; ttl?: string }> = {
 };
 
 describe("the tables", () => {
-  test("there are exactly the eight tables", () => {
-    template.resourceCountIs("AWS::DynamoDB::GlobalTable", 8);
+  test("there are exactly the seven tables, and no tokens table (NOC-295 A)", () => {
+    template.resourceCountIs("AWS::DynamoDB::GlobalTable", 7);
   });
 
   for (const [name, { keys, ttl }] of Object.entries(tables)) {
@@ -104,6 +103,13 @@ describe("the tables", () => {
       });
     });
   }
+
+  test("no table is named tokens", () => {
+    const names = Object.values(
+      template.findResources("AWS::DynamoDB::GlobalTable"),
+    ).map((t) => t.Properties.TableName);
+    expect(names).not.toContain("ncdb-prod-tokens");
+  });
 
   test("members: the index on member id, sorted by space, with current", () => {
     template.hasResourceProperties("AWS::DynamoDB::GlobalTable", {

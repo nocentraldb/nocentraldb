@@ -1,6 +1,9 @@
 //! The relay's AWS backend (RFC 0007, "The AWS backend"): DynamoDB and S3
 //! behind the relay core's backend interface, [`RelayStore`]. It passes the
-//! conformance suite against the AWS Emulator (`tests/conformance.rs`).
+//! conformance suite against the AWS Emulator (`tests/conformance.rs`). It
+//! does not implement [`TokenUrls`](ncdb_relay::store::TokenUrls): behind
+//! API Gateway the URLs of large changes are presigned S3 URLs, so the
+//! backend keeps no tokens (NOC-295, NOC-303).
 //!
 //! The tables and keys are RFC 0007's ("Tables and keys"), each a table of
 //! its own whose name [`Names`] gives:
@@ -15,13 +18,10 @@
 //!   secondary index `by_member` on `member`, sorted by `space`.
 //! - `person_keys`: PK `space`, SK `id`; `generation`, `writer`, `wrapped`,
 //!   `signature`.
-//! - `uploads`: PK `id`; `token`, `space`, `member`, `size`, `expires_at`,
-//!   `filled`. Its frame waits in S3 under [`upload_key`].
-//! - `tokens`: PK `token`; an upload's token names its `upload`, a download
-//!   token its `space`, `position` and `expires_at`.
+//! - `uploads`: PK `id`; `space`, `member`, `size`, `expires_at`. Its
+//!   frame goes straight into S3 under [`upload_key`].
 //!
-//! RFC 0007's table has no row for uploads and download tokens; the last
-//! two tables are this backend's (NOC-270). The `connections` table belongs
+//! The `connections` table belongs
 //! to delivery, not to the backend interface, and comes with it.
 //!
 //! An append is one `TransactWriteItems`; a frame above [`INLINE_LIMIT`]
@@ -42,7 +42,7 @@ use std::sync::Arc;
 use ncdb_core::ids::{ChangeId, MemberId, SpaceId};
 use ncdb_relay::store::{
     AppendOutcome, Effect, Entry, Epoch, MemberRecord, NewEntry, PersonKeyId, PersonKeyPut,
-    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Token, Upload, UploadId,
+    PersonKeyRecord, Position, PutOutcome, RelayStore, StoreError, Upload, UploadId,
 };
 use tokio::runtime::Handle;
 
@@ -87,16 +87,15 @@ pub struct Names {
     pub person_keys: String,
     /// Uploads that wait to be pushed.
     pub uploads: String,
-    /// The tokens of upload and download URLs.
-    pub tokens: String,
     /// The bucket of frames above 8 KiB and of uploads.
     pub bucket: String,
 }
 
 impl Names {
     /// The tables `<prefix>log`, `<prefix>changes`, `<prefix>spaces`,
-    /// `<prefix>members`, `<prefix>person-keys`, `<prefix>uploads`,
-    /// `<prefix>tokens` and the bucket `<prefix>frames`.
+    /// `<prefix>members`, `<prefix>person-keys` and `<prefix>uploads`, and
+    /// the bucket `<prefix>frames`. There is no tokens table: the backend
+    /// serves no URLs of its own (NOC-295, NOC-303).
     pub fn with_prefix(prefix: &str) -> Names {
         let name = |table: &str| format!("{prefix}{table}");
         Names {
@@ -106,7 +105,6 @@ impl Names {
             members: name("members"),
             person_keys: name("person-keys"),
             uploads: name("uploads"),
-            tokens: name("tokens"),
             bucket: name("frames"),
         }
     }
@@ -299,21 +297,6 @@ impl RelayStore for AwsStore {
         self.run(move |aws| async move { uploads::begin_upload(&aws, upload, now).await })
     }
 
-    fn upload(
-        &self,
-        token: Token,
-    ) -> impl Future<Output = Result<Option<(Upload, bool)>, StoreError>> + Send {
-        self.run(move |aws| async move { uploads::upload(&aws, token).await })
-    }
-
-    fn fill_upload(
-        &self,
-        token: Token,
-        frame: Vec<u8>,
-    ) -> impl Future<Output = Result<bool, StoreError>> + Send {
-        self.run(move |aws| async move { uploads::fill_upload(&aws, token, frame).await })
-    }
-
     fn take_upload(
         &self,
         space: SpaceId,
@@ -323,23 +306,4 @@ impl RelayStore for AwsStore {
         self.run(move |aws| async move { uploads::take_upload(&aws, space, member, id).await })
     }
 
-    fn begin_download(
-        &self,
-        token: Token,
-        space: SpaceId,
-        position: Position,
-        expires_at: u64,
-        now: u64,
-    ) -> impl Future<Output = Result<(), StoreError>> + Send {
-        self.run(move |aws| async move {
-            uploads::begin_download(&aws, token, space, position, expires_at, now).await
-        })
-    }
-
-    fn download(
-        &self,
-        token: Token,
-    ) -> impl Future<Output = Result<Option<(SpaceId, Position, u64)>, StoreError>> + Send {
-        self.run(move |aws| async move { uploads::download(&aws, token).await })
-    }
 }

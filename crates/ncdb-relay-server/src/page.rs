@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use ncdb_core::ids::{MemberId, SpaceId};
 use ncdb_relay::page::{self, Page, TokenDownloads};
-use ncdb_relay::store::{Epoch, Position, RelayStore};
+use ncdb_relay::store::{Epoch, Position, TokenUrls};
 use ncdb_relay::{ErrorCode, Relay};
 
 use crate::connection::blocking;
@@ -16,7 +16,7 @@ use crate::http::FRAMES;
 /// `limit` and as many as fit into one message, with `req` as its request
 /// id.
 #[allow(clippy::too_many_arguments)]
-pub(crate) async fn read<S: RelayStore + 'static>(
+pub(crate) async fn read<S: TokenUrls + 'static>(
     relay: Arc<Relay<S>>,
     base_url: Arc<str>,
     member: MemberId,

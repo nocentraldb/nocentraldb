@@ -1,12 +1,14 @@
 //! The suite's rules for large changes (RFC 0007, "Large changes"): an
 //! upload is filled once and taken once, by its member in its space, and a
 //! download token names one entry of the log. Expired uploads and download
-//! tokens are swept when a new one begins.
+//! tokens are swept when a new one begins. The four rules that fill an
+//! upload or read a download by its token run only on a backend with
+//! [`TokenUrls`] ([`token_urls_conformance_suite!`](crate::token_urls_conformance_suite)).
 
 use ncdb_core::ids::MemberId;
 
 use super::{Backend, append, block_on, entry, space};
-use crate::store::{RelayStore, Token, Upload, UploadId};
+use crate::store::{RelayStore, Token, TokenUrls, Upload, UploadId};
 use ncdb_core::change::Kind;
 
 /// An upload in space 1 for member `m`, of `size` bytes, its URL valid
@@ -22,7 +24,10 @@ fn upload(n: u8, m: u8, size: u64, expires_at: u64) -> Upload {
     }
 }
 
-pub fn an_upload_is_filled_once_and_taken_once<B: Backend>(backend: &B) {
+pub fn an_upload_is_filled_once_and_taken_once<B: Backend>(backend: &B)
+where
+    B::Store: TokenUrls,
+{
     let store = backend.connect();
     let begun = upload(1, 1, 3, 1_000);
     block_on(store.begin_upload(begun.clone(), 0)).unwrap();
@@ -44,7 +49,10 @@ pub fn an_upload_is_filled_once_and_taken_once<B: Backend>(backend: &B) {
     assert_eq!(block_on(store.upload(Token([1; 32]))).unwrap(), None);
 }
 
-pub fn an_upload_is_taken_only_by_its_member_in_its_space_once_filled<B: Backend>(backend: &B) {
+pub fn an_upload_is_taken_only_by_its_member_in_its_space_once_filled<B: Backend>(backend: &B)
+where
+    B::Store: TokenUrls,
+{
     let store = backend.connect();
     block_on(store.begin_upload(upload(2, 1, 1, 1_000), 0)).unwrap();
     let take = |space_n: u8, member: u8| {
@@ -58,7 +66,10 @@ pub fn an_upload_is_taken_only_by_its_member_in_its_space_once_filled<B: Backend
     assert_eq!(take(1, 1), Some(vec![9]));
 }
 
-pub fn a_download_token_names_one_entry<B: Backend>(backend: &B) {
+pub fn a_download_token_names_one_entry<B: Backend>(backend: &B)
+where
+    B::Store: TokenUrls,
+{
     let store = backend.connect();
     append(&store, space(1), 0, vec![entry(1), entry(2)]);
     block_on(store.begin_download(Token([3; 32]), space(1), 2, 500, 0)).unwrap();
@@ -69,7 +80,10 @@ pub fn a_download_token_names_one_entry<B: Backend>(backend: &B) {
     assert_eq!(block_on(store.download(Token([4; 32]))).unwrap(), None);
 }
 
-pub fn expired_uploads_and_downloads_are_swept<B: Backend>(backend: &B) {
+pub fn expired_uploads_and_downloads_are_swept<B: Backend>(backend: &B)
+where
+    B::Store: TokenUrls,
+{
     let store = backend.connect();
     const DAY: u64 = 24 * 60 * 60 * 1000;
     block_on(store.begin_upload(upload(5, 1, 1, 100), 0)).unwrap();

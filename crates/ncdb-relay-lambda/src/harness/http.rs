@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use ncdb_relay::Filled;
-use ncdb_relay::store::{RelayStore, Token};
+use ncdb_relay::store::{Token, TokenUrls};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -53,7 +53,7 @@ fn token(hex: &str) -> Option<Token> {
 }
 
 /// Serves requests until the listener fails.
-pub(super) async fn serve<S: RelayStore + 'static>(listener: TcpListener, handler: Arc<Local<S>>) {
+pub(super) async fn serve<S: TokenUrls + 'static>(listener: TcpListener, handler: Arc<Local<S>>) {
     while let Ok((stream, _)) = listener.accept().await {
         let handler = handler.clone();
         tokio::spawn(async move {
@@ -70,7 +70,7 @@ async fn blocking<T: Send + 'static>(future: impl Future<Output = T> + Send + 's
         .expect("a relay call does not panic")
 }
 
-async fn one<S: RelayStore + 'static>(mut stream: TcpStream, handler: Arc<Local<S>>) {
+async fn one<S: TokenUrls + 'static>(mut stream: TcpStream, handler: Arc<Local<S>>) {
     let mut buf = Vec::new();
     let mut chunk = vec![0u8; 64 * 1024];
     let (method, path, length, start) = loop {
@@ -130,7 +130,7 @@ async fn one<S: RelayStore + 'static>(mut stream: TcpStream, handler: Arc<Local<
 
 /// `PUT /uploads/<token>`: the declared size, the body of exactly that
 /// length, then the core fills the upload.
-async fn put<S: RelayStore + 'static>(
+async fn put<S: TokenUrls + 'static>(
     stream: &mut TcpStream,
     handler: &Arc<Local<S>>,
     token: Token,
