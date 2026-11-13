@@ -5,7 +5,7 @@ This runbook is for the owner. It deploys the relay as RFC 0007 describes it ("T
 **Deploys run from GitHub Actions** (`.github/workflows/relay-deploy.yml`), as decided on NOC-264. Every merge to `main` that changes the relay's infrastructure or the crates its function is built from deploys it, after you approve the deploy.
 
 - **The account's side lives in the private repository `nocentraldb/aws-deploy`** (Carsten, 2026-11-13): GitHub as an OIDC provider, the deploy role, and CDK's bootstrap with narrowed execution policies. This repository holds no role setup.
-- **You approve every change that is deployed.** `.github/CODEOWNERS` makes you the owner of every path the workflow deploys from, and branch protection requires your review (section 1.3). The environment `aws-prod` waits for your approval before each deploy (section 1.2).
+- **You approve every change that is deployed.** `.github/CODEOWNERS` makes you the owner of every path the workflow deploys from, and branch protection requires your review (section 1.4). The environment `aws-prod` waits for your approval before each deploy (section 1.3). The agents act on GitHub as an account of their own, so only you can give either approval (section 1.2).
 - **No AWS key** is stored anywhere. The deploy job assumes the role with its OIDC token.
 - **No agent** ever holds AWS credentials, and no agent or pm merges a change to these paths or approves a deploy.
 - **Pull requests** get no AWS access at all. They show their infrastructure change as the diff of the committed template snapshot, `infra/aws/test/__snapshots__/`.
@@ -22,14 +22,24 @@ Follow the runbook of the private repository `nocentraldb/aws-deploy`. It sets u
 - the deploy role, which trusts only `repo:nocentraldb/nocentraldb:environment:aws-prod` and may only assume CDK's bootstrap roles;
 - CDK's bootstrap, whose CloudFormation execution role is limited to this stack's own resources instead of `AdministratorAccess`.
 
-It ends with the deploy role's ARN, which section 1.2 needs. When this repository's stack gains a resource type, the execution policies there must cover it before the change deploys.
+It ends with the deploy role's ARN, which section 1.3 needs. The agents' account has no access to that repository: its setup is yours. When this repository's stack gains a resource type, the execution policies there must cover it before the change deploys.
 
-### 1.2 The GitHub environment `aws-prod`
+### 1.2 The agents' own GitHub account
+
+The factory's agents act on GitHub as a machine account of their own, never as `cabcookie` (Carsten, 2026-11-13). Only you act as `cabcookie`, so GitHub can tell your approval from theirs.
+
+1. **Create a GitHub user** for the agents, with its own email address and two-factor authentication.
+2. **Give it Write on `nocentraldb/nocentraldb` only:** the repository's Settings → Collaborators and teams, role "Write". Give it no access to `nocentraldb/aws-deploy`, and no admin or owner role anywhere. With Write it can push branches and open pull requests, but cannot change rulesets, environments or their reviewers.
+3. **Connect claude.ai's GitHub as that account:** in claude.ai, disconnect GitHub, sign in to GitHub as the machine account, and connect again. Every Claude session then pushes, opens pull requests and comments as it.
+4. **Keep the Claude GitHub App installed** on `nocentraldb/nocentraldb`, so the sessions can reach the repository.
+5. **Check:** the next pull request an agent opens shows the machine account as its author, not `cabcookie`.
+
+### 1.3 The GitHub environment `aws-prod`
 
 In the repository's Settings → Environments, create `aws-prod`:
 
 - **Deployment branches and tags:** only `main`.
-- **Required reviewers:** `cabcookie`. Every deploy then waits in its run until you approve it, after the build and before the job gets its OIDC token. Leave "Prevent self-review" off: you start the deploys yourself by merging.
+- **Required reviewers:** `cabcookie` only, never the agents' account. Every deploy then waits in its run until you approve it, after the build and before the job gets its OIDC token. Leave "Prevent self-review" off: you start the deploys yourself by merging.
 - **Environment variables.** These are variables, not secrets; none of them is a secret:
   - `AWS_DEPLOY_ROLE_ARN`: the deploy role's ARN from section 1.1.
   - `RELAY_ID`: the relay's stable id, 32 hex digits. Draw it once, with `openssl rand -hex 16`, and never change it: members sign it into every connection's authentication (RFC 0007, "Opening a connection").
@@ -44,18 +54,18 @@ python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); pri
 
 It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one.
 
-### 1.3 Branch protection on `main`
+### 1.4 Branch protection on `main`
 
 In the repository's Settings → Rules → Rulesets, create a branch ruleset for the default branch, with enforcement "Active":
 
 - **Require a pull request before merging**, with:
-  - **Required approvals:** 1;
-  - **Dismiss stale pull request approvals when new commits are pushed**;
-  - **Require review from Code Owners**.
+  - **Require review from Code Owners**;
+  - **Dismiss stale pull request approvals when new commits are pushed**.
+- **Bypass list:** empty. Above all, never add the agents' account.
 
-With it, a pull request that touches a path in `.github/CODEOWNERS` merges only after you approved its latest commit.
+With it, a pull request that touches a path in `.github/CODEOWNERS` merges only after you, as `cabcookie`, approved its latest commit, and a push after your approval needs your approval again. The agents' account cannot approve in your place, and cannot change the ruleset. "Required approvals" may stay at 0: the Code Owners rule asks for your approval on the owned paths by itself. Check it once: on the first agent pull request that touches an owned path, GitHub shows "Review required" from a code owner.
 
-**A limit of this setup.** The factory's agents open pull requests and push as your GitHub account, `cabcookie`. GitHub never counts an author's own approval, and it cannot tell your approval from an agent's acting as you. So with these rules, a pull request an agent opened on these paths cannot be approved at all, unless you add yourself to the ruleset's bypass list. Then the rule rests on the agents keeping theirs (they never merge or approve these changes) rather than on GitHub. To make GitHub enforce it, the agents need a GitHub identity of their own, such as a GitHub App or a machine account, which pm brings to you as its own question.
+**What it costs.** `.github/CODEOWNERS` also owns `Cargo.lock`, `Cargo.toml` and `pnpm-lock.yaml`, because they decide which dependencies the deployed function and the CDK app are built from. So every dependency change in the repository, for any crate or package, needs your review, not only changes to the relay.
 
 ## 2. The first deploy
 
