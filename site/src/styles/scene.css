@@ -1,0 +1,146 @@
+/* Colours and type of the landing page's drawing (components/scene.mjs).
+   Every colour reads a brand role from tokens.css. */
+.sc {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* Two layouts of one drawing: the tall one on a phone, the wide one everywhere else. */
+.sc--tall {
+  display: none;
+}
+@media (max-width: 639px) {
+  /* only a scenario step carries both; the hero keeps its wide drawing */
+  .mo-pc__visual .sc--wide {
+    display: none;
+  }
+  .sc--tall {
+    display: block;
+  }
+}
+/* The tall layout is drawn at half the width, so its type is set larger. Written
+   as .sc.sc--tall so these win over the .sc .sc-* sizes further down. */
+.sc.sc--tall .sc-label {
+  font-size: 19px;
+}
+.sc.sc--tall .sc-title {
+  font-size: 18px;
+}
+.sc.sc--tall .sc-status {
+  font-size: 17px;
+}
+.sc.sc--tall .sc-cipher {
+  font-size: 16px;
+}
+.sc.sc--tall .sc-cipher-big {
+  font-size: 24px;
+}
+.sc text {
+  font-family: var(--ncdb-font-body);
+  fill: var(--ncdb-ink);
+}
+.sc .sc-label {
+  font-size: 17px;
+  font-weight: 600;
+}
+.sc .sc-title {
+  font-size: 17px;
+  font-weight: 500;
+}
+.sc .sc-status {
+  font-size: 13.5px;
+  fill: var(--ncdb-muted);
+}
+.sc .sc-on-accent {
+  fill: var(--ncdb-accent-ink);
+}
+.sc .sc-cipher {
+  font-family: var(--ncdb-font-mono);
+  font-size: 13px;
+  fill: var(--ncdb-muted);
+}
+.sc .sc-cipher-big {
+  font-family: var(--ncdb-font-mono);
+  font-size: 26px;
+  fill: var(--ncdb-ink);
+}
+
+/* Yellow marks data that changes: the changed row and the travelling point. */
+.sc-card {
+  fill: var(--ncdb-surface-2);
+}
+.sc-row {
+  fill: var(--ncdb-bg);
+}
+.sc-row-origin {
+  fill: var(--ncdb-accent);
+}
+.sc-row-got {
+  stroke: var(--ncdb-accent);
+  stroke-width: 1.5;
+}
+.sc-pulse {
+  fill: var(--ncdb-accent);
+}
+.sc-cloud {
+  fill: var(--ncdb-surface-2);
+}
+
+.sc-link {
+  fill: none;
+  stroke: var(--ncdb-muted);
+  stroke-opacity: 0.45;
+  stroke-width: 2;
+}
+.sc-link-cut {
+  stroke-dasharray: 3 9;
+  stroke-opacity: 0.3;
+}
+/* The brand's loud colour marks a live connection: the state mark in a card's header. Nowhere else. */
+.sc-dot-on {
+  fill: var(--ncdb-loud);
+}
+.sc-dot-off {
+  fill: none;
+  stroke: var(--ncdb-muted);
+  stroke-width: 1.5;
+}
+
+.sc-lens {
+  fill: var(--ncdb-bg);
+  stroke: var(--ncdb-ink);
+  stroke-width: 5;
+}
+.sc-handle {
+  stroke: var(--ncdb-ink);
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.sc-thing {
+  fill: var(--ncdb-surface-2);
+  stroke: var(--ncdb-muted);
+  stroke-opacity: 0.6;
+  stroke-width: 2;
+}
+.sc-window {
+  fill: var(--ncdb-bg);
+}
+.sc-window-lit {
+  fill: var(--ncdb-ink);
+  fill-opacity: 0.85;
+}
+.sc-track {
+  stroke: var(--ncdb-muted);
+  stroke-opacity: 0.4;
+  stroke-width: 2;
+}
+.sc-lamp {
+  fill: var(--ncdb-muted);
+}
+.sc-hill {
+  fill: #2f2f27;
+} /* a shade between surface and surface-2 with no role of its own */
+.sc-mouth {
+  fill: var(--ncdb-bg);
+}

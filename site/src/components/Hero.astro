@@ -1,318 +1,45 @@
 ---
-// The first screen, in BRAND.md's visible lines: eyebrow, headline, subline.
-// Next to them, the same changes as a member reads them and as the relay
-// stores them.
-const rows = [
-  {
-    coll: "tasks",
-    text: "Write the README",
-    meta: "open · priority 1",
-    size: 312,
-  },
-  {
-    coll: "tasks",
-    text: "Write the README",
-    meta: "status → in_progress",
-    size: 188,
-  },
-  { coll: "people", text: "Ada ••••••", meta: "personal field", size: 264 },
-  {
-    coll: "messages",
-    text: "Draft is up for review",
-    meta: "agent · planner",
-    size: 240,
-  },
-];
+// The first screen: eyebrow, headline, subline, two buttons, the status line
+// and the fact line at the left; the scenario's first drawing at the right.
+import { scene } from "./scene.mjs";
 ---
 
-<section class="hero" aria-labelledby="hero-title">
+<section class="hero hero--split" data-enter aria-labelledby="hero-h">
   <div class="wrap">
-    <p class="eyebrow mono enter" style="--d: 0ms">A local-first database for people and agents.</p>
-    <h1 id="hero-title" class="enter" style="--d: 60ms">
-      For when a central database is the wrong&nbsp;place.
-    </h1>
-    <div class="hero-grid">
-      <div class="hero-copy">
-        <p class="lead enter" style="--d: 140ms">
-          Everyone works on their own copy, under their own keys. The relay in the middle can't read a thing.
+    <div class="hero-text grid hero__grid">
+      <div class="hero__text span-6">
+        <p class="hero__kicker"><span class="dot" aria-hidden="true"></span>A local-first database for people and agents</p>
+        <h1 id="hero-h">A database that reads like a local file and syncs like a shared doc</h1>
+        <p class="hero__lead">
+          Each person and each agent reads and writes a full copy on their own machine. The changes sync encrypted
+          through a server that can't read them.
         </p>
-        <div class="actions enter" style="--d: 220ms">
-          <a class="btn btn-primary" href="/docs/">Read the docs</a>
-          <a class="btn btn-secondary" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md"
+        <div class="btn-row">
+          <a class="btn btn--primary" href="#story">See how it works</a>
+          <a class="btn btn--secondary" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md"
             >Review the RFCs</a
           >
         </div>
-        <p class="status enter" style="--d: 300ms">
+        <p class="status-line">
           NoCentralDB does not exist yet. This page shows what it is designed to do; the design is open in the RFCs.
         </p>
+        <p class="fact-line">
+          SDKs for TypeScript and Rust. One core for desktop, mobile and the browser. Open source under MIT or
+          Apache-2.0.
+        </p>
       </div>
-
-      <figure class="split enter" style="--d: 180ms" aria-label="The same changes, as a member and as the relay see them">
-        <div class="pane pane-member">
-          <p class="pane-title">On a member</p>
-          <ol class="rows" data-rows="member">
-            {
-              rows.map((r) => (
-                <li>
-                  <span class="tag term">{r.coll}</span>
-                  <strong>{r.text}</strong>
-                  <small>{r.meta}</small>
-                </li>
-              ))
-            }
-          </ol>
+      <div class="span-6 start-7 hero__media">
+        <div class="scene-frame" data-scene-scope>
+          <Fragment set:html={scene(0, "hero")} />
+          <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-scene-pause hidden>
+            Pause
+          </button>
         </div>
-        <div class="pane pane-relay">
-          <p class="pane-title">On the <span class="term">relay</span></p>
-          <ol class="rows" data-rows="relay">
-            {
-              rows.map((r) => (
-                <li>
-                  <span class="tag">{r.size} B</span>
-                  <code class="cipher">9f3ac01e77b2d54a0c6e1f8b3d92a7e4c5b0f61d28a3</code>
-                </li>
-              ))
-            }
-          </ol>
-        </div>
-        <button class="pause" type="button" aria-pressed="false" data-pause>Pause</button>
-      </figure>
+      </div>
     </div>
   </div>
 </section>
 
-<style>
-  .hero {
-    min-height: 100svh;
-    display: flex;
-    align-items: center;
-    padding: 128px 0 72px !important;
-  }
-  .hero > .wrap {
-    width: 100%;
-  }
-  .eyebrow {
-    font-size: var(--ncdb-text-small);
-    color: var(--ncdb-muted);
-    margin-bottom: 20px;
-  }
-  h1 {
-    max-width: 21ch;
-  }
-  .hero-grid {
-    display: grid;
-    grid-template-columns: 0.9fr 1.1fr;
-    gap: clamp(32px, 5vw, 72px);
-    align-items: start;
-    margin-top: 44px;
-  }
-  .lead {
-    font-size: var(--ncdb-text-lead);
-    line-height: 1.4;
-    max-width: 30ch;
-  }
-  .actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 32px;
-    flex-wrap: wrap;
-  }
-  .status {
-    margin-top: 28px;
-    font-size: var(--ncdb-text-small);
-    color: var(--ncdb-muted);
-    max-width: 40ch;
-  }
-
-  .split {
-    position: relative;
-    margin: 0;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    border-radius: var(--radius-l);
-    overflow: hidden;
-  }
-  .pane {
-    padding: 22px 18px 64px;
-    min-width: 0;
-  }
-  .pane-member {
-    background: var(--ncdb-accent);
-    color: var(--ncdb-accent-ink);
-  }
-  .pane-member .rows :global(li) {
-    background: rgb(17 17 16 / 0.08);
-  }
-  .pane-member .rows :global(small),
-  .pane-member .rows :global(.tag) {
-    color: var(--ncdb-accent-ink);
-  }
-  .pane-relay {
-    background: var(--ncdb-surface);
-  }
-  .pane-relay .rows :global(.tag) {
-    color: var(--loud);
-  }
-  .pane-title {
-    font-family: var(--ncdb-font-heading);
-    font-weight: var(--ncdb-weight-heading);
-    font-size: var(--ncdb-text-body);
-    margin-bottom: 16px;
-  }
-  .rows {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 8px;
-  }
-  .rows :global(li) {
-    display: grid;
-    gap: 2px;
-    padding: 10px 12px;
-    border-radius: var(--radius-s);
-    background: var(--ncdb-bg);
-    min-height: 72px;
-    align-content: start;
-  }
-  .rows :global(strong) {
-    font-weight: var(--ncdb-weight-emphasis);
-    font-size: 15px;
-    line-height: 1.3;
-  }
-  .rows :global(small),
-  .rows :global(.tag) {
-    font-size: var(--ncdb-text-small);
-    color: var(--ncdb-muted);
-  }
-  .rows :global(.cipher) {
-    font-size: 12.5px;
-    line-height: 1.45;
-    word-break: break-all;
-    color: var(--ncdb-ink);
-  }
-  .rows :global(li.fresh) {
-    animation: arrive 520ms var(--ease-out);
-  }
-  @keyframes arrive {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-  }
-  .pause {
-    position: absolute;
-    right: 14px;
-    bottom: 14px;
-    min-height: 36px;
-    padding: 0 14px;
-    border-radius: 999px;
-    border: 0;
-    background: var(--ncdb-bg);
-    color: var(--ncdb-ink);
-    font: var(--ncdb-weight-emphasis) var(--ncdb-text-small) var(--ncdb-font-body);
-    cursor: pointer;
-  }
-
-  .enter {
-    animation: enter 700ms var(--ease-out) both;
-    animation-delay: var(--d);
-  }
-  @keyframes enter {
-    from {
-      opacity: 0;
-      transform: translateY(14px);
-    }
-  }
-
-  @media (max-width: 900px) {
-    .hero-grid {
-      grid-template-columns: 1fr;
-    }
-    .hero {
-      min-height: auto;
-    }
-  }
-  @media (max-width: 520px) {
-    .actions .btn {
-      width: 100%;
-    }
-    .pane {
-      padding: 16px 10px 60px;
-    }
-    .rows :global(li) {
-      padding: 10px;
-    }
-    .rows :global(strong) {
-      font-size: 14px;
-    }
-  }
-</style>
-
-<script is:inline>
-  (() => {
-    const member = document.querySelector('[data-rows="member"]');
-    const relay = document.querySelector('[data-rows="relay"]');
-    const button = document.querySelector("[data-pause]");
-    if (!member || !relay || !button) return;
-    const hex = (n) =>
-      Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
-    relay.querySelectorAll(".cipher").forEach((c) => {
-      c.textContent = hex(22);
-    });
-    const feed = [
-      ["tasks", "Review the relay RFC", "open · priority 2", 296],
-      ["tasks", "Review the relay RFC", "assignee → agent", 204],
-      ["messages", "Ranked 50 open tasks", "agent · planner", 232],
-      ["people", "Ada ••••••", "shredded · key destroyed", 96],
-      ["tasks", "Write the README", "status → done", 188],
-    ];
-    let i = 0;
-    const row = (cells) => {
-      const li = document.createElement("li");
-      li.className = "fresh";
-      for (const [tag, cls, text] of cells) {
-        const el = document.createElement(tag);
-        el.className = cls;
-        el.textContent = text;
-        li.append(el);
-      }
-      return li;
-    };
-    const step = () => {
-      const [coll, text, meta, size] = feed[i++ % feed.length];
-      member.prepend(
-        row([
-          ["span", "tag term", coll],
-          ["strong", "", text],
-          ["small", "", meta],
-        ]),
-      );
-      relay.prepend(
-        row([
-          ["span", "tag", `${size} B`],
-          ["code", "cipher", hex(22)],
-        ]),
-      );
-      member.lastElementChild.remove();
-      relay.lastElementChild.remove();
-    };
-    const still =
-      matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.shot !== undefined;
-    let timer = still ? null : setInterval(step, 3200);
-    if (!timer) button.hidden = true;
-    button.addEventListener("click", () => {
-      if (timer) {
-        clearInterval(timer);
-        timer = null;
-        button.textContent = "Play";
-        button.setAttribute("aria-pressed", "true");
-      } else {
-        step();
-        timer = setInterval(step, 3200);
-        button.textContent = "Pause";
-        button.setAttribute("aria-pressed", "false");
-      }
-    });
-  })();
+<script>
+  import "./scene-pause.mjs";
 </script>
