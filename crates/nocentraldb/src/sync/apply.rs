@@ -32,12 +32,20 @@ fn sync(inner: &mut Inner) -> &mut SyncState {
 /// said it belongs to, except those it may no longer read.
 pub(super) fn spaces(inner: &Inner) -> Vec<SpaceId> {
     let stopped = inner.sync.as_ref().map(|s| &s.stopped);
-    inner
+    let mut spaces: Vec<SpaceId> = inner
         .spaces
         .keys()
         .copied()
         .filter(|space| stopped.is_none_or(|s| !s.contains(space)))
-        .collect()
+        .collect();
+    // The account space goes first, so its genesis reaches the relay
+    // before any other: on a relay that lets an account it does not list
+    // create one space, that space must be the account space (RFC 0007,
+    // "Who may create a space"; NOC-287).
+    if let Some(account) = crate::account::space(inner) {
+        spaces.sort_by_key(|space| *space != account);
+    }
+    spaces
 }
 
 /// Reads back what the database kept of its relay: the relay epoch its

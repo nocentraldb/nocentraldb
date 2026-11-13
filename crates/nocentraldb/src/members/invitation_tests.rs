@@ -185,7 +185,7 @@ fn a_version_2_text_of_another_length_or_kind_is_refused() {
 
 /// A member waiting to be paired has no account: its fingerprint is SHA-256
 /// over `"nocentraldb/member-fingerprint"` and its member id, as twelve
-/// blocks of five digits (pm's proposal A to the owner, NOC-267). The
+/// blocks of five digits (Carsten, 2026-11-13, NOC-288). The
 /// digits were computed with Python's `hashlib`.
 #[test]
 fn a_waiting_members_fingerprint_is_over_its_member_id_and_never_an_accounts() {

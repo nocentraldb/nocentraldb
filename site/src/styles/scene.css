@@ -1,11 +1,39 @@
 /* Colours and type of the landing page's drawing (components/scene.mjs).
-   Every colour reads a brand role from tokens.css, except magenta. */
+   Every colour reads a brand role from tokens.css. */
 .sc {
-  /* Magenta marks a live connection: the state mark in a card's header. Nowhere else. */
-  --loud: #ff3d8b;
   display: block;
   width: 100%;
   height: 100%;
+}
+/* Two layouts of one drawing: the tall one on a phone, the wide one everywhere else. */
+.sc--tall {
+  display: none;
+}
+@media (max-width: 639px) {
+  /* only a scenario step carries both; the hero keeps its wide drawing */
+  .mo-pc__visual .sc--wide {
+    display: none;
+  }
+  .sc--tall {
+    display: block;
+  }
+}
+/* The tall layout is drawn at half the width, so its type is set larger. Written
+   as .sc.sc--tall so these win over the .sc .sc-* sizes further down. */
+.sc.sc--tall .sc-label {
+  font-size: 19px;
+}
+.sc.sc--tall .sc-title {
+  font-size: 18px;
+}
+.sc.sc--tall .sc-status {
+  font-size: 17px;
+}
+.sc.sc--tall .sc-cipher {
+  font-size: 16px;
+}
+.sc.sc--tall .sc-cipher-big {
+  font-size: 24px;
 }
 .sc text {
   font-family: var(--ncdb-font-body);
@@ -68,8 +96,9 @@
   stroke-dasharray: 3 9;
   stroke-opacity: 0.3;
 }
+/* The brand's loud colour marks a live connection: the state mark in a card's header. Nowhere else. */
 .sc-dot-on {
-  fill: var(--loud);
+  fill: var(--ncdb-loud);
 }
 .sc-dot-off {
   fill: none;

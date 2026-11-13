@@ -2,6 +2,7 @@ projects:
   - "."
   - "apps/*"
   - "crates/*"
+  - "infra/*"
   - "packages/*"
 vcs:
   client: git

@@ -53,7 +53,7 @@ impl Account<'_> {
 
     /// `AccountRecovered` when this open recovered the account from its
     /// recovery code ([`OpenOptions::recover`](crate::OpenOptions::recover)),
-    /// and `None` on every other open.
+    /// and `None` on every other open (Carsten, 2026-11-13, NOC-289).
     pub async fn recovered(&self) -> Result<Option<Notice>, Error> {
         Ok(self.db.lock().recovered)
     }
