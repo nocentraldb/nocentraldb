@@ -64,8 +64,11 @@ pub(crate) struct Folded<'a> {
     pub(crate) space: CoreSpaceId,
     pub(crate) collections: &'a BTreeSet<String>,
     /// The `(collection, object)` the fold wrote, and whose change it was;
-    /// none for a fold that re-reads everything, as after a rebuild.
+    /// none for a fold that re-reads everything, as after a rebuild. Only
+    /// the fold feed reads it and the origin, so only the bridge's build.
+    #[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
     pub(crate) touched: &'a [(String, ncdb_core::ids::ObjectId)],
+    #[cfg_attr(not(any(test, feature = "bridge")), allow(dead_code))]
     pub(crate) origin: Origin,
 }
 
