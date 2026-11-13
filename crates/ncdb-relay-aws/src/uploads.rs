@@ -230,8 +230,30 @@ pub async fn take_upload(
     };
     let ours = get_id::<16>(&item, "uploads", "space")? == space.0
         && get_id::<32>(&item, "uploads", "member")? == member.0;
-    if !ours || !get_bool(&item, "filled") {
+    if !ours {
         return Ok(None);
+    }
+    // An upload is filled through the relay's own URL (`fill_upload`), or,
+    // behind API Gateway, straight into S3 through a presigned PUT URL that
+    // fixes its size (RFC 0007, "How large changes go to S3"; NOC-272): its
+    // object then holds exactly the declared size.
+    let size = get_n(&item, "uploads", "size")?;
+    if !get_bool(&item, "filled") {
+        let head = aws
+            .s3
+            .head_object()
+            .bucket(&aws.names.bucket)
+            .key(upload_key(id))
+            .send()
+            .await;
+        match head {
+            Ok(out) if out.content_length().and_then(|n| u64::try_from(n).ok()) == Some(size) => {}
+            Ok(_) => return Ok(None),
+            Err(error) if error.as_service_error().is_some_and(|e| e.is_not_found()) => {
+                return Ok(None);
+            }
+            Err(error) => return Err(failed("read an upload's object")(error)),
+        }
     }
     let got = aws
         .s3
@@ -254,16 +276,17 @@ pub async fn take_upload(
         }
         Err(error) => return Err(failed("read an upload's frame")(error)),
     };
+    if frame.len() as u64 != size {
+        return Ok(None);
+    }
     let taken = aws
         .db
         .delete_item()
         .table_name(&aws.names.uploads)
         .key("id", b(&id.0))
-        .condition_expression("#filled = :yes AND #space = :space AND #member = :member")
-        .expression_attribute_names("#filled", "filled")
+        .condition_expression("#space = :space AND #member = :member")
         .expression_attribute_names("#space", "space")
         .expression_attribute_names("#member", "member")
-        .expression_attribute_values(":yes", AttributeValue::Bool(true))
         .expression_attribute_values(":space", b(&space.0))
         .expression_attribute_values(":member", b(&member.0))
         .send()
