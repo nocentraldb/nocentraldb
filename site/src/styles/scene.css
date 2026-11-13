@@ -12,28 +12,29 @@
   display: none;
 }
 @media (max-width: 639px) {
-  .sc--wide:has(+ .sc--tall) {
+  /* only a scenario step carries both; the hero keeps its wide drawing */
+  .mo-pc__visual .sc--wide {
     display: none;
   }
   .sc--tall {
     display: block;
   }
 }
-/* The tall layout is drawn at half the width, so its type is set larger: on a
-   390px phone the smallest label comes out at about 12px. */
-.sc--tall .sc-label {
+/* The tall layout is drawn at half the width, so its type is set larger. Written
+   as .sc.sc--tall so these win over the .sc .sc-* sizes further down. */
+.sc.sc--tall .sc-label {
   font-size: 19px;
 }
-.sc--tall .sc-title {
+.sc.sc--tall .sc-title {
   font-size: 18px;
 }
-.sc--tall .sc-status {
+.sc.sc--tall .sc-status {
   font-size: 17px;
 }
-.sc--tall .sc-cipher {
+.sc.sc--tall .sc-cipher {
   font-size: 16px;
 }
-.sc--tall .sc-cipher-big {
+.sc.sc--tall .sc-cipher-big {
   font-size: 24px;
 }
 .sc text {

@@ -31,10 +31,13 @@ const playOnce = (svg) => {
   svg.unpauseAnimations();
   timers.set(
     svg,
-    setTimeout(() => svg.pauseAnimations(), ONCE_MS),
+    setTimeout(() => hold(svg), ONCE_MS),
   );
 };
-if (!reduced && "IntersectionObserver" in window) {
+// Whether a phone's tall drawings are played by the observer below. Where they are
+// not (reduced motion, no IntersectionObserver), apply() holds them like the rest.
+const watching = !reduced && "IntersectionObserver" in window;
+if (watching) {
   const seen = new IntersectionObserver(
     (entries) => {
       if (!phone.matches) return;
@@ -57,6 +60,11 @@ for (const button of document.querySelectorAll("[data-scene-pause]")) {
       (moment && !moment.classList.contains("is-live"));
     button.hidden = reduced || phone.matches;
     for (const svg of scope.querySelectorAll("svg.sc")) {
+      if (svg.classList.contains("sc--tall")) {
+        // Shown on a phone only, where the observer plays it; hidden and held elsewhere.
+        if (!(watching && phone.matches)) hold(svg);
+        continue;
+      }
       if (still) hold(svg);
       else if (paused) svg.pauseAnimations();
       else svg.unpauseAnimations();

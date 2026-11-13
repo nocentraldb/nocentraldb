@@ -1,6 +1,7 @@
 // The landing page's drawing (scene.mjs): the four states say what the spec's
 // table "The scenario picture" says. Needs no build.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { STEPS, scene } from "../src/components/scene.mjs";
 
@@ -99,4 +100,17 @@ test("a wide and a tall drawing with one prefix share no id", () => {
     ids(scene(2, "a", "tall")).length > 0,
     "state 2 has the train clip",
   );
+});
+
+test("the tall drawing's type sizes win over the wide ones", () => {
+  const css = readFileSync(
+    new URL("../src/styles/scene.css", import.meta.url),
+    "utf8",
+  );
+  // .sc--tall .sc-x has the specificity of .sc .sc-x, which comes later and would win
+  assert.ok(
+    !/(^|[^.\w])\.sc--tall \.sc-/m.test(css.replace(/\.sc\.sc--tall/g, "")),
+  );
+  for (const part of ["label", "title", "status", "cipher", "cipher-big"])
+    assert.match(css, new RegExp(`\\.sc\\.sc--tall \\.sc-${part}[ ,{]`), part);
 });

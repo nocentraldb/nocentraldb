@@ -88,6 +88,8 @@
   [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
     aspect-ratio: 400 / 704;
     max-height: none;
+    /* out over the step's indent and rule, so the drawing gets the wrap's full width */
+    margin-left: calc(-1 * var(--s-5) - 2px);
   }
 }
 /* beats moment.css's main > [data-moment="pinned-chapters"][data-moment]:not(.is-live) (min-height: 100svh) */
