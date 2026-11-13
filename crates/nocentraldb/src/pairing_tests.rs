@@ -47,6 +47,23 @@ fn the_recovery_code_shows_as_redacted() {
     assert_eq!(format!("{code:#?}"), "RecoveryCode(redacted)");
 }
 
+/// A code whose words occur inside the redacted text itself: "act" in
+/// "redacted", "code" in "RecoveryCode". The check that the text names no
+/// word of the code fails on such a code although nothing leaks, so the
+/// redacted forms are checked against the exact text.
+#[test]
+fn a_code_whose_words_occur_in_the_redacted_text_shows_as_redacted() {
+    let mut bits = [0; 16];
+    bits[..3].copy_from_slice(&[0x02, 0x65, 0xa0]);
+    let code = RecoveryCode::new(CoreCode::from_bits(bits));
+    assert_eq!(code.words()[..2], ["act", "code"]);
+    assert_eq!(code.to_string(), "RecoveryCode(redacted)");
+    assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
+    for word in code.words() {
+        assert!(!format!("{code} {code:?}").contains(word));
+    }
+}
+
 #[test]
 fn a_pairing_answer_reads_back_from_its_text() {
     let answer = answer();
