@@ -1,0 +1,21 @@
+language: typescript
+layer: application
+
+tasks:
+  browser:
+    # The example app in Chromium through Playwright (e2e/): it builds
+    # packages/sdk, its core in wasm included, then the app, and drives the
+    # page as a person does. Not part of `gates`, which runs without
+    # browsers; the workflow browser-view.yml runs it in CI. Never cached:
+    # its result depends on the installed browser.
+    command: "node --test 'e2e/*.e2e.mjs'"
+    deps: ["repo:wasm-runner"]
+    inputs:
+      - "/apps/tasks-ts/**/*"
+      - "/packages/sdk/**/*"
+      - "/crates/nocentraldb/**/*"
+      - "/crates/nocentraldb-wasm/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+    options:
+      cache: false

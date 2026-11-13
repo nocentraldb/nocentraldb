@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // The type check reads the SDK's source, so it needs no build; the
+    // build (tsconfig.build.json) reads the package's build output.
+    "paths": { "@nocentraldb/sdk": ["../../packages/sdk/src/index.ts"] }
+  },
+  "include": ["model.ts", "src", "test"]
+}
