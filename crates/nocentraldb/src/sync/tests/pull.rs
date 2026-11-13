@@ -68,3 +68,29 @@ async fn a_change_appended_later_arrives_through_the_subscription() {
         .relay_position(space.space, later.id());
     assert_eq!(position, Some(6));
 }
+
+// db.changes (RFC 0009, "Subscribe"): a change that sync folds reaches the
+// fold feed with the ids it touched and the origin "remote".
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pulled_change_reaches_the_fold_feed_as_remote() {
+    let relay = LocalRelay::start().await;
+    let (mut space, mut client) = shared(&relay).await;
+    let db = open(ME, &relay.url()).await;
+    eventually("the first task", || holds(&db, &space, FIRST)).await;
+    let feed = db.folds();
+
+    let later = space.sealed(ADMIN, vec![field_op::create(SECOND, "tasks")]);
+    push(&mut client, &[&later]).await;
+    eventually("the second task", || holds(&db, &space, SECOND)).await;
+
+    let changes: Vec<_> = feed
+        .take()
+        .into_iter()
+        .filter(|fold| fold.space.0 == space.space)
+        .flat_map(|fold| fold.changes)
+        .collect();
+    assert_eq!(changes.len(), 1, "{changes:?}");
+    assert_eq!(changes[0].collection, "tasks");
+    assert_eq!(changes[0].ids, vec![ObjectId(SECOND)]);
+    assert_eq!(changes[0].origin, crate::subscribe::Origin::Remote);
+}
