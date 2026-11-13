@@ -53,7 +53,7 @@ impl Account<'_> {
 
     /// `AccountRecovered` when this open recovered the account from its
     /// recovery code ([`OpenOptions::recover`](crate::OpenOptions::recover)),
-    /// and `None` on every other open.
+    /// and `None` on every other open (Carsten, 2026-11-13, NOC-289).
     pub async fn recovered(&self) -> Result<Option<Notice>, Error> {
         Ok(self.db.lock().recovered)
     }
@@ -278,6 +278,19 @@ struct Plan {
 fn spaces_to_join(inner: &Inner) -> Result<Plan, Error> {
     let me = inner.member.key().id();
     let account_space = crate::account::space(inner);
+    // The spaces where a device of the account other than this one is an
+    // admin, by the account space's `memberships` records (RFC 0010, "The
+    // account space"): that device adds the new one, so the app asks no
+    // one. A space with no record of an admin falls back to being listed.
+    let records = match account_space {
+        Some(_) => crate::account::memberships(inner)?,
+        None => Vec::new(),
+    };
+    let administered = |space: &ncdb_core::ids::SpaceId| {
+        records.iter().any(|record| {
+            record.space == space.0 && record.member != me.0 && record.role == Role::Admin
+        })
+    };
     let mut plan = Plan::default();
     for (space, state) in &inner.spaces {
         let account = Some(*space) == account_space;
@@ -287,16 +300,14 @@ fn spaces_to_join(inner: &Inner) -> Result<Plan, Error> {
         let role = state.checks.resolved().role(me);
         if role == Some(CoreRole::Admin) {
             plan.add.push((SpaceId(*space), !account));
-        } else if role.is_some() && !account {
+        } else if role.is_some() && !account && !administered(space) {
             plan.ask_admins.push(SpaceId(*space));
         }
     }
-    if account_space.is_some() {
-        for record in crate::account::memberships(inner)? {
-            let space = ncdb_core::ids::SpaceId(record.space);
-            if record.member != me.0 && !inner.spaces.contains_key(&space) {
-                plan.ask_admins.push(SpaceId(space));
-            }
+    for record in &records {
+        let space = ncdb_core::ids::SpaceId(record.space);
+        if record.member != me.0 && !inner.spaces.contains_key(&space) && !administered(&space) {
+            plan.ask_admins.push(SpaceId(space));
         }
     }
     plan.ask_admins.sort();

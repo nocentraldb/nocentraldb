@@ -79,7 +79,7 @@ impl Fingerprint {
     /// fingerprint").
     const ACCOUNT: &'static [u8] = b"nocentraldb/account-fingerprint";
     /// The context string in front of the member id of a member waiting to
-    /// be paired.
+    /// be paired (Carsten, 2026-11-13, NOC-288).
     const MEMBER: &'static [u8] = b"nocentraldb/member-fingerprint";
 
     /// The fingerprint of the account whose identity is `key`: its

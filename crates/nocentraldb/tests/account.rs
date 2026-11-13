@@ -291,13 +291,15 @@ fn words_that_are_no_code_are_invalid_and_create_nothing() {
     let dir = TempDir::new("recover-invalid");
     let laptop = open(at(&dir, "laptop"));
     let words = words(&laptop);
-    let mut swapped: Vec<&str> = words.split(' ').collect();
-    swapped.swap(0, 1);
+    // Twelve words of the list whose checksum fails, always: twelve times
+    // "abandon" are the bits 0, whose checksum word is "about". (Two words
+    // of a random code swapped keep the 4-bit checksum one time in 16.)
+    let bad_checksum = ["abandon"; 12].join(" ");
     for bad in [
         "",
         "abandon abandon abandon",
         &words.replacen(words.split(' ').next().unwrap(), "notaword", 1),
-        &swapped.join(" "),
+        &bad_checksum,
     ] {
         let refused = now(Db::open(at(&dir, "third").recover(bad))).unwrap_err();
         assert_eq!(refused.code(), ErrorCode::InvalidValue, "{bad}");

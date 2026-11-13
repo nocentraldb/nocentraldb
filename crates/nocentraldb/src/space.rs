@@ -64,11 +64,14 @@ impl Spaces<'_> {
     /// random nonce.
     pub async fn create(&self) -> Result<Space, Error> {
         let mut inner = self.db.lock();
+        // The account's first space comes with the account space, created
+        // before it: on a relay that lets an account it does not list
+        // create one space, that space must be the account space (RFC
+        // 0007, "Who may create a space"; NOC-287).
+        crate::account::create(&mut inner)?;
         let model = inner.model_id;
         let space = create_space(&mut inner, model)?;
-        // The account's first space creates the account space, which
-        // records the space the device joined (RFC 0010).
-        crate::account::create(&mut inner)?;
+        // The account space records the space the device joined (RFC 0010).
         crate::account::reconcile(&mut inner)?;
         Ok(Space {
             inner: self.db.inner.clone(),

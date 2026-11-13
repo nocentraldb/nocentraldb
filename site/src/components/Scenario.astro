@@ -2,6 +2,8 @@
 // The scroll scenario on the kit's pinned-chapters moment (see the kit's
 // moments/_demo/in-page-service.html): four steps, each with its drawing.
 // moment.js moves the four figures into the shared frame while the section is held.
+// Each figure carries the drawing twice: wide for screens from 640px, tall for a
+// phone (scene.css shows one of them).
 import { STEPS, scene } from "./scene.mjs";
 ---
 
@@ -22,7 +24,7 @@ import { STEPS, scene } from "./scene.mjs";
             <li class="mo-pc__step">
               <h3>{step.title}</h3>
               <p>{step.text}</p>
-              <figure class="mo-pc__visual" set:html={scene(i, `s${i}`)} />
+              <figure class="mo-pc__visual" set:html={scene(i, `s${i}`) + scene(i, `s${i}`, "tall")} />
             </li>
           ))
         }

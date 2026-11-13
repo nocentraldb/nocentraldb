@@ -255,3 +255,47 @@ async fn a_guest_that_pairs_a_device_creates_the_account_space_the_relay_admits(
     )
     .await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_space_where_another_device_of_the_account_is_an_admin_is_in_neither_list() {
+    // The account space's `memberships` records carry each device's role
+    // (RFC 0010, "The account space"), so the laptop knows the phone is an
+    // admin of the phone's space although the laptop does not hold it: the
+    // phone adds the new device there, the app asks no one.
+    let relay = LocalRelay::start().await;
+    let laptop = open(LAPTOP, &relay.url()).await;
+    now(laptop.spaces().create()).unwrap();
+    let phone = waiting(&relay.url()).await;
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(phone.invitation())))
+    .unwrap();
+    now(phone.account().complete_pairing(&paired.answer)).unwrap();
+    synced(&laptop).await;
+    eventually("the phone holds the account space", || {
+        crate::account::space(&crate::db::lock(&phone.inner)).is_some()
+    })
+    .await;
+    let phones = now(phone.spaces().create()).unwrap();
+    synced(&phone).await;
+    eventually("the laptop reads the phone's membership record", || {
+        crate::account::memberships(&crate::db::lock(&laptop.inner))
+            .unwrap()
+            .iter()
+            .any(|record| ncdb_core::ids::SpaceId(record.space) == phones.id().0)
+    })
+    .await;
+    assert!(now(laptop.spaces().get(phones.id())).is_err());
+
+    let tablet = waiting(&relay.url()).await;
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(tablet.invitation())))
+    .unwrap();
+    assert!(paired.added.iter().all(|(space, _)| *space != phones.id()));
+    assert!(
+        paired.ask_admins.is_empty(),
+        "the phone is the admin of its space: {:?}",
+        paired.ask_admins
+    );
+}

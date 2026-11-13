@@ -184,3 +184,50 @@ async fn the_account_space_never_holds_the_account_key() {
         );
     }
 }
+
+/// A guest: a device of an account the relay does not list, added to a
+/// space of the listed one (RFC 0007, "Who may create a space"; NOC-286).
+/// Its account may create exactly one space, and that one must be its
+/// account space: the SDK creates the account space before the app space
+/// and pushes it first (NOC-287).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guests_one_space_is_its_account_space() {
+    let relay = LocalRelay::start().await;
+    let host = open(A, &relay.url()).await;
+    let guest = crate::db::Db::open(
+        crate::db::OpenOptions::new(LOCK)
+            .in_memory()
+            .relay(&relay.url()),
+    )
+    .await
+    .expect("the test lock opens");
+    let shared = now(host.spaces().create()).unwrap();
+    let invitation = now(guest.invitation());
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: Some(invitation.fingerprint()),
+    };
+    now(shared.members().add(&invitation, options)).unwrap();
+    synced(&host).await;
+    eventually("the guest holds the shared space", || {
+        now(guest.spaces().get(shared.id())).is_ok()
+    })
+    .await;
+
+    now(guest.spaces().create()).unwrap();
+    let account = account_space(&guest);
+
+    let mut log = Vec::new();
+    for _ in 0..200 {
+        log = relay.log(account.0).await;
+        if !log.is_empty() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(
+        !log.is_empty(),
+        "the relay holds the guest's account space; refused {}",
+        guest.sync().current().refused
+    );
+}
