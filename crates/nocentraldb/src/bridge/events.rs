@@ -271,10 +271,9 @@ pub(super) fn space_status(status: &SpaceStatus) -> Value {
                                 ),
                             ),
                             ("canUndo", Value::Bool(erasure.can_undo)),
-                            // NOC-176 slice 4: a member id has no text form
-                            // yet; the owner decides one. Until then, the
-                            // hex of its bytes.
-                            ("performer", Value::Text(hex(&erasure.performer.0.0))),
+                            // A member id's text form, 64 lowercase hex
+                            // digits (Carsten, 2026-11-13, NOC-298).
+                            ("performer", Value::Text(erasure.performer.to_string())),
                             (
                                 "notice",
                                 entries([
@@ -294,9 +293,4 @@ pub(super) fn space_status(status: &SpaceStatus) -> Value {
             ),
         ),
     ])
-}
-
-/// Lowercase hex of `bytes`.
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }

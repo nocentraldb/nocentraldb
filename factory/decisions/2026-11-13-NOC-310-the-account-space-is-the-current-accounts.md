@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-310 · The account space is the one whose creator is the current account
+
+- Decided by: pm, NOC-310, on the coding agent's proposal
+- Why: a database with an account of its own that created a space holds an account space under that account. Once it is linked into the person's account (RFC 0010, "Linking accounts drawn per database"), it holds two, and "the first account space by id" could be the old one: its link statement went there, the relay confirmed it, and the person's account never learned the link. `account::space()` now returns the account space whose genesis creator's certificate names this database's current account, by fingerprint, and none while the copy holds none. The creator is the first member by seniority, which a removal keeps. The link statement, the device's member and membership records, the removal of lost devices and pairing's spaces to join all wait until the person's account space arrives; the old account space stays as it is, like any space from before the link. The fingerprint, not the account key, so that a new account key (NOC-268) keeps the same account space.
+- Instead of: choosing by the space's members, which an add could change; or deleting or leaving the old account space, which would drop the records of the old account that other devices may still read.
+- Topics: sdk-rust, accounts, linking

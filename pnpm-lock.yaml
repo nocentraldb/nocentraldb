@@ -194,6 +194,12 @@ importers:
         specifier: workspace:*
         version: link:../../packages/sdk
 
+  apps/tasks-ts:
+    dependencies:
+      '@nocentraldb/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   infra/aws:
     dependencies:
       aws-cdk-lib:

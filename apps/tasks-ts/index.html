@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 36rem; margin: 2rem auto; padding: 0 1rem; }
+  ul { list-style: none; padding: 0; }
+  li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.25rem 0; }
+  #done .title { text-decoration: line-through; color: #666; }
+  #error { color: #b00020; }
+</style>
+<!-- The app imports the SDK by its package name; the server serves the
+     package's build output under /sdk/. -->
+<script type="importmap">
+  { "imports": { "@nocentraldb/sdk": "/sdk/index.js" } }
+</script>
+<script type="module" src="/dist/src/app.js"></script>
+<body>
+  <h1>Tasks</h1>
+  <form id="add">
+    <input name="title" placeholder="A new task" aria-label="A new task" autocomplete="off">
+    <button type="submit">Add</button>
+  </form>
+  <p id="error" role="alert"></p>
+  <h2>Open</h2>
+  <ul id="open"></ul>
+  <button id="open-more" type="button" hidden>Show more</button>
+  <h2>Done</h2>
+  <ul id="done"></ul>
+  <button id="done-more" type="button" hidden>Show more</button>
+</body>
+</html>

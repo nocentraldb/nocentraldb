@@ -226,8 +226,8 @@ pub(crate) fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) ->
 
 impl Space {
     /// A handle on a space the database holds, without the checks of
-    /// [`Spaces::get`], as the sync tests read a space of another model.
-    #[cfg(test)]
+    /// [`Spaces::get`]: pairing adds a device to the account space with it,
+    /// and the sync tests read a space of another model.
     pub(crate) fn handle(inner: Arc<Mutex<Inner>>, id: SpaceId) -> Space {
         Space { inner, id }
     }

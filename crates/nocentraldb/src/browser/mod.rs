@@ -44,6 +44,8 @@ pub(crate) struct Placed {
     pub(crate) storage: Storage,
     /// The database's name, under which IndexedDB keeps its keys.
     pub(crate) name: String,
+    /// Whether the keys were drawn new for this open.
+    pub(crate) drawn: bool,
 }
 
 /// Whether `name` may name a database: 1 to 64 characters of `a`–`z`,
@@ -82,6 +84,7 @@ pub(crate) async fn place(name: &str, new: impl FnOnce() -> Keys) -> Result<Plac
         keys,
         storage,
         name: name.to_owned(),
+        drawn: false,
     })
 }
 

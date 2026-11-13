@@ -228,6 +228,9 @@ impl<T: Transport> Session<'_, T> {
                 }
             }
             push = false;
+            // A newer account key the account space hands this device is
+            // taken once its pulls are in (RFC 0010, "Losing a device").
+            crate::account::take_new_key(self.db).await;
             // A space the relay stopped has its unconfirmed changes pushed
             // once more, so those it holds are confirmed (NOC-276).
             for space in with(self.db, |inner| apply::flushing(inner))? {

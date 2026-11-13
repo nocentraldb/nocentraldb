@@ -7,7 +7,7 @@ use ncdb_core::ids::{MemberId, SpaceId};
 
 use crate::error::ErrorCode;
 use crate::relay::Relay;
-use crate::store::{Position, RelayStore, StoreError, Token, Upload, UploadId};
+use crate::store::{Position, RelayStore, StoreError, Token, TokenUrls, Upload, UploadId};
 
 /// How long an upload URL takes its frame: 15 minutes (RFC 0007).
 pub const UPLOAD_URL_VALID_FOR: u64 = 15 * 60 * 1000;
@@ -72,6 +72,25 @@ impl<S: RelayStore> Relay<S> {
         Ok((id, token))
     }
 
+    /// The frame of a filled upload of `uploader` in `space`, taken once.
+    /// An upload not filled, unknown, or of another member or space is
+    /// malformed: the push names no frame.
+    pub(crate) async fn take_upload(
+        &self,
+        uploader: MemberId,
+        space: SpaceId,
+        id: UploadId,
+    ) -> Result<Vec<u8>, ErrorCode> {
+        self.store()
+            .take_upload(space, uploader, id)
+            .await?
+            .ok_or(ErrorCode::Malformed)
+    }
+}
+
+/// The URLs of large changes that a backend with token URLs serves itself
+/// (NOC-303): the relay server and the local harness.
+impl<S: TokenUrls> Relay<S> {
     /// The declared size of the frame an upload URL takes, if it takes one:
     /// its upload is known, unfilled and its URL has not expired. A server
     /// checks it before it reads the body.
@@ -96,21 +115,6 @@ impl<S: RelayStore> Relay<S> {
         } else {
             Filled::NotFound
         })
-    }
-
-    /// The frame of a filled upload of `uploader` in `space`, taken once.
-    /// An upload not filled, unknown, or of another member or space is
-    /// malformed: the push names no frame.
-    pub(crate) async fn take_upload(
-        &self,
-        uploader: MemberId,
-        space: SpaceId,
-        id: UploadId,
-    ) -> Result<Vec<u8>, ErrorCode> {
-        self.store()
-            .take_upload(space, uploader, id)
-            .await?
-            .ok_or(ErrorCode::Malformed)
     }
 
     /// A download token for the entry at `position` of `space`, which a

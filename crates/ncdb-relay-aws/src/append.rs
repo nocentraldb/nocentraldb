@@ -314,7 +314,9 @@ fn transaction(
 }
 
 /// Deletes the objects under `frames/` last modified before `cutoff` that
-/// no `changes` item holds, and returns how many.
+/// no `changes` item holds, and returns how many: one whole pass, with no
+/// budget and no cursor. The Lambda runs [`crate::sweep::run`] instead,
+/// which resumes across runs (NOC-293).
 pub async fn sweep_orphans(aws: &Aws, cutoff: u64) -> Result<u32, StoreError> {
     let mut deleted = 0;
     let mut pages = aws
@@ -327,27 +329,39 @@ pub async fn sweep_orphans(aws: &Aws, cutoff: u64) -> Result<u32, StoreError> {
     while let Some(page) = pages.next().await {
         let page = page.map_err(failed("list frames in S3"))?;
         for object in page.contents() {
-            let (Some(key), Some(modified)) = (object.key(), object.last_modified()) else {
-                continue;
-            };
-            let old = modified.to_millis().is_ok_and(|ms| ms < cutoff as i64);
-            let Some((space, change)) = parse_frame_key(key) else {
-                continue;
-            };
-            if !old || find(aws, space, change).await?.is_some() {
-                continue;
+            if visit(aws, object, cutoff).await? {
+                deleted += 1;
             }
-            aws.s3
-                .delete_object()
-                .bucket(&aws.names.bucket)
-                .key(key)
-                .send()
-                .await
-                .map_err(failed("delete an orphan frame"))?;
-            deleted += 1;
         }
     }
     Ok(deleted)
+}
+
+/// Deletes `object` if it is under `frames/`, was last modified before
+/// `cutoff` and no `changes` item holds it; whether it deleted it.
+pub(crate) async fn visit(
+    aws: &Aws,
+    object: &aws_sdk_s3::types::Object,
+    cutoff: u64,
+) -> Result<bool, StoreError> {
+    let (Some(key), Some(modified)) = (object.key(), object.last_modified()) else {
+        return Ok(false);
+    };
+    let old = modified.to_millis().is_ok_and(|ms| ms < cutoff as i64);
+    let Some((space, change)) = parse_frame_key(key) else {
+        return Ok(false);
+    };
+    if !old || find(aws, space, change).await?.is_some() {
+        return Ok(false);
+    }
+    aws.s3
+        .delete_object()
+        .bucket(&aws.names.bucket)
+        .key(key)
+        .send()
+        .await
+        .map_err(failed("delete an orphan frame"))?;
+    Ok(true)
 }
 
 /// The space and change of a key [`frame_key`] wrote.

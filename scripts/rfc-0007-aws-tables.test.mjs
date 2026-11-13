@@ -1,10 +1,12 @@
 // Asserts that RFC 0007's AWS backend carries the five points the owner
 // decided with the tick on #275 (NOC-270), each marked with his name, the
-// date and the pull request: the tables `uploads` and `tokens`, ids in
-// lowercase hex in S3 keys, the epoch item's key `epoch`, the index
-// `by_member` on `members`, and the `ttl` attribute on uploads and tokens;
-// and that every place that lists the backend's tables lists the two new
-// ones. Whether the wording is right is the owner's review of the PR.
+// date and the pull request: the table `uploads`, ids in lowercase hex in
+// S3 keys, the epoch item's key `epoch`, the index `by_member` on
+// `members`, and the `ttl` attribute on uploads; and that every place that
+// lists the backend's tables lists `uploads`. The table `tokens` of #275 is
+// gone by the owner's later decision on NOC-295 (Carsten, 2026-11-13): no
+// list names it, and the uploads row says why. Whether the wording is right
+// is the owner's review of the PR.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -14,6 +16,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0007-relay.md";
 const MARK = "(Carsten, 2026-11-12, #275)";
+const NO_TOKENS = "(Carsten, 2026-11-13, NOC-295; NOC-303)";
 const read = () => readFileSync(join(root, RFC), "utf8");
 
 /** The text under the heading `### title`, up to the next `##` heading. */
@@ -35,23 +38,29 @@ const row = (table) => {
   return line;
 };
 
-test("uploads and download tokens have tables of their own, keyed as decided", () => {
+test("uploads have a table of their own, keyed as decided", () => {
   const uploads = row("uploads");
   assert.match(uploads, /^\| `uploads` \| upload id \| — \|/);
   assert.ok(uploads.includes(MARK), "the uploads row carries the owner's mark");
-  const tokens = row("tokens");
-  assert.match(tokens, /^\| `tokens` \| token \| — \|/);
-  assert.ok(tokens.includes(MARK), "the tokens row carries the owner's mark");
 });
 
-test("uploads and tokens carry a ttl attribute", () => {
-  for (const table of ["uploads", "tokens"]) {
-    assert.match(
-      row(table),
-      /`ttl`/,
-      `the ${table} row names the ttl attribute`,
-    );
-  }
+test("there is no tokens table, as the owner decided on NOC-295", () => {
+  const rows = subsection("Tables and keys").split("\n");
+  assert.ok(
+    !rows.some((l) => l.startsWith("| `tokens` |")),
+    "no row for `tokens`",
+  );
+  const uploads = row("uploads");
+  assert.ok(uploads.includes(NO_TOKENS), "the uploads row names the decision");
+  assert.match(uploads, /no table of tokens/);
+});
+
+test("uploads carry a ttl attribute", () => {
+  assert.match(
+    row("uploads"),
+    /`ttl`/,
+    "the uploads row names the ttl attribute",
+  );
 });
 
 test("the epoch item's key in spaces is the five bytes epoch", () => {
@@ -75,16 +84,16 @@ test("S3 keys write their ids in lowercase hex", () => {
   assert.ok(line.includes(MARK));
 });
 
-test("every list of the backend's tables names uploads and tokens", () => {
+test("every list of the backend's tables names uploads, and none names tokens", () => {
   const markdown = read();
   const diagram = markdown.match(/```text\nmember ──WebSocket──▶[\s\S]*?```/);
   assert.ok(diagram, "the AWS diagram is there");
   assert.match(diagram[0], /uploads/);
-  assert.match(diagram[0], /tokens/);
+  assert.doesNotMatch(diagram[0], /tokens/);
   const dynamo = subsection("Services")
     .split("\n")
     .find((l) => l.startsWith("| DynamoDB, on-demand |"));
   assert.ok(dynamo, "the services table has a DynamoDB row");
   assert.match(dynamo, /uploads/);
-  assert.match(dynamo, /download tokens/);
+  assert.doesNotMatch(dynamo, /tokens/);
 });

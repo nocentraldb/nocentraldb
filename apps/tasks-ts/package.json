@@ -1,0 +1,14 @@
+{
+  "name": "@nocentraldb/example-tasks-ts",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "@nocentraldb/sdk": "workspace:*"
+  }
+}

@@ -1,5 +1,7 @@
 [workspace]
 members = ["apps/*", "crates/*"]
+# apps/tasks-ts is a TypeScript app of the pnpm workspace, not a crate.
+exclude = ["apps/tasks-ts"]
 resolver = "3"
 
 [workspace.package]
