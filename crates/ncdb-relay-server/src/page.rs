@@ -5,12 +5,12 @@
 use std::sync::Arc;
 
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_relay::page::{self, Page};
-use ncdb_relay::store::{Epoch, Position, RelayStore, Token};
+use ncdb_relay::page::{self, Page, TokenDownloads};
+use ncdb_relay::store::{Epoch, Position, RelayStore};
 use ncdb_relay::{ErrorCode, Relay};
 
 use crate::connection::blocking;
-use crate::http::{FRAMES, hex};
+use crate::http::FRAMES;
 
 /// The entries of `space` after `after` that `member` reads, at most
 /// `limit` and as many as fit into one message, with `req` as its request
@@ -27,8 +27,12 @@ pub(crate) async fn read<S: RelayStore + 'static>(
     limit: u64,
 ) -> Result<Page, ErrorCode> {
     blocking(async move {
-        let url = |token: &Token| format!("{base_url}{FRAMES}{}", hex(token));
-        page::read(&relay, &url, member, req, space, epoch, after, limit).await
+        let prefix = format!("{base_url}{FRAMES}");
+        let downloads = TokenDownloads {
+            relay: &relay,
+            prefix: &prefix,
+        };
+        page::read(&relay, &downloads, member, req, space, epoch, after, limit).await
     })
     .await
 }
