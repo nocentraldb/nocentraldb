@@ -12,7 +12,7 @@ use ncdb_core::envelope;
 use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::State;
-use ncdb_core::membership::{self, Certificate, ControlBody, Entry, Genesis, Role};
+use ncdb_core::membership::{self, ControlBody, Entry, Genesis, Role};
 use ncdb_core::seal;
 use ncdb_core::view::View;
 
@@ -105,6 +105,15 @@ impl Spaces<'_> {
 /// the account space of the model the SDK ships (`crate::account`).
 pub(crate) fn create_space(inner: &mut Inner, model: [u8; 16]) -> Result<CoreSpaceId, Error> {
     let member = inner.member.key();
+    let certificate = inner
+        .account
+        .certificate(member.id(), inner.kind)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::NotAllowed,
+                "a database waiting to be paired creates no space until its pairing completes",
+            )
+        })?;
     let nonce = CoreObjectId::random().0;
     let space = membership::space_id(member.id(), &nonce);
     let generation = membership::generation_id(space, member.id(), &[]);
@@ -112,7 +121,7 @@ pub(crate) fn create_space(inner: &mut Inner, model: [u8; 16]) -> Result<CoreSpa
     let genesis = Genesis {
         nonce,
         creator: member.public(),
-        certificate: Certificate::sign(&inner.account, member.id(), inner.kind),
+        certificate,
         first_generation: generation,
         model_id: membership::seal_model_id(&key, space, member.id(), model),
     };

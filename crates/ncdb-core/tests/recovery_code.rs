@@ -154,3 +154,13 @@ fn debug_shows_no_word_and_no_byte() {
     .unwrap_err();
     assert!(!format!("{error:?} {error}").contains("secretword"));
 }
+
+#[test]
+fn a_code_gives_back_the_bits_it_was_made_from() {
+    for vector in vectors() {
+        let bits = bits(vector.bits);
+        assert_eq!(*RecoveryCode::from_bits(bits).bits(), bits);
+    }
+    let code = RecoveryCode::generate();
+    assert_eq!(RecoveryCode::from_bits(*code.bits()), code);
+}

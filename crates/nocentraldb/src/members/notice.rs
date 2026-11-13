@@ -35,9 +35,64 @@ pub enum NoticeCode {
     /// status gives it on every device of the account, not a call
     /// (Carsten, 2026-11-11, NOC-230).
     ErasurePending,
+    /// The account's new device was added to a space, from
+    /// `Account::pair`, once per space (Carsten,
+    /// 2026-11-12, NOC-273).
+    DeviceAdded,
+    /// This device now holds the account key, from
+    /// `Account::complete_pairing`.
+    DevicePaired,
+    /// This agent acts for the account, from
+    /// `Account::complete_pairing`.
+    AgentPaired,
+    /// The database's own account was linked into the one it paired with,
+    /// from `Account::complete_pairing`.
+    AccountLinked,
+    /// The account was recovered from its code on this device.
+    AccountRecovered,
+    /// The account has a new account key, from removing a lost member.
+    AccountKeyRenewed,
 }
 
 impl Notice {
+    /// The notices of accounts, with the texts the owner decided (Carsten,
+    /// 2026-11-12, NOC-273; RFC 0009, "Accounts and devices").
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const DEVICE_ADDED: Notice = Notice {
+        code: NoticeCode::DeviceAdded,
+        text: "Your new device was added to this space and reads its whole history.",
+    };
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const DEVICE_PAIRED: Notice = Notice {
+        code: NoticeCode::DevicePaired,
+        text: "This device now holds your account key. \
+               Keep your recovery code: it is the way back if you lose every device.",
+    };
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const AGENT_PAIRED: Notice = Notice {
+        code: NoticeCode::AgentPaired,
+        text: "This agent acts for your account in the spaces an admin adds it to. \
+               It holds no account key.",
+    };
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const ACCOUNT_LINKED: Notice = Notice {
+        code: NoticeCode::AccountLinked,
+        text: "Spaces this database joined before keep its old account. \
+               Other members see it as linked to yours.",
+    };
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const ACCOUNT_RECOVERED: Notice = Notice {
+        code: NoticeCode::AccountRecovered,
+        text: "Your account is back with a new account key. \
+               Your spaces come back when one of their members adds this device.",
+    };
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) const ACCOUNT_KEY_RENEWED: Notice = Notice {
+        code: NoticeCode::AccountKeyRenewed,
+        text: "Your account has a new account key. \
+               Members that have not learnt it yet still accept the old one.",
+    };
+
     /// The notice of [`Members::add`](crate::Members::add).
     pub(crate) const MEMBER_ADDED: Notice = Notice {
         code: NoticeCode::MemberAdded,

@@ -83,7 +83,7 @@ impl Members<'_> {
                 let member = resolved.member(id)?;
                 Some(MemberInfo {
                     id: MemberId(id),
-                    account: Fingerprint(member.certificate.account_key),
+                    account: Fingerprint::of(&member.certificate),
                     kind: MemberKind::of(member.certificate.kind),
                     role: Some(Role::of(role)),
                     is_self: id == me,

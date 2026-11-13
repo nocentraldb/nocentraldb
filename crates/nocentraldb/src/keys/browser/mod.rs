@@ -1,10 +1,10 @@
 //! The member's keys in the browser (RFC 0003, "The member key"; NOC-175
-//! slice 2; the owner's NOC-210 Q1 A): the 113-byte key record, sealed with
+//! slice 2; the owner's NOC-210 Q1 A): the key record, sealed with
 //! AES-GCM-256 under a non-extractable WebCrypto key, and that key, both
 //! kept in IndexedDB ([`indexeddb`]).
 //!
 //! The sealed record is a 12-byte random IV, then the AES-GCM ciphertext of
-//! the key record and its 16-byte tag, [`SEALED_LEN`] bytes in all; its
+//! the key record and its 16-byte tag, 28 bytes more than the record; its
 //! associated data is `"nocentraldb/browser-key-record"` followed by the
 //! database name's UTF-8 bytes, so the records of one database do not open
 //! as another's. An open that finds neither record draws new keys and
@@ -34,7 +34,7 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{AesGcmParams, AesKeyGenParams, Crypto, CryptoKey, SubtleCrypto};
 use zeroize::Zeroizing;
 
-use super::{Keys, LEN};
+use super::Keys;
 use crate::error::{Error, ErrorCode};
 
 /// What the associated data of a sealed record starts with.
@@ -43,10 +43,6 @@ const AD: &[u8] = b"nocentraldb/browser-key-record";
 const IV_LEN: usize = 12;
 /// The length of an AES-GCM tag.
 const TAG_LEN: usize = 16;
-/// The length of a sealed key record: its IV, the ciphertext of the key
-/// record and the tag.
-pub(crate) const SEALED_LEN: usize = IV_LEN + LEN + TAG_LEN;
-
 /// What a store holds of a database's two records.
 pub(crate) struct Stored {
     /// The wrapping key.
@@ -63,23 +59,49 @@ pub(crate) trait Records {
     async fn read(&self) -> Result<Stored, Error>;
     /// Keeps both records at once, and fails when either is there already.
     async fn write(&self, wrapping_key: &CryptoKey, record: &[u8]) -> Result<(), Error>;
+    /// Replaces the sealed key record, keeping the wrapping key.
+    async fn replace(&self, record: &[u8]) -> Result<(), Error>;
 }
 
-/// The keys of the database `name`, from IndexedDB: new keys, kept there,
-/// when it holds none for that name and the database did not exist.
+/// The keys of the database `name`, from IndexedDB: `new` keys, kept
+/// there, when it holds none for that name and the database did not exist.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) async fn load_or_create(name: &str, database_existed: bool) -> Result<Keys, Error> {
+pub(crate) async fn load_or_create(
+    name: &str,
+    database_existed: bool,
+    new: impl FnOnce() -> Keys,
+) -> Result<Keys, Error> {
     let db = indexeddb::IndexedDb::open(name).await?;
-    from_records(&db, name, database_existed).await
+    from_records(&db, name, database_existed, new).await
 }
 
-/// The keys of the database `name` from `records`, or new keys, sealed and
-/// kept there, when it holds neither record and the database did not
-/// exist.
+/// Keeps `keys` as the key record of the database `name` in IndexedDB,
+/// sealed under the wrapping key it holds.
+pub(crate) async fn save(name: &str, keys: &Keys) -> Result<(), Error> {
+    let db = indexeddb::IndexedDb::open(name).await?;
+    replace(&db, name, keys).await
+}
+
+/// Seals `keys` under the wrapping key `records` holds for the database
+/// `name`, and replaces its key record.
+pub(crate) async fn replace(records: &impl Records, name: &str, keys: &Keys) -> Result<(), Error> {
+    let wrapping_key = records
+        .read()
+        .await?
+        .wrapping_key
+        .ok_or_else(|| failed("IndexedDB holds no wrapping key for the database"))?;
+    let sealed = seal(&wrapping_key, name, &keys.encode()).await?;
+    records.replace(&sealed).await
+}
+
+/// The keys of the database `name` from `records`, or `new` keys, sealed
+/// and kept there, when it holds neither record and the database did not
+/// exist. A record of format 1 is kept again as format 2.
 pub(crate) async fn from_records(
     records: &impl Records,
     name: &str,
     database_existed: bool,
+    new: impl FnOnce() -> Keys,
 ) -> Result<Keys, Error> {
     let Stored {
         wrapping_key,
@@ -90,7 +112,7 @@ pub(crate) async fn from_records(
             "the database exists, but IndexedDB holds no keys for it; new keys would open none of its spaces",
         )),
         (None, None) => {
-            let keys = Keys::generate();
+            let keys = new();
             let wrapping_key = generate().await?;
             let sealed = seal(&wrapping_key, name, &keys.encode()).await?;
             records.write(&wrapping_key, &sealed).await?;
@@ -100,9 +122,14 @@ pub(crate) async fn from_records(
             let opened = open(&wrapping_key, name, &record).await.ok_or_else(|| {
                 failed("the key record of the database does not open under its wrapping key")
             })?;
-            Keys::decode(&opened).ok_or_else(|| {
+            let keys = Keys::decode(&opened).ok_or_else(|| {
                 failed("the key record of the database holds no keys of this SDK's format")
-            })
+            })?;
+            if keys.upgraded {
+                let sealed = seal(&wrapping_key, name, &keys.encode()).await?;
+                records.replace(&sealed).await?;
+            }
+            Ok(keys)
         }
         _ => Err(failed(
             "IndexedDB holds only one of the database's two key records; new keys would open none of its spaces",
@@ -143,7 +170,7 @@ pub(crate) async fn seal(key: &CryptoKey, name: &str, record: &[u8]) -> Result<V
 /// The record `sealed` holds, when it opens under `key` for the database
 /// `name`. The engine's copy of it is zeroed.
 pub(crate) async fn open(key: &CryptoKey, name: &str, sealed: &[u8]) -> Option<Zeroizing<Vec<u8>>> {
-    if sealed.len() != SEALED_LEN {
+    if sealed.len() < IV_LEN + TAG_LEN {
         return None;
     }
     let (iv, body) = sealed.split_at(IV_LEN);
