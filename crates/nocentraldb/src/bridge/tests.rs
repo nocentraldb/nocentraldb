@@ -81,8 +81,27 @@ fn opened() -> Bridge {
         "open",
         map(&[("lock", text(LOCK)), ("inMemory", Value::Bool(true))]),
     );
-    assert_eq!(answer, Value::Null);
+    assert!(field(&answer, "sync").is_some(), "{answer:?}");
     bridge
+}
+
+/// The events the worker would send now, decoded, in order.
+fn taken(events: &super::Events) -> Vec<Value> {
+    events
+        .take()
+        .iter()
+        .map(|bytes| cbor::decode(bytes).expect("CBOR"))
+        .collect()
+}
+
+/// The one event of kind `kind` among those taken now, if any.
+fn event(events: &super::Events, kind: &str) -> Option<Value> {
+    let mut of_kind = taken(events)
+        .into_iter()
+        .filter(|message| field(message, "event") == Some(&text(kind)));
+    let first = of_kind.next();
+    assert!(of_kind.next().is_none(), "two {kind} events at once");
+    first
 }
 
 #[test]
@@ -578,8 +597,7 @@ fn a_write_yields_a_folded_event_with_its_space_and_collection() {
     let space = tasks(&mut bridge, &[]);
     events.take();
     tasks_in(&mut bridge, &space);
-    let message = cbor::decode(&events.take().expect("an event")).unwrap();
-    assert_eq!(field(&message, "event"), Some(&text("folded")));
+    let message = event(&events, "folded").expect("a folded event");
     let Some(Value::Array(folds)) = field(&message, "folds") else {
         panic!("{message:?}")
     };
@@ -588,7 +606,7 @@ fn a_write_yields_a_folded_event_with_its_space_and_collection() {
         field(&folds[0], "collections"),
         Some(&Value::Array(vec![text("tasks")]))
     );
-    assert!(events.take().is_none(), "taken");
+    assert!(event(&events, "folded").is_none(), "taken");
 }
 
 #[test]
@@ -662,7 +680,7 @@ fn a_folded_event_names_the_ids_a_write_touched_as_local() {
             ("values", map(&[("title", text("x"))])),
         ]),
     );
-    let message = cbor::decode(&events.take().expect("an event")).unwrap();
+    let message = event(&events, "folded").expect("a folded event");
     let Some(Value::Array(folds)) = field(&message, "folds") else {
         panic!("{message:?}")
     };
@@ -676,4 +694,129 @@ fn a_folded_event_names_the_ids_a_write_touched_as_local() {
         Some(&Value::Array(vec![text(id)]))
     );
     assert_eq!(field(&changes[0], "origin"), Some(&text("local")));
+}
+
+/// The `sync` status a message carries.
+fn sync_of(message: &Value) -> Value {
+    field(message, "sync")
+        .or_else(|| field(message, "status"))
+        .unwrap_or_else(|| panic!("no status: {message:?}"))
+        .clone()
+}
+
+#[test]
+fn open_answers_the_first_sync_status_as_rfc_0009_names_it() {
+    let mut bridge = Bridge::new();
+    let answer = ok(
+        &mut bridge,
+        "open",
+        map(&[("lock", text(LOCK)), ("inMemory", Value::Bool(true))]),
+    );
+    assert_eq!(
+        sync_of(&answer),
+        map(&[
+            ("connection", text("none")),
+            ("unconfirmed", Value::Unsigned(0)),
+            ("refused", Value::Unsigned(0)),
+            ("epochChanged", Value::Bool(false)),
+            ("error", Value::Null),
+        ])
+    );
+}
+
+#[test]
+fn a_write_yields_a_sync_event_once_the_status_changed() {
+    let mut bridge = opened();
+    let events = bridge.events().expect("events once open");
+    assert!(event(&events, "sync").is_none(), "open answered the status");
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let before = match event(&events, "sync") {
+        Some(message) => field(&sync_of(&message), "unconfirmed").cloned(),
+        None => Some(Value::Unsigned(0)),
+    };
+    let Some(Value::Unsigned(before)) = before else {
+        panic!("{before:?}")
+    };
+    write_one(
+        &mut bridge,
+        &space,
+        map(&[
+            ("op", text("create")),
+            ("collection", text("tasks")),
+            ("values", map(&[("title", text("a"))])),
+        ]),
+    );
+    let status = sync_of(&event(&events, "sync").expect("a sync event"));
+    assert_eq!(
+        field(&status, "unconfirmed"),
+        Some(&Value::Unsigned(before + 1))
+    );
+    assert_eq!(field(&status, "connection"), Some(&text("none")));
+    assert!(event(&events, "sync").is_none(), "taken");
+}
+
+#[test]
+fn a_pause_reports_paused_and_a_resume_syncs_again() {
+    let mut bridge = Bridge::new();
+    let answer = ok(
+        &mut bridge,
+        "open",
+        map(&[
+            ("lock", text(LOCK)),
+            ("inMemory", Value::Bool(true)),
+            ("relay", text("ws://127.0.0.1:9")),
+        ]),
+    );
+    assert_ne!(
+        field(&sync_of(&answer), "connection"),
+        Some(&text("none")),
+        "{answer:?}"
+    );
+    let events = bridge.events().expect("events once open");
+    events.take();
+    assert_eq!(ok(&mut bridge, "sync.pause", map(&[])), Value::Null);
+    let paused = event(&events, "sync").expect("a sync event");
+    assert_eq!(
+        field(&sync_of(&paused), "connection"),
+        Some(&text("paused"))
+    );
+    assert_eq!(ok(&mut bridge, "sync.resume", map(&[])), Value::Null);
+    let resumed = event(&events, "sync").expect("a sync event");
+    assert_ne!(
+        field(&sync_of(&resumed), "connection"),
+        Some(&text("paused"))
+    );
+    ok(&mut bridge, "close", map(&[]));
+}
+
+#[test]
+fn a_change_the_relay_does_not_hold_is_not_confirmed() {
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let written = write_one(
+        &mut bridge,
+        &space,
+        map(&[
+            ("op", text("create")),
+            ("collection", text("tasks")),
+            ("values", map(&[("title", text("a"))])),
+        ]),
+    );
+    let change = field(&written, "change").expect("a change").clone();
+    assert_eq!(
+        ok(&mut bridge, "sync.isConfirmed", map(&[("change", change)])),
+        Value::Bool(false)
+    );
+    assert_eq!(
+        code(&mut bridge, "sync.isConfirmed", map(&[("change", text("nope"))])),
+        "invalidValue"
+    );
+}
+
+#[test]
+fn a_closed_database_sends_no_more_events() {
+    let mut bridge = opened();
+    let events = bridge.events().expect("events once open");
+    ok(&mut bridge, "close", map(&[]));
+    assert!(taken(&events).is_empty());
 }
