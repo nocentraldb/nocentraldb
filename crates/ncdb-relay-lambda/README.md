@@ -4,7 +4,14 @@ The NoCentralDB relay as one AWS Lambda function behind an API Gateway WebSocket
 
 The function checks nothing itself. Every request goes through the relay core, the same as in the WebSocket server `ncdb-relay-server`, and both speak the same messages: the core's `wire` and `page`.
 
-**Not deployable yet.** The DynamoDB and S3 backend exists (`ncdb-relay-aws`, NOC-270). The binary also needs a `connections` store on DynamoDB and a client of the real connection API (NOC-272). Until those exist, it says so and exits. The handler runs on the SQLite backend and the in-memory connections, in this crate's tests and in the local harness.
+**On AWS** the binary runs the handler over the AWS backend (`ncdb-relay-aws`, DynamoDB and S3), the `connections` table on DynamoDB, API Gateway's connection API and presigned S3 URLs for large changes. It reads its settings from the environment, which the deployment sets:
+- `NCDB_RELAY_ID`: the relay id, 32 hex digits;
+- `NCDB_ALLOWED_ACCOUNTS`: the account keys whose members may create spaces, comma-separated;
+- `NCDB_TABLE_PREFIX`: the prefix of its tables;
+- `NCDB_BUCKET`: the frames bucket;
+- `NCDB_CONNECTIONS_URL`: the connection API's stage URL.
+
+A missing or malformed variable stops it at start and names the variable, never its value. Outside Lambda it refuses to start. In this crate's tests and in the local harness, the handler runs on the SQLite backend and the in-memory connections.
 
 ## What it keeps between invocations
 
