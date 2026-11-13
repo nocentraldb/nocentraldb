@@ -295,3 +295,36 @@ test("subscriptions re-run after a write, until stopped", async () => {
   assert.deepEqual(seen.pages, [[], ["a"], ["b"]]);
   assert.deepEqual(seen.objects, ["a", "b"]);
 });
+
+// NOC-176 slice 3: db.changes (RFC 0009, "Subscribe").
+test("db.changes names the ids a write touched, as local", async () => {
+  const { page: opened } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "changes" });
+      const project = await db.spaces.create();
+      const changes = [];
+      const stop = db.changes.subscribe((change) => changes.push(change));
+      const { ids } = await project.write((tx) => {
+        tx.create(model.tasks, { title: "a" });
+        tx.create(model.tasks, { title: "b" });
+      });
+      const start = Date.now();
+      while (changes.length === 0 && Date.now() - start < 5000) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      stop();
+      await db.close();
+      return { changes, ids, space: project.id };
+    },
+    { lock, MODEL },
+  );
+  assert.equal(result.changes.length, 1, JSON.stringify(result.changes));
+  const [change] = result.changes;
+  assert.equal(change.space, result.space);
+  assert.equal(change.collection, "tasks");
+  assert.equal(change.origin, "local");
+  assert.deepEqual([...change.ids].sort(), [...result.ids].sort());
+});

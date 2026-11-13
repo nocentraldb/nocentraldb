@@ -16,7 +16,7 @@ use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::basic::{BasicValue, Entry};
 use crate::cbor::Value;
@@ -55,6 +55,10 @@ pub(super) struct SqlFold<'a> {
     /// The first error; the fold's calls cannot return one, so the
     /// transaction rolls back after the change.
     error: Option<Error>,
+    /// The `(collection, object)` of each object the fold wrote or
+    /// cleared, by the view's name of the collection (RFC 0006,
+    /// "Folding", step 6).
+    touched: BTreeSet<(String, ObjectId)>,
 }
 
 impl<'a> SqlFold<'a> {
@@ -67,6 +71,7 @@ impl<'a> SqlFold<'a> {
             keys: &NO_KEYS,
             shipped: false,
             error: None,
+            touched: BTreeSet::new(),
         }
     }
 
@@ -114,8 +119,18 @@ impl<'a> SqlFold<'a> {
 
     /// The first error the fold met, if any: the transaction must then
     /// roll back.
-    pub(super) fn finish(self) -> Result<(), Error> {
-        self.error.map_or(Ok(()), Err)
+    pub(super) fn finish(self) -> Result<BTreeSet<(String, ObjectId)>, Error> {
+        self.error.map_or(Ok(self.touched), Err)
+    }
+
+    /// The view's name of the collection `object` is created in, when the
+    /// fold holds a create of it.
+    fn collection_of(&self, object: ObjectId) -> Option<String> {
+        let state = self.object(object).ok()?;
+        match state.object().collection().value?.value {
+            crate::cbor::Value::Text(name) => Some(name),
+            _ => None,
+        }
     }
 
     /// Keeps the first error.
@@ -595,7 +610,13 @@ impl Fold for SqlFold<'_> {
             _ => operation,
         };
         match self.fold_field(origin, operation) {
-            Ok(folded) => folded,
+            Ok(folded) => {
+                if folded.is_ok() {
+                    self.touched
+                        .insert((operation.collection.clone(), operation.object));
+                }
+                folded
+            }
             Err(error) => {
                 self.keep(Err(error));
                 Ok(())
@@ -618,6 +639,15 @@ impl Fold for SqlFold<'_> {
                 other => other.clone(),
             };
             let result = self.fold_object_operation(object, &operation);
+            let collection = match &operation {
+                ObjectOperation::Create(create) => Some(create.collection.clone()),
+                ObjectOperation::Delete(_) => self.collection_of(object),
+            };
+            if result.is_ok()
+                && let Some(collection) = collection
+            {
+                self.touched.insert((collection, object));
+            }
             self.keep(result);
         }
     }
@@ -628,13 +658,22 @@ impl Fold for SqlFold<'_> {
         };
         if self.error.is_none() && self.model.field(&collection, field).is_some() {
             let result = self.clear_field_state(&collection, field, object);
+            if result.is_ok() {
+                self.touched.insert((collection, object));
+            }
             self.keep(result);
         }
     }
 
     fn clear_object(&mut self, object: ObjectId) {
         if self.error.is_none() {
+            let collection = self.collection_of(object);
             let result = self.clear_object_state(object);
+            if result.is_ok()
+                && let Some(collection) = collection
+            {
+                self.touched.insert((collection, object));
+            }
             self.keep(result);
         }
     }

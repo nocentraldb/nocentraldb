@@ -157,11 +157,30 @@ export const connect = async (
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
+  const changeListeners = new Set<(change: Change) => void>();
   let pending: Fold[] = [];
   core.listen((bytes) => {
     if (closed) return;
     const message = decode(bytes) as { event?: string; folds?: Fold[] };
     if (message.event !== "folded" || !message.folds) return;
+    for (const fold of message.folds) {
+      for (const changed of fold.changes ?? []) {
+        const change: Change = {
+          space: fold.space,
+          collection: changed.collection,
+          ids: changed.ids,
+          origin: changed.origin,
+        };
+        for (const listener of [...changeListeners]) {
+          try {
+            listener(change);
+          } catch {
+            // A listener that throws loses this change, and the others
+            // still get it.
+          }
+        }
+      }
+    }
     if (pending.length === 0) queueMicrotask(flush);
     pending.push(...message.folds);
   });
@@ -431,6 +450,14 @@ export const connect = async (
         (await ask("spaces.list", {})) as unknown as SpaceEntry[],
     },
     find: (query) => find(query),
+    changes: {
+      subscribe: (listener) => {
+        changeListeners.add(listener);
+        return () => {
+          changeListeners.delete(listener);
+        };
+      },
+    },
     subscribe: (query, listener) =>
       follow(collectionOf(query), undefined, async () =>
         listener(await find(query)),
@@ -442,14 +469,26 @@ export const connect = async (
       } finally {
         closed = true;
         subscriptions.clear();
+        changeListeners.clear();
         core.terminate();
       }
     },
   };
 };
 
-/** One fold the core reports: its space and the collections it touched. */
-type Fold = { space: string; collections: string[] };
+/** One fold the core reports: its space, the collections whose reads it may have changed, and the ids it touched per collection with their origin. */
+type Fold = {
+  space: string;
+  collections: string[];
+  changes?: {
+    collection: string;
+    ids: string[];
+    origin: "local" | "remote";
+  }[];
+};
+
+/** What `db.changes.subscribe` gives a listener. */
+type Change = Parameters<Parameters<Db["changes"]["subscribe"]>[0]>[0];
 
 /** A read a subscription re-runs, and what it follows. */
 type Subscription = {

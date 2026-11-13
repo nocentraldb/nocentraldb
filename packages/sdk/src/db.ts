@@ -75,6 +75,14 @@ export interface Page<T> {
 /** Stops a subscription. */
 type Stop = () => void;
 
+/** What one fold touched in one collection (RFC 0009, "Subscribe"): ids, never values, and whether the change was this member's own write. */
+interface Change {
+  readonly space: Id;
+  readonly collection: string;
+  readonly ids: readonly Id[];
+  readonly origin: "local" | "remote";
+}
+
 /** What a write answers: its change id and the ids of the objects it created, in order. */
 interface Written {
   readonly change: string;
@@ -161,6 +169,11 @@ export interface Db {
     query: Query<T, readonly unknown[]>,
     listener: (page: Page<T>) => void,
   ): Stop;
+  /** The change event: after each fold, its space, collection and the ids it touched, and its origin (RFC 0009, "Subscribe"). */
+  readonly changes: {
+    /** Calls `listener` after each fold, once per collection it touched. */
+    subscribe(listener: (change: Change) => void): Stop;
+  };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
 }
