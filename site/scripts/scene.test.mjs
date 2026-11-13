@@ -54,3 +54,49 @@ test("ids carry the prefix, so two drawings can share a page", () => {
     );
   }
 });
+
+// The phone drawing: the same four states in a tall layout whose labels stay readable.
+for (const step of [0, 1, 2, 3]) {
+  test(`state ${step}: the tall drawing shows what the wide one shows`, () => {
+    const wide = scene(step, "a");
+    const tall = scene(step, "a", "tall");
+    assert.match(wide, /<svg class="sc sc--wide" viewBox="0 0 800 600"/);
+    assert.match(tall, /<svg class="sc sc--tall" viewBox="0 0 400 704"/);
+    for (const needle of [
+      ">open<",
+      ">in progress<",
+      ">done<",
+      ">assigned to agent<",
+      "stored locally",
+      "sc-row-origin",
+      "sc-row-got",
+      "sc-dot-on",
+      "sc-dot-off",
+      "sc-link-cut",
+      'class="sc-lens"',
+      "<animateMotion",
+      ">Cloud server<",
+      ">On the train<",
+      ">Home office<",
+      ">Agent<",
+    ])
+      assert.equal(count(tall, needle), count(wide, needle), needle);
+    assert.ok(!/relay/i.test(tall));
+  });
+}
+test("a wide and a tall drawing with one prefix share no id", () => {
+  const ids = (s) => [...s.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+  for (const i of [0, 1, 2, 3]) {
+    const tall = ids(scene(i, "a", "tall"));
+    assert.ok(tall.every((id) => id.startsWith("a-tall")));
+    assert.equal(
+      ids(scene(i, "a")).filter((id) => tall.includes(id)).length,
+      0,
+    );
+  }
+  assert.ok(ids(scene(1, "a", "tall")).length > 0, "state 1 has the lens clip");
+  assert.ok(
+    ids(scene(2, "a", "tall")).length > 0,
+    "state 2 has the train clip",
+  );
+});

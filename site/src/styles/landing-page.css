@@ -82,10 +82,12 @@
     max-height: 30svh;
   }
 }
+/* A phone shows the tall drawing (scene.mjs) whole: its labels are readable there,
+   and each step is about one screen of words and picture. */
 @media (max-width: 639px) {
   [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
-    aspect-ratio: 16 / 9;
-    max-height: 26svh;
+    aspect-ratio: 400 / 704;
+    max-height: none;
   }
 }
 /* beats moment.css's main > [data-moment="pinned-chapters"][data-moment]:not(.is-live) (min-height: 100svh) */

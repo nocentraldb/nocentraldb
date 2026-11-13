@@ -1,8 +1,10 @@
-// The pause control of the landing page's drawings: each button[data-scene-pause]
-// pauses and plays every drawing inside its [data-scene-scope]. A drawing is still
-// (held at STILL_AT, then paused) under reduced motion, in a screenshot (?shot), on a
-// phone, and in the scenario while its moment is at rest (tablets, short screens: no
-// is-live). There the control is hidden or out of view, so no button is needed.
+// The motion of the landing page's drawings.
+// Each button[data-scene-pause] pauses and plays every drawing inside its
+// [data-scene-scope]. A drawing is still (held at STILL_AT, then paused) under reduced
+// motion, in a screenshot (?shot), and in the scenario while its moment is at rest
+// (tablets, short screens: no is-live). There the control is hidden or out of view.
+// On a phone a drawing plays its loop once each time it scrolls into view and then
+// rests on the same picture: under five seconds of motion, so it needs no control.
 // The markup carries every button hidden, so without script none stands dead; apply()
 // shows it wherever the drawing can move.
 
@@ -15,6 +17,35 @@ const reduced =
   document.documentElement.dataset.shot !== undefined;
 const phone = matchMedia("(max-width: 639px)");
 
+// One pass on a phone: from the start of the loop to the still picture one loop later.
+const ONCE_MS = (3.6 + STILL_AT) * 1000;
+const timers = new WeakMap();
+const hold = (svg) => {
+  clearTimeout(timers.get(svg));
+  svg.setCurrentTime(STILL_AT);
+  svg.pauseAnimations();
+};
+const playOnce = (svg) => {
+  clearTimeout(timers.get(svg));
+  svg.setCurrentTime(0);
+  svg.unpauseAnimations();
+  timers.set(
+    svg,
+    setTimeout(() => svg.pauseAnimations(), ONCE_MS),
+  );
+};
+if (!reduced && "IntersectionObserver" in window) {
+  const seen = new IntersectionObserver(
+    (entries) => {
+      if (!phone.matches) return;
+      for (const e of entries) (e.isIntersecting ? playOnce : hold)(e.target);
+    },
+    { threshold: 0.6 },
+  );
+  for (const svg of document.querySelectorAll("svg.sc--tall"))
+    seen.observe(svg);
+}
+
 for (const button of document.querySelectorAll("[data-scene-pause]")) {
   const scope = button.closest("[data-scene-scope]");
   const moment = scope.matches("[data-moment]") ? scope : null;
@@ -26,10 +57,8 @@ for (const button of document.querySelectorAll("[data-scene-pause]")) {
       (moment && !moment.classList.contains("is-live"));
     button.hidden = reduced || phone.matches;
     for (const svg of scope.querySelectorAll("svg.sc")) {
-      if (still) {
-        svg.setCurrentTime(STILL_AT);
-        svg.pauseAnimations();
-      } else if (paused) svg.pauseAnimations();
+      if (still) hold(svg);
+      else if (paused) svg.pauseAnimations();
       else svg.unpauseAnimations();
     }
   };
