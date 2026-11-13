@@ -52,13 +52,15 @@ test("the hero says what it is, in the spec's words", () => {
       line,
     );
 });
-test("the scenario holds all four steps and five drawings in the HTML", () => {
+test("the scenario holds all four steps and their drawings in the HTML", () => {
   assert.match(
     html,
     /<section[^>]*id="story"[^>]*data-moment="pinned-chapters"/,
   );
   for (const s of STEPS) assert.ok(html.includes(s.title), s.title);
-  assert.equal(html.split('class="sc"').length - 1, 5);
+  assert.equal(html.split('class="sc sc--wide"').length - 1, 5);
+  // each of the scenario's four steps also carries the tall drawing a phone shows
+  assert.equal(html.split('class="sc sc--tall"').length - 1, 4);
   assert.equal(html.split('mo-pc__step"').length - 1, 4);
 });
 test("hero and scenario never say relay, and the drawings can be paused", () => {

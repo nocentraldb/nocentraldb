@@ -3,6 +3,9 @@
 // function returns the SVG as a string in four states. Colours and type live in
 // site/src/styles/scene.css, on the classes used here.
 // Ported from the prototype the owner accepted on 2026-11-12.
+// Two layouts draw the same states: "wide" (800x600, three copies side by side) for
+// screens from 640px, and "tall" (400x704, the copies stacked, one line per task)
+// for a phone, where the wide drawing's labels would be too small to read.
 
 const W = 230;
 const X = { train: 20, home: 285, agent: 550 };
@@ -90,13 +93,15 @@ const hill = (where) => `
     <path d="M190 566 V524 a30 30 0 0 1 60 0 V566 Z" class="sc-mouth"/>
   </g>`;
 
-// Track, hill, train, house and machine rack. tunnel: undefined (before), "in" or "out".
-const scenery = (tunnel, id) => `
+// The three places under the copies. tunnel: undefined (before), "in" or "out".
+const trainPlace = (tunnel, id) => `
   <line x1="0" y1="566" x2="322" y2="566" class="sc-track"/>
   ${hill(tunnel === "out" ? "behind" : "ahead")}
-  ${tunnel === "in" ? train(150, 221, id) : tunnel === "out" ? train(150, 0, id) : train(20, 0, id)}
+  ${tunnel === "in" ? train(150, 221, id) : tunnel === "out" ? train(150, 0, id) : train(20, 0, id)}`;
+const housePlace = () => `
   <path d="M340 566 V508 L405 464 L470 508 V566 Z" class="sc-thing"/>
-  <rect x="389" y="518" width="32" height="28" rx="5" class="sc-window sc-window-lit"/>
+  <rect x="389" y="518" width="32" height="28" rx="5" class="sc-window sc-window-lit"/>`;
+const rackPlace = () => `
   <rect x="595" y="482" width="140" height="84" rx="12" class="sc-thing"/>
   <line x1="595" y1="510" x2="735" y2="510" class="sc-track"/><line x1="595" y1="538" x2="735" y2="538" class="sc-track"/>
   <circle cx="614" cy="496" r="4" class="sc-lamp"/><circle cx="614" cy="524" r="4" class="sc-lamp"/><circle cx="614" cy="552" r="4" class="sc-lamp"/>`;
@@ -113,32 +118,168 @@ const R = {
 };
 const open3 = [R.readme("open"), R.rfc("open"), R.release("open")];
 
-// The four states: what each one draws, apart from how it is drawn.
+// The four states as data: what each one shows, apart from how a layout draws it.
+// pulses: [who, "up" (copy to cloud) | "down" (cloud to copy), from, to] in fractions of the loop.
 const STATES = [
-  (id) => `${links()}${cloud(false, id)}
-     ${card("train", "On the train", open3)}
-     ${card("home", "Home office", open3)}
-     ${card("agent", "Agent", open3, { loop: true })}
-     ${scenery(undefined, id)}`,
-  (id) => `${links()}${cloud(true, id)}
-     ${pulse(LINK.train, 0.05, 0.4)}${pulse(REVERSE.home, 0.45, 0.8)}${pulse(REVERSE.agent, 0.45, 0.8)}
-     ${card("train", "On the train", [R.readme("in progress", "origin"), R.rfc("open"), R.release("open")])}
-     ${card("home", "Home office", [R.readme("in progress", "got"), R.rfc("open"), R.release("open")])}
-     ${card("agent", "Agent", [R.readme("in progress", "got"), R.rfc("open"), R.release("open")])}
-     ${scenery(undefined, id)}`,
-  (id) => `${links(true)}${cloud(false, id)}
-     ${pulse(LINK.home, 0.05, 0.3)}${pulse(REVERSE.agent, 0.32, 0.57)}${pulse(LINK.agent, 0.6, 0.8)}${pulse(REVERSE.home, 0.82, 0.98)}
-     ${card("train", "On the train", [R.readme("in progress"), R.rfc("done · stored locally", "origin"), R.release("open")], { offline: true })}
-     ${card("home", "Home office", [R.readme("in progress"), R.rfc("open"), R.release("assigned to agent", "origin")])}
-     ${card("agent", "Agent", [R.readme("in progress"), R.rfc("open"), R.release("assigned to agent", "got")], { loop: true })}
-     ${scenery("in", id)}`,
-  (id) => `${links()}${cloud(false, id)}
-     ${pulse(LINK.train, 0.05, 0.3)}${pulse(REVERSE.home, 0.32, 0.57)}${pulse(REVERSE.agent, 0.32, 0.57)}${pulse(REVERSE.train, 0.6, 0.9)}
-     ${card("train", "On the train", [R.readme("in progress"), R.rfc("done"), R.release("assigned to agent", "got")])}
-     ${card("home", "Home office", [R.readme("in progress"), R.rfc("done", "got"), R.release("assigned to agent")])}
-     ${card("agent", "Agent", [R.readme("in progress"), R.rfc("done", "got"), R.release("assigned to agent")])}
-     ${scenery("out", id)}`,
+  {
+    cards: { train: open3, home: open3, agent: open3 },
+    loop: true,
+    pulses: [],
+  },
+  {
+    lens: true,
+    cards: {
+      train: [
+        R.readme("in progress", "origin"),
+        R.rfc("open"),
+        R.release("open"),
+      ],
+      home: [R.readme("in progress", "got"), R.rfc("open"), R.release("open")],
+      agent: [R.readme("in progress", "got"), R.rfc("open"), R.release("open")],
+    },
+    pulses: [
+      ["train", "up", 0.05, 0.4],
+      ["home", "down", 0.45, 0.8],
+      ["agent", "down", 0.45, 0.8],
+    ],
+  },
+  {
+    offline: true,
+    tunnel: "in",
+    loop: true,
+    cards: {
+      train: [
+        R.readme("in progress"),
+        R.rfc("done · stored locally", "origin"),
+        R.release("open"),
+      ],
+      home: [
+        R.readme("in progress"),
+        R.rfc("open"),
+        R.release("assigned to agent", "origin"),
+      ],
+      agent: [
+        R.readme("in progress"),
+        R.rfc("open"),
+        R.release("assigned to agent", "got"),
+      ],
+    },
+    pulses: [
+      ["home", "up", 0.05, 0.3],
+      ["agent", "down", 0.32, 0.57],
+      ["agent", "up", 0.6, 0.8],
+      ["home", "down", 0.82, 0.98],
+    ],
+  },
+  {
+    tunnel: "out",
+    cards: {
+      train: [
+        R.readme("in progress"),
+        R.rfc("done"),
+        R.release("assigned to agent", "got"),
+      ],
+      home: [
+        R.readme("in progress"),
+        R.rfc("done", "got"),
+        R.release("assigned to agent"),
+      ],
+      agent: [
+        R.readme("in progress"),
+        R.rfc("done", "got"),
+        R.release("assigned to agent"),
+      ],
+    },
+    pulses: [
+      ["train", "up", 0.05, 0.3],
+      ["home", "down", 0.32, 0.57],
+      ["agent", "down", 0.32, 0.57],
+      ["train", "down", 0.6, 0.9],
+    ],
+  },
 ];
+const LABEL = { train: "On the train", home: "Home office", agent: "Agent" };
+const WHO = ["train", "home", "agent"];
+
+const wide = (st, id) => `${links(st.offline)}${cloud(st.lens, id)}
+  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? LINK : REVERSE)[who], t0, t1)).join("")}
+  ${card("train", LABEL.train, st.cards.train, { offline: st.offline })}
+  ${card("home", LABEL.home, st.cards.home)}
+  ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop })}
+  ${trainPlace(st.tunnel, id)}${housePlace()}${rackPlace()}`;
+
+// The tall layout: the cloud on top, the three copies stacked under it, each with its
+// place drawn small in its header and its own line up the left edge to the cloud.
+const T = { x: 50, w: 336, top: 176, h: 164, gap: 12, head: 56, foot: 138 };
+const LANE = { train: [36, 160], home: [25, 142], agent: [14, 124] }; // [lane x, x at the cloud's foot]
+const tallY = (who) => T.top + WHO.indexOf(who) * (T.h + T.gap);
+const tallUp = (who) => {
+  const [lx, cx] = LANE[who];
+  const by = tallY(who) + 28;
+  return `M${T.x} ${by} H${lx + 10} Q${lx} ${by} ${lx} ${by - 10} V170 C${lx} 150 ${cx} 162 ${cx} ${T.foot}`;
+};
+const tallDown = (who) => {
+  const [lx, cx] = LANE[who];
+  const by = tallY(who) + 28;
+  return `M${cx} ${T.foot} C${cx} 162 ${lx} 150 ${lx} 170 V${by - 10} Q${lx} ${by} ${lx + 10} ${by} H${T.x}`;
+};
+// A place at 0.45 of its size, its right edge at `right` and its ground line at `ground`.
+const PLACE = {
+  train: [322, trainPlace],
+  home: [470, housePlace],
+  agent: [735, rackPlace],
+};
+const tallPlace = (who, tunnel, id, right, ground) => {
+  const [x1, draw] = PLACE[who];
+  return `<g transform="translate(${right - x1 * 0.45} ${ground - 566 * 0.45}) scale(0.45)">${draw(tunnel, id)}</g>`;
+};
+const tallCard = (who, rows, st, id) => {
+  const { x, w, h, head } = T;
+  const y = tallY(who);
+  const offline = who === "train" && st.offline;
+  const perimeter = `M${x + 14} ${y} H${x + w - 14} a14 14 0 0 1 14 14 V${y + h - 14} a14 14 0 0 1 -14 14 H${x + 14} a14 14 0 0 1 -14 -14 V${y + 14} a14 14 0 0 1 14 -14 Z`;
+  return `
+  <g>
+    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" class="sc-card"/>
+    <text x="${x + 16}" y="${y + 35}" class="sc-label">${LABEL[who]}</text>
+    ${tallPlace(who, st.tunnel, id, x + w - 40, y + head - 6)}
+    <circle cx="${x + w - 20}" cy="${y + 28}" r="5" class="${offline ? "sc-dot-off" : "sc-dot-on"}"/>
+    ${rows
+      .map(([title, status, kind], i) => {
+        const ry = y + head + i * 34;
+        const on = kind === "origin" ? " sc-on-accent" : "";
+        return `
+    <rect x="${x + 8}" y="${ry}" width="${w - 16}" height="30" rx="8" class="sc-row ${kind ? `sc-row-${kind}` : ""}"/>
+    <text x="${x + 20}" y="${ry + 21}" class="sc-title${on}">${title}</text>
+    <text x="${x + w - 20}" y="${ry + 21}" text-anchor="end" class="sc-status${on}">${status}</text>`;
+      })
+      .join("")}
+    ${who === "agent" && st.loop ? `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>` : ""}
+  </g>`;
+};
+const tallCloud = (lens, id) => `
+  <path transform="translate(-190 -12)" d="M312 150 H490 a44 44 0 0 0 6 -87 a58 58 0 0 0 -108 -20 a50 50 0 0 0 -92 26 a41 41 0 0 0 16 81 Z" class="sc-cloud"/>
+  <text x="210" y="80" text-anchor="middle" class="sc-label">Cloud server</text>
+  <text x="210" y="104" text-anchor="middle" class="sc-cipher">9f3a c01e 77b2</text>
+  <text x="210" y="124" text-anchor="middle" class="sc-cipher">0c6e 1f8b 3d92</text>
+  ${
+    lens
+      ? `
+  <line x1="361" y1="109" x2="384" y2="132" class="sc-handle"/>
+  <circle cx="322" cy="70" r="54" class="sc-lens"/>
+  <clipPath id="${id}-lens-clip"><circle cx="322" cy="70" r="50"/></clipPath>
+  <g clip-path="url(#${id}-lens-clip)">
+    <text x="322" y="50" text-anchor="middle" class="sc-cipher-big">e77b2d54</text>
+    <text x="322" y="79" text-anchor="middle" class="sc-cipher-big">a0c6e1f8</text>
+    <text x="322" y="108" text-anchor="middle" class="sc-cipher-big">b3d92a7e</text>
+  </g>`
+      : ""
+  }`;
+const tall = (st, id) => `
+  ${WHO.map((who) => `<path d="${tallUp(who)}" class="sc-link ${who === "train" && st.offline ? "sc-link-cut" : ""}"/>`).join("")}
+  ${tallCloud(st.lens, id)}
+  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? tallUp : tallDown)(who), t0, t1)).join("")}
+  ${WHO.map((who) => tallCard(who, st.cards[who], st, id)).join("")}`;
 
 // title and text for the step, alt for the drawing's aria-label.
 export const STEPS = [
@@ -164,8 +305,13 @@ export const STEPS = [
   },
 ];
 
-// The drawing for step 0..3 as an SVG string. idPrefix starts every id inside it,
-// so several drawings can share one page.
-export function scene(step, idPrefix) {
-  return `<svg class="sc" viewBox="0 0 800 600" role="img" aria-label="${STEPS[step].alt}">${STATES[step](idPrefix)}</svg>`;
+// The drawing for step 0..3 as an SVG string, in the "wide" or the "tall" layout.
+// idPrefix starts every id inside it, so several drawings can share one page; the
+// tall layout adds "-tall", so a wide and a tall drawing may share a prefix.
+export function scene(step, idPrefix, layout = "wide") {
+  const [box, body] =
+    layout === "tall"
+      ? ["0 0 400 704", tall(STATES[step], `${idPrefix}-tall`)]
+      : ["0 0 800 600", wide(STATES[step], idPrefix)];
+  return `<svg class="sc sc--${layout}" viewBox="${box}" role="img" aria-label="${STEPS[step].alt}">${body}</svg>`;
 }
