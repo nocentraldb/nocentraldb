@@ -93,7 +93,7 @@ pub(super) async fn list(db: &Db, args: &Value) -> Result<Value, Failed> {
                     MemberKind::SubAgent => "subAgent",
                 };
                 entries([
-                    ("id", Value::Text(hex(&member.id))),
+                    ("id", Value::Text(member.id.to_string())),
                     ("account", Value::Text(member.account.to_string())),
                     ("kind", Value::Text(kind.into())),
                     (
@@ -158,25 +158,8 @@ fn digits(text: &str) -> String {
     text.chars().filter(char::is_ascii_digit).collect()
 }
 
-/// A member id's 64 lowercase hex digits (NOC-298).
-fn hex(id: &MemberId) -> String {
-    id.0.0.iter().map(|byte| format!("{byte:02x}")).collect()
-}
-
 /// The member a call names by its 64 lowercase hex digits.
 fn member_id(args: &Value) -> Result<MemberId, Failed> {
-    let text = text(args, "member")?;
-    let bad = || invalid("a member id is 64 lowercase hex digits");
-    if text.len() != 64 {
-        return Err(bad());
-    }
-    let mut bytes = [0; 32];
-    for (i, byte) in bytes.iter_mut().enumerate() {
-        let pair = &text[2 * i..2 * i + 2];
-        if !pair.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
-            return Err(bad());
-        }
-        *byte = u8::from_str_radix(pair, 16).map_err(|_| bad())?;
-    }
-    Ok(MemberId(ncdb_core::ids::MemberId(bytes)))
+    MemberId::from_str(text(args, "member")?)
+        .map_err(|_| invalid("a member id is 64 lowercase hex digits"))
 }
