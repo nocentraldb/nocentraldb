@@ -159,7 +159,8 @@ The `release` workflow (`.github/workflows/release.yml`) runs on `workflow_run` 
 2. **Compute.** The job checks out the commit with full history and tags. It does not leave its token in the checkout's git configuration (`persist-credentials: false`); only the publishing step gets the token. It installs the toolchain and runs `node scripts/release/next-version.mjs --json` (see [Versioning](#versioning)). That prints the answer to the log and to `next.json` in the checkout. It commits nothing.
 3. **Skip.** If next-version answers `"skip": true`, the job stops green. This happens when none of the fragments added since the previous alpha has a `type` other than `internal`. The previous alpha is the nearest alpha tag reachable from the commit. Before the first alpha, the job looks at every fragment present.
 4. **Render.** The job renders the alpha notes with `node scripts/release/render-notes.mjs --alpha --since <previous alpha | none> --repo <owner/name>`. The notes list every fragment added since the previous alpha, in slug order. Each fragment gets a heading `## <slug>`, a line `*<type>* · components: … · tickets: …` that ends with `· issues: …` and a link to each GitHub issue when the fragment lists any, and its body with its sections demoted to `###`. The notes end with `Previous alpha: [<tag>](<its release>)` or `First alpha.` Alpha notes are raw, so they list `internal` fragments and `introduced: cycle` fixes too.
-5. **Publish.** The job publishes a GitHub prerelease `v<next>-alpha.<n>` with the notes as its body, and the tag with it. `gh release create "$TAG" --target "$SHA" --prerelease` creates the tag on the commit and the release in one API call. There is no separate `git tag` or `git push`, so the job never leaves a tag without a release. If a tag of that name already exists on the remote without a release, the step fails and creates nothing, because `gh release create` would attach the release to that tag and ignore `--target`. Check what the tag points at and delete it if it is an orphan, then re-run. If the step fails, it created nothing, and a re-run computes the same alpha again. If the release already exists because an earlier run succeeded, the step creates nothing. On such a re-run, next-version answers `skip` anyway, because the tag already sits on the commit. The job attaches the binary of every component that ships one, such as the CLI and the relay, after the release exists, and a re-run completes missing uploads. Every publishable npm package gets the alpha under the dist-tag `alpha`.
+5. **Publish.** The job publishes a GitHub prerelease `v<next>-alpha.<n>` with the notes as its body, and the tag with it. `gh release create "$TAG" --target "$SHA" --prerelease` creates the tag on the commit and the release in one API call. There is no separate `git tag` or `git push`, so the job never leaves a tag without a release. If a tag of that name already exists on the remote without a release, the step fails and creates nothing, because `gh release create` would attach the release to that tag and ignore `--target`. Check what the tag points at and delete it if it is an orphan, then re-run. If the step fails, it created nothing, and a re-run computes the same alpha again. If the release already exists because an earlier run succeeded, the step creates nothing. On such a re-run, next-version answers `skip` anyway, because the tag already sits on the commit. The job attaches the binary of every component that ships one, such as the CLI and the relay, after the release exists, and a re-run completes missing uploads.
+6. **npm.** Once the prerelease exists, the job `alpha-npm` publishes every npm package that `publishable` lets through at the alpha's version, under the dist-tag `alpha` (NOC-281). It runs only when the alpha job got as far as an alpha, that is when neither the guard nor next-version skipped. It holds `id-token: write` and `contents: read`, and nothing else. It checks out the alpha's commit without keeping a token, writes the version with `set-version`, installs wasm-bindgen (`moon run repo:wasm-runner`), builds with `pnpm -r --if-present run build`, and runs `node scripts/release/npm-publish.mjs --version <X.Y.Z-alpha.N> --dist-tag alpha --repo <owner/name>`. That script publishes each package from its directory with `npm publish --tag alpha --provenance --access public`. npm authenticates through Trusted Publishing: it exchanges the job's OIDC token for a short-lived publish token, so no npm token exists. Before it publishes anything, the script checks that each package carries the version and that its `repository.url` names this repository, which npm checks the provenance against. It also asks the registry for each version and skips one npm already holds. If a publish fails, use "Re-run failed jobs": that re-runs `alpha-npm` with the alpha job's outputs, and it publishes only what is missing. A new run of the whole workflow does not help, because next-version then finds the alpha tagged and skips. An app installs the newest alpha with `npm i @nocentraldb/sdk@alpha`. The placeholder `0.0.0` stays `latest` until the first release. `alpha-npm` runs in the concurrency group `release-alpha-npm`, which never cancels a run in progress, for at most 45 minutes. It needs the owner's one-time setup in [Publishing @nocentraldb/sdk for the first time](#publishing-nocentraldbsdk-for-the-first-time).
 
 Alphas never go to crates.io. crates.io versions are permanent, and one version per merge would bury the real versions. Rust users who want an alpha depend on the git tag.
 
@@ -179,7 +180,7 @@ gh run watch "$(gh run list --workflow release.yml --event workflow_dispatch --l
 git ls-remote --tags origin 'v*-alpha.*'   # unchanged: a dry run tags nothing
 ```
 
-Its log shows the guard's verdict and the answer of next-version, which is the content of `next.json`: either `"skip": true` with the reason, or the version, the tag, the previous alpha and the fragments. When it does not skip, the log also shows the rendered notes. The dry run skips the tag-and-publish step (`DRY_RUN`), so it tags and publishes nothing. A dispatch on a ref other than `main` fails at the guard with an error that names the ref, and computes nothing: its commit is never the head of `main`, so it would otherwise skip every step and end green without proving anything. Only a dispatch on `main` proves the job. A dispatch with a non-empty `tag` is the publish dry run (see [Beta](#beta)), and it does not run the alpha job. Every dispatch, with or without a tag, also runs the job `app-token-check`, which checks the release app's setup (see [The bypass for commit-back](#the-bypass-for-commit-back)).
+Its log shows the guard's verdict and the answer of next-version, which is the content of `next.json`: either `"skip": true` with the reason, or the version, the tag, the previous alpha and the fragments. When it does not skip, the log also shows the rendered notes. The dry run skips the tag-and-publish step (`DRY_RUN`), so it tags and publishes nothing. When it does not skip, `alpha-npm` runs too: it builds and passes `--dry-run`, so its log lists `would publish <name>@<version> under alpha` or `skip <name>…` for each package, and it publishes nothing. A dispatch on a ref other than `main` fails at the guard with an error that names the ref, and computes nothing: its commit is never the head of `main`, so it would otherwise skip every step and end green without proving anything. Only a dispatch on `main` proves the job. A dispatch with a non-empty `tag` is the publish dry run (see [Beta](#beta)), and it does not run the alpha job. Every dispatch, with or without a tag, also runs the job `app-token-check`, which checks the release app's setup (see [The bypass for commit-back](#the-bypass-for-commit-back)).
 
 **Reproducing it locally.** `node scripts/release/next-version.mjs [--json] [--head <ref>]` and `node scripts/release/render-notes.mjs --alpha --since <tag|none> --repo nocentraldb/nocentraldb [--head <ref>]` give the same answer for the same commit, as long as your local tags match `origin` (`git fetch --tags`). Both read every file as it stands at the commit, never from the working tree.
 
@@ -394,7 +395,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 
 1. **Provenance.** npm publishes with `--provenance`, and binaries get GitHub artifact attestations (`actions/attest-build-provenance`).
 2. **Breaking-change detection.** On every pull request, `cargo-semver-checks` compares each workspace crate against the base commit, and the workflow regenerates and diffs the TypeScript SDK's API report, which is committed under `packages/sdk/etc/` and kept current by the gate task `repo:api-report`. A reported breaking change fails `changes` unless the pull request adds a `breaking` fragment. `cargo-semver-checks` also checks a crate with `publish = false`, so the Rust detector is active before any crate is published. Details in [Writing a change fragment](#writing-a-change-fragment).
-3. **No long-lived tokens.** CI publishes to npm and crates.io through Trusted Publishing, which uses OIDC from GitHub Actions, with `id-token: write` on the publish job only. The owner's passkey-protected accounts stay out of automation. The one long-lived secret is the release app's private key, from which `commit-back` mints an hour-long token (see [The bypass for commit-back](#the-bypass-for-commit-back)).
+3. **No long-lived tokens.** CI publishes to npm and crates.io through Trusted Publishing, which uses OIDC from GitHub Actions, with `id-token: write` only on the jobs that publish to a registry. Today that is `alpha-npm`, which holds no `contents: write`; the `publish` job gets it with the beta and release publishing. The owner's passkey-protected accounts stay out of automation. The one long-lived secret is the release app's private key, from which `commit-back` mints an hour-long token (see [The bypass for commit-back](#the-bypass-for-commit-back)).
 4. **Protected branches and tags.** The ruleset "Require PR" on `main` blocks its deletion, requires a pull request and requires the `gates` and `changes` checks. Its bypass for the release app, and only that app, lets the release workflow push its commit to `main` ([The bypass for commit-back](#the-bypass-for-commit-back)). No ruleset protects the `v*` tags yet.
 5. **Withdrawal.** If a published version is broken, we yank it on crates.io and deprecate it on npm, and a fixed version follows at once. Nothing is deleted.
 6. **Security advisories.** We publish them through GitHub Security Advisories, with a Security section in the notes.
@@ -403,6 +404,49 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 **Published packages.** On crates.io: `ncdb-core` (core), `nocentraldb` (Rust SDK) and `ncdb` (the CLI, so that `cargo install ncdb` works). On npm: `@nocentraldb/sdk`. GitHub releases carry the CLI and relay binaries. All packages share one version. The publish steps skip a package that is not publishable (`private: true`, `publish = false`, or no package at all) and do not fail because of it.
 
 **A new package's first publish.** Trusted Publishing can only be configured for a package that exists. The owner therefore publishes each new package once by hand, before configuring it. Every later publish goes through CI. Each name is held on its registry by a `0.0.0` placeholder, so the first real version of a package must be above `0.0.0`. A crate drops `publish = false` when it first ships, and `@nocentraldb/sdk` drops `private: true` and gets a build output under `dist/`, so that `publishable` lets it through.
+
+### Publishing @nocentraldb/sdk for the first time
+
+The owner does this once, before the first alpha that `alpha-npm` publishes. Without it, the job fails at `npm publish`: npm knows no trusted publisher for the package, and the job holds no token. No agent does these steps, and no npm token is ever created for CI.
+
+1. **Publish the placeholder by hand.** Log in to npm as a member of the organization `nocentraldb` that may publish to its scope. Then publish `@nocentraldb/sdk@0.0.0` from an empty directory:
+
+   ```sh
+   mkdir sdk-placeholder && cd sdk-placeholder
+   cat > package.json <<'EOF'
+   {
+     "name": "@nocentraldb/sdk",
+     "version": "0.0.0",
+     "description": "Holds the name. Alphas: npm i @nocentraldb/sdk@alpha",
+     "license": "MIT OR Apache-2.0",
+     "repository": {
+       "type": "git",
+       "url": "git+https://github.com/nocentraldb/nocentraldb.git",
+       "directory": "packages/sdk"
+     }
+   }
+   EOF
+   npm login
+   npm publish --access public
+   npm view @nocentraldb/sdk dist-tags    # { latest: '0.0.0' }
+   ```
+
+   `--access public` is needed because npm publishes a scoped package as private by default. The placeholder publishes without provenance, because it does not come from CI.
+
+2. **Configure Trusted Publishing.** On npmjs.com, open the package's settings at <https://www.npmjs.com/package/@nocentraldb/sdk/access>. Under "Trusted Publisher", choose "GitHub Actions" and enter these values, then save:
+
+   | Field | Value |
+   | --- | --- |
+   | Organization or user | `nocentraldb` |
+   | Repository | `nocentraldb` |
+   | Workflow filename | `release.yml` |
+   | Environment name | leave empty |
+
+   The workflow filename is the file's name only, without `.github/workflows/`. npm then accepts a publish of this package only from a run of that workflow in that repository, and only with that run's OIDC token.
+
+3. **Close the token path.** On the same page, under "Publishing access", choose "Require two-factor authentication and disallow tokens", and save. From then on, only the trusted publisher and a person who logs in with two-factor authentication can publish the package. A leaked token cannot.
+
+4. **Check it.** Dispatch the alpha dry run (`gh workflow run release.yml --ref main`). When next-version does not skip, the log of `alpha-npm` shows `would publish @nocentraldb/sdk@<version> under alpha`. After the next product-changing merge, `npm view @nocentraldb/sdk dist-tags` lists that alpha under `alpha`. The package page shows the provenance, which links to the run that built it.
 
 **A public repository.** The repository has been public since 2026-11-09, before the first release. Provenance, artifact attestations, the public milestone and the ruleset on `main` all rely on that: on a private repository, GitHub releases and their binaries would be visible to collaborators only.
 
@@ -431,9 +475,11 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | moon task `repo:test` | also runs the tests under `scripts/release/` (`node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'`) |
 | workflow `changes.yml` (check `changes`) | required fragment; `cargo-semver-checks` against a worktree of the base and the API report diff, which add `--require-breaking` |
 | workflow `release.yml`, job `alpha` | publishes an alpha after a green `ci` run of a push to `main`; tagless dispatch dry run |
+| workflow `release.yml`, job `alpha-npm` | after the alpha job, publishes the alpha's npm packages under the dist-tag `alpha` through Trusted Publishing, with `id-token: write` and `contents: read` only; on a dispatch it only reports |
+| `scripts/release/npm-publish.mjs --version <X.Y.Z-alpha.N> --dist-tag alpha --repo <owner/name> [--dry-run]` | publishes every publishable npm package at that version under `alpha`, with provenance; refuses a package not at the version or not naming the repository, and skips a version npm already holds |
 | workflow `release.yml`, jobs `verify`, `build`, `publish`, `commit-back` | beta and release on `v*` tags that are not alphas; `verify` and `build` read-only, `publish` with `contents: write`, `commit-back` with the release app's token; a dispatch with a `tag` runs `verify` and `build` only |
 | workflow `release.yml`, job `app-token-check` | on every dispatch: checks that the release app's Client ID and private key are set, mints its token as `commit-back` does, and only reads with it |
-| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/release-workflow-alpha.test.mjs`, `scripts/release-workflow-publish.test.mjs`, `scripts/lib/release-workflow.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants |
+| `scripts/changes-workflow.test.mjs`, `scripts/release-workflow.test.mjs`, `scripts/release-workflow-alpha.test.mjs`, `scripts/release-workflow-npm.test.mjs`, `scripts/release-workflow-publish.test.mjs`, `scripts/lib/release-workflow.mjs`, `scripts/lib/workflow-checks.mjs` | the workflows' contracts, with mutants |
 | label `skip-changes` | waives the required fragment, never a detected breaking change |
 | `changes/README.md` | the writer's guide for fragments |
 | `release-notes/index.json` and its test | the notes archive index, held to its shape by `scripts/release/index.test.mjs` in `repo:test` |
