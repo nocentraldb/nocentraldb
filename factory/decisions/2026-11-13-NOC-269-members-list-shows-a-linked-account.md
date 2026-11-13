@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-269 · members.list() shows a linked account with linked_to, and MemberInfo is non_exhaustive
+
+- Decided by: Carsten (NOC-307 A1 and B3), carried out by the coding agent
+- Why: RFC 0010 keeps memberships written before a link as they were, so a member's certificate still names its old account, and asks the person's own SDK to show the two as one. `MemberInfo` keeps `account`, the account the certificate names, and gains `linked_to: Option<Fingerprint>`, the account it is linked into, from the link statements of this database's own account: the account space's `links` and the statements a completed pairing keeps until they reach it, each one verified. Another person's links are not known in v1 (B3), so for their members `linked_to` is `None`. `MemberInfo` becomes `#[non_exhaustive]`, so that the next field is no breaking change; this one is, for an app that built a `MemberInfo` itself.
+- Instead of: `account` showing the account it is linked into, with the old one in a field of its own (A2), which would change a value an app may have compared with a fingerprint a person checked; or a separate `db.account().linked()` (A3), which covers only the database's own account.
+- Topics: sdk-rust, accounts, linking, public-api
