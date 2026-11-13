@@ -29,8 +29,14 @@ const tree = (t, files) => {
   return dir;
 };
 
+const REPO = "acme/widgets";
+const REPOSITORY = {
+  type: "git",
+  url: `git+https://github.com/${REPO}.git`,
+  directory: "packages/x",
+};
 const pkg = (fields) =>
-  `${JSON.stringify({ version: VERSION, ...fields }, null, 2)}\n`;
+  `${JSON.stringify({ version: VERSION, repository: REPOSITORY, ...fields }, null, 2)}\n`;
 
 const FIXTURE = {
   "packages/sdk/package.json": pkg({
@@ -102,7 +108,7 @@ const run = (t, dir, args, env = {}) => {
   return { ...r, calls };
 };
 
-const ALPHA = ["--version", VERSION, "--dist-tag", "alpha"];
+const ALPHA = ["--version", VERSION, "--dist-tag", "alpha", "--repo", REPO];
 const publishes = (calls) => calls.filter((c) => c.args[0] === "publish");
 
 test("publishes each publishable package under the dist-tag alpha, with provenance, from its directory", (t) => {
@@ -198,12 +204,13 @@ test("--dry-run reports what it would publish and publishes nothing", (t) => {
 test("only an alpha: another version or dist-tag is a usage error, and npm is not called", (t) => {
   const dir = tree(t, FIXTURE);
   for (const args of [
-    ["--version", "0.2.0-beta.1", "--dist-tag", "alpha"],
-    ["--version", "0.2.0", "--dist-tag", "alpha"],
-    ["--version", VERSION, "--dist-tag", "latest"],
-    ["--version", VERSION, "--dist-tag", "beta"],
-    ["--version", VERSION],
-    ["--dist-tag", "alpha"],
+    ["--version", "0.2.0-beta.1", "--dist-tag", "alpha", "--repo", REPO],
+    ["--version", "0.2.0", "--dist-tag", "alpha", "--repo", REPO],
+    ["--version", VERSION, "--dist-tag", "latest", "--repo", REPO],
+    ["--version", VERSION, "--dist-tag", "beta", "--repo", REPO],
+    ["--version", VERSION, "--dist-tag", "alpha"],
+    ["--dist-tag", "alpha", "--repo", REPO],
+    ["--version", VERSION, "--repo", REPO],
   ]) {
     const r = run(t, dir, args);
     assert.equal(r.status, 2, `${args.join(" ")}: ${r.stderr}`);
@@ -247,4 +254,46 @@ test("a failed publish fails the run and names the package", (t) => {
     r.stderr,
     new RegExp(`npm-publish: npm publish of @x/other@${VERSION} failed`),
   );
+});
+
+test("a package whose repository is not this repository fails the run, since npm refuses its provenance", (t) => {
+  for (const repository of [
+    undefined,
+    { type: "git", url: "git+https://github.com/someone/else.git" },
+    "acme/widgets",
+  ]) {
+    const dir = tree(t, {
+      ...FIXTURE,
+      "packages/sdk/package.json": pkg({
+        name: "@x/sdk",
+        main: "./dist/index.js",
+        repository,
+      }),
+    });
+    const r = run(t, dir, ALPHA);
+    assert.equal(r.status, 1, JSON.stringify(repository));
+    assert.match(
+      r.stderr,
+      /npm-publish: @x\/sdk \(packages\/sdk\): its repository\.url must name https:\/\/github\.com\/acme\/widgets/,
+    );
+    assert.deepEqual(publishes(r.calls), []);
+  }
+});
+
+test("a repository.url with or without git+ and .git names the repository", (t) => {
+  for (const url of [
+    "https://github.com/acme/widgets",
+    "git+https://github.com/acme/widgets.git",
+    "https://github.com/acme/widgets.git",
+  ]) {
+    const dir = tree(t, {
+      "packages/sdk/package.json": pkg({
+        name: "@x/sdk",
+        main: "./dist/index.js",
+        repository: { type: "git", url },
+      }),
+    });
+    const r = run(t, dir, ALPHA);
+    assert.equal(r.status, 0, `${url}: ${r.stderr}`);
+  }
 });
