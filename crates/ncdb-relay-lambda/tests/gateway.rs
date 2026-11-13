@@ -17,7 +17,7 @@ use ncdb_core::ids::SpaceId;
 use ncdb_core::membership::Role;
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::{Config, Relay};
-use ncdb_relay_lambda::harness::Gateway;
+use ncdb_relay_lambda::harness::{Expiry, Gateway};
 use support::space::{Space, account};
 use support::*;
 
@@ -27,6 +27,7 @@ struct Local {
     addr: SocketAddr,
     _dir: TempDir,
     log: Arc<Mutex<Vec<String>>>,
+    expiry: Expiry,
     handler: Arc<
         ncdb_relay_lambda::Handler<
             SqliteStore,
@@ -53,6 +54,7 @@ async fn gateway(max_age: Option<Duration>) -> Local {
         addr: gateway.local_addr().expect("an address"),
         _dir: dir,
         log: gateway.log(),
+        expiry: gateway.expiry(),
         handler: gateway.handler(),
     };
     tokio::spawn(gateway.run());
@@ -198,7 +200,10 @@ async fn a_message_of_128_kib_still_reaches_the_handler() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_connection_closes_at_its_maximum_age_and_is_forgotten() {
-    let local = gateway(Some(Duration::from_millis(400))).await;
+    // The test ends the connections' age itself, once the connection holds
+    // its subscription, so no clock decides whether the close comes before
+    // the answers (NOC-309).
+    let local = gateway(None).await;
     let (mut zero, welcome) = Client::member(local.addr, 0).await;
     let space = Space::new(0);
     let genesis = space.genesis.clone();
@@ -206,11 +211,30 @@ async fn a_connection_closes_at_its_maximum_age_and_is_forgotten() {
     zero.ask(&subscribe(2, space.space, &welcome.epoch, 0))
         .await;
     assert_eq!(local.handler.connections().subscriptions(), 1);
+    local.expiry.expire();
     zero.closed().await;
     local.forgotten().await;
     // A member reconnects, as RFC 0007's "Liveness" says it does.
     let (_again, welcome) = Client::member(local.addr, 0).await;
     assert_eq!(welcome.spaces, [space.space.0.to_vec()]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_maximum_age_closes_a_connection_by_itself() {
+    // The connection sends nothing, so nothing can race the close.
+    let max_age = Duration::from_millis(200);
+    let local = gateway(Some(max_age)).await;
+    let started = Instant::now();
+    let mut zero = Client::connect(local.addr).await;
+    zero.closed().await;
+    assert!(started.elapsed() >= max_age, "not before its maximum age");
+    local.forgotten().await;
+    let routes: Vec<String> = local
+        .lines()
+        .iter()
+        .map(|line| line["route"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(routes, ["connect", "disconnect"]);
 }
 
 #[tokio::test(flavor = "multi_thread")]
