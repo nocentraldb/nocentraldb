@@ -16,17 +16,20 @@ use ncdb_core::ids::{self, SpaceId as CoreSpaceId};
 use ncdb_core::membership::Role as CoreRole;
 
 use super::{Kind, MEMBERS, member_object, member_rows, memberships, model, space};
-use crate::db::{Db, Inner, lock};
+use crate::db::Inner;
+#[cfg(test)]
+use crate::db::{Db, lock};
 use crate::error::{Error, ErrorCode};
 use crate::id::{ObjectId, SpaceId};
-use crate::members::{MemberId, Notice, Role, remove_member};
+#[cfg(test)]
+use crate::members::MemberId;
+use crate::members::{Notice, Role, remove_member};
 use crate::space::{not_stopped, writable_or_account};
 use crate::tx::Transaction;
 use crate::value::Value;
 
 /// What removing a lost member did.
 #[derive(Debug)]
-#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) struct Removal {
     /// The spaces this device removed the member from, each with
     /// `MemberRemoved`'s notice, in the order of their ids.
@@ -37,52 +40,63 @@ pub(crate) struct Removal {
     pub(crate) ask_admins: Vec<SpaceId>,
 }
 
+#[cfg(test)]
 impl Db {
-    /// Removes the lost member `member` of the account, as the module
-    /// says. A member the account space holds no record of is refused with
-    /// `NotFound`, the database's own member with `InvalidValue`; so is a
-    /// device without an account space, which records no member. A space
-    /// this device would remove the member from but cannot rotate, since
-    /// it lacks a person key or a generation the rotation chains, refuses
-    /// the call with `InvalidValue` before anything is written.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// [`remove_lost`] under the database's lock.
     pub(crate) async fn remove_lost(&self, member: MemberId) -> Result<Removal, Error> {
-        let mut inner = lock(&self.inner);
-        let lost = member.0;
-        if lost == inner.member.key().id() {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "a device does not remove itself as lost",
-            ));
-        }
-        let Some(account) = space(&inner) else {
-            return Err(not_recorded());
-        };
-        if !member_rows(&inner)?.values().any(|m| m.member == lost.0) {
-            return Err(not_recorded());
-        }
-        let plan = plan(&inner, lost)?;
-        for space in plan.remove.iter().chain([&account]) {
-            if held_member(&inner, *space, lost) {
-                writable_or_account(&inner, SpaceId(*space))?;
-                not_stopped(&inner, SpaceId(*space))?;
-                crate::members::rotatable(&inner.spaces[space])?;
-            }
-        }
-        let mut removed = Vec::new();
-        for space in plan.remove {
-            let notice = remove_member(&mut inner, space, lost)?;
-            removed.push((SpaceId(space), notice));
-        }
-        mark_removed(&mut inner, account, lost)?;
-        if held_member(&inner, account, lost) {
-            remove_member(&mut inner, account, lost)?;
-        }
-        Ok(Removal {
-            removed,
-            ask_admins: plan.ask_admins.into_iter().map(SpaceId).collect(),
-        })
+        remove_lost(&mut lock(&self.inner), member.0)
     }
+}
+
+/// Removes the lost member `lost` of the account, as the module says. A
+/// member the account space holds no record of is refused with
+/// `NotFound`, the database's own member with `InvalidValue`; so is a
+/// device without an account space, which records no member. A space
+/// this device would remove the member from but cannot rotate, since it
+/// lacks a person key or a generation the rotation chains, refuses the
+/// call with `InvalidValue` before anything is written.
+pub(super) fn remove_lost(inner: &mut Inner, lost: ids::MemberId) -> Result<Removal, Error> {
+    check(inner, lost)?;
+    let account = space(inner).expect("checked");
+    let plan = plan(inner, lost)?;
+    let mut removed = Vec::new();
+    for space in plan.remove {
+        let notice = remove_member(inner, space, lost)?;
+        removed.push((SpaceId(space), notice));
+    }
+    mark_removed(inner, account, lost)?;
+    if held_member(inner, account, lost) {
+        remove_member(inner, account, lost)?;
+    }
+    Ok(Removal {
+        removed,
+        ask_admins: plan.ask_admins.into_iter().map(SpaceId).collect(),
+    })
+}
+
+/// Whether [`remove_lost`] would remove `lost`: refuses what it refuses,
+/// and writes nothing.
+pub(super) fn check(inner: &Inner, lost: ids::MemberId) -> Result<(), Error> {
+    if lost == inner.member.key().id() {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "a device does not remove itself as lost",
+        ));
+    }
+    let Some(account) = space(inner) else {
+        return Err(not_recorded());
+    };
+    if !member_rows(inner)?.values().any(|m| m.member == lost.0) {
+        return Err(not_recorded());
+    }
+    for space in plan(inner, lost)?.remove.iter().chain([&account]) {
+        if held_member(inner, *space, lost) {
+            writable_or_account(inner, SpaceId(*space))?;
+            not_stopped(inner, SpaceId(*space))?;
+            crate::members::rotatable(&inner.spaces[space])?;
+        }
+    }
+    Ok(())
 }
 
 fn not_recorded() -> Error {

@@ -11,10 +11,6 @@
 //! A record's id derives from what it records, as the member records'
 //! ids do: a statement's from its number, a sealed key's from its device
 //! and number.
-//!
-//! `Account::remove_member` (RFC 0009) calls it once the `Account` handle
-//! is built (NOC-267); until then only the tests do.
-#![cfg_attr(not(test), allow(dead_code))]
 
 use ed25519_dalek::SigningKey;
 use ncdb_core::ids::{MemberId as CoreMemberId, ObjectId as CoreObjectId};
@@ -181,6 +177,7 @@ fn wrapped(inner: &Inner) -> Result<Vec<([u8; 32], u64, String)>, Error> {
 
 /// The member and number of each sealed account key the account space
 /// holds, in order.
+#[cfg(test)]
 pub(crate) fn wrapped_to(inner: &Inner) -> Result<Vec<([u8; 32], u64)>, Error> {
     Ok(wrapped(inner)?
         .into_iter()

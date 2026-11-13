@@ -150,8 +150,9 @@ async fn the_new_statement_is_carried_into_the_accounts_spaces() {
     now(laptop.account().remove_member(member(&phone), &words())).unwrap();
     let (statement, _) = held(&laptop);
 
+    let spaces = [shared, account_space(&laptop)];
     let inner = lock(&laptop.inner);
-    for space in [shared, account_space(&laptop)] {
+    for space in spaces {
         let resolved = inner.spaces[&space.0].checks.resolved();
         assert!(
             resolved.statements().any(|s| *s == statement),

@@ -32,7 +32,8 @@ mod remove;
 mod renew;
 
 pub use handle::Removed;
-#[cfg_attr(not(test), allow(unused_imports))]
+pub(crate) use handle::take_new_key;
+#[cfg(test)]
 pub(crate) use renew::{new_key, renew, statements, wrapped_to};
 
 use std::collections::BTreeMap;

@@ -86,7 +86,6 @@ impl Notice {
         text: "Your account is back with a new account key. \
                Your spaces come back when one of their members adds this device.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_KEY_RENEWED: Notice = Notice {
         code: NoticeCode::AccountKeyRenewed,
         text: "Your account has a new account key. \
