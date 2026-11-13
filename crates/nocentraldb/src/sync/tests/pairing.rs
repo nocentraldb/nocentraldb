@@ -199,3 +199,59 @@ async fn a_tablet_with_an_account_of_its_own_is_linked_and_its_link_reaches_the_
     )
     .await;
 }
+
+/// A guest: a member of another account's space, whose own account the
+/// relay does not let create spaces.
+const GUEST: Who = 5;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_guest_that_pairs_a_device_creates_the_account_space_the_relay_admits() {
+    // Only the owner's account may create spaces on this relay; the guest's
+    // may create its account space once it is a member of an admitted space
+    // (NOC-283, #288).
+    let guest_account = ed25519_dalek::SigningKey::from_bytes(&[0x55; 32]);
+    let relay = LocalRelay::start().await;
+    let owner = open(LAPTOP, &relay.url()).await;
+    let shared = now(owner.spaces().create()).unwrap();
+    let guest = Db::open_as(
+        OpenOptions::new(LOCK).in_memory().relay(&relay.url()),
+        [GUEST; 32],
+        [GUEST ^ 0x80; 32],
+        guest_account,
+    )
+    .await
+    .unwrap();
+    let invitation = now(guest.invitation());
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: Some(invitation.fingerprint()),
+    };
+    now(shared.members().add(&invitation, options)).unwrap();
+    synced(&owner).await;
+    eventually("the guest joined the owner's space", || {
+        now(guest.spaces().get(shared.id())).is_ok()
+    })
+    .await;
+    assert!(crate::account::space(&crate::db::lock(&guest.inner)).is_none());
+
+    let phone = waiting(&relay.url()).await;
+    let paired = now(guest
+        .account()
+        .pair(PairKind::Device, &now(phone.invitation())))
+    .unwrap();
+    assert!(
+        paired.added.is_empty(),
+        "the guest administers no app space"
+    );
+    assert_eq!(paired.ask_admins, [shared.id()]);
+    let account_space = crate::account::space(&crate::db::lock(&guest.inner))
+        .expect("pairing created the account space");
+    now(phone.account().complete_pairing(&paired.answer)).unwrap();
+    synced(&guest).await;
+
+    eventually(
+        "the phone holds the account space the relay admitted",
+        || crate::account::space(&crate::db::lock(&phone.inner)) == Some(account_space),
+    )
+    .await;
+}
