@@ -340,3 +340,34 @@ fn an_agent_with_an_account_of_its_own_is_not_linked_yet() {
     .unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotAllowed);
 }
+
+#[test]
+fn a_linked_database_lists_itself_as_linked_in_its_old_spaces_at_once() {
+    // NOC-269, with the owner's NOC-307 A1: the joining database knows its
+    // own link from the statement it keeps, before any relay carries it.
+    let dir = TempDir::new("linked-to");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    let old_fingerprint = now(tablet.invitation()).fingerprint();
+    let old = now(tablet.spaces().create()).unwrap();
+    let own = |space: &nocentraldb::Space| {
+        now(space.members().list())
+            .unwrap()
+            .into_iter()
+            .find(|member| member.is_self)
+            .unwrap()
+    };
+    assert_eq!(own(&old).linked_to, None, "not linked yet");
+
+    pair(&laptop, &tablet, PairKind::Device);
+    let ours = now(laptop.invitation()).fingerprint();
+    let listed = own(&old);
+    assert_eq!(
+        (listed.account, listed.linked_to),
+        (old_fingerprint, Some(ours))
+    );
+    // A space made after the link is under the person's account already.
+    let new = now(tablet.spaces().create()).unwrap();
+    let listed = own(&new);
+    assert_eq!((listed.account, listed.linked_to), (ours, None));
+}
