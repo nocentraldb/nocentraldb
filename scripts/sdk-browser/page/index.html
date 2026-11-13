@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>@nocentraldb/sdk in the browser</title>
+<script type="module">
+  // The package's build output, as an app imports it.
+  import { nc } from "/sdk/index.js";
+
+  window.nc = nc;
+  window.ready = true;
+</script>
