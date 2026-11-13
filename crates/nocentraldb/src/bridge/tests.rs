@@ -881,7 +881,11 @@ fn a_followed_space_yields_a_space_status_event_when_its_status_changed() {
     );
     let events = bridge.events().expect("events once open");
     let space = ok(&mut bridge, "spaces.create", map(&[]));
-    ok(&mut bridge, "space.status", map(&[("space", space.clone())]));
+    ok(
+        &mut bridge,
+        "space.status",
+        map(&[("space", space.clone())]),
+    );
     events.take();
     assert!(event(&events, "spaceStatus").is_none(), "unchanged");
     {
@@ -895,7 +899,10 @@ fn a_followed_space_yields_a_space_status_event_when_its_status_changed() {
     let message = event(&events, "spaceStatus").expect("a spaceStatus event");
     assert_eq!(field(&message, "space"), Some(&space));
     assert_eq!(
-        field(field(&message, "status").expect("a status"), "initialSyncComplete"),
+        field(
+            field(&message, "status").expect("a status"),
+            "initialSyncComplete"
+        ),
         Some(&Value::Bool(true))
     );
     ok(&mut bridge, "close", map(&[]));

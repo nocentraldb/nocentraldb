@@ -44,14 +44,19 @@
 //! - `sync.isConfirmed` `{"change": id}`: whether the relay holds the
 //!   change. Answers a bool. Waiting for a confirmation is the SDK's: a
 //!   call that waits would hold back every call after it.
+//! - `space.status` `{"space": id}`: the space's status (see
+//!   [`space_status`]), and from then on a `spaceStatus` event whenever
+//!   it changes, until the database closes.
 //!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
 //!
 //! Events, which the worker sends unasked: `{"event": "folded", ..}`
-//! after folds (see [`Events::take`]), and `{"event": "sync", "status":
-//! status}` whenever the sync status changed.
+//! after folds (see [`Events::take`]), `{"event": "sync", "status":
+//! status}` whenever the sync status changed, and `{"event":
+//! "spaceStatus", "space": id, "status": status}` whenever the status of
+//! a space `space.status` asked for changed.
 //!
 //! A value is text, an integer, a float, a boolean, an array,
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
@@ -77,6 +82,7 @@ use crate::id::{ChangeId, ObjectId, SpaceId};
 use crate::members::Role;
 use crate::object::Object;
 use crate::query::Cursor;
+use crate::status::SpaceStatus;
 use crate::subscribe::FoldFeed;
 use crate::sync::{Connection, SyncStatus, Watch};
 use crate::value::{Repr, Value as Field};
@@ -101,11 +107,19 @@ pub struct Bridge {
 pub struct Events {
     feed: FoldFeed,
     sync: Arc<Mutex<Watch<SyncStatus>>>,
+    /// The spaces whose status the SDK follows.
+    spaces: Arc<Mutex<BTreeMap<SpaceId, Watch<SpaceStatus>>>>,
 }
 
 impl Events {
     fn sync(&self) -> std::sync::MutexGuard<'_, Watch<SyncStatus>> {
         self.sync
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn spaces(&self) -> std::sync::MutexGuard<'_, BTreeMap<SpaceId, Watch<SpaceStatus>>> {
+        self.spaces
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
@@ -125,6 +139,15 @@ impl Events {
                 ("event", Value::Text("sync".into())),
                 ("status", sync_status(&status)),
             ])));
+        }
+        for (space, watch) in self.spaces().iter_mut() {
+            if let Some(status) = watch.take() {
+                messages.push(cbor::encode(&entries([
+                    ("event", Value::Text("spaceStatus".into())),
+                    ("space", Value::Text(space.to_string())),
+                    ("status", space_status(&status)),
+                ])));
+            }
         }
         messages
     }
@@ -184,6 +207,13 @@ impl Events {
             if events.sync().changed(cx.waker()) {
                 return Poll::Ready(());
             }
+            if events
+                .spaces()
+                .values()
+                .any(|watch| watch.changed(cx.waker()))
+            {
+                return Poll::Ready(());
+            }
             events.feed.poll_wait(cx)
         })
     }
@@ -223,6 +253,137 @@ fn sync_status(status: &SyncStatus) -> Value {
     ])
 }
 
+/// A space's status as the bridge sends it (RFC 0009, "Sync and status"):
+/// `{"role": "reader" | "writer" | "admin" | "removed",
+/// "initialSyncComplete": bool, "behind": u64, "gaps": [id], "parked":
+/// {reason: u64}, "newestModel": u64 | null, "rejected": {reason: u64},
+/// "refused": [{"change": id, "code": text}], "lostGrants": [id],
+/// "equivocations": [id], "exposed": bool, "waitingForKey": bool,
+/// "badPersonKeyRecords": [fingerprint], "provisionalErasures":
+/// [{"change": id, "age": milliseconds, "canUndo": bool, "performer":
+/// member, "notice": {"code": text, "text": text}}]}`. A reason is its
+/// Rust name in lower camel case.
+fn space_status(status: &SpaceStatus) -> Value {
+    let ids =
+        |ids: &[ChangeId]| Value::Array(ids.iter().map(|id| Value::Text(id.to_string())).collect());
+    let counts = |counts: Vec<(String, u64)>| {
+        Value::Map(
+            counts
+                .into_iter()
+                .map(|(reason, count)| (Key::Text(reason), Value::Unsigned(count)))
+                .collect(),
+        )
+    };
+    let role = status.role.map_or("removed", role_name);
+    entries([
+        ("role", Value::Text(role.into())),
+        (
+            "initialSyncComplete",
+            Value::Bool(status.initial_sync_complete),
+        ),
+        ("behind", Value::Unsigned(status.behind)),
+        ("gaps", ids(&status.gaps)),
+        (
+            "parked",
+            counts(
+                status
+                    .parked
+                    .iter()
+                    .map(|(reason, count)| (lower_camel(&format!("{reason:?}")), *count))
+                    .collect(),
+            ),
+        ),
+        (
+            "newestModel",
+            status
+                .newest_model
+                .map_or(Value::Null, |version| Value::Unsigned(version.into())),
+        ),
+        (
+            "rejected",
+            counts(
+                status
+                    .rejected
+                    .iter()
+                    .map(|(reason, count)| (lower_camel(&format!("{reason:?}")), *count))
+                    .collect(),
+            ),
+        ),
+        (
+            "refused",
+            Value::Array(
+                status
+                    .refused
+                    .iter()
+                    .map(|refused| {
+                        entries([
+                            ("change", Value::Text(refused.change.to_string())),
+                            ("code", Value::Text(refused.code.clone())),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        ("lostGrants", ids(&status.lost_grants)),
+        ("equivocations", ids(&status.equivocations)),
+        ("exposed", Value::Bool(status.exposed)),
+        ("waitingForKey", Value::Bool(status.waiting_for_key)),
+        (
+            "badPersonKeyRecords",
+            Value::Array(
+                status
+                    .bad_person_key_records
+                    .iter()
+                    .map(|fingerprint| Value::Text(fingerprint.to_string()))
+                    .collect(),
+            ),
+        ),
+        (
+            "provisionalErasures",
+            Value::Array(
+                status
+                    .provisional_erasures
+                    .iter()
+                    .map(|erasure| {
+                        entries([
+                            ("change", Value::Text(erasure.change.to_string())),
+                            (
+                                "age",
+                                Value::Unsigned(
+                                    u64::try_from(erasure.age.as_millis()).unwrap_or(u64::MAX),
+                                ),
+                            ),
+                            ("canUndo", Value::Bool(erasure.can_undo)),
+                            // NOC-176 slice 4: a member id has no text form
+                            // yet; the owner decides one. Until then, the
+                            // hex of its bytes.
+                            ("performer", Value::Text(hex(&erasure.performer.0.0))),
+                            (
+                                "notice",
+                                entries([
+                                    (
+                                        "code",
+                                        Value::Text(lower_camel(&format!(
+                                            "{:?}",
+                                            erasure.notice.code
+                                        ))),
+                                    ),
+                                    ("text", Value::Text(erasure.notice.text.into())),
+                                ]),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+    ])
+}
+
+/// Lowercase hex of `bytes`.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 /// Why a call failed: RFC 0009's code, a message and, for
 /// `unknownAccount`, the account's fingerprint as twelve blocks (RFC 0009,
 /// "Errors"; Carsten, 2026-11-12, NOC-274).
@@ -242,11 +403,15 @@ fn invalid(message: impl Into<String>) -> Failed {
 /// RFC 0009's name of an error code: the variant's name in lower camel
 /// case, as `NotFound` is `notFound`.
 fn code_name(code: ErrorCode) -> String {
-    let name = format!("{code:?}");
+    lower_camel(&format!("{code:?}"))
+}
+
+/// A Rust variant's name in lower camel case, as `NotFound` is `notFound`.
+fn lower_camel(name: &str) -> String {
     let mut chars = name.chars();
     match chars.next() {
         Some(first) => first.to_lowercase().chain(chars).collect(),
-        None => name,
+        None => String::new(),
     }
 }
 
@@ -320,6 +485,14 @@ impl Bridge {
                 db.sync().resume().await;
                 Ok(Value::Null)
             }
+            "space.status" => {
+                let space = db.spaces().get(space_id(args)?).await?;
+                let (status, watch) = space.status().watch();
+                if let Some(events) = &self.events {
+                    events.spaces().insert(space.id(), watch);
+                }
+                Ok(space_status(&status))
+            }
             "sync.isConfirmed" => {
                 let change = ChangeId::from_str(text(args, "change")?)
                     .map_err(|_| invalid("change is not a change id"))?;
@@ -379,6 +552,7 @@ impl Bridge {
         self.events = Some(Events {
             feed: db.folds(),
             sync: Arc::new(Mutex::new(sync)),
+            spaces: Arc::new(Mutex::new(BTreeMap::new())),
         });
         self.db = Some(db);
         Ok(entries([("sync", sync_status(&status))]))

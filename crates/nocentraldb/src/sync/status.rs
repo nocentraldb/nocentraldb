@@ -106,7 +106,7 @@ pub(crate) struct Watch<T> {
     inner: Weak<Mutex<Inner>>,
     slot: Arc<Slot>,
     last: T,
-    read: fn(&Inner) -> T,
+    read: Box<dyn Fn(&Inner) -> T + Send>,
 }
 
 #[cfg(any(test, feature = "bridge"))]
@@ -139,7 +139,10 @@ impl<T: Clone + PartialEq> Watch<T> {
 /// Watches what `read` reads of the database `inner`, from what it reads
 /// now, which it returns; see [`Watch`].
 #[cfg(any(test, feature = "bridge"))]
-pub(crate) fn watch<T: Clone>(inner: &Arc<Mutex<Inner>>, read: fn(&Inner) -> T) -> (T, Watch<T>) {
+pub(crate) fn watch<T: Clone>(
+    inner: &Arc<Mutex<Inner>>,
+    read: impl Fn(&Inner) -> T + Send + 'static,
+) -> (T, Watch<T>) {
     let mut locked = lock(inner);
     let slot = locked.status.slot();
     let now = read(&locked);
@@ -150,7 +153,7 @@ pub(crate) fn watch<T: Clone>(inner: &Arc<Mutex<Inner>>, read: fn(&Inner) -> T) 
             inner: Arc::downgrade(inner),
             slot,
             last: now,
-            read,
+            read: Box::new(read),
         },
     )
 }
