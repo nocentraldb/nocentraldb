@@ -29,6 +29,10 @@
 # compiled to wasm from crates/nocentraldb-wasm, and a page in the image
 # opens it as an app does. It runs on pull requests that touch the
 # TypeScript SDK or what its core is built from.
+#
+# The example app apps/tasks-ts: the same job runs the browser task list in
+# Chromium on the package built above, as a person uses it, on pull
+# requests that touch the app or the TypeScript SDK.
 name: browser-view
 
 on:
@@ -43,6 +47,7 @@ on:
       - "scripts/browser-view/**"
       - "scripts/sdk-keys/**"
       - "scripts/sdk-browser/**"
+      - "apps/tasks-ts/**"
       - ".github/workflows/browser-view.yml"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -157,3 +162,14 @@ jobs:
           -e SDK_BROWSER_PREBUILT=1
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/sdk-browser/*.test.mjs'
+
+      # The example app on the package built above, its own TypeScript
+      # compiled in the image; run even when a step above failed.
+      - name: The example app in Chromium
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'apps/tasks-ts/e2e/*.e2e.mjs'
