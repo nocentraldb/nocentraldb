@@ -2,11 +2,12 @@
 //! small chunks, each at most [`crate::PAGE_BYTES`] of frames, so a page
 //! of large frames holds only a few of them in memory at once; an entry whose frame is larger than [`MAX_INLINE`]
 //! comes as a download URL (RFC 0007, "Large changes"), which the
-//! deployment makes from the entry's download token.
+//! deployment makes ([`Downloads`]): from a download token on its own
+//! listener, or as a presigned S3 URL on AWS.
 
 use ncdb_core::ids::{MemberId, SpaceId};
 
-use crate::store::{Epoch, Position, RelayStore, Token};
+use crate::store::{Entry, Epoch, Position, RelayStore};
 use crate::wire::{self, Carried, Item, MAX_INLINE, MAX_MESSAGE};
 use crate::{ErrorCode, Relay};
 
@@ -24,13 +25,43 @@ pub struct Page {
     pub head: Position,
 }
 
+/// How a deployment hands out the URL of an entry too large to carry
+/// inline (RFC 0007, "Large changes"). Its futures are `Send`.
+pub trait Downloads: Sync {
+    /// The URL `entry` of `space` downloads from, valid for
+    /// [`crate::DOWNLOAD_URL_VALID_FOR`].
+    fn url(
+        &self,
+        space: SpaceId,
+        entry: &Entry,
+    ) -> impl Future<Output = Result<String, ErrorCode>> + Send;
+}
+
+/// The download URLs of a deployment that serves download tokens on its
+/// own listener: `prefix` and the token in lowercase hex, such as
+/// `http://127.0.0.1:7700/frames/` and 64 hex digits.
+pub struct TokenDownloads<'a, S> {
+    /// The relay core, which hands out the tokens.
+    pub relay: &'a Relay<S>,
+    /// What every URL starts with, before the token.
+    pub prefix: &'a str,
+}
+
+impl<S: RelayStore> Downloads for TokenDownloads<'_, S> {
+    async fn url(&self, space: SpaceId, entry: &Entry) -> Result<String, ErrorCode> {
+        let token = self.relay.begin_download(space, entry.position).await?;
+        let hex: String = token.0.iter().map(|b| format!("{b:02x}")).collect();
+        Ok(format!("{}{hex}", self.prefix))
+    }
+}
+
 /// The entries of `space` after `after` that `member` reads, at most
 /// `limit` and as many as fit into one message, with `req` as its request
-/// id; `download_url` makes the URL of an entry's download token.
+/// id; `downloads` makes the URL of an entry too large to carry inline.
 #[allow(clippy::too_many_arguments)]
-pub async fn read<S: RelayStore>(
+pub async fn read<S: RelayStore, D: Downloads>(
     relay: &Relay<S>,
-    download_url: &(dyn Fn(&Token) -> String + Sync),
+    downloads: &D,
     member: MemberId,
     req: Option<u64>,
     space: SpaceId,
@@ -55,9 +86,8 @@ pub async fn read<S: RelayStore>(
         let mut full = false;
         for entry in pulled.entries {
             let carried = if entry.frame.len() > MAX_INLINE {
-                let token = relay.begin_download(space, entry.position).await?;
                 Carried::Download {
-                    url: download_url(&token),
+                    url: downloads.url(space, &entry).await?,
                     size: entry.frame.len() as u64,
                 }
             } else {

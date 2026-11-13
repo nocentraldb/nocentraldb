@@ -137,7 +137,7 @@ async fn a_record_whose_key_does_not_match_its_commitment_is_not_held() {
     stored(&relay, space).await;
     relay.proxy.cut();
     relay.proxy.restore();
-    let writer = Fingerprint(lock(&admin.inner).account.verifying_key().to_bytes());
+    let writer = now(admin.invitation()).fingerprint();
     eventually("the member names the record's writer", || {
         let status = handle(&member, space).status().current();
         status.bad_person_key_records == vec![writer]

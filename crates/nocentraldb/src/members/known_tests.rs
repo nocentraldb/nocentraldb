@@ -73,7 +73,9 @@ fn the_database_keeps_the_account_key_and_when_it_was_confirmed() {
     let admin = of_account(1, &SigningKey::from_bytes(&[9; 32]));
     let project = space(&admin);
     let invitation = now(of_account(2, &guests()).invitation());
-    let key = guests().verifying_key().to_bytes();
+    // The account is known by its identity, the recovery key its
+    // certificate's statement names, which the fingerprint is over.
+    let key = invitation.fingerprint().0;
 
     let before = millis();
     now(project.members().add(&invitation, confirmed(&invitation))).unwrap();

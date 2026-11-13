@@ -228,7 +228,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
     status.bad_person_key_records = state
         .bad_person_key_records
         .iter()
-        .map(|account| Fingerprint(*account))
+        .map(|account| crate::erasures::of_account_key(resolved, *account))
         .collect();
     let now = crate::clock::now_millis();
     status.provisional_erasures = pending(resolved)

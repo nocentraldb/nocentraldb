@@ -11,7 +11,7 @@ use tokio::runtime::Runtime;
 
 #[allow(dead_code)]
 #[path = "../emulator/common.rs"]
-mod common;
+pub mod common;
 
 /// One backend: tables and a bucket that several handles open, and the
 /// runtime the handles' clients run on.
