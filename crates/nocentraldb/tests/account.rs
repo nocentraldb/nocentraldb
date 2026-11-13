@@ -71,9 +71,6 @@ fn the_recovery_code_is_redacted_in_display_and_debug() {
     let code = code(&db).unwrap();
     assert_eq!(format!("{code}"), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
-    for word in code.words() {
-        assert!(!format!("{code} {code:?}").contains(word));
-    }
 }
 
 #[test]
@@ -228,4 +225,95 @@ fn a_paired_device_creates_spaces_under_the_accounts_certificate() {
         fingerprint: None,
     };
     now(project.members().add(&now(laptop.invitation()), options)).unwrap();
+}
+
+/// The words of `db`'s recovery code, as the person stored them.
+fn words(db: &Db) -> String {
+    code(db).expect("the account's code").words().join(" ")
+}
+
+#[test]
+fn recovery_on_a_third_device_keeps_the_fingerprint_and_joins_no_space() {
+    let dir = TempDir::new("recover");
+    let laptop = open(at(&dir, "laptop"));
+    let words = words(&laptop);
+    now(code(&laptop).unwrap().confirm()).unwrap();
+    now(laptop.spaces().create()).unwrap();
+
+    let third = open(at(&dir, "third").recover(&words));
+    assert_eq!(
+        now(third.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    assert_eq!(
+        now(third.account().recovered())
+            .unwrap()
+            .map(|notice| notice.code),
+        Some(NoticeCode::AccountRecovered)
+    );
+    assert!(now(third.spaces().list()).unwrap().is_empty());
+    // The person holds the code; the device does not hand it again.
+    assert!(code(&third).is_none());
+    // It holds the new account key: it pairs an agent of the account.
+    let agent = open(at(&dir, "agent").pairing().agent());
+    assert_eq!(
+        pair(&third, &agent, PairKind::Agent),
+        [NoticeCode::AgentPaired]
+    );
+    assert_eq!(
+        now(agent.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // An ordinary open recovered nothing.
+    assert_eq!(now(laptop.account().recovered()).unwrap(), None);
+    drop(third);
+    let third = open(at(&dir, "third"));
+    assert_eq!(now(third.account().recovered()).unwrap(), None);
+}
+
+#[test]
+fn words_typed_in_any_case_and_spacing_recover() {
+    let dir = TempDir::new("recover-typed");
+    let laptop = open(at(&dir, "laptop"));
+    let typed = format!("  {}\n", words(&laptop).to_uppercase().replace(' ', "   "));
+    let third = open(at(&dir, "third").recover(&typed));
+    assert_eq!(
+        now(third.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+}
+
+#[test]
+fn words_that_are_no_code_are_invalid_and_create_nothing() {
+    let dir = TempDir::new("recover-invalid");
+    let laptop = open(at(&dir, "laptop"));
+    let words = words(&laptop);
+    // Twelve words of the list whose checksum fails, always: twelve times
+    // "abandon" are the bits 0, whose checksum word is "about". (Two words
+    // of a random code swapped keep the 4-bit checksum one time in 16.)
+    let bad_checksum = ["abandon"; 12].join(" ");
+    for bad in [
+        "",
+        "abandon abandon abandon",
+        &words.replacen(words.split(' ').next().unwrap(), "notaword", 1),
+        &bad_checksum,
+    ] {
+        let refused = now(Db::open(at(&dir, "third").recover(bad))).unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{bad}");
+        assert!(!dir.join("third").exists(), "nothing is created");
+        assert!(!dir.join("third.keys").exists(), "no key file is created");
+        for word in bad.split_whitespace() {
+            assert!(!refused.to_string().contains(word), "{refused}");
+        }
+    }
+}
+
+#[test]
+fn recovery_does_not_open_a_database_that_exists() {
+    let dir = TempDir::new("recover-existing");
+    let laptop = open(at(&dir, "laptop"));
+    let words = words(&laptop);
+    drop(open(at(&dir, "phone")));
+    let refused = now(Db::open(at(&dir, "phone").recover(&words))).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
 }

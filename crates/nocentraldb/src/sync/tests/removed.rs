@@ -9,6 +9,8 @@
 //! The admin removes the member through the crate's internals, since
 //! `members().remove` is not built.
 
+use std::time::Duration;
+
 use super::support::*;
 use crate::db::Db;
 use crate::error::ErrorCode;
@@ -37,6 +39,14 @@ struct Shared {
 
 async fn shared(relay: &LocalRelay) -> Shared {
     let admin = open(ADMIN, &relay.url()).await;
+    // The removals here write no rotation, so the current generation is
+    // exposed and the admin's SDK would write a merge rotation after a
+    // random delay of up to a minute (RFC 0008, "Two removals that rotate
+    // the key at once"). The tests build the admin's next changes
+    // themselves and push them raw: a merge rotation the SDK wrote between
+    // the two takes their author sequence, and the relay refuses them
+    // (NOC-296). The admin does not rotate while a test runs.
+    crate::sync::set_merge_delay(&admin, Duration::from_secs(3600));
     let member = open(MEMBER, &relay.url()).await;
     let on_admin = now(admin.spaces().create()).unwrap();
     let task = now(on_admin.write(|tx| {
