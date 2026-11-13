@@ -20,11 +20,11 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use ncdb_core::membership::{Certificate, MemberKind, Role as CoreRole};
-use ncdb_core::pairing::{self as core, CheckError};
+use ncdb_core::pairing::{self as core, CheckError, LinkStatement};
 use ncdb_core::recovery::{RecoveryCode as CoreCode, WORD_LIST};
 
 use crate::db::{Db, Inner, lock};
-use crate::error::{Error, ErrorCode};
+use crate::error::{Error, ErrorCode, storage};
 use crate::id::SpaceId;
 use crate::keys::{self, Keys};
 use crate::members::invitation::Form;
@@ -76,23 +76,47 @@ impl Account<'_> {
                     "this database holds no account key, so it pairs nobody",
                 ));
             };
-            let asked = match &invitation.form {
-                Form::Waiting(asked) => *asked,
-                Form::Certified(_) => {
-                    return Err(Error::new(
-                        ErrorCode::NotAllowed,
-                        "the invitation's member already has an account: linking it is not built yet",
-                    ));
+            let kind = kind.member_kind();
+            // A database with an account of its own is linked into this
+            // one: its device's answer carries the account key's half of
+            // the link statement (RFC 0010, "Linking accounts drawn per
+            // database"). An agent's is not built yet: it has no place to
+            // keep the statement (pm, NOC-267).
+            let (asked, old) = match &invitation.form {
+                Form::Waiting(asked) => (*asked, None),
+                Form::Certified(certificate) => {
+                    if certificate.kind != MemberKind::Device || kind != MemberKind::Device {
+                        return Err(Error::new(
+                            ErrorCode::NotAllowed,
+                            "the invitation's agent already has an account: linking an agent is not built yet",
+                        ));
+                    }
+                    if certificate.member != invitation.key.id()
+                        || !certificate.verify(&certificate.account_key)
+                    {
+                        return Err(Error::new(
+                            ErrorCode::InvalidCertificate,
+                            "the invitation's certificate does not hold",
+                        ));
+                    }
+                    if crate::members::Fingerprint::of(certificate)
+                        == Invitation::of(&inner).fingerprint()
+                    {
+                        return Err(Error::new(
+                            ErrorCode::NotAllowed,
+                            "the invitation's member is a device of this account already",
+                        ));
+                    }
+                    (certificate.kind, Some(certificate.account_key))
                 }
             };
-            let kind = kind.member_kind();
             if asked != kind {
                 return Err(Error::new(
                     ErrorCode::InvalidValue,
                     "the invitation asks to be paired as the other kind",
                 ));
             }
-            let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, None)
+            let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, old)
                 .map_err(|_| {
                     Error::new(
                         ErrorCode::InvalidValue,
@@ -149,20 +173,29 @@ impl Account<'_> {
     /// `InvalidCertificate` and changes nothing; a database that is not
     /// waiting to be paired is `NotAllowed`.
     pub async fn complete_pairing(&self, answer: &PairingAnswer) -> Result<Vec<Notice>, Error> {
-        let (keys, home, notice) = {
-            let inner = self.db.lock();
-            if !matches!(inner.account, keys::Account::None) {
-                return Err(Error::new(
-                    ErrorCode::NotAllowed,
-                    "this database is not waiting to be paired",
-                ));
-            }
+        let (keys, home, notices, link) = {
+            let mut inner = self.db.lock();
+            // A database with an account of its own is linked: its old key
+            // signs its half of the link statement, then is deleted.
+            let old = match &inner.account {
+                keys::Account::None => None,
+                keys::Account::Holds { key, .. } if inner.kind == MemberKind::Device => {
+                    Some(key.clone())
+                }
+                _ => {
+                    return Err(Error::new(
+                        ErrorCode::NotAllowed,
+                        "this database is not waiting to be paired",
+                    ));
+                }
+            };
             if answer.0.kind() != inner.kind {
                 return Err(check_error(CheckError::Certificate));
             }
+            let old_key = old.as_ref().map(|old| old.verifying_key().to_bytes());
             let paired = answer
                 .0
-                .complete(&inner.member.key(), None)
+                .complete(&inner.member.key(), old_key.as_ref())
                 .map_err(check_error)?;
             let statement = *paired
                 .certificate
@@ -182,17 +215,49 @@ impl Account<'_> {
                     Notice::AGENT_PAIRED,
                 ),
             };
+            // The whole link statement is kept beside the log before the
+            // old key is deleted, so that it reaches the account space.
+            let link = match (&old, paired.link) {
+                (Some(old), Some(half)) => {
+                    let statement = paired
+                        .certificate
+                        .statement
+                        .as_deref()
+                        .expect("a statement");
+                    let bytes = LinkStatement::sign(old, statement, half).encode();
+                    inner.view.put_pending_link(&bytes).map_err(storage)?;
+                    Some(bytes)
+                }
+                _ => None,
+            };
             let keys = Keys {
                 member: inner.member.clone(),
                 account,
                 code: None,
                 upgraded: false,
             };
-            (keys, inner.home.clone(), notice)
+            let mut notices = vec![notice];
+            if link.is_some() {
+                notices.push(Notice::ACCOUNT_LINKED);
+            }
+            (keys, inner.home.clone(), notices, link)
         };
-        home.save(&keys).await?;
-        lock(&self.db.inner).account = keys.account;
-        Ok(vec![notice])
+        if let Err(error) = home.save(&keys).await {
+            if let Some(bytes) = link {
+                let _ = lock(&self.db.inner).view.delete_pending_link(&bytes);
+            }
+            return Err(error);
+        }
+        let mut inner = lock(&self.db.inner);
+        inner.account = keys.account;
+        inner.code = None;
+        if link.is_some() {
+            // It joined the account: a device of it added it to the account
+            // space, so it creates none of its own.
+            inner.joins_account = true;
+            let _ = crate::account::reconcile(&mut inner);
+        }
+        Ok(notices)
     }
 }
 

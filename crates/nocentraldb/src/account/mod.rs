@@ -44,12 +44,13 @@ use ncdb_core::change::WriterModel;
 use ncdb_core::ids::{ObjectId as CoreObjectId, SpaceId as CoreSpaceId};
 use ncdb_core::membership::{MemberKind, Role as CoreRole};
 use ncdb_core::model_lock::ModelLock;
+use ncdb_core::pairing::LinkStatement;
 use ncdb_core::view::{Model, RESERVED, reserved_name};
 use sha2::{Digest, Sha256};
 
 use crate::db::Inner;
 use crate::error::{Error, storage};
-use crate::id::ObjectId;
+use crate::id::{ChangeId, ObjectId};
 use crate::members::Role;
 use crate::tx::Transaction;
 use crate::value::{Repr, Value};
@@ -60,7 +61,6 @@ const LOCK: &str = include_str!("model.lock.json");
 /// The collections of the shipped model (RFC 0010, "Its model").
 const MEMBERS: &str = "members";
 const MEMBERSHIPS: &str = "memberships";
-#[cfg(test)]
 const LINKS: &str = "links";
 const STATEMENTS: &str = "statements";
 const WRAPPED_KEYS: &str = "wrappedKeys";
@@ -322,9 +322,91 @@ pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
 /// Brings the device's own records in the account space up to date: its
 /// member record, and a membership record for each app space it belongs
 /// to, with its role. First it removes each member another device marked
-/// removed from the app spaces this device administers. Without an account space, and on an agent, it
-/// writes nothing, as it does when the records are current.
+/// removed from the app spaces this device administers; last it writes
+/// the link statements a completed pairing kept (NOC-291). Without an
+/// account space, and on an agent, it writes no record, as it does when
+/// the records are current.
 pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
+    records(inner)?;
+    flush_links(inner)
+}
+
+#[cfg_attr(not(test), allow(dead_code))]
+/// The account's link statements the account space holds, each read from
+/// its record; a record that does not read as one is left out.
+pub(crate) fn links(inner: &Inner) -> Result<Vec<LinkStatement>, Error> {
+    let mut links = Vec::new();
+    for (_, values) in rows(inner, LINKS, "byAccount")? {
+        let bytes = text(&values, "statement")
+            .and_then(|text| data_encoding::BASE64URL_NOPAD.decode(text.as_bytes()).ok());
+        if let Some(link) = bytes.and_then(|bytes| LinkStatement::decode(&bytes).ok()) {
+            links.push(link);
+        }
+    }
+    Ok(links)
+}
+
+fn link_object(old_account_key: [u8; 32]) -> CoreObjectId {
+    record_id("nocentraldb/account-link", &[&old_account_key])
+}
+
+/// Writes the link statements a completed pairing kept into the account
+/// space's `links` (RFC 0010, "The link statement"), once the database
+/// holds the account space, and forgets each once the relay holds the
+/// change that wrote it, or the account space already holds the link.
+fn flush_links(inner: &mut Inner) -> Result<(), Error> {
+    let Some(account) = space(inner) else {
+        return Ok(());
+    };
+    if crate::space::writable_by(inner, account, id()).is_err() {
+        return Ok(());
+    }
+    for (bytes, change) in inner.view.pending_links().map_err(storage)? {
+        let Ok(link) = LinkStatement::decode(&bytes) else {
+            inner.view.delete_pending_link(&bytes).map_err(storage)?;
+            continue;
+        };
+        let object = link_object(link.old_account_key);
+        match change {
+            Some(change) => {
+                let held = inner
+                    .spaces
+                    .keys()
+                    .any(|space| inner.view.relay_position(*space, change).is_some());
+                if held {
+                    inner.view.delete_pending_link(&bytes).map_err(storage)?;
+                }
+            }
+            None if exists(inner, account, LINKS, object)? => {
+                inner.view.delete_pending_link(&bytes).map_err(storage)?;
+            }
+            None => {
+                let mut tx = Transaction::reserved(model());
+                tx.create_at(
+                    LINKS,
+                    object,
+                    [
+                        ("account", Value::from(hex(&link.old_account_key).as_str())),
+                        (
+                            "statement",
+                            Value::from(data_encoding::BASE64URL_NOPAD.encode(&bytes).as_str()),
+                        ),
+                    ],
+                )?;
+                let change = write(inner, account, tx)?;
+                inner
+                    .view
+                    .set_pending_link_change(&bytes, change.0)
+                    .map_err(storage)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Keeps the device's own records current: its member record, and one
+/// membership record per app space it holds.
+fn records(inner: &mut Inner) -> Result<(), Error> {
     if inner.kind != MemberKind::Device {
         return Ok(());
     }
@@ -399,17 +481,17 @@ pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if !changed {
         return Ok(());
     }
-    write(inner, account, tx)
+    write(inner, account, tx).map(drop)
 }
 
-/// Writes `tx` into the account space `account`, by the shipped model.
-fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<(), Error> {
+/// Writes `tx` into the account space `account`, by the shipped model,
+/// and returns the id of the change it wrote.
+fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<ChangeId, Error> {
     let writer = WriterModel {
         id: model().id,
         version: model().version,
     };
-    crate::space::write_change(inner, account, tx, writer, |_| Ok(()))?;
-    Ok(())
+    Ok(crate::space::write_change(inner, account, tx, writer, |_| Ok(()))?.change)
 }
 
 /// Whether the copy holds the object `object` of a shipped collection in

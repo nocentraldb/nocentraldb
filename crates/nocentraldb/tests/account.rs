@@ -328,3 +328,15 @@ fn recovery_does_not_open_a_database_that_exists() {
     let refused = now(Db::open(at(&dir, "phone").recover(&words))).unwrap_err();
     assert_eq!(refused.code(), ErrorCode::InvalidValue);
 }
+
+#[test]
+fn an_agent_with_an_account_of_its_own_is_not_linked_yet() {
+    let dir = TempDir::new("link-agent");
+    let laptop = open(at(&dir, "laptop"));
+    let agent = open(at(&dir, "agent").agent());
+    let refused = now(laptop
+        .account()
+        .pair(PairKind::Agent, &now(agent.invitation())))
+    .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
