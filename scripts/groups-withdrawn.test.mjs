@@ -40,6 +40,9 @@ const OTHER_GROUPS = [
   /\bgrouping\b/g,
   /a parent only groups/g,
   /older job of the group/g,
+  // The AWS CLI's names for CloudWatch Logs, in the relay's runbook.
+  /--log-group-name\b/g,
+  /\bdelete-log-group\b/g,
 ];
 const mentionsGroups = (text) =>
   /\bgroups?\b/i.test(

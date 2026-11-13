@@ -71,9 +71,6 @@ fn the_recovery_code_is_redacted_in_display_and_debug() {
     let code = code(&db).unwrap();
     assert_eq!(format!("{code}"), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
-    for word in code.words() {
-        assert!(!format!("{code} {code:?}").contains(word));
-    }
 }
 
 #[test]
@@ -228,4 +225,222 @@ fn a_paired_device_creates_spaces_under_the_accounts_certificate() {
         fingerprint: None,
     };
     now(project.members().add(&now(laptop.invitation()), options)).unwrap();
+}
+
+/// The words of `db`'s recovery code, as the person stored them.
+fn words(db: &Db) -> String {
+    code(db).expect("the account's code").words().join(" ")
+}
+
+#[test]
+fn recovery_on_a_third_device_keeps_the_fingerprint_and_joins_no_space() {
+    let dir = TempDir::new("recover");
+    let laptop = open(at(&dir, "laptop"));
+    let words = words(&laptop);
+    now(code(&laptop).unwrap().confirm()).unwrap();
+    now(laptop.spaces().create()).unwrap();
+
+    let third = open(at(&dir, "third").recover(&words));
+    assert_eq!(
+        now(third.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    assert_eq!(
+        now(third.account().recovered())
+            .unwrap()
+            .map(|notice| notice.code),
+        Some(NoticeCode::AccountRecovered)
+    );
+    assert!(now(third.spaces().list()).unwrap().is_empty());
+    // The person holds the code; the device does not hand it again.
+    assert!(code(&third).is_none());
+    // It holds the new account key: it pairs an agent of the account.
+    let agent = open(at(&dir, "agent").pairing().agent());
+    assert_eq!(
+        pair(&third, &agent, PairKind::Agent),
+        [NoticeCode::AgentPaired]
+    );
+    assert_eq!(
+        now(agent.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+    // An ordinary open recovered nothing.
+    assert_eq!(now(laptop.account().recovered()).unwrap(), None);
+    drop(third);
+    let third = open(at(&dir, "third"));
+    assert_eq!(now(third.account().recovered()).unwrap(), None);
+}
+
+#[test]
+fn words_typed_in_any_case_and_spacing_recover() {
+    let dir = TempDir::new("recover-typed");
+    let laptop = open(at(&dir, "laptop"));
+    let typed = format!("  {}\n", words(&laptop).to_uppercase().replace(' ', "   "));
+    let third = open(at(&dir, "third").recover(&typed));
+    assert_eq!(
+        now(third.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+}
+
+#[test]
+fn words_that_are_no_code_are_invalid_and_create_nothing() {
+    let dir = TempDir::new("recover-invalid");
+    // Twelve words of the list whose checksum fails, always: twelve times
+    // "abandon" are the bits 0, whose checksum word is "about". (Two words
+    // of a random code swapped keep the 4-bit checksum one time in 16.)
+    let bad_checksum = ["abandon"; 12].join(" ");
+    // A word not on the list first, then words that occur inside the error
+    // text itself: "cover" and "over" in "recovery" (NOC-304).
+    let unknown = format!("notaword cover over {}", ["abandon"; 9].join(" "));
+    // Each refusal says why with a fixed text: the exact compare shows it
+    // names a word's position, never a word.
+    let not_a_code = "the words are not a recovery code";
+    for (bad, why) in [
+        ("", "a recovery code has 12 words, not 0"),
+        (
+            "abandon abandon abandon",
+            "a recovery code has 12 words, not 3",
+        ),
+        (
+            unknown.as_str(),
+            "word 1 of the recovery code is not on the list",
+        ),
+        (
+            bad_checksum.as_str(),
+            "the recovery code's checksum does not match: a word is wrong or out of order",
+        ),
+    ] {
+        let refused = now(Db::open(at(&dir, "third").recover(bad))).unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{bad}");
+        assert_eq!(refused.to_string(), format!("{not_a_code}: {why}"));
+        assert!(!dir.join("third").exists(), "nothing is created");
+        assert!(!dir.join("third.keys").exists(), "no key file is created");
+    }
+}
+
+#[test]
+fn recovery_does_not_open_a_database_that_exists() {
+    let dir = TempDir::new("recover-existing");
+    let laptop = open(at(&dir, "laptop"));
+    let words = words(&laptop);
+    drop(open(at(&dir, "phone")));
+    let refused = now(Db::open(at(&dir, "phone").recover(&words))).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+}
+
+#[test]
+fn an_agent_with_an_account_of_its_own_is_not_linked_yet() {
+    let dir = TempDir::new("link-agent");
+    let laptop = open(at(&dir, "laptop"));
+    let agent = open(at(&dir, "agent").agent());
+    let refused = now(laptop
+        .account()
+        .pair(PairKind::Agent, &now(agent.invitation())))
+    .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
+
+// Linking an account drawn per database (RFC 0010, "Linking accounts drawn
+// per database"; NOC-269): a database opened with an account of its own
+// pairs into the person's account.
+
+/// Where the account secret sits in a key record of format 2 that holds
+/// the account key: after the 16-byte magic, the format byte, the two
+/// 32-byte member secrets and the account byte, which is 1.
+const ACCOUNT_SECRET: std::ops::Range<usize> = 82..114;
+
+fn key_file(dir: &TempDir, name: &str) -> Vec<u8> {
+    std::fs::read(dir.join(&format!("{name}.keys"))).unwrap()
+}
+
+/// The fingerprint `db` lists itself with in `space`.
+fn own_account(space: &nocentraldb::Space) -> nocentraldb::Fingerprint {
+    now(space.members().list())
+        .unwrap()
+        .into_iter()
+        .find(|member| member.is_self)
+        .expect("the database is a member of its own space")
+        .account
+}
+
+#[test]
+fn linking_deletes_the_old_account_key_from_the_key_file() {
+    let dir = TempDir::new("link-key-file");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    let before = key_file(&dir, "tablet");
+    assert_eq!(before[81], 1, "the tablet holds an account key of its own");
+    let old = before[ACCOUNT_SECRET].to_vec();
+    assert_ne!(old, key_file(&dir, "laptop")[ACCOUNT_SECRET]);
+
+    assert_eq!(
+        pair(&laptop, &tablet, PairKind::Device),
+        [NoticeCode::DevicePaired, NoticeCode::AccountLinked]
+    );
+    // The key file holds the person's account key in its place.
+    let after = key_file(&dir, "tablet");
+    assert_eq!(
+        after[ACCOUNT_SECRET],
+        key_file(&dir, "laptop")[ACCOUNT_SECRET]
+    );
+    // No file the tablet keeps holds the old account secret any more.
+    for entry in std::fs::read_dir(dir.join("")).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_file() {
+            let bytes = std::fs::read(&path).unwrap();
+            assert!(
+                !bytes
+                    .windows(old.len())
+                    .any(|window| window == old.as_slice()),
+                "{} still holds the old account secret",
+                path.display()
+            );
+        }
+    }
+    // A reopen reads the person's account from the key file.
+    drop(tablet);
+    let tablet = open(at(&dir, "tablet"));
+    assert_eq!(
+        now(tablet.invitation()).fingerprint(),
+        now(laptop.invitation()).fingerprint()
+    );
+}
+
+#[test]
+fn a_space_from_before_the_link_keeps_the_old_account_and_takes_writes() {
+    let dir = TempDir::new("link-old-space");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    let old_fingerprint = now(tablet.invitation()).fingerprint();
+    let before = now(tablet.spaces().create()).unwrap();
+    assert_eq!(own_account(&before), old_fingerprint);
+
+    pair(&laptop, &tablet, PairKind::Device);
+    // The fold still counts the old account as an account of its own: the
+    // membership written before the link keeps the old certificate.
+    assert_ne!(old_fingerprint, now(laptop.invitation()).fingerprint());
+    assert_eq!(own_account(&before), old_fingerprint);
+    // And the tablet still writes there, as the member it was.
+    now(before.write(|tx| {
+        tx.create("projects", [("name", nocentraldb::Value::from("After"))])?;
+        Ok(())
+    }))
+    .unwrap();
+}
+
+#[test]
+fn a_space_created_after_the_link_carries_the_persons_account() {
+    let dir = TempDir::new("link-new-space");
+    let laptop = open(at(&dir, "laptop"));
+    let tablet = open(at(&dir, "tablet"));
+    pair(&laptop, &tablet, PairKind::Device);
+    let after = now(tablet.spaces().create()).unwrap();
+    assert_eq!(own_account(&after), now(laptop.invitation()).fingerprint());
+    // The laptop's account is the tablet's: it joins without a fingerprint.
+    let options = nocentraldb::AddMember {
+        role: nocentraldb::Role::Writer,
+        fingerprint: None,
+    };
+    now(after.members().add(&now(laptop.invitation()), options)).unwrap();
 }

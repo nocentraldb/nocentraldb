@@ -51,6 +51,9 @@ pub struct OpenOptions {
     /// Whether a new database waits to be paired with a device of an
     /// account (RFC 0010).
     pairing: bool,
+    /// The words of the recovery code a new database recovers its account
+    /// from (RFC 0010, "The recovery code").
+    recover: Option<zeroize::Zeroizing<String>>,
     /// The plugins whose field types the core folds (RFC 0011).
     plugins: Vec<Plugin>,
     /// Whether the database joins an account another device created, as a
@@ -81,6 +84,7 @@ impl OpenOptions {
             key_file: None,
             agent: false,
             pairing: false,
+            recover: None,
             plugins: Vec::new(),
             joins_account: false,
             #[cfg(target_arch = "wasm32")]
@@ -104,12 +108,45 @@ impl OpenOptions {
         self
     }
 
-    /// The keys of a new database: a member key and no account when it
-    /// waits to be paired, a new account and its recovery code otherwise.
-    fn new_keys(&self) -> Keys {
-        match self.pairing {
-            true => Keys::pairing(),
-            false => Keys::generate(),
+    /// Recovers an account on a new device from its recovery code (RFC
+    /// 0009, "Accounts and devices"; RFC 0010, "The recovery code"): the
+    /// words as the person typed them, separated by white space, in any
+    /// letter case. The new database draws a new account key, with the
+    /// next statement number, and certifies its member with it; the
+    /// account's fingerprint stays the same, and the database is a member
+    /// of nothing until other members add it. [`Db::open`] fails with
+    /// `InvalidValue`, and creates nothing, when they are not twelve words
+    /// of the list or their checksum fails, or when the database exists.
+    pub fn recover(mut self, words: &str) -> OpenOptions {
+        self.recover = Some(zeroize::Zeroizing::new(words.to_owned()));
+        self
+    }
+
+    /// The recovery code the options recover from, read before anything
+    /// is created: words that are no code are `InvalidValue`, naming a
+    /// word's position, never the word.
+    fn recovery_code(&self) -> Result<Option<ncdb_core::recovery::RecoveryCode>, Error> {
+        let Some(words) = &self.recover else {
+            return Ok(None);
+        };
+        ncdb_core::recovery::RecoveryCode::parse(words)
+            .map(Some)
+            .map_err(|why| {
+                Error::new(
+                    ErrorCode::InvalidValue,
+                    format!("the words are not a recovery code: {why}"),
+                )
+            })
+    }
+
+    /// The keys of a new database: those that recover the account of
+    /// `recovered`, a member key and no account when it waits to be
+    /// paired, a new account and its recovery code otherwise.
+    fn new_keys(&self, recovered: Option<&ncdb_core::recovery::RecoveryCode>) -> Keys {
+        match (recovered, self.pairing) {
+            (Some(code), _) => Keys::recovered(code, crate::clock::now_millis() / 1000),
+            (None, true) => Keys::pairing(),
+            (None, false) => Keys::generate(),
         }
     }
 
@@ -219,6 +256,8 @@ pub(crate) struct Inner {
     pub(crate) account: keys::Account,
     /// The recovery code, until the person confirmed they stored it.
     pub(crate) code: Option<ncdb_core::recovery::RecoveryCode>,
+    /// `AccountRecovered`, when this open recovered the account.
+    pub(crate) recovered: Option<crate::members::Notice>,
     /// Where the key record lives, to keep it again when it changes.
     pub(crate) home: keys::Home,
     /// What the account certifies the member as: a device or an agent.
@@ -447,7 +486,14 @@ impl Db {
     pub async fn open(options: OpenOptions) -> Result<Db, Error> {
         #[cfg(target_arch = "wasm32")]
         if let Place::Browser { name } = options.place()? {
-            let placed = crate::browser::place(&name, || options.new_keys()).await?;
+            let code = options.recovery_code()?;
+            let drawn = std::cell::Cell::new(false);
+            let mut placed = crate::browser::place(&name, || {
+                drawn.set(true);
+                options.new_keys(code.as_ref())
+            })
+            .await?;
+            placed.drawn = drawn.get();
             return Db::open_placed(options, None, &keys::store::platform, Some(placed));
         }
         Db::open_with(options, None, &keys::store::platform)
@@ -513,7 +559,14 @@ impl Db {
             .map_err(|error| Error::new(ErrorCode::InvalidValue, error.to_string()))?
             .with_reserved_model(crate::account::lock());
         let _ = &placed;
-        let new = || options.new_keys();
+        #[cfg(target_arch = "wasm32")]
+        let placed_drawn = placed.as_ref().is_some_and(|placed| placed.drawn);
+        let code = options.recovery_code()?;
+        let drawn = std::cell::Cell::new(false);
+        let new = || {
+            drawn.set(true);
+            options.new_keys(code.as_ref())
+        };
         let (mut view, keys, storage, home) = match place {
             Place::Memory => {
                 let view =
@@ -541,6 +594,20 @@ impl Db {
                 )
             }
         };
+        // An open with a recovery code recovers onto a new database only;
+        // the keys it drew are dropped with the database that exists.
+        #[cfg(target_arch = "wasm32")]
+        let drawn = std::cell::Cell::new(drawn.get() || placed_drawn);
+        let recovered = match (&code, drawn.get()) {
+            (Some(_), false) => {
+                return Err(Error::new(
+                    ErrorCode::InvalidValue,
+                    "the database exists: a recovery code recovers the account onto a new one",
+                ));
+            }
+            (Some(_), true) => Some(crate::members::Notice::ACCOUNT_RECOVERED),
+            (None, _) => None,
+        };
         let model = Arc::new(crate::account::app_model(view.model()));
         let spaces: BTreeMap<_, _> = view
             .spaces()
@@ -559,6 +626,7 @@ impl Db {
             member: keys.member,
             account: keys.account,
             code: keys.code,
+            recovered,
             home,
             kind: match options.agent {
                 true => MemberKind::Agent,
