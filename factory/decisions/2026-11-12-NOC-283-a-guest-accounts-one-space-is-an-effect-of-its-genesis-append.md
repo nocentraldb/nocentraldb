@@ -1,0 +1,6 @@
+# 2026-11-12 · NOC-283 · The one space of an account the relay does not list is an effect of its genesis append, kept by the backend
+
+- Decided by: Carsten, 2026-11-13, on #288
+- Why: the owner decided on NOC-286 (A1) that an account the relay does not list, but whose member belongs to a space an admitted account created, may create exactly one space. "Exactly one" must hold when two devices of the account push a genesis at once, so the check and the record are one atomic step: `Effect::GuestSpace(account)` in the genesis append, and `AppendOutcome::GuestSpaceTaken` when the account already has one, after which the relay answers `not_allowed`. SQLite keeps a row of `guest_spaces` (account, space); DynamoDB an item of `spaces` under the 32-byte account key with `guest_space`, put with `attribute_not_exists` in the append's transaction; neither a 16-byte space id nor the 5-byte `epoch` key can be 32 bytes. The relay learns which unlisted account created a space, which it could already read from the genesis certificate.
+- Instead of: counting the spaces the uploading device belongs to whose genesis names its account, which needs no storage change but lets two concurrent geneses, or a device of the account outside its account space, create a second space.
+- Topics: relay, aws, rfc-0007, accounts

@@ -10,6 +10,8 @@
 //! - **One change id, one position**: the check for a duplicate and the
 //!   append are one atomic step.
 //! - **An append and its effects are atomic.**
+//! - **An account the relay does not list creates one space**: the check
+//!   that it has none and the record of this one are part of the append.
 //! - **A person-key put is conditional on the stored generation**: the
 //!   check that every record still replaces the generation the core
 //!   checked it against and the write are one atomic step.
@@ -125,6 +127,13 @@ pub enum Effect {
     /// Writes a member's row of the space's membership table, replacing the
     /// row it had.
     Member(MemberRecord),
+    /// Records that the account, by its account key, created this space as
+    /// the one space an account the relay does not list may create (RFC
+    /// 0007, "Who may create a space"; Carsten, 2026-11-12, NOC-286). It
+    /// holds only if the account has no such space yet; otherwise nothing
+    /// of the append is applied, and the append is
+    /// [`AppendOutcome::GuestSpaceTaken`].
+    GuestSpace([u8; 32]),
 }
 
 /// A person-key record (RFC 0003, "Person-key record"): opaque wrapped bytes and the
@@ -189,6 +198,9 @@ pub enum AppendOutcome {
         /// Its position.
         position: Position,
     },
+    /// The account of an [`Effect::GuestSpace`] already created its one
+    /// space. Nothing was appended.
+    GuestSpaceTaken,
 }
 
 /// A backend that failed or timed out. Nothing was appended. Its detail
@@ -460,6 +472,11 @@ mod debug {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
                 Effect::Member(record) => f.debug_tuple("Member").field(record).finish(),
+                Effect::GuestSpace(account) => {
+                    f.write_str("GuestSpace(")?;
+                    hex(f, account)?;
+                    f.write_str(")")
+                }
             }
         }
     }

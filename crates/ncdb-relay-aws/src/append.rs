@@ -68,14 +68,21 @@ pub async fn find(
 }
 
 /// The member rows of `effects`, the last row of each member only: the
-/// effects apply in order, and one transaction writes an item once.
-fn member_rows(effects: Vec<Effect>) -> Vec<MemberRecord> {
+/// effects apply in order, and one transaction writes an item once. And the
+/// account whose one space this is, when the relay does not list it.
+fn member_rows(effects: Vec<Effect>) -> (Vec<MemberRecord>, Option<[u8; 32]>) {
     let mut rows: Vec<MemberRecord> = Vec::new();
-    for Effect::Member(record) in effects {
-        rows.retain(|row: &MemberRecord| row.member != record.member);
-        rows.push(record);
+    let mut guest = None;
+    for effect in effects {
+        match effect {
+            Effect::Member(record) => {
+                rows.retain(|row: &MemberRecord| row.member != record.member);
+                rows.push(record);
+            }
+            Effect::GuestSpace(account) => guest = Some(account),
+        }
     }
-    rows
+    (rows, guest)
 }
 
 pub async fn append(
@@ -85,8 +92,8 @@ pub async fn append(
     entries: Vec<NewEntry>,
     effects: Vec<Effect>,
 ) -> Result<AppendOutcome, StoreError> {
-    let rows = member_rows(effects);
-    if 2 * entries.len() + 1 + rows.len() > TRANSACTION_ITEMS {
+    let (rows, guest) = member_rows(effects);
+    if 2 * entries.len() + 1 + rows.len() + usize::from(guest.is_some()) > TRANSACTION_ITEMS {
         return Err(StoreError(format!(
             "an append of {} changes and {} member rows is more than one transaction holds",
             entries.len(),
@@ -107,7 +114,14 @@ pub async fn append(
             .await
             .map_err(failed("write a frame to S3"))?;
     }
-    let items = transaction(aws, space, expected_head, &entries, &rows)?;
+    let mut items = transaction(aws, space, expected_head, &entries, &rows)?;
+    // The account's one space, when the relay does not list it: an item
+    // in `spaces` under the account key, on the condition that none is
+    // there (RFC 0007, "Who may create a space").
+    let guest_at = items.len();
+    if let Some(account) = guest {
+        items.push(guest_item(aws, space, account)?);
+    }
     let new_head = expected_head + entries.len() as u64;
     for attempt in 1..=ATTEMPTS {
         let result = aws
@@ -136,6 +150,13 @@ pub async fn append(
         };
         if let Some(outcome) = refused(aws, space, expected_head, &entries, &codes).await? {
             return Ok(outcome);
+        }
+        if guest.is_some()
+            && codes
+                .get(guest_at)
+                .is_some_and(|code| code == "ConditionalCheckFailed")
+        {
+            return Ok(AppendOutcome::GuestSpaceTaken);
         }
         // A condition that failed but whose head or change read back does
         // not show it is retried too: the read saw a later state.
@@ -186,6 +207,26 @@ async fn refused(
         }
     }
     Ok(None)
+}
+
+/// The item that records `space` as the one space of `account`, which the
+/// relay does not list: in `spaces`, keyed by the 32-byte account key,
+/// which no 16-byte space id and no 5-byte [`EPOCH_ITEM`](crate::EPOCH_ITEM)
+/// can be, on the condition that the account has no such item yet.
+fn guest_item(
+    aws: &Aws,
+    space: SpaceId,
+    account: [u8; 32],
+) -> Result<TransactWriteItem, StoreError> {
+    let put = Put::builder()
+        .table_name(&aws.names.spaces)
+        .item("space", b(&account))
+        .item("guest_space", b(&space.0))
+        .condition_expression("attribute_not_exists(#space)")
+        .expression_attribute_names("#space", "space")
+        .build()
+        .map_err(|e| StoreError(format!("append: a transaction item: {e}")))?;
+    Ok(TransactWriteItem::builder().put(put).build())
 }
 
 /// The items of an append's transaction: the head, then the `log` and
@@ -349,6 +390,6 @@ mod tests {
             Effect::Member(row(2, 2)),
             Effect::Member(row(1, 3)),
         ];
-        assert_eq!(member_rows(effects), [row(2, 2), row(1, 3)]);
+        assert_eq!(member_rows(effects).0, [row(2, 2), row(1, 3)]);
     }
 }

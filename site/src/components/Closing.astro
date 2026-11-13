@@ -1,169 +1,93 @@
 ---
-// Who it is not for and what it does not do (BRAND.md "Not for", GENESIS
-// principle 4), the way into the docs, and the footer with the endorsement line.
-const limits = [
-  [
-    "The relay sees metadata.",
-    "Which key is in which space, when and how much each key writes, and who reads from where. It can withhold changes.",
-  ],
-  [
-    "Removing a member keeps their copy.",
-    "The space key rotates, so they get no new changes. What they already received stays on their device.",
-  ],
-  [
-    "Shredding has edges.",
-    "It does not reach devices that never come back online, a modified client, exports, screenshots or unmarked free text.",
-  ],
-  [
-    "v1 is not post-quantum.",
-    "Ciphertext recorded today could be read by a future quantum computer.",
-  ],
-];
+// The close: row 1 of footer.closing (Landing.astro), which is flooded yellow
+// edge to edge (the kit's .ground-brand on the footer itself), with the way into
+// the docs, the feedback button and the use cases.
 const docs = [
   ["Getting started", "Install, describe a model, open a database.", "/docs/"],
-  [
-    "Concepts",
-    "Spaces, the relay, convergence, shredding.",
-    "/docs/concepts/spaces/",
-  ],
+  ["Concepts", "Spaces, the relay, convergence.", "/docs/concepts/spaces/"],
   ["API", "The SDK calls, as RFC 0009 designs them.", "/docs/api/"],
   ["RFCs", "The whole design, open for your feedback.", "/docs/rfcs/"],
 ];
 ---
 
-<section id="limits" class="ground-yellow" aria-labelledby="limits-title">
-  <div class="wrap limits-grid">
-    <div>
-      <h2 id="limits-title">When a central database is exactly right.</h2>
-      <p class="section-lead">
-        If your app needs queries on the server, analytics across all users' data, or one global truth at write time, such
-        as unique names, use a central database. And know these limits before you build on NoCentralDB:
-      </p>
-    </div>
-    <dl>
-      {
-        limits.map(([t, d]) => (
-          <div class="card">
-            <dt>{t}</dt>
-            <dd>{d}</dd>
-          </div>
-        ))
-      }
-    </dl>
+<div class="closing__cta">
+  <div class="section-head">
+    <h2 id="close-h">Read the design, then tell us where it breaks</h2>
   </div>
-</section>
-
-<section id="docs" aria-labelledby="docs-title">
-  <div class="wrap">
-    <h2 id="docs-title">Read the design, then tell us where it breaks.</h2>
-    <ul class="doc-links">
-      {
-        docs.map(([t, d, href]) => (
-          <li>
-            <a class="card" href={href}>
-              <strong>{t}</strong>
-              <span>{d}</span>
-            </a>
-          </li>
-        ))
-      }
-    </ul>
-    <a class="btn btn-primary feedback" href="https://github.com/nocentraldb/nocentraldb/discussions"
-      >Share your feedback</a
-    >
+  <div class="grid doc-cards">
+    {
+      docs.map(([t, d, href]) => (
+        <a class="card span-3" href={href}>
+          <h3>{t}</h3>
+          <p>{d}</p>
+        </a>
+      ))
+    }
   </div>
-</section>
-
-<footer>
-  <div class="wrap foot">
-    <p class="tagline">No center. No collisions.</p>
-    <p>Open source under MIT or Apache-2.0. Initiated by nxsflow.</p>
-    <a class="link" href="https://github.com/nocentraldb/nocentraldb">GitHub</a>
+  <div class="btn-row close-actions">
+    <a class="btn btn--primary" href="https://github.com/nocentraldb/nocentraldb/discussions">Share your feedback</a>
+    <a class="link" href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/use-cases.md">See the use cases</a>
   </div>
-</footer>
+</div>
 
 <style>
-  .limits-grid {
-    display: grid;
-    grid-template-columns: 0.9fr 1.1fr;
-    gap: clamp(32px, 5vw, 72px);
-    align-items: start;
+  .closing__cta {
+    justify-content: space-between;
   }
-  dl {
-    margin: 0;
-    display: grid;
-    gap: 10px;
+  .closing__cta h2 {
+    max-width: 18ch;
+    font-size: var(--t-h1, var(--ncdb-text-heading));
   }
-  dl .card {
-    padding: 20px 22px;
-    color: var(--ncdb-ink);
+  /* the primary button near-black with light text (the kit's .ground-brand
+     gives it the yellow as text) */
+  .closing__cta .btn--primary {
+    color: var(--p-ink);
   }
-  dt {
-    font-family: var(--ncdb-font-heading);
-    font-weight: var(--ncdb-weight-heading);
-    font-size: var(--ncdb-text-body);
+  /* near-black cards on the yellow ground, with the cards' own gap, not the
+     footer's link-column gap (.footer .grid) */
+  .closing__cta > .doc-cards.grid {
+    align-content: start;
+    row-gap: var(--card-gap);
   }
-  dd {
-    margin: 6px 0 0;
-    color: var(--ncdb-muted);
-  }
-  .doc-links {
-    list-style: none;
-    margin: 48px 0 0;
-    padding: 0;
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-  }
-  .doc-links a {
-    display: grid;
-    gap: 8px;
-    height: 100%;
-    padding: 24px 22px 28px;
+  .doc-cards .card {
+    --card: var(--p-bg);
+    --ink: var(--p-ink);
+    --muted: var(--p-muted);
     text-decoration: none;
   }
-  .doc-links strong {
-    font-family: var(--ncdb-font-heading);
-    font-weight: var(--ncdb-weight-heading);
-    font-size: var(--ncdb-text-lead);
+  .doc-cards h3 {
+    font: var(--display-weight) var(--t-h3, 22px) / 1.25 var(--font-display);
   }
-  .doc-links span {
-    color: var(--ncdb-muted);
-  }
-  .feedback {
-    margin-top: 40px;
-  }
-  footer {
-    padding: 40px 0 56px;
-    background: var(--ncdb-surface);
-  }
-  .foot {
+  .close-actions {
     display: flex;
-    gap: 24px;
-    align-items: center;
-    justify-content: space-between;
     flex-wrap: wrap;
-    font-size: var(--ncdb-text-small);
+    align-items: center;
+    gap: var(--s-4) var(--s-7);
   }
-  .tagline {
-    font-family: var(--ncdb-font-heading);
-    font-weight: var(--ncdb-weight-heading);
-    font-size: var(--ncdb-text-body);
-  }
-  @media (max-width: 900px) {
-    .limits-grid {
-      grid-template-columns: 1fr;
-    }
-    .doc-links {
-      grid-template-columns: 1fr 1fr;
+  /* two by two below a desktop, so the close stays one screen on a phone */
+  @media (max-width: 1023px) {
+    .doc-cards > .card {
+      grid-column: auto / span 6;
     }
   }
-  @media (max-width: 520px) {
-    .doc-links {
-      grid-template-columns: 1fr;
+  @media (max-width: 639px) {
+    .closing__cta {
+      gap: var(--s-5);
     }
-    .feedback {
+    .closing__cta h2 {
+      font-size: var(--t-h2);
+    }
+    .close-actions {
+      row-gap: var(--s-2);
+    }
+    .close-actions .btn {
       width: 100%;
+    }
+    .doc-cards h3 {
+      font-size: 18px;
+    }
+    .doc-cards .card {
+      --c-pad: var(--s-4);
     }
   }
 </style>

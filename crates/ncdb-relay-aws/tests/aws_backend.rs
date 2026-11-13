@@ -252,11 +252,14 @@ fn an_append_beyond_one_transaction_fails_and_appends_nothing() {
         space(1),
         0,
         entries.clone(),
-        vec![effect.clone(), {
-            let Effect::Member(mut other) = effect.clone();
-            other.member = MemberId([2; 32]);
-            Effect::Member(other)
-        }],
+        vec![
+            effect.clone(),
+            Effect::Member(MemberRecord {
+                member: MemberId([2; 32]),
+                current: true,
+                state: vec![1],
+            }),
+        ],
     ));
     assert!(too_many.is_err(), "{too_many:?}");
     assert_eq!(block_on(store.head(space(1))).unwrap(), None);

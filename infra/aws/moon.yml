@@ -1,0 +1,3 @@
+id: "infra-aws"
+language: typescript
+layer: application
