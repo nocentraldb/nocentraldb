@@ -173,11 +173,14 @@ export const connect = async (
 
   // The newest sync status the core sent: at open, then in its `sync`
   // events, so that `db.sync.current()` answers at once.
+  // The relay that serves this database: this tab's option, or, when
+  // another tab owns the database, that tab's (NOC-177).
+  let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
   const statusOf = (raw: unknown): SyncStatus => {
     const given = (raw ?? {}) as Partial<Record<keyof SyncStatus, unknown>>;
     return {
       connection: (given.connection ?? "none") as SyncStatus["connection"],
-      ...(options.relay === undefined ? {} : { relay: options.relay }),
+      ...(relay === undefined ? {} : { relay }),
       unconfirmed: Number(given.unconfirmed ?? 0),
       refused: Number(given.refused ?? 0),
       epochChanged: given.epochChanged === true,
@@ -303,6 +306,7 @@ export const connect = async (
     if (message.event === "reopened") {
       // Another tab took the database over (NOC-177): its core follows no
       // space yet and its reads may differ, so everything is read again.
+      relay = (message as { relay?: string }).relay;
       synced((message as { sync?: unknown }).sync);
       for (const id of statuses.keys()) {
         ask("space.status", { space: id }).then(

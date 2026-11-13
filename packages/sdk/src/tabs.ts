@@ -126,6 +126,12 @@ export const tabCore = async (
     post({ kind: "event", bytes });
   };
 
+  /** The relay this tab opened with, which serves every tab while it owns the database. */
+  const relayOfOwner = (): { relay?: Cbor } =>
+    typeof ownOpen?.args.relay === "string"
+      ? { relay: ownOpen.args.relay }
+      : {};
+
   /** The owner's answer to another tab's call. */
   const serve = async (from: string, id: number, bytes: Uint8Array) => {
     await ready;
@@ -134,7 +140,7 @@ export const tabCore = async (
     if (request.call === "open") {
       answer =
         ownOpen?.args.lock === request.args.lock
-          ? encode({ id: request.id, ok: { sync } })
+          ? encode({ id: request.id, ok: { sync, ...relayOfOwner() } })
           : failure(
               request.id,
               "modelRefused",
@@ -262,7 +268,7 @@ export const tabCore = async (
     post({ kind: "owner", tab: me });
     ownerIs(me);
     // Every tab re-reads what it follows from the new owner.
-    const reopened = encode({ event: "reopened", sync });
+    const reopened = encode({ event: "reopened", sync, ...relayOfOwner() });
     emit(reopened);
     post({ kind: "event", bytes: reopened });
   };
