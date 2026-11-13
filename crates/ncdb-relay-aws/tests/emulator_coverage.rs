@@ -106,15 +106,28 @@ async fn what_the_emulator_covers() {
         s3::lifecycle(&s3_client).await,
     ));
     rows.push(("S3", "PutBucketCors", s3::cors(&s3_client).await));
-    let (created, _) = apigateway::websocket_api(&api).await;
+    let (created, websocket) = apigateway::websocket_api(&api).await;
     rows.push((
         "API Gateway",
         "CreateApi (WebSocket) and CreateStage",
         created,
     ));
+    let upgrade = match &websocket {
+        Some((_, endpoint)) => apigateway::upgrade(&https, endpoint).await,
+        None => Outcome::Differs("no WebSocket API to upgrade on".into()),
+    };
+    rows.push(("API Gateway", "WebSocket upgrade on the stage", upgrade));
     let (post, delete) = apigateway::connections(&config).await;
-    rows.push(("API Gateway", "@connections PostToConnection", post));
-    rows.push(("API Gateway", "@connections DeleteConnection", delete));
+    rows.push((
+        "API Gateway",
+        "@connections PostToConnection, an id never issued",
+        post,
+    ));
+    rows.push((
+        "API Gateway",
+        "@connections DeleteConnection, an id never issued",
+        delete,
+    ));
     let (create, invoke) = lambda::lambda(&config).await;
     rows.push(("Lambda", "CreateFunction", create));
     rows.push(("Lambda", "Invoke", invoke));

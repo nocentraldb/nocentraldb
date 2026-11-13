@@ -224,6 +224,8 @@ async fn a_text_message_before_auth_closes_the_connection() {
     assert!(handler.connections().is_empty());
 }
 
+/// Stands in for the emulator until NOC-278 closes: see
+/// `delivery_to_a_gone_subscriber_waits_for_noc_278` in `tests/emulator.rs`.
 #[tokio::test]
 async fn a_post_to_a_gone_connection_forgets_it() {
     let (handler, _dir) = handler();
