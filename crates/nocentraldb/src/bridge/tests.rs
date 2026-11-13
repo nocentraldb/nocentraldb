@@ -824,3 +824,79 @@ fn a_closed_database_sends_no_more_events() {
     ok(&mut bridge, "close", map(&[]));
     assert!(taken(&events).is_empty());
 }
+
+// NOC-176 slice 4: a space's status (RFC 0009, "Sync and status").
+
+#[test]
+fn space_status_answers_rfc_0009s_values_for_a_new_space() {
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let status = ok(&mut bridge, "space.status", map(&[("space", space)]));
+    let empty = Value::Array(Vec::new());
+    assert_eq!(
+        status,
+        map(&[
+            ("role", text("admin")),
+            ("initialSyncComplete", Value::Bool(false)),
+            ("behind", Value::Unsigned(0)),
+            ("gaps", empty.clone()),
+            ("parked", map(&[])),
+            ("newestModel", Value::Null),
+            ("rejected", map(&[])),
+            ("refused", empty.clone()),
+            ("lostGrants", empty.clone()),
+            ("equivocations", empty.clone()),
+            ("exposed", Value::Bool(false)),
+            ("waitingForKey", Value::Bool(false)),
+            ("badPersonKeyRecords", empty.clone()),
+            ("provisionalErasures", empty),
+        ])
+    );
+}
+
+#[test]
+fn space_status_of_an_unknown_space_is_not_found() {
+    let mut bridge = opened();
+    assert_eq!(
+        code(
+            &mut bridge,
+            "space.status",
+            map(&[("space", text(&"ab".repeat(16)))])
+        ),
+        "notFound"
+    );
+}
+
+#[test]
+fn a_followed_space_yields_a_space_status_event_when_its_status_changed() {
+    let mut bridge = Bridge::new();
+    ok(
+        &mut bridge,
+        "open",
+        map(&[
+            ("lock", text(LOCK)),
+            ("inMemory", Value::Bool(true)),
+            ("relay", text("ws://127.0.0.1:9")),
+        ]),
+    );
+    let events = bridge.events().expect("events once open");
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    ok(&mut bridge, "space.status", map(&[("space", space.clone())]));
+    events.take();
+    assert!(event(&events, "spaceStatus").is_none(), "unchanged");
+    {
+        // As a pull that reached the relay's head would.
+        let db = bridge.db.as_ref().expect("open");
+        let id: crate::id::SpaceId = as_text(&space).parse().expect("an id");
+        let mut inner = db.lock();
+        inner.sync.as_mut().expect("syncs").pulled.insert(id.0);
+        inner.status.notify();
+    }
+    let message = event(&events, "spaceStatus").expect("a spaceStatus event");
+    assert_eq!(field(&message, "space"), Some(&space));
+    assert_eq!(
+        field(field(&message, "status").expect("a status"), "initialSyncComplete"),
+        Some(&Value::Bool(true))
+    );
+    ok(&mut bridge, "close", map(&[]));
+}
