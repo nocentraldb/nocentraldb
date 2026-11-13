@@ -390,6 +390,11 @@ pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if !changed {
         return Ok(());
     }
+    write(inner, account, tx)
+}
+
+/// Writes `tx` into the account space `account`, by the shipped model.
+fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<(), Error> {
     let writer = WriterModel {
         id: model().id,
         version: model().version,

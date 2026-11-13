@@ -52,7 +52,10 @@ fn role_in(db: &Db, space: SpaceId, member: [u8; 32]) -> Option<ncdb_core::membe
 
 fn generation(db: &Db, space: SpaceId) -> Option<u64> {
     let inner = lock(&db.inner);
-    inner.spaces[&space.0].checks.resolved().current_generation()
+    inner.spaces[&space.0]
+        .checks
+        .resolved()
+        .current_generation()
 }
 
 /// Adds the database `to` to `space` of `by`, with `role`.
@@ -122,9 +125,16 @@ async fn a_lost_device_leaves_the_account_space_marked_removed() {
     now(laptop.remove_lost(MemberId(ncdb_core::ids::MemberId(lost)))).unwrap();
 
     assert_eq!(role_in(&laptop, accounts, lost), None);
-    assert_ne!(generation(&laptop, accounts), before, "the account space's key rotates");
+    assert_ne!(
+        generation(&laptop, accounts),
+        before,
+        "the account space's key rotates"
+    );
     let records = account::members(&lock(&laptop.inner)).unwrap();
-    let record = records.iter().find(|m| m.member == lost).expect("its record");
+    let record = records
+        .iter()
+        .find(|m| m.member == lost)
+        .expect("its record");
     assert!(record.removed, "{record:?}");
     let laptop_record = records.iter().find(|m| m.member == member_id(&laptop));
     assert!(!laptop_record.expect("the laptop's record").removed);

@@ -25,6 +25,7 @@ use crate::space::{Space, not_stopped};
 
 pub(crate) mod batch;
 mod change;
+pub(crate) use change::remove as remove_member;
 pub(crate) mod erasure;
 mod info;
 mod invitation;
@@ -32,6 +33,7 @@ mod leave;
 pub(crate) mod merge;
 mod notice;
 mod rotate;
+pub(crate) use rotate::rotatable;
 mod statement;
 
 use batch::Batch;
