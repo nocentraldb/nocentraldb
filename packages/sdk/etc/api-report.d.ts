@@ -29,6 +29,12 @@ export interface Page<T> {
     readonly hasMore: boolean;
 }
 type Stop = () => void;
+interface Change {
+    readonly space: Id;
+    readonly collection: string;
+    readonly ids: readonly Id[];
+    readonly origin: "local" | "remote";
+}
 interface Written {
     readonly change: string;
     readonly ids: readonly Id[];
@@ -63,6 +69,9 @@ export interface Db {
     };
     find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
     subscribe<T>(query: Query<T, readonly unknown[]>, listener: (page: Page<T>) => void): Stop;
+    readonly changes: {
+        subscribe(listener: (change: Change) => void): Stop;
+    };
     close(): Promise<void>;
 }
 interface OpenOptions {

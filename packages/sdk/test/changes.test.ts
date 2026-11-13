@@ -19,7 +19,7 @@ const B = "bb".repeat(16);
 type Change = {
   space: string;
   collection: string;
-  ids: string[];
+  ids: readonly string[];
   origin: "local" | "remote";
 };
 
