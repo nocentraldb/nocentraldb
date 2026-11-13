@@ -45,7 +45,11 @@ async fn a_space_without_erasures_lists_none() {
 async fn a_final_shred_lists_its_performer_its_sign_off_and_who_deleted_the_key() {
     let relay = LocalRelay::start().await;
     let (admin, member, project, shred) = shredded(&relay).await;
-    let signer = Fingerprint(space::other_account(1).verifying_key().to_bytes());
+    // The signer's account, opened with `open_as`: its recovery key derives
+    // from its account key, and its fingerprint is over the recovery key.
+    let bits: [u8; 16] = space::other_account(1).to_bytes()[..16].try_into().unwrap();
+    let recovery = ncdb_core::recovery::RecoveryCode::from_bits(bits).recovery_key();
+    let signer = Fingerprint::account(recovery.public());
 
     eventually("the admin's copy shows the member deleted the key", || {
         list(&project)

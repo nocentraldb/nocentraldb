@@ -169,7 +169,10 @@ async fn the_account_space_never_holds_the_account_key() {
     now(a.spaces().create()).unwrap();
 
     let inner = lock(&a.inner);
-    let secret = inner.account.to_bytes();
+    let crate::keys::Account::Holds { key, .. } = &inner.account else {
+        panic!("the account's first device holds the account key");
+    };
+    let secret = key.to_bytes();
     let hex: String = secret.iter().map(|b| format!("{b:02x}")).collect();
     let texts = account::texts(&inner).unwrap();
     assert!(!texts.is_empty(), "the account space holds records");
