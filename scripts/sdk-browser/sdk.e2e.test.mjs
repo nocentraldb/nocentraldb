@@ -380,3 +380,29 @@ test("nc.open with a relay connects, and db.sync pauses and resumes it", async (
     relay.stop();
   }
 });
+
+test("space.status gives a new space's status, and its handles share it", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "status" });
+      const project = await db.spaces.create();
+      const again = await db.spaces.get(project.id);
+      const seen = [];
+      const stop = project.status.subscribe((status) => seen.push(status.role));
+      stop();
+      const status = project.status.current();
+      await db.close();
+      return { status, same: again.status.current(), seen };
+    },
+    { lock, MODEL },
+  );
+  assert.equal(result.status.role, "admin");
+  assert.equal(result.status.initialSyncComplete, false);
+  assert.deepEqual(result.status.provisionalErasures, []);
+  assert.deepEqual(result.same, result.status);
+  assert.deepEqual(result.seen, ["admin"]);
+  assert.deepEqual(errors, []);
+});
