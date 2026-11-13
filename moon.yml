@@ -247,7 +247,8 @@ tasks:
   sdk-browser:
     # NOC-176 slice 1: the TypeScript SDK in Chromium through Playwright
     # (scripts/sdk-browser/): it builds packages/sdk, its core in wasm
-    # included, and opens it in a page as an app does. Not part of `gates`,
+    # included, and opens it in a page as an app does; slice 4 syncs it
+    # with the local relay server, which it builds too. Not part of `gates`,
     # for the reasons of browser-storage above; the workflow browser-view.yml
     # runs it in CI. Never cached: its result depends on the installed
     # browser.
@@ -258,6 +259,8 @@ tasks:
       - "/packages/sdk/**/*"
       - "/crates/nocentraldb/**/*"
       - "/crates/nocentraldb-wasm/**/*"
+      - "/crates/ncdb-relay/**/*"
+      - "/crates/ncdb-relay-server/**/*"
       - "/Cargo.toml"
       - "/Cargo.lock"
       - "/package.json"
