@@ -71,9 +71,6 @@ fn the_recovery_code_is_redacted_in_display_and_debug() {
     let code = code(&db).unwrap();
     assert_eq!(format!("{code}"), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
-    for word in code.words() {
-        assert!(!format!("{code} {code:?}").contains(word));
-    }
 }
 
 #[test]

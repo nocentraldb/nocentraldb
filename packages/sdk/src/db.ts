@@ -1,5 +1,6 @@
 // The database an app opens in the browser (RFC 0009, "Open and close",
-// "Write", "Get by id", "Spaces"; NOC-176 slice 1). The SDK runs the core,
+// "Write", "Get by id", "Queries and indexes", "Subscribe", "Spaces";
+// NOC-176 slices 1 and 2). The SDK runs the core,
 // the Rust SDK compiled to WebAssembly, in a dedicated worker it starts
 // itself, and speaks to it in the bridge's messages
 // (crates/nocentraldb/src/bridge/mod.rs): canonical CBOR, one request and
@@ -40,6 +41,39 @@ type Read<C> = C extends AnyCollection
       readonly $deleted: boolean;
     }
   : never;
+
+/** Where the page after another starts. It holds the page's last position on this device and prints as `[redacted]`; another database refuses it with `cursorOfAnotherModel` (RFC 0009, "Queries and indexes"). */
+interface Cursor {
+  toString(): string;
+}
+
+/**
+ * A query of a declared index, whose objects are `T`: the handle
+ * `model.<collection>.indexes.<index>`, with `.equal` fixing its equality
+ * prefix (`E`, its values in index order), `.take` the page size (50 by
+ * default, at most 1000) and `.after` where the page starts (RFC 0009,
+ * "Queries and indexes"). Each returns a new query.
+ */
+export interface Query<T, E extends readonly unknown[] = readonly []> {
+  /** Fixes the index's leading fields, as many as its `equal` declares. */
+  equal(...values: E): Query<T>;
+  /** Sets the page size: 50 by default, at most 1000. */
+  take(n: number): Query<T, E>;
+  /** Starts after the cursor of an earlier page. */
+  after(cursor: Cursor): Query<T, E>;
+  /** Brands the query with its objects' type. */
+  readonly "nc.query"?: T;
+}
+
+/** One page of a query: its objects in index order, the cursor after the last one when more may follow, and whether more do. */
+export interface Page<T> {
+  readonly items: T[];
+  readonly cursor: Cursor | undefined;
+  readonly hasMore: boolean;
+}
+
+/** Stops a subscription. */
+type Stop = () => void;
 
 /** What a write answers: its change id and the ids of the objects it created, in order. */
 interface Written {
@@ -89,6 +123,19 @@ export interface Space {
     collection: C,
     id: Id,
   ): Promise<Read<C> | undefined>;
+  /** A page of a query of an index with `scope: "space"`, in this space. */
+  find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
+  /** Follows a query in this space: its page at once, and again after every fold in this space that touched its collection. */
+  subscribe<T>(
+    query: Query<T, readonly unknown[]>,
+    listener: (page: Page<T>) => void,
+  ): Stop;
+  /** Follows the object `id` of `collection`: as `get` reads it, at once and after every fold in this space that touched the collection. */
+  subscribe<C extends AnyCollection>(
+    collection: C,
+    id: Id,
+    listener: (object: Read<C> | undefined) => void,
+  ): Stop;
 }
 
 /** A space as `db.spaces.list` gives it. */
@@ -107,7 +154,14 @@ export interface Db {
     /** Every space of this member, with its role. */
     list(): Promise<SpaceEntry[]>;
   };
-  /** Closes the database; every later call fails with `closed`. */
+  /** A page of a query of an index across every space of the member. */
+  find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
+  /** Follows a query: its page at once, and again after every fold that touched its collection, whole pages, never diffs (RFC 0009, "Subscribe"). */
+  subscribe<T>(
+    query: Query<T, readonly unknown[]>,
+    listener: (page: Page<T>) => void,
+  ): Stop;
+  /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
 }
 
