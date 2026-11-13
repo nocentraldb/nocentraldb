@@ -7,10 +7,11 @@
 // the vitest tests pass a fake core to `connect`.
 
 import { type Cbor, decode, encode } from "./cbor.ts";
-import type { Db, open, Page, Space, SyncStatus, Tx } from "./db.ts";
+import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import { Cursor, queryState } from "./query.ts";
+import type { SyncStatus } from "./sync.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {

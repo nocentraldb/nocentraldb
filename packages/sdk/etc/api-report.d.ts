@@ -1,5 +1,6 @@
 // file: db.d.ts
 import type { Infer, model } from "./nc.ts";
+import type { SyncStatus } from "./sync.ts";
 type AnyCollection = Parameters<typeof model>[0][string];
 type Id = string;
 interface Elements<E> {
@@ -82,14 +83,6 @@ export interface Db {
     };
     close(): Promise<void>;
 }
-export interface SyncStatus {
-    readonly connection: "connected" | "connecting" | "offline" | "paused" | "none";
-    readonly relay?: string;
-    readonly unconfirmed: number;
-    readonly refused: number;
-    readonly epochChanged: boolean;
-    readonly error?: string;
-}
 interface OpenOptions {
     model: Record<string, any>;
     lock: unknown;
@@ -110,8 +103,8 @@ export declare class NcError extends Error {
 // file: index.d.ts
 export declare function name(): string;
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
-export type { SyncStatus } from "./db.ts";
 export * as nc from "./nc.ts";
+export type { SyncStatus } from "./sync.ts";
 // file: nc.d.ts
 import type { Query } from "./db.ts";
 interface Value<T = unknown, D extends boolean = false> {
@@ -213,3 +206,12 @@ export declare const index: <const K extends readonly (string | {
 }) => Index<Names<K>, N>;
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
+// file: sync.d.ts
+export interface SyncStatus {
+    readonly connection: "connected" | "connecting" | "offline" | "paused" | "none";
+    readonly relay?: string;
+    readonly unconfirmed: number;
+    readonly refused: number;
+    readonly epochChanged: boolean;
+    readonly error?: string;
+}

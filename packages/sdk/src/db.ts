@@ -11,6 +11,7 @@
 import { connectWorker } from "./connect.ts";
 import { SetElements } from "./elements.ts";
 import type { Infer, model } from "./nc.ts";
+import type { SyncStatus } from "./sync.ts";
 
 /** A collection handle of the model, such as `model.tasks`. */
 type AnyCollection = Parameters<typeof model>[0][string];
@@ -191,27 +192,6 @@ export interface Db {
   };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
-}
-
-/** The relay connection and what syncing found, as `db.sync.current()` gives it (RFC 0009, "Sync and status"). */
-export interface SyncStatus {
-  /** `"offline"`: no relay reachable, and the SDK retries; `"none"`: opened without a relay. */
-  readonly connection:
-    | "connected"
-    | "connecting"
-    | "offline"
-    | "paused"
-    | "none";
-  /** The relay `nc.open` named; absent without one. */
-  readonly relay?: string;
-  /** This member's changes the relay has not confirmed. */
-  readonly unconfirmed: number;
-  /** This member's changes the relay refused. */
-  readonly refused: number;
-  /** Whether the relay was restored and the SDK is pushing again what it lost. */
-  readonly epochChanged: boolean;
-  /** The last error that stops syncing, by its RFC 0007 code, such as `unsupported_version`, or `unknown_error`; never content. Absent while syncing runs. */
-  readonly error?: string;
 }
 
 /** The options of `nc.open` in a browser (RFC 0009, "Open and close"). */
