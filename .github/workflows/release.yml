@@ -226,7 +226,7 @@ jobs:
       - name: Publish to npm under alpha
         run: |
           if [ "$DRY_RUN" = true ]; then dry=--dry-run; else dry=; fi
-          node scripts/release/npm-publish.mjs --version "${TAG#v}" --dist-tag alpha $dry
+          node scripts/release/npm-publish.mjs --version "${TAG#v}" --dist-tag alpha --repo "$GITHUB_REPOSITORY" $dry
 
   verify:
     # Beta and release tags, or a dispatch that names a tag (the dry run, on

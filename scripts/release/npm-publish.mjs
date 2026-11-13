@@ -11,8 +11,11 @@
 //    publish job, which this script does not serve yet.
 // A2 The packages are those scripts/release/publishable.mjs lists. One it
 //    calls not publishable is reported as `skip <name>: <reason>`.
-// A3 Every publishable package's package.json carries --version; one that
-//    does not fails the run before anything is published.
+// A3 Every publishable package's package.json carries --version, and its
+//    repository.url names the repository --repo gives, as
+//    https://github.com/<owner>/<name>, with or without git+ and .git: npm
+//    checks the provenance against it. A package that does not fails the run
+//    before anything is published.
 // A4 Before anything is published, the registry is asked for each
 //    <name>@<version>. One already there is reported as
 //    `skip <name>@<version>: already on npm`, so a re-run publishes only what
@@ -36,7 +39,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cli } from "./lib/cli.mjs";
 
-const USAGE = `usage: npm-publish --version <X.Y.Z-alpha.N> --dist-tag alpha [--dry-run]
+const USAGE = `usage: npm-publish --version <X.Y.Z-alpha.N> --dist-tag alpha --repo <owner/name> [--dry-run]
 Publishes every publishable npm package of the workspace at that version
 under the dist-tag alpha, with provenance, skipping a version npm already
 holds. --dry-run only reports.`;
@@ -63,6 +66,13 @@ const packages = () => {
   return JSON.parse(r.stdout).npm;
 };
 
+/** A package's repository.url without git+ and .git, or null. */
+const repositoryUrl = (pkg) => {
+  const url = pkg.repository?.url;
+  if (typeof url !== "string") return null;
+  return url.replace(/^git\+/, "").replace(/\.git$/, "");
+};
+
 /** Whether npm holds `spec`: true, false on a 404, null after a failure. */
 const published = (spec) => {
   const r = spawnSync(NPM, ["view", spec, "version", "--json"], {
@@ -78,11 +88,17 @@ const published = (spec) => {
 const main = () => {
   const opts = parseArgs(process.argv.slice(2), {
     flags: ["--dry-run"],
-    values: ["--version", "--dist-tag"],
+    values: ["--version", "--dist-tag", "--repo"],
     defaults: { dryRun: false },
   });
-  if (!ALPHA.test(opts.version ?? "") || opts.distTag !== "alpha") usageError();
+  if (
+    !ALPHA.test(opts.version ?? "") ||
+    opts.distTag !== "alpha" ||
+    !/^[\w.-]+\/[\w.-]+$/.test(opts.repo ?? "")
+  )
+    usageError();
   const { version, distTag } = opts;
+  const home = `https://github.com/${opts.repo}`;
 
   const entries = packages();
   if (entries === null) return;
@@ -98,6 +114,12 @@ const main = () => {
     if (pkg.version !== version) {
       fail(
         `${entry.name} (${entry.dir}) is at ${pkg.version}, not ${version}: run set-version first`,
+      );
+      continue;
+    }
+    if (repositoryUrl(pkg) !== home) {
+      fail(
+        `${entry.name} (${entry.dir}): its repository.url must name ${home}, which npm checks the provenance against`,
       );
       continue;
     }

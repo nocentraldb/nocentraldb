@@ -41,7 +41,7 @@ const OUTPUTS = {
 };
 const PERMISSIONS = { contents: "read", "id-token": "write" };
 const CONCURRENCY = { group: "release-alpha-npm", "cancel-in-progress": false };
-const PUBLISH = `node scripts/release/npm-publish.mjs --version "\${TAG#v}" --dist-tag alpha $dry`;
+const PUBLISH = `node scripts/release/npm-publish.mjs --version "\${TAG#v}" --dist-tag alpha --repo "$GITHUB_REPOSITORY" $dry`;
 
 const checks = [
   {
