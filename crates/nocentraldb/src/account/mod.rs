@@ -30,6 +30,8 @@
 mod handle;
 mod remove;
 mod renew;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod reopen_tests;
 
 pub use handle::Removed;
 pub(crate) use handle::take_new_key;
@@ -327,12 +329,27 @@ fn role_text(role: CoreRole) -> &'static str {
 
 /// Creates the account space, when the device holds none and creates the
 /// account's first: a device that joins an account another device created
-/// creates none, and an agent keeps no account space.
+/// creates none, nor does a linked database that still keeps its link
+/// statement, and an agent keeps no account space.
 pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
-    if inner.kind == MemberKind::Device && !inner.joins_account && space(inner).is_none() {
+    if inner.kind == MemberKind::Device
+        && !inner.joins_account
+        && space(inner).is_none()
+        && !keeps_a_link(inner)?
+    {
         crate::space::create_space(inner, id())?;
     }
     Ok(())
+}
+
+/// Whether the database keeps a link statement it has not yet seen reach
+/// the person's account space (NOC-311). It was linked into an account
+/// whose account space a device of it created, and it keeps the statement
+/// until the relay holds it there, by which time it holds that space; so
+/// while it keeps one it creates no account space, also after a reopen,
+/// when `joins_account` no longer says so.
+fn keeps_a_link(inner: &Inner) -> Result<bool, Error> {
+    Ok(!inner.view.pending_links().map_err(storage)?.is_empty())
 }
 
 /// Brings the device's own records in the account space up to date: its
