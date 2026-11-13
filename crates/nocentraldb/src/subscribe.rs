@@ -21,17 +21,91 @@ use crate::space::Space;
 /// Whether a subscription's page may have changed since it last yielded,
 /// and who waits for it.
 #[derive(Default)]
-struct Watch {
+pub(crate) struct Watch {
     stale: bool,
     waker: Option<Waker>,
 }
 
 /// What the database keeps of a subscription: what it follows, and its
-/// watch while the stream lives.
-pub(crate) struct Watcher {
-    collection: String,
-    space: Option<CoreSpaceId>,
-    watch: Weak<Mutex<Watch>>,
+/// watch while the stream lives; or a fold feed while it lives.
+pub(crate) enum Watcher {
+    Query {
+        collection: String,
+        space: Option<CoreSpaceId>,
+        watch: Weak<Mutex<Watch>>,
+    },
+    #[cfg(any(test, feature = "bridge"))]
+    Folds(Weak<Mutex<Feed>>),
+}
+
+/// The folds a fold feed has not given out yet, in order, and who waits
+/// for them.
+#[cfg(any(test, feature = "bridge"))]
+#[derive(Default)]
+pub(crate) struct Feed {
+    folds: Vec<(CoreSpaceId, BTreeSet<String>)>,
+    closed: bool,
+    waker: Option<Waker>,
+}
+
+/// The space and collections of every fold, for the TypeScript SDK's
+/// worker, which re-runs the reads its subscriptions follow (NOC-176;
+/// RFC 0009, "Subscribe"). It carries names and ids, never values.
+/// Dropping every clone stops it.
+#[cfg(any(test, feature = "bridge"))]
+#[derive(Clone)]
+pub(crate) struct FoldFeed(Arc<Mutex<Feed>>);
+
+#[cfg(any(test, feature = "bridge"))]
+impl FoldFeed {
+    fn state(&self) -> std::sync::MutexGuard<'_, Feed> {
+        self.0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The folds since the last take, each its space and the names of the
+    /// collections it touched, in order.
+    pub(crate) fn take(&self) -> Vec<(crate::id::SpaceId, Vec<String>)> {
+        std::mem::take(&mut self.state().folds)
+            .into_iter()
+            .map(|(space, collections)| {
+                (crate::id::SpaceId(space), collections.into_iter().collect())
+            })
+            .collect()
+    }
+
+    /// Resolves when a fold waits to be taken, or the feed is closed.
+    pub(crate) fn wait(&self) -> impl std::future::Future<Output = ()> + use<> {
+        let feed = self.0.clone();
+        std::future::poll_fn(move |cx| {
+            let mut state = feed.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if state.closed || !state.folds.is_empty() {
+                return Poll::Ready(());
+            }
+            state.waker = Some(cx.waker().clone());
+            Poll::Pending
+        })
+    }
+
+    /// Closes the feed: a waiter returns, and no fold is added.
+    pub(crate) fn close(&self) {
+        let mut state = self.state();
+        state.closed = true;
+        if let Some(waker) = state.waker.take() {
+            waker.wake();
+        }
+    }
+
+    /// Whether the feed is closed.
+    pub(crate) fn is_closed(&self) -> bool {
+        self.state().closed
+    }
+
+    /// Whether `other` is this feed.
+    pub(crate) fn same(&self, other: &FoldFeed) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
 }
 
 /// The stream [`Db::subscribe`] and [`Space::subscribe`] return.
@@ -75,7 +149,7 @@ fn subscribe(
         stale: true,
         waker: None,
     }));
-    lock(inner).watchers.push(Watcher {
+    lock(inner).watchers.push(Watcher::Query {
         collection: query.collection().to_owned(),
         space,
         watch: Arc::downgrade(&state),
@@ -95,24 +169,56 @@ pub(crate) fn touched(
     space: CoreSpaceId,
     collections: &BTreeSet<String>,
 ) {
-    watchers.retain(|watcher| {
-        let Some(state) = watcher.watch.upgrade() else {
-            return false;
-        };
-        let follows =
-            collections.contains(&watcher.collection) && watcher.space.is_none_or(|s| s == space);
-        if follows {
-            let mut state = watch(&state);
-            state.stale = true;
-            if let Some(waker) = state.waker.take() {
+    watchers.retain(|watcher| match watcher {
+        Watcher::Query {
+            collection,
+            space: follows_space,
+            watch: state,
+        } => {
+            let Some(state) = state.upgrade() else {
+                return false;
+            };
+            let follows =
+                collections.contains(collection) && follows_space.is_none_or(|s| s == space);
+            if follows {
+                let mut state = watch(&state);
+                state.stale = true;
+                if let Some(waker) = state.waker.take() {
+                    waker.wake();
+                }
+            }
+            true
+        }
+        #[cfg(any(test, feature = "bridge"))]
+        Watcher::Folds(feed) => {
+            let Some(feed) = feed.upgrade() else {
+                return false;
+            };
+            let mut feed = feed.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if feed.closed {
+                return false;
+            }
+            feed.folds.push((space, collections.clone()));
+            if let Some(waker) = feed.waker.take() {
                 waker.wake();
             }
+            true
         }
-        true
     });
 }
 
 impl Db {
+    /// A fold feed of this database: the space and collections of every
+    /// fold from now on (NOC-176).
+    #[cfg(any(test, feature = "bridge"))]
+    pub(crate) fn folds(&self) -> FoldFeed {
+        let feed = Arc::new(Mutex::new(Feed::default()));
+        lock(&self.inner)
+            .watchers
+            .push(Watcher::Folds(Arc::downgrade(&feed)));
+        FoldFeed(feed)
+    }
+
     /// Follows `query`, of an index that spans every space: the stream
     /// yields its page at once and after every fold that touched an object
     /// of its collection.
