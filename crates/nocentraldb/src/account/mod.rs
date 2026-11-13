@@ -27,11 +27,13 @@
 //! An agent keeps no account space: it holds an agent certificate of an
 //! account, and the account's devices record it.
 
+mod handle;
 mod remove;
 mod renew;
 
+pub use handle::Removed;
 #[cfg_attr(not(test), allow(unused_imports))]
-pub(crate) use renew::{new_key, renew, wrapped_to};
+pub(crate) use renew::{new_key, renew, statements, wrapped_to};
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
