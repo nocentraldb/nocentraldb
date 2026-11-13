@@ -49,5 +49,5 @@ test("RFC 0009 names db.account().recovered() (NOC-289)", () => {
   const row = text
     .split("\n")
     .find((l) => l.startsWith("| `AccountRecovered` |"));
-  assert.ok(row && row.includes("db.account().recovered()"), row);
+  assert.ok(row?.includes("db.account().recovered()"), row);
 });
