@@ -30,6 +30,8 @@
 mod handle;
 mod remove;
 mod renew;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod reopen_tests;
 
 pub use handle::Removed;
 pub(crate) use handle::take_new_key;
