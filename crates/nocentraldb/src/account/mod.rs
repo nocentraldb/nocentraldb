@@ -51,7 +51,7 @@ use sha2::{Digest, Sha256};
 use crate::db::Inner;
 use crate::error::{Error, storage};
 use crate::id::{ChangeId, ObjectId};
-use crate::members::Role;
+use crate::members::{Fingerprint, Role};
 use crate::tx::Transaction;
 use crate::value::{Repr, Value};
 
@@ -119,14 +119,30 @@ pub(crate) struct MembershipRecord {
     pub(crate) role: Role,
 }
 
-/// The account space the copy holds, if any: the first, by id, whose
-/// genesis names the shipped model.
+/// The account space of this database's current account, if the copy
+/// holds it: the first, by id, whose genesis names the shipped model and
+/// whose creator's certificate names this account, by fingerprint
+/// (NOC-310). A database that created spaces before it was linked into
+/// another account keeps the account space of its old account; that one
+/// is no longer its account space, and stays as it is. `None` while the
+/// copy holds no account space of its current account, or while the
+/// database has no account yet.
 pub(crate) fn space(inner: &Inner) -> Option<CoreSpaceId> {
     let shipped = id();
+    let me = inner.member.key().id();
+    let ours = Fingerprint::of(&inner.account.certificate(me, inner.kind)?);
     inner
         .spaces
         .iter()
-        .find(|(_, state)| state.checks.model_id() == Some(shipped))
+        .find(|(_, state)| {
+            let resolved = state.checks.resolved();
+            let creator = resolved
+                .seniority()
+                .first()
+                .and_then(|creator| resolved.member(*creator));
+            state.checks.model_id() == Some(shipped)
+                && creator.is_some_and(|creator| Fingerprint::of(&creator.certificate) == ours)
+        })
         .map(|(space, _)| *space)
 }
 
