@@ -42,6 +42,8 @@ pub(crate) struct Placed {
     pub(crate) keys: Keys,
     /// Where the copy is stored.
     pub(crate) storage: Storage,
+    /// The database's name, under which IndexedDB keeps its keys.
+    pub(crate) name: String,
 }
 
 /// Whether `name` may name a database: 1 to 64 characters of `a`–`z`,
@@ -61,7 +63,7 @@ pub(crate) fn valid_name(name: &str) -> Result<(), Error> {
 /// Prepares the database named `name` in this dedicated worker: installs
 /// the VFS, reserves its slots, and takes its keys from IndexedDB.
 #[cfg_attr(not(test), allow(dead_code))]
-pub(crate) async fn place(name: &str) -> Result<Placed, Error> {
+pub(crate) async fn place(name: &str, new: impl FnOnce() -> Keys) -> Result<Placed, Error> {
     valid_name(name)?;
     let vfs = install().await.map_err(refused)?;
     let path = format!("/{name}/{FILE}");
@@ -69,7 +71,7 @@ pub(crate) async fn place(name: &str) -> Result<Placed, Error> {
     if vfs == Vfs::Opfs {
         reserve(SLOTS).await.map_err(refused)?;
     }
-    let keys = load_or_create(name, existed).await?;
+    let keys = load_or_create(name, existed, new).await?;
     let storage = match vfs {
         Vfs::Opfs if persisted().await => Storage::Persistent,
         Vfs::Opfs => Storage::BestEffort,
@@ -79,6 +81,7 @@ pub(crate) async fn place(name: &str) -> Result<Placed, Error> {
         path,
         keys,
         storage,
+        name: name.to_owned(),
     })
 }
 

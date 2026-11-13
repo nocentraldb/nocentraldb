@@ -21,7 +21,7 @@ use crate::error::{Error, ErrorCode};
 const SERVICE: &str = "nocentraldb";
 
 /// Where a database's key record is kept, by the database's user name.
-pub(crate) trait SecretStore {
+pub(crate) trait SecretStore: Send + Sync {
     /// The record of `user`, or `None` when there is none.
     fn get(&self, user: &str) -> Result<Option<Zeroizing<Vec<u8>>>, Error>;
     /// Keeps `record` as the record of `user`.
@@ -32,35 +32,49 @@ pub(crate) trait SecretStore {
 }
 
 /// The keys of the database in `dir`, which must exist, from `store`. When
-/// the store holds none and the database did not exist, new keys are drawn
-/// and kept there. An existing database whose entry is gone fails with
-/// `StorageFailed`: new keys would hold none of its spaces' keys.
+/// the store holds none and the database did not exist, `new` keys are
+/// drawn and kept there. An existing database whose entry is gone fails
+/// with `StorageFailed`: new keys would hold none of its spaces' keys. A
+/// record of format 1 is kept again as format 2.
 pub(crate) fn from_store(
     store: &dyn SecretStore,
     dir: &Path,
     database_existed: bool,
+    new: impl FnOnce() -> Keys,
 ) -> Result<Keys, Error> {
-    let dir = dir
-        .canonicalize()
-        .map_err(|error| super::io("the database directory cannot be found", &error))?;
-    let user = dir.to_string_lossy();
+    let user = user(dir)?;
     match store.get(&user)? {
-        Some(record) => Keys::decode(&record).ok_or_else(|| {
-            Error::new(
-                ErrorCode::StorageFailed,
-                "the keystore entry of the database holds no keys of this SDK's format",
-            )
-        }),
+        Some(record) => {
+            let keys = Keys::decode(&record).ok_or_else(|| {
+                Error::new(
+                    ErrorCode::StorageFailed,
+                    "the keystore entry of the database holds no keys of this SDK's format",
+                )
+            })?;
+            if keys.upgraded {
+                store.set(&user, &keys.encode())?;
+            }
+            Ok(keys)
+        }
         None if database_existed => Err(Error::new(
             ErrorCode::StorageFailed,
             "the database exists, but the keystore holds no keys for it; new keys would open none of its spaces",
         )),
         None => {
-            let keys = Keys::generate();
+            let keys = new();
             store.set(&user, &keys.encode())?;
             Ok(keys)
         }
     }
+}
+
+/// The user name of the entry of the database in `dir`, which must exist:
+/// its canonical path.
+pub(crate) fn user(dir: &Path) -> Result<String, Error> {
+    let dir = dir
+        .canonicalize()
+        .map_err(|error| super::io("the database directory cannot be found", &error))?;
+    Ok(dir.to_string_lossy().into_owned())
 }
 
 /// The platform's keystore, or the keystore's error when none is

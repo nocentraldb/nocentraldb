@@ -49,6 +49,7 @@ mod list;
 mod members;
 mod next;
 mod object;
+mod pairing;
 mod personal;
 mod query;
 mod space;
@@ -89,6 +90,7 @@ pub use members::{
 };
 pub use ncdb_plugin::Data;
 pub use object::Object;
+pub use pairing::{Account, PairKind, Paired, PairingAnswer, RecoveryCode};
 pub use query::{Cursor, Page, Query};
 pub use space::{Space, Spaces, Written};
 pub use status::{

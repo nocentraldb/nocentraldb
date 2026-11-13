@@ -102,6 +102,13 @@ impl RecoveryCode {
         RecoveryCode(Zeroizing::new(bits))
     }
 
+    /// The code's 128 bits, for the SDK's key record, which keeps them until
+    /// the person stored the code (RFC 0003, "The member key"). The copy is
+    /// wiped when it is dropped.
+    pub fn bits(&self) -> Zeroizing<[u8; 16]> {
+        self.0.clone()
+    }
+
     /// Reads a recovery code from its twelve words. Case does not matter,
     /// and the words may be separated, led and followed by any whitespace.
     pub fn parse(text: &str) -> Result<RecoveryCode, CodeError> {
