@@ -51,7 +51,7 @@ fn valid_for(ms: u64) -> Result<PresigningConfig, ErrorCode> {
     PresigningConfig::expires_in(Duration::from_millis(ms)).map_err(|_| ErrorCode::Unavailable)
 }
 
-impl Urls for S3Urls {
+impl<S: RelayStore> Urls<S> for S3Urls {
     async fn upload(&self, id: UploadId, _: Token, size: u64) -> Result<String, ErrorCode> {
         let size = i64::try_from(size).map_err(|_| ErrorCode::TooLarge)?;
         let presigned = self
@@ -66,7 +66,7 @@ impl Urls for S3Urls {
         Ok(presigned.uri().to_owned())
     }
 
-    async fn download<S: RelayStore>(
+    async fn download(
         &self,
         _: &Relay<S>,
         space: SpaceId,

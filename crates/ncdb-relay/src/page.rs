@@ -7,7 +7,7 @@
 
 use ncdb_core::ids::{MemberId, SpaceId};
 
-use crate::store::{Entry, Epoch, Position, RelayStore};
+use crate::store::{Entry, Epoch, Position, RelayStore, TokenUrls};
 use crate::wire::{self, Carried, Item, MAX_INLINE, MAX_MESSAGE};
 use crate::{ErrorCode, Relay};
 
@@ -47,7 +47,7 @@ pub struct TokenDownloads<'a, S> {
     pub prefix: &'a str,
 }
 
-impl<S: RelayStore> Downloads for TokenDownloads<'_, S> {
+impl<S: TokenUrls> Downloads for TokenDownloads<'_, S> {
     async fn url(&self, space: SpaceId, entry: &Entry) -> Result<String, ErrorCode> {
         let token = self.relay.begin_download(space, entry.position).await?;
         let hex: String = token.0.iter().map(|b| format!("{b:02x}")).collect();

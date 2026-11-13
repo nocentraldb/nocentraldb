@@ -10,7 +10,8 @@
 //   logs are kept 14 days.
 // - The tables, on demand, with point-in-time recovery for 35 days:
 //   - RFC 0007's `log`, `changes`, `spaces`, `members` and `person-keys`;
-//   - NOC-270's `uploads` and `tokens`;
+//   - NOC-270's `uploads` (no `tokens`: behind API Gateway the URLs of
+//     large changes are presigned S3 URLs; NOC-295, NOC-303);
 //   - `connections`, with its TTL and indexes.
 //   Their keys are those the backend creates in tests (ncdb_relay_aws::schema,
 //   ncdb_relay_lambda::dynamo).
@@ -121,7 +122,6 @@ export class RelayStack extends Stack {
       table("members", binary("space"), binary("member")),
       table("person-keys", binary("space"), binary("id")),
       table("uploads", binary("id"), undefined, "ttl"),
-      table("tokens", binary("token"), undefined, "ttl"),
     ];
     const members = tables[3];
     members?.addGlobalSecondaryIndex({
