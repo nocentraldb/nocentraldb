@@ -6,6 +6,7 @@
 // every action is SHA-pinned; every job is bounded in time; a step that
 // derives the basic-auth header from the token masks it before git sees it.
 // The alpha job's own rules are in scripts/release-workflow-alpha.test.mjs,
+// those of alpha-npm in scripts/release-workflow-npm.test.mjs,
 // those of the publish side in scripts/release-workflow-publish.test.mjs.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
@@ -32,6 +33,7 @@ import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 
 const TIMEOUTS = {
   alpha: 20,
+  "alpha-npm": 45,
   verify: 45,
   build: 45,
   publish: 20,
@@ -92,6 +94,12 @@ const checks = [
       assert.deepEqual(wf.permissions, { contents: "read" });
       assert.deepEqual(Object.keys(wf.jobs).sort(), [...JOBS].sort());
       assert.deepEqual(wf.jobs.alpha.permissions, WRITE);
+      // The one job that publishes to npm holds the OIDC token npm's
+      // Trusted Publishing exchanges, and no contents: write (NOC-281).
+      assert.deepEqual(wf.jobs["alpha-npm"].permissions, {
+        contents: "read",
+        "id-token": "write",
+      });
       // verify and build inherit contents: read from the workflow.
       assert.equal(wf.jobs.verify.permissions, undefined);
       assert.equal(wf.jobs.build.permissions, undefined);
@@ -112,6 +120,11 @@ const checks = [
         ctx.doc.deleteIn([...ALPHA, "permissions"]),
       "grants the alpha id-token: write": (ctx) =>
         ctx.doc.setIn([...ALPHA, "permissions", "id-token"], "write"),
+      "grants alpha-npm contents: write": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "alpha-npm", "permissions", "contents"],
+          "write",
+        ),
       "grants verify contents: write": (ctx) =>
         ctx.doc.setIn(["jobs", "verify", "permissions"], WRITE),
       "grants build contents: write": (ctx) =>
