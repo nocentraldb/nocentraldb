@@ -13,6 +13,9 @@
 // whether it is deprecated, and a collection's carry its fields, which is
 // what `Infer` reads.
 
+import type { Query } from "./db.ts";
+import { makeQuery } from "./query.ts";
+
 /** What every field of the model carries: what it reads as (`T`), and whether it is deprecated (`D`). */
 interface Value<T = unknown, D extends boolean = false> {
   readonly "nc.reads": T;
@@ -40,13 +43,62 @@ interface Ref<D extends boolean = false> extends Value<Target, D> {
 /** The fields of a collection, by name. */
 type Fields = Record<string, Value<unknown, boolean>>;
 
-/** A collection of the model with the fields `F`, deprecated when `D` is true: its fields, and the places for computed fields, views and indexes. */
-interface Collection<F extends Fields = Fields, D extends boolean = false> {
+/** A collection of the model with the fields `F` and the indexes `I`, deprecated when `D` is true: its fields, and the places for computed fields, views and indexes. */
+interface Collection<
+  F extends Fields = Fields,
+  D extends boolean = false,
+  I extends Indexes = Indexes,
+> {
   readonly "nc.collection": F;
   readonly "nc.deprecated": D;
+  /** A query of every declared index, by name (RFC 0009, "Queries and indexes"). */
+  readonly indexes: {
+    readonly [K in keyof I]: Query<Item<F>, EqualOf<F, I[K]>>;
+  };
   /** Hides the collection from the app, and keeps it in the model and the data. */
-  deprecated(reason: string): Collection<F, true>;
+  deprecated(reason: string): Collection<F, true, I>;
 }
+
+/** The declared indexes of a collection, by name. */
+type Indexes = Record<string, Index>;
+
+/** The fields of `F` that are not deprecated, each optional, as the app reads them. */
+type Readable<F extends Fields> = {
+  [K in keyof F as F[K] extends Value<unknown, true>
+    ? never
+    : K]?: F[K]["nc.reads"];
+};
+
+/** An object of a collection with the fields `F`, as a read gives it: its fields and its ids (RFC 0009, "Get by id"). */
+type Item<F extends Fields> = Readable<F> & {
+  readonly $id: ObjectId;
+  readonly $space: SpaceId;
+  readonly $deleted: boolean;
+};
+
+/** The values `.equal` takes for the first `N` fields `K` of a collection with the fields `F`: one per field, of that field's type. */
+type EqualValues<
+  F extends Fields,
+  K extends readonly string[],
+  N extends number,
+  Taken extends readonly unknown[] = [],
+> = Taken["length"] extends N
+  ? Taken
+  : K extends readonly [
+        infer H extends string,
+        ...infer R extends readonly string[],
+      ]
+    ? EqualValues<
+        F,
+        R,
+        N,
+        [...Taken, Exclude<F[H & keyof F]["nc.reads"], undefined>]
+      >
+    : Taken;
+
+/** The values `.equal` takes for the index `X` of a collection with the fields `F`. */
+type EqualOf<F extends Fields, X> =
+  X extends Index<infer K, infer N> ? EqualValues<F, K, N> : readonly [];
 
 /** The collections of a model without the deprecated ones, which the app does not see. */
 type Visible<C> = {
@@ -77,10 +129,24 @@ interface Named {
   readonly "nc.named": true;
 }
 
-/** A declared index. */
-interface Index {
+/** A declared index on the fields `K`, whose first `N` a query fixes with equality. */
+interface Index<
+  K extends readonly string[] = readonly string[],
+  N extends number = number,
+> {
   readonly "nc.index": true;
+  readonly "nc.fields": K;
+  readonly "nc.equal": N;
 }
+
+/** The field names of an index's entries, in order. */
+type Names<E extends readonly (string | { field: string })[]> = {
+  [P in keyof E]: E[P] extends string
+    ? E[P]
+    : E[P] extends { field: infer N extends string }
+      ? N
+      : never;
+};
 
 /** The key under which `model` keeps the function that describes the model for `ncdb model build`. */
 const DESCRIBE = Symbol.for("nocentraldb.model.describe");
@@ -177,14 +243,17 @@ export function model<C extends Record<string, Collection<Fields, boolean>>>(
 }
 
 /** Declares a collection: its fields by name, and its computed fields, views and indexes. */
-export function collection<F extends Fields>(
+export function collection<
+  F extends Fields,
+  const I extends Indexes = Record<never, never>,
+>(
   fields: F,
   options: {
     computed?: Record<string, Named>;
     views?: Record<string, Named>;
-    indexes?: Record<string, Index>;
+    indexes?: I;
   } = {},
-): Collection<F> {
+): Collection<F, false, I> {
   return makeCollection({
     fields: { ...fields },
     computed: { ...options.computed },
@@ -194,15 +263,18 @@ export function collection<F extends Fields>(
 }
 
 /** The collection with this state; `deprecated` returns a new collection. */
-const makeCollection = <F extends Fields, D extends boolean>(
+const makeCollection = <F extends Fields, D extends boolean, I extends Indexes>(
   state: CollectionState,
-): Collection<F, D> => {
-  const made = {
+): Collection<F, D, I> => {
+  const made: Record<string, unknown> = {
     deprecated: (reason: string) =>
       makeCollection({ ...state, deprecated: reason }),
-  } as unknown as Collection<F, D>;
+  };
+  made.indexes = Object.fromEntries(
+    Object.keys(state.indexes).map((name) => [name, makeQuery(made, name)]),
+  );
   collectionStates.set(made, state);
-  return made;
+  return made as unknown as Collection<F, D, I>;
 };
 
 /** A string, basic value. */
@@ -254,11 +326,17 @@ export const reach = (..._args: unknown[]): Named => name();
 export const view = (..._args: unknown[]): Named => name();
 
 /** Declares an index: fields in index order, each ascending unless it says otherwise, how many leading fields a query fixes with equality (`equal`, 0 by default), and with `scope: "space"` an index that runs in one space at a time instead of across every space of the member. */
-export const index = (
-  fields: readonly (string | { field: string; direction: "asc" | "desc" })[],
-  options: { equal?: number; scope?: "space" } = {},
-): Index => {
-  const made = {} as Index;
+export const index = <
+  const K extends readonly (
+    | string
+    | { field: string; direction: "asc" | "desc" }
+  )[],
+  const N extends number = 0,
+>(
+  fields: K,
+  options: { equal?: N; scope?: "space" } = {},
+): Index<Names<K>, N> => {
+  const made = {} as Index<Names<K>, N>;
   indexStates.set(made, {
     fields: fields.map((entry) =>
       typeof entry === "string"

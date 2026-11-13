@@ -39,6 +39,7 @@ const fake = (answer: (request: Request) => Answer = () => ({ ok: null })) => {
     terminate: () => {
       terminated = true;
     },
+    listen: () => {},
   };
   return { core, requests, terminated: () => terminated };
 };
