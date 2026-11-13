@@ -23,7 +23,7 @@ use crate::list::SpaceModel;
 use crate::members::{Members, holds};
 use crate::next;
 use crate::object::Object;
-use crate::subscribe::touched;
+use crate::subscribe::{Folded, Origin, touched};
 use crate::tx::Transaction;
 use crate::value::Value;
 
@@ -340,9 +340,20 @@ pub(crate) fn write_change(
         .space_key(generation)
         .expect("a writable space's key is held");
     let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
+    // What other folds of the space touched before is not this write's.
+    view.take_touched(space);
     fold(view, &mut state.checks, &change)?;
+    let objects = view.take_touched(space);
     crate::personal::refresh(view, space, state).map_err(storage)?;
-    touched(watchers, space, &collections);
+    touched(
+        watchers,
+        &Folded {
+            space,
+            collections: &collections,
+            touched: &objects,
+            origin: Origin::Local,
+        },
+    );
     if !records.is_empty() {
         crate::sync::put_person_keys(inner, space, records);
     }

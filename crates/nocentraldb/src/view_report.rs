@@ -84,7 +84,7 @@ mod rebuild {
     use std::sync::{Arc, Mutex, Weak};
 
     use crate::db::{Inner, lock};
-    use crate::subscribe::touched;
+    use crate::subscribe::{Folded, Origin, touched};
 
     /// How many frames of the log the rebuild folds while it holds the lock.
     const PAGE: usize = 128;
@@ -125,8 +125,18 @@ mod rebuild {
         inner.model = Arc::new(crate::account::app_model(inner.view.model()));
         let collections: BTreeSet<String> = inner.model.collections.keys().cloned().collect();
         let spaces: Vec<_> = inner.spaces.keys().copied().collect();
+        // A swap folds no change: subscriptions read again, and no object
+        // is named as touched.
         for space in spaces {
-            touched(&mut inner.watchers, space, &collections);
+            touched(
+                &mut inner.watchers,
+                &Folded {
+                    space,
+                    collections: &collections,
+                    touched: &[],
+                    origin: Origin::Remote,
+                },
+            );
         }
     }
 }

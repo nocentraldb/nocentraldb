@@ -51,7 +51,13 @@ fn task(n: u8, title: &str) -> Vec<Operation> {
     let kind = BasicValue { kind: Kind::Text };
     vec![
         field_op::create(object(n), TASK),
-        field_op::encode(&kind, &write(Value::Text(title.into())), object(n), TASK, TITLE),
+        field_op::encode(
+            &kind,
+            &write(Value::Text(title.into())),
+            object(n),
+            TASK,
+            TITLE,
+        ),
     ]
 }
 
@@ -65,7 +71,8 @@ impl Writer {
     /// A view on `view` that holds the space's genesis.
     fn new(view: &mut View) -> Writer {
         let mut control = Control::default();
-        view.receive(&envelope(FOUNDER, 1, 0), &mut control).unwrap();
+        view.receive(&envelope(FOUNDER, 1, 0), &mut control)
+            .unwrap();
         Writer {
             control,
             sequence: 1,
@@ -132,7 +139,8 @@ fn a_fold_that_rolls_back_leaves_nothing_touched() {
     // The task's field states are gone, so the fold of its title fails
     // after its create was written.
     let conn = rusqlite::Connection::open(&db.0).unwrap();
-    conn.execute_batch(&format!("DROP TABLE \"fs_{TASK}\"")).unwrap();
+    conn.execute_batch(&format!("DROP TABLE \"fs_{TASK}\""))
+        .unwrap();
     drop(conn);
     let bytes = writer.next(task(1, "a"));
     assert!(view.receive(&bytes, &mut writer.control).is_err());

@@ -38,12 +38,63 @@ pub(crate) enum Watcher {
     Folds(Weak<Mutex<Feed>>),
 }
 
+/// Whose change a fold folded: this member's own write, or one that sync
+/// brought (RFC 0009, "Subscribe": `origin` is "local" or "remote").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Origin {
+    Local,
+    Remote,
+}
+
+impl Origin {
+    /// RFC 0009's name of the origin.
+    #[cfg(any(test, feature = "bridge"))]
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Origin::Local => "local",
+            Origin::Remote => "remote",
+        }
+    }
+}
+
+/// What one fold did: its space, the collections whose reads it may have
+/// changed, and the objects it touched with their origin; ids, never
+/// values (RFC 0006, "Folding", step 6).
+pub(crate) struct Folded<'a> {
+    pub(crate) space: CoreSpaceId,
+    pub(crate) collections: &'a BTreeSet<String>,
+    /// The `(collection, object)` the fold wrote, and whose change it was;
+    /// none for a fold that re-reads everything, as after a rebuild.
+    pub(crate) touched: &'a [(String, ncdb_core::ids::ObjectId)],
+    pub(crate) origin: Origin,
+}
+
+/// One fold a fold feed gives out.
+#[cfg(any(test, feature = "bridge"))]
+#[derive(Clone, Debug)]
+pub(crate) struct Fold {
+    pub(crate) space: crate::id::SpaceId,
+    /// The collections whose reads it may have changed.
+    pub(crate) collections: Vec<String>,
+    /// The objects it touched, per collection, with their origin.
+    pub(crate) changes: Vec<Changed>,
+}
+
+/// The objects one fold touched in one collection, and whose change it was.
+#[cfg(any(test, feature = "bridge"))]
+#[derive(Clone, Debug)]
+pub(crate) struct Changed {
+    pub(crate) collection: String,
+    pub(crate) ids: Vec<crate::id::ObjectId>,
+    pub(crate) origin: Origin,
+}
+
 /// The folds a fold feed has not given out yet, in order, and who waits
 /// for them.
 #[cfg(any(test, feature = "bridge"))]
 #[derive(Default)]
 pub(crate) struct Feed {
-    folds: Vec<(CoreSpaceId, BTreeSet<String>)>,
+    folds: Vec<Fold>,
     closed: bool,
     waker: Option<Waker>,
 }
@@ -66,13 +117,8 @@ impl FoldFeed {
 
     /// The folds since the last take, each its space and the names of the
     /// collections it touched, in order.
-    pub(crate) fn take(&self) -> Vec<(crate::id::SpaceId, Vec<String>)> {
+    pub(crate) fn take(&self) -> Vec<Fold> {
         std::mem::take(&mut self.state().folds)
-            .into_iter()
-            .map(|(space, collections)| {
-                (crate::id::SpaceId(space), collections.into_iter().collect())
-            })
-            .collect()
     }
 
     /// Resolves when a fold waits to be taken, or the feed is closed.
@@ -164,11 +210,10 @@ fn subscribe(
 
 /// Marks stale every subscription a fold in `space` that touched
 /// `collections` may change, and wakes it; forgets the dropped ones.
-pub(crate) fn touched(
-    watchers: &mut Vec<Watcher>,
-    space: CoreSpaceId,
-    collections: &BTreeSet<String>,
-) {
+pub(crate) fn touched(watchers: &mut Vec<Watcher>, folded: &Folded<'_>) {
+    let Folded {
+        space, collections, ..
+    } = *folded;
     watchers.retain(|watcher| match watcher {
         Watcher::Query {
             collection,
@@ -198,7 +243,7 @@ pub(crate) fn touched(
             if feed.closed {
                 return false;
             }
-            feed.folds.push((space, collections.clone()));
+            feed.folds.push(fold_of(folded));
             if let Some(waker) = feed.waker.take() {
                 waker.wake();
             }
@@ -237,5 +282,32 @@ impl Space {
         query: Query,
     ) -> impl Stream<Item = Result<Page, Error>> + Unpin + use<> {
         subscribe(self.inner(), query, Some(self.id().0))
+    }
+}
+
+/// The fold a feed gives out for `folded`: the objects of the app's
+/// collections it touched, per collection, in order; the model the SDK
+/// ships (`$` collections) is not the app's (NOC-266).
+#[cfg(any(test, feature = "bridge"))]
+fn fold_of(folded: &Folded<'_>) -> Fold {
+    let mut changes: Vec<Changed> = Vec::new();
+    for (collection, object) in folded.touched {
+        if collection.starts_with('$') {
+            continue;
+        }
+        let id = crate::id::ObjectId(*object);
+        match changes.iter_mut().find(|c| &c.collection == collection) {
+            Some(changed) => changed.ids.push(id),
+            None => changes.push(Changed {
+                collection: collection.clone(),
+                ids: vec![id],
+                origin: folded.origin,
+            }),
+        }
+    }
+    Fold {
+        space: crate::id::SpaceId(folded.space),
+        collections: folded.collections.iter().cloned().collect(),
+        changes,
     }
 }
