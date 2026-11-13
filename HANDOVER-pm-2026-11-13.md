@@ -1,6 +1,6 @@
 # pm handover, 2026-11-13 ~13:50 UTC
 
-The previous pm session (session_01QSAQLrzS8Mwz2aPRKfmrhF) ended because its GitHub tools answered "invalid session" after the owner switched claude.ai's GitHub connection to the agents' own account. This file is the state to resume from. Delete it, or leave it off main, once its content is in Linear.
+The previous pm session (session_01QSAQLrzS8Mwz2aPRKfmrhF) ended because its GitHub tools answered "invalid session" after the owner switched claude.ai's GitHub connection to the agents' own account. This file is the state to resume from. It lives only on this branch, never on main.
 
 Read first: factory/roles/pm.md, factory/FACTORY.md, factory/CONFIG.md. Chat with the owner in German; every artifact in English.
 
@@ -8,7 +8,6 @@ Read first: factory/roles/pm.md, factory/FACTORY.md, factory/CONFIG.md. Chat wit
 
 1. Check GitHub works: `mcp__github__get_me` should show the agents' account (`nxsflow` or `nexusflow-ug`), not `cabcookie`. The repo API should show push true, admin false.
 2. Linear was down at handover. Once it answers:
-   - Create the **handover ticket** with this file's content.
    - Create the **owner decision ticket** (it was never created, Linear timed out). Mark it Done: "Agents act as cabcookie on GitHub, so GitHub cannot require the owner's approval for AWS deploys". Decided (Carsten, 2026-11-13): **B**, agents get their own GitHub identity (done: claude.ai is now connected to the agents' account). CODEOWNERS, a ruleset on main (require PR, require Code Owner review, dismiss stale approvals, no bypass for agents, required approvals 0) and the `aws-prod` required reviewer `cabcookie` enforce the owner's approval for code that deploys to AWS. Lockfiles stay in CODEOWNERS (cost: every dependency change needs his review).
    - Create a **docs ticket** for rT1G's getting-started guide: "Docs: a getting-started guide for the Rust SDK, with snippets that compile". Send rT1G the number; his PR waits for it.
    - Record on NOC-295 that it still waits for the owner (remove the unused `tokens` table, recommended A, before the first deploy).
