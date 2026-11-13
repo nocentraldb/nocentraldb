@@ -16,6 +16,7 @@ import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { startRelay } from "./relay.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -327,4 +328,81 @@ test("db.changes names the ids a write touched, as local", async () => {
   assert.equal(change.collection, "tasks");
   assert.equal(change.origin, "local");
   assert.deepEqual([...change.ids].sort(), [...result.ids].sort());
+});
+
+// NOC-176 slice 4: db.sync (RFC 0009, "Sync and status"), with the local
+// relay server. The relay allows no account to create spaces here, so the
+// test follows the connection only; membership adds the rest.
+test("nc.open with a relay connects, and db.sync pauses and resumes it", async () => {
+  const relay = await startRelay();
+  try {
+    const { page: opened, errors } = await page();
+    const seen = await opened.evaluate(
+      async ({ lock, MODEL, url }) => {
+        const { nc } = window;
+        const model = new Function("nc", `return ${MODEL}`)(nc);
+        const db = await nc.open({ model, lock, name: "sync", relay: url });
+        const seen = [];
+        const until = (connection) =>
+          new Promise((resolve, reject) => {
+            const timer = setTimeout(
+              () =>
+                reject(
+                  new Error(
+                    `not ${connection}: ${JSON.stringify(db.sync.current())}`,
+                  ),
+                ),
+              20000,
+            );
+            const stop = db.sync.subscribe((status) => {
+              if (status.connection !== connection) return;
+              clearTimeout(timer);
+              queueMicrotask(() => stop());
+              resolve();
+            });
+          });
+        seen.push(db.sync.current().relay);
+        await until("connected");
+        seen.push(db.sync.current().connection);
+        await db.sync.pause();
+        seen.push(db.sync.current().connection);
+        await db.sync.resume();
+        await until("connected");
+        seen.push(db.sync.current().connection);
+        await db.close();
+        return seen;
+      },
+      { lock, MODEL, url: relay.url },
+    );
+    assert.deepEqual(seen, [relay.url, "connected", "paused", "connected"]);
+    assert.deepEqual(errors, []);
+  } finally {
+    relay.stop();
+  }
+});
+
+test("space.status gives a new space's status, and its handles share it", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "status" });
+      const project = await db.spaces.create();
+      const again = await db.spaces.get(project.id);
+      const seen = [];
+      const stop = project.status.subscribe((status) => seen.push(status.role));
+      stop();
+      const status = project.status.current();
+      await db.close();
+      return { status, same: again.status.current(), seen };
+    },
+    { lock, MODEL },
+  );
+  assert.equal(result.status.role, "admin");
+  assert.equal(result.status.initialSyncComplete, false);
+  assert.deepEqual(result.status.provisionalErasures, []);
+  assert.deepEqual(result.same, result.status);
+  assert.deepEqual(result.seen, ["admin"]);
+  assert.deepEqual(errors, []);
 });

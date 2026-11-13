@@ -22,7 +22,8 @@
 //!
 //! - `open` `{"lock": text, "inMemory": bool, "name": text?, "relay":
 //!   text?}`: opens the database, in memory or, in the browser, at a name
-//!   on OPFS. Answers `null`. A second `open` fails with `invalidValue`.
+//!   on OPFS. Answers `{"sync": status}`, the first sync status (below).
+//!   A second `open` fails with `invalidValue`.
 //! - `close` `{}`: drops the database; any later call but `open` fails
 //!   with `closed`. Answers `null`.
 //! - `spaces.create` `{}`: answers the new space's id, 32 hex digits.
@@ -36,15 +37,41 @@
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
+//! The calls of slice 4, sync (RFC 0009, "Sync and status"):
+//!
+//! - `sync.pause` `{}` and `sync.resume` `{}`: stop and restart syncing.
+//!   Answer `null`.
+//! - `sync.isConfirmed` `{"change": id}`: whether the relay holds the
+//!   change. Answers a bool. Waiting for a confirmation is the SDK's: a
+//!   call that waits would hold back every call after it.
+//! - `space.status` `{"space": id}`: the space's status (see
+//!   [`space_status`]), and from then on a `spaceStatus` event whenever
+//!   it changes, until the database closes.
+//!
+//! A sync status is `{"connection": "connected" | "connecting" |
+//! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
+//! "epochChanged": bool, "error": text | null}`.
+//!
+//! Events, which the worker sends unasked: `{"event": "folded", ..}`
+//! after folds (see [`Events::take`]), `{"event": "sync", "status":
+//! status}` whenever the sync status changed, and `{"event":
+//! "spaceStatus", "space": id, "status": status}` whenever the status of
+//! a space `space.status` asked for changed.
+//!
 //! A value is text, an integer, a float, a boolean, an array,
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
 //! `null`, which clears a basic field or a link (`Value::clear`).
 
+mod events;
 #[cfg(test)]
 mod tests;
 
+pub use events::Events;
+use events::{space_status, sync_status};
+
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 use ncdb_core::basic::{BasicValue, Kind};
 pub use ncdb_core::cbor;
@@ -54,11 +81,10 @@ use ncdb_core::view::{Field as ModelField, Model};
 
 use crate::db::{Db, OpenOptions};
 use crate::error::{Error, ErrorCode};
-use crate::id::{ObjectId, SpaceId};
+use crate::id::{ChangeId, ObjectId, SpaceId};
 use crate::members::Role;
 use crate::object::Object;
 use crate::query::Cursor;
-use crate::subscribe::FoldFeed;
 use crate::value::{Repr, Value as Field};
 
 /// The worker's side of the bridge: at most one open database.
@@ -71,78 +97,6 @@ pub struct Bridge {
     /// worker (RFC 0009, "Queries and indexes").
     cursors: BTreeMap<u64, Cursor>,
     next_cursor: u64,
-}
-
-/// The fold events of a database (NOC-176): after each fold, the space and
-/// the collections it touched, so that the TypeScript SDK re-runs what its
-/// subscriptions follow (RFC 0009, "Subscribe"). Names and ids, never
-/// values.
-#[derive(Clone)]
-pub struct Events(FoldFeed);
-
-impl Events {
-    /// The folds since the last take as one message, `{"event": "folded",
-    /// "folds": [{"space": id, "collections": [text], "changes":
-    /// [{"collection": text, "ids": [id], "origin": "local" | "remote"}]}]}`;
-    /// `None` when nothing folded.
-    pub fn take(&self) -> Option<Vec<u8>> {
-        let folds = self.0.take();
-        if folds.is_empty() {
-            return None;
-        }
-        let folds = folds
-            .into_iter()
-            .map(|fold| {
-                let changes = fold
-                    .changes
-                    .into_iter()
-                    .map(|changed| {
-                        entries([
-                            ("collection", Value::Text(changed.collection)),
-                            (
-                                "ids",
-                                Value::Array(
-                                    changed
-                                        .ids
-                                        .iter()
-                                        .map(|id| Value::Text(id.to_string()))
-                                        .collect(),
-                                ),
-                            ),
-                            ("origin", Value::Text(changed.origin.name().into())),
-                        ])
-                    })
-                    .collect();
-                entries([
-                    ("space", Value::Text(fold.space.to_string())),
-                    (
-                        "collections",
-                        Value::Array(fold.collections.into_iter().map(Value::Text).collect()),
-                    ),
-                    ("changes", Value::Array(changes)),
-                ])
-            })
-            .collect();
-        Some(cbor::encode(&entries([
-            ("event", Value::Text("folded".into())),
-            ("folds", Value::Array(folds)),
-        ])))
-    }
-
-    /// Resolves when a fold waits to be taken, or the database closed.
-    pub fn wait(&self) -> impl std::future::Future<Output = ()> + use<> {
-        self.0.wait()
-    }
-
-    /// Whether the database these events follow is closed.
-    pub fn is_closed(&self) -> bool {
-        self.0.is_closed()
-    }
-
-    /// Whether `other` follows the same database as these events.
-    pub fn same(&self, other: &Events) -> bool {
-        self.0.same(&other.0)
-    }
 }
 
 /// Why a call failed: RFC 0009's code, a message and, for
@@ -164,11 +118,15 @@ fn invalid(message: impl Into<String>) -> Failed {
 /// RFC 0009's name of an error code: the variant's name in lower camel
 /// case, as `NotFound` is `notFound`.
 fn code_name(code: ErrorCode) -> String {
-    let name = format!("{code:?}");
+    lower_camel(&format!("{code:?}"))
+}
+
+/// A Rust variant's name in lower camel case, as `NotFound` is `notFound`.
+fn lower_camel(name: &str) -> String {
     let mut chars = name.chars();
     match chars.next() {
         Some(first) => first.to_lowercase().chain(chars).collect(),
-        None => name,
+        None => String::new(),
     }
 }
 
@@ -228,12 +186,33 @@ impl Bridge {
             "close" => {
                 self.db = None;
                 if let Some(events) = self.events.take() {
-                    events.0.close();
+                    events.feed.close();
                 }
                 self.cursors.clear();
                 Ok(Value::Null)
             }
             "find" => self.find(&db, args).await,
+            "sync.pause" => {
+                db.sync().pause().await;
+                Ok(Value::Null)
+            }
+            "sync.resume" => {
+                db.sync().resume().await;
+                Ok(Value::Null)
+            }
+            "space.status" => {
+                let space = db.spaces().get(space_id(args)?).await?;
+                let (status, watch) = space.status().watch();
+                if let Some(events) = &self.events {
+                    events.spaces().insert(space.id(), watch);
+                }
+                Ok(space_status(&status))
+            }
+            "sync.isConfirmed" => {
+                let change = ChangeId::from_str(text(args, "change")?)
+                    .map_err(|_| invalid("change is not a change id"))?;
+                Ok(Value::Bool(db.sync().is_confirmed(change)))
+            }
             "spaces.create" => Ok(Value::Text(db.spaces().create().await?.id().to_string())),
             "spaces.get" => {
                 let space = db.spaces().get(space_id(args)?).await?;
@@ -284,9 +263,14 @@ impl Bridge {
             options = options.relay(relay);
         }
         let db = Db::open(options).await?;
-        self.events = Some(Events(db.folds()));
+        let (status, sync) = db.sync().watch();
+        self.events = Some(Events {
+            feed: db.folds(),
+            sync: Arc::new(Mutex::new(sync)),
+            spaces: Arc::new(Mutex::new(BTreeMap::new())),
+        });
         self.db = Some(db);
-        Ok(Value::Null)
+        Ok(entries([("sync", sync_status(&status))]))
     }
 }
 

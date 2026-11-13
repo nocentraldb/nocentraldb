@@ -11,6 +11,8 @@
 import { connectWorker } from "./connect.ts";
 import { SetElements } from "./elements.ts";
 import type { Infer, model } from "./nc.ts";
+import type { SpaceStatus } from "./status.ts";
+import type { SyncStatus } from "./sync.ts";
 
 /** A collection handle of the model, such as `model.tasks`. */
 type AnyCollection = Parameters<typeof model>[0][string];
@@ -109,6 +111,13 @@ export interface Tx {
 export interface Space {
   /** The space id, 32 lowercase hex digits. */
   readonly id: Id;
+  /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
+  readonly status: {
+    /** The report as it is now. */
+    current(): SpaceStatus;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (status: SpaceStatus) => void): Stop;
+  };
   /** Records the writes of `record` and turns them into one change of this space. */
   write(record: (tx: Tx) => void): Promise<Written>;
   /** A write with one create. */
@@ -173,6 +182,21 @@ export interface Db {
   readonly changes: {
     /** Calls `listener` after each fold, once per collection it touched. */
     subscribe(listener: (change: Change) => void): Stop;
+  };
+  /** The relay connection, as a report (RFC 0009, "Sync and status"). */
+  readonly sync: {
+    /** The report as it is now. */
+    current(): SyncStatus;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (status: SyncStatus) => void): Stop;
+    /** Stops syncing, for an app that wants to stay offline; the connection reads `"paused"` until `resume`. */
+    pause(): Promise<void>;
+    /** Syncs again after `pause`. */
+    resume(): Promise<void>;
+    /** Whether the relay holds the change `change`, as `write` answered its id. */
+    isConfirmed(change: string): Promise<boolean>;
+    /** Resolves when the relay holds the change `change`. It may never resolve: the relay can refuse the change, or never be reached. */
+    confirmed(change: string): Promise<void>;
   };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;

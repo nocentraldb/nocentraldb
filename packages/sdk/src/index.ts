@@ -8,3 +8,7 @@ export function name(): string {
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 /** The schema functions of RFC 0005: `nc.model`, `nc.collection`, the field types and `nc.index`, and the types `nc.Infer` and `nc.Unknown`. */
 export * as nc from "./nc.ts";
+/** A space's status (RFC 0009, "Sync and status"; NOC-176 slice 4). */
+export type { SpaceStatus } from "./status.ts";
+/** The sync report (RFC 0009, "Sync and status"; NOC-176 slice 4). */
+export type { SyncStatus } from "./sync.ts";

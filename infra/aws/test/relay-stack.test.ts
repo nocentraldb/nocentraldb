@@ -283,12 +283,12 @@ describe("the daily orphan sweep (NOC-290)", () => {
   );
   const input = /pub const SWEEP_INPUT: &str = r#"(.*)"#;/.exec(source)?.[1];
 
-  test("a rule invokes the function once a day with the sweep's input", () => {
+  test("a rule invokes the function every hour with the sweep's input (NOC-293)", () => {
     expect(input).toBe('{"ncdb-relay":"sweep-orphans"}');
     template.resourceCountIs("AWS::Events::Rule", 1);
     const rules = template.findResources("AWS::Events::Rule");
     const [rule] = Object.values(rules);
-    expect(rule?.Properties.ScheduleExpression).toBe("cron(17 3 * * ? *)");
+    expect(rule?.Properties.ScheduleExpression).toBe("cron(17 * * * ? *)");
     expect(rule?.Properties.State).toBe("ENABLED");
     expect(rule?.Properties.Targets).toHaveLength(1);
     const [target] = rule?.Properties.Targets ?? [];
@@ -300,7 +300,7 @@ describe("the daily orphan sweep (NOC-290)", () => {
   });
 
   test("its log lines count each run's start and end", () => {
-    template.resourceCountIs("AWS::Logs::MetricFilter", 2);
+    template.resourceCountIs("AWS::Logs::MetricFilter", 3);
     const [logs] = Object.keys(template.findResources("AWS::Logs::LogGroup"));
     for (const [phase, metric] of [
       ["start", "SweepStarted"],
@@ -359,6 +359,35 @@ describe("the daily orphan sweep (NOC-290)", () => {
     });
   });
 
+  test("a completed pass is counted, and two days without one raise an alarm (NOC-293)", () => {
+    const [logs] = Object.keys(template.findResources("AWS::Logs::LogGroup"));
+    template.hasResourceProperties("AWS::Logs::MetricFilter", {
+      LogGroupName: { Ref: logs },
+      FilterPattern:
+        '{ ($.sweep = "orphans") && ($.phase = "end") && ($.pass = "completed") }',
+      MetricTransformations: [
+        {
+          MetricNamespace: "NoCentralDb/Relay",
+          MetricName: "SweepPassCompleted",
+          MetricValue: "1",
+        },
+      ],
+    });
+    const [topic] = Object.keys(template.findResources("AWS::SNS::Topic"));
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "SweepPassCompleted",
+      Namespace: "NoCentralDb/Relay",
+      Statistic: "Sum",
+      Period: 86400,
+      EvaluationPeriods: 2,
+      DatapointsToAlarm: 2,
+      Threshold: 1,
+      ComparisonOperator: "LessThanThreshold",
+      TreatMissingData: "breaching",
+      AlarmActions: [{ Ref: topic }],
+    });
+  });
+
   test("only that rule may invoke the function from EventBridge", () => {
     const [ruleId] = Object.keys(template.findResources("AWS::Events::Rule"));
     const permissions = Object.values(
@@ -395,7 +424,7 @@ describe("alarms and the budget", () => {
   });
 
   test("the function's errors and throttles raise an alarm that mails the owner", () => {
-    template.resourceCountIs("AWS::CloudWatch::Alarm", 3);
+    template.resourceCountIs("AWS::CloudWatch::Alarm", 4);
     template.hasResourceProperties("AWS::SNS::Subscription", {
       Protocol: "email",
       Endpoint: "owner@example.invalid",

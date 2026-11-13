@@ -940,7 +940,7 @@ exports[`the template matches its committed snapshot 1`] = `
     "SweepOrphans6B61F257": {
       "Type": "AWS::Events::Rule",
       "Properties": {
-        "ScheduleExpression": "cron(17 3 * * ? *)",
+        "ScheduleExpression": "cron(17 * * * ? *)",
         "State": "ENABLED",
         "Targets": [
           {
@@ -1118,6 +1118,41 @@ exports[`the template matches its committed snapshot 1`] = `
         ],
         "Threshold": 1,
         "TreatMissingData": "notBreaching"
+      }
+    },
+    "SweepPassCompleted810405EB": {
+      "Type": "AWS::Logs::MetricFilter",
+      "Properties": {
+        "FilterPattern": "{ ($.sweep = \\"orphans\\") && ($.phase = \\"end\\") && ($.pass = \\"completed\\") }",
+        "LogGroupName": {
+          "Ref": "Logs6819BB44"
+        },
+        "MetricTransformations": [
+          {
+            "MetricName": "SweepPassCompleted",
+            "MetricNamespace": "NoCentralDb/Relay",
+            "MetricValue": "1"
+          }
+        ]
+      }
+    },
+    "SweepPassOverdue033B1108": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          {
+            "Ref": "Alarms04B5A0BF"
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold",
+        "DatapointsToAlarm": 2,
+        "EvaluationPeriods": 2,
+        "MetricName": "SweepPassCompleted",
+        "Namespace": "NoCentralDb/Relay",
+        "Period": 86400,
+        "Statistic": "Sum",
+        "Threshold": 1,
+        "TreatMissingData": "breaching"
       }
     },
     "Budget": {

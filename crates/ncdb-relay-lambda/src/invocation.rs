@@ -14,7 +14,7 @@
 //! `body`. Anything that is neither is refused.
 
 use std::future::Future;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequest;
 use ncdb_relay::store::{RelayStore, StoreError};
@@ -31,12 +31,54 @@ pub const SWEEP_INPUT: &str = r#"{"ncdb-relay":"sweep-orphans"}"#;
 /// milliseconds.
 pub const SWEEP_AGE: u64 = 24 * 60 * 60 * 1000;
 
-/// The orphan sweep, as the AWS backend runs it
-/// (`ncdb_relay_aws::AwsStore::sweep_orphans`).
+/// How long before the invocation's deadline the sweep stops (NOC-293): a
+/// run that stops in time logs its end and stores where it got to, which a
+/// run Lambda's timeout cuts off would not.
+pub const SWEEP_MARGIN: Duration = Duration::from_secs(5);
+
+/// How a sweep's run left its pass (NOC-293).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pass {
+    /// The run stopped before the deadline; the next continues the pass.
+    Paused,
+    /// The run reached the end of the frames: the pass is complete.
+    Completed,
+    /// A pass completed less than a day ago: the run did nothing.
+    Skipped,
+}
+
+impl Pass {
+    /// The pass as the log names it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Pass::Paused => "paused",
+            Pass::Completed => "completed",
+            Pass::Skipped => "skipped",
+        }
+    }
+}
+
+/// What one run of the sweep did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Swept {
+    /// The orphans it deleted.
+    pub deleted: u32,
+    /// How it left its pass.
+    pub pass: Pass,
+}
+
+/// The orphan sweep in bounded runs, as the AWS backend runs it
+/// (`ncdb_relay_aws::AwsStore::sweep_orphans_run`).
 pub trait Sweep: Send + Sync {
-    /// Deletes the orphan frames last written before `cutoff`, in
-    /// milliseconds since the Unix epoch, and returns how many.
-    fn sweep(&self, cutoff: u64) -> impl Future<Output = Result<u32, StoreError>> + Send;
+    /// One run at `now`, in milliseconds since the Unix epoch: it deletes
+    /// orphan frames last written before `cutoff`, continuing where the
+    /// last run stopped, until `deadline`.
+    fn sweep(
+        &self,
+        cutoff: u64,
+        now: u64,
+        deadline: Instant,
+    ) -> impl Future<Output = Result<Swept, StoreError>> + Send;
 }
 
 /// One invocation.
@@ -87,6 +129,7 @@ pub async fn invoke<S, C, A, U, W>(
     sweep: &W,
     payload: Value,
     now: u64,
+    deadline: Instant,
     log: &(dyn Fn(&str) + Sync),
 ) -> bool
 where
@@ -107,12 +150,25 @@ where
             log(&format!(
                 "{{\"sweep\":\"orphans\",\"phase\":\"start\",\"cutoff\":{cutoff},\"at\":{now}}}"
             ));
-            let result = sweep.sweep(cutoff).await;
+            let result = sweep
+                .sweep(
+                    cutoff,
+                    now,
+                    deadline.checked_sub(SWEEP_MARGIN).unwrap_or(deadline),
+                )
+                .await;
             let ms = started.elapsed().as_millis();
             // A store error's text can name the bucket and keys; the line
             // keeps only that it failed.
             let (detail, failed) = match result {
-                Ok(deleted) => (format!("\"deleted\":{deleted}"), false),
+                Ok(swept) => (
+                    format!(
+                        "\"deleted\":{},\"pass\":\"{}\"",
+                        swept.deleted,
+                        swept.pass.name()
+                    ),
+                    false,
+                ),
                 Err(_) => (String::from("\"failed\":true"), true),
             };
             log(&format!(
@@ -129,7 +185,19 @@ where
 
 #[cfg(feature = "aws")]
 impl Sweep for ncdb_relay_aws::AwsStore {
-    fn sweep(&self, cutoff: u64) -> impl Future<Output = Result<u32, StoreError>> + Send {
-        self.sweep_orphans(cutoff)
+    async fn sweep(&self, cutoff: u64, now: u64, deadline: Instant) -> Result<Swept, StoreError> {
+        use ncdb_relay_aws::{SweepBudget, SweepOutcome};
+        let run = self
+            .sweep_orphans_run(cutoff, now, SweepBudget::until(deadline))
+            .await?;
+        let pass = match run.outcome {
+            SweepOutcome::Paused => Pass::Paused,
+            SweepOutcome::Completed => Pass::Completed,
+            SweepOutcome::Skipped => Pass::Skipped,
+        };
+        Ok(Swept {
+            deleted: run.deleted,
+            pass,
+        })
     }
 }

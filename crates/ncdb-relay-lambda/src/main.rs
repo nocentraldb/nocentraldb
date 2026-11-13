@@ -21,6 +21,7 @@
 
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use aws_config::BehaviorVersion;
 use aws_lambda_events::apigw::ApiGatewayProxyResponse;
@@ -52,7 +53,10 @@ where
         async move {
             let (handler, sweep) = &*both;
             let now = ncdb_relay_lambda::contract::now();
-            let failed = invoke(handler, sweep, invocation.payload, now, &|line| {
+            // Lambda's deadline for this invocation, as an instant.
+            let left = invocation.context.deadline.saturating_sub(now);
+            let deadline = Instant::now() + Duration::from_millis(left);
+            let failed = invoke(handler, sweep, invocation.payload, now, deadline, &|line| {
                 println!("{line}");
             })
             .await;

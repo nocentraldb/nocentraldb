@@ -181,10 +181,12 @@ describe("spaces", () => {
     expect(calls(requests)).toEqual([
       "open",
       "spaces.create",
+      "space.status",
       "spaces.get",
+      "space.status",
       "spaces.list",
     ]);
-    expect(requests[2]?.args).toEqual({ space: SPACE });
+    expect(requests[3]?.args).toEqual({ space: SPACE });
   });
 
   test("get of a space the copy does not hold rejects with notFound", async () => {
