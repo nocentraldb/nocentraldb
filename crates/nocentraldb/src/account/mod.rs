@@ -59,9 +59,7 @@ const MEMBERS: &str = "members";
 const MEMBERSHIPS: &str = "memberships";
 #[cfg(test)]
 const LINKS: &str = "links";
-#[cfg(test)]
 const STATEMENTS: &str = "statements";
-#[cfg(test)]
 const WRAPPED_KEYS: &str = "wrappedKeys";
 
 /// The lock of the model the SDK ships for the account space.
