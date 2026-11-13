@@ -158,6 +158,17 @@ impl Records for IndexedDb {
             .await
             .map_err(|error| refused("IndexedDB cannot be written", &error))
     }
+
+    async fn replace(&self, record: &[u8]) -> Result<(), Error> {
+        let (transaction, store) = self.store(IdbTransactionMode::Readwrite)?;
+        let buffer = Uint8Array::from(record).buffer();
+        store
+            .put_with_key(&buffer, &JsValue::from_str(KEY_RECORD))
+            .map_err(|error| refused("IndexedDB cannot be written", &error))?;
+        complete(&transaction)
+            .await
+            .map_err(|error| refused("IndexedDB cannot be written", &error))
+    }
 }
 
 /// What `request` gave, once it succeeded, or its error.

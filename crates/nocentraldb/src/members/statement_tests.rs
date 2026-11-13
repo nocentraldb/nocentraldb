@@ -43,8 +43,10 @@ fn held(account: &SigningKey) -> (Db, Db, Space) {
     let project = space(&admin);
     let member = of_account(2, account);
     let mut invitation = now(member.invitation());
-    invitation.certificate = Certificate::sign(account, invitation.key.id(), MemberKind::Device)
-        .with_statement(statement(account, 1));
+    invitation.form = crate::members::invitation::Form::Certified(
+        Certificate::sign(account, invitation.key.id(), MemberKind::Device)
+            .with_statement(statement(account, 1)),
+    );
     let options = AddMember {
         role: Role::Writer,
         fingerprint: Some(invitation.fingerprint()),

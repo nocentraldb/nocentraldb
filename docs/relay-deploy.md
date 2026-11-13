@@ -129,7 +129,7 @@ Run the example app (`apps/tasks-rust/README.md`) against the deployed relay ins
 
 ```sh
 cargo build -p tasks-rust
-alias tasks=./target/debug/tasks
+alias tasks="$PWD/target/debug/tasks"
 RELAY=wss://<api id>.execute-api.eu-central-1.amazonaws.com/prod
 LAPTOP="--data /tmp/laptop --key-file /tmp/laptop.keys --relay $RELAY"
 PHONE="--data /tmp/phone --key-file /tmp/phone.keys --relay $RELAY"
@@ -147,7 +147,104 @@ Check two more things:
 
 If a check fails, roll back (below) and tell pm what you saw, with the log lines. The log lines hold no content.
 
-The function never logs the events API Gateway sends it. A one-time capture of a real event per route, as test fixtures, is NOC-292.
+### 3.1 Capture one real event per route, once (NOC-292)
+
+The function's tests read API Gateway's events from fixtures that were written by hand. Capture one real event per route during this first smoke test, so the tests read what API Gateway really sends. The relay itself never logs an event. The capture uses a temporary second function behind a temporary second WebSocket API, and you delete both afterwards.
+
+1. Create the capture function and its API. Its stage is also named `prod`, as the relay's is, because an event carries the stage's name.
+
+   ```sh
+   cd "$(mktemp -d)"
+   cat > capture.py <<'EOF'
+   import json
+   def handler(event, context):
+       print("NCDB-CAPTURE " + json.dumps(event))
+       return {"statusCode": 200}
+   EOF
+   python3 -m zipfile -c capture.zip capture.py
+   aws iam create-role --role-name ncdb-capture --assume-role-policy-document \
+     '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"lambda.amazonaws.com"},"Action":"sts:AssumeRole"}]}'
+   aws iam attach-role-policy --role-name ncdb-capture \
+     --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+   sleep 10   # until IAM hands the new role to Lambda
+   FN=$(aws lambda create-function --function-name ncdb-capture --runtime python3.13 \
+     --handler capture.handler --zip-file fileb://capture.zip \
+     --role "arn:aws:iam::$ACCOUNT:role/ncdb-capture" --query FunctionArn --output text)
+   API=$(aws apigatewayv2 create-api --name ncdb-capture --protocol-type WEBSOCKET \
+     --route-selection-expression '$request.body.action' --query ApiId --output text)
+   INT=$(aws apigatewayv2 create-integration --api-id "$API" --integration-type AWS_PROXY \
+     --integration-uri "arn:aws:apigateway:eu-central-1:lambda:path/2015-03-31/functions/$FN/invocations" \
+     --query IntegrationId --output text)
+   for route in '$connect' '$disconnect' '$default'; do
+     aws apigatewayv2 create-route --api-id "$API" --route-key "$route" --target "integrations/$INT" >/dev/null
+   done
+   aws apigatewayv2 create-stage --api-id "$API" --stage-name prod --auto-deploy >/dev/null
+   aws lambda add-permission --function-name ncdb-capture --statement-id apigw \
+     --action lambda:InvokeFunction --principal apigateway.amazonaws.com \
+     --source-arn "arn:aws:execute-api:eu-central-1:$ACCOUNT:$API/*" >/dev/null
+   ```
+
+2. Point the laptop's database from the smoke test at it once. The app opens a connection and sends its `hello`, which holds the protocol's version and no key. The capture function never answers with a challenge, so the app sends nothing more, `timeout` ends it, and the connection closes. That makes one event per route.
+
+   ```sh
+   timeout 15 tasks --data /tmp/laptop --key-file /tmp/laptop.keys \
+     --relay "wss://$API.execute-api.eu-central-1.amazonaws.com/prod" sync
+   sleep 20   # until CloudWatch Logs holds the lines
+   ```
+
+3. Turn the three log lines into fixtures. The script replaces every id that names your account, the API, the connection, a request or your machine with the fixed values the existing fixtures use. It writes `connect.json`, `message.json` and `disconnect.json`:
+
+   ```sh
+   aws logs filter-log-events --log-group-name /aws/lambda/ncdb-capture \
+     --filter-pattern NCDB-CAPTURE --query 'events[].message' --output json > lines.json
+   python3 -I - "$ACCOUNT" lines.json <<'EOF'
+   import json, re, sys
+   account, path = sys.argv[1], sys.argv[2]
+   names = {"CONNECT": "connect", "MESSAGE": "message", "DISCONNECT": "disconnect"}
+   events = [json.loads(l.split("NCDB-CAPTURE ", 1)[1]) for l in json.load(open(path))]
+   first = events[0]["requestContext"]
+   fixed = {
+       account: "123456789012",
+       first["apiId"]: "abcdef1234",
+       first["connectionId"]: "Q7mXJdJpFiACFbQ=",
+       first["identity"]["sourceIp"]: "192.0.2.10",
+   }
+   def scrub(value, key=""):
+       if isinstance(value, dict):
+           return {k: scrub(v, k) for k, v in value.items()}
+       if isinstance(value, list):
+           return [scrub(v, key) for v in value]
+       if not isinstance(value, str):
+           return value
+       if key in ("requestId", "extendedRequestId", "messageId"):
+           return "Q7mXOFpUliAFvdA="
+       if key in ("X-Amzn-Trace-Id", "Sec-WebSocket-Key"):
+           return {"X-Amzn-Trace-Id": "Root=1-00000000-000000000000000000000000",
+                   "Sec-WebSocket-Key": "dGhlIHNhbXBsZSBub25jZQ=="}[key]
+       for real, stand_in in fixed.items():
+           value = value.replace(real, stand_in)
+       return value
+   for event in events:
+       name = names[event["requestContext"]["eventType"]]
+       with open(f"{name}.json", "w") as out:
+           json.dump(scrub(event), out, indent=2)
+           out.write("\n")
+       print(name, "written")
+   EOF
+   ```
+
+   Read the three files before you hand them on. No address, account id or name of yours may be left; replace by hand what the script missed. The `body` of `message.json` is the app's `hello`. Attach the three files to NOC-292; an agent commits them as the function's test fixtures.
+
+4. Delete the capture function, its API, its role and its logs:
+
+   ```sh
+   aws apigatewayv2 delete-api --api-id "$API"
+   aws lambda delete-function --function-name ncdb-capture
+   aws iam detach-role-policy --role-name ncdb-capture \
+     --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+   aws iam delete-role --role-name ncdb-capture
+   aws logs delete-log-group --log-group-name /aws/lambda/ncdb-capture
+   ```
 
 ## 4. Rollback
 

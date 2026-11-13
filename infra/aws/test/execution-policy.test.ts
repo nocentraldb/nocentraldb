@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { App } from "aws-cdk-lib";
 import { describe, expect, test } from "vitest";
 import { RelayStack } from "../src/relay-stack.ts";
-import { lambdaPackage } from "./lambda-package.ts";
+import { flags, lambdaPackage } from "./support.ts";
 
 const here = import.meta.dirname;
 const read = (path: string): unknown =>
@@ -114,7 +114,7 @@ const allowedBy = (action: string) =>
   );
 
 function template(): Record<string, Record<string, { Type: string }>> {
-  const app = new App();
+  const app = new App({ context: flags() });
   const stack = new RelayStack(app, "NoCentralDbRelay-prod", {
     stage: "prod",
     relayId: "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",

@@ -18,6 +18,13 @@
 //! which needs the feature, runs them over the AWS backend of
 //! `ncdb-relay-aws`.
 //!
+//! On AWS, with the feature `aws`: `dynamo` is the `connections` table,
+//! which [`contract`] holds to the same rules as the in-memory store;
+//! `apigw` is the connection API; `s3` hands out presigned S3 URLs for
+//! large changes; `settings` reads the function's environment. The binary,
+//! which needs the feature, runs them over the AWS backend of
+//! `ncdb-relay-aws`.
+//!
 //! Limits, as RFC 0007 has them: API Gateway refuses a message above
 //! 128 KiB and closes every connection after 2 hours; the handler posts no
 //! message above 128 KiB, sends a frame that does not fit inline as a

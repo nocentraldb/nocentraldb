@@ -16,10 +16,7 @@ const ME: Who = 1;
 pub(super) async fn open_at(dir: &TempDir, url: &str) -> crate::Db {
     let key_file = dir.0.join("member.key");
     if !key_file.exists() {
-        let keys = Keys {
-            member: Secrets::new([ME; 32], [ME ^ 0x80; 32]),
-            account: account(),
-        };
+        let keys = Keys::of_account(Secrets::new([ME; 32], [ME ^ 0x80; 32]), account());
         std::fs::write(&key_file, keys.encode()).unwrap();
     }
     let options = OpenOptions::new(LOCK)

@@ -14,17 +14,27 @@ use super::{Keys, io};
 use crate::error::{Error, ErrorCode};
 
 /// The keys in the key file at `path`. When the file does not exist and
-/// the database did not exist either, new keys are drawn and written to
+/// the database did not exist either, `new` keys are drawn and written to
 /// a new file. An existing database whose key file is gone fails with
-/// `StorageFailed`: new keys would hold none of its spaces' keys.
-pub(crate) fn from_file(path: &Path, database_existed: bool) -> Result<Keys, Error> {
+/// `StorageFailed`: new keys would hold none of its spaces' keys. A record
+/// of format 1 is written again as format 2.
+pub(crate) fn from_file(
+    path: &Path,
+    database_existed: bool,
+    new: impl FnOnce() -> Keys,
+) -> Result<Keys, Error> {
     match read(path)? {
-        Some(keys) => Ok(keys),
+        Some(keys) => {
+            if keys.upgraded {
+                save(path, &keys)?;
+            }
+            Ok(keys)
+        }
         None if database_existed => Err(Error::new(
             ErrorCode::StorageFailed,
             "the database exists, but its key file does not; new keys would open none of its spaces",
         )),
-        None => create(path),
+        None => create(path, new()),
     }
 }
 
@@ -46,15 +56,9 @@ fn read(path: &Path) -> Result<Option<Keys>, Error> {
     })
 }
 
-/// Draws new keys and writes them to a new file at `path`, which must not
-/// exist yet.
-fn create(path: &Path) -> Result<Keys, Error> {
-    let keys = Keys::generate();
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let written = options.open(path).and_then(|mut file| {
+/// Writes `keys` to a new file at `path`, which must not exist yet.
+fn create(path: &Path, keys: Keys) -> Result<Keys, Error> {
+    let written = new_file(path).and_then(|mut file| {
         file.write_all(&keys.encode())?;
         file.sync_all()
     });
@@ -69,4 +73,32 @@ fn create(path: &Path) -> Result<Keys, Error> {
             Err(io("the key file cannot be written", &error))
         }
     }
+}
+
+/// Replaces the key file at `path` with `keys`: written whole to a new file
+/// beside it, then renamed over it, so that a crash leaves the old record
+/// or the new one, never part of one.
+pub(crate) fn save(path: &Path, keys: &Keys) -> Result<(), Error> {
+    let mut next = path.as_os_str().to_owned();
+    next.push(".next");
+    let next = std::path::PathBuf::from(next);
+    let _ = std::fs::remove_file(&next);
+    let written = new_file(&next).and_then(|mut file| {
+        file.write_all(&keys.encode())?;
+        file.sync_all()
+    });
+    let replaced = written.and_then(|()| std::fs::rename(&next, path));
+    replaced.map_err(|error| {
+        let _ = std::fs::remove_file(&next);
+        io("the key file cannot be written", &error)
+    })
+}
+
+/// A new file at `path`, readable and writable by its user alone on Unix.
+fn new_file(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    options.open(path)
 }
