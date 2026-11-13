@@ -18,8 +18,9 @@
 // - The bucket: all public access blocked, S3-managed encryption, no
 //   versions, TLS only, uploads deleted after a day, and CORS for any origin
 //   (NOC-245 A).
-// - A rule that runs the orphan sweep once a day, and an alarm when a run
-//   starts and never ends (NOC-290).
+// - A rule that runs the orphan sweep every hour in bounded runs, an alarm
+//   when a run starts and never ends (NOC-290), and one when no pass
+//   completed in two days (NOC-293).
 // - Alarms on the function's errors and throttles, and a budget of 20 USD a
 //   month with mails at 50, 80 and 100 percent (NOC-264 point 5).
 
@@ -221,12 +222,15 @@ export class RelayStack extends Stack {
     api.addRoute("$disconnect", { integration });
     api.addRoute("$default", { integration });
 
-    // The daily orphan sweep (NOC-290; RFC 0007, "How large changes go to
-    // S3"): the function runs it for exactly this input
-    // (ncdb_relay_lambda::invocation::SWEEP_INPUT), at a quiet hour. A
-    // failed sweep fails the invocation, which the error alarm reports.
+    // The orphan sweep (NOC-290; RFC 0007, "How large changes go to S3"):
+    // the function runs it for exactly this input
+    // (ncdb_relay_lambda::invocation::SWEEP_INPUT). It runs every hour, in
+    // bounded runs that continue where the last stopped, and starts a new
+    // pass at most once a day (NOC-293), so a pass finishes however many
+    // frames the bucket holds. A failed sweep fails the invocation, which
+    // the error alarm reports.
     new Rule(this, "SweepOrphans", {
-      schedule: Schedule.cron({ minute: "17", hour: "3" }),
+      schedule: Schedule.cron({ minute: "17" }),
       targets: [
         new LambdaTarget(relay, {
           event: RuleTargetInput.fromObject({ "ncdb-relay": "sweep-orphans" }),
@@ -277,6 +281,29 @@ export class RelayStack extends Stack {
         period: Duration.hours(1),
       }),
     );
+
+    // A run that reaches the end of the frames logs its pass as completed.
+    // Two days without a completed pass raise an alarm: a pass that takes
+    // longer than a day, or a sweep that stopped running (NOC-293).
+    const passes = new MetricFilter(this, "SweepPassCompleted", {
+      logGroup: logs,
+      filterPattern: FilterPattern.all(
+        FilterPattern.stringValue("$.sweep", "=", "orphans"),
+        FilterPattern.stringValue("$.phase", "=", "end"),
+        FilterPattern.stringValue("$.pass", "=", "completed"),
+      ),
+      metricNamespace: "NoCentralDb/Relay",
+      metricName: "SweepPassCompleted",
+      metricValue: "1",
+    }).metric({ period: Duration.days(1), statistic: "Sum" });
+    new Alarm(this, "SweepPassOverdue", {
+      metric: passes,
+      threshold: 1,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.BREACHING,
+    }).addAlarmAction(new SnsAction(owner));
 
     new CfnBudget(this, "Budget", {
       budget: {

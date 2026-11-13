@@ -46,11 +46,14 @@ use ncdb_relay::store::{
 };
 use tokio::runtime::Handle;
 
+pub use sweep::{PASS_EVERY, SweepBudget, SweepOutcome, SweepRun};
+
 mod append;
 mod item;
 mod keys;
 mod read;
 pub mod schema;
+mod sweep;
 mod uploads;
 
 /// The largest frame kept inline in its `log` item, in bytes: 8 KiB (RFC
@@ -60,6 +63,12 @@ pub const INLINE_LIMIT: usize = 8 * 1024;
 /// The key of the reserved item in `spaces` that holds the relay epoch. A
 /// space id has 16 bytes, so no space has this key.
 pub const EPOCH_ITEM: &[u8] = b"epoch";
+
+/// The key of the reserved item in `spaces` that holds where the orphan
+/// sweep stands (NOC-293; its place decided by Carsten, 2026-11-13, NOC-306): the 5 bytes
+/// `sweep`, which no 16-byte space id, no 32-byte account key and not
+/// [`EPOCH_ITEM`] can be.
+pub const SWEEP_ITEM: &[u8] = b"sweep";
 
 /// The S3 key of a frame above [`INLINE_LIMIT`]:
 /// `frames/<space id>/<change id>`, each id in lowercase hex.
@@ -178,6 +187,21 @@ impl AwsStore {
         cutoff: u64,
     ) -> impl Future<Output = Result<u32, StoreError>> + Send + use<> {
         self.run(move |aws| async move { append::sweep_orphans(&aws, cutoff).await })
+    }
+
+    /// One bounded run of the sweep at `now`, in milliseconds since the Unix
+    /// epoch: it continues where the last run stopped, deletes the orphans
+    /// last modified before `cutoff` until `budget` is spent, and stores
+    /// where it got to (NOC-293). A pass that completed less than
+    /// [`PASS_EVERY`] ago is not started again: the run is
+    /// [`SweepOutcome::Skipped`].
+    pub fn sweep_orphans_run(
+        &self,
+        cutoff: u64,
+        now: u64,
+        budget: SweepBudget,
+    ) -> impl Future<Output = Result<SweepRun, StoreError>> + Send + use<> {
+        self.run(move |aws| async move { sweep::run(&aws, cutoff, now, budget).await })
     }
 }
 
