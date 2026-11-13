@@ -60,6 +60,7 @@ mod tx;
 mod value;
 mod view_report;
 
+pub use account::Removed;
 pub use db::{Db, OpenOptions};
 
 #[cfg(test)]

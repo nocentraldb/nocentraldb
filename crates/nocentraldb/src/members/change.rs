@@ -56,40 +56,7 @@ impl Members<'_> {
         let space = self.space.id();
         writable(&inner, space)?;
         not_stopped(&inner, space)?;
-        let me = inner.member.key().id();
-        let subject = member.0;
-        {
-            let resolved = inner.spaces[&space.0].checks.resolved();
-            holds(resolved, me, membership::Role::Admin, "removes members")?;
-            current(resolved, subject)?;
-        }
-        if subject == me {
-            return Err(Error::new(
-                ErrorCode::InvalidValue,
-                "a member does not remove itself: leaving a space is space.leave()",
-            ));
-        }
-        rotate::rotatable(&inner.spaces[&space.0])?;
-        write(&mut inner, space.0, subject, |batch, state, key, cutoff| {
-            let removal = batch.write(
-                key,
-                Entry::Membership(MembershipEntry {
-                    subject,
-                    action: Action::Remove { cutoff },
-                }),
-                None,
-            );
-            batch.heads = BTreeSet::from([removal]);
-            rotate::rotate(
-                batch,
-                state,
-                key,
-                space.0,
-                BTreeSet::from([removal]),
-                Some(subject),
-            );
-        })?;
-        Ok(Notice::MEMBER_REMOVED)
+        remove(&mut inner, space.0, member.0)
     }
 
     /// Sets the role of `member` to `role`: writes a set role, a grant of
@@ -172,6 +139,49 @@ impl Members<'_> {
         })?;
         Ok(Notice::ROLE_SET)
     }
+}
+
+/// Removes `subject` from `space`, as [`Members::remove`] says, on a space
+/// the caller checked is writable and not stopped. Losing a device
+/// (`crate::account`) removes a lost member through it too.
+pub(crate) fn remove(
+    inner: &mut Inner,
+    space: ids::SpaceId,
+    subject: ids::MemberId,
+) -> Result<Notice, Error> {
+    let me = inner.member.key().id();
+    {
+        let resolved = inner.spaces[&space].checks.resolved();
+        holds(resolved, me, membership::Role::Admin, "removes members")?;
+        current(resolved, subject)?;
+    }
+    if subject == me {
+        return Err(Error::new(
+            ErrorCode::InvalidValue,
+            "a member does not remove itself: leaving a space is space.leave()",
+        ));
+    }
+    rotate::rotatable(&inner.spaces[&space])?;
+    write(inner, space, subject, |batch, state, key, cutoff| {
+        let removal = batch.write(
+            key,
+            Entry::Membership(MembershipEntry {
+                subject,
+                action: Action::Remove { cutoff },
+            }),
+            None,
+        );
+        batch.heads = BTreeSet::from([removal]);
+        rotate::rotate(
+            batch,
+            state,
+            key,
+            space,
+            BTreeSet::from([removal]),
+            Some(subject),
+        );
+    })?;
+    Ok(Notice::MEMBER_REMOVED)
 }
 
 /// The role of `subject` in `resolved`, which must be a current member:
