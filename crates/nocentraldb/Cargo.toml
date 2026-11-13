@@ -9,6 +9,12 @@ description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, r
 
 # The SDK wraps the core: the change, its signature and seal, membership and
 # the local view on SQLite. The view is native only, so is this crate.
+[features]
+# The bridge to the TypeScript SDK's worker (NOC-176): one hidden public
+# module that answers CBOR requests. Off by default; only the crate
+# nocentraldb-wasm turns it on (NOC-176, A).
+bridge = []
+
 [dependencies]
 ncdb-core.workspace = true
 # What a plugin field type implements, and Data, which its fields read and

@@ -1,5 +1,70 @@
+// file: db.d.ts
+import type { Infer, model } from "./nc.ts";
+type AnyCollection = Parameters<typeof model>[0][string];
+type Id = string;
+interface Elements<E> {
+    readonly "nc.elements": E;
+}
+type Write<T> = [T] extends [readonly (infer E)[] | undefined] ? Elements<E> : Exclude<T, undefined> | null;
+type Values<C> = C extends AnyCollection ? {
+    [K in keyof Infer<C>]?: Write<Infer<C>[K]> | undefined;
+} : never;
+type Read<C> = C extends AnyCollection ? Infer<C> & {
+    readonly $id: Id;
+    readonly $space: Id;
+    readonly $deleted: boolean;
+} : never;
+interface Written {
+    readonly change: string;
+    readonly ids: readonly Id[];
+}
+export interface Tx {
+    create<C extends AnyCollection>(collection: C, values: Values<C>): Id;
+    update<C extends AnyCollection>(collection: C, id: Id, values: Values<C>): void;
+    delete(collection: AnyCollection, id: Id): void;
+    restore(collection: AnyCollection, id: Id): void;
+}
+export interface Space {
+    readonly id: Id;
+    write(record: (tx: Tx) => void): Promise<Written>;
+    create<C extends AnyCollection>(collection: C, values: Values<C>): Promise<Written>;
+    update<C extends AnyCollection>(collection: C, id: Id, values: Values<C>): Promise<Written>;
+    delete(collection: AnyCollection, id: Id): Promise<Written>;
+    restore(collection: AnyCollection, id: Id): Promise<Written>;
+    get<C extends AnyCollection>(collection: C, id: Id): Promise<Read<C> | undefined>;
+}
+interface SpaceEntry {
+    readonly id: Id;
+    readonly role: string | null;
+}
+export interface Db {
+    readonly spaces: {
+        create(): Promise<Space>;
+        get(id: Id): Promise<Space>;
+        list(): Promise<SpaceEntry[]>;
+    };
+    close(): Promise<void>;
+}
+interface OpenOptions {
+    model: Record<string, any>;
+    lock: unknown;
+    relay?: string;
+    name?: string;
+}
+export declare const open: (options: OpenOptions) => Promise<Db>;
+export declare const add: <E>(...elements: E[]) => Elements<E>;
+export declare const remove: <E>(...elements: E[]) => Elements<E>;
+export {};
+// file: error.d.ts
+export declare class NcError extends Error {
+    readonly code: string;
+    readonly ids: readonly string[];
+    readonly fingerprint?: string;
+    constructor(code: string, message: string, ids?: readonly string[], fingerprint?: string);
+}
 // file: index.d.ts
 export declare function name(): string;
+export type { Db, Space, Tx } from "./db.ts";
 export * as nc from "./nc.ts";
 // file: nc.d.ts
 interface Value<T = unknown, D extends boolean = false> {
@@ -70,4 +135,5 @@ export declare const index: (fields: readonly (string | {
     equal?: number;
     scope?: "space";
 }) => Index;
-export {};
+export { add, open, remove } from "./db.ts";
+export { NcError as Error } from "./error.ts";

@@ -1,0 +1,289 @@
+// The implementation behind `nc.open` (NOC-176 slice 1): the worker that
+// runs the core, and the database the SDK builds on any core that answers
+// the bridge's protocol (crates/nocentraldb/src/bridge/mod.rs). Internal:
+// the package's entry does not reach it, so it is not in the API report;
+// the vitest tests pass a fake core to `connect`.
+
+import { type Cbor, decode, encode } from "./cbor.ts";
+import type { Db, open, Space, Tx } from "./db.ts";
+import { SetElements } from "./elements.ts";
+import { NcError } from "./error.ts";
+
+/** The core, as the SDK reaches it: one CBOR request, one CBOR answer. */
+/** The core, as the SDK reaches it: one CBOR request, one CBOR answer. Internal; a test passes a fake. */
+export interface Core {
+  call(request: Uint8Array): Promise<Uint8Array>;
+  terminate(): void;
+}
+
+type OpenOptions = Parameters<typeof open>[0];
+type Written = Awaited<ReturnType<Space["write"]>>;
+type SpaceEntry = Awaited<ReturnType<Db["spaces"]["list"]>>[number];
+type Id = string;
+
+/** The rule RFC 0006 sets for a browser database's name ("The browser"). */
+const NAME = /^[a-z0-9_-]{1,64}$/;
+
+const DESCRIBE = Symbol.for("nocentraldb.model.describe");
+
+/** The worker that runs the core, shipped next to this module. */
+const startWorker = (): Core => {
+  const worker = new Worker(new URL("./worker.js", import.meta.url), {
+    type: "module",
+    name: "nocentraldb",
+  });
+  const waiting: ((answer: Uint8Array) => void)[] = [];
+  let failed: Error | undefined;
+  const failing: ((error: Error) => void)[] = [];
+  worker.onmessage = (event: MessageEvent<Uint8Array>) => {
+    failing.shift();
+    waiting.shift()?.(event.data);
+  };
+  worker.onerror = (event) => {
+    failed = new NcError(
+      "storageFailed",
+      `the worker failed: ${event.message}`,
+    );
+    for (const fail of failing.splice(0)) fail(failed);
+    waiting.length = 0;
+  };
+  return {
+    call: (request) =>
+      new Promise((resolve, reject) => {
+        if (failed) return reject(failed);
+        waiting.push(resolve);
+        failing.push(reject);
+        worker.postMessage(request, [request.buffer]);
+      }),
+    terminate: () => worker.terminate(),
+  };
+};
+
+/** Opens the database in the worker the package ships. */
+export const connectWorker = async (options: OpenOptions): Promise<Db> => {
+  checkName(options.name);
+  return connect(startWorker(), options);
+};
+
+const checkName = (name: string | undefined) => {
+  if (name !== undefined && !NAME.test(name)) {
+    throw new NcError(
+      "invalidValue",
+      "a database name is 1 to 64 characters of a-z, 0-9, - and _",
+    );
+  }
+};
+
+/** What the lock says of the model's collections: each field's type. */
+type Described = Record<
+  string,
+  { fields: Record<string, { type: string; of?: { type: string } }> }
+>;
+
+/** Opens the database through `core`. Internal: `open` passes the worker, a test a fake. */
+export const connect = async (
+  core: Core,
+  options: OpenOptions,
+): Promise<Db> => {
+  try {
+    checkName(options.name);
+  } catch (error) {
+    core.terminate();
+    throw error;
+  }
+  const names = new Map<object, string>();
+  for (const [name, collection] of Object.entries(options.model)) {
+    names.set(collection, name);
+  }
+  const describe = (
+    options.model as { [DESCRIBE]?: () => { collections: Described } }
+  )[DESCRIBE];
+  const described: Described = describe ? describe().collections : {};
+
+  let next = 0;
+  let closed = false;
+  const ask = async (
+    call: string,
+    args: Record<string, unknown>,
+  ): Promise<Cbor> => {
+    if (closed) throw new NcError("closed", "the database is closed");
+    next += 1;
+    const answer = decode(
+      await core.call(encode({ id: next, call, args })),
+    ) as {
+      ok?: Cbor;
+      error?: {
+        code: string;
+        message: string;
+        ids?: string[];
+        fingerprint?: string;
+      };
+    };
+    if (answer.error) {
+      const { code, message, ids, fingerprint } = answer.error;
+      throw new NcError(code, message, ids ?? [], fingerprint);
+    }
+    return answer.ok ?? null;
+  };
+
+  try {
+    await ask("open", {
+      lock: JSON.stringify(options.lock),
+      name: options.name ?? "default",
+      relay: options.relay,
+    });
+  } catch (error) {
+    core.terminate();
+    throw error;
+  }
+
+  const nameOf = (collection: object): string => {
+    const name = names.get(collection);
+    if (name === undefined) {
+      throw new NcError(
+        "notFound",
+        "the model has no such collection; pass a handle such as model.tasks",
+      );
+    }
+    return name;
+  };
+
+  const value = (
+    collection: string,
+    field: string,
+    written: unknown,
+  ): unknown => {
+    if (written === null) return null;
+    if (written instanceof SetElements) {
+      const elements = written.elements.map((e) =>
+        element(collection, field, e, true),
+      );
+      return written.add ? { $add: elements } : { $remove: elements };
+    }
+    return element(collection, field, written, false);
+  };
+
+  const element = (
+    collection: string,
+    field: string,
+    written: unknown,
+    inSet: boolean,
+  ): unknown => {
+    const type = described[collection]?.fields[field];
+    const kind = inSet ? (type?.of?.type ?? type?.type) : type?.type;
+    if (
+      kind === "ncdb/int" &&
+      !(typeof written === "number" && Number.isSafeInteger(written))
+    ) {
+      throw new NcError(
+        "invalidValue",
+        `${collection}.${field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1`,
+      );
+    }
+    if (typeof written === "string") return written.normalize("NFC");
+    return written;
+  };
+
+  const values = (collection: string, written: Record<string, unknown>) => {
+    const out: Record<string, unknown> = {};
+    for (const [field, v] of Object.entries(written)) {
+      if (v !== undefined) out[field] = value(collection, field, v);
+    }
+    return out;
+  };
+
+  const space = (id: Id): Space => {
+    const write = async (record: (tx: Tx) => void): Promise<Written> => {
+      if (closed) throw new NcError("closed", "the database is closed");
+      const ops: Record<string, unknown>[] = [];
+      const tx: Tx = {
+        create: (collection, written) => {
+          const name = nameOf(collection);
+          const created = randomId();
+          ops.push({
+            op: "create",
+            collection: name,
+            id: created,
+            values: values(name, written),
+          });
+          return created;
+        },
+        update: (collection, object, written) => {
+          const name = nameOf(collection);
+          ops.push({
+            op: "update",
+            collection: name,
+            id: object,
+            values: values(name, written),
+          });
+        },
+        delete: (collection, object) => {
+          ops.push({
+            op: "delete",
+            collection: nameOf(collection),
+            id: object,
+          });
+        },
+        restore: (collection, object) => {
+          ops.push({
+            op: "restore",
+            collection: nameOf(collection),
+            id: object,
+          });
+        },
+      };
+      record(tx);
+      return (await ask("write", { space: id, ops })) as unknown as Written;
+    };
+    return {
+      id,
+      write,
+      create: (collection, written) =>
+        write((tx) => void tx.create(collection, written)),
+      update: (collection, object, written) =>
+        write((tx) => tx.update(collection, object, written)),
+      delete: (collection, object) =>
+        write((tx) => tx.delete(collection, object)),
+      restore: (collection, object) =>
+        write((tx) => tx.restore(collection, object)),
+      get: async (collection, object) => {
+        if (closed) throw new NcError("closed", "the database is closed");
+        const answer = (await ask("get", {
+          space: id,
+          collection: nameOf(collection),
+          id: object,
+        })) as {
+          fields: Record<string, unknown>;
+        } | null;
+        if (answer === null) return undefined;
+        const { fields, ...rest } = answer;
+        return { ...rest, ...fields } as never;
+      },
+    };
+  };
+
+  return {
+    spaces: {
+      create: async () => space((await ask("spaces.create", {})) as string),
+      get: async (id) =>
+        space((await ask("spaces.get", { space: id })) as string),
+      list: async () =>
+        (await ask("spaces.list", {})) as unknown as SpaceEntry[],
+    },
+    close: async () => {
+      if (closed) return;
+      try {
+        await ask("close", {});
+      } finally {
+        closed = true;
+        core.terminate();
+      }
+    },
+  };
+};
+
+/** 128 random bits from the browser's secure generator, as 32 hex digits (RFC 0002, "Object ids"). */
+const randomId = (): Id => {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
