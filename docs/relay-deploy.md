@@ -2,107 +2,36 @@
 
 This runbook is for the owner. It deploys the relay as RFC 0007 describes it ("The AWS backend") into the account NoCentralDb-Prod, in eu-central-1. The infrastructure is the CDK app in `infra/aws`. The function is `crates/ncdb-relay-lambda`, built with its feature `aws`.
 
-**Deploys run from GitHub Actions** (`.github/workflows/relay-deploy.yml`), as decided on NOC-264. You set up the trust between GitHub and the account once. From then on, every merge to `main` that changes the relay's infrastructure or the crates its function is built from deploys it.
+**Deploys run from GitHub Actions** (`.github/workflows/relay-deploy.yml`), as decided on NOC-264. Every merge to `main` that changes the relay's infrastructure or the crates its function is built from deploys it, after you approve the deploy.
 
-- **No AWS key** is stored anywhere. The deploy job assumes a role with its OIDC token.
-- **No agent** ever holds AWS credentials.
+- **The account's side lives in the private repository `nocentraldb/aws-deploy`** (Carsten, 2026-11-13): GitHub as an OIDC provider, the deploy role, and CDK's bootstrap with narrowed execution policies. This repository holds no role setup.
+- **You approve every change that is deployed.** `.github/CODEOWNERS` makes you the owner of every path the workflow deploys from, and branch protection requires your review (section 1.3). The environment `aws-prod` waits for your approval before each deploy (section 1.2).
+- **No AWS key** is stored anywhere. The deploy job assumes the role with its OIDC token.
+- **No agent** ever holds AWS credentials, and no agent or pm merges a change to these paths or approves a deploy.
 - **Pull requests** get no AWS access at all. They show their infrastructure change as the diff of the committed template snapshot, `infra/aws/test/__snapshots__/`.
 
 **One stage first: `prod`.** A separate `dev` stage is later work (NOC-264).
 
-## 1. The one-time trust setup
+## 1. The one-time setup
 
-You need the AWS CLI, signed in to NoCentralDb-Prod with rights to create IAM roles. The commands use the profile `nocentraldb` and the variable `ACCOUNT`, the account's 12-digit id:
+### 1.1 The account's side, in `nocentraldb/aws-deploy`
 
-```sh
-export AWS_PROFILE=nocentraldb AWS_REGION=eu-central-1
-aws sso login --use-device-code --no-browser
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-```
+Follow the runbook of the private repository `nocentraldb/aws-deploy`. It sets up, in NoCentralDb-Prod and eu-central-1:
 
-### 1.1 GitHub as an identity provider
+- GitHub's OIDC provider;
+- the deploy role, which trusts only `repo:nocentraldb/nocentraldb:environment:aws-prod` and may only assume CDK's bootstrap roles;
+- CDK's bootstrap, whose CloudFormation execution role is limited to this stack's own resources instead of `AdministratorAccess`.
 
-```sh
-aws iam create-open-id-connect-provider \
-  --url https://token.actions.githubusercontent.com \
-  --client-id-list sts.amazonaws.com
-```
+It ends with the deploy role's ARN, which section 1.2 needs. When this repository's stack gains a resource type, the execution policies there must cover it before the change deploys.
 
-### 1.2 CDK's bootstrap, with a narrow execution role
-
-The bootstrap creates CDK's own roles (`cdk-hnb659fds-*`) and its asset bucket. CloudFormation deploys the stack through CDK's execution role, and only CloudFormation can assume it. CDK's default gives that role `AdministratorAccess`. NOC-264 asks for least privilege, so the role gets two managed policies of the repository's own instead, in `infra/aws/execution-policy`:
-
-- `storage.json`: the stack's tables (`ncdb-*`), its bucket, and reading the function's package from CDK's asset bucket.
-- `service.json`: the WebSocket API, the function and its permissions, the function's role, the logs, the alarms, the alarm topic, the budget, and CDK's bootstrap version in SSM.
-
-Each action is one that CloudFormation's own handlers call for a resource type of the stack, and each names the stack's own resources (`NoCentralDbRelay-*`, `ncdb-*`), in eu-central-1. The function's role may be passed only to Lambda, and gets no managed policy but `AWSLambdaBasicExecutionRole`. `infra/aws/test/execution-policy.test.ts` checks the policies against the synthesized template: every resource type covered, nothing extra, nothing outside the stack. There are two policies because one would be larger than IAM allows.
-
-Run this once from the repository, after `pnpm install`:
-
-```sh
-cd infra/aws
-for part in storage service; do
-  aws iam create-policy --policy-name "ncdb-relay-cloudformation-$part" \
-    --policy-document "file://execution-policy/$part.json"
-done
-pnpm exec cdk bootstrap "aws://$ACCOUNT/eu-central-1" \
-  --cloudformation-execution-policies "arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-storage,arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-service"
-```
-
-When a pull request changes a policy file, update the policy in IAM before the merge deploys it. For example, for `service.json`:
-
-```sh
-aws iam create-policy-version --set-as-default \
-  --policy-arn "arn:aws:iam::$ACCOUNT:policy/ncdb-relay-cloudformation-service" \
-  --policy-document file://execution-policy/service.json
-```
-
-IAM keeps at most five versions of a policy; delete the oldest with `aws iam delete-policy-version` when it refuses. If a deploy fails because the role lacks an action, CloudFormation rolls the stack back and its events name the action. Tell pm; the fix is a change to the policy file, and the test shows it.
-
-### 1.3 The deploy role
-
-The deploy role trusts only GitHub's OIDC tokens for this repository's environment `aws-prod`. It can do one thing: assume CDK's bootstrap roles. It gets no direct rights on any resource.
-
-```sh
-cat > trust.json <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Principal": { "Federated": "arn:aws:iam::$ACCOUNT:oidc-provider/token.actions.githubusercontent.com" },
-    "Action": "sts:AssumeRoleWithWebIdentity",
-    "Condition": {
-      "StringEquals": {
-        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-        "token.actions.githubusercontent.com:sub": "repo:nocentraldb/nocentraldb:environment:aws-prod"
-      }
-    }
-  }]
-}
-EOF
-cat > assume-cdk.json <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Effect": "Allow",
-    "Action": "sts:AssumeRole",
-    "Resource": "arn:aws:iam::$ACCOUNT:role/cdk-hnb659fds-*-$ACCOUNT-eu-central-1"
-  }]
-}
-EOF
-aws iam create-role --role-name ncdb-relay-deploy --assume-role-policy-document file://trust.json
-aws iam put-role-policy --role-name ncdb-relay-deploy --policy-name assume-cdk-roles \
-  --policy-document file://assume-cdk.json
-rm trust.json assume-cdk.json
-```
-
-### 1.4 The GitHub environment `aws-prod`
+### 1.2 The GitHub environment `aws-prod`
 
 In the repository's Settings → Environments, create `aws-prod`:
 
 - **Deployment branches and tags:** only `main`.
+- **Required reviewers:** `cabcookie`. Every deploy then waits in its run until you approve it, after the build and before the job gets its OIDC token. Leave "Prevent self-review" off: you start the deploys yourself by merging.
 - **Environment variables.** These are variables, not secrets; none of them is a secret:
-  - `AWS_DEPLOY_ROLE_ARN`: `arn:aws:iam::<ACCOUNT>:role/ncdb-relay-deploy`.
+  - `AWS_DEPLOY_ROLE_ARN`: the deploy role's ARN from section 1.1.
   - `RELAY_ID`: the relay's stable id, 32 hex digits. Draw it once, with `openssl rand -hex 16`, and never change it: members sign it into every connection's authentication (RFC 0007, "Opening a connection").
   - `ALLOWED_ACCOUNTS`: the account keys whose members may create spaces, 64 hex digits each, separated by commas.
   - `ALARM_EMAIL`: where the budget and the alarms send their mails.
@@ -115,11 +44,24 @@ python3 -c 'import base64,sys; t=sys.argv[1].removeprefix("ncdb-invite-1:"); pri
 
 It reads the key without checking the invitation. The local relay does check it: `ncdb-relay --allow-invitation` refuses a malformed one.
 
+### 1.3 Branch protection on `main`
+
+In the repository's Settings → Rules → Rulesets, create a branch ruleset for the default branch, with enforcement "Active":
+
+- **Require a pull request before merging**, with:
+  - **Required approvals:** 1;
+  - **Dismiss stale pull request approvals when new commits are pushed**;
+  - **Require review from Code Owners**.
+
+With it, a pull request that touches a path in `.github/CODEOWNERS` merges only after you approved its latest commit.
+
+**A limit of this setup.** The factory's agents open pull requests and push as your GitHub account, `cabcookie`. GitHub never counts an author's own approval, and it cannot tell your approval from an agent's acting as you. So with these rules, a pull request an agent opened on these paths cannot be approved at all, unless you add yourself to the ruleset's bypass list. Then the rule rests on the agents keeping theirs (they never merge or approve these changes) rather than on GitHub. To make GitHub enforce it, the agents need a GitHub identity of their own, such as a GitHub App or a machine account, which pm brings to you as its own question.
+
 ## 2. The first deploy
 
-The first deploy runs when a change to the relay reaches `main` after you finished the setup above. Before that, the `deploy` job finds no `AWS_DEPLOY_ROLE_ARN` in `aws-prod`, skips every step with a notice and stays green, and nothing is deployed; the merge that brings this runbook is such a run. To deploy once the setup is done, re-run the latest `relay-deploy` run on `main`, or merge the next change to the relay.
+The first deploy runs when a change to the relay reaches `main` after you finished section 1. Before that, the `deploy` job finds no `AWS_DEPLOY_ROLE_ARN` in `aws-prod`, skips every step with a notice and stays green, and nothing is deployed; the merge that brings this runbook is such a run. To deploy once the setup is done, re-run the latest `relay-deploy` run on `main`, or merge the next change to the relay.
 
-1. Watch the workflow `relay-deploy`. Its `deploy` job waits for the environment `aws-prod`, shows `cdk diff`, then deploys.
+1. Watch the workflow `relay-deploy`. Its `deploy` job waits for your approval in the environment `aws-prod`, shows `cdk diff`, then deploys.
 2. Confirm the SNS subscription mail that AWS sends to `ALARM_EMAIL`. Until you confirm it, the alarms send nothing.
 3. The stack's output `Url` is the relay's URL, `wss://<api id>.execute-api.eu-central-1.amazonaws.com/prod`. It is also in the CloudFormation console, under the stack `NoCentralDbRelay-prod`.
 
@@ -150,6 +92,14 @@ If a check fails, roll back (below) and tell pm what you saw, with the log lines
 ### 3.1 Capture one real event per route, once (NOC-292)
 
 The function's tests read API Gateway's events from fixtures that were written by hand. Capture one real event per route during this first smoke test, so the tests read what API Gateway really sends. The relay itself never logs an event. The capture uses a temporary second function behind a temporary second WebSocket API, and you delete both afterwards.
+
+You need the AWS CLI, signed in to NoCentralDb-Prod with rights to create a Lambda function, an IAM role and an API. The commands use the profile `nocentraldb` and the variable `ACCOUNT`, the account's 12-digit id:
+
+```sh
+export AWS_PROFILE=nocentraldb AWS_REGION=eu-central-1
+aws sso login --use-device-code --no-browser
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+```
 
 1. Create the capture function and its API. Its stage is also named `prod`, as the relay's is, because an event carries the stage's name.
 

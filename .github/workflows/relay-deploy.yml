@@ -1,10 +1,13 @@
 # NOC-272: builds the relay's Lambda package and deploys the relay to AWS,
-# as the owner decided on NOC-264 (point 4 B). The owner set up the trust
-# between GitHub Actions and the account NoCentralDb-Prod once, with OIDC
-# (docs/relay-deploy.md). From then on, every merge to main that changes the
-# relay's infrastructure or the crates its function is built from deploys
-# it. No long-lived AWS key exists anywhere, and no agent holds AWS
-# credentials.
+# as the owner decided on NOC-264 (point 4 B). The trust between GitHub
+# Actions and the account NoCentralDb-Prod (OIDC, the deploy role, CDK's
+# bootstrap) lives in the private repository nocentraldb/aws-deploy
+# (Carsten, 2026-11-13). Every merge to main that changes the relay's
+# infrastructure or the crates its function is built from deploys it, once
+# the owner approves the deploy in `aws-prod`. .github/CODEOWNERS owns
+# exactly this workflow's paths, so each such change also needs the owner's
+# review (docs/relay-deploy.md). No long-lived AWS key exists anywhere, and
+# no agent holds AWS credentials.
 #
 # - build: on pull requests and on main. It builds the function's arm64
 #   package with cargo-lambda, pinned by version and hash, and has no AWS
@@ -12,7 +15,8 @@
 #   template snapshot, which `pnpm gates` checks (infra/aws/test); it gets
 #   no credentials, not even to read (pm, NOC-272 answer C).
 # - deploy: on a push to main only, never on a pull request or a fork,
-#   through the GitHub environment `aws-prod`, which allows only main. It
+#   through the GitHub environment `aws-prod`, which allows only main and
+#   waits for the owner's approval. It
 #   assumes the deploy role with the job's OIDC token, builds the package
 #   again in its own job, shows `cdk diff`, then runs `cdk deploy`.
 #   Until the owner's one-time setup gives the environment its role, the job
@@ -27,6 +31,7 @@ on:
     paths:
       - "infra/aws/**"
       - "crates/ncdb-core/**"
+      - "crates/ncdb-plugin/**"
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-aws/**"
       - "crates/ncdb-relay-lambda/**"
@@ -40,6 +45,7 @@ on:
     paths:
       - "infra/aws/**"
       - "crates/ncdb-core/**"
+      - "crates/ncdb-plugin/**"
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-aws/**"
       - "crates/ncdb-relay-lambda/**"

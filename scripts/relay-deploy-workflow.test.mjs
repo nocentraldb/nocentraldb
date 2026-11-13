@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseToml } from "smol-toml";
 import { parse } from "yaml";
 import { runWorkflowChecks } from "./lib/workflow-checks.mjs";
 
@@ -23,6 +24,59 @@ const WORKFLOW = ".github/workflows/relay-deploy.yml";
 const text = existsSync(join(root, WORKFLOW))
   ? readFileSync(join(root, WORKFLOW), "utf8")
   : null;
+
+const CODEOWNERS = ".github/CODEOWNERS";
+const codeowners = existsSync(join(root, CODEOWNERS))
+  ? readFileSync(join(root, CODEOWNERS), "utf8")
+  : null;
+
+/** The owner who must approve every change that is deployed to AWS. */
+const OWNER = "@cabcookie";
+
+/** CODEOWNERS' entries, as [pattern, owners]. */
+const owned = (text) =>
+  text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line !== "" && !line.startsWith("#"))
+    .map((line) => {
+      const [pattern, ...owners] = line.split(/\s+/);
+      return [pattern, owners];
+    });
+
+/** A workflow path filter as CODEOWNERS spells it: `a/**` is `/a/`. */
+const asOwned = (path) =>
+  path.endsWith("/**") ? `/${path.slice(0, -2)}` : `/${path}`;
+
+/**
+ * The workspace crates the function links in its deployed build: the
+ * normal dependencies, optional ones included, of ncdb-relay-lambda and of
+ * every workspace crate they reach, as `crates/<dir>`.
+ */
+function linkedCrates() {
+  const workspace = parseToml(readFileSync(join(root, "Cargo.toml"), "utf8"));
+  const paths = Object.fromEntries(
+    Object.entries(workspace.workspace.dependencies)
+      .filter(([, d]) => typeof d === "object" && d.path)
+      .map(([name, d]) => [name, d.path]),
+  );
+  const seen = new Set();
+  const queue = ["crates/ncdb-relay-lambda"];
+  while (queue.length > 0) {
+    const dir = queue.shift();
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    const manifest = parseToml(
+      readFileSync(join(root, dir, "Cargo.toml"), "utf8"),
+    );
+    for (const [name, dep] of Object.entries(manifest.dependencies ?? {})) {
+      if (typeof dep === "object" && dep.workspace && paths[name]) {
+        queue.push(paths[name]);
+      }
+    }
+  }
+  return [...seen].sort();
+}
 
 const workflow = (ctx) => {
   assert.ok(ctx.workflow, `${WORKFLOW} is missing`);
@@ -47,13 +101,14 @@ const BUILD =
 const RELAY_PATHS = [
   "infra/aws/**",
   "crates/ncdb-core/**",
+  "crates/ncdb-plugin/**",
   "crates/ncdb-relay/**",
   "crates/ncdb-relay-aws/**",
   "crates/ncdb-relay-lambda/**",
 ];
 
 runWorkflowChecks({
-  files: { workflow: text === null ? null : parse(text), text },
+  files: { workflow: text === null ? null : parse(text), text, codeowners },
   clone: (files) => structuredClone(files),
   checks: [
     {
@@ -79,6 +134,78 @@ runWorkflowChecks({
           ctx.workflow.on.push.paths = ctx.workflow.on.push.paths.filter(
             (p) => p !== "crates/ncdb-relay-lambda/**",
           );
+        },
+      },
+    },
+    {
+      name: "it runs on every workspace crate the function links",
+      check: (ctx) => {
+        const on = workflow(ctx).on ?? {};
+        for (const dir of linkedCrates()) {
+          for (const trigger of [on.push, on.pull_request]) {
+            assert.ok(
+              trigger.paths?.includes(`${dir}/**`),
+              `no path ${dir}/**`,
+            );
+          }
+        }
+      },
+      mutants: {
+        "misses a crate the function links": (ctx) => {
+          ctx.workflow.on.push.paths = ctx.workflow.on.push.paths.filter(
+            (p) => p !== "crates/ncdb-plugin/**",
+          );
+        },
+      },
+    },
+    {
+      name: "the owner must approve every change that is deployed: CODEOWNERS owns exactly the deploy's paths",
+      check: (ctx) => {
+        assert.ok(ctx.codeowners, `${CODEOWNERS} is missing`);
+        const on = workflow(ctx).on ?? {};
+        assert.deepEqual(
+          [...(on.push.paths ?? [])].sort(),
+          [...(on.pull_request.paths ?? [])].sort(),
+          "the push and pull request paths differ",
+        );
+        const entries = owned(ctx.codeowners);
+        for (const [pattern, owners] of entries) {
+          assert.deepEqual(
+            owners,
+            [OWNER],
+            `${pattern} is not the owner's alone`,
+          );
+        }
+        assert.deepEqual(
+          entries.map(([pattern]) => pattern).sort(),
+          [...on.push.paths.map(asOwned), `/${CODEOWNERS}`].sort(),
+        );
+      },
+      mutants: {
+        "a deployed path without an owner": (ctx) => {
+          ctx.codeowners = ctx.codeowners
+            .split("\n")
+            .filter((l) => !l.startsWith("/crates/ncdb-relay-aws/"))
+            .join("\n");
+        },
+        "CODEOWNERS owns itself no more": (ctx) => {
+          ctx.codeowners = ctx.codeowners
+            .split("\n")
+            .filter((l) => !l.startsWith("/.github/CODEOWNERS"))
+            .join("\n");
+        },
+        "another owner may approve": (ctx) => {
+          ctx.codeowners = ctx.codeowners.replace(
+            "/infra/aws/ @cabcookie",
+            "/infra/aws/ @cabcookie @someone-else",
+          );
+        },
+        "a trigger the owner does not own": (ctx) => {
+          ctx.workflow.on.push.paths.push("crates/ncdb/**");
+          ctx.workflow.on.pull_request.paths.push("crates/ncdb/**");
+        },
+        "pull requests watch other paths": (ctx) => {
+          ctx.workflow.on.pull_request.paths.pop();
         },
       },
     },

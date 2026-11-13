@@ -1,0 +1,19 @@
+# The owner approves every change to code that is deployed to AWS
+# (Carsten, 2026-11-13, NOC-272): the paths that .github/workflows/relay-deploy.yml
+# builds and deploys from, and this file. Branch protection requires a code
+# owner's review on main (docs/relay-deploy.md). scripts/relay-deploy-workflow.test.mjs
+# keeps these paths equal to the workflow's, and the workflow's to every
+# workspace crate the function links.
+
+/infra/aws/ @cabcookie
+/crates/ncdb-core/ @cabcookie
+/crates/ncdb-plugin/ @cabcookie
+/crates/ncdb-relay/ @cabcookie
+/crates/ncdb-relay-aws/ @cabcookie
+/crates/ncdb-relay-lambda/ @cabcookie
+/Cargo.lock @cabcookie
+/Cargo.toml @cabcookie
+/rust-toolchain.toml @cabcookie
+/pnpm-lock.yaml @cabcookie
+/.github/workflows/relay-deploy.yml @cabcookie
+/.github/CODEOWNERS @cabcookie
