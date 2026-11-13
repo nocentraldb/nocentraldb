@@ -301,6 +301,58 @@ async fn a_space_where_another_device_of_the_account_is_an_admin_is_in_neither_l
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_tablet_that_created_a_space_before_the_link_writes_its_link_into_the_persons_account_space()
+ {
+    // NOC-310: a database with an account of its own that created a space
+    // holds an account space under that old account. After the link, the
+    // account space it writes to is the person's, whose genesis creator is
+    // its current account, not the old one.
+    let tablet_account = ed25519_dalek::SigningKey::from_bytes(&[0x47; 32]);
+    let old_key = tablet_account.verifying_key().to_bytes();
+    let relay = LocalRelay::with(std::collections::BTreeSet::from([
+        account().verifying_key().to_bytes(),
+        tablet_account.verifying_key().to_bytes(),
+    ]))
+    .await;
+    let laptop = open(LAPTOP, &relay.url()).await;
+    now(laptop.spaces().create()).unwrap();
+    let tablet = Db::open_as(
+        OpenOptions::new(LOCK).in_memory().relay(&relay.url()),
+        [TABLET; 32],
+        [TABLET ^ 0x80; 32],
+        tablet_account,
+    )
+    .await
+    .unwrap();
+    now(tablet.spaces().create()).unwrap();
+    let old_account_space =
+        crate::account::space(&crate::db::lock(&tablet.inner)).expect("an old account space");
+
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(tablet.invitation())))
+    .unwrap();
+    now(tablet.account().complete_pairing(&paired.answer)).unwrap();
+    synced(&laptop).await;
+
+    eventually("the laptop's account space holds the tablet's link", || {
+        crate::account::links(&crate::db::lock(&laptop.inner))
+            .unwrap()
+            .iter()
+            .any(|link| link.old_account_key == old_key && link.verify())
+    })
+    .await;
+    // The tablet writes to the person's account space now; its old one
+    // stays as it was.
+    let tablet_inner = crate::db::lock(&tablet.inner);
+    assert_eq!(
+        crate::account::space(&tablet_inner),
+        crate::account::space(&crate::db::lock(&laptop.inner))
+    );
+    assert!(tablet_inner.spaces.contains_key(&old_account_space));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn the_laptop_lists_the_tablets_old_account_as_linked_to_its_own() {
     // NOC-269, with the owner's NOC-307 A1: `members.list()` keeps the
     // account a member's certificate names and adds the account it is

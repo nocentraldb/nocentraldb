@@ -13,7 +13,7 @@ use ncdb_core::view::Error as ViewError;
 use super::wire::{self, Entry, Pushed};
 use super::{SyncState, again};
 use crate::db::{Inner, SpaceState};
-use crate::subscribe::touched;
+use crate::subscribe::{Folded, Origin, touched};
 
 /// The codes after which the same push may succeed later: the relay
 /// appended nothing, and the change stays unconfirmed (RFC 0007, "The
@@ -152,6 +152,8 @@ pub(super) fn entries(
     let mut cursor = cursor(inner, space);
     let mut folded = false;
     let mut gap = false;
+    // What other folds of the space touched before is not sync's.
+    inner.view.take_touched(space);
     for entry in entries {
         if entry.position <= cursor {
             continue;
@@ -194,7 +196,16 @@ pub(super) fn entries(
         // fails, since the log then holds none of them.
         let _ = super::acknowledge::acknowledge(inner, space);
         let collections = inner.model.collections.keys().cloned().collect();
-        touched(&mut inner.watchers, space, &collections);
+        let objects = inner.view.take_touched(space);
+        touched(
+            &mut inner.watchers,
+            &Folded {
+                space,
+                collections: &collections,
+                touched: &objects,
+                origin: Origin::Remote,
+            },
+        );
         // What the fold changed of the device's spaces or roles, or the
         // account space it now holds, reaches its records there (RFC
         // 0010, "The account space"). A failed write is made again by the

@@ -33,7 +33,7 @@ mod state;
 mod stored_lock;
 
 use crate::plugins::Registry;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::Path;
 
@@ -41,7 +41,7 @@ use rusqlite::Connection;
 
 use crate::change::Change;
 use crate::checks::SealChecks;
-use crate::ids::{ChangeId, SpaceId};
+use crate::ids::{ChangeId, ObjectId, SpaceId};
 use crate::keys::PersonKey;
 use crate::log::{Appended, Log, State, StateCounts};
 use crate::model_lock::{ModelLock, Refusal};
@@ -69,6 +69,10 @@ pub struct View {
     /// The person keys each space's personal fields open with, in memory
     /// only (RFC 0009, "Personal fields").
     person_keys: BTreeMap<SpaceId, fold::PersonKeys>,
+    /// What the committed folds touched since [`View::take_touched`] last
+    /// handed it out, per space: `(collection, object)` (RFC 0006,
+    /// "Folding", step 6).
+    touched: BTreeMap<SpaceId, BTreeSet<(String, ObjectId)>>,
 }
 
 impl fmt::Debug for View {
@@ -274,6 +278,7 @@ impl View {
             logs,
             rebuild,
             person_keys: BTreeMap::new(),
+            touched: BTreeMap::new(),
         })
     }
 
@@ -399,7 +404,7 @@ impl View {
         written_at: Option<u64>,
     ) -> Result<Appended, Error> {
         let tx = self.conn.transaction()?;
-        let appended = append(
+        let (appended, touched) = append(
             Target {
                 tx: &tx,
                 model: &self.model,
@@ -412,7 +417,28 @@ impl View {
             written_at,
         )?;
         tx.commit()?;
+        // Only a committed fold counts (RFC 0006, "Folding", step 6).
+        self.add_touched(change.header().space, touched);
         Ok(appended)
+    }
+
+    /// Keeps what a committed fold of `space` touched.
+    fn add_touched(&mut self, space: SpaceId, touched: BTreeSet<(String, ObjectId)>) {
+        if !touched.is_empty() {
+            self.touched.entry(space).or_default().extend(touched);
+        }
+    }
+
+    /// What the committed folds of `space` touched since the last call:
+    /// the `(collection, object id)` of each object a fold wrote or
+    /// cleared, in order, each once, by the view's name of its collection
+    /// (RFC 0006, "Folding", step 6). Names objects, never values. A fold
+    /// that rolled back touched nothing.
+    pub fn take_touched(&mut self, space: SpaceId) -> Vec<(String, ObjectId)> {
+        self.touched
+            .remove(&space)
+            .map(|touched| touched.into_iter().collect())
+            .unwrap_or_default()
     }
 
     /// Receives every frame of `frames`, in order, as [`View::receive`]
@@ -467,8 +493,9 @@ impl View {
             .map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
         let tx = self.conn.transaction()?;
         let mut appended = Vec::with_capacity(frames.len());
+        let mut touched = Vec::with_capacity(frames.len());
         for (change, bytes) in changes.iter().zip(frames) {
-            appended.push(append(
+            let (one, its) = append(
                 Target {
                     tx: &tx,
                     model: &self.model,
@@ -479,9 +506,15 @@ impl View {
                 bytes,
                 checks,
                 written_at,
-            )?);
+            )?;
+            appended.push(one);
+            touched.push((change.header().space, its));
         }
         tx.commit()?;
+        // Only committed folds count (RFC 0006, "Folding", step 6).
+        for (space, its) in touched {
+            self.add_touched(space, its);
+        }
         Ok(appended)
     }
 
@@ -545,7 +578,7 @@ fn append(
     bytes: &[u8],
     checks: &mut impl Checks,
     written_at: Option<u64>,
-) -> Result<Appended, Error> {
+) -> Result<(Appended, BTreeSet<(String, ObjectId)>), Error> {
     let space = change.header().space;
     let log = logs.entry(space).or_insert_with(|| Log::new(space));
     log.take_changed();
@@ -559,7 +592,7 @@ fn append(
         .with_keys(keys)
         .for_space(checks.space_model_id());
     let appended = log.receive(bytes, checks, &mut fold);
-    fold.finish()?;
+    let touched = fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
         log_table::insert(tx, log, change.id(), written_at)?;
@@ -570,5 +603,5 @@ fn append(
             }
         }
     }
-    Ok(appended)
+    Ok((appended, touched))
 }
