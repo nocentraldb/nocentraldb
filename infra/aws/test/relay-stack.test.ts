@@ -6,12 +6,13 @@
 
 import { App } from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
+import { CURRENTLY_RECOMMENDED_FLAGS } from "aws-cdk-lib/cx-api";
 import { describe, expect, test } from "vitest";
 import { RelayStack } from "../src/relay-stack.ts";
-import { lambdaPackage } from "./lambda-package.ts";
+import { flags, lambdaPackage } from "./support.ts";
 
 function synth(): Template {
-  const app = new App();
+  const app = new App({ context: flags() });
   const stack = new RelayStack(app, "NoCentralDbRelay", {
     stage: "prod",
     relayId: "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
@@ -291,6 +292,13 @@ describe("alarms and the budget", () => {
       Endpoint: "owner@example.invalid",
     });
   });
+});
+
+test("the app sets every feature flag aws-cdk-lib recommends, as the owner decided", () => {
+  // Carsten, 2026-11-13, on #293: set before the first deploy, so no flag
+  // changes a deployed resource later. The tests synthesize with the same
+  // context as bin/relay.ts, which cdk reads from cdk.json.
+  expect(flags()).toMatchObject(CURRENTLY_RECOMMENDED_FLAGS);
 });
 
 test("the template matches its committed snapshot", () => {
