@@ -1,7 +1,9 @@
 //! The core of `@nocentraldb/sdk` in the browser (NOC-176): the Rust SDK
 //! compiled to WebAssembly, with one export, [`Core`], that the package's
 //! worker calls with each bridge request, CBOR bytes, and that answers
-//! with the bridge's CBOR answer (`nocentraldb::bridge`). The crate is
+//! with the bridge's CBOR answer (`nocentraldb::bridge`). It also gives
+//! the worker the open database's fold events, which the SDK's
+//! subscriptions re-run on. The crate is
 //! never published; the package ships the module built from it (Carsten,
 //! 2026-11-12, NOC-274, point 1).
 
@@ -11,7 +13,7 @@ mod tests;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use nocentraldb::bridge::Bridge;
+use nocentraldb::bridge::{Bridge, Events};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -19,6 +21,12 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct Core {
     bridge: Rc<RefCell<Option<Bridge>>>,
+    /// The fold events the core forwards, of the database it opened last.
+    #[cfg(target_arch = "wasm32")]
+    events: Rc<RefCell<Option<Events>>>,
+    /// Who gets the events: the worker's callback.
+    #[cfg(target_arch = "wasm32")]
+    listener: Rc<RefCell<Option<js_sys::Function>>>,
 }
 
 impl Default for Core {
@@ -33,6 +41,24 @@ impl Core {
     /// answered is refused rather than run at once.
     pub async fn answer(&self, request: Vec<u8>) -> Vec<u8> {
         answer(self.bridge.clone(), request).await
+    }
+
+    /// The fold events of the open database; `None` while none is open.
+    pub fn events(&self) -> Option<Events> {
+        self.bridge.borrow().as_ref().and_then(Bridge::events)
+    }
+
+    /// The events of a database opened since the last call, which the
+    /// core starts forwarding.
+    #[cfg(target_arch = "wasm32")]
+    fn new_events(&self) -> Option<Events> {
+        let events = self.events()?;
+        let mut current = self.events.borrow_mut();
+        if current.as_ref().is_some_and(|known| known.same(&events)) {
+            return None;
+        }
+        *current = Some(events.clone());
+        Some(events)
     }
 }
 
@@ -85,16 +111,55 @@ impl Core {
     pub fn new() -> Core {
         Core {
             bridge: Rc::new(RefCell::new(Some(Bridge::new()))),
+            #[cfg(target_arch = "wasm32")]
+            events: Rc::new(RefCell::new(None)),
+            #[cfg(target_arch = "wasm32")]
+            listener: Rc::new(RefCell::new(None)),
         }
     }
 
     /// Answers `request`: a promise of the answer's bytes, a `Uint8Array`.
+    /// When the request opened a database, the core starts giving its
+    /// fold events to the listener.
     #[cfg(target_arch = "wasm32")]
     pub fn handle(&self, request: Vec<u8>) -> js_sys::Promise {
         let bridge = self.bridge.clone();
+        let core = Core {
+            bridge: self.bridge.clone(),
+            events: self.events.clone(),
+            listener: self.listener.clone(),
+        };
         wasm_bindgen_futures::future_to_promise(async move {
             let bytes = answer(bridge, request).await;
+            if let Some(events) = core.new_events() {
+                wasm_bindgen_futures::spawn_local(forward(events, core.listener.clone()));
+            }
             Ok(js_sys::Uint8Array::from(bytes.as_slice()).into())
         })
+    }
+
+    /// Gives every fold event, a `Uint8Array` of CBOR, to `listener`.
+    #[cfg(target_arch = "wasm32")]
+    pub fn listen(&self, listener: js_sys::Function) {
+        *self.listener.borrow_mut() = Some(listener);
+    }
+}
+
+/// Gives the events of one database to the listener until it closes.
+#[cfg(target_arch = "wasm32")]
+async fn forward(events: Events, listener: Rc<RefCell<Option<js_sys::Function>>>) {
+    loop {
+        events.wait().await;
+        if events.is_closed() {
+            return;
+        }
+        let Some(bytes) = events.take() else {
+            continue;
+        };
+        if let Some(listener) = listener.borrow().as_ref() {
+            let bytes = js_sys::Uint8Array::from(bytes.as_slice());
+            // A listener that throws loses this event, not the next ones.
+            let _ = listener.call1(&wasm_bindgen::JsValue::NULL, &bytes);
+        }
     }
 }

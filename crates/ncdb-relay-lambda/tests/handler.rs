@@ -48,11 +48,11 @@ impl ConnectionApi for Recording {
 
 struct NoUrls;
 
-impl Urls for NoUrls {
+impl<S: RelayStore> Urls<S> for NoUrls {
     async fn upload(&self, _: UploadId, _: Token, _: u64) -> Result<String, ErrorCode> {
         Ok(String::from("http://uploads.invalid/"))
     }
-    async fn download<S: RelayStore>(
+    async fn download(
         &self,
         _: &Relay<S>,
         _: ncdb_core::ids::SpaceId,

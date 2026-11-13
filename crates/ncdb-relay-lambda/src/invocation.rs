@@ -93,7 +93,7 @@ where
     S: RelayStore,
     C: Connections,
     A: ConnectionApi,
-    U: Urls,
+    U: Urls<S>,
     W: Sweep,
 {
     match Invocation::read(payload) {

@@ -24,7 +24,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use ncdb_relay::store::{RelayStore, Token};
+use ncdb_relay::store::{Token, TokenUrls};
 use ncdb_relay::{Filled, Relay};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -90,7 +90,7 @@ enum Head {
 /// Reads the head of the first request on `stream`. A WebSocket upgrade
 /// comes back with every byte read so far in front of the stream; any
 /// other request is served here, and the connection closes.
-pub(crate) async fn route<S: RelayStore + 'static>(
+pub(crate) async fn route<S: TokenUrls + 'static>(
     mut stream: TcpStream,
     shared: &Arc<Shared<S>>,
 ) -> Option<Prefixed> {
@@ -189,7 +189,7 @@ async fn preflight<S>(stream: TcpStream, shared: &Arc<Shared<S>>, method: &str) 
 
 /// `PUT /uploads/<token>`: the declared size, the body of exactly that
 /// length, then the core fills the upload.
-async fn put<S: RelayStore + 'static>(
+async fn put<S: TokenUrls + 'static>(
     stream: &mut TcpStream,
     shared: &Arc<Shared<S>>,
     token: Token,
@@ -235,7 +235,7 @@ async fn put<S: RelayStore + 'static>(
 }
 
 /// `GET /frames/<token>`: the entry's frame.
-async fn get<S: RelayStore + 'static>(relay: Arc<Relay<S>>, token: Token) -> (u16, Vec<u8>) {
+async fn get<S: TokenUrls + 'static>(relay: Arc<Relay<S>>, token: Token) -> (u16, Vec<u8>) {
     match blocking(async move { relay.download(token).await }).await {
         Ok(Some(frame)) => (200, frame),
         Ok(None) => (404, Vec::new()),

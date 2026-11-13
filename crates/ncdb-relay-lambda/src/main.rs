@@ -43,7 +43,7 @@ where
     S: RelayStore + 'static,
     C: Connections + 'static,
     A: ConnectionApi + 'static,
-    U: Urls + 'static,
+    U: Urls<S> + 'static,
     W: Sweep + 'static,
 {
     let both = Arc::new((handler, sweep));

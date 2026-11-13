@@ -328,14 +328,35 @@ pub trait RelayStore: Send + Sync {
 
     /// Stores a new, unfilled upload. In the same call, it deletes every
     /// upload whose URL expired [`UPLOAD_KEPT_AFTER_EXPIRY`] or longer
-    /// before `now`, filled or not, and every download token that expired
-    /// at or before `now`.
+    /// before `now`, filled or not. A backend with [`TokenUrls`] also
+    /// deletes every download token that expired at or before `now`.
     fn begin_upload(
         &self,
         upload: Upload,
         now: u64,
     ) -> impl Future<Output = Result<(), StoreError>> + Send;
 
+    /// Deletes a filled upload that `member` began in `space`, and returns
+    /// its frame: one atomic step, so a frame is taken once. None, and
+    /// nothing deleted, for an upload not filled, of another member or
+    /// space, or unknown.
+    fn take_upload(
+        &self,
+        space: SpaceId,
+        member: MemberId,
+        id: UploadId,
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, StoreError>> + Send;
+}
+
+/// A backend that serves the URLs of large changes itself, by token: the
+/// relay server's and the local harness's SQLite backend (RFC 0007, "Large
+/// changes"). A backend whose URLs come from elsewhere, such as the AWS
+/// backend's presigned S3 URLs, implements only [`RelayStore`] and keeps no
+/// tokens (NOC-295, NOC-303).
+///
+/// Its [`RelayStore::begin_upload`] also keeps the upload's token, and
+/// also deletes every download token that expired at or before `now`.
+pub trait TokenUrls: RelayStore {
     /// The upload of a URL's token, and whether it is filled.
     fn upload(
         &self,
@@ -349,17 +370,6 @@ pub trait RelayStore: Send + Sync {
         token: Token,
         frame: Vec<u8>,
     ) -> impl Future<Output = Result<bool, StoreError>> + Send;
-
-    /// Deletes a filled upload that `member` began in `space`, and returns
-    /// its frame: one atomic step, so a frame is taken once. None, and
-    /// nothing deleted, for an upload not filled, of another member or
-    /// space, or unknown.
-    fn take_upload(
-        &self,
-        space: SpaceId,
-        member: MemberId,
-        id: UploadId,
-    ) -> impl Future<Output = Result<Option<Vec<u8>>, StoreError>> + Send;
 
     /// Stores a download token for the entry at `position` of `space`,
     /// valid until `expires_at`, and sweeps as [`RelayStore::begin_upload`]
