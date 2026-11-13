@@ -13,8 +13,8 @@ The static site lands in `site/dist/`, which git ignores. `pnpm --dir site previ
 
 ## Screenshots
 
-With the preview running, `pnpm --dir site shots` writes `drafts/magenta-desktop.png` (1440 px) and `drafts/magenta-mobile.png` (390 px), at deviceScaleFactor 2. `drafts/` is ignored too: screenshots go to the pull request, never into git.
+With the preview running, `pnpm --dir site shots` writes `drafts/landing-desktop.png` (1440 px, full page), `drafts/landing-mobile.png` (390 px, full page) and `drafts/landing-desktop-670.png` (the first screen of a 1440x670 window), at deviceScaleFactor 2. `drafts/` is ignored too: screenshots go to the pull request, never into git.
 
 ## Brand
 
-Colours, type, logo and copy follow the NoCentralDB brand in `nxsflow/brand`, commit 38abcfc: BRAND.md, section "NoCentralDB (endorsed)". `src/styles/tokens.css` copies `tokens/nocentraldb.css` unchanged. On top of it the page is 60/30/10: near-black, safety yellow #F2DC4B and hot magenta #FF3D8B (`--loud`), as `factory/decisions/2026-11-11-NOC-211-the-landing-page-is-60-30-10-with-hot-magenta.md` records.
+Colours, type, logo and copy follow the NoCentralDB brand in `nxsflow/brand`, commit 74bf76f: BRAND.md, section "NoCentralDB (endorsed)". `src/styles/tokens.css` copies `tokens/nocentraldb.css`, formatted by Biome. On top of it the landing page uses two colours: near-black for its grounds and safety yellow #F2DC4B as the one accent, with one section flooded yellow, the close. Hot magenta #FF3D8B (the brand's role `loud`, `--ncdb-loud`) appears only inside the scenario's drawing, as the mark of a live connection. `factory/decisions/2026-11-12-no-ticket-the-landing-page-leads-with-speed-in-two-colours.md` records this; it supersedes the earlier 60/30/10 decision. The landing page is built on a vendored copy of the tasteskill design kit in `public/assets/` (MIT, see `public/assets/LICENSE-taste-skill.md`), which is never edited.
