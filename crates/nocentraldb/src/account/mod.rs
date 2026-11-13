@@ -50,7 +50,7 @@ use sha2::{Digest, Sha256};
 
 use crate::db::Inner;
 use crate::error::{Error, storage};
-use crate::id::ObjectId;
+use crate::id::{ChangeId, ObjectId};
 use crate::members::Role;
 use crate::tx::Transaction;
 use crate::value::{Repr, Value};
@@ -322,8 +322,10 @@ pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
 /// Brings the device's own records in the account space up to date: its
 /// member record, and a membership record for each app space it belongs
 /// to, with its role. First it removes each member another device marked
-/// removed from the app spaces this device administers. Without an account space, and on an agent, it
-/// writes nothing, as it does when the records are current.
+/// removed from the app spaces this device administers; last it writes
+/// the link statements a completed pairing kept (NOC-291). Without an
+/// account space, and on an agent, it writes no record, as it does when
+/// the records are current.
 pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     records(inner)?;
     flush_links(inner)
@@ -391,14 +393,10 @@ fn flush_links(inner: &mut Inner) -> Result<(), Error> {
                         ),
                     ],
                 )?;
-                let writer = WriterModel {
-                    id: model().id,
-                    version: model().version,
-                };
-                let written = crate::space::write_change(inner, account, tx, writer, |_| Ok(()))?;
+                let change = write(inner, account, tx)?;
                 inner
                     .view
-                    .set_pending_link_change(&bytes, written.change.0)
+                    .set_pending_link_change(&bytes, change.0)
                     .map_err(storage)?;
             }
         }
@@ -483,17 +481,17 @@ fn records(inner: &mut Inner) -> Result<(), Error> {
     if !changed {
         return Ok(());
     }
-    write(inner, account, tx)
+    write(inner, account, tx).map(drop)
 }
 
-/// Writes `tx` into the account space `account`, by the shipped model.
-fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<(), Error> {
+/// Writes `tx` into the account space `account`, by the shipped model,
+/// and returns the id of the change it wrote.
+fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<ChangeId, Error> {
     let writer = WriterModel {
         id: model().id,
         version: model().version,
     };
-    crate::space::write_change(inner, account, tx, writer, |_| Ok(()))?;
-    Ok(())
+    Ok(crate::space::write_change(inner, account, tx, writer, |_| Ok(()))?.change)
 }
 
 /// Whether the copy holds the object `object` of a shipped collection in
