@@ -44,10 +44,15 @@ fn the_core_opens_a_database_in_memory_and_creates_a_space() {
         ("inMemory", Value::Bool(true)),
     ]);
     let answer = cbor::decode(&now(core.answer(request(1, "open", open)))).unwrap();
+    let Value::Map(answer) = answer else { panic!() };
     assert_eq!(
-        answer,
-        map(&[("id", Value::Unsigned(1)), ("ok", Value::Null)])
+        answer.get(&Key::Text("id".into())),
+        Some(&Value::Unsigned(1))
     );
+    let Some(Value::Map(ok)) = answer.get(&Key::Text("ok".into())) else {
+        panic!("{answer:?}")
+    };
+    assert!(ok.contains_key(&Key::Text("sync".into())), "{ok:?}");
 
     let answer = cbor::decode(&now(core.answer(request(2, "spaces.create", map(&[]))))).unwrap();
     let Value::Map(answer) = answer else { panic!() };

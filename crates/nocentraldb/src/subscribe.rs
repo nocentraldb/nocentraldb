@@ -125,16 +125,21 @@ impl FoldFeed {
     }
 
     /// Resolves when a fold waits to be taken, or the feed is closed.
+    #[cfg(test)]
     pub(crate) fn wait(&self) -> impl std::future::Future<Output = ()> + use<> {
-        let feed = self.0.clone();
-        std::future::poll_fn(move |cx| {
-            let mut state = feed.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            if state.closed || !state.folds.is_empty() {
-                return Poll::Ready(());
-            }
-            state.waker = Some(cx.waker().clone());
-            Poll::Pending
-        })
+        let feed = self.clone();
+        std::future::poll_fn(move |cx| feed.poll_wait(cx))
+    }
+
+    /// Ready when a fold waits to be taken, or the feed is closed; else
+    /// wakes `cx` when one is added or the feed closes.
+    pub(crate) fn poll_wait(&self, cx: &mut std::task::Context<'_>) -> Poll<()> {
+        let mut state = self.state();
+        if state.closed || !state.folds.is_empty() {
+            return Poll::Ready(());
+        }
+        state.waker = Some(cx.waker().clone());
+        Poll::Pending
     }
 
     /// Closes the feed: a waiter returns, and no fold is added.

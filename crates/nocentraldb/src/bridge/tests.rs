@@ -808,7 +808,11 @@ fn a_change_the_relay_does_not_hold_is_not_confirmed() {
         Value::Bool(false)
     );
     assert_eq!(
-        code(&mut bridge, "sync.isConfirmed", map(&[("change", text("nope"))])),
+        code(
+            &mut bridge,
+            "sync.isConfirmed",
+            map(&[("change", text("nope"))])
+        ),
         "invalidValue"
     );
 }

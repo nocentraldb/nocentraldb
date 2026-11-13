@@ -74,6 +74,8 @@ pub(crate) use merge::set_merge_delay;
 #[cfg_attr(not(test), allow(unused_imports))]
 pub(crate) use person_keys::put as put_person_keys;
 pub(crate) use run::start;
+#[cfg(any(test, feature = "bridge"))]
+pub(crate) use status::Watch;
 pub(crate) use status::{Notify, follow};
 pub(crate) use wire::Record;
 

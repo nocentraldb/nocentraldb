@@ -22,7 +22,8 @@
 //!
 //! - `open` `{"lock": text, "inMemory": bool, "name": text?, "relay":
 //!   text?}`: opens the database, in memory or, in the browser, at a name
-//!   on OPFS. Answers `null`. A second `open` fails with `invalidValue`.
+//!   on OPFS. Answers `{"sync": status}`, the first sync status (below).
+//!   A second `open` fails with `invalidValue`.
 //! - `close` `{}`: drops the database; any later call but `open` fails
 //!   with `closed`. Answers `null`.
 //! - `spaces.create` `{}`: answers the new space's id, 32 hex digits.
@@ -36,6 +37,22 @@
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
+//! The calls of slice 4, sync (RFC 0009, "Sync and status"):
+//!
+//! - `sync.pause` `{}` and `sync.resume` `{}`: stop and restart syncing.
+//!   Answer `null`.
+//! - `sync.isConfirmed` `{"change": id}`: whether the relay holds the
+//!   change. Answers a bool. Waiting for a confirmation is the SDK's: a
+//!   call that waits would hold back every call after it.
+//!
+//! A sync status is `{"connection": "connected" | "connecting" |
+//! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
+//! "epochChanged": bool, "error": text | null}`.
+//!
+//! Events, which the worker sends unasked: `{"event": "folded", ..}`
+//! after folds (see [`Events::take`]), and `{"event": "sync", "status":
+//! status}` whenever the sync status changed.
+//!
 //! A value is text, an integer, a float, a boolean, an array,
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
 //! `null`, which clears a basic field or a link (`Value::clear`).
@@ -45,6 +62,8 @@ mod tests;
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex};
+use std::task::Poll;
 
 use ncdb_core::basic::{BasicValue, Kind};
 pub use ncdb_core::cbor;
@@ -54,11 +73,12 @@ use ncdb_core::view::{Field as ModelField, Model};
 
 use crate::db::{Db, OpenOptions};
 use crate::error::{Error, ErrorCode};
-use crate::id::{ObjectId, SpaceId};
+use crate::id::{ChangeId, ObjectId, SpaceId};
 use crate::members::Role;
 use crate::object::Object;
 use crate::query::Cursor;
 use crate::subscribe::FoldFeed;
+use crate::sync::{Connection, SyncStatus, Watch};
 use crate::value::{Repr, Value as Field};
 
 /// The worker's side of the bridge: at most one open database.
@@ -73,20 +93,48 @@ pub struct Bridge {
     next_cursor: u64,
 }
 
-/// The fold events of a database (NOC-176): after each fold, the space and
+/// The events of a database (NOC-176): after each fold, the space and
 /// the collections it touched, so that the TypeScript SDK re-runs what its
-/// subscriptions follow (RFC 0009, "Subscribe"). Names and ids, never
-/// values.
+/// subscriptions follow (RFC 0009, "Subscribe"), and the sync status
+/// whenever it changed. Names, ids and counts, never values.
 #[derive(Clone)]
-pub struct Events(FoldFeed);
+pub struct Events {
+    feed: FoldFeed,
+    sync: Arc<Mutex<Watch<SyncStatus>>>,
+}
 
 impl Events {
+    fn sync(&self) -> std::sync::MutexGuard<'_, Watch<SyncStatus>> {
+        self.sync
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The messages since the last take, in order: the folds as one
+    /// `folded` message (see below), then the sync status as `{"event":
+    /// "sync", "status": status}` when it changed. None once the database
+    /// closed.
+    pub fn take(&self) -> Vec<Vec<u8>> {
+        if self.feed.is_closed() {
+            return Vec::new();
+        }
+        let mut messages = Vec::new();
+        messages.extend(self.folded());
+        if let Some(status) = self.sync().take() {
+            messages.push(cbor::encode(&entries([
+                ("event", Value::Text("sync".into())),
+                ("status", sync_status(&status)),
+            ])));
+        }
+        messages
+    }
+
     /// The folds since the last take as one message, `{"event": "folded",
     /// "folds": [{"space": id, "collections": [text], "changes":
     /// [{"collection": text, "ids": [id], "origin": "local" | "remote"}]}]}`;
     /// `None` when nothing folded.
-    pub fn take(&self) -> Option<Vec<u8>> {
-        let folds = self.0.take();
+    fn folded(&self) -> Option<Vec<u8>> {
+        let folds = self.feed.take();
         if folds.is_empty() {
             return None;
         }
@@ -129,20 +177,50 @@ impl Events {
         ])))
     }
 
-    /// Resolves when a fold waits to be taken, or the database closed.
+    /// Resolves when a message waits to be taken, or the database closed.
     pub fn wait(&self) -> impl std::future::Future<Output = ()> + use<> {
-        self.0.wait()
+        let events = self.clone();
+        std::future::poll_fn(move |cx| {
+            if events.sync().changed(cx.waker()) {
+                return Poll::Ready(());
+            }
+            events.feed.poll_wait(cx)
+        })
     }
 
     /// Whether the database these events follow is closed.
     pub fn is_closed(&self) -> bool {
-        self.0.is_closed()
+        self.feed.is_closed()
     }
 
     /// Whether `other` follows the same database as these events.
     pub fn same(&self, other: &Events) -> bool {
-        self.0.same(&other.0)
+        self.feed.same(&other.feed)
     }
+}
+
+/// A sync status as the bridge sends it (RFC 0009, "Sync and status").
+fn sync_status(status: &SyncStatus) -> Value {
+    let connection = match status.connection {
+        Connection::Connected => "connected",
+        Connection::Connecting => "connecting",
+        Connection::Offline => "offline",
+        Connection::Paused => "paused",
+        Connection::None => "none",
+    };
+    entries([
+        ("connection", Value::Text(connection.into())),
+        ("unconfirmed", Value::Unsigned(status.unconfirmed)),
+        ("refused", Value::Unsigned(status.refused)),
+        ("epochChanged", Value::Bool(status.epoch_changed)),
+        (
+            "error",
+            status
+                .error
+                .as_ref()
+                .map_or(Value::Null, |error| Value::Text(error.clone())),
+        ),
+    ])
 }
 
 /// Why a call failed: RFC 0009's code, a message and, for
@@ -228,12 +306,25 @@ impl Bridge {
             "close" => {
                 self.db = None;
                 if let Some(events) = self.events.take() {
-                    events.0.close();
+                    events.feed.close();
                 }
                 self.cursors.clear();
                 Ok(Value::Null)
             }
             "find" => self.find(&db, args).await,
+            "sync.pause" => {
+                db.sync().pause().await;
+                Ok(Value::Null)
+            }
+            "sync.resume" => {
+                db.sync().resume().await;
+                Ok(Value::Null)
+            }
+            "sync.isConfirmed" => {
+                let change = ChangeId::from_str(text(args, "change")?)
+                    .map_err(|_| invalid("change is not a change id"))?;
+                Ok(Value::Bool(db.sync().is_confirmed(change)))
+            }
             "spaces.create" => Ok(Value::Text(db.spaces().create().await?.id().to_string())),
             "spaces.get" => {
                 let space = db.spaces().get(space_id(args)?).await?;
@@ -284,9 +375,13 @@ impl Bridge {
             options = options.relay(relay);
         }
         let db = Db::open(options).await?;
-        self.events = Some(Events(db.folds()));
+        let (status, sync) = db.sync().watch();
+        self.events = Some(Events {
+            feed: db.folds(),
+            sync: Arc::new(Mutex::new(sync)),
+        });
         self.db = Some(db);
-        Ok(Value::Null)
+        Ok(entries([("sync", sync_status(&status))]))
     }
 }
 

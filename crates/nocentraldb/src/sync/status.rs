@@ -97,6 +97,64 @@ where
     }
 }
 
+/// What `read` reads of a database, followed without keeping the database
+/// open: the bridge's events hold it (NOC-176), and a closed database
+/// must not stay open for them. Whatever may change it calls
+/// [`Notify::notify`], as for [`Follow`].
+#[cfg(any(test, feature = "bridge"))]
+pub(crate) struct Watch<T> {
+    inner: Weak<Mutex<Inner>>,
+    slot: Arc<Slot>,
+    last: T,
+    read: fn(&Inner) -> T,
+}
+
+#[cfg(any(test, feature = "bridge"))]
+impl<T: Clone + PartialEq> Watch<T> {
+    /// What `read` reads now, when it differs from what was last taken;
+    /// `None` when it does not, or the database is gone.
+    pub(crate) fn take(&mut self) -> Option<T> {
+        let inner = self.inner.upgrade()?;
+        let now = (self.read)(&lock(&inner));
+        if now == self.last {
+            return None;
+        }
+        self.last = now.clone();
+        Some(now)
+    }
+
+    /// Whether what `read` reads differs from what was last taken. Wakes
+    /// `waker` on the next change, so a caller that registers before it
+    /// checks misses none.
+    pub(crate) fn changed(&self, waker: &Waker) -> bool {
+        let Some(inner) = self.inner.upgrade() else {
+            return false;
+        };
+        let inner = lock(&inner);
+        *slot_lock(&self.slot) = Some(waker.clone());
+        (self.read)(&inner) != self.last
+    }
+}
+
+/// Watches what `read` reads of the database `inner`, from what it reads
+/// now, which it returns; see [`Watch`].
+#[cfg(any(test, feature = "bridge"))]
+pub(crate) fn watch<T: Clone>(inner: &Arc<Mutex<Inner>>, read: fn(&Inner) -> T) -> (T, Watch<T>) {
+    let mut locked = lock(inner);
+    let slot = locked.status.slot();
+    let now = read(&locked);
+    drop(locked);
+    (
+        now.clone(),
+        Watch {
+            inner: Arc::downgrade(inner),
+            slot,
+            last: now,
+            read,
+        },
+    )
+}
+
 /// Whether the relay recorded a position for the change `id`, in any
 /// space the database holds.
 fn confirmed_in(inner: &Inner, id: CoreChangeId) -> bool {
@@ -104,6 +162,14 @@ fn confirmed_in(inner: &Inner, id: CoreChangeId) -> bool {
         .spaces
         .keys()
         .any(|space| inner.view.relay_position(*space, id).is_some())
+}
+
+#[cfg(any(test, feature = "bridge"))]
+impl SyncReport<'_> {
+    /// The report now, and a [`Watch`] of it from now on.
+    pub(crate) fn watch(&self) -> (SyncStatus, Watch<SyncStatus>) {
+        watch(&self.db.inner, status)
+    }
 }
 
 impl SyncReport<'_> {
