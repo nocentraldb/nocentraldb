@@ -177,3 +177,50 @@ async fn a_device_does_not_remove_itself_or_a_member_of_no_record() {
     let refused = now(laptop.remove_lost(stranger)).unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotFound);
 }
+
+/// The account's tablet, a second device that remains.
+const TABLET: Who = 4;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn another_device_of_the_account_removes_the_lost_member_from_its_spaces() {
+    let relay = LocalRelay::start().await;
+    let Account { laptop, phone, .. } = laptop_and_phone(&relay).await;
+    let lost = member_id(&phone);
+    // The tablet joins the account space and creates a space of its own,
+    // which the laptop is not in, and adds the phone to it.
+    let tablet = open_joining(TABLET, &relay.url()).await;
+    add(&laptop, account_space(&laptop), &tablet, Role::Admin);
+    synced(&laptop).await;
+    eventually("the tablet holds the account space", || {
+        account::space(&lock(&tablet.inner)).is_some()
+    })
+    .await;
+    let own = now(tablet.spaces().create()).unwrap().id();
+    add(&tablet, own, &phone, Role::Writer);
+    synced(&tablet).await;
+    eventually(
+        "the laptop reads that the phone is in the tablet's space",
+        || {
+            recorded_spaces(&laptop, lost).contains(&own)
+                && account::memberships(&lock(&laptop.inner))
+                    .unwrap()
+                    .iter()
+                    .any(|m| m.member == member_id(&tablet) && m.space == own.0.0)
+        },
+    )
+    .await;
+    let before = generation(&tablet, own);
+
+    let removal = now(laptop.remove_lost(MemberId(ncdb_core::ids::MemberId(lost)))).unwrap();
+
+    // The laptop leaves the tablet's space to the tablet: it neither
+    // removed the phone there nor asks another admin.
+    assert!(!removal.removed.iter().any(|(space, _)| *space == own));
+    assert!(!removal.ask_admins.contains(&own));
+    synced(&laptop).await;
+    eventually("the tablet removes the phone from its space", || {
+        role_in(&tablet, own, lost).is_none()
+    })
+    .await;
+    assert_ne!(generation(&tablet, own), before, "the space key rotates");
+}
