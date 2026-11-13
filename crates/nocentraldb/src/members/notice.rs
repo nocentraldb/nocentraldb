@@ -74,19 +74,16 @@ impl Notice {
         text: "This agent acts for your account in the spaces an admin adds it to. \
                It holds no account key.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_LINKED: Notice = Notice {
         code: NoticeCode::AccountLinked,
         text: "Spaces this database joined before keep its old account. \
                Other members see it as linked to yours.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_RECOVERED: Notice = Notice {
         code: NoticeCode::AccountRecovered,
         text: "Your account is back with a new account key. \
                Your spaces come back when one of their members adds this device.",
     };
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const ACCOUNT_KEY_RENEWED: Notice = Notice {
         code: NoticeCode::AccountKeyRenewed,
         text: "Your account has a new account key. \

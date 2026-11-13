@@ -31,7 +31,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use ncdb_relay::store::RelayStore;
+use ncdb_relay::store::TokenUrls;
 use ncdb_relay::{Config, Relay};
 use tokio::net::{TcpListener, ToSocketAddrs, lookup_host};
 use tokio::sync::Semaphore;
@@ -95,7 +95,7 @@ pub struct Server<S> {
     max_handshakes: usize,
 }
 
-impl<S: RelayStore + 'static> Server<S> {
+impl<S: TokenUrls + 'static> Server<S> {
     /// A server on `addr` over the relay core `relay`, whose deployment has
     /// the stable id `relay_id`.
     ///

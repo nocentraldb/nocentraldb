@@ -49,6 +49,10 @@ CREATE TABLE IF NOT EXISTS confirmed_accounts (
     account_key BLOB PRIMARY KEY NOT NULL,
     confirmed_at INTEGER NOT NULL
 ) STRICT;
+CREATE TABLE IF NOT EXISTS pending_links (
+    statement BLOB PRIMARY KEY NOT NULL,
+    change_id BLOB
+) STRICT;
 CREATE TABLE IF NOT EXISTS shreds_held (
     space_id BLOB NOT NULL,
     change_id BLOB NOT NULL,

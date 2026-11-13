@@ -10,13 +10,17 @@
 //   logs are kept 14 days.
 // - The tables, on demand, with point-in-time recovery for 35 days:
 //   - RFC 0007's `log`, `changes`, `spaces`, `members` and `person-keys`;
-//   - NOC-270's `uploads` and `tokens`;
+//   - NOC-270's `uploads` (no `tokens`: behind API Gateway the URLs of
+//     large changes are presigned S3 URLs; NOC-295, NOC-303);
 //   - `connections`, with its TTL and indexes.
 //   Their keys are those the backend creates in tests (ncdb_relay_aws::schema,
 //   ncdb_relay_lambda::dynamo).
 // - The bucket: all public access blocked, S3-managed encryption, no
 //   versions, TLS only, uploads deleted after a day, and CORS for any origin
 //   (NOC-245 A).
+// - A rule that runs the orphan sweep every hour in bounded runs, an alarm
+//   when a run starts and never ends (NOC-290), and one when no pass
+//   completed in two days (NOC-293).
 // - Alarms on the function's errors and throttles, and a budget of 20 USD a
 //   month with mails at 50, 80 and 100 percent (NOC-264 point 5).
 
@@ -33,6 +37,7 @@ import { CfnBudget } from "aws-cdk-lib/aws-budgets";
 import {
   Alarm,
   ComparisonOperator,
+  MathExpression,
   TreatMissingData,
 } from "aws-cdk-lib/aws-cloudwatch";
 import { SnsAction } from "aws-cdk-lib/aws-cloudwatch-actions";
@@ -42,13 +47,20 @@ import {
   ProjectionType,
   TableV2,
 } from "aws-cdk-lib/aws-dynamodb";
+import { Rule, RuleTargetInput, Schedule } from "aws-cdk-lib/aws-events";
+import { LambdaFunction as LambdaTarget } from "aws-cdk-lib/aws-events-targets";
 import {
   Architecture,
   Code,
   Function as LambdaFunction,
   Runtime,
 } from "aws-cdk-lib/aws-lambda";
-import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import {
+  FilterPattern,
+  LogGroup,
+  MetricFilter,
+  RetentionDays,
+} from "aws-cdk-lib/aws-logs";
 import {
   BlockPublicAccess,
   Bucket,
@@ -121,7 +133,6 @@ export class RelayStack extends Stack {
       table("members", binary("space"), binary("member")),
       table("person-keys", binary("space"), binary("id")),
       table("uploads", binary("id"), undefined, "ttl"),
-      table("tokens", binary("token"), undefined, "ttl"),
     ];
     const members = tables[3];
     members?.addGlobalSecondaryIndex({
@@ -211,11 +222,28 @@ export class RelayStack extends Stack {
     api.addRoute("$disconnect", { integration });
     api.addRoute("$default", { integration });
 
+    // The orphan sweep (NOC-290; RFC 0007, "How large changes go to S3"):
+    // the function runs it for exactly this input
+    // (ncdb_relay_lambda::invocation::SWEEP_INPUT). It runs every hour, in
+    // bounded runs that continue where the last stopped, and starts a new
+    // pass at most once a day (NOC-293), so a pass finishes however many
+    // frames the bucket holds. A failed sweep fails the invocation, which
+    // the error alarm reports.
+    new Rule(this, "SweepOrphans", {
+      schedule: Schedule.cron({ minute: "17" }),
+      targets: [
+        new LambdaTarget(relay, {
+          event: RuleTargetInput.fromObject({ "ncdb-relay": "sweep-orphans" }),
+          retryAttempts: 2,
+        }),
+      ],
+    });
+
     const owner = new Topic(this, "Alarms");
     owner.addSubscription(new EmailSubscription(props.alarmEmail));
     const alarm = (
       id: string,
-      metric: ReturnType<LambdaFunction["metricErrors"]>,
+      metric: ReturnType<LambdaFunction["metricErrors"]> | MathExpression,
     ) =>
       new Alarm(this, id, {
         metric,
@@ -227,6 +255,55 @@ export class RelayStack extends Stack {
       }).addAlarmAction(new SnsAction(owner));
     alarm("Errors", relay.metricErrors({ period: Duration.minutes(5) }));
     alarm("Throttles", relay.metricThrottles({ period: Duration.minutes(5) }));
+
+    // A sweep logs its start before it runs and its end after; a run that
+    // Lambda's timeout cut off, or that crashed, has a start without an
+    // end. The alarm fires within the hour, before orphans pile up.
+    const sweepPhase = (phase: string, metricName: string) =>
+      new MetricFilter(this, metricName, {
+        logGroup: logs,
+        filterPattern: FilterPattern.all(
+          FilterPattern.stringValue("$.sweep", "=", "orphans"),
+          FilterPattern.stringValue("$.phase", "=", phase),
+        ),
+        metricNamespace: "NoCentralDb/Relay",
+        metricName,
+        metricValue: "1",
+      }).metric({ period: Duration.hours(1), statistic: "Sum" });
+    alarm(
+      "SweepUnfinished",
+      new MathExpression({
+        expression: "FILL(started, 0) - FILL(ended, 0)",
+        usingMetrics: {
+          started: sweepPhase("start", "SweepStarted"),
+          ended: sweepPhase("end", "SweepEnded"),
+        },
+        period: Duration.hours(1),
+      }),
+    );
+
+    // A run that reaches the end of the frames logs its pass as completed.
+    // Two days without a completed pass raise an alarm: a pass that takes
+    // longer than a day, or a sweep that stopped running (NOC-293).
+    const passes = new MetricFilter(this, "SweepPassCompleted", {
+      logGroup: logs,
+      filterPattern: FilterPattern.all(
+        FilterPattern.stringValue("$.sweep", "=", "orphans"),
+        FilterPattern.stringValue("$.phase", "=", "end"),
+        FilterPattern.stringValue("$.pass", "=", "completed"),
+      ),
+      metricNamespace: "NoCentralDb/Relay",
+      metricName: "SweepPassCompleted",
+      metricValue: "1",
+    }).metric({ period: Duration.days(1), statistic: "Sum" });
+    new Alarm(this, "SweepPassOverdue", {
+      metric: passes,
+      threshold: 1,
+      evaluationPeriods: 2,
+      datapointsToAlarm: 2,
+      comparisonOperator: ComparisonOperator.LESS_THAN_THRESHOLD,
+      treatMissingData: TreatMissingData.BREACHING,
+    }).addAlarmAction(new SnsAction(owner));
 
     new CfnBudget(this, "Budget", {
       budget: {

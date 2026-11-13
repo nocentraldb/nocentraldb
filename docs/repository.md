@@ -17,9 +17,11 @@ crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's
 infra/aws/            the relay's AWS infrastructure as a CDK app in TypeScript (RFC 0007, "The AWS backend"); its tests synthesize it with no AWS credentials
 crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
 packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
-apps/                 applications (empty for now)
+apps/tasks-rust/       the example app on the Rust SDK: a task list on two devices, synced through a local relay
+apps/tasks-ts/         the example app on the TypeScript SDK: a task list in the browser, its lists live queries; its Chromium test runs in browser-view.yml
 docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/repository.md          this page: the layout, the tools and the gates
+docs/getting-started.md     the getting-started guide for the Rust SDK; the doc tests of `nocentraldb` compile its Rust snippets
 docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
@@ -35,7 +37,7 @@ scripts/release/      release tooling (check-fragments.mjs, check-version.mjs, s
 moon.yml              the root project `repo`: gates the root config files
 ```
 
-Rust crates form a Cargo workspace (`Cargo.toml`, `crates/*`); TypeScript projects form a pnpm workspace (`pnpm-workspace.yaml`, `apps/*`, `packages/*`). moon runs the tasks of both.
+Rust crates form a Cargo workspace (`Cargo.toml`, `crates/*` and `apps/tasks-rust`); TypeScript projects form a pnpm workspace (`pnpm-workspace.yaml`, `apps/*`, `packages/*`). moon runs the tasks of both.
 
 ## Prerequisites
 
