@@ -59,9 +59,6 @@ fn a_code_whose_words_occur_in_the_redacted_text_shows_as_redacted() {
     assert_eq!(code.words()[..2], ["act", "code"]);
     assert_eq!(code.to_string(), "RecoveryCode(redacted)");
     assert_eq!(format!("{code:?}"), "RecoveryCode(redacted)");
-    for word in code.words() {
-        assert!(!format!("{code} {code:?}").contains(word));
-    }
 }
 
 #[test]
