@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use ncdb_relay::store::RelayStore;
+use ncdb_relay::store::TokenUrls;
 use ncdb_relay::{ErrorCode, Relay};
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinHandle;
@@ -19,7 +19,7 @@ use crate::wire::{self, Cursor};
 
 /// Starts a subscription of `member` from `cursor`; `head` must be watched
 /// before the first read, so no append between the two is missed.
-pub(crate) fn spawn<S: RelayStore + 'static>(
+pub(crate) fn spawn<S: TokenUrls + 'static>(
     relay: Arc<Relay<S>>,
     base_url: Arc<str>,
     member: ncdb_core::ids::MemberId,
@@ -30,7 +30,7 @@ pub(crate) fn spawn<S: RelayStore + 'static>(
     tokio::spawn(run(relay, base_url, member, cursor, head, out))
 }
 
-async fn run<S: RelayStore + 'static>(
+async fn run<S: TokenUrls + 'static>(
     relay: Arc<Relay<S>>,
     base_url: Arc<str>,
     member: ncdb_core::ids::MemberId,

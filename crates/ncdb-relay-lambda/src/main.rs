@@ -5,11 +5,15 @@
 //! environment (`ncdb_relay_lambda::settings`); its credentials are the
 //! function's role, which Lambda hands it.
 //!
-//! Each invocation is one API Gateway WebSocket event. The function answers
-//! every one with status 200, and its answers to the member go out through
-//! the connection API, never in the response, since API Gateway's route
-//! responses carry text, not RFC 0007's binary messages. It prints each
-//! invocation's log line to stdout, which Lambda sends to CloudWatch Logs.
+//! An invocation is an API Gateway WebSocket event, or the daily
+//! schedule's event, which runs the orphan sweep (NOC-290,
+//! `ncdb_relay_lambda::invocation`). The function answers every WebSocket
+//! event with status 200, and its answers to the member go out through the
+//! connection API, never in the response, since API Gateway's route
+//! responses carry text, not RFC 0007's binary messages. A failed sweep
+//! fails its invocation, so the function's error alarm fires. It prints
+//! each invocation's log line to stdout, which Lambda sends to CloudWatch
+//! Logs.
 
 // The future of `main` nests the AWS clients' futures deeper than the
 // compiler's default of 128 lets it lay out.
@@ -19,41 +23,47 @@ use std::process::ExitCode;
 use std::sync::Arc;
 
 use aws_config::BehaviorVersion;
-use aws_lambda_events::apigw::{ApiGatewayProxyResponse, ApiGatewayWebsocketProxyRequest};
+use aws_lambda_events::apigw::ApiGatewayProxyResponse;
 use lambda_runtime::{Error, LambdaEvent, service_fn};
 use ncdb_relay::store::RelayStore;
 use ncdb_relay::{Config, Relay};
 use ncdb_relay_aws::AwsStore;
 use ncdb_relay_lambda::apigw::ApiGatewayApi;
 use ncdb_relay_lambda::dynamo::DynamoConnections;
+use ncdb_relay_lambda::invocation::{Sweep, invoke};
 use ncdb_relay_lambda::s3::S3Urls;
 use ncdb_relay_lambda::settings::Settings;
-use ncdb_relay_lambda::{ConnectionApi, Connections, Event, Handler, Urls};
+use ncdb_relay_lambda::{ConnectionApi, Connections, Handler, Urls};
+use serde_json::Value;
 use tokio::runtime::Handle;
 
-/// Runs Lambda's loop of invocations around `handler`.
-async fn serve<S, C, A, U>(handler: Handler<S, C, A, U>) -> Result<(), Error>
+/// Runs Lambda's loop of invocations around `handler` and `sweep`.
+async fn serve<S, C, A, U, W>(handler: Handler<S, C, A, U>, sweep: W) -> Result<(), Error>
 where
     S: RelayStore + 'static,
     C: Connections + 'static,
     A: ConnectionApi + 'static,
-    U: Urls + 'static,
+    U: Urls<S> + 'static,
+    W: Sweep + 'static,
 {
-    let handler = Arc::new(handler);
-    lambda_runtime::run(service_fn(
-        move |invocation: LambdaEvent<ApiGatewayWebsocketProxyRequest>| {
-            let handler = handler.clone();
-            async move {
-                match Event::from_request(&invocation.payload) {
-                    Ok(event) => println!("{}", handler.handle(event).await),
-                    Err(not) => println!("{{\"refused\":\"{not:?}\"}}"),
-                }
-                let mut response = ApiGatewayProxyResponse::default();
-                response.status_code = 200;
-                Ok::<_, Error>(response)
+    let both = Arc::new((handler, sweep));
+    lambda_runtime::run(service_fn(move |invocation: LambdaEvent<Value>| {
+        let both = both.clone();
+        async move {
+            let (handler, sweep) = &*both;
+            let now = ncdb_relay_lambda::contract::now();
+            let failed = invoke(handler, sweep, invocation.payload, now, &|line| {
+                println!("{line}");
+            })
+            .await;
+            if failed {
+                return Err(Error::from("the orphan sweep failed"));
             }
-        },
-    ))
+            let mut response = ApiGatewayProxyResponse::default();
+            response.status_code = 200;
+            Ok::<_, Error>(response)
+        }
+    }))
     .await
 }
 
@@ -94,6 +104,7 @@ async fn main() -> ExitCode {
         runtime,
     );
     let urls = S3Urls::new(s3, settings.names.bucket);
+    let sweep = store.clone();
     let handler = Handler::new(
         Relay::new(store, config),
         settings.relay_id,
@@ -101,7 +112,7 @@ async fn main() -> ExitCode {
         api,
         urls,
     );
-    match serve(handler).await {
+    match serve(handler, sweep).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("ncdb-relay-lambda: the runtime ended: {error}");

@@ -26,7 +26,11 @@ pub const PAGE: u64 = 256;
 /// How the deployment makes the URLs of large changes (RFC 0007, "Large
 /// changes"): presigned S3 URLs on AWS (`s3::S3Urls`), the harness's own
 /// listener and the core's tokens in tests. Its futures are `Send`.
-pub trait Urls: Send + Sync {
+///
+/// It is generic over the backend `S`: the harness's URLs need a backend
+/// with [`TokenUrls`](ncdb_relay::store::TokenUrls), S3's URLs any
+/// backend (NOC-303).
+pub trait Urls<S: RelayStore>: Send + Sync {
     /// The URL the frame of the upload `id`, of `size` bytes, goes to; the
     /// relay core gave it `token`, which a deployment that serves uploads
     /// itself puts in the URL.
@@ -39,7 +43,7 @@ pub trait Urls: Send + Sync {
 
     /// The URL `entry` of `space` downloads from; `relay` hands out a
     /// download token where the deployment serves downloads itself.
-    fn download<S: RelayStore>(
+    fn download(
         &self,
         relay: &Relay<S>,
         space: SpaceId,
@@ -53,7 +57,7 @@ struct Through<'a, S, U> {
     urls: &'a U,
 }
 
-impl<S: RelayStore, U: Urls> page::Downloads for Through<'_, S, U> {
+impl<S: RelayStore, U: Urls<S>> page::Downloads for Through<'_, S, U> {
     fn url(
         &self,
         space: SpaceId,
@@ -84,7 +88,7 @@ where
     S: RelayStore,
     C: Connections,
     A: ConnectionApi,
-    U: Urls,
+    U: Urls<S>,
 {
     /// A handler over `relay`, whose deployment has the stable id
     /// `relay_id`.

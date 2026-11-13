@@ -10,6 +10,10 @@
 //! ncdb_relay::conformance_suite!(fresh_sqlite_backend);
 //! ```
 //!
+//! A backend that serves the URLs of large changes itself, by token,
+//! implements [`TokenUrls`](crate::store::TokenUrls) and also calls
+//! [`token_urls_conformance_suite!`](crate::token_urls_conformance_suite).
+//!
 //! Each test gets a fresh, empty backend. Tests that run appends at the same
 //! time open one handle per thread with [`Backend::connect`], the way two
 //! relay processes share one storage.
@@ -96,10 +100,6 @@ macro_rules! conformance_suite {
             a_person_key_put_on_a_moved_record_stores_nothing,
             concurrent_person_key_puts_on_one_generation_store_one,
             the_epoch_is_shared_and_a_new_one_differs,
-            an_upload_is_filled_once_and_taken_once,
-            an_upload_is_taken_only_by_its_member_in_its_space_once_filled,
-            a_download_token_names_one_entry,
-            expired_uploads_and_downloads_are_swept,
             control_entries_are_read_alone,
             a_bounded_read_stops_before_its_byte_budget,
             an_account_records_one_guest_space,
@@ -116,6 +116,27 @@ macro_rules! conformance_suite {
     };
     (@item [$($attr:tt)*] $item:item) => {
         $($attr)* $item
+    };
+}
+
+/// Writes one `#[test]` per rule of the suite that a backend with
+/// [`TokenUrls`](crate::store::TokenUrls) also keeps: the URLs of large
+/// changes it serves itself, by token (NOC-303). Such a backend runs both
+/// macros:
+///
+/// ```text
+/// ncdb_relay::conformance_suite!(fresh_sqlite_backend);
+/// ncdb_relay::token_urls_conformance_suite!(fresh_sqlite_backend);
+/// ```
+#[macro_export]
+macro_rules! token_urls_conformance_suite {
+    ($fresh:path) => {
+        $crate::conformance_suite!(@tests $fresh; [#[test]];
+            an_upload_is_filled_once_and_taken_once,
+            an_upload_is_taken_only_by_its_member_in_its_space_once_filled,
+            a_download_token_names_one_entry,
+            expired_uploads_and_downloads_are_swept,
+        );
     };
 }
 

@@ -27,7 +27,7 @@ use base64::engine::general_purpose::STANDARD;
 use futures_util::{SinkExt, StreamExt};
 use ncdb_core::ids::SpaceId;
 use ncdb_relay::page::{Downloads, TokenDownloads};
-use ncdb_relay::store::{Entry, RelayStore, StoreError, Token, UploadId};
+use ncdb_relay::store::{Entry, StoreError, Token, TokenUrls, UploadId};
 use ncdb_relay::wire::MAX_MESSAGE;
 use ncdb_relay::{ErrorCode, Relay};
 use serde_json::Value;
@@ -103,7 +103,7 @@ pub struct LocalUrls {
     base: String,
 }
 
-impl Urls for LocalUrls {
+impl<S: TokenUrls> Urls<S> for LocalUrls {
     async fn upload(&self, _: UploadId, token: Token, _: u64) -> Result<String, ErrorCode> {
         Ok(format!(
             "{}{}{}",
@@ -113,7 +113,7 @@ impl Urls for LocalUrls {
         ))
     }
 
-    async fn download<S: RelayStore>(
+    async fn download(
         &self,
         relay: &Relay<S>,
         space: SpaceId,
@@ -139,7 +139,7 @@ pub struct Gateway<S> {
     log: Arc<Mutex<Vec<String>>>,
 }
 
-impl<S: RelayStore + 'static> Gateway<S> {
+impl<S: TokenUrls + 'static> Gateway<S> {
     /// A gateway on `addr`, and its URLs on another port of the same
     /// host, in front of the handler over `relay`, whose deployment has
     /// the stable id `relay_id`.
@@ -218,7 +218,7 @@ struct Link<S> {
     log: Arc<Mutex<Vec<String>>>,
 }
 
-impl<S: RelayStore + 'static> Link<S> {
+impl<S: TokenUrls + 'static> Link<S> {
     async fn serve(self, stream: TcpStream) {
         let config = WebSocketConfig::default()
             .max_message_size(Some(MAX_MESSAGE))

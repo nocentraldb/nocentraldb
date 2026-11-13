@@ -41,7 +41,9 @@ fn param<'a>(url: &'a str, name: &str) -> Option<&'a str> {
 #[tokio::test]
 async fn an_upload_url_puts_its_size_to_its_key_for_15_minutes() {
     let id = UploadId([0xab; 16]);
-    let url = urls().upload(id, Token([1; 32]), 200_000).await.unwrap();
+    let url = Urls::<SqliteStore>::upload(&urls(), id, Token([1; 32]), 200_000)
+        .await
+        .unwrap();
     assert!(
         url.starts_with(&format!(
             "https://ncdb-frames.s3.eu-central-1.amazonaws.com/uploads/{}?",
