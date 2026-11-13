@@ -65,7 +65,7 @@ pub const INLINE_LIMIT: usize = 8 * 1024;
 pub const EPOCH_ITEM: &[u8] = b"epoch";
 
 /// The key of the reserved item in `spaces` that holds where the orphan
-/// sweep stands (NOC-293; its place is the owner's NOC-306): the 5 bytes
+/// sweep stands (NOC-293; its place decided by Carsten, 2026-11-13, NOC-306): the 5 bytes
 /// `sweep`, which no 16-byte space id, no 32-byte account key and not
 /// [`EPOCH_ITEM`] can be.
 pub const SWEEP_ITEM: &[u8] = b"sweep";

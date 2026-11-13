@@ -7,7 +7,7 @@
 //! [`PASS_EVERY`] after it.
 //!
 //! The cursor is one reserved item in `spaces`, under [`SWEEP_ITEM`], as
-//! the relay epoch is (pending the owner's NOC-306). [`load`] and [`save`]
+//! the relay epoch is (Carsten, 2026-11-13, NOC-306). [`load`] and [`save`]
 //! are the only code that knows where it lives.
 
 use std::time::Instant;
