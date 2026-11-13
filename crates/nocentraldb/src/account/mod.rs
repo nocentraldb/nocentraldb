@@ -51,7 +51,7 @@ use sha2::{Digest, Sha256};
 use crate::db::Inner;
 use crate::error::{Error, storage};
 use crate::id::{ChangeId, ObjectId};
-use crate::members::Role;
+use crate::members::{Fingerprint, Role};
 use crate::tx::Transaction;
 use crate::value::{Repr, Value};
 
@@ -331,7 +331,6 @@ pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     flush_links(inner)
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 /// The account's link statements the account space holds, each read from
 /// its record; a record that does not read as one is left out.
 pub(crate) fn links(inner: &Inner) -> Result<Vec<LinkStatement>, Error> {
@@ -344,6 +343,35 @@ pub(crate) fn links(inner: &Inner) -> Result<Vec<LinkStatement>, Error> {
         }
     }
     Ok(links)
+}
+
+/// The accounts this database knows to be linked into another (RFC 0010,
+/// "Linking accounts drawn per database"; the owner's NOC-307 A1): each
+/// old account key, with the fingerprint of the account it is part of.
+/// They come from the account space's `links` and from the statements a
+/// completed pairing keeps until they reach it; only statements that
+/// verify count.
+pub(crate) fn linked(inner: &Inner) -> Result<BTreeMap<[u8; 32], Fingerprint>, Error> {
+    let mut statements = if space(inner).is_some() {
+        links(inner)?
+    } else {
+        Vec::new()
+    };
+    for (bytes, _) in inner.view.pending_links().map_err(storage)? {
+        if let Ok(link) = LinkStatement::decode(&bytes) {
+            statements.push(link);
+        }
+    }
+    Ok(statements
+        .into_iter()
+        .filter(LinkStatement::verify)
+        .map(|link| {
+            (
+                link.old_account_key,
+                Fingerprint::account(link.recovery_key),
+            )
+        })
+        .collect())
 }
 
 fn link_object(old_account_key: [u8; 32]) -> CoreObjectId {
