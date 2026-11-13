@@ -25,6 +25,7 @@ use crate::space::{Space, not_stopped};
 
 pub(crate) mod batch;
 mod change;
+pub(crate) use change::remove as remove_member;
 pub(crate) mod erasure;
 mod info;
 pub(crate) mod invitation;
@@ -32,7 +33,9 @@ mod leave;
 pub(crate) mod merge;
 mod notice;
 mod rotate;
+pub(crate) use rotate::rotatable;
 mod statement;
+pub(crate) use statement::carry;
 
 use batch::Batch;
 
@@ -140,6 +143,7 @@ impl Members<'_> {
         let resolved = inner.spaces[&space.0].checks.resolved();
         let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;
         let certificate = certified(invitation)?.clone();
+        current(&inner, resolved, &certificate)?;
         let confirming = known(&inner, invitation, options.fingerprint)?;
         let member = inner.member.key();
         let Inner {
@@ -251,6 +255,34 @@ fn certified(invitation: &Invitation) -> Result<&Certificate, Error> {
         false => Err(Error::new(
             ErrorCode::InvalidCertificate,
             "the invitation's certificate does not hold",
+        )),
+    }
+}
+
+/// Whether `certificate` is under its account's current account key, as
+/// far as this member knows (RFC 0010, "Losing a device"): a statement of
+/// the same recovery key with a higher number, in the space or held by
+/// this database for its own account, supersedes it, and the add is
+/// refused with `InvalidCertificate`. A certificate without a statement
+/// is judged as before.
+fn current(inner: &Inner, resolved: &Resolved, certificate: &Certificate) -> Result<(), Error> {
+    let Some(statement) = certificate.statement.as_deref() else {
+        return Ok(());
+    };
+    let own = match &inner.account {
+        crate::keys::Account::Holds { statement, .. }
+        | crate::keys::Account::Agent { statement, .. } => Some(statement),
+        crate::keys::Account::None => None,
+    };
+    let superseded = resolved
+        .all_statements()
+        .chain(own)
+        .any(|s| s.recovery_key == statement.recovery_key && s.number > statement.number);
+    match superseded {
+        false => Ok(()),
+        true => Err(Error::new(
+            ErrorCode::InvalidCertificate,
+            "the invitation's certificate is under an account key its account replaced",
         )),
     }
 }

@@ -60,6 +60,7 @@ mod tx;
 mod value;
 mod view_report;
 
+pub use account::Removed;
 pub use db::{Db, OpenOptions};
 
 // The Rust snippets of docs/getting-started.md, compiled by the doc tests,
@@ -74,6 +75,8 @@ mod agent_tests;
 mod clear_tests;
 #[cfg(test)]
 mod durability_tests;
+#[cfg(test)]
+mod fold_feed_tests;
 #[cfg(test)]
 mod page_limit_tests;
 #[cfg(test)]

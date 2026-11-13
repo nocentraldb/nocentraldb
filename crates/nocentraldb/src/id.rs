@@ -1,6 +1,7 @@
 //! The ids an app sees: an object id and a space id, 16 bytes each, and a
-//! change id, 32 bytes. Each shows and reads back as lowercase hex, an
-//! object id as 32 digits (RFC 0009, "Get by id").
+//! change id and a member id, 32 bytes each. Each shows and reads back as
+//! lowercase hex, an object id as 32 digits (RFC 0009, "Get by id"), a
+//! member id as 64 (Carsten, 2026-11-13, NOC-298).
 
 use std::fmt;
 use std::str::FromStr;
@@ -74,5 +75,15 @@ hex_id!(
     /// The id of a change.
     ChangeId,
     ChangeId,
+    64
+);
+hex_id!(
+    /// A member of a space, as [`Members::list`](crate::Members::list)
+    /// gives it and [`Members::remove`](crate::Members::remove) and
+    /// [`Members::set_role`](crate::Members::set_role) take it: a hash of
+    /// the member's two public keys, which every invitation carries, so its
+    /// text form shows no secret (Carsten, 2026-11-13, NOC-298).
+    MemberId,
+    MemberId,
     64
 );

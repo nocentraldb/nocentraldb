@@ -1,19 +1,23 @@
-// The implementation behind `nc.open` (NOC-176 slice 1): the worker that
-// runs the core, and the database the SDK builds on any core that answers
-// the bridge's protocol (crates/nocentraldb/src/bridge/mod.rs). Internal:
+// The implementation behind `nc.open` (NOC-176 slices 1 and 2): the worker
+// that runs the core, and the database the SDK builds on any core that
+// answers the bridge's protocol (crates/nocentraldb/src/bridge/mod.rs).
+// Subscriptions re-run their read after the core's `folded` events, which
+// name the space and collections of each fold, never values. Internal:
 // the package's entry does not reach it, so it is not in the API report;
 // the vitest tests pass a fake core to `connect`.
 
 import { type Cbor, decode, encode } from "./cbor.ts";
-import type { Db, open, Space, Tx } from "./db.ts";
+import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
+import { Cursor, queryState } from "./query.ts";
 
-/** The core, as the SDK reaches it: one CBOR request, one CBOR answer. */
-/** The core, as the SDK reaches it: one CBOR request, one CBOR answer. Internal; a test passes a fake. */
+/** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {
   call(request: Uint8Array): Promise<Uint8Array>;
   terminate(): void;
+  /** Gives the core's events, such as `{event: "folded", folds}`, to `listener`. */
+  listen(listener: (event: Uint8Array) => void): void;
 }
 
 type OpenOptions = Parameters<typeof open>[0];
@@ -35,9 +39,19 @@ const startWorker = (): Core => {
   const waiting: ((answer: Uint8Array) => void)[] = [];
   let failed: Error | undefined;
   const failing: ((error: Error) => void)[] = [];
-  worker.onmessage = (event: MessageEvent<Uint8Array>) => {
+  let listener: ((event: Uint8Array) => void) | undefined;
+  // The worker sends `{answer}` for each request, in order, and `{event}`
+  // for what the core reports unasked.
+  worker.onmessage = (
+    message: MessageEvent<{ answer?: Uint8Array; event?: Uint8Array }>,
+  ) => {
+    const { answer, event } = message.data;
+    if (event !== undefined) {
+      listener?.(event);
+      return;
+    }
     failing.shift();
-    waiting.shift()?.(event.data);
+    if (answer !== undefined) waiting.shift()?.(answer);
   };
   worker.onerror = (event) => {
     failed = new NcError(
@@ -56,6 +70,9 @@ const startWorker = (): Core => {
         worker.postMessage(request, [request.buffer]);
       }),
     terminate: () => worker.terminate(),
+    listen: (given) => {
+      listener = given;
+    },
   };
 };
 
@@ -136,6 +153,133 @@ export const connect = async (
     core.terminate();
     throw error;
   }
+
+  // The identity of this database, which its cursors carry.
+  const identity = {};
+  const subscriptions = new Set<Subscription>();
+  let pending: Fold[] = [];
+  core.listen((bytes) => {
+    if (closed) return;
+    const message = decode(bytes) as { event?: string; folds?: Fold[] };
+    if (message.event !== "folded" || !message.folds) return;
+    if (pending.length === 0) queueMicrotask(flush);
+    pending.push(...message.folds);
+  });
+  // Re-runs, once, every subscription a batch of folds may have changed.
+  const flush = () => {
+    const folds = pending;
+    pending = [];
+    for (const subscription of subscriptions) {
+      if (
+        folds.some(
+          (fold) =>
+            fold.collections.includes(subscription.collection) &&
+            (subscription.space === undefined ||
+              subscription.space === fold.space),
+        )
+      ) {
+        rerun(subscription);
+      }
+    }
+  };
+  // Runs a subscription's read; one that is asked again while it runs runs
+  // once more after it, so a listener sees the newest state and never two
+  // reads at once.
+  const rerun = (subscription: Subscription) => {
+    if (closed || !subscriptions.has(subscription)) return;
+    if (subscription.running) {
+      subscription.again = true;
+      return;
+    }
+    subscription.running = true;
+    subscription
+      .run()
+      .catch(() => {})
+      .finally(() => {
+        subscription.running = false;
+        if (subscription.again) {
+          subscription.again = false;
+          rerun(subscription);
+        }
+      });
+  };
+  const follow = (
+    collection: string,
+    spaceId: string | undefined,
+    run: () => Promise<void>,
+  ) => {
+    const subscription: Subscription = {
+      collection,
+      space: spaceId,
+      run,
+      running: false,
+      again: false,
+    };
+    subscriptions.add(subscription);
+    rerun(subscription);
+    return () => {
+      subscriptions.delete(subscription);
+    };
+  };
+
+  /** A page of `query`, in `spaceId` when it names one. */
+  const find = async <T>(query: object, spaceId?: string): Promise<Page<T>> => {
+    if (closed) throw new NcError("closed", "the database is closed");
+    const state = queryState(query);
+    if (state === undefined) {
+      throw new NcError(
+        "invalidValue",
+        "not a query; start one from an index, such as model.tasks.indexes.byPriority",
+      );
+    }
+    const asked: Record<string, unknown> = {
+      collection: nameOf(state.collection),
+      index: state.index,
+    };
+    if (state.equal !== undefined) {
+      asked.equal = state.equal.map((v) =>
+        typeof v === "string" ? v.normalize("NFC") : v,
+      );
+    }
+    if (state.take !== undefined) asked.take = state.take;
+    if (state.after !== undefined) {
+      const handle =
+        state.after instanceof Cursor
+          ? state.after.handleIn(identity)
+          : undefined;
+      if (handle === undefined) {
+        throw new NcError(
+          "cursorOfAnotherModel",
+          "the cursor is not of this database; start from the first page",
+        );
+      }
+      asked.after = handle;
+    }
+    const args: Record<string, unknown> = { query: asked };
+    if (spaceId !== undefined) args.space = spaceId;
+    const answer = (await ask("find", args)) as {
+      items: { fields: Record<string, unknown> }[];
+      cursor: number | null;
+      hasMore: boolean;
+    };
+    return {
+      items: answer.items.map(flatten) as T[],
+      cursor:
+        answer.cursor === null
+          ? undefined
+          : new Cursor(identity, answer.cursor),
+      hasMore: answer.hasMore,
+    };
+  };
+
+  /** The collection a query reads. */
+  const collectionOf = (query: object): string => {
+    const state = queryState(query);
+    if (state === undefined) {
+      throw new NcError("invalidValue", "not a query");
+    }
+    return nameOf(state.collection);
+  };
 
   const nameOf = (collection: object): string => {
     const name = names.get(collection);
@@ -246,20 +390,36 @@ export const connect = async (
         write((tx) => tx.delete(collection, object)),
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
-      get: async (collection, object) => {
-        if (closed) throw new NcError("closed", "the database is closed");
-        const answer = (await ask("get", {
-          space: id,
-          collection: nameOf(collection),
-          id: object,
-        })) as {
-          fields: Record<string, unknown>;
-        } | null;
-        if (answer === null) return undefined;
-        const { fields, ...rest } = answer;
-        return { ...rest, ...fields } as never;
-      },
+      get: (collection, object) => get(id, collection, object) as never,
+      find: (query) => find(query, id),
+      subscribe: ((
+        first: object,
+        second: unknown,
+        third?: (object: unknown) => void,
+      ) => {
+        if (queryState(first) !== undefined) {
+          const listener = second as (page: Page<unknown>) => void;
+          return follow(collectionOf(first), id, async () =>
+            listener(await find(first, id)),
+          );
+        }
+        const object = second as string;
+        const listener = third as (object: unknown) => void;
+        return follow(nameOf(first), id, async () =>
+          listener(await get(id, first, object)),
+        );
+      }) as Space["subscribe"],
     };
+  };
+
+  const get = async (spaceId: Id, collection: object, object: Id) => {
+    if (closed) throw new NcError("closed", "the database is closed");
+    const answer = (await ask("get", {
+      space: spaceId,
+      collection: nameOf(collection),
+      id: object,
+    })) as { fields: Record<string, unknown> } | null;
+    return answer === null ? undefined : flatten(answer);
   };
 
   return {
@@ -270,17 +430,43 @@ export const connect = async (
       list: async () =>
         (await ask("spaces.list", {})) as unknown as SpaceEntry[],
     },
+    find: (query) => find(query),
+    subscribe: (query, listener) =>
+      follow(collectionOf(query), undefined, async () =>
+        listener(await find(query)),
+      ),
     close: async () => {
       if (closed) return;
       try {
         await ask("close", {});
       } finally {
         closed = true;
+        subscriptions.clear();
         core.terminate();
       }
     },
   };
 };
+
+/** One fold the core reports: its space and the collections it touched. */
+type Fold = { space: string; collections: string[] };
+
+/** A read a subscription re-runs, and what it follows. */
+type Subscription = {
+  collection: string;
+  space: string | undefined;
+  run: () => Promise<void>;
+  running: boolean;
+  again: boolean;
+};
+
+/** An object as the core answers it, with its fields beside `$id`, `$space` and `$deleted`. */
+const flatten = ({
+  fields,
+  ...rest
+}: {
+  fields: Record<string, unknown>;
+}): Record<string, unknown> => ({ ...rest, ...fields });
 
 /** 128 random bits from the browser's secure generator, as 32 hex digits (RFC 0002, "Object ids"). */
 const randomId = (): Id => {

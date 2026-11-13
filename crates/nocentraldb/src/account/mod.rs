@@ -27,6 +27,15 @@
 //! An agent keeps no account space: it holds an agent certificate of an
 //! account, and the account's devices record it.
 
+mod handle;
+mod remove;
+mod renew;
+
+pub use handle::Removed;
+pub(crate) use handle::take_new_key;
+#[cfg(test)]
+pub(crate) use renew::{new_key, renew, statements, wrapped_to};
+
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
@@ -53,9 +62,7 @@ const MEMBERS: &str = "members";
 const MEMBERSHIPS: &str = "memberships";
 #[cfg(test)]
 const LINKS: &str = "links";
-#[cfg(test)]
 const STATEMENTS: &str = "statements";
-#[cfg(test)]
 const WRAPPED_KEYS: &str = "wrappedKeys";
 
 /// The lock of the model the SDK ships for the account space.
@@ -314,7 +321,8 @@ pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
 
 /// Brings the device's own records in the account space up to date: its
 /// member record, and a membership record for each app space it belongs
-/// to, with its role. Without an account space, and on an agent, it
+/// to, with its role. First it removes each member another device marked
+/// removed from the app spaces this device administers. Without an account space, and on an agent, it
 /// writes nothing, as it does when the records are current.
 pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if inner.kind != MemberKind::Device {
@@ -327,6 +335,9 @@ pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if crate::space::writable_by(inner, account, id()).is_err() {
         return Ok(());
     }
+    // A member another device removed as lost leaves this device's spaces
+    // too (RFC 0010, "Losing a device").
+    remove::remove_marked(inner)?;
     let me = inner.member.key().id();
     let own = member_object(me.0);
     let mut tx = Transaction::reserved(model());
@@ -388,6 +399,11 @@ pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
     if !changed {
         return Ok(());
     }
+    write(inner, account, tx)
+}
+
+/// Writes `tx` into the account space `account`, by the shipped model.
+fn write(inner: &mut Inner, account: CoreSpaceId, tx: Transaction) -> Result<(), Error> {
     let writer = WriterModel {
         id: model().id,
         version: model().version,
