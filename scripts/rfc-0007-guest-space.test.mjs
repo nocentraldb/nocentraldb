@@ -2,7 +2,7 @@
 // account the relay does not list (NOC-286, built in NOC-283): a backend
 // rule, its row in the table of how each backend keeps the rules, and the
 // item in DynamoDB's `spaces` table under the 32-byte account key. Each
-// passage is marked as proposed until the owner's tick on the PR. Whether
+// passage carries the owner's decision on #288. Whether
 // the wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0007-relay.md";
-const MARK = "(proposed in NOC-283; the owner decides with the PR's tick)";
+const MARK = "(Carsten, 2026-11-13, #288)";
 const lines = () => readFileSync(join(root, RFC), "utf8").split("\n");
 const line = (start) => {
   const found = lines().find((l) => l.startsWith(start));

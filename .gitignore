@@ -12,3 +12,7 @@ node_modules/
 .pnpm-store/
 .nxf/
 coverage/
+
+# the design skill's gate writes its history files here; only the waivers are kept
+.taste-skill/*
+!.taste-skill/waivers.json
