@@ -62,6 +62,12 @@ mod view_report;
 
 pub use db::{Db, OpenOptions};
 
+// The Rust snippets of docs/getting-started.md, compiled by the doc tests,
+// so the guide cannot drift from the SDK.
+#[cfg(doctest)]
+#[doc = include_str!("../../../docs/getting-started.md")]
+pub struct GettingStarted;
+
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
