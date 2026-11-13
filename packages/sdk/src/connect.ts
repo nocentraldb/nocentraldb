@@ -11,6 +11,7 @@ import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import { Cursor, queryState } from "./query.ts";
+import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 import { type Platform, tabCore } from "./tabs.ts";
@@ -176,18 +177,7 @@ export const connect = async (
   // The relay that serves this database: this tab's option, or, when
   // another tab owns the database, that tab's (NOC-177).
   let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
-  const statusOf = (raw: unknown): SyncStatus => {
-    const given = (raw ?? {}) as Partial<Record<keyof SyncStatus, unknown>>;
-    return {
-      connection: (given.connection ?? "none") as SyncStatus["connection"],
-      ...(relay === undefined ? {} : { relay }),
-      unconfirmed: Number(given.unconfirmed ?? 0),
-      refused: Number(given.refused ?? 0),
-      epochChanged: given.epochChanged === true,
-      ...(typeof given.error === "string" ? { error: given.error } : {}),
-    };
-  };
-  let sync = statusOf((opened as { sync?: unknown } | null)?.sync);
+  let sync = syncStatusOf((opened as { sync?: unknown } | null)?.sync, relay);
   const syncListeners = new Set<(status: SyncStatus) => void>();
   // Who waits for the next sync status: `db.sync.confirmed`.
   const syncWaiters = new Set<{
@@ -203,15 +193,8 @@ export const connect = async (
     return { promise, cancel: () => syncWaiters.delete(waiter) };
   };
   const synced = (raw: unknown) => {
-    sync = statusOf(raw);
-    for (const listener of [...syncListeners]) {
-      try {
-        listener(sync);
-      } catch {
-        // A listener that throws loses this status, and the others still
-        // get it.
-      }
-    }
+    sync = syncStatusOf(raw, relay);
+    notify(syncListeners, sync);
     for (const waiter of [...syncWaiters]) {
       syncWaiters.delete(waiter);
       waiter.resolve();
@@ -227,49 +210,11 @@ export const connect = async (
     Id,
     { status: SpaceStatus; listeners: Set<(status: SpaceStatus) => void> }
   >();
-  const spaceStatusOf = (raw: unknown): SpaceStatus => {
-    const given = (raw ?? {}) as Record<string, unknown>;
-    const list = <T>(value: unknown) =>
-      (Array.isArray(value) ? value : []) as T[];
-    const counts = (value: unknown) =>
-      Object.fromEntries(
-        Object.entries((value ?? {}) as Record<string, unknown>).map(
-          ([reason, count]) => [reason, Number(count)],
-        ),
-      );
-    return {
-      role: (given.role ?? "removed") as SpaceStatus["role"],
-      initialSyncComplete: given.initialSyncComplete === true,
-      behind: Number(given.behind ?? 0),
-      gaps: list<string>(given.gaps),
-      parked: counts(given.parked),
-      ...(typeof given.newestModel === "number"
-        ? { newestModel: given.newestModel }
-        : {}),
-      rejected: counts(given.rejected),
-      refused: list<{ change: string; code: string }>(given.refused),
-      lostGrants: list<string>(given.lostGrants),
-      equivocations: list<string>(given.equivocations),
-      exposed: given.exposed === true,
-      waitingForKey: given.waitingForKey === true,
-      badPersonKeyRecords: list<string>(given.badPersonKeyRecords),
-      provisionalErasures: list<SpaceStatus["provisionalErasures"][number]>(
-        given.provisionalErasures,
-      ).map((erasure) => ({ ...erasure, age: Number(erasure.age) })),
-    };
-  };
   const statusChanged = (id: Id, raw: unknown) => {
     const entry = statuses.get(id);
     if (entry === undefined) return;
     entry.status = spaceStatusOf(raw);
-    for (const listener of [...entry.listeners]) {
-      try {
-        listener(entry.status);
-      } catch {
-        // A listener that throws loses this status, and the others still
-        // get it.
-      }
-    }
+    notify(entry.listeners, entry.status);
   };
   /** A handle of the space `id`, with its status, which the core follows from now on. */
   const handleOf = async (id: Id): Promise<Space> => {
