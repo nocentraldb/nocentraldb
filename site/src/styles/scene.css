@@ -1,8 +1,6 @@
 /* Colours and type of the landing page's drawing (components/scene.mjs).
-   Every colour reads a brand role from tokens.css, except magenta. */
+   Every colour reads a brand role from tokens.css. */
 .sc {
-  /* Magenta marks a live connection: the state mark in a card's header. Nowhere else. */
-  --loud: #ff3d8b;
   display: block;
   width: 100%;
   height: 100%;
@@ -98,8 +96,9 @@
   stroke-dasharray: 3 9;
   stroke-opacity: 0.3;
 }
+/* The brand's loud colour marks a live connection: the state mark in a card's header. Nowhere else. */
 .sc-dot-on {
-  fill: var(--loud);
+  fill: var(--ncdb-loud);
 }
 .sc-dot-off {
   fill: none;
