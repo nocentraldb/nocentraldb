@@ -69,7 +69,7 @@ impl Account<'_> {
     /// asks to be paired as the other kind is `InvalidValue`.
     pub async fn pair(&self, kind: PairKind, invitation: &Invitation) -> Result<Paired, Error> {
         let (answer, certified, plan) = {
-            let inner = self.db.lock();
+            let mut inner = self.db.lock();
             let keys::Account::Holds { key, statement } = &inner.account else {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
@@ -108,7 +108,16 @@ impl Account<'_> {
                 form: Form::Certified(certificate),
             };
             let plan = match kind {
-                MemberKind::Device => spaces_to_join(&inner)?,
+                MemberKind::Device => {
+                    // A device of an account that has no account space
+                    // yet, as a guest that joined only others' spaces,
+                    // creates it now: the new device joins it, and the
+                    // relay admits it for an account that is a member of
+                    // an admitted space (NOC-283).
+                    crate::account::create(&mut inner)?;
+                    crate::account::reconcile(&mut inner)?;
+                    spaces_to_join(&inner)?
+                }
                 MemberKind::Agent | MemberKind::SubAgent => Plan::default(),
             };
             (PairingAnswer(answer), certified, plan)
