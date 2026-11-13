@@ -2,8 +2,10 @@
 // as RFC 0003 records it (NOC-175 slice 2): in the browser the key record
 // is sealed with AES-GCM under a non-extractable WebCrypto key, and both
 // sit in IndexedDB, in the database `nocentraldb/<name>`, object store
-// `keys`, under the keys `wrapping-key` and `key-record`. Whether the
-// wording is right is the review of the PR.
+// `keys`, under the keys `wrapping-key` and `key-record`. Since the key
+// record's format 2 (Carsten, 2026-11-12, NOC-285), the sealed record is 28
+// bytes longer than the record, not a fixed 141. Whether the wording is
+// right is the review of the PR.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { read, section } from "./lib/rfc-text.mjs";
@@ -21,7 +23,7 @@ test("RFC 0003's member key gives the browser's layout of the key record", () =>
     /non-extractable AES-GCM-256/,
     /12-byte random IV/,
     /`"nocentraldb\/browser-key-record"`/,
-    /141 bytes/,
+    /28 bytes more than the record/,
     /no passkey/i,
     /Carsten, 2026-11-11, NOC-210/,
   ]) {

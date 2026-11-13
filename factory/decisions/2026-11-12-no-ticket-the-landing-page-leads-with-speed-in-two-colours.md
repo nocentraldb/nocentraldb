@@ -1,0 +1,7 @@
+# 2026-11-12 · no ticket · The landing page leads with speed, in two colours
+
+- Decided by: Carsten, 2026-11-12
+- Why: on board item mt08.bx1m, the landing page at nocentraldb.io leads with speed and follows with confidentiality, under the headline "A database that reads like a local file and syncs like a shared doc", which replaces the brand guideline's former headline "For when a central database is the wrong place." It explains the mechanism in one scroll scenario of four steps (a laptop on a train, a home office and an agent, each with a full copy, syncing through a cloud server that cannot read the changes). It has no limits section and no FAQ in this version; the limits stay in the docs. Two colours carry the page: near-black for the hero, the scenario and the code, and the brand's yellow as the one accent, with one section flooded yellow, the close. Hot magenta #FF3D8B appears only inside the scenario's drawing, as the mark of a live connection; nowhere else on the page. The owner made the colour call after the design skill's assessment; the docs under /docs keep their colours.
+- Instead of: the 60/30/10 split with magenta as the action colour (primary button, link underlines, focus) and about 30 % yellow; a limits section and a FAQ; the brand's former headline and subline.
+- Topics: site, brand, design
+- Supersedes: 2026-11-11-NOC-211-the-landing-page-is-60-30-10-with-hot-magenta.md

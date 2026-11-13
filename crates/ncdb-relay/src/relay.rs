@@ -230,7 +230,7 @@ impl<S: RelayStore> Relay<S> {
         }
         for _ in 0..RETRIES {
             let (expected_head, checked) = match self.store.head(space).await? {
-                None => (0, self.check_genesis(uploader, &change)?),
+                None => (0, self.check_genesis(uploader, &change).await?),
                 Some(head) => {
                     // A push is idempotent (RFC 0007, "Push"): a change the
                     // log holds is a duplicate. Its own author learns that
@@ -281,15 +281,23 @@ impl<S: RelayStore> Relay<S> {
                     return Ok((Pushed::Duplicate(position), Vec::new()));
                 }
                 AppendOutcome::HeadMoved(_) => continue,
+                // The account already created its one space.
+                AppendOutcome::GuestSpaceTaken => return Err(ErrorCode::NotAllowed),
             }
         }
         Err(ErrorCode::Unavailable)
     }
 
     /// A change to a space the relay does not hold: only its genesis, pushed
-    /// by its creator, a member of an account the relay allows (RFC 0007,
-    /// "What the relay checks"), and valid by RFC 0008's rules for a genesis.
-    fn check_genesis(&self, uploader: MemberId, change: &Change) -> Result<Checked, ErrorCode> {
+    /// by its creator, a member of an account the relay allows, or of an
+    /// account that may create its one space ([`Relay::guest`]; RFC 0007,
+    /// "Who may create a space"), and valid by RFC 0008's rules for a
+    /// genesis.
+    async fn check_genesis(
+        &self,
+        uploader: MemberId,
+        change: &Change,
+    ) -> Result<Checked, ErrorCode> {
         let genesis = match control_body(change) {
             Ok(ControlBody {
                 entry: Entry::Genesis(genesis),
@@ -300,16 +308,51 @@ impl<S: RelayStore> Relay<S> {
         if genesis.creator.id() != uploader {
             return Err(ErrorCode::NotMember);
         }
-        if !self
-            .config
-            .allowed_accounts
-            .contains(&genesis.certificate.account_key)
-        {
-            return Err(ErrorCode::NotAllowed);
-        }
+        let account = genesis.certificate.account_key;
+        let guest = match self.config.allowed_accounts.contains(&account) {
+            true => false,
+            false if self.guest(uploader).await? => true,
+            false => return Err(ErrorCode::NotAllowed),
+        };
         let resolved = membership::resolve(change.header().space, [change]);
         verdict(resolved.verdict(change.id()))?;
-        Ok(Checked::new(&resolved, &BTreeSet::new()))
+        let mut checked = Checked::new(&resolved, &BTreeSet::new());
+        // The one space of an account the relay does not list: the append
+        // records it, and holds only if the account has none yet.
+        if guest {
+            checked.effects.push(Effect::GuestSpace(account));
+        }
+        Ok(checked)
+    }
+
+    /// Whether `member` currently belongs to a space that an account the
+    /// relay allows created: its account, which the relay does not list,
+    /// may then create one space, its account space (RFC 0007, "Who may
+    /// create a space"; Carsten, 2026-11-12, NOC-286). The relay cannot
+    /// tell what kind of space that is, since the genesis seals the model
+    /// id, and does not need to.
+    async fn guest(&self, member: MemberId) -> Result<bool, ErrorCode> {
+        for space in self.store.members_of(member).await? {
+            let first = self.store.read_controls(space, 0, 1).await?;
+            let Some(genesis) = first.first() else {
+                continue;
+            };
+            let Ok(change) = Change::decode(&genesis.frame) else {
+                continue;
+            };
+            if let Ok(ControlBody {
+                entry: Entry::Genesis(genesis),
+                ..
+            }) = control_body(&change)
+                && self
+                    .config
+                    .allowed_accounts
+                    .contains(&genesis.certificate.account_key)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// The uploader or reader is a current member of the space.

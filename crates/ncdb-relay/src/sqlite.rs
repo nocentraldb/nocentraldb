@@ -1,7 +1,9 @@
 //! The SQLite backend of RFC 0007 ("The backend interface"), as its
 //! backend table says for SQLite: a conditional append is one write
 //! transaction on the head, a row in `spaces`; "one change id, one
-//! position" is a unique index on (space, change id); frames are kept
+//! position" is a unique index on (space, change id); the one space of an
+//! account the relay does not list is a row of `guest_spaces`, keyed by
+//! the account, in the same transaction; frames are kept
 //! inline; a person-key put is one write transaction that reads each
 //! stored generation before it writes. An upload's frame (RFC 0007, "Large
 //! changes") waits in `uploads` until a push takes it, and is then kept
@@ -32,64 +34,11 @@ use crate::store::{
     Upload, UploadId,
 };
 
+mod schema;
+use schema::SCHEMA;
+
 /// How long a write waits for another handle's write lock.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(30);
-
-const SCHEMA: &str = "
-CREATE TABLE IF NOT EXISTS relay (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    epoch BLOB NOT NULL
-);
-CREATE TABLE IF NOT EXISTS spaces (
-    id BLOB PRIMARY KEY,
-    head INTEGER NOT NULL
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS log (
-    space BLOB NOT NULL,
-    position INTEGER NOT NULL,
-    change BLOB NOT NULL,
-    accepted_at INTEGER NOT NULL,
-    author BLOB NOT NULL,
-    kind INTEGER NOT NULL,
-    frame BLOB NOT NULL,
-    PRIMARY KEY (space, position)
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX IF NOT EXISTS log_change ON log (space, change);
-CREATE TABLE IF NOT EXISTS members (
-    space BLOB NOT NULL,
-    member BLOB NOT NULL,
-    current INTEGER NOT NULL,
-    state BLOB NOT NULL,
-    PRIMARY KEY (space, member)
-) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS members_current ON members (member, space) WHERE current = 1;
-CREATE TABLE IF NOT EXISTS person_keys (
-    space BLOB NOT NULL,
-    id BLOB NOT NULL,
-    generation INTEGER NOT NULL,
-    writer BLOB NOT NULL,
-    wrapped BLOB NOT NULL,
-    signature BLOB NOT NULL,
-    PRIMARY KEY (space, id)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS uploads (
-    token BLOB PRIMARY KEY,
-    id BLOB NOT NULL UNIQUE,
-    space BLOB NOT NULL,
-    member BLOB NOT NULL,
-    size INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL,
-    frame BLOB
-);
-CREATE INDEX IF NOT EXISTS uploads_expiry ON uploads (expires_at);
-CREATE TABLE IF NOT EXISTS downloads (
-    token BLOB PRIMARY KEY,
-    space BLOB NOT NULL,
-    position INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS downloads_expiry ON downloads (expires_at);
-";
 
 /// A handle on a relay's SQLite database. Its `Debug` output shows nothing
 /// of the database.
@@ -278,6 +227,21 @@ impl RelayStore for SqliteStore {
                 return Ok(AppendOutcome::Duplicate { change, position });
             }
         }
+        for effect in &effects {
+            if let Effect::GuestSpace(account) = effect {
+                let held: Option<Vec<u8>> = tx
+                    .query_row(
+                        "SELECT space FROM guest_spaces WHERE account = ?1",
+                        [account],
+                        |row| row.get(0),
+                    )
+                    .optional()
+                    .map_err(failed("guest space"))?;
+                if held.is_some() {
+                    return Ok(AppendOutcome::GuestSpaceTaken);
+                }
+            }
+        }
         let mut position = head;
         for entry in &entries {
             position += 1;
@@ -313,6 +277,13 @@ impl RelayStore for SqliteStore {
                         params![space.0, record.member.0, record.current, record.state],
                     )
                     .map_err(failed("member"))?;
+                }
+                Effect::GuestSpace(account) => {
+                    tx.execute(
+                        "INSERT INTO guest_spaces (account, space) VALUES (?1, ?2)",
+                        params![account, space.0],
+                    )
+                    .map_err(failed("guest space"))?;
                 }
             }
         }
