@@ -54,6 +54,9 @@ pub struct Subscription {
 }
 
 /// The open connections and their subscriptions. Its futures are `Send`.
+/// A connection whose record expired, and its subscriptions, read as gone,
+/// whether or not the store deleted them yet. [`crate::contract::run`]
+/// holds every store to these rules.
 pub trait Connections: Send + Sync {
     /// Stores `connection` under `id`, replacing what was stored.
     fn put(
@@ -132,6 +135,17 @@ struct Memory {
     subscriptions: HashMap<(String, SpaceId), Subscription>,
 }
 
+impl Memory {
+    /// The connection `id`, unless its record expired by `now`, as the
+    /// `connections` table's TTL would delete it.
+    fn live(&self, id: &str, now: u64) -> Option<Connection> {
+        self.connections
+            .get(id)
+            .copied()
+            .filter(|connection| connection.expires_at > now)
+    }
+}
+
 impl MemoryConnections {
     fn with<T>(&self, f: impl FnOnce(&mut Memory) -> T) -> T {
         f(&mut self
@@ -163,7 +177,8 @@ impl Connections for MemoryConnections {
     }
 
     async fn get(&self, id: &str) -> Result<Option<Connection>, StoreError> {
-        Ok(self.with(|memory| memory.connections.get(id).copied()))
+        let now = crate::contract::now();
+        Ok(self.with(|memory| memory.live(id, now)))
     }
 
     async fn remove(&self, id: &str) -> Result<(), StoreError> {
@@ -194,11 +209,12 @@ impl Connections for MemoryConnections {
     }
 
     async fn subscribers(&self, space: SpaceId) -> Result<Vec<(String, Subscription)>, StoreError> {
+        let now = crate::contract::now();
         Ok(self.with(|memory| {
             let mut found: Vec<(String, Subscription)> = memory
                 .subscriptions
                 .iter()
-                .filter(|((_, s), _)| *s == space)
+                .filter(|((conn, s), _)| *s == space && memory.live(conn, now).is_some())
                 .map(|((conn, _), sub)| (conn.clone(), *sub))
                 .collect();
             found.sort_by(|a, b| a.0.cmp(&b.0));
@@ -207,11 +223,12 @@ impl Connections for MemoryConnections {
     }
 
     async fn of_member(&self, member: MemberId) -> Result<Vec<String>, StoreError> {
+        let now = crate::contract::now();
         Ok(self.with(|memory| {
             let mut found: Vec<String> = memory
                 .connections
                 .iter()
-                .filter(|(_, c)| c.stage == Stage::Member(member))
+                .filter(|(_, c)| c.stage == Stage::Member(member) && c.expires_at > now)
                 .map(|(id, _)| id.clone())
                 .collect();
             found.sort();

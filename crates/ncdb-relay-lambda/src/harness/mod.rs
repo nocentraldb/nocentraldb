@@ -25,9 +25,11 @@ use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequest;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use futures_util::{SinkExt, StreamExt};
-use ncdb_relay::Relay;
-use ncdb_relay::store::{RelayStore, StoreError, Token};
+use ncdb_core::ids::SpaceId;
+use ncdb_relay::page::{Downloads, TokenDownloads};
+use ncdb_relay::store::{Entry, RelayStore, StoreError, Token, UploadId};
 use ncdb_relay::wire::MAX_MESSAGE;
+use ncdb_relay::{ErrorCode, Relay};
 use serde_json::Value;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
 use tokio::sync::mpsc;
@@ -102,12 +104,28 @@ pub struct LocalUrls {
 }
 
 impl Urls for LocalUrls {
-    fn upload(&self, token: &Token) -> String {
-        format!("{}{}{}", self.base, http::UPLOADS, http::hex(token))
+    async fn upload(&self, _: UploadId, token: Token, _: u64) -> Result<String, ErrorCode> {
+        Ok(format!(
+            "{}{}{}",
+            self.base,
+            http::UPLOADS,
+            http::hex(&token)
+        ))
     }
 
-    fn download(&self, token: &Token) -> String {
-        format!("{}{}{}", self.base, http::FRAMES, http::hex(token))
+    async fn download<S: RelayStore>(
+        &self,
+        relay: &Relay<S>,
+        space: SpaceId,
+        entry: &Entry,
+    ) -> Result<String, ErrorCode> {
+        let prefix = format!("{}{}", self.base, http::FRAMES);
+        TokenDownloads {
+            relay,
+            prefix: &prefix,
+        }
+        .url(space, entry)
+        .await
     }
 }
 

@@ -76,6 +76,10 @@ test("--write orders the files by path, each with its header", (t) => {
   const repo = fixture(t);
   repo.write("packages/sdk/src/b/z.ts", "export const z = 1;\n");
   repo.write("packages/sdk/src/a.ts", "export const a = 1;\n");
+  repo.write(
+    "packages/sdk/src/index.ts",
+    `${INDEX}export { a } from "./a.ts";\nexport * from "./b/z.ts";\n`,
+  );
   assert.equal(run(repo, "--write").status, 0);
   const headers = report(repo)
     .split("\n")
@@ -85,6 +89,57 @@ test("--write orders the files by path, each with its header", (t) => {
     "// file: b/z.d.ts",
     "// file: index.d.ts",
   ]);
+});
+
+test("a file src/index.ts does not reach stays out of the report (NOC-176)", (t) => {
+  const repo = fixture(t);
+  repo.write("packages/sdk/src/internal.ts", "export const internal = 1;\n");
+  assert.equal(run(repo, "--write").status, 0);
+  const text = report(repo);
+  assert.ok(!text.includes("internal"), text);
+  assert.deepEqual(
+    text.split("\n").filter((line) => line.startsWith("// file: ")),
+    ["// file: index.d.ts"],
+  );
+});
+
+test("the report follows the declarations' imports and re-exports, transitively", (t) => {
+  const repo = fixture(t);
+  repo.write(
+    "packages/sdk/src/index.ts",
+    `${INDEX}export type { Db } from "./db.ts";\nexport * as nc from "./nc.ts";\n`,
+  );
+  repo.write(
+    "packages/sdk/src/db.ts",
+    'import type { Id } from "./id.ts";\nimport { run } from "./impl.ts";\nexport interface Db { id: Id }\nexport const open = (): Db => run();\n',
+  );
+  repo.write("packages/sdk/src/id.ts", "export type Id = string;\n");
+  repo.write("packages/sdk/src/nc.ts", 'export { open } from "./db.ts";\n');
+  // Imported only for a value: its declarations import nothing from it.
+  repo.write(
+    "packages/sdk/src/impl.ts",
+    'import type { Db } from "./db.ts";\nexport const run = (): Db => ({ id: "x" });\nexport const hidden = 2;\n',
+  );
+  assert.equal(run(repo, "--write").status, 0);
+  const headers = report(repo)
+    .split("\n")
+    .filter((line) => line.startsWith("// file: "));
+  assert.deepEqual(headers, [
+    "// file: db.d.ts",
+    "// file: id.d.ts",
+    "// file: index.d.ts",
+    "// file: nc.d.ts",
+  ]);
+  assert.ok(!report(repo).includes("hidden"));
+});
+
+test("a project without src/index.ts fails, naming the entry", (t) => {
+  const repo = fixture(t);
+  repo.remove("packages/sdk/src/index.ts");
+  repo.write("packages/sdk/src/other.ts", "export const other = 1;\n");
+  const result = run(repo, "--write");
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /src\/index\.ts/);
 });
 
 test("check mode passes on a fresh report", (t) => {

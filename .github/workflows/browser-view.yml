@@ -23,6 +23,12 @@
 # against the local relay server, which build.mjs builds on the runner next
 # to the tests and the test starts in the image; it runs on pull requests
 # that touch the relay too.
+#
+# NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
+# (scripts/sdk-browser/): the package is built on the runner, its core
+# compiled to wasm from crates/nocentraldb-wasm, and a page in the image
+# opens it as an app does. It runs on pull requests that touch the
+# TypeScript SDK or what its core is built from.
 name: browser-view
 
 on:
@@ -30,10 +36,13 @@ on:
     paths:
       - "crates/ncdb-core/**"
       - "crates/nocentraldb/**"
+      - "crates/nocentraldb-wasm/**"
+      - "packages/sdk/**"
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-server/**"
       - "scripts/browser-view/**"
       - "scripts/sdk-keys/**"
+      - "scripts/sdk-browser/**"
       - ".github/workflows/browser-view.yml"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -96,6 +105,14 @@ jobs:
       - name: The SDK's key tests, built on the runner
         run: node scripts/sdk-keys/build.mjs
 
+      # The TypeScript SDK's package, in packages/sdk/dist
+      # (packages/sdk/build.mjs), with the wasm-bindgen the first step
+      # installed; built even when a build above failed, so its tests
+      # report on their own.
+      - name: The TypeScript SDK, built on the runner
+        if: ${{ !cancelled() }}
+        run: node scripts/sdk-browser/build.mjs
+
       # A registry that does not answer fails the pull in 4 minutes, and the
       # pull is tried once more.
       - name: Playwright's image, with a short timeout and one retry
@@ -129,3 +146,14 @@ jobs:
           -e SDK_KEYS_PREBUILT=1
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/sdk-keys/*.test.mjs'
+
+      # The TypeScript SDK as an app uses it, its worker and its database on
+      # OPFS, in Chromium; run even when a step above failed.
+      - name: The TypeScript SDK in Chromium
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/*.test.mjs'

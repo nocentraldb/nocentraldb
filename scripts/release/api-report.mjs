@@ -16,9 +16,14 @@
 //    cause. Comments are removed, so a doc comment edit is never reported
 //    as an API change. A value of --base or --project that starts with a
 //    dash is a usage error.
-// R2 The report is every <tmp>/src/**/*.d.ts in sorted path order, each
-//    preceded by `// file: <path relative to src/>`, normalised to LF. The
-//    project's tests (anything outside src/) are not part of it.
+// R2 The report is every <tmp>/src/**/*.d.ts that src/index.d.ts reaches
+//    through the relative specifiers of its `import ... from`, `export ...
+//    from` and `import("...")`, transitively, in sorted path order, each
+//    preceded by `// file: <path relative to src/>`, normalised to LF. A
+//    module the package's entry does not reach is internal and not part of
+//    it, nor is a module imported only for a value, whose declarations
+//    import nothing from it (NOC-176). The project's tests (anything outside
+//    src/) are not part of it. A project without src/index.ts fails.
 // R3 Check mode (default): the regenerated report must equal the committed
 //    one; a missing or differing report fails, naming the file and the
 //    command that rewrites it. --write writes it instead.
@@ -44,7 +49,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, posix, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cli } from "./lib/cli.mjs";
 import { git } from "./lib/git.mjs";
@@ -84,6 +89,34 @@ const declarations = (dir) =>
     : [];
 
 const lf = (text) => text.replace(/\r\n?/g, "\n");
+
+/** The package's entry, as tsc declares it. */
+const ENTRY = "index.d.ts";
+
+/** The relative module specifiers a declaration file names. */
+const SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|^\s*import\s+)["'](\.{1,2}\/[^"']+)["']/gm;
+
+/** R2: the declaration files `ENTRY` reaches, as paths relative to `src`. */
+const reachable = (src, files) => {
+  const known = new Set(files);
+  const reached = new Set();
+  const queue = [ENTRY];
+  while (queue.length > 0) {
+    const file = queue.pop();
+    if (reached.has(file) || !known.has(file)) continue;
+    reached.add(file);
+    const text = readFileSync(join(src, file), "utf8");
+    for (const [, specifier] of text.matchAll(SPECIFIER)) {
+      const base = posix.join(posix.dirname(file), specifier);
+      const stem = base.replace(/\.(?:d\.ts|[mc]?ts|[mc]?js)$/, "");
+      for (const candidate of [`${stem}.d.ts`, `${stem}/index.d.ts`]) {
+        if (known.has(candidate)) queue.push(candidate);
+      }
+    }
+  }
+  return reached;
+};
 
 /** tsc's time limit; API_REPORT_TSC_TIMEOUT_MS is a test seam. */
 const TSC_TIMEOUT_MS = Number(process.env.API_REPORT_TSC_TIMEOUT_MS) || 300_000;
@@ -133,7 +166,14 @@ function generate(project) {
       );
     }
     const src = join(out, "src");
-    return declarations(src)
+    const all = declarations(src);
+    if (!all.includes(ENTRY))
+      throw new Failure(
+        `${join(project, "src", "index.ts")} is missing: the report starts at the package's entry`,
+      );
+    const reached = reachable(src, all);
+    return all
+      .filter((file) => reached.has(file))
       .map((file) => {
         const body = lf(readFileSync(join(src, file), "utf8")).replace(
           /\n*$/,

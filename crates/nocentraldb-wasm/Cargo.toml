@@ -1,0 +1,28 @@
+[package]
+name = "nocentraldb-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# The TypeScript SDK's core, never published on its own: @nocentraldb/sdk
+# ships the module it builds (Carsten, 2026-11-12, NOC-274, point 1).
+publish = false
+description = "The Rust SDK compiled to WebAssembly for @nocentraldb/sdk's worker: one export that answers the bridge's CBOR requests (NOC-176)."
+
+[lib]
+# cdylib: the module wasm-bindgen turns into the package's wasm; rlib: the
+# tests.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The bridge, public only with this feature (NOC-176, A).
+nocentraldb = { workspace = true, features = ["bridge"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The export to JavaScript and its promise; the versions the SDK pins.
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+wasm-bindgen-futures = { version = "=0.4.80", default-features = false, features = ["std"] }
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "=0.3.80"

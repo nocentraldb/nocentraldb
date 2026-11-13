@@ -28,6 +28,7 @@ mod lost_device;
 mod members;
 mod merge;
 mod newest_model;
+mod pairing;
 mod pause;
 mod person_keys;
 mod personal;
