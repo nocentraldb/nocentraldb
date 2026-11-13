@@ -10,6 +10,7 @@ import { type Cbor, decode, encode } from "./cbor.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
+import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -480,6 +481,7 @@ export const connect = async (
         write((tx) => tx.delete(collection, object)),
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
+      members: membersOf(ask, id),
       status: {
         current: () => (statuses.get(id) as { status: SpaceStatus }).status,
         subscribe: (listener) => {
@@ -545,6 +547,7 @@ export const connect = async (
       follow(collectionOf(query), undefined, async () =>
         listener(await find(query)),
       ),
+    invitation: async () => ownInvitation(await ask("invitation", {})),
     sync: {
       current: () => sync,
       subscribe: (listener) => {

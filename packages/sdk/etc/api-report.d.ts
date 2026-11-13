@@ -1,4 +1,5 @@
 // file: db.d.ts
+import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
@@ -49,6 +50,7 @@ export interface Tx {
 }
 export interface Space {
     readonly id: Id;
+    readonly members: Members;
     readonly status: {
         current(): SpaceStatus;
         subscribe(listener: (status: SpaceStatus) => void): Stop;
@@ -78,6 +80,7 @@ export interface Db {
     readonly changes: {
         subscribe(listener: (change: Change) => void): Stop;
     };
+    invitation(): Promise<Invitation>;
     readonly sync: {
         current(): SyncStatus;
         subscribe(listener: (status: SyncStatus) => void): Stop;
@@ -108,9 +111,44 @@ export declare class NcError extends Error {
 // file: index.d.ts
 export declare function name(): string;
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
+export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
+// file: members.d.ts
+export interface Invitation {
+    readonly fingerprint?: string;
+    toString(): string;
+}
+export interface Notice {
+    readonly code: string;
+    readonly text: string;
+}
+type Role = "reader" | "writer" | "admin";
+interface Member {
+    readonly id: string;
+    readonly account: string;
+    readonly kind: "device" | "agent" | "subAgent";
+    readonly role: Role | null;
+    readonly self: boolean;
+}
+export interface Members {
+    add(invitations: Invitation | readonly Invitation[], options?: {
+        role?: Role;
+        fingerprint?: string;
+    }): Promise<{
+        readonly notice: Notice;
+    }>;
+    list(): Promise<Member[]>;
+    setRole(member: string, role: Role): Promise<{
+        readonly notice: Notice;
+    }>;
+    remove(member: string): Promise<{
+        readonly notice: Notice;
+    }>;
+}
+export declare const invitation: (text: string) => Invitation;
+export {};
 // file: nc.d.ts
 import type { Query } from "./db.ts";
 interface Value<T = unknown, D extends boolean = false> {
@@ -212,6 +250,7 @@ export declare const index: <const K extends readonly (string | {
 }) => Index<Names<K>, N>;
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
+export { invitation } from "./members.ts";
 // file: status.d.ts
 export interface SpaceStatus {
     readonly role: "reader" | "writer" | "admin" | "removed";
