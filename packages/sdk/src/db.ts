@@ -174,8 +174,44 @@ export interface Db {
     /** Calls `listener` after each fold, once per collection it touched. */
     subscribe(listener: (change: Change) => void): Stop;
   };
+  /** The relay connection, as a report (RFC 0009, "Sync and status"). */
+  readonly sync: {
+    /** The report as it is now. */
+    current(): SyncStatus;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (status: SyncStatus) => void): Stop;
+    /** Stops syncing, for an app that wants to stay offline; the connection reads `"paused"` until `resume`. */
+    pause(): Promise<void>;
+    /** Syncs again after `pause`. */
+    resume(): Promise<void>;
+    /** Whether the relay holds the change `change`, as `write` answered its id. */
+    isConfirmed(change: string): Promise<boolean>;
+    /** Resolves when the relay holds the change `change`. It may never resolve: the relay can refuse the change, or never be reached. */
+    confirmed(change: string): Promise<void>;
+  };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
+}
+
+/** The relay connection and what syncing found, as `db.sync.current()` gives it (RFC 0009, "Sync and status"). */
+export interface SyncStatus {
+  /** `"offline"`: no relay reachable, and the SDK retries; `"none"`: opened without a relay. */
+  readonly connection:
+    | "connected"
+    | "connecting"
+    | "offline"
+    | "paused"
+    | "none";
+  /** The relay `nc.open` named; absent without one. */
+  readonly relay?: string;
+  /** This member's changes the relay has not confirmed. */
+  readonly unconfirmed: number;
+  /** This member's changes the relay refused. */
+  readonly refused: number;
+  /** Whether the relay was restored and the SDK is pushing again what it lost. */
+  readonly epochChanged: boolean;
+  /** The last error that stops syncing, by its RFC 0007 code, such as `unsupported_version`, or `unknown_error`; never content. Absent while syncing runs. */
+  readonly error?: string;
 }
 
 /** The options of `nc.open` in a browser (RFC 0009, "Open and close"). */

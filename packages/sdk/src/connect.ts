@@ -7,7 +7,7 @@
 // the vitest tests pass a fake core to `connect`.
 
 import { type Cbor, decode, encode } from "./cbor.ts";
-import type { Db, open, Page, Space, Tx } from "./db.ts";
+import type { Db, open, Page, Space, SyncStatus, Tx } from "./db.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import { Cursor, queryState } from "./query.ts";
@@ -143,8 +143,9 @@ export const connect = async (
     return answer.ok ?? null;
   };
 
+  let opened: Cbor;
   try {
-    await ask("open", {
+    opened = await ask("open", {
       lock: JSON.stringify(options.lock),
       name: options.name ?? "default",
       relay: options.relay,
@@ -154,6 +155,52 @@ export const connect = async (
     throw error;
   }
 
+  // The newest sync status the core sent: at open, then in its `sync`
+  // events, so that `db.sync.current()` answers at once.
+  const statusOf = (raw: unknown): SyncStatus => {
+    const given = (raw ?? {}) as Partial<Record<keyof SyncStatus, unknown>>;
+    return {
+      connection: (given.connection ?? "none") as SyncStatus["connection"],
+      ...(options.relay === undefined ? {} : { relay: options.relay }),
+      unconfirmed: Number(given.unconfirmed ?? 0),
+      refused: Number(given.refused ?? 0),
+      epochChanged: given.epochChanged === true,
+      ...(typeof given.error === "string" ? { error: given.error } : {}),
+    };
+  };
+  let sync = statusOf((opened as { sync?: unknown } | null)?.sync);
+  const syncListeners = new Set<(status: SyncStatus) => void>();
+  // Who waits for the next sync status: `db.sync.confirmed`.
+  const syncWaiters = new Set<{
+    resolve: () => void;
+    reject: (error: unknown) => void;
+  }>();
+  const nextSync = () => {
+    let waiter!: { resolve: () => void; reject: (error: unknown) => void };
+    const promise = new Promise<void>((resolve, reject) => {
+      waiter = { resolve, reject };
+    });
+    syncWaiters.add(waiter);
+    return { promise, cancel: () => syncWaiters.delete(waiter) };
+  };
+  const synced = (raw: unknown) => {
+    sync = statusOf(raw);
+    for (const listener of [...syncListeners]) {
+      try {
+        listener(sync);
+      } catch {
+        // A listener that throws loses this status, and the others still
+        // get it.
+      }
+    }
+    for (const waiter of [...syncWaiters]) {
+      syncWaiters.delete(waiter);
+      waiter.resolve();
+    }
+  };
+  const isConfirmed = async (change: string) =>
+    (await ask("sync.isConfirmed", { change })) === true;
+
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
@@ -161,7 +208,15 @@ export const connect = async (
   let pending: Fold[] = [];
   core.listen((bytes) => {
     if (closed) return;
-    const message = decode(bytes) as { event?: string; folds?: Fold[] };
+    const message = decode(bytes) as {
+      event?: string;
+      folds?: Fold[];
+      status?: unknown;
+    };
+    if (message.event === "sync") {
+      synced(message.status);
+      return;
+    }
     if (message.event !== "folded" || !message.folds) return;
     for (const fold of message.folds) {
       for (const changed of fold.changes ?? []) {
@@ -462,6 +517,43 @@ export const connect = async (
       follow(collectionOf(query), undefined, async () =>
         listener(await find(query)),
       ),
+    sync: {
+      current: () => sync,
+      subscribe: (listener) => {
+        syncListeners.add(listener);
+        listener(sync);
+        return () => {
+          syncListeners.delete(listener);
+        };
+      },
+      pause: async () => {
+        await ask("sync.pause", {});
+      },
+      resume: async () => {
+        await ask("sync.resume", {});
+      },
+      isConfirmed,
+      // A confirmation lowers `unconfirmed`, so it arrives as a sync
+      // status: wait for the next one, registered before asking, so none
+      // slips between the answer and the wait.
+      confirmed: async (change) => {
+        for (;;) {
+          const next = nextSync();
+          let held: boolean;
+          try {
+            held = await isConfirmed(change);
+          } catch (error) {
+            next.cancel();
+            throw error;
+          }
+          if (held) {
+            next.cancel();
+            return;
+          }
+          await next.promise;
+        }
+      },
+    },
     close: async () => {
       if (closed) return;
       try {
@@ -470,6 +562,11 @@ export const connect = async (
         closed = true;
         subscriptions.clear();
         changeListeners.clear();
+        syncListeners.clear();
+        for (const waiter of syncWaiters) {
+          waiter.reject(new NcError("closed", "the database is closed"));
+        }
+        syncWaiters.clear();
         core.terminate();
       }
     },

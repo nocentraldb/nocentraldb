@@ -72,7 +72,23 @@ export interface Db {
     readonly changes: {
         subscribe(listener: (change: Change) => void): Stop;
     };
+    readonly sync: {
+        current(): SyncStatus;
+        subscribe(listener: (status: SyncStatus) => void): Stop;
+        pause(): Promise<void>;
+        resume(): Promise<void>;
+        isConfirmed(change: string): Promise<boolean>;
+        confirmed(change: string): Promise<void>;
+    };
     close(): Promise<void>;
+}
+export interface SyncStatus {
+    readonly connection: "connected" | "connecting" | "offline" | "paused" | "none";
+    readonly relay?: string;
+    readonly unconfirmed: number;
+    readonly refused: number;
+    readonly epochChanged: boolean;
+    readonly error?: string;
 }
 interface OpenOptions {
     model: Record<string, any>;
@@ -94,6 +110,7 @@ export declare class NcError extends Error {
 // file: index.d.ts
 export declare function name(): string;
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
+export type { SyncStatus } from "./db.ts";
 export * as nc from "./nc.ts";
 // file: nc.d.ts
 import type { Query } from "./db.ts";
