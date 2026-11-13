@@ -3,7 +3,7 @@
 // its account's fingerprint; `nc.invitation(text)` reads one back. A
 // space's members are added by invitation, listed, re-roled and removed by
 // their id, 64 lowercase hex digits (NOC-298). The shapes RFC 0009 leaves
-// open follow NOC-305 A and A. Against a fake core.
+// open follow NOC-305 A and A (Carsten, 2026-11-13). Against a fake core.
 import { expect, expectTypeOf, test } from "vitest";
 import { decode, encode } from "../src/cbor.ts";
 import { type Core, connect } from "../src/connect.ts";

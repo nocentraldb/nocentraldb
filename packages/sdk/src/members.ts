@@ -3,7 +3,7 @@
 // implements a space's `members` over the bridge's `invitation` and
 // `members.*` calls (crates/nocentraldb/src/bridge/members.rs). A member id is its 64
 // lowercase hex digits (Carsten, 2026-11-13, NOC-298). What RFC 0009 leaves
-// open follows NOC-305 A and A, pending the owner.
+// open follows NOC-305 A and A (Carsten, 2026-11-13).
 
 import { NcError } from "./error.ts";
 
