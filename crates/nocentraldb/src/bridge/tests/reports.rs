@@ -17,8 +17,20 @@ fn opened() -> (Bridge, Value) {
     (bridge, answer)
 }
 
-fn write_one(bridge: &mut Bridge) {
-    let space = ok(bridge, "spaces.create", map(&[]));
+/// The number of this member's unconfirmed changes `durability` answers.
+fn unconfirmed(durability: &Value) -> u64 {
+    match field(durability, "unconfirmed") {
+        Some(Value::Unsigned(count)) => *count,
+        other => panic!("a count: {other:?}"),
+    }
+}
+
+/// A new space; its genesis is this member's change too.
+fn space(bridge: &mut Bridge) -> Value {
+    ok(bridge, "spaces.create", map(&[]))
+}
+
+fn write_one(bridge: &mut Bridge, space: Value) {
     ok(
         bridge,
         "write",
@@ -51,9 +63,11 @@ fn open_answers_the_durability_and_the_view() {
 #[test]
 fn a_write_without_a_relay_is_unconfirmed_and_at_risk_in_memory() {
     let (mut bridge, _) = opened();
-    write_one(&mut bridge);
+    let space = space(&mut bridge);
+    let before = unconfirmed(&ok(&mut bridge, "durability", map(&[])));
+    write_one(&mut bridge, space);
     let durability = ok(&mut bridge, "durability", map(&[]));
-    assert_eq!(field(&durability, "unconfirmed"), Some(&Value::Unsigned(1)));
+    assert_eq!(unconfirmed(&durability), before + 1);
     let Some(Value::Unsigned(at)) = field(&durability, "oldestUnconfirmedAt") else {
         panic!("milliseconds since the epoch: {durability:?}")
     };
@@ -65,11 +79,13 @@ fn a_write_without_a_relay_is_unconfirmed_and_at_risk_in_memory() {
 fn a_write_yields_a_durability_event() {
     let (mut bridge, _) = opened();
     let events = bridge.events().expect("events once open");
+    let space = space(&mut bridge);
+    let before = unconfirmed(&ok(&mut bridge, "durability", map(&[])));
     events.take();
-    write_one(&mut bridge);
+    write_one(&mut bridge, space);
     let message = event(&events, "durability").expect("a durability event");
     let durability = field(&message, "durability").expect("the durability");
-    assert_eq!(field(durability, "unconfirmed"), Some(&Value::Unsigned(1)));
+    assert_eq!(unconfirmed(durability), before + 1);
     // Nothing changed since: no second event.
     assert!(event(&events, "durability").is_none());
 }
