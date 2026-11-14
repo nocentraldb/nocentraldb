@@ -267,6 +267,29 @@ tasks:
       - "/pnpm-lock.yaml"
     options:
       cache: false
+  site-demo:
+    # NOC-319: the landing page's live demo in Chromium through Playwright
+    # (scripts/site-demo/): it builds packages/sdk, its core in wasm
+    # included, copies it into the site and builds the site, then checks
+    # that the page renders before the demo downloads anything, and that
+    # the demo shows its loading and failure states, runs and shares its
+    # database with a second tab. Not part of `gates`, for the reasons of
+    # browser-storage above; the workflow browser-view.yml runs it in CI.
+    # Never cached: its result depends on the installed browser.
+    command: "node --test 'scripts/site-demo/*.test.mjs'"
+    deps: ["~:wasm-runner"]
+    inputs:
+      - "/scripts/site-demo/**/*"
+      - "/site/**/*"
+      - "!/site/dist/**/*"
+      - "!/site/node_modules/**/*"
+      - "/packages/sdk/**/*"
+      - "/crates/nocentraldb/**/*"
+      - "/crates/nocentraldb-wasm/**/*"
+      - "/Cargo.toml"
+      - "/Cargo.lock"
+    options:
+      cache: false
   sdk-keys:
     # NOC-175 slice 2: the Rust SDK's keys in IndexedDB in a dedicated
     # worker in Chromium through Playwright (scripts/sdk-keys/), and its
