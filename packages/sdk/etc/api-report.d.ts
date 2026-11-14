@@ -1,4 +1,5 @@
 // file: db.d.ts
+import type { Durability, ViewStatus } from "./durability.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -89,6 +90,15 @@ export interface Db {
         isConfirmed(change: string): Promise<boolean>;
         confirmed(change: string): Promise<void>;
     };
+    readonly durability: {
+        current(): Durability;
+        subscribe(listener: (durability: Durability) => void): Stop;
+        requestPersistent(): Promise<boolean>;
+    };
+    readonly view: {
+        current(): ViewStatus;
+        subscribe(listener: (view: ViewStatus) => void): Stop;
+    };
     close(): Promise<void>;
 }
 interface OpenOptions {
@@ -96,11 +106,25 @@ interface OpenOptions {
     lock: unknown;
     relay?: string;
     name?: string;
+    persistentStorage?: "on-open" | "on-request";
 }
 export declare const open: (options: OpenOptions) => Promise<Db>;
 export declare const add: <E>(...elements: E[]) => Elements<E>;
 export declare const remove: <E>(...elements: E[]) => Elements<E>;
 export {};
+// file: durability.d.ts
+export interface Durability {
+    readonly storage: "persistent" | "best-effort" | "temporary";
+    readonly unconfirmed: number;
+    readonly oldestUnconfirmedAt: number | null;
+    readonly atRisk: boolean;
+}
+export interface ViewStatus {
+    readonly rebuild: {
+        readonly folded: number;
+        readonly total: number;
+    } | null;
+}
 // file: error.d.ts
 export declare class NcError extends Error {
     readonly code: string;
@@ -111,6 +135,7 @@ export declare class NcError extends Error {
 // file: index.d.ts
 export declare function name(): string;
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
+export type { Durability } from "./durability.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
