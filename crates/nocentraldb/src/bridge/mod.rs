@@ -52,6 +52,10 @@
 //!   [`space_status`]), and from then on a `spaceStatus` event whenever
 //!   it changes, until the database closes.
 //!
+//! The call of NOC-315, slice 2, in `erasures.rs`: `erasures.list`
+//! `{"space": id}`, the audit of the space's erasures (RFC 0009,
+//! "Erasures").
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -197,6 +201,7 @@ impl Bridge {
                 self.cursors.clear();
                 Ok(Value::Null)
             }
+            "erasures.list" => erasures::list(&db, args).await,
             "find" => self.find(&db, args).await,
             "invitation" => members::invitation(&db).await,
             "members.add" => members::add(&db, args).await,

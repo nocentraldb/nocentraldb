@@ -511,6 +511,12 @@ export const connect = async (
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
       members: membersOf(ask, id),
+      erasures: {
+        list: async () =>
+          (await ask("erasures.list", { space: id })) as unknown as Awaited<
+            ReturnType<Space["erasures"]["list"]>
+          >,
+      },
       status: {
         current: () => (statuses.get(id) as { status: SpaceStatus }).status,
         subscribe: (listener) => {

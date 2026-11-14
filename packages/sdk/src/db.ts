@@ -114,6 +114,11 @@ export interface Space {
   readonly id: Id;
   /** The members of this space: add, list, re-role and remove (RFC 0009, "Invitations and members"). */
   readonly members: Members;
+  /** The audit of this space's erasures; every member may read it, a reader too (RFC 0009, "Erasures"). */
+  readonly erasures: {
+    /** Each erasure, with who deleted the person key, who only saw it and who never answered. */
+    list(): Promise<ErasureEntry[]>;
+  };
   /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
   readonly status: {
     /** The report as it is now. */
@@ -156,6 +161,27 @@ export interface Space {
     id: Id,
     listener: (object: Read<C> | undefined) => void,
   ): Stop;
+}
+
+/** One erasure of a space, as `space.erasures.list()` gives it (RFC 0009, "Erasures"; Carsten, 2026-11-12, NOC-246). */
+interface ErasureEntry {
+  /** The change id of the erasure's shred entry. */
+  readonly shred: string;
+  /** `"final"` for a shred, or a provisional one a decision finalized; `"provisional"` while it waits; `"takenBack"` when its account took it back. */
+  readonly state: "final" | "provisional" | "takenBack";
+  /** The member that performed it, and its account's fingerprint. */
+  readonly performer: { readonly id: string; readonly account: string };
+  /** The fingerprint of the account that signed it off. */
+  readonly signOff: string;
+  /** Every member that could have held the person key. */
+  readonly members: readonly {
+    readonly id: string;
+    readonly account: string;
+    /** Whether it is still a member. */
+    readonly current: boolean;
+    /** Whether it confirmed it deleted the key, only saw the shred, or never answered. */
+    readonly acknowledged: "deleted" | "seen" | "missing";
+  }[];
 }
 
 /** A space as `db.spaces.list` gives it. */
