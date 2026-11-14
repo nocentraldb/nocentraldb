@@ -73,6 +73,8 @@ async fn a_post_is_sent_to_its_connection() {
     assert_eq!(seen.lock().unwrap()[0], "POST /@connections/open HTTP/1.1");
 }
 
+/// Stands in for the emulator until NOC-278 closes: see
+/// `delivery_to_a_gone_subscriber_waits_for_noc_278` in `tests/emulator.rs`.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_gone_connection_is_reported_gone_and_its_close_is_done() {
     let (url, seen) = endpoint().await;

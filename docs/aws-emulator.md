@@ -50,6 +50,13 @@ cargo test -p ncdb-relay-aws --test conformance --test aws_backend -- --ignored
 
 The coverage check and the backend's tests refuse to run when `AWS_ENDPOINT_URL` is not a loopback address or when real credentials are set, so they never reach AWS. The coverage check prints a table of results, and writes it to the file `NCDB_EMULATOR_REPORT` names, when it is set.
 
+## Known gaps
+
+- **API Gateway's WebSocket data plane (NOC-278).** Emulator 1.0.336 refuses the WebSocket upgrade on a stage, so it never issues a connection id. It answers `@connections` for an id it never issued with 400 `BadRequestException`, where AWS answers 410 `GoneException`. The relay's delivery to a gone subscriber relies on the 410, so it cannot be tested against the emulator yet.
+  - `delivery_to_a_gone_subscriber_waits_for_noc_278` in `crates/ncdb-relay-lambda/tests/emulator.rs` pins the gap. It fails the day the emulator answers 410; that day it becomes the delivery test.
+  - Until then, two tests stand in for it, each marked as doing so: a local endpoint that answers as AWS does (`tests/apigw.rs`), and the handler forgetting a gone connection (`tests/handler.rs`).
+  - The coverage check's row "WebSocket upgrade on the stage" shows when the emulator starts to serve connections.
+
 ## What the emulator does not replace
 
 It does not evaluate IAM as AWS does, it holds one region, and it keeps its state in memory. A smoke test on a real `dev` stage before `prod` stays (NOC-264).

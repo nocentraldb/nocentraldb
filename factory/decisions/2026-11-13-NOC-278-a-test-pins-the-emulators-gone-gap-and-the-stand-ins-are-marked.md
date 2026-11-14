@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-278 · A test pins the emulator's GoneException gap, and the tests that stand in for it are marked
+
+- Decided by: coding agent (NOC-278), on pm's assignment
+- Why: the AWS Emulator 1.0.336 serves no WebSocket data plane, so it never issues a connection id, and it answers an id it never issued with 400 `BadRequestException` where AWS answers 410 `GoneException`. The relay's delivery to a gone subscriber relies on the 410. The emulator test `delivery_to_a_gone_subscriber_waits_for_noc_278` runs in the CI emulator job and asserts the 400 for both `PostToConnection` and `DeleteConnection`. It fails the day the emulator answers 410, with a message that says to turn it into the delivery test. The two local tests that cover the delivery path meanwhile, in `tests/apigw.rs` and `tests/handler.rs`, each say that they stand in for it. The coverage check gains a row for the WebSocket upgrade on the stage, which shows when the emulator starts to issue connections; a probe through a live connection waits for that.
+- Instead of: an `#[ignore]` with a reason, which the emulator job's `--ignored` would run and fail, or which a `--skip` would hide; or no test at all, which would let the gap close unnoticed.
+- Topics: relay, aws, lambda, tests, emulator
