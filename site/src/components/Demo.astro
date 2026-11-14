@@ -11,6 +11,10 @@
 // heading, the text and the status line. The status line says what is
 // happening at each step, and plainly when the demo cannot run; the rest
 // of the page never depends on it.
+//
+// The loader is a module script: it never blocks parsing, so the rest of
+// the page and the kit's scripts at its end, which reveal the hero, do not
+// wait for it.
 ---
 
 <section class="section demo" id="demo" aria-labelledby="demo-h">
@@ -39,8 +43,6 @@
   </div>
 </section>
 
-<!-- A module script: it never blocks parsing, so the rest of the page and
-     the kit's scripts at its end, which reveal the hero, do not wait for it. -->
 <script type="module" is:inline data-demo-loader>
   (() => {
     const root = document.getElementById("demo");
