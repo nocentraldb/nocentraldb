@@ -196,6 +196,22 @@ test("a write in flight when the owner goes away fails, and the new owner never 
   expect(first.log.filter((call) => call === "write")).toEqual(["write"]);
 });
 
+for (const call of ["members.add", "members.remove", "members.setRole"]) {
+  test(`${call} in flight when the owner goes away fails, and the new owner never runs it`, async () => {
+    const { tab } = origin();
+    const first = await tab(new Set([call]));
+    await ask(first.core, "open", { lock: LOCK });
+    const second = await tab();
+    await ask(second.core, "open", { lock: LOCK });
+    const changed = ask(second.core, call, { space: "s" });
+    await until(() => first.log.includes(call));
+    first.core.terminate();
+    const failed = await changed.catch((error) => error);
+    expect(failed.code).toBe("storageFailed");
+    expect(second.log).toEqual(["open"]);
+  });
+}
+
 test("closing a follower ends only its own connection", async () => {
   const { tab } = origin();
   const first = await tab();
