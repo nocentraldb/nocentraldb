@@ -78,8 +78,8 @@ pub(super) async fn add(db: &Db, args: &Value) -> Result<Value, Failed> {
 }
 
 /// `members.list` `{"space": id}`: `[{"id": member, "account":
-/// fingerprint, "kind": "device" | "agent" | "subAgent", "role": text |
-/// null, "self": bool}]`.
+/// fingerprint, "linkedTo": fingerprint | null, "kind": "device" | "agent"
+/// | "subAgent", "role": text | null, "self": bool}]`.
 pub(super) async fn list(db: &Db, args: &Value) -> Result<Value, Failed> {
     let space = db.spaces().get(space_id(args)?).await?;
     let members = space.members().list().await?;
@@ -95,6 +95,12 @@ pub(super) async fn list(db: &Db, args: &Value) -> Result<Value, Failed> {
                 entries([
                     ("id", Value::Text(member.id.to_string())),
                     ("account", Value::Text(member.account.to_string())),
+                    (
+                        "linkedTo",
+                        member
+                            .linked_to
+                            .map_or(Value::Null, |into| Value::Text(into.to_string())),
+                    ),
                     ("kind", Value::Text(kind.into())),
                     (
                         "role",
