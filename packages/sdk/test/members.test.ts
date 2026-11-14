@@ -19,6 +19,9 @@ const MEMBER = "ab".repeat(32);
 const TEXT = "ncdb-invite-1:AQIDBA";
 const FINGERPRINT =
   "12345 67890 12345 67890 12345 67890 12345 67890 12345 67890 12345 67890";
+/** The fingerprint of the account FINGERPRINT's account is linked into. */
+const LINKED =
+  "09876 54321 09876 54321 09876 54321 09876 54321 09876 54321 09876 54321";
 const ADDED = {
   code: "memberAdded",
   text: "The new member reads the whole history of this space.",
@@ -50,6 +53,7 @@ const fake = (
             {
               id: MEMBER,
               account: FINGERPRINT,
+              linkedTo: LINKED,
               kind: "device",
               role: "admin",
               self: true,
@@ -146,14 +150,19 @@ test("an account new to this device fails with unknownAccount, carrying the fing
   expect((refused as NcError).fingerprint).toBe(FINGERPRINT);
 });
 
-test("members.list gives each member's id, account, kind, role and whether it is this member", async () => {
+test("members.list gives each member's id, account, the account it is linked into, kind, role and whether it is this member", async () => {
   const { core } = fake();
   const db = await connect(core, { model, lock });
   const project = await db.spaces.create();
+  const [listed] = await project.members.list();
+  // The owner's NOC-307 A1: the account the old fingerprint is linked into.
+  const linkedTo: string | null | undefined = listed?.linkedTo;
+  expect(linkedTo).toBe(LINKED);
   expect(await project.members.list()).toEqual([
     {
       id: MEMBER,
       account: FINGERPRINT,
+      linkedTo: LINKED,
       kind: "device",
       role: "admin",
       self: true,
