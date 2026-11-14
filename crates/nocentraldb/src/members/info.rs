@@ -34,13 +34,24 @@ impl MemberKind {
     }
 }
 
-/// One current member of a space, from [`Members::list`].
+/// One current member of a space, from [`Members::list`]. It is
+/// `#[non_exhaustive]`: an app reads its fields, and a later field is no
+/// breaking change.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct MemberInfo {
     /// Its id, which [`Members::remove`] and [`Members::set_role`] take.
     pub id: MemberId,
-    /// The fingerprint of its account.
+    /// The fingerprint of the account its certificate names. A membership
+    /// written before that account was linked into another keeps it
+    /// (RFC 0010, "Linking accounts drawn per database").
     pub account: Fingerprint,
+    /// The fingerprint of the account that `account` is linked into, when
+    /// this database knows the link: from its own account's link
+    /// statements. `None` when `account` is linked into no other, and for
+    /// another person's linked accounts, whose links this database does
+    /// not learn (the owner's NOC-307 A1 and B3).
+    pub linked_to: Option<Fingerprint>,
     /// Whether it is a device, an agent or a sub-agent.
     pub kind: MemberKind,
     /// Its role in the space.
@@ -65,14 +76,21 @@ impl Members<'_> {
             )
         })?;
         let me = inner.member.key().id();
+        let linked = crate::account::linked(&inner)?;
         let resolved = state.checks.resolved();
         Ok(resolved
             .members()
             .filter_map(|(id, role)| {
                 let member = resolved.member(id)?;
+                let account = Fingerprint::of(&member.certificate);
+                let linked_to = linked
+                    .get(&member.certificate.account_key)
+                    .copied()
+                    .filter(|into| *into != account);
                 Some(MemberInfo {
                     id: MemberId(id),
-                    account: Fingerprint::of(&member.certificate),
+                    account,
+                    linked_to,
                     kind: MemberKind::of(member.certificate.kind),
                     role: Some(Role::of(role)),
                     is_self: id == me,

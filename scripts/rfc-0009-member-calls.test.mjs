@@ -1,7 +1,7 @@
 // Holds the owner's answer on NOC-203 (Carsten, 2026-11-11, every
 // recommendation) as RFC 0009 records it (NOC-169): a public, opaque
-// `MemberId`; `Members::list` returns `MemberInfo { id, account, kind, role,
-// is_self }` for the current members, with `MemberKind`; `Members::remove`
+// `MemberId`; `Members::list` returns `MemberInfo { id, account, linked_to,
+// kind, role, is_self }` (NOC-307 A1 added `linked_to`) for the current members, with `MemberKind`; `Members::remove`
 // and `Members::set_role` take a `MemberId` and return a `Notice`,
 // `set_role` with `NoticeCode::RoleSet` (TypeScript `roleSet`). Each stands
 // where it belongs, with the options not taken. Whether the wording is right
@@ -47,7 +47,8 @@ test("the Rust SDK names MemberId, MemberInfo, MemberKind, list, remove and set_
   const rust = bullet(part("the-rust-sdk"), "- **Invitations and members.**");
   for (const pattern of [
     /`Members::list\(\) -> Result<Vec<MemberInfo>, Error>`/,
-    /`MemberInfo \{ id: MemberId, account: Fingerprint, kind: MemberKind, role: Option<Role>, is_self: bool \}`/,
+    /`MemberInfo \{ id: MemberId, account: Fingerprint, linked_to: Option<Fingerprint>, kind: MemberKind, role: Option<Role>, is_self: bool \}`/,
+    /`MemberInfo` is `#\[non_exhaustive\]`, so that a later field is no breaking change \(Carsten, 2026-11-13, NOC-307 A1\)/,
     /`MemberKind` is `Device`, `Agent` or `SubAgent`, `#\[non_exhaustive\]`/,
     /`MemberId` is public and opaque: `Copy`, `Eq`, `Ord`, `Hash` and `Debug`, with no text form yet/,
     /`Members::remove\(MemberId\) -> Result<Notice, Error>` returns `NoticeCode::MemberRemoved`/,
