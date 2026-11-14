@@ -466,3 +466,23 @@ test("an admin adds a member by invitation once its fingerprint is confirmed, re
   assert.deepEqual(otherErrors, []);
   assert.deepEqual(errors, []);
 });
+
+// NOC-315 slice 2: the audit of a space's erasures (RFC 0009, "Erasures").
+// No TypeScript call erases yet, so a new space lists none.
+test("space.erasures.list() of a new space lists no erasure", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "erasures" });
+      const project = await db.spaces.create();
+      const erasures = await project.erasures.list();
+      await db.close();
+      return { erasures };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(result.erasures, []);
+  assert.deepEqual(errors, []);
+});

@@ -51,6 +51,9 @@ export interface Tx {
 export interface Space {
     readonly id: Id;
     readonly members: Members;
+    readonly erasures: {
+        list(): Promise<ErasureEntry[]>;
+    };
     readonly status: {
         current(): SpaceStatus;
         subscribe(listener: (status: SpaceStatus) => void): Stop;
@@ -64,6 +67,21 @@ export interface Space {
     find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
     subscribe<T>(query: Query<T, readonly unknown[]>, listener: (page: Page<T>) => void): Stop;
     subscribe<C extends AnyCollection>(collection: C, id: Id, listener: (object: Read<C> | undefined) => void): Stop;
+}
+interface ErasureEntry {
+    readonly shred: string;
+    readonly state: "final" | "provisional" | "takenBack";
+    readonly performer: {
+        readonly id: string;
+        readonly account: string;
+    };
+    readonly signOff: string;
+    readonly members: readonly {
+        readonly id: string;
+        readonly account: string;
+        readonly current: boolean;
+        readonly acknowledged: "deleted" | "seen" | "missing";
+    }[];
 }
 interface SpaceEntry {
     readonly id: Id;
