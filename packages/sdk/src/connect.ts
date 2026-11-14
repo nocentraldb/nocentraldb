@@ -8,6 +8,7 @@
 
 import { type Cbor, decode, encode } from "./cbor.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
+import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import { membersOf, ownInvitation } from "./membership.ts";
@@ -179,6 +180,11 @@ export const connect = async (
   // another tab owns the database, that tab's (NOC-177).
   let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
   let sync = syncStatusOf((opened as { sync?: unknown } | null)?.sync, relay);
+  const reports = reportsOf(
+    ask,
+    (opened ?? {}) as { durability?: unknown; view?: unknown },
+    options.persistentStorage,
+  );
   const syncListeners = new Set<(status: SyncStatus) => void>();
   // Who waits for the next sync status: `db.sync.confirmed`.
   const syncWaiters = new Set<{
@@ -245,6 +251,16 @@ export const connect = async (
       synced(message.status);
       return;
     }
+    if (message.event === "durability") {
+      reports.durabilityChanged(
+        (message as { durability?: unknown }).durability,
+      );
+      return;
+    }
+    if (message.event === "view") {
+      reports.viewChanged((message as { view?: unknown }).view);
+      return;
+    }
     if (message.event === "spaceStatus") {
       statusChanged((message as { space: Id }).space, message.status);
       return;
@@ -260,6 +276,7 @@ export const connect = async (
           () => {},
         );
       }
+      reports.reopened();
       for (const subscription of subscriptions) rerun(subscription);
       return;
     }
@@ -614,6 +631,8 @@ export const connect = async (
         }
       },
     },
+    durability: reports.durability,
+    view: reports.view,
     close: async () => {
       if (closed) return;
       try {
@@ -623,6 +642,7 @@ export const connect = async (
         subscriptions.clear();
         changeListeners.clear();
         syncListeners.clear();
+        reports.clear();
         for (const entry of statuses.values()) entry.listeners.clear();
         for (const waiter of syncWaiters) {
           waiter.reject(new NcError("closed", "the database is closed"));

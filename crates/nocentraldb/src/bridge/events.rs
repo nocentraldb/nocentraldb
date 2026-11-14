@@ -9,10 +9,12 @@ use std::task::Poll;
 use ncdb_core::cbor::{self, Key, Value};
 
 use super::{entries, lower_camel, role_name};
+use crate::durability::Durability;
 use crate::id::{ChangeId, SpaceId};
 use crate::status::SpaceStatus;
 use crate::subscribe::FoldFeed;
 use crate::sync::{Connection, SyncStatus, Watch};
+use crate::view_report::ViewStatus;
 
 /// The events of a database (NOC-176): after each fold, the space and
 /// the collections it touched, so that the TypeScript SDK re-runs what its
@@ -24,6 +26,17 @@ pub struct Events {
     pub(super) sync: Arc<Mutex<Watch<SyncStatus>>>,
     /// The spaces whose status the SDK follows.
     pub(super) spaces: Arc<Mutex<BTreeMap<SpaceId, Watch<SpaceStatus>>>>,
+    /// The durability of the copy (NOC-315).
+    pub(super) durability: Arc<Mutex<Watch<Durability>>>,
+    /// The view's report (NOC-315).
+    pub(super) view: Arc<Mutex<Watch<ViewStatus>>>,
+}
+
+/// The guarded value of `mutex`, poisoned or not.
+fn guard<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 impl Events {
@@ -55,6 +68,18 @@ impl Events {
             messages.push(cbor::encode(&entries([
                 ("event", Value::Text("sync".into())),
                 ("status", sync_status(&status)),
+            ])));
+        }
+        if let Some(durability) = guard(&self.durability).take() {
+            messages.push(cbor::encode(&entries([
+                ("event", Value::Text("durability".into())),
+                ("durability", super::reports::durability(&durability)),
+            ])));
+        }
+        if let Some(view) = guard(&self.view).take() {
+            messages.push(cbor::encode(&entries([
+                ("event", Value::Text("view".into())),
+                ("view", super::reports::view(&view)),
             ])));
         }
         for (space, watch) in self.spaces().iter_mut() {
@@ -122,6 +147,11 @@ impl Events {
         let events = self.clone();
         std::future::poll_fn(move |cx| {
             if events.sync().changed(cx.waker()) {
+                return Poll::Ready(());
+            }
+            if guard(&events.durability).changed(cx.waker())
+                || guard(&events.view).changed(cx.waker())
+            {
                 return Poll::Ready(());
             }
             if events

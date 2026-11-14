@@ -9,6 +9,7 @@
 // 2026-11-12, NOC-274).
 
 import { connectWorker } from "./connect.ts";
+import type { Durability, ViewStatus } from "./durability.ts";
 import { SetElements } from "./elements.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
@@ -203,6 +204,22 @@ export interface Db {
     /** Resolves when the relay holds the change `change`. It may never resolve: the relay can refuse the change, or never be reached. */
     confirmed(change: string): Promise<void>;
   };
+  /** What this copy would lose if the browser deleted it now, as a report (RFC 0006, "What the SDK reports"). */
+  readonly durability: {
+    /** The report as it is now. */
+    current(): Durability;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (durability: Durability) => void): Stop;
+    /** Asks the browser for persistent storage and answers its answer; the new storage is also reported through `subscribe`. */
+    requestPersistent(): Promise<boolean>;
+  };
+  /** The view's report: whether a rebuild runs, and how far it is (RFC 0009, "Sync and status"). */
+  readonly view: {
+    /** The report as it is now. */
+    current(): ViewStatus;
+    /** Calls `listener` with the report at once, and again whenever it changes. */
+    subscribe(listener: (view: ViewStatus) => void): Stop;
+  };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
 }
@@ -218,6 +235,8 @@ interface OpenOptions {
   relay?: string;
   /** Which database: 1 to 64 of a–z, 0–9, `-` and `_`; `"default"` when left out. */
   name?: string;
+  /** `"on-open"`, the default: ask the browser for persistent storage on open, without waiting; `"on-request"`: only when the app calls `db.durability.requestPersistent()` (RFC 0006). */
+  persistentStorage?: "on-open" | "on-request";
 }
 
 /** Opens this member's database in the browser. */

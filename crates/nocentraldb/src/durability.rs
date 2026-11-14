@@ -61,3 +61,36 @@ pub(crate) fn durability(inner: &Inner, storage: Storage) -> Durability {
         at_risk: unconfirmed > 0 && storage != Storage::Persistent,
     }
 }
+
+#[cfg(any(test, feature = "bridge"))]
+impl crate::db::Db {
+    /// The durability now, and a [`Watch`](crate::sync::Watch) of it from
+    /// now on, for the bridge's events (NOC-315).
+    pub(crate) fn durability_watch(&self) -> (Durability, crate::sync::Watch<Durability>) {
+        crate::sync::watch(&self.inner, |inner: &Inner| {
+            durability(inner, inner.storage)
+        })
+    }
+
+    /// Reads again whether the browser keeps this copy persistent, after the
+    /// page asked with `persist()` or became visible again (RFC 0006, "What
+    /// the SDK reports"). A copy in memory stays temporary; natively the
+    /// storage never changes.
+    pub(crate) async fn refresh_storage(&self) {
+        #[cfg(target_arch = "wasm32")]
+        {
+            if crate::db::lock(&self.inner).storage == Storage::Temporary {
+                return;
+            }
+            let storage = match crate::browser::persisted().await {
+                true => Storage::Persistent,
+                false => Storage::BestEffort,
+            };
+            let mut inner = crate::db::lock(&self.inner);
+            if inner.storage != storage {
+                inner.storage = storage;
+                inner.status.notify();
+            }
+        }
+    }
+}
