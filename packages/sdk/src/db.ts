@@ -114,6 +114,8 @@ export interface Space {
   readonly id: Id;
   /** The members of this space: add, list, re-role and remove (RFC 0009, "Invitations and members"). */
   readonly members: Members;
+  /** Leaves the space: this member writes its own removal and keeps its copy; the last admin is refused with `lastAdmin` (RFC 0009, "Spaces"). */
+  leave(): Promise<{ readonly notice: import("./members.ts").Notice }>;
   /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
   readonly status: {
     /** The report as it is now. */
@@ -162,6 +164,8 @@ export interface Space {
 interface SpaceEntry {
   readonly id: Id;
   readonly role: string | null;
+  /** Whether the space is of this database's model, or of another (RFC 0009, "Spaces of another model"). */
+  readonly model: "ours" | "another";
 }
 
 /** This member's database (RFC 0009, "Open and close"). */
@@ -173,6 +177,8 @@ export interface Db {
     get(id: Id): Promise<Space>;
     /** Every space of this member, with its role. */
     list(): Promise<SpaceEntry[]>;
+    /** Calls `listener` with the list, then with each new list when a space is added, left or removed, or its role changes (RFC 0009, "Spaces"). */
+    subscribe(listener: (spaces: SpaceEntry[]) => void): Stop;
   };
   /** A page of a query of an index across every space of the member. */
   find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;

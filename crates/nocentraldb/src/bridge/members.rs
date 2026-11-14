@@ -133,7 +133,7 @@ pub(super) async fn set_role(db: &Db, args: &Value) -> Result<Value, Failed> {
 }
 
 /// A notice as the bridge sends it: `{"code": text, "text": text}`.
-fn notice_of(notice: Notice) -> Value {
+pub(super) fn notice_of(notice: Notice) -> Value {
     entries([
         (
             "code",

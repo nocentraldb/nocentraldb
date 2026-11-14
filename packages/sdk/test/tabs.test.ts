@@ -196,7 +196,12 @@ test("a write in flight when the owner goes away fails, and the new owner never 
   expect(first.log.filter((call) => call === "write")).toEqual(["write"]);
 });
 
-for (const call of ["members.add", "members.remove", "members.setRole"]) {
+for (const call of [
+  "members.add",
+  "members.remove",
+  "members.setRole",
+  "space.leave",
+]) {
   test(`${call} in flight when the owner goes away fails, and the new owner never runs it`, async () => {
     const { tab } = origin();
     const first = await tab(new Set([call]));
