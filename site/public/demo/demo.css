@@ -1,0 +1,69 @@
+/* The live demo's task list and its loading spinner (NOC-319). The page's
+   loader adds this stylesheet when the demo starts loading, after the page
+   has rendered, so none of it is part of the first render. */
+.demo__status[data-state="loading"] p::before {
+  content: "";
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  margin-right: 0.5em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -0.1em;
+  animation: demo-spin 0.9s linear infinite;
+}
+@keyframes demo-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo__status[data-state="loading"] p::before {
+    animation: none;
+  }
+}
+.demo__app {
+  display: grid;
+  gap: var(--s-3, 0.75rem);
+  margin-top: var(--s-4, 1rem);
+}
+.demo__add {
+  display: flex;
+  gap: var(--s-3, 0.75rem);
+}
+.demo__add input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--s-2, 0.5rem) var(--s-3, 0.75rem);
+  font: inherit;
+}
+.demo__error:empty {
+  display: none;
+}
+.demo__error {
+  color: var(--danger, #b00020);
+}
+.demo__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.demo__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3, 0.75rem);
+  padding: var(--s-2, 0.5rem) 0;
+}
+.demo__list--done .title {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.demo__delete {
+  font: inherit;
+  font-size: var(--t-small, 0.875rem);
+  color: var(--muted);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}

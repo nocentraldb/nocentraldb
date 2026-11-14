@@ -6,7 +6,9 @@
 // event, for the section to come near the viewport and for the browser to
 // be idle, checks that the browser has what the demo needs, and only then
 // imports /demo/demo.js, which brings the
-// SDK, its worker and its WebAssembly core. The status line says what is
+// SDK, its worker and its WebAssembly core; that module adds the task list
+// and its stylesheet (/demo/demo.css), so the first render carries only the
+// heading, the text and the status line. The status line says what is
 // happening at each step, and plainly when the demo cannot run; the rest
 // of the page never depends on it.
 ---
@@ -32,17 +34,6 @@
         <p data-demo-text>
           The demo starts when you reach it, once this page has loaded. It then downloads the SDK and its WebAssembly core, about 2 MB.
         </p>
-      </div>
-      <div class="demo__app" data-demo-app hidden>
-        <form id="demo-add" class="demo__add">
-          <input name="title" placeholder="A new task" aria-label="A new task" autocomplete="off" maxlength="200" />
-          <button type="submit" class="btn btn--primary">Add</button>
-        </form>
-        <p class="demo__error" data-demo-error role="alert"></p>
-        <h3>Open</h3>
-        <ul id="demo-open" class="demo__list"></ul>
-        <h3>Done</h3>
-        <ul id="demo-done" class="demo__list demo__list--done"></ul>
       </div>
     </div>
   </div>
@@ -80,6 +71,10 @@
         "loading",
         "Loading the demo: downloading the SDK, its worker and its WebAssembly core, about 2 MB.",
       );
+      const style = document.createElement("link");
+      style.rel = "stylesheet";
+      style.href = "/demo/demo.css";
+      document.head.append(style);
       import("/demo/demo.js")
         .then((demo) => demo.start(root, say))
         .catch((error) => {
@@ -117,86 +112,17 @@
 </script>
 
 <style>
-  .demo-grid {
-    align-content: start;
-  }
   .demo__hint {
     margin-top: var(--s-4);
     color: var(--muted);
-  }
-  .demo__panel {
-    display: grid;
-    gap: var(--s-4);
-    align-content: start;
   }
   .demo__status {
     padding: var(--s-4) var(--s-5);
     border: 1px solid var(--line, currentColor);
     border-radius: var(--r-3, 12px);
   }
-  .demo__status[data-state="loading"] p::before {
-    content: "";
-    display: inline-block;
-    width: 0.8em;
-    height: 0.8em;
-    margin-right: 0.5em;
-    border: 2px solid currentColor;
-    border-right-color: transparent;
-    border-radius: 50%;
-    vertical-align: -0.1em;
-    animation: demo-spin 0.9s linear infinite;
-  }
   .demo__status[data-state="failed"],
   .demo__status[data-state="unsupported"] {
     border-color: var(--danger, #b00020);
-  }
-  @keyframes demo-spin {
-    to {
-      transform: rotate(1turn);
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .demo__status[data-state="loading"] p::before {
-      animation: none;
-    }
-  }
-  .demo__add {
-    display: flex;
-    gap: var(--s-3);
-  }
-  .demo__add input {
-    flex: 1;
-    min-width: 0;
-    padding: var(--s-2) var(--s-3);
-    font: inherit;
-  }
-  .demo__error:empty {
-    display: none;
-  }
-  .demo__error {
-    color: var(--danger, #b00020);
-  }
-  .demo__list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-  }
-  .demo__list :global(li) {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--s-3);
-    padding: var(--s-2) 0;
-  }
-  .demo__list--done :global(.title) {
-    text-decoration: line-through;
-    color: var(--muted);
-  }
-  .demo__list :global(.demo__delete) {
-    font: inherit;
-    font-size: var(--t-small);
-    color: var(--muted);
-    background: none;
-    border: 0;
-    cursor: pointer;
   }
 </style>

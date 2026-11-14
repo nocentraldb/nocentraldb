@@ -12,15 +12,12 @@ import { fileURLToPath } from "node:url";
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 const html = readFileSync(join(dist, "index.html"), "utf8");
 
-test("the landing page holds the demo section and its waiting state", () => {
+test("the landing page holds the demo section and its waiting state, and no more", () => {
   assert.match(html, /<section[^>]*id="demo"/);
-  assert.match(
-    html,
-    /data-demo-status[^>]*data-state="waiting"|data-state="waiting"[^>]*data-demo-status/,
-  );
-  assert.match(html, /<form[^>]*id="demo-add"/);
-  assert.match(html, /<ul[^>]*id="demo-open"/);
-  assert.match(html, /<ul[^>]*id="demo-done"/);
+  assert.match(html, /<[^>]*data-demo-status[^>]*data-state="waiting"/);
+  // The task list comes with the demo, after the page has rendered.
+  assert.doesNotMatch(html, /id="demo-add"/);
+  assert.doesNotMatch(html, /id="demo-open"/);
 });
 
 test("nothing under /demo/ is part of the first render", () => {

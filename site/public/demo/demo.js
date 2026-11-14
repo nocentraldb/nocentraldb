@@ -49,7 +49,27 @@ const theSpace = async (db) => {
  * Opens the demo's database and shows it in `root`, the page's demo
  * section. `say(state, text)` updates the section's status line.
  */
+/** The task list's markup, which the page's first render does not carry. */
+const app = () => {
+  const box = document.createElement("div");
+  box.className = "demo__app";
+  box.dataset.demoApp = "";
+  box.hidden = true;
+  box.innerHTML = `
+    <form id="demo-add" class="demo__add">
+      <input name="title" placeholder="A new task" aria-label="A new task" autocomplete="off" maxlength="200">
+      <button type="submit" class="btn btn--primary">Add</button>
+    </form>
+    <p class="demo__error" data-demo-error role="alert"></p>
+    <h3>Open</h3>
+    <ul id="demo-open" class="demo__list"></ul>
+    <h3>Done</h3>
+    <ul id="demo-done" class="demo__list demo__list--done"></ul>`;
+  return box;
+};
+
 export const start = async (root, say) => {
+  (root.querySelector(".demo__panel") ?? root).append(app());
   const find = (selector) => {
     const found = root.querySelector(selector);
     if (found === null) throw new Error(`the demo section has no ${selector}`);
