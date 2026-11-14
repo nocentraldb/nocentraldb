@@ -407,6 +407,41 @@ test("space.status gives a new space's status, and its handles share it", async 
   assert.deepEqual(errors, []);
 });
 
+// NOC-315 slice 1: the space list as a report, and leaving a space (RFC
+// 0009, "Spaces").
+test("db.spaces.subscribe follows the list, and the last admin cannot leave", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "spaces" });
+      const seen = [];
+      const first = new Promise((resolve) =>
+        db.spaces.subscribe((all) => {
+          seen.push(all);
+          resolve();
+        }),
+      );
+      await first;
+      const project = await db.spaces.create();
+      for (let i = 0; i < 100 && seen.length < 2; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const refused = await project.leave().catch((error) => error.code);
+      await db.close();
+      return { seen, id: project.id, refused };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(result.seen[0], []);
+  assert.deepEqual(result.seen[1], [
+    { id: result.id, role: "admin", model: "ours" },
+  ]);
+  assert.equal(result.refused, "lastAdmin");
+  assert.deepEqual(errors, []);
+});
+
 // NOC-176 slice 4b: invitations and members (RFC 0009, "Invitations and
 // members"), between two members, each in its own browser context: the
 // databases of one origin share one OPFS pool, which one worker holds.
