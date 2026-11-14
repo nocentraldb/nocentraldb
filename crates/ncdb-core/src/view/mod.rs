@@ -17,6 +17,7 @@ mod accounts;
 pub mod browser;
 mod fold;
 mod from_lock;
+mod joined;
 mod log_table;
 mod migrate;
 pub mod model;

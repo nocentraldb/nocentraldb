@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS pending_links (
     statement BLOB PRIMARY KEY NOT NULL,
     change_id BLOB
 ) STRICT;
+CREATE TABLE IF NOT EXISTS joined (
+    id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1)
+) STRICT;
 CREATE TABLE IF NOT EXISTS shreds_held (
     space_id BLOB NOT NULL,
     change_id BLOB NOT NULL,
