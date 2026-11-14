@@ -4,9 +4,11 @@
 // /demo/ with when it started. It reads the built site in site/dist, so
 // it measures the page before and after a change the same way.
 //
-//   node scripts/site-demo/measure.mjs [--runs 9] [--throttle] [--dist <dir>]
+//   node scripts/site-demo/measure.mjs [--runs 9] [--throttle] [--local] [--dist <dir>]
 //
 // --dist measures another build of the site, such as one of main.
+// --local blocks every request that leaves localhost, such as the web
+// fonts, whose arrival otherwise decides when the hero repaints.
 //
 // --throttle runs each load with Chromium's CPU slowed 4x and the network
 // at "Fast 3G", closer to a phone than this machine.
@@ -20,8 +22,18 @@ const median = (values) => {
 };
 
 /** One load of `url`: its paint timings and the /demo/ requests. */
-export const measureOnce = async (browser, url, { throttle = false } = {}) => {
+export const measureOnce = async (
+  browser,
+  url,
+  { throttle = false, local = false } = {},
+) => {
   const context = await browser.newContext();
+  if (local) {
+    await context.route(
+      (target) => target.hostname !== "localhost",
+      (route) => route.abort(),
+    );
+  }
   const page = await context.newPage();
   if (throttle) {
     const cdp = await context.newCDPSession(page);
@@ -64,7 +76,12 @@ export const measureOnce = async (browser, url, { throttle = false } = {}) => {
   return { ...timings, demo };
 };
 
-export const measure = async ({ runs = 9, throttle = false, dist } = {}) => {
+export const measure = async ({
+  runs = 9,
+  throttle = false,
+  local = false,
+  dist,
+} = {}) => {
   const server = await startServer({
     port: 0,
     ...(dist ? { root: dist } : {}),
@@ -73,7 +90,9 @@ export const measure = async ({ runs = 9, throttle = false, dist } = {}) => {
   try {
     const all = [];
     for (let run = 0; run < runs; run++) {
-      all.push(await measureOnce(browser, `${server.url}/`, { throttle }));
+      all.push(
+        await measureOnce(browser, `${server.url}/`, { throttle, local }),
+      );
     }
     return {
       runs,
@@ -95,12 +114,14 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
       runs: { type: "string" },
       throttle: { type: "boolean" },
       dist: { type: "string" },
+      local: { type: "boolean" },
     },
   });
   const result = await measure({
     runs: Number(values.runs ?? 9),
     throttle: values.throttle ?? false,
     dist: values.dist,
+    local: values.local ?? false,
   });
   console.log(JSON.stringify(result, null, 2));
 }
