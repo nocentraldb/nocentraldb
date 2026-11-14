@@ -37,7 +37,7 @@ const SCRIPT = "scripts/install-toolchain.sh";
 const JOBS = {
   ci: ["gates"],
   changes: ["changes"],
-  release: ["alpha", "verify", "build", "publish", "commit-back"],
+  release: ["alpha", "alpha-npm", "verify", "build", "publish", "commit-back"],
   "site-pages": ["build"],
 };
 

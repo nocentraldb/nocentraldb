@@ -1,5 +1,6 @@
 # Releases. The alpha job turns every product-changing merge to main into a
-# tagged GitHub prerelease once `ci` is green; the publish jobs (verify,
+# tagged GitHub prerelease once `ci` is green, and alpha-npm publishes its
+# npm packages under the dist-tag alpha; the publish jobs (verify,
 # build, publish, commit-back) react to beta and release tags. Every decision
 # is in scripts/release/*.mjs with tests; this file only wires them. A
 # workflow_dispatch is ALWAYS a dry run: nothing is tagged or published.
@@ -7,6 +8,8 @@
 # the dispatched ref. These tests assert these rules:
 # scripts/release-workflow.test.mjs (the triggers and the rules for every
 # job), scripts/release-workflow-alpha.test.mjs (the alpha job),
+# scripts/release-workflow-npm.test.mjs (alpha-npm, which publishes the
+# alpha to npm),
 # scripts/release-workflow-publish.test.mjs (verify, build, publish and
 # commit-back) and scripts/release-ruleset.test.mjs (the release app's token
 # in commit-back and app-token-check).
@@ -56,6 +59,12 @@ jobs:
     env:
       SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    # What alpha-npm needs: whether this run got as far as an alpha (the
+    # guard and next-version did not skip), its tag and its commit.
+    outputs:
+      publish: ${{ steps.guard.outputs.skip != 'true' && steps.next.outputs.skip != 'true' }}
+      tag: ${{ steps.next.outputs.tag }}
+      sha: ${{ env.SHA }}
     steps:
       # Runs before any checkout, with the runner's own git, so nothing from
       # the commit under test executes before it is known to be the head of
@@ -154,6 +163,70 @@ jobs:
             fi
             gh release create "$TAG" --target "$SHA" --prerelease --title "$TAG" --notes-file alpha-notes.md
           fi
+
+  alpha-npm:
+    # The alpha's npm packages (NOC-281; docs/release-management.md,
+    # "Alpha"). After the alpha job created the GitHub prerelease, every npm
+    # package that publishable lets through goes to npm at the alpha's
+    # version under the dist-tag alpha, with provenance. npm authenticates
+    # through Trusted Publishing: it exchanges this job's OIDC token for a
+    # short-lived publish token, so no npm token exists anywhere. This job
+    # alone holds id-token: write, and it holds no contents: write. A
+    # dispatch (the dry run) only reports what it would publish. A failed
+    # publish is retried with "Re-run failed jobs", which keeps the alpha
+    # job's outputs; npm-publish skips what npm already holds. A new run of
+    # the whole workflow finds the alpha tagged and skips (next-version, N3).
+    needs: alpha
+    if: needs.alpha.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: release-alpha-npm
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    env:
+      SHA: ${{ needs.alpha.outputs.sha }}
+      TAG: ${{ needs.alpha.outputs.tag }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.SHA }}
+          # No token stays in .git/config, where the dependency install and
+          # the build could read it.
+          persist-credentials: false
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
+      - run: rustup toolchain install --no-self-update
+      - run: pnpm install --frozen-lockfile
+      # The tag is vX.Y.Z-alpha.N; the version to publish drops the v.
+      - name: Write the alpha's version into this checkout
+        run: node scripts/release/set-version.mjs "${TAG#v}"
+      # The SDK's build runs wasm-bindgen from target/tools
+      # (packages/sdk/build.mjs).
+      - name: Install wasm-bindgen
+        run: moon run repo:wasm-runner
+      - name: Build the npm packages
+        run: pnpm -r --if-present run build
+      - name: Publish to npm under alpha
+        run: |
+          if [ "$DRY_RUN" = true ]; then dry=--dry-run; else dry=; fi
+          node scripts/release/npm-publish.mjs --version "${TAG#v}" --dist-tag alpha --repo "$GITHUB_REPOSITORY" $dry
 
   verify:
     # Beta and release tags, or a dispatch that names a tag (the dry run, on
