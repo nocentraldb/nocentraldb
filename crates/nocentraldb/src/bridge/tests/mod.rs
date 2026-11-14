@@ -7,6 +7,7 @@ use super::Bridge;
 
 mod find;
 mod members;
+mod reports;
 mod sync;
 
 const LOCK: &str = include_str!("../../../tests/model/model.lock.json");
