@@ -460,3 +460,4 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
 export { add, open, remove } from "./db.ts";
 /** The one error class the SDK throws (RFC 0009, "Errors"). */
 export { NcError as Error } from "./error.ts";
+export { invitation } from "./members.ts";

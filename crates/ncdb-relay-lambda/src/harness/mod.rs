@@ -32,7 +32,7 @@ use ncdb_relay::wire::MAX_MESSAGE;
 use ncdb_relay::{ErrorCode, Relay};
 use serde_json::Value;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
@@ -129,6 +129,19 @@ impl<S: TokenUrls> Urls<S> for LocalUrls {
     }
 }
 
+/// Ends the maximum age of every connection open now, at once (NOC-309):
+/// a test that needs a connection to reach its age at a point of its own,
+/// after its answers, says so instead of racing a timer.
+#[derive(Clone)]
+pub struct Expiry(Arc<watch::Sender<()>>);
+
+impl Expiry {
+    /// Every connection open now closes as one at its maximum age does.
+    pub fn expire(&self) {
+        self.0.send_replace(());
+    }
+}
+
 /// The gateway: API Gateway's WebSocket API and S3's URLs, locally.
 pub struct Gateway<S> {
     listener: TcpListener,
@@ -136,6 +149,7 @@ pub struct Gateway<S> {
     handler: Arc<Local<S>>,
     api: FakeApi,
     max_age: Duration,
+    expiry: Expiry,
     log: Arc<Mutex<Vec<String>>>,
 }
 
@@ -167,6 +181,7 @@ impl<S: TokenUrls + 'static> Gateway<S> {
             handler: Arc::new(handler),
             api,
             max_age: Duration::from_millis(MAX_CONNECTION_AGE),
+            expiry: Expiry(Arc::new(watch::channel(()).0)),
             log: Arc::default(),
         })
     }
@@ -176,6 +191,11 @@ impl<S: TokenUrls + 'static> Gateway<S> {
     pub fn with_max_age(mut self, max_age: Duration) -> Gateway<S> {
         self.max_age = max_age;
         self
+    }
+
+    /// What ends the connections' maximum age before it runs out.
+    pub fn expiry(&self) -> Expiry {
+        self.expiry.clone()
     }
 
     /// The address of the WebSocket API.
@@ -203,6 +223,7 @@ impl<S: TokenUrls + 'static> Gateway<S> {
                 handler: self.handler.clone(),
                 api: self.api.clone(),
                 max_age: self.max_age,
+                expired: self.expiry.0.subscribe(),
                 log: self.log.clone(),
             };
             tokio::spawn(link.serve(stream));
@@ -215,11 +236,13 @@ struct Link<S> {
     handler: Arc<Local<S>>,
     api: FakeApi,
     max_age: Duration,
+    /// Changes when the test ends the connections' age.
+    expired: watch::Receiver<()>,
     log: Arc<Mutex<Vec<String>>>,
 }
 
 impl<S: TokenUrls + 'static> Link<S> {
-    async fn serve(self, stream: TcpStream) {
+    async fn serve(mut self, stream: TcpStream) {
         let config = WebSocketConfig::default()
             .max_message_size(Some(MAX_MESSAGE))
             .max_frame_size(Some(MAX_MESSAGE));
@@ -260,6 +283,9 @@ impl<S: TokenUrls + 'static> Link<S> {
                 message = incoming.next() => message,
                 _ = &mut writer => break,
                 () = &mut expired => break,
+                // Only a change ends the age: a gateway that stopped
+                // running drops the sender, which is no expiry.
+                Ok(()) = self.expired.changed() => break,
             };
             let body = match message {
                 Some(Ok(Message::Binary(bytes))) => Some((bytes.to_vec(), true)),

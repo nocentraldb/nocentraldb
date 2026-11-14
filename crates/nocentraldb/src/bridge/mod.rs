@@ -37,6 +37,10 @@
 //! - `get` `{"space": id, "collection": text, "id": id}`: answers `null`
 //!   or `{"$id": id, "$space": id, "$deleted": bool, "fields": map}`.
 //!
+//! The calls of slice 4b, members (RFC 0009, "Invitations and members"),
+//! in `members.rs`: `invitation`, `members.add`, `members.list`,
+//! `members.remove` and `members.setRole`.
+//!
 //! The calls of slice 4, sync (RFC 0009, "Sync and status"):
 //!
 //! - `sync.pause` `{}` and `sync.resume` `{}`: stop and restart syncing.
@@ -63,6 +67,7 @@
 //! `null`, which clears a basic field or a link (`Value::clear`).
 
 mod events;
+mod members;
 #[cfg(test)]
 mod tests;
 
@@ -192,6 +197,11 @@ impl Bridge {
                 Ok(Value::Null)
             }
             "find" => self.find(&db, args).await,
+            "invitation" => members::invitation(&db).await,
+            "members.add" => members::add(&db, args).await,
+            "members.list" => members::list(&db, args).await,
+            "members.remove" => members::remove(&db, args).await,
+            "members.setRole" => members::set_role(&db, args).await,
             "sync.pause" => {
                 db.sync().pause().await;
                 Ok(Value::Null)

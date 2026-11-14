@@ -10,6 +10,7 @@
 
 import { connectWorker } from "./connect.ts";
 import { SetElements } from "./elements.ts";
+import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
@@ -111,6 +112,8 @@ export interface Tx {
 export interface Space {
   /** The space id, 32 lowercase hex digits. */
   readonly id: Id;
+  /** The members of this space: add, list, re-role and remove (RFC 0009, "Invitations and members"). */
+  readonly members: Members;
   /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
   readonly status: {
     /** The report as it is now. */
@@ -183,6 +186,8 @@ export interface Db {
     /** Calls `listener` after each fold, once per collection it touched. */
     subscribe(listener: (change: Change) => void): Stop;
   };
+  /** This member's invitation, with its account's fingerprint, for an admin to add it to a space (RFC 0009, "Invitations and members"). */
+  invitation(): Promise<Invitation>;
   /** The relay connection, as a report (RFC 0009, "Sync and status"). */
   readonly sync: {
     /** The report as it is now. */

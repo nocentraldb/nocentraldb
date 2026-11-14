@@ -353,6 +353,71 @@ async fn a_tablet_that_created_a_space_before_the_link_writes_its_link_into_the_
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn the_laptop_lists_the_tablets_old_account_as_linked_to_its_own() {
+    // NOC-269, with the owner's NOC-307 A1: `members.list()` keeps the
+    // account a member's certificate names and adds the account it is
+    // linked into, from the link statements the account space holds.
+    let tablet_account = ed25519_dalek::SigningKey::from_bytes(&[0x46; 32]);
+    let relay = LocalRelay::with(std::collections::BTreeSet::from([
+        account().verifying_key().to_bytes(),
+        tablet_account.verifying_key().to_bytes(),
+    ]))
+    .await;
+    let laptop = open(LAPTOP, &relay.url()).await;
+    now(laptop.spaces().create()).unwrap();
+    let tablet = Db::open_as(
+        OpenOptions::new(LOCK).in_memory().relay(&relay.url()),
+        [TABLET; 32],
+        [TABLET ^ 0x80; 32],
+        tablet_account,
+    )
+    .await
+    .unwrap();
+    let old_fingerprint = now(tablet.invitation()).fingerprint();
+    let old = now(tablet.spaces().create()).unwrap();
+
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(tablet.invitation())))
+    .unwrap();
+    now(tablet.account().complete_pairing(&paired.answer)).unwrap();
+    let ours = now(laptop.invitation()).fingerprint();
+    // The tablet adds the laptop to the space it made before the link; the
+    // space knows only the old account, so the laptop's needs its
+    // fingerprint.
+    let options = AddMember {
+        role: Role::Writer,
+        fingerprint: Some(ours),
+    };
+    now(old.members().add(&now(laptop.invitation()), options)).unwrap();
+    synced(&tablet).await;
+
+    eventually(
+        "the laptop lists the tablet as linked to its account",
+        || {
+            now(laptop.spaces().get(old.id())).is_ok_and(|space| {
+                now(space.members().list()).is_ok_and(|members| {
+                    members.iter().any(|member| {
+                        !member.is_self
+                            && member.account == old_fingerprint
+                            && member.linked_to == Some(ours)
+                    })
+                })
+            })
+        },
+    )
+    .await;
+    // The laptop itself is not linked to anything.
+    let space = now(laptop.spaces().get(old.id())).unwrap();
+    let laptops = now(space.members().list())
+        .unwrap()
+        .into_iter()
+        .find(|member| member.is_self)
+        .unwrap();
+    assert_eq!((laptops.account, laptops.linked_to), (ours, None));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_paired_phone_reopened_before_its_first_sync_holds_only_the_accounts_account_space() {
     // NOC-311, with the owner's NOC-312 C3: the phone remembers beside its
     // log that it joined the account, so after a reopen it creates no
