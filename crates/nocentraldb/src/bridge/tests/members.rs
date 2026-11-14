@@ -57,6 +57,9 @@ fn a_new_space_lists_its_creator_as_its_admin() {
     assert_eq!(field(me, "kind"), Some(&text("device")));
     assert_eq!(field(me, "self"), Some(&Value::Bool(true)));
     assert!(field(me, "account").is_some());
+    // An account linked into no other has no `linkedTo` (the owner's
+    // NOC-307 A1).
+    assert_eq!(field(me, "linkedTo"), Some(&Value::Null));
 }
 
 #[test]

@@ -509,6 +509,7 @@ await db.sync.resume();
 | Value | Meaning |
 | --- | --- |
 | `connection` | `"connected"`, `"connecting"`, `"offline"` (no relay reachable, the SDK retries), `"paused"` or `"none"` (opened without a relay). |
+| `relay` | The relay `nc.open` named, absent without one. In a browser tab that reaches another tab's database, it is the owning tab's relay, which serves every tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). TypeScript only (Carsten, 2026-11-13, #317). |
 | `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
 | `refused` | Changes of this member the relay refused ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). |
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |

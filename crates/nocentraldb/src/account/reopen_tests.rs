@@ -77,3 +77,29 @@ fn a_linked_database_reopened_before_its_link_is_written_creates_no_account_spac
     assert_eq!(super::space(&lock(&tablet.inner)), None);
     assert_eq!(account_spaces(&tablet), 1, "only the old account's");
 }
+
+#[test]
+fn a_paired_phone_reopened_before_its_first_sync_creates_no_account_space() {
+    // NOC-311, with the owner's NOC-312 C3: a device paired into an account
+    // another device created remembers it beside its log, so after a
+    // reopen without `pairing()` it still creates no account space before
+    // the account's reaches it.
+    let dir = Dir::new();
+    let laptop = dir.open("laptop");
+    now(laptop.spaces().create()).unwrap();
+    let phone = now(Db::open(
+        OpenOptions::new(LOCK)
+            .path(dir.0.join("phone"))
+            .key_file(dir.0.join("phone.keys"))
+            .pairing(),
+    ))
+    .unwrap();
+    let invitation = now(phone.invitation());
+    let paired = now(laptop.account().pair(PairKind::Device, &invitation)).unwrap();
+    now(phone.account().complete_pairing(&paired.answer)).unwrap();
+    drop(phone);
+
+    let phone = dir.open("phone");
+    now(phone.spaces().create()).unwrap();
+    assert_eq!(account_spaces(&phone), 0, "no account space of its own");
+}

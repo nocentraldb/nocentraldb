@@ -32,8 +32,10 @@ type Role = "reader" | "writer" | "admin";
 interface Member {
   /** Its id, 64 lowercase hex digits, which `setRole` and `remove` take. */
   readonly id: string;
-  /** The fingerprint of its account. */
+  /** The fingerprint of the account its certificate names. */
   readonly account: string;
+  /** The fingerprint of the account `account` is linked into, when this database knows the link; `null` otherwise (RFC 0010, "Linking accounts drawn per database"). */
+  readonly linkedTo: string | null;
   readonly kind: "device" | "agent" | "subAgent";
   /** Its role; `null` while no membership of it is folded. */
   readonly role: Role | null;

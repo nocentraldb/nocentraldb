@@ -133,6 +133,7 @@ type Role = "reader" | "writer" | "admin";
 interface Member {
     readonly id: string;
     readonly account: string;
+    readonly linkedTo: string | null;
     readonly kind: "device" | "agent" | "subAgent";
     readonly role: Role | null;
     readonly self: boolean;

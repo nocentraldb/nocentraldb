@@ -1,0 +1,6 @@
+# 2026-11-14 · NOC-311 · A paired device keeps that it joined an account beside its log
+
+- Decided by: Carsten, 2026-11-14, on NOC-312 (C3)
+- Why: a device paired into an account another device created must not create an account space of its own, but `joins_account` said so only until the database was closed, so a device opened again before the account's account space reached it created a second one. The database now keeps one row in a table `joined` of the member's SQLite file, beside the log and no part of the view, so a rebuild or a refold never drops it. `complete_pairing` writes it before it saves the key record and deletes it if the save fails, the order the link statement already follows; `account::create` creates no account space while it is set; `account::reconcile` deletes it once the database holds the account's account space. A recovered device writes no row, since it may have to create the account space again when no device of the account is left; an agent writes none, since it keeps no account space.
+- Instead of: a new value of the key record's account byte (C1) or a key record format 3 with an origin byte (C2), which change RFC 0003's open format and leave a database that an older SDK no longer opens.
+- Topics: sdk-rust, core, accounts, pairing

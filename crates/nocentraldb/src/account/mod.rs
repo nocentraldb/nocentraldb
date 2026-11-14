@@ -330,12 +330,15 @@ fn role_text(role: CoreRole) -> &'static str {
 /// Creates the account space, when the device holds none and creates the
 /// account's first: a device that joins an account another device created
 /// creates none, nor does a linked database that still keeps its link
-/// statement, and an agent keeps no account space.
+/// statement, nor a paired one that keeps that it joined an account until
+/// the account's account space reaches it (NOC-312 C3), and an agent keeps
+/// no account space.
 pub(crate) fn create(inner: &mut Inner) -> Result<(), Error> {
     if inner.kind == MemberKind::Device
         && !inner.joins_account
         && space(inner).is_none()
         && !keeps_a_link(inner)?
+        && !inner.view.joined().map_err(storage)?
     {
         crate::space::create_space(inner, id())?;
     }
@@ -360,6 +363,11 @@ fn keeps_a_link(inner: &Inner) -> Result<bool, Error> {
 /// account space, and on an agent, it writes no record, as it does when
 /// the records are current.
 pub(crate) fn reconcile(inner: &mut Inner) -> Result<(), Error> {
+    // Once the account's account space reached a device that joined the
+    // account, it no longer waits for it (NOC-311).
+    if space(inner).is_some() && inner.view.joined().map_err(storage)? {
+        inner.view.clear_joined().map_err(storage)?;
+    }
     records(inner)?;
     flush_links(inner)
 }
