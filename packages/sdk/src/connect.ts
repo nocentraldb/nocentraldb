@@ -15,6 +15,7 @@ import { Cursor, queryState } from "./query.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
+import { type Platform, tabCore } from "./tabs.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {
@@ -80,10 +81,23 @@ const startWorker = (): Core => {
   };
 };
 
-/** Opens the database in the worker the package ships. */
+/** Opens the database in the worker the package ships, or, when another tab owns it, through that tab (NOC-177; RFC 0006, "The browser"). */
 export const connectWorker = async (options: OpenOptions): Promise<Db> => {
   checkName(options.name);
-  return connect(startWorker(), options);
+  const core =
+    typeof navigator !== "undefined" &&
+    navigator.locks !== undefined &&
+    typeof BroadcastChannel !== "undefined"
+      ? await tabCore(options.name ?? "default", {
+          locks: navigator.locks as unknown as Platform["locks"],
+          channel: (name) =>
+            new BroadcastChannel(name) as unknown as ReturnType<
+              Platform["channel"]
+            >,
+          startWorker,
+        })
+      : startWorker();
+  return connect(core, options);
 };
 
 const checkName = (name: string | undefined) => {
@@ -161,8 +175,9 @@ export const connect = async (
 
   // The newest sync status the core sent: at open, then in its `sync`
   // events, so that `db.sync.current()` answers at once.
-  // The relay that serves this database.
-  const relay = options.relay;
+  // The relay that serves this database: this tab's option, or, when
+  // another tab owns the database, that tab's (NOC-177).
+  let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
   let sync = syncStatusOf((opened as { sync?: unknown } | null)?.sync, relay);
   const syncListeners = new Set<(status: SyncStatus) => void>();
   // Who waits for the next sync status: `db.sync.confirmed`.
@@ -232,6 +247,20 @@ export const connect = async (
     }
     if (message.event === "spaceStatus") {
       statusChanged((message as { space: Id }).space, message.status);
+      return;
+    }
+    if (message.event === "reopened") {
+      // Another tab took the database over (NOC-177): its core follows no
+      // space yet and its reads may differ, so everything is read again.
+      relay = (message as { relay?: string }).relay;
+      synced((message as { sync?: unknown }).sync);
+      for (const id of statuses.keys()) {
+        ask("space.status", { space: id }).then(
+          (raw) => statusChanged(id, raw),
+          () => {},
+        );
+      }
+      for (const subscription of subscriptions) rerun(subscription);
       return;
     }
     if (message.event !== "folded" || !message.folds) return;
