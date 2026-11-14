@@ -39,7 +39,9 @@
   </div>
 </section>
 
-<script is:inline data-demo-loader>
+<!-- A module script: it never blocks parsing, so the rest of the page and
+     the kit's scripts at its end, which reveal the hero, do not wait for it. -->
+<script type="module" is:inline data-demo-loader>
   (() => {
     const root = document.getElementById("demo");
     const status = root?.querySelector("[data-demo-status]");

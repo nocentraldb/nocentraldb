@@ -27,6 +27,7 @@ test("nothing under /demo/ is part of the first render", () => {
 });
 
 test("the loader starts after the load event, near the viewport and when the browser is idle", () => {
+  assert.match(html, /<script type="module" data-demo-loader>/, "a module script, which never blocks parsing");
   const loader = html.slice(html.indexOf("data-demo-loader"));
   assert.match(loader, /addEventListener\(\s*"load"/);
   assert.match(loader, /IntersectionObserver/);
