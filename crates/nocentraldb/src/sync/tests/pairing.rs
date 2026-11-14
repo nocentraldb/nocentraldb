@@ -351,3 +351,54 @@ async fn a_tablet_that_created_a_space_before_the_link_writes_its_link_into_the_
     );
     assert!(tablet_inner.spaces.contains_key(&old_account_space));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_paired_phone_reopened_before_its_first_sync_holds_only_the_accounts_account_space() {
+    // NOC-311, with the owner's NOC-312 C3: the phone remembers beside its
+    // log that it joined the account, so after a reopen it creates no
+    // account space of its own; once it syncs it holds the account's one,
+    // and forgets that it is waiting for it.
+    let relay = LocalRelay::start().await;
+    let laptop = open(LAPTOP, &relay.url()).await;
+    now(laptop.spaces().create()).unwrap();
+    let dir = TempDir::new();
+    let at = |pairing: bool| {
+        let options = OpenOptions::new(LOCK)
+            .path(dir.0.join("data"))
+            .key_file(dir.0.join("phone.keys"));
+        if pairing { options.pairing() } else { options }
+    };
+    // Opened for pairing, but with no relay yet, so nothing syncs.
+    let phone = Db::open(at(true)).await.unwrap();
+    let paired = now(laptop
+        .account()
+        .pair(PairKind::Device, &now(phone.invitation())))
+    .unwrap();
+    now(phone.account().complete_pairing(&paired.answer)).unwrap();
+    drop(phone);
+    synced(&laptop).await;
+
+    // Reopened, still offline, it creates a space and no account space.
+    let phone = Db::open(at(false)).await.unwrap();
+    now(phone.spaces().create()).unwrap();
+    assert!(crate::account::space(&crate::db::lock(&phone.inner)).is_none());
+    drop(phone);
+
+    // With the relay, it receives the account's account space and holds
+    // only that one.
+    let phone = Db::open(at(false).relay(&relay.url())).await.unwrap();
+    let ours = crate::account::space(&crate::db::lock(&laptop.inner)).unwrap();
+    eventually("the phone holds the account's account space", || {
+        crate::account::space(&crate::db::lock(&phone.inner)) == Some(ours)
+    })
+    .await;
+    let inner = crate::db::lock(&phone.inner);
+    let shipped = crate::account::id();
+    let held = inner
+        .spaces
+        .values()
+        .filter(|state| state.checks.model_id() == Some(shipped))
+        .count();
+    assert_eq!(held, 1, "only the account's account space");
+    assert!(!inner.view.joined().unwrap(), "no longer waiting for it");
+}
