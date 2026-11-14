@@ -33,6 +33,12 @@
 # The example app apps/tasks-ts: the same job runs the browser task list in
 # Chromium on the package built above, as a person uses it, on pull
 # requests that touch the app or the TypeScript SDK.
+#
+# NOC-319: the same job runs the landing page's live demo in Chromium
+# (scripts/site-demo/): the site is built on the runner with the demo's
+# assets from the package built above, and a page in the image loads it
+# after the page renders, on pull requests that touch the site, the demo's
+# tests or the TypeScript SDK.
 name: browser-view
 
 on:
@@ -48,6 +54,8 @@ on:
       - "scripts/sdk-keys/**"
       - "scripts/sdk-browser/**"
       - "apps/tasks-ts/**"
+      - "site/**"
+      - "scripts/site-demo/**"
       - ".github/workflows/browser-view.yml"
       - "Cargo.toml"
       - "Cargo.lock"
@@ -118,6 +126,17 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/sdk-browser/build.mjs
 
+      # The site with the landing page's demo, in site/dist
+      # (scripts/site-demo/build.mjs): the demo's assets from the package
+      # built above, then the site; run even when a build above failed.
+      - name: The site with its demo, built on the runner
+        if: ${{ !cancelled() }}
+        env:
+          SDK_BROWSER_PREBUILT: "1"
+        run: |
+          pnpm --dir site install --frozen-lockfile
+          node scripts/site-demo/build.mjs
+
       # A registry that does not answer fails the pull in 4 minutes, and the
       # pull is tried once more.
       - name: Playwright's image, with a short timeout and one retry
@@ -173,3 +192,14 @@ jobs:
           -e SDK_BROWSER_PREBUILT=1
           "$PLAYWRIGHT_IMAGE"
           node --test 'apps/tasks-ts/e2e/*.e2e.mjs'
+
+      # The landing page's live demo on the site built above; run even when
+      # a step above failed.
+      - name: The landing page's demo in Chromium
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SITE_DEMO_PREBUILT=1
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/site-demo/*.test.mjs'

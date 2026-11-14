@@ -7,6 +7,11 @@
 // site/dist, and deploys in the github-pages environment; and every action is
 // pinned by SHA. Each check also rejects its mutants
 // (scripts/lib/workflow-checks.mjs).
+//
+// NOC-319: the build builds the TypeScript SDK, its WebAssembly core
+// included, and copies it into the site as the landing page's live demo
+// before it builds the site; the output check then requires the demo's
+// files (SITE_DEMO_REQUIRED=1), so no deploy ships the page without them.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -41,6 +46,8 @@ const runIndex = (job, command) =>
 const INSTALL = "pnpm --dir site install --frozen-lockfile";
 const BUILD = "pnpm --dir site build";
 const CHECK = "node --test 'site/scripts/*.test.mjs'";
+const SDK = "node packages/sdk/build.mjs";
+const DEMO = "node site/scripts/demo-assets.mjs";
 
 runWorkflowChecks({
   files: { workflow: text === null ? null : parse(text), text },
@@ -137,6 +144,49 @@ runWorkflowChecks({
         },
         "uploads another folder": (ctx) => {
           step(ctx, "actions/upload-pages-artifact").with.path = "site";
+        },
+      },
+    },
+    {
+      name: "the demo's assets are built before the site, and the check requires them",
+      check: (ctx) => {
+        const build = workflow(ctx).jobs?.build;
+        assert.ok(build, "no build job");
+        const sdk = runIndex(build, SDK);
+        const demo = runIndex(build, DEMO);
+        const built = runIndex(build, BUILD);
+        const checked = runIndex(build, CHECK);
+        assert.ok(sdk >= 0, `no step runs ${SDK}`);
+        assert.ok(demo > sdk, `${DEMO} runs after the SDK's build`);
+        assert.ok(built > demo, `${BUILD} runs after ${DEMO}`);
+        assert.equal(
+          build.steps[checked].env?.SITE_DEMO_REQUIRED,
+          "1",
+          "the output check does not require the demo",
+        );
+      },
+      mutants: {
+        "no demo assets": (ctx) => {
+          ctx.workflow.jobs.build.steps = ctx.workflow.jobs.build.steps.filter(
+            (s) => s.run?.trim() !== DEMO,
+          );
+        },
+        "the demo's assets after the site's build": (ctx) => {
+          const steps = ctx.workflow.jobs.build.steps;
+          const [demo] = steps.splice(
+            steps.findIndex((s) => s.run?.trim() === DEMO),
+            1,
+          );
+          steps.splice(
+            steps.findIndex((s) => s.run?.trim() === BUILD) + 1,
+            0,
+            demo,
+          );
+        },
+        "the check does not require the demo": (ctx) => {
+          for (const s of ctx.workflow.jobs.build.steps) {
+            if (s.run?.trim() === CHECK) delete s.env;
+          }
         },
       },
     },

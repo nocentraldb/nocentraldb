@@ -15,6 +15,11 @@
 //
 // The example app apps/tasks-ts: the same job runs it in Chromium, on the
 // SDK built above, whenever a pull request touches the app or the SDK.
+//
+// NOC-319: the same job runs the landing page's live demo in Chromium
+// (scripts/site-demo/): the site is built on the runner with the demo's
+// assets from the SDK built above, whenever a pull request touches the
+// site, the demo's tests or the SDK.
 import assert from "node:assert/strict";
 import {
   imageChecks,
@@ -31,6 +36,8 @@ const KEYS_TESTS = "scripts/sdk-keys/*.test.mjs";
 const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
 const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
 const APP_TESTS = "apps/tasks-ts/e2e/*.e2e.mjs";
+const DEMO_BUILD = "node scripts/site-demo/build.mjs";
+const DEMO_TESTS = "scripts/site-demo/*.test.mjs";
 
 runWorkflowChecks({
   files: load(".github/workflows/browser-view.yml"),
@@ -219,6 +226,68 @@ runWorkflowChecks({
           const all = jobSteps(ctx);
           all.splice(
             all.findIndex((s) => s.run?.includes(APP_TESTS)),
+            1,
+          );
+        },
+      },
+    },
+    {
+      name: "the landing page's demo runs in the image on the site built on the runner, on site and SDK changes",
+      check: (ctx) => {
+        const all = steps(ctx);
+        const sdk = all.findIndex((s) => s.run?.includes(SDK_BUILD));
+        const build = all.findIndex((s) => s.run?.includes(DEMO_BUILD));
+        const test = all.findIndex(
+          (s) => s.run?.includes("docker run") && s.run.includes(DEMO_TESTS),
+        );
+        assert.ok(build >= 0, "the site with its demo is not built");
+        assert.ok(build > sdk, "the site is built before the SDK");
+        assert.equal(
+          all[build].env?.SDK_BROWSER_PREBUILT,
+          "1",
+          "the site's build builds the SDK again",
+        );
+        assert.ok(test > build, "the demo does not run after the site's build");
+        for (const at of [build, test]) {
+          assert.match(
+            all[at].if ?? "",
+            /^\$\{\{ !cancelled\(\) \}\}$/,
+            "a failed step above skips the demo",
+          );
+        }
+        const run = all[test].run;
+        assert.match(run, /"\$PLAYWRIGHT_IMAGE"/);
+        assert.match(run, /SITE_DEMO_PREBUILT=1/);
+        const paths = ctx.workflow.on?.pull_request?.paths ?? [];
+        for (const path of [
+          "site/**",
+          "scripts/site-demo/**",
+          "packages/sdk/**",
+        ]) {
+          assert.ok(paths.includes(path), `changes of ${path} do not run it`);
+        }
+      },
+      mutants: {
+        "the demo builds the site again in the image": (ctx) => {
+          const run = jobSteps(ctx).find((s) => s.run?.includes(DEMO_TESTS));
+          run.run = run.run.replace("SITE_DEMO_PREBUILT=1", "X=1");
+        },
+        "the site's build rebuilds the SDK": (ctx) => {
+          const build = jobSteps(ctx).find((s) => s.run?.includes(DEMO_BUILD));
+          delete build.env;
+        },
+        "the demo skipped after a failure above": (ctx) => {
+          const step = jobSteps(ctx).find((s) => s.run?.includes(DEMO_TESTS));
+          delete step.if;
+        },
+        "site changes do not run it": (ctx) => {
+          const paths = ctx.workflow.on.pull_request.paths;
+          paths.splice(paths.indexOf("site/**"), 1);
+        },
+        "no demo at all": (ctx) => {
+          const all = jobSteps(ctx);
+          all.splice(
+            all.findIndex((s) => s.run?.includes(DEMO_TESTS)),
             1,
           );
         },
