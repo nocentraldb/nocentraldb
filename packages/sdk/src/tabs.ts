@@ -53,6 +53,9 @@ const CHANGES = new Set([
   "spaces.create",
   "sync.pause",
   "sync.resume",
+  "members.add",
+  "members.remove",
+  "members.setRole",
 ]);
 
 type Request = { id: number; call: string; args: Record<string, Cbor> };
