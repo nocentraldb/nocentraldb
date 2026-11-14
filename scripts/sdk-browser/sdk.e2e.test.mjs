@@ -122,7 +122,9 @@ test("opens, writes, reads, closes and reopens the database on OPFS", async () =
     },
     { lock, MODEL, space: written.space, id: written.id },
   );
-  assert.deepEqual(reread.spaces, [{ id: written.space, role: "admin" }]);
+  assert.deepEqual(reread.spaces, [
+    { id: written.space, role: "admin", model: "ours" },
+  ]);
   assert.equal(reread.title, "Ship the SDK");
   await context.close();
 });

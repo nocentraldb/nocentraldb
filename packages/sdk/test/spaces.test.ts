@@ -51,7 +51,8 @@ const fake = (list: unknown[] = ONE) => {
       listener = given;
     },
   };
-  const send = (message: Record<string, unknown>) => listener?.(encode(message));
+  const send = (message: Record<string, unknown>) =>
+    listener?.(encode(message));
   return { core, calls, send };
 };
 
