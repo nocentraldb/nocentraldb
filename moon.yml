@@ -105,6 +105,9 @@ tasks:
     # scripts/session-start-git.test.mjs runs the session start's git repair
     # in throwaway repositories, and scripts/session-start-wiring.test.mjs
     # reads .claude/settings.json and factory/roles/coder.md (NOC-52).
+    # scripts/doc-snippets.test.mjs type-checks the snippets of
+    # docs/getting-started-browser.md against packages/sdk/src with tsc
+    # (NOC-322), hence the SDK's source among the inputs.
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -129,6 +132,8 @@ tasks:
       - "/factory/**/*"
       - "/crates/ncdb-core/src/**/*"
       - "/crates/ncdb-core/tests/**/*"
+      - "/packages/sdk/src/**/*"
+      - "/tsconfig.base.json"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not
