@@ -173,7 +173,7 @@ impl Account<'_> {
     /// `InvalidCertificate` and changes nothing; a database that is not
     /// waiting to be paired is `NotAllowed`.
     pub async fn complete_pairing(&self, answer: &PairingAnswer) -> Result<Vec<Notice>, Error> {
-        let (keys, home, notices, link) = {
+        let (keys, home, notices, link, joined) = {
             let mut inner = self.db.lock();
             // A database with an account of its own is linked: its old key
             // signs its half of the link statement, then is deleted.
@@ -230,6 +230,15 @@ impl Account<'_> {
                 }
                 _ => None,
             };
+            // A device keeps beside its log that it joined an account
+            // another device created, before its key record says so, so
+            // that once it is opened again it still creates no account
+            // space of its own before the account's reaches it (the
+            // owner's NOC-312 C3). An agent keeps no account space.
+            let joined = inner.kind == MemberKind::Device;
+            if joined {
+                inner.view.set_joined().map_err(storage)?;
+            }
             let keys = Keys {
                 member: inner.member.clone(),
                 account,
@@ -240,11 +249,15 @@ impl Account<'_> {
             if link.is_some() {
                 notices.push(Notice::ACCOUNT_LINKED);
             }
-            (keys, inner.home.clone(), notices, link)
+            (keys, inner.home.clone(), notices, link, joined)
         };
         if let Err(error) = home.save(&keys).await {
+            let mut inner = lock(&self.db.inner);
             if let Some(bytes) = link {
-                let _ = lock(&self.db.inner).view.delete_pending_link(&bytes);
+                let _ = inner.view.delete_pending_link(&bytes);
+            }
+            if joined {
+                let _ = inner.view.clear_joined();
             }
             return Err(error);
         }
