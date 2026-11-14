@@ -3,16 +3,23 @@
 // way the doc tests of `nocentraldb` compile the Rust guide's snippets: the
 // guide cannot drift from the SDK's public API.
 //
-// Every ```ts block of the guide is one module. A block whose info string
-// names a file, such as ```ts model.ts, is written under that name, so the
-// other snippets import it as "./model.ts"; every other block is a module of
-// its own. `@nocentraldb/sdk` resolves to packages/sdk/src/index.ts, as in
+// Every ```ts block of the guide is one module of an app laid out as
+// apps/tasks-ts is. A block whose info string names a file, such as
+// ```ts model.ts, is written under that path; every other block is a module
+// of its own in src/, as the app's src/app.ts would be, so it imports the
+// model as "../model.ts". `@nocentraldb/sdk` resolves to packages/sdk/src/index.ts, as in
 // the type check of apps/tasks-ts, and tsc runs with tsconfig.base.json.
 // Errors are reported at their line in the guide.
 //
 //   node scripts/doc-snippets.mjs [guide.md]
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +27,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 export const GUIDE = join(ROOT, "docs", "getting-started-browser.md");
 const TSC = join(ROOT, "node_modules", ".bin", "tsc");
-const FILE = /^[a-z0-9][a-z0-9-]*\.ts$/;
+const FILE = /^(?:[a-z0-9][a-z0-9-]*\/)*[a-z0-9][a-z0-9-]*\.ts$/;
 
 /** The ```ts blocks of `markdown`: { file, line, code }, `line` the 1-based line of the block's first code line. */
 export const snippets = (markdown) => {
@@ -32,7 +39,7 @@ export const snippets = (markdown) => {
       const fence = text.match(/^```ts(?:\s+(\S+))?\s*$/);
       if (fence) open = { name: fence[1], line: i + 2, code: [] };
     } else if (text === "```") {
-      const file = open.name ?? `snippet-${found.length + 1}.ts`;
+      const file = open.name ?? `src/snippet-${found.length + 1}.ts`;
       if (!FILE.test(file)) {
         throw new Error(`line ${open.line - 1}: ${file} is not a file name`);
       }
@@ -71,10 +78,11 @@ export const check = (path = GUIDE) => {
             ],
           },
         },
-        include: ["*.ts"],
+        include: ["**/*.ts"],
       }),
     );
     for (const block of blocks) {
+      mkdirSync(dirname(join(dir, block.file)), { recursive: true });
       writeFileSync(join(dir, block.file), `${block.code}\n`);
     }
     const result = spawnSync(TSC, ["-p", dir, "--pretty", "false"], {
@@ -82,9 +90,9 @@ export const check = (path = GUIDE) => {
       encoding: "utf8",
     });
     const shown = relative(process.cwd(), path) || path;
-    // tsc names a file and a position: `model.ts(3,5): error TS...`.
+    // tsc names a file and a position: `src/snippet-2.ts(3,5): error TS...`.
     const output = `${result.stdout}${result.stderr}`.replace(
-      /^([a-z0-9-]+\.ts)\((\d+),(\d+)\)/gm,
+      /^([a-z0-9/-]+\.ts)\((\d+),(\d+)\)/gm,
       (whole, file, line, column) => {
         const block = blocks.find((b) => b.file === file);
         if (!block) return whole;

@@ -44,7 +44,7 @@ const guide = (code) =>
     "",
     "```ts",
     'import { nc } from "@nocentraldb/sdk";',
-    'import { model } from "./model.ts";',
+    'import { model } from "../model.ts";',
     "",
     "const lock: unknown = await (await fetch('/model.lock.json')).json();",
     'const db = await nc.open({ model, lock, name: "tasks" });',
@@ -71,7 +71,7 @@ test("snippets: each ts block, named by its info string or numbered, with the li
   );
   assert.deepEqual(found, [
     { file: "model.ts", line: 2, code: "a" },
-    { file: "snippet-2.ts", line: 9, code: "b\nc" },
+    { file: "src/snippet-2.ts", line: 9, code: "b\nc" },
   ]);
 });
 
@@ -82,6 +82,9 @@ test("snippets: refuses an unclosed block, a name given twice and a name that is
     /named twice/,
   );
   assert.throws(() => snippets("```ts ../a.ts\n```\n"), /not a file name/);
+  assert.deepEqual(snippets("```ts lib/a.ts\nx\n```\n"), [
+    { file: "lib/a.ts", line: 2, code: "x" },
+  ]);
 });
 
 test("a snippet on the SDK's public API type-checks", () => {
