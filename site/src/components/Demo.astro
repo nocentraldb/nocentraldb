@@ -1,0 +1,202 @@
+---
+// The live demo (NOC-319; Carsten, 2026-11-14): the example task list
+// running on the visitor's own browser, its database on OPFS, with no
+// relay and no server. The section's HTML is part of the first render; the
+// demo itself is not. The inline loader below waits for the page's load
+// event, for the section to come near the viewport and for the browser to
+// be idle, checks that the browser has what the demo needs, and only then
+// imports /demo/demo.js, which brings the
+// SDK, its worker and its WebAssembly core. The status line says what is
+// happening at each step, and plainly when the demo cannot run; the rest
+// of the page never depends on it.
+---
+
+<section class="section demo" id="demo" aria-labelledby="demo-h">
+  <div class="wrap grid demo-grid">
+    <div class="span-5">
+      <div class="section-head">
+        <h2 id="demo-h">Try it in this browser</h2>
+        <p>
+          A task list on NoCentralDB, running here. Its database is a file in this browser's private storage. There is
+          no server and no account: nothing leaves this device.
+        </p>
+      </div>
+      <p class="demo__hint">
+        Open this page in a <a href="/#demo" target="_blank" rel="noopener">second tab</a>: both tabs share one database,
+        and a task added in one appears in the other.
+      </p>
+    </div>
+
+    <div class="span-6 start-7 demo__panel">
+      <div class="demo__status" data-demo-status data-state="waiting" role="status" aria-live="polite">
+        <p data-demo-text>
+          The demo starts when you reach it, once this page has loaded. It then downloads the SDK and its WebAssembly core, about 2 MB.
+        </p>
+      </div>
+      <div class="demo__app" data-demo-app hidden>
+        <form id="demo-add" class="demo__add">
+          <input name="title" placeholder="A new task" aria-label="A new task" autocomplete="off" maxlength="200" />
+          <button type="submit" class="btn btn--primary">Add</button>
+        </form>
+        <p class="demo__error" data-demo-error role="alert"></p>
+        <h3>Open</h3>
+        <ul id="demo-open" class="demo__list"></ul>
+        <h3>Done</h3>
+        <ul id="demo-done" class="demo__list demo__list--done"></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script is:inline data-demo-loader>
+  (() => {
+    const root = document.getElementById("demo");
+    const status = root?.querySelector("[data-demo-status]");
+    if (!status) return;
+    const say = (state, text) => {
+      status.dataset.state = state;
+      status.querySelector("[data-demo-text]").textContent = text;
+    };
+    // What the demo needs: a secure page, OPFS for its database, Web Locks
+    // and BroadcastChannel to share it between tabs, a worker and WebAssembly.
+    const missing = [];
+    if (!window.isSecureContext) missing.push("a secure (https) page");
+    if (!navigator.storage || typeof navigator.storage.getDirectory !== "function")
+      missing.push("the origin private file system (OPFS)");
+    if (!navigator.locks) missing.push("Web Locks");
+    if (typeof BroadcastChannel === "undefined") missing.push("BroadcastChannel");
+    if (typeof Worker === "undefined" || typeof WebAssembly === "undefined")
+      missing.push("Web Workers and WebAssembly");
+    const start = () => {
+      if (missing.length > 0) {
+        say(
+          "unsupported",
+          `This browser does not offer ${missing.join(", ")}, which the demo needs, so it does not start here. ` +
+            "Everything else on this page works as usual.",
+        );
+        return;
+      }
+      say(
+        "loading",
+        "Loading the demo: downloading the SDK, its worker and its WebAssembly core, about 2 MB.",
+      );
+      import("/demo/demo.js")
+        .then((demo) => demo.start(root, say))
+        .catch((error) => {
+          say(
+            "failed",
+            `The demo could not load (${error && error.message ? error.message : error}). ` +
+              "Everything else on this page works as usual; reloading may help.",
+          );
+        });
+    };
+    const idle = () => {
+      if ("requestIdleCallback" in window) requestIdleCallback(start, { timeout: 3000 });
+      else setTimeout(start, 200);
+    };
+    // Not before the section is about to scroll into view: a visitor who
+    // reads the page from the top has scrolled by then, which ends the
+    // page's Largest Contentful Paint, so the demo's download and its core's
+    // compile never compete with the page's own first paints.
+    const near = () => {
+      if (!("IntersectionObserver" in window)) return idle();
+      const seen = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) {
+            seen.disconnect();
+            idle();
+          }
+        },
+        { rootMargin: "600px 0px" },
+      );
+      seen.observe(root);
+    };
+    if (document.readyState === "complete") near();
+    else addEventListener("load", near, { once: true });
+  })();
+</script>
+
+<style>
+  .demo-grid {
+    align-content: start;
+  }
+  .demo__hint {
+    margin-top: var(--s-4);
+    color: var(--muted);
+  }
+  .demo__panel {
+    display: grid;
+    gap: var(--s-4);
+    align-content: start;
+  }
+  .demo__status {
+    padding: var(--s-4) var(--s-5);
+    border: 1px solid var(--line, currentColor);
+    border-radius: var(--r-3, 12px);
+  }
+  .demo__status[data-state="loading"] p::before {
+    content: "";
+    display: inline-block;
+    width: 0.8em;
+    height: 0.8em;
+    margin-right: 0.5em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -0.1em;
+    animation: demo-spin 0.9s linear infinite;
+  }
+  .demo__status[data-state="failed"],
+  .demo__status[data-state="unsupported"] {
+    border-color: var(--danger, #b00020);
+  }
+  @keyframes demo-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .demo__status[data-state="loading"] p::before {
+      animation: none;
+    }
+  }
+  .demo__add {
+    display: flex;
+    gap: var(--s-3);
+  }
+  .demo__add input {
+    flex: 1;
+    min-width: 0;
+    padding: var(--s-2) var(--s-3);
+    font: inherit;
+  }
+  .demo__error:empty {
+    display: none;
+  }
+  .demo__error {
+    color: var(--danger, #b00020);
+  }
+  .demo__list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .demo__list :global(li) {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-3);
+    padding: var(--s-2) 0;
+  }
+  .demo__list--done :global(.title) {
+    text-decoration: line-through;
+    color: var(--muted);
+  }
+  .demo__list :global(.demo__delete) {
+    font: inherit;
+    font-size: var(--t-small);
+    color: var(--muted);
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+</style>

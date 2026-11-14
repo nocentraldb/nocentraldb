@@ -14,7 +14,10 @@ const html = readFileSync(join(dist, "index.html"), "utf8");
 
 test("the landing page holds the demo section and its waiting state", () => {
   assert.match(html, /<section[^>]*id="demo"/);
-  assert.match(html, /data-demo-status[^>]*data-state="waiting"|data-state="waiting"[^>]*data-demo-status/);
+  assert.match(
+    html,
+    /data-demo-status[^>]*data-state="waiting"|data-state="waiting"[^>]*data-demo-status/,
+  );
   assert.match(html, /<form[^>]*id="demo-add"/);
   assert.match(html, /<ul[^>]*id="demo-open"/);
   assert.match(html, /<ul[^>]*id="demo-done"/);
@@ -26,9 +29,10 @@ test("nothing under /demo/ is part of the first render", () => {
   assert.doesNotMatch(html, /modulepreload[^>]*\/demo\//);
 });
 
-test("the loader starts after the load event and when the browser is idle", () => {
+test("the loader starts after the load event, near the viewport and when the browser is idle", () => {
   const loader = html.slice(html.indexOf("data-demo-loader"));
   assert.match(loader, /addEventListener\(\s*"load"/);
+  assert.match(loader, /IntersectionObserver/);
   assert.match(loader, /requestIdleCallback/);
   assert.match(loader, /import\(/);
 });

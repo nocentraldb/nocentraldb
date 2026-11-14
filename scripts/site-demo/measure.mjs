@@ -4,7 +4,9 @@
 // /demo/ with when it started. It reads the built site in site/dist, so
 // it measures the page before and after a change the same way.
 //
-//   node scripts/site-demo/measure.mjs [--runs 9] [--throttle]
+//   node scripts/site-demo/measure.mjs [--runs 9] [--throttle] [--dist <dir>]
+//
+// --dist measures another build of the site, such as one of main.
 //
 // --throttle runs each load with Chromium's CPU slowed 4x and the network
 // at "Fast 3G", closer to a phone than this machine.
@@ -52,14 +54,21 @@ export const measureOnce = async (browser, url, { throttle = false } = {}) => {
     const fcp = performance
       .getEntriesByType("paint")
       .find((entry) => entry.name === "first-contentful-paint");
-    return { fcp: fcp?.startTime ?? 0, lcp: window.__lcp, load: nav.loadEventEnd };
+    return {
+      fcp: fcp?.startTime ?? 0,
+      lcp: window.__lcp,
+      load: nav.loadEventEnd,
+    };
   });
   await context.close();
   return { ...timings, demo };
 };
 
-export const measure = async ({ runs = 9, throttle = false } = {}) => {
-  const server = await startServer({ port: 0 });
+export const measure = async ({ runs = 9, throttle = false, dist } = {}) => {
+  const server = await startServer({
+    port: 0,
+    ...(dist ? { root: dist } : {}),
+  });
   const browser = await chromium.launch();
   try {
     const all = [];
@@ -82,11 +91,16 @@ export const measure = async ({ runs = 9, throttle = false } = {}) => {
 
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   const { values } = parseArgs({
-    options: { runs: { type: "string" }, throttle: { type: "boolean" } },
+    options: {
+      runs: { type: "string" },
+      throttle: { type: "boolean" },
+      dist: { type: "string" },
+    },
   });
   const result = await measure({
     runs: Number(values.runs ?? 9),
     throttle: values.throttle ?? false,
+    dist: values.dist,
   });
   console.log(JSON.stringify(result, null, 2));
 }

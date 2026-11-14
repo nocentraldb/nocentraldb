@@ -2,6 +2,7 @@
 // its core in WebAssembly included (packages/sdk/build.mjs), unless
 // SDK_BROWSER_PREBUILT=1 says it is built; then the demo's assets into
 // site/public/demo (site/scripts/demo-assets.mjs); then the site.
+// SITE_DEMO_PREBUILT=1 skips all of it: the site is built already.
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -15,6 +16,9 @@ const run = (command, args) => {
 };
 
 export const build = () => {
+  // In CI the runner built the site, and the tests run in Playwright's
+  // image on it (browser-view.yml).
+  if (process.env.SITE_DEMO_PREBUILT === "1") return;
   if (process.env.SDK_BROWSER_PREBUILT !== "1") {
     run(process.execPath, ["packages/sdk/build.mjs"]);
   }

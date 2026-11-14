@@ -32,12 +32,17 @@ after(async () => {
 const state = (page) =>
   page.locator("[data-demo-status]").getAttribute("data-state");
 
-/** Opens the landing page in `context` (a fresh one: a fresh OPFS). */
+/** Scrolls the demo's section into view, which starts the demo. */
+const reach = (page) => page.locator("#demo").scrollIntoViewIfNeeded();
+
+/** Opens the landing page in `context` (a fresh one: a fresh OPFS) and scrolls to the demo. */
 const open = async (context) => {
   const page = await (context ?? (await browser.newContext())).newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error));
   await page.goto(`${server.url}/`);
+  await page.waitForLoadState("load");
+  await reach(page);
   return { page, errors };
 };
 
@@ -57,10 +62,24 @@ const add = async (page, title) => {
   await page.click("#demo-add button[type=submit]");
 };
 
-test("the page renders and loads before the demo requests anything", async () => {
+test("the page renders and loads before the demo requests anything, and the demo waits to be reached", async () => {
   const context = await browser.newContext();
   const page = await context.newPage();
+  const requested = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.startsWith("/demo/"))
+      requested.push(request.url());
+  });
   await page.goto(`${server.url}/`);
+  await page.waitForLoadState("load");
+  await page.waitForTimeout(1500);
+  assert.deepEqual(
+    requested,
+    [],
+    "nothing of the demo before the visitor reaches it",
+  );
+  assert.equal(await state(page), "waiting");
+  await reach(page);
   await ready(page);
   const timing = await page.evaluate(() => {
     const [nav] = performance.getEntriesByType("navigation");
@@ -75,8 +94,14 @@ test("the page renders and loads before the demo requests anything", async () =>
   });
   assert.ok(timing.demo.length > 0, "the demo downloads its assets");
   for (const start of timing.demo) {
-    assert.ok(start >= timing.paint, `a demo request at ${start} ms, before the first paint`);
-    assert.ok(start >= timing.load, `a demo request at ${start} ms, before the load event`);
+    assert.ok(
+      start >= timing.paint,
+      `a demo request at ${start} ms, before the first paint`,
+    );
+    assert.ok(
+      start >= timing.load,
+      `a demo request at ${start} ms, before the load event`,
+    );
   }
   await context.close();
 });
@@ -93,7 +118,7 @@ test("it shows that it is loading, and what, while the SDK downloads", async () 
   });
   const { page, errors } = await open(context);
   await page.waitForSelector("[data-demo-status][data-state='loading']");
-  const text = await page.locator("[data-demo-status]").innerText();
+  const text = await page.locator("[data-demo-status]").textContent();
   assert.match(text, /loading/i);
   assert.match(text, /WebAssembly|SDK/);
   release();
@@ -111,7 +136,10 @@ test("the demo keeps tasks in the visitor's browser, and a tick marks one done",
       (title) => title.textContent === "Water the plants",
     ),
   );
-  await page.locator("#demo-open li", { hasText: "Water the plants" }).locator("input[type=checkbox]").check();
+  await page
+    .locator("#demo-open li", { hasText: "Water the plants" })
+    .locator("input[type=checkbox]")
+    .check();
   await page.waitForFunction(() =>
     [...document.querySelectorAll("#demo-done li .title")].some(
       (title) => title.textContent === "Water the plants",
@@ -158,7 +186,7 @@ test("a failed download shows the failure, and the rest of the page is unaffecte
   await page.waitForSelector("[data-demo-status][data-state='failed']", {
     timeout: 30_000,
   });
-  const text = await page.locator("[data-demo-status]").innerText();
+  const text = await page.locator("[data-demo-status]").textContent();
   assert.match(text, /could not load/i);
   assert.ok(await page.locator("h1").first().isVisible());
   assert.equal(await page.locator("#demo-add").isVisible(), false);
@@ -181,7 +209,7 @@ test("a browser without OPFS is told so, and downloads nothing for the demo", as
   await page.waitForSelector("[data-demo-status][data-state='unsupported']", {
     timeout: 30_000,
   });
-  const text = await page.locator("[data-demo-status]").innerText();
+  const text = await page.locator("[data-demo-status]").textContent();
   assert.match(text, /OPFS|private file system/i);
   assert.deepEqual(requested, []);
   assert.deepEqual(errors, []);
