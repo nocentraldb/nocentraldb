@@ -22,6 +22,7 @@ apps/tasks-ts/         the example app on the TypeScript SDK: a task list in the
 docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/repository.md          this page: the layout, the tools and the gates
 docs/getting-started.md     the getting-started guide for the Rust SDK; the doc tests of `nocentraldb` compile its Rust snippets
+docs/getting-started-browser.md  the getting-started guide for the TypeScript SDK in the browser; scripts/doc-snippets.test.mjs type-checks its snippets
 docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram

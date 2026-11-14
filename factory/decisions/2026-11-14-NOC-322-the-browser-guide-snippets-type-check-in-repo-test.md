@@ -1,0 +1,6 @@
+# 2026-11-14 · NOC-322 · The browser guide's snippets type-check with tsc in repo:test
+
+- Decided by: coding agent (NOC-322)
+- Why: the browser getting-started guide must not drift from the TypeScript SDK, as the Rust guide's snippets cannot drift from the Rust SDK because its doc tests compile them. `scripts/doc-snippets.mjs` writes each ```ts block of `docs/getting-started-browser.md` as a module of an app laid out as `apps/tasks-ts` is, a block named in its info string (```ts model.ts) under that path and every other block in `src/`, and runs tsc on them against `packages/sdk/src` with `tsconfig.base.json`, reporting errors at their line in the guide. `scripts/doc-snippets.test.mjs` runs it, so it is part of `repo:test` and of the gates without a task of its own, and holds mutants that call what the SDK lacks, write a value a field does not take, and query an undeclared index.
+- Instead of: a moon task of its own, which would add a gate task for one file; type-checking against the SDK's build output, which the gates do not build; and running the snippets, which needs a browser the gates do not have. The guide's flow was run once in Chromium by hand.
+- Topics: docs, sdk-ts, gates
