@@ -45,7 +45,7 @@ interface Member {
 
 /** The members of a space (RFC 0009, "Invitations and members"). */
 export interface Members {
-  /** Adds the member of each invitation; `role` may be left out for an agent. An account new to this device fails with `unknownAccount`, carrying its fingerprint, until `fingerprint` passes the one a person compared. */
+  /** Adds the member of each invitation; `role` may be left out for an agent. An account new to this device fails with `unknownAccount`, carrying its fingerprint, until `fingerprint` passes the one a person compared. With several invitations it adds them in turn and stops at the first that fails, with that one's error: the members added before it stay, and an invitation is checked only when its turn comes. On success it answers the last invitation's notice (Carsten, 2026-11-14, NOC-313). */
   add(
     invitations: Invitation | readonly Invitation[],
     options?: { role?: Role; fingerprint?: string },
