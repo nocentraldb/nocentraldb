@@ -466,3 +466,44 @@ test("an admin adds a member by invitation once its fingerprint is confirmed, re
   assert.deepEqual(otherErrors, []);
   assert.deepEqual(errors, []);
 });
+
+// NOC-315 slice 3: the durability of the copy and the view's report (RFC
+// 0006, "What the SDK reports"; NOC-317). A write raises `unconfirmed`
+// without a relay; whether headless Chromium grants persistent storage is
+// the browser's choice, so the storage is one of the two OPFS values.
+test("db.durability counts an unconfirmed write, requestPersistent answers a boolean, and db.view reports no rebuild", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({
+        model,
+        lock,
+        name: "durability",
+        persistentStorage: "on-request",
+      });
+      const project = await db.spaces.create();
+      const before = db.durability.current().unconfirmed;
+      const seen = [];
+      db.durability.subscribe((durability) => seen.push(durability));
+      await project.create(model.tasks, { title: "Persist me" });
+      for (let i = 0; i < 100 && seen.at(-1).unconfirmed === before; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const answer = await db.durability.requestPersistent();
+      const after = db.durability.current();
+      const view = db.view.current();
+      await db.close();
+      return { before, last: seen.at(-1), answer, after, view };
+    },
+    { lock, MODEL },
+  );
+  assert.equal(result.last.unconfirmed, result.before + 1);
+  assert.equal(typeof result.last.oldestUnconfirmedAt, "number");
+  assert.equal(typeof result.answer, "boolean");
+  assert.ok(["persistent", "best-effort"].includes(result.after.storage));
+  assert.equal(result.after.atRisk, result.after.storage !== "persistent");
+  assert.deepEqual(result.view, { rebuild: null });
+  assert.deepEqual(errors, []);
+});
