@@ -66,6 +66,7 @@
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
 //! `null`, which clears a basic field or a link (`Value::clear`).
 
+mod erasures;
 mod events;
 mod members;
 #[cfg(test)]

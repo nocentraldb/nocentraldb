@@ -5,6 +5,7 @@ use ncdb_core::cbor::{self, Key, Value};
 
 use super::Bridge;
 
+mod erasures;
 mod find;
 mod members;
 mod sync;
