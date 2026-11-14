@@ -6,6 +6,7 @@ use ncdb_core::cbor::{self, Key, Value};
 use super::Bridge;
 
 mod find;
+mod members;
 mod sync;
 
 const LOCK: &str = include_str!("../../../tests/model/model.lock.json");

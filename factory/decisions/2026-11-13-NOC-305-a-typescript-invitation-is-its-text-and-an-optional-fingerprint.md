@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-305 · A TypeScript invitation is its text and an optional fingerprint, and nc.invitation stays synchronous
+
+- Decided by: Carsten, 2026-11-13, on NOC-305 (option A: "The recommendations are fine with me")
+- Why: RFC 0009 names `db.invitation()`, `invitation.toString()` and a synchronous `nc.invitation(text)`, but only the core computes an invitation's fingerprint, from its layout under RFC 0010's hash. So `Invitation` is `{ readonly fingerprint?: string; toString(): string }`: `db.invitation()` fills `fingerprint`, so a device shows its own, and `nc.invitation(text)` checks only the prefix `ncdb-invite-1:` and unpadded base64url, failing with `invalidValue` otherwise, and leaves `fingerprint` unset. The core checks the full layout when `members.add` reads it, also with `invalidValue`. The admin learns the fingerprint as RFC 0009 describes: the first `members.add` fails with `unknownAccount` and `error.fingerprint`, a person compares it, and the app adds again with `{ role, fingerprint }`.
+- Instead of: an asynchronous `nc.invitation(text)` that asks a core for the fingerprint, which needs an open database and differs from RFC 0009's example.
+- Topics: sdk-ts, membership, invitations
