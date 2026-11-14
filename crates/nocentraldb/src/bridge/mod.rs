@@ -28,7 +28,8 @@
 //!   with `closed`. Answers `null`.
 //! - `spaces.create` `{}`: answers the new space's id, 32 hex digits.
 //! - `spaces.get` `{"space": id}`: answers the id, or fails with `notFound`.
-//! - `spaces.list` `{}`: answers `[{"id": id, "role": text|null}]`.
+//! - `spaces.list` `{}`: answers `[{"id": id, "role": text|null,
+//!   "model": "ours" | "another"}]`.
 //! - `write` `{"space": id, "ops": [op]}`, each op one of `{"op":
 //!   "create", "collection": text, "values": map}`, `{"op": "update",
 //!   "collection": text, "id": id, "values": map}`, `{"op": "delete",
@@ -52,6 +53,15 @@
 //!   [`space_status`]), and from then on a `spaceStatus` event whenever
 //!   it changes, until the database closes.
 //!
+//! The calls of NOC-315, slice 1 (RFC 0009, "Spaces"):
+//!
+//! - `spaces.follow` `{}`: answers the list as `spaces.list` does, and
+//!   from then on a `spaces` event whenever it changes, until the
+//!   database closes.
+//! - `space.leave` `{"space": id}`: writes this member's removal of
+//!   itself. Answers `{"notice": notice}`; the last admin is refused with
+//!   `lastAdmin`.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -60,7 +70,8 @@
 //! after folds (see [`Events::take`]), `{"event": "sync", "status":
 //! status}` whenever the sync status changed, and `{"event":
 //! "spaceStatus", "space": id, "status": status}` whenever the status of
-//! a space `space.status` asked for changed.
+//! a space `space.status` asked for changed, and `{"event": "spaces",
+//! "spaces": list}` whenever the list `spaces.follow` asked for changed.
 //!
 //! A value is text, an integer, a float, a boolean, an array,
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
@@ -72,7 +83,7 @@ mod members;
 mod tests;
 
 pub use events::Events;
-use events::{space_status, sync_status};
+use events::{space_list, space_status, sync_status};
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -228,18 +239,20 @@ impl Bridge {
                 let space = db.spaces().get(space_id(args)?).await?;
                 Ok(Value::Text(space.id().to_string()))
             }
-            "spaces.list" => {
-                let list = db.spaces().list().await?;
-                Ok(Value::Array(
-                    list.into_iter()
-                        .map(|info| {
-                            let role = info
-                                .role
-                                .map_or(Value::Null, |role| Value::Text(role_name(role).into()));
-                            entries([("id", Value::Text(info.id.to_string())), ("role", role)])
-                        })
-                        .collect(),
-                ))
+            "spaces.list" => Ok(space_list(&db.spaces().list().await?)),
+            "spaces.follow" => {
+                let (list, watch) = db.spaces().watch();
+                if let Some(events) = &self.events {
+                    *events.list.lock().unwrap_or_else(|p| p.into_inner()) = Some(watch);
+                }
+                Ok(space_list(&list))
+            }
+            "space.leave" => {
+                let space = db.spaces().get(space_id(args)?).await?;
+                Ok(entries([(
+                    "notice",
+                    members::notice_of(space.leave().await?),
+                )]))
             }
             "write" => write(&db, args).await,
             "get" => {
@@ -278,6 +291,7 @@ impl Bridge {
             feed: db.folds(),
             sync: Arc::new(Mutex::new(sync)),
             spaces: Arc::new(Mutex::new(BTreeMap::new())),
+            list: Arc::new(Mutex::new(None)),
         });
         self.db = Some(db);
         Ok(entries([("sync", sync_status(&status))]))
