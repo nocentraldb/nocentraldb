@@ -1,0 +1,160 @@
+// Accounts in Chromium through the local relay (NOC-316, slice 3; RFC
+// 0009, "Accounts and devices"; RFC 0010, "Losing a device"): a laptop
+// pairs a phone into its account, both sync, and the laptop removes the
+// lost phone with the recovery code. Removing needs the phone's records
+// in the account space, which the phone writes and the laptop learns by
+// syncing, so this test, and not the bridge's, shows a removal that
+// succeeds.
+//
+// The relay lets the laptop's account create spaces
+// (`--allow-invitation`), as rust.e2e.test.mjs lets the Rust device's.
+//
+// Not part of `pnpm gates`, which runs without browsers: the task
+// `repo:sdk-browser` and the workflow browser-view.yml run it.
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { after, before, test } from "node:test";
+import { chromium } from "playwright";
+import { build, LOCK, prebuilt } from "./build.mjs";
+import { startRelay } from "./relay.mjs";
+import { startServer } from "./server.mjs";
+
+let server;
+let browser;
+
+before(async () => {
+  if (process.env.SDK_BROWSER_PREBUILT === "1") prebuilt();
+  else build();
+  server = await startServer({ port: 0 });
+  browser = await chromium.launch();
+});
+
+after(async () => {
+  await browser?.close();
+  await server?.close();
+});
+
+const lock = JSON.parse(readFileSync(LOCK, "utf8"));
+
+/** The test lock's tasks, as an app declares them. */
+const MODEL = `nc.model({
+  tasks: nc.collection(
+    {
+      title: nc.string(),
+      status: nc.oneOf(["open", "done"]),
+      priority: nc.int(),
+      estimate: nc.float(),
+      urgent: nc.boolean(),
+      tags: nc.set(nc.string()),
+    },
+    {
+      indexes: {
+        byPriority: nc.index(["priority"]),
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        open: nc.index(["status", "priority"], { equal: 1, scope: "space" }),
+      },
+    },
+  ),
+})`;
+
+/** A fresh page with the package loaded and `window.model` set; a fresh context, so a fresh OPFS. */
+const page = async () => {
+  const opened = await (await browser.newContext()).newPage();
+  const errors = [];
+  opened.on("pageerror", (error) => errors.push(error));
+  await opened.goto(`${server.url}/`);
+  await opened.waitForFunction(() => window.ready === true);
+  await opened.evaluate((MODEL) => {
+    window.model = new Function("nc", `return ${MODEL}`)(window.nc);
+  }, MODEL);
+  return { page: opened, errors };
+};
+
+test("a device removes a lost one from its spaces with the recovery code, which renews the account key", async () => {
+  // The laptop's invitation, for the relay to let its account create spaces.
+  const { page: laptop, errors } = await page();
+  const { invitation, words } = await laptop.evaluate(async (lock) => {
+    const { nc, model } = window;
+    const db = await nc.open({ model, lock, name: "laptop" });
+    const invitation = String(await db.invitation());
+    const words = [...(await db.account.recoveryCode()).words()].join(" ");
+    await db.close();
+    return { invitation, words };
+  }, lock);
+  const relay = await startRelay(["--allow-invitation", invitation]);
+  try {
+    const { page: phone, errors: phoneErrors } = await page();
+    const asked = await phone.evaluate(
+      async ({ lock, url }) => {
+        const { nc, model } = window;
+        window.db = await nc.open({
+          model,
+          lock,
+          name: "phone",
+          pairing: "request",
+          relay: url,
+        });
+        return String(await window.db.invitation());
+      },
+      { lock, url: relay.url },
+    );
+    const paired = await laptop.evaluate(
+      async ({ lock, url, asked }) => {
+        const { nc, model } = window;
+        window.db = await nc.open({ model, lock, name: "laptop", relay: url });
+        const project = await window.db.spaces.create();
+        window.project = project.id;
+        const { answer } = await window.db.account.pair({
+          kind: "device",
+          invitation: nc.invitation(asked),
+        });
+        return String(answer);
+      },
+      { lock, url: relay.url, asked },
+    );
+    await phone.evaluate(async (answer) => {
+      await window.db.account.completePairing(window.nc.pairingAnswer(answer));
+    }, paired);
+
+    // Until the laptop has learnt the phone's records, the phone is not
+    // found; once it has, the laptop removes it.
+    const result = await laptop.evaluate(async (words) => {
+      const { db, project } = window;
+      const space = await db.spaces.get(project);
+      const others = (await space.members.list()).filter((m) => !m.self);
+      const phone = others[0].id;
+      const start = Date.now();
+      for (;;) {
+        try {
+          const removed = await db.account.removeMember(phone, {
+            recover: words,
+          });
+          const left = await space.members.list();
+          return {
+            others: others.length,
+            removed: removed.removed.map(({ space, notice }) => [
+              space === project,
+              notice.code,
+            ]),
+            askAdmins: removed.askAdmins,
+            notice: removed.notice.code,
+            left: left.map((member) => member.self),
+          };
+        } catch (error) {
+          if (error.code !== "notFound" || Date.now() - start > 20000)
+            throw error;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+      }
+    }, words);
+    assert.equal(result.others, 1, "the phone is the one other member");
+    assert.deepEqual(result.removed, [[true, "memberRemoved"]]);
+    assert.deepEqual(result.askAdmins, []);
+    assert.equal(result.notice, "accountKeyRenewed");
+    assert.deepEqual(result.left, [true], "only the laptop is left");
+    assert.deepEqual(errors, []);
+    assert.deepEqual(phoneErrors, []);
+  } finally {
+    relay.stop();
+  }
+});
