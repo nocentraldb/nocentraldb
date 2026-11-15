@@ -51,6 +51,9 @@ export interface Tx {
 export interface Space {
     readonly id: Id;
     readonly members: Members;
+    leave(): Promise<{
+        readonly notice: import("./members.ts").Notice;
+    }>;
     readonly erasures: {
         list(): Promise<ErasureEntry[]>;
     };
@@ -86,12 +89,14 @@ interface ErasureEntry {
 interface SpaceEntry {
     readonly id: Id;
     readonly role: string | null;
+    readonly model: "ours" | "another";
 }
 export interface Db {
     readonly spaces: {
         create(): Promise<Space>;
         get(id: Id): Promise<Space>;
         list(): Promise<SpaceEntry[]>;
+        subscribe(listener: (spaces: SpaceEntry[]) => void): Stop;
     };
     find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
     subscribe<T>(query: Query<T, readonly unknown[]>, listener: (page: Page<T>) => void): Stop;

@@ -192,3 +192,40 @@ fn an_invitation_that_is_not_one_is_refused() {
         "invalidValue"
     );
 }
+
+#[test]
+fn adding_several_invitations_stops_at_the_first_that_fails_and_keeps_the_members_before_it() {
+    // Not atomic (Carsten, 2026-11-14, NOC-313): each invitation is read and
+    // added in turn, and the first that fails ends the call.
+    let mut bridge = opened();
+    let space = ok(&mut bridge, "spaces.create", map(&[]));
+    let (_other, invitation, fingerprint) = invitation();
+    let broken = text("ncdb-invite-1:AAAA");
+    let add = |invitations: Vec<Value>| {
+        map(&[
+            ("space", space.clone()),
+            ("invitations", Value::Array(invitations)),
+            ("role", text("writer")),
+            ("fingerprint", fingerprint.clone()),
+        ])
+    };
+
+    // A broken invitation first: the call fails before it reaches the next.
+    assert_eq!(
+        code(
+            &mut bridge,
+            "members.add",
+            add(vec![broken.clone(), invitation.clone()])
+        ),
+        "invalidValue"
+    );
+    assert_eq!(members(&mut bridge, &space).len(), 1);
+
+    // A broken invitation after a good one: the call fails, and the member
+    // added before it stays.
+    assert_eq!(
+        code(&mut bridge, "members.add", add(vec![invitation, broken])),
+        "invalidValue"
+    );
+    assert_eq!(members(&mut bridge, &space).len(), 2);
+}

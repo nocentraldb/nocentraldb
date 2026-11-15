@@ -8,6 +8,7 @@ use super::Bridge;
 mod erasures;
 mod find;
 mod members;
+mod spaces;
 mod sync;
 
 const LOCK: &str = include_str!("../../../tests/model/model.lock.json");
