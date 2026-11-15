@@ -73,6 +73,12 @@
 //! `{}` answers the view's report. A `durability` or `view` event follows
 //! each change.
 //!
+//! The calls of NOC-316, slice 1 (RFC 0009, "Accounts and devices"), in
+//! `account.rs`: `open` also takes `"pairing": true` and `"recover":
+//! words`; `account.recoveryCode` `{}` answers `{"words": [text]}` or
+//! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
+//! `account.recovered` `{}` answers a notice or `null`.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -88,6 +94,7 @@
 //! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
 //! `null`, which clears a basic field or a link (`Value::clear`).
 
+mod account;
 mod erasures;
 mod events;
 mod members;
@@ -221,6 +228,9 @@ impl Bridge {
                 Ok(Value::Null)
             }
             "erasures.list" => erasures::list(&db, args).await,
+            "account.recoveryCode" => account::recovery_code(&db).await,
+            "account.confirmRecoveryCode" => account::confirm_recovery_code(&db).await,
+            "account.recovered" => account::recovered(&db).await,
             "durability" => {
                 db.refresh_storage().await;
                 Ok(reports::durability(&db.durability()))
@@ -303,6 +313,12 @@ impl Bridge {
         }
         if let Some(Value::Text(relay)) = get(args, "relay") {
             options = options.relay(relay);
+        }
+        if let Some(Value::Bool(true)) = get(args, "pairing") {
+            options = options.pairing();
+        }
+        if let Some(Value::Text(words)) = get(args, "recover") {
+            options = options.recover(words);
         }
         let db = Db::open(options).await?;
         let (status, sync) = db.sync().watch();
