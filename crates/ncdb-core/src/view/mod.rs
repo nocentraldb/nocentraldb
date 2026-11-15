@@ -13,6 +13,7 @@
 //! code on every target"): only the SQLite under `rusqlite` differs.
 
 mod accounts;
+mod ad_hoc;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
 mod fold;
@@ -22,6 +23,7 @@ mod log_table;
 mod migrate;
 pub mod model;
 mod pending_links;
+mod person_keys;
 mod plugin;
 mod query;
 mod read;
@@ -49,6 +51,7 @@ use crate::model_lock::{ModelLock, Refusal};
 use crate::receive::{Checks, ReceiveError};
 use crate::tips::Tips;
 
+pub use ad_hoc::AdHocCopy;
 pub use model::{
     Direction, Field, FieldState, Index, Invalid, Model, PluginField, RESERVED, Reserved, Scope,
     reserved_name,

@@ -81,7 +81,7 @@ impl Object {
         match self.fields.get(name) {
             None => Err(Error::new(
                 ErrorCode::NotFound,
-                format!("the object's collection has no field {name}"),
+                crate::texts::error::no_such_field_of_object(name),
             )),
             Some(None) => Ok(None),
             Some(Some(value)) => T::try_from(value).map(Some),

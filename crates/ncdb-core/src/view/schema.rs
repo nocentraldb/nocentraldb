@@ -7,7 +7,8 @@
 //! `written_at` came later (NOC-231): a database from before gains it on
 //! open, `NULL` in every row, and keeps its format version. Nor is
 //! `shreds_held`: when this device first held each shred
-//! (`super::shreds_held`).
+//! (`super::shreds_held`), nor `ad_hoc_copies`: which object each copy in
+//! an ad-hoc space came from (`super::ad_hoc`).
 
 use crate::plugins::Registry;
 use std::collections::BTreeMap;
@@ -55,6 +56,14 @@ CREATE TABLE IF NOT EXISTS pending_links (
 ) STRICT;
 CREATE TABLE IF NOT EXISTS joined (
     id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1)
+) STRICT;
+CREATE TABLE IF NOT EXISTS ad_hoc_copies (
+    space_id BLOB NOT NULL,
+    copy_id BLOB NOT NULL,
+    source_space_id BLOB NOT NULL,
+    source_id BLOB NOT NULL,
+    PRIMARY KEY (space_id, copy_id),
+    UNIQUE (space_id, source_space_id, source_id)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS shreds_held (
     space_id BLOB NOT NULL,

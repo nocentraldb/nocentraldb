@@ -127,7 +127,7 @@ pub(crate) fn storage(error: ncdb_core::view::Error) -> Error {
         true => ErrorCode::StorageFull,
         false => ErrorCode::StorageFailed,
     };
-    Error::new(code, format!("the local view failed: {error}"))
+    Error::new(code, crate::texts::error::view_failed(error))
 }
 
 #[cfg(test)]

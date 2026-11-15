@@ -52,16 +52,14 @@ pub(crate) fn rotatable(state: &SpaceState) -> Result<(), Error> {
     {
         return Err(Error::new(
             ErrorCode::InvalidValue,
-            "the member holds no key of a generation the rotation must chain; \
-             it rotates once an envelope for it arrives",
+            crate::texts::error::ROTATION_MISSING_GENERATION,
         ));
     }
     match live(state).any(|(id, _)| !state.person_keys.contains_key(&id)) {
         false => Ok(()),
         true => Err(Error::new(
             ErrorCode::InvalidValue,
-            "the member does not hold a person key of the space, which the \
-             rotation must re-wrap; it rotates once it fetched the key's record",
+            crate::texts::error::ROTATION_MISSING_PERSON_KEY,
         )),
     }
 }

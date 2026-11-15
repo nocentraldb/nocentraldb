@@ -193,17 +193,24 @@ Its log shows the guard's verdict and the answer of next-version, which is the c
    ```
 
    It writes `release-notes/X.Y.Z.md` and refuses to overwrite an existing file unless you pass `--force`. Each entry is titled by the first line of its first section and shows the sections as bold labels; rewrite the titles and the text for the user. A trailing comment lists the fragments the filter left out. The script also warns about every `introduced: cycle` fix that was added before the previous release was cut (the highest release in `release-notes/index.json`, or `--previous vA.B.C`). Such a bug may have shipped in that release. The script does not change the fragment, because only the PM can tell whether the bug reached the release branch. If it did, change the fragment to `introduced: A.B.C` in the same pull request.
-3. **Pull request to `main`.** The draft goes into a pull request against `main` that changes nothing else. An agent curates it, and pm merges it without the owner: pm checks that every entry comes from a fragment and ticks "Agent, beta release notes" (`.github/AI_POLICY.md`). The owner reads it in the daily note and may ask for a follow-up. The notes of a stable release stay with the owner, who curates them before the release (owner, 2026-11-09, NOC-45).
-4. **Cut (`cut`).** After the merge, cut `release/X.Y` from the merge commit (see [Branches](#branches)):
+3. **Review the texts (owner and PM).** Every text a developer reads from the SDKs lives in `texts/texts.json`, with when it shows (NOC-329). Before each beta, the owner reviews every text that is new or changed since the last release, in one pass, and polishes them together with the PM (Carsten, 2026-11-15, NOC-329):
+
+   ```sh
+   pnpm texts
+   ```
+
+   It finds the last release tag by itself, the newest `vX.Y.Z-beta.N` or `vX.Y.Z`, compares `texts/texts.json` at that tag with the one checked out, and prints, for each new, changed and removed entry, its id, kind, code and when it shows, and the old and the new text. Before the first beta every text counts as new. `pnpm texts --since <tag>` compares against another tag. The polished texts go into a pull request to `main` before the cut, and, for a later beta, also to `release/X.Y`.
+4. **Pull request to `main`.** The draft goes into a pull request against `main` that changes nothing else. An agent curates it, and pm merges it without the owner: pm checks that every entry comes from a fragment and ticks "Agent, beta release notes" (`.github/AI_POLICY.md`). The owner reads it in the daily note and may ask for a follow-up. The notes of a stable release stay with the owner, who curates them before the release (owner, 2026-11-09, NOC-45).
+5. **Cut (`cut`).** After the merge, cut `release/X.Y` from the merge commit (see [Branches](#branches)):
 
    ```sh
    node scripts/release/cut.mjs X.Y.Z --from <merge commit of the notes pull request> [--push]
    ```
 
    It refuses a detached HEAD, a working tree that is not clean, and a `release/X.Y` that already exists locally or on `origin`. It sets the manifests on the branch and commits only if they changed; for the first cut of a minor they already say `X.Y.0`, and it makes no commit. It always switches back to the branch it started from, also when a step fails, so the next commit, such as a `NEXUS_MEMORY.md` commit, cannot land on the release branch. Then it prints the next steps: the push command (unless `--push`), the commands for the pull request that raises `main` to `X.(Y+1).0` with the label `skip-changes`, and the owner's beta tag command.
-5. **Push the branch.** The owner pushes `release/X.Y`, or the PM does on the owner's word, with `--push` or the printed command.
-6. **Raise `main`.** The PM opens the raise pull request with the printed commands.
-7. **Tag (owner).** The owner pushes the beta tag on the branch head:
+6. **Push the branch.** The owner pushes `release/X.Y`, or the PM does on the owner's word, with `--push` or the printed command.
+7. **Raise `main`.** The PM opens the raise pull request with the printed commands.
+8. **Tag (owner).** The owner pushes the beta tag on the branch head:
 
    ```sh
    git tag vX.Y.Z-beta.1 release/X.Y && git push origin refs/tags/vX.Y.Z-beta.1
@@ -283,22 +290,23 @@ For condition 2, open bugs have no fragment yet. The PM therefore derives `intro
 
 Steps:
 
-1. **Final notes pull request** to `release/X.Y`. It makes the curated notes final and deletes the release's fragments from `changes/`. The tooling refuses a release while `changes/` on the branch is not empty.
-2. **Tag (owner).** On approval, the owner pushes `vX.Y.Z` on the head of `release/X.Y`:
+1. **Review the texts** with `pnpm texts`, as before a beta (see [Beta](#beta), step 3). Since the last beta only `release-notes/` and `changes/` may change (condition 4), so a text polished now waits for the next minor; the review mostly confirms the texts the betas shipped.
+2. **Final notes pull request** to `release/X.Y`. It makes the curated notes final and deletes the release's fragments from `changes/`. The tooling refuses a release while `changes/` on the branch is not empty.
+3. **Tag (owner).** On approval, the owner pushes `vX.Y.Z` on the head of `release/X.Y`:
 
    ```sh
    git tag vX.Y.Z && git push origin refs/tags/vX.Y.Z
    ```
 
-3. **What the publish job does:**
+4. **What the publish job does:**
    1. It runs the gate and `verify-tag`, with the eight rules listed under [Beta](#beta). The tag must match the manifests and sit on the head of `release/X.Y` after a beta. The diff rule of condition 4 must hold: `git diff --name-only <last beta tag> <release tag>` may show only `release-notes/` and `changes/`. No fragment may be left in `changes/`, and `release-notes/<X.Y.Z>.md` must exist at the tag. Any failure turns `verify` red before anything is built or published, and the tag stays in place for the owner to delete or move. The [dry run](#beta) proves the release tag on the branch head before the owner pushes it.
    2. It writes the version into the checkout and builds. The version is embedded, so the bytes differ from the beta's. Then it publishes every publishable package to crates.io and to npm under `latest`, and a GitHub release marked latest whose body is the file's content, without a manual step.
    3. It commits back to `main`, in one commit that the job `commit-back` makes and pushes with `node scripts/release/commit-back.mjs`, in a checkout of `main`. The commit is `Release vX.Y.Z: index, notes archive and shipped fragments` (after a beta: `Beta vX.Y.Z-beta.N: index`, with the index entry only). It contains the updated `release-notes/index.json`, the final `release-notes/<X.Y.Z>.md` as it stands at the tag, and the removal of every fragment that shipped. With the notes file on `main`, `main` becomes the archive that the landing page renders from. The shipped fragments are exactly the files deleted under `changes/` on the branch between the merge base with `main` and the release tag (`git log --diff-filter=D --name-only --format= <merge-base>..<tag> -- changes/`). `node scripts/release/shipped-fragments.mjs --tag vX.Y.Z` lists them with the content that shipped. With `--delete` on a checkout of `main`, it deletes a fragment only when the fragment's content is the blob that shipped. If a new fragment on `main` reused the slug, the script keeps it and names it (`kept <path>: differs from the shipped fragment (slug reused?)`). It never deletes a fragment by its name alone. Before it commits, `commit-back.mjs` holds the index to its shape with `validateIndex` and runs `check-fragments` on what is left in `changes/`. If either fails, it commits nothing. When nothing changed, as on a re-run after a successful one, it prints `nothing to commit` and makes no commit. The index date is the UTC day the GitHub release was published (`gh release view <tag> --json publishedAt`), not the day the job runs, so a re-run on a later day still finds nothing to commit.
    4. It closes the GitHub milestone with `gh`. The landing page picks up the change from `main`.
 
    The ruleset on `main` requires a pull request, so this push passes only because the release app, whose token the job pushes with, is on the ruleset's bypass list (see [The bypass for commit-back](#the-bypass-for-commit-back)). A push made with an app's token starts the `ci` workflow on `main`, as a merge does, so the gate runs on that commit, including the fragment schema check and the index test. The commit adds no fragment, so the alpha job that follows produces no alpha of its own.
-4. **When something fails.** A partial publish, where the GitHub release exists but a registry step failed, leaves the job red and retracts nothing. Re-run it. Every publish step first checks whether its tag, release or package version already exists, and skips it if so. If the commit to `main` fails to push, for example because `main` moved, the job fetches, rebases onto `origin/main`, checks again and retries once. A push that the ruleset refuses (git names a rule violation, `GH013`) fails the retry too: the release app is not on the bypass list, and the owner adds it as [The bypass for commit-back](#the-bypass-for-commit-back) says. If it still fails, the job is red, and a maintainer makes the commit by hand (see [If the commit to main failed](#if-the-commit-to-main-failed)).
-5. **After the release.** The PM updates the `active-release` memory (see [Planning a release](#planning-a-release)).
+5. **When something fails.** A partial publish, where the GitHub release exists but a registry step failed, leaves the job red and retracts nothing. Re-run it. Every publish step first checks whether its tag, release or package version already exists, and skips it if so. If the commit to `main` fails to push, for example because `main` moved, the job fetches, rebases onto `origin/main`, checks again and retries once. A push that the ruleset refuses (git names a rule violation, `GH013`) fails the retry too: the release app is not on the bypass list, and the owner adds it as [The bypass for commit-back](#the-bypass-for-commit-back) says. If it still fails, the job is red, and a maintainer makes the commit by hand (see [If the commit to main failed](#if-the-commit-to-main-failed)).
+6. **After the release.** The PM updates the `active-release` memory (see [Planning a release](#planning-a-release)).
 
 **Patch releases** `X.Y.(Z+1)` go through the same branch and through beta again. The owner approves, the branch's manifests are set to `X.Y.(Z+1)`, `release-notes/X.Y.(Z+1).md` is drafted, and `vX.Y.(Z+1)-beta.1` is pushed on the branch head.
 
@@ -425,6 +433,7 @@ The PM is the nexus-flow persona that plans releases (see [How we plan the work]
 | `scripts/release/cut.mjs <X.Y.Z> [--from <commit>] [--push]` | creates `release/X.Y` (or, for a patch, uses its head), sets the manifests and commits only a change, returns to the starting branch, and prints the push, raise-PR and beta-tag commands |
 | `scripts/release/promotion-check.mjs <X.Y.Z> [--now <ISO date>] [--remote <name>]` | reports the promotion conditions as a table, `PASS`, `FAIL` or `MANUAL` with evidence: soak from the GitHub release, the product code since the last beta, the audits, the breaking changes' tickets in the notes |
 | `scripts/release/api-report.mjs [--write \| --base <rev>] [--project <dir>]` | regenerates the TypeScript SDK's public declarations with `tsc` and fails when the committed `packages/sdk/etc/api-report.d.ts` differs; `--write` rewrites it; `--base` also names each line removed or changed since `<rev>` and exits 3 |
+| `scripts/texts.mjs [--since <tag>]` (`pnpm texts`) | lists every text of `texts/texts.json` new, changed or removed since the last release tag, the newest `vX.Y.Z-beta.N` or `vX.Y.Z`, or since `<tag>`, for the owner's review before a beta or a release; `--write` regenerates the SDK's text module, `--check` is the gate `repo:texts` |
 | moon task `repo:fragments` | runs `node scripts/release/check-fragments.mjs` in `pnpm gates` |
 | moon task `repo:version` | runs `node scripts/release/check-version.mjs` in `pnpm gates` |
 | moon task `repo:api-report` | runs `node scripts/release/api-report.mjs` in `pnpm gates` |

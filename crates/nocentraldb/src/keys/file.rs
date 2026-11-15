@@ -32,7 +32,7 @@ pub(crate) fn from_file(
         }
         None if database_existed => Err(Error::new(
             ErrorCode::StorageFailed,
-            "the database exists, but its key file does not; new keys would open none of its spaces",
+            crate::texts::error::KEY_FILE_MISSING,
         )),
         None => create(path, new()),
     }
@@ -43,15 +43,15 @@ fn read(path: &Path) -> Result<Option<Keys>, Error> {
     let mut file = match std::fs::File::open(path) {
         Ok(file) => file,
         Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(io("the key file cannot be read", &error)),
+        Err(error) => return Err(io(crate::texts::part::KEY_FILE_UNREADABLE, &error)),
     };
     let mut record = Zeroizing::new(Vec::new());
     file.read_to_end(&mut record)
-        .map_err(|error| io("the key file cannot be read", &error))?;
+        .map_err(|error| io(crate::texts::part::KEY_FILE_UNREADABLE, &error))?;
     Keys::decode(&record).map(Some).ok_or_else(|| {
         Error::new(
             ErrorCode::StorageFailed,
-            "the key file holds no keys of this SDK's format",
+            crate::texts::error::KEY_FILE_FORMAT,
         )
     })
 }
@@ -70,7 +70,7 @@ fn create(path: &Path, keys: Keys) -> Result<Keys, Error> {
             if error.kind() != ErrorKind::AlreadyExists {
                 let _ = std::fs::remove_file(path);
             }
-            Err(io("the key file cannot be written", &error))
+            Err(io(crate::texts::part::KEY_FILE_UNWRITABLE, &error))
         }
     }
 }
@@ -90,7 +90,7 @@ pub(crate) fn save(path: &Path, keys: &Keys) -> Result<(), Error> {
     let replaced = written.and_then(|()| std::fs::rename(&next, path));
     replaced.map_err(|error| {
         let _ = std::fs::remove_file(&next);
-        io("the key file cannot be written", &error)
+        io(crate::texts::part::KEY_FILE_UNWRITABLE, &error)
     })
 }
 
