@@ -116,7 +116,7 @@ pub(crate) fn take_back(
     let Some(performer) = pending.map(|key| key.performer) else {
         return Err(Error::new(
             crate::error::ErrorCode::InvalidValue,
-            "the shred is no provisional erasure of this space that is still pending",
+            crate::texts::error::TAKE_BACK_NOT_PENDING,
         ));
     };
     let may = resolved.role(me) == Some(Role::Admin)
@@ -124,7 +124,7 @@ pub(crate) fn take_back(
     if !may {
         return Err(Error::new(
             crate::error::ErrorCode::NotAllowed,
-            "only an admin of the performer's account takes an erasure back",
+            crate::texts::error::TAKE_BACK_NOT_ALLOWED,
         ));
     }
     write(inner, space, me, |batch, _, key, _| {

@@ -89,13 +89,23 @@ impl Members<'_> {
             let resolved = inner.spaces[&space.0].checks.resolved();
             let was = current(resolved, subject)?;
             match subject == me && new <= was {
-                true => holds(resolved, me, membership::Role::Reader, "lowers its role")?,
-                false => holds(resolved, me, membership::Role::Admin, "sets roles")?,
+                true => holds(
+                    resolved,
+                    me,
+                    membership::Role::Reader,
+                    crate::texts::part::DOING_LOWER_OWN_ROLE,
+                )?,
+                false => holds(
+                    resolved,
+                    me,
+                    membership::Role::Admin,
+                    crate::texts::part::DOING_SET_ROLES,
+                )?,
             }
             if was == membership::Role::Admin && new < was && admins(resolved) == 1 {
                 return Err(Error::new(
                     ErrorCode::LastAdmin,
-                    "the space's last admin may not lower its own role",
+                    crate::texts::error::LAST_ADMIN_LOWERS_ROLE,
                 ));
             }
             new >= membership::Role::Writer && was < membership::Role::Writer
@@ -152,13 +162,18 @@ pub(crate) fn remove(
     let me = inner.member.key().id();
     {
         let resolved = inner.spaces[&space].checks.resolved();
-        holds(resolved, me, membership::Role::Admin, "removes members")?;
+        holds(
+            resolved,
+            me,
+            membership::Role::Admin,
+            crate::texts::part::DOING_REMOVE_MEMBERS,
+        )?;
         current(resolved, subject)?;
     }
     if subject == me {
         return Err(Error::new(
             ErrorCode::InvalidValue,
-            "a member does not remove itself: leaving a space is space.leave()",
+            crate::texts::error::MEMBER_REMOVES_ITSELF,
         ));
     }
     rotate::rotatable(&inner.spaces[&space])?;
@@ -187,12 +202,9 @@ pub(crate) fn remove(
 /// The role of `subject` in `resolved`, which must be a current member:
 /// another is refused with `NotFound`.
 fn current(resolved: &Resolved, subject: ids::MemberId) -> Result<membership::Role, Error> {
-    resolved.role(subject).ok_or_else(|| {
-        Error::new(
-            ErrorCode::NotFound,
-            "the member is not a member of the space",
-        )
-    })
+    resolved
+        .role(subject)
+        .ok_or_else(|| Error::new(ErrorCode::NotFound, crate::texts::error::NOT_AMEMBER))
 }
 
 /// How many admins `resolved` holds.

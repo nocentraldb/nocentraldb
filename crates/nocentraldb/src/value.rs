@@ -111,12 +111,12 @@ impl From<ObjectId> for Value {
 fn other_kind(asked: &str) -> Error {
     Error::new(
         ErrorCode::InvalidValue,
-        format!("the field does not hold {asked}"),
+        crate::texts::error::field_does_not_hold(asked),
     )
 }
 
 macro_rules! read_as {
-    ($t:ty, $asked:literal, $pattern:pat => $out:expr) => {
+    ($t:ty, $asked:expr, $pattern:pat => $out:expr) => {
         impl<'a> TryFrom<&'a Value> for $t {
             type Error = Error;
 
@@ -130,13 +130,13 @@ macro_rules! read_as {
     };
 }
 
-read_as!(&'a str, "a text", Repr::Text(text) => text.as_str());
-read_as!(i64, "an integer", Repr::Integer(n) => *n);
-read_as!(f64, "a float", Repr::Float(x) => *x);
-read_as!(bool, "a boolean", Repr::Boolean(b) => *b);
-read_as!(ObjectId, "an object id", Repr::Id(id) => *id);
-read_as!(&'a [Value], "a list of elements", Repr::List(elements) => elements.as_slice());
-read_as!(Data, "a plugin's data", Repr::Data(data) => data.clone());
+read_as!(&'a str, crate::texts::part::KIND_TEXT, Repr::Text(text) => text.as_str());
+read_as!(i64, crate::texts::part::KIND_INTEGER, Repr::Integer(n) => *n);
+read_as!(f64, crate::texts::part::KIND_FLOAT, Repr::Float(x) => *x);
+read_as!(bool, crate::texts::part::KIND_BOOLEAN, Repr::Boolean(b) => *b);
+read_as!(ObjectId, crate::texts::part::KIND_OBJECT_ID, Repr::Id(id) => *id);
+read_as!(&'a [Value], crate::texts::part::KIND_LIST, Repr::List(elements) => elements.as_slice());
+read_as!(Data, crate::texts::part::KIND_DATA, Repr::Data(data) => data.clone());
 
 impl From<Data> for Value {
     /// A write intent for a plugin field, which the plugin's `write` turns

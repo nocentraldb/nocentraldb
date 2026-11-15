@@ -73,7 +73,7 @@ impl Account<'_> {
             let keys::Account::Holds { key, statement } = &inner.account else {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
-                    "this database holds no account key, so it pairs nobody",
+                    crate::texts::error::PAIR_NEEDS_ACCOUNT_KEY,
                 ));
             };
             let kind = kind.member_kind();
@@ -88,7 +88,7 @@ impl Account<'_> {
                     if certificate.kind != MemberKind::Device || kind != MemberKind::Device {
                         return Err(Error::new(
                             ErrorCode::NotAllowed,
-                            "the invitation's agent already has an account: linking an agent is not built yet",
+                            crate::texts::error::AGENT_HAS_ACCOUNT,
                         ));
                     }
                     if certificate.member != invitation.key.id()
@@ -96,7 +96,7 @@ impl Account<'_> {
                     {
                         return Err(Error::new(
                             ErrorCode::InvalidCertificate,
-                            "the invitation's certificate does not hold",
+                            crate::texts::error::CERTIFICATE_DOES_NOT_HOLD,
                         ));
                     }
                     if crate::members::Fingerprint::of(certificate)
@@ -104,7 +104,7 @@ impl Account<'_> {
                     {
                         return Err(Error::new(
                             ErrorCode::NotAllowed,
-                            "the invitation's member is a device of this account already",
+                            crate::texts::error::ALREADY_ADEVICE,
                         ));
                     }
                     (certificate.kind, Some(certificate.account_key))
@@ -113,14 +113,14 @@ impl Account<'_> {
             if asked != kind {
                 return Err(Error::new(
                     ErrorCode::InvalidValue,
-                    "the invitation asks to be paired as the other kind",
+                    crate::texts::error::PAIRED_AS_OTHER_KIND,
                 ));
             }
             let answer = core::PairingAnswer::build(key, statement, &invitation.key, kind, old)
                 .map_err(|_| {
                     Error::new(
                         ErrorCode::InvalidValue,
-                        "the account key cannot be sealed to the invitation's member",
+                        crate::texts::error::ACCOUNT_KEY_NOT_SEALABLE,
                     )
                 })?;
             // The new member's certificate, as its pairing answer carries
@@ -185,7 +185,7 @@ impl Account<'_> {
                 _ => {
                     return Err(Error::new(
                         ErrorCode::NotAllowed,
-                        "this database is not waiting to be paired",
+                        crate::texts::error::NOT_WAITING_TO_BE_PAIRED,
                     ));
                 }
             };
@@ -387,7 +387,7 @@ impl FromStr for PairingAnswer {
             .map_err(|why: core::ReadError| {
                 Error::new(
                     ErrorCode::InvalidValue,
-                    format!("the text is not a pairing answer: {why}"),
+                    crate::texts::error::not_apairing_answer(why),
                 )
             })
     }
@@ -399,7 +399,7 @@ impl FromStr for PairingAnswer {
 pub(crate) fn check_error(why: CheckError) -> Error {
     Error::new(
         ErrorCode::InvalidCertificate,
-        format!("the pairing answer does not hold for this database: {why}"),
+        crate::texts::error::pairing_answer_does_not_hold(why),
     )
 }
 

@@ -98,24 +98,35 @@ impl ErasureRequest {
     }
 
     fn read(bytes: &[u8]) -> Result<ErasureRequest, &'static str> {
-        let (&version, rest) = bytes.split_first().ok_or("it is empty")?;
+        let (&version, rest) = bytes
+            .split_first()
+            .ok_or(crate::texts::part::ERASURE_TEXT_EMPTY)?;
         if version != VERSION {
-            return Err("its version is not 1");
+            return Err(crate::texts::part::ERASURE_TEXT_VERSION);
         }
-        let (performer, rest) = rest.split_at_checked(32).ok_or("it is too short")?;
-        let (length, rest) = rest.split_at_checked(2).ok_or("it is too short")?;
+        let (performer, rest) = rest
+            .split_at_checked(32)
+            .ok_or(crate::texts::part::ERASURE_TEXT_TOO_SHORT)?;
+        let (length, rest) = rest
+            .split_at_checked(2)
+            .ok_or(crate::texts::part::ERASURE_TEXT_TOO_SHORT)?;
         let length = u16::from_be_bytes([length[0], length[1]]) as usize;
-        let (certificate, rest) = rest.split_at_checked(length).ok_or("it is too short")?;
+        let (certificate, rest) = rest
+            .split_at_checked(length)
+            .ok_or(crate::texts::part::ERASURE_TEXT_TOO_SHORT)?;
         let certificate = match certificate.is_empty() {
             true => None,
-            false => {
-                Some(Certificate::decode(certificate).map_err(|_| "its certificate is not one")?)
-            }
+            false => Some(
+                Certificate::decode(certificate)
+                    .map_err(|_| crate::texts::part::ERASURE_REQUEST_CERTIFICATE)?,
+            ),
         };
-        let (count, mut rest) = rest.split_at_checked(2).ok_or("it is too short")?;
+        let (count, mut rest) = rest
+            .split_at_checked(2)
+            .ok_or(crate::texts::part::ERASURE_TEXT_TOO_SHORT)?;
         let count = u16::from_be_bytes([count[0], count[1]]) as usize;
         if rest.len() != count * 32 {
-            return Err("its length does not match its number of entries");
+            return Err(crate::texts::part::ERASURE_TEXT_ENTRIES);
         }
         let mut keys = BTreeSet::new();
         while let Some((entry, next)) = rest.split_at_checked(32) {
@@ -124,7 +135,7 @@ impl ErasureRequest {
             rest = next;
         }
         if keys.len() != count {
-            return Err("it names an entry twice");
+            return Err(crate::texts::part::ERASURE_TEXT_ENTRY_TWICE);
         }
         Ok(ErasureRequest {
             performer: CoreMemberId(performer.try_into().expect("32 bytes")),
@@ -150,15 +161,15 @@ impl FromStr for ErasureRequest {
         let invalid = |why: &str| {
             Error::new(
                 ErrorCode::InvalidValue,
-                format!("the text is not an erasure request: {why}"),
+                crate::texts::error::not_an_erasure_request(why),
             )
         };
         let body = text
             .strip_prefix(REQUEST)
-            .ok_or_else(|| invalid("it does not start with ncdb-erase-1:"))?;
+            .ok_or_else(|| invalid(crate::texts::part::ERASURE_REQUEST_PREFIX))?;
         let bytes = BASE64URL_NOPAD
             .decode(body.as_bytes())
-            .map_err(|_| invalid("it is not unpadded base64url"))?;
+            .map_err(|_| invalid(crate::texts::part::ERASURE_TEXT_BASE64))?;
         ErasureRequest::read(&bytes).map_err(invalid)
     }
 }
@@ -183,14 +194,18 @@ impl SignOffs {
     }
 
     fn read(bytes: &[u8]) -> Result<SignOffs, &'static str> {
-        let (&version, rest) = bytes.split_first().ok_or("it is empty")?;
+        let (&version, rest) = bytes
+            .split_first()
+            .ok_or(crate::texts::part::ERASURE_TEXT_EMPTY)?;
         if version != VERSION {
-            return Err("its version is not 1");
+            return Err(crate::texts::part::ERASURE_TEXT_VERSION);
         }
-        let (count, mut rest) = rest.split_at_checked(2).ok_or("it is too short")?;
+        let (count, mut rest) = rest
+            .split_at_checked(2)
+            .ok_or(crate::texts::part::ERASURE_TEXT_TOO_SHORT)?;
         let count = u16::from_be_bytes([count[0], count[1]]) as usize;
         if rest.len() != count * 128 {
-            return Err("its length does not match its number of entries");
+            return Err(crate::texts::part::ERASURE_TEXT_ENTRIES);
         }
         let mut sign_offs = BTreeMap::new();
         while let Some((entry, next)) = rest.split_at_checked(128) {
@@ -204,7 +219,7 @@ impl SignOffs {
             rest = next;
         }
         if sign_offs.len() != count {
-            return Err("it names an entry twice");
+            return Err(crate::texts::part::ERASURE_TEXT_ENTRY_TWICE);
         }
         Ok(SignOffs(sign_offs))
     }
@@ -234,15 +249,15 @@ impl FromStr for SignOffs {
         let invalid = |why: &str| {
             Error::new(
                 ErrorCode::InvalidValue,
-                format!("the text is not a set of sign-offs: {why}"),
+                crate::texts::error::not_sign_offs(why),
             )
         };
         let body = text
             .strip_prefix(SIGN_OFFS)
-            .ok_or_else(|| invalid("it does not start with ncdb-sign-off-1:"))?;
+            .ok_or_else(|| invalid(crate::texts::part::SIGN_OFFS_PREFIX))?;
         let bytes = BASE64URL_NOPAD
             .decode(body.as_bytes())
-            .map_err(|_| invalid("it is not unpadded base64url"))?;
+            .map_err(|_| invalid(crate::texts::part::ERASURE_TEXT_BASE64))?;
         SignOffs::read(&bytes).map_err(invalid)
     }
 }
@@ -333,7 +348,7 @@ impl Db {
         let person = person.person_id().ok_or_else(|| {
             Error::new(
                 ErrorCode::NoPerson,
-                "the object is no person's: it has no personal field",
+                crate::texts::error::OBJECT_IS_NO_PERSON,
             )
         })?;
         let inner = lock(&self.inner);
@@ -378,7 +393,7 @@ impl Db {
         if request.performer != me {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
-                "the erasure request is another member's",
+                crate::texts::error::ERASURE_REQUEST_OF_ANOTHER_MEMBER,
             ));
         }
         let mut by_space: BTreeMap<CoreSpaceId, Vec<[u8; 16]>> = BTreeMap::new();
@@ -416,8 +431,7 @@ impl Db {
                     None => {
                         return Err(Error::new(
                             ErrorCode::InvalidValue,
-                            "a sign-off does not hold for this erasure in its space; \
-                             nothing was erased",
+                            crate::texts::error::SIGN_OFF_DOES_NOT_HOLD,
                         ));
                     }
                 }
@@ -464,7 +478,7 @@ impl Account<'_> {
         let keys::Account::Holds { key, .. } = &inner.account else {
             return Err(Error::new(
                 ErrorCode::NotAllowed,
-                "this database holds no account key; a device of the account signs off",
+                crate::texts::error::NO_ACCOUNT_KEY_TO_SIGN_OFF,
             ));
         };
         let mut sign_offs = BTreeMap::new();
