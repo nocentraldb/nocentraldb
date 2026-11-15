@@ -16,7 +16,7 @@ const section = () => {
   const start = guide.search(/^#{2,3} Where the database lives$/m);
   assert.ok(start >= 0, "the guide has no section Where the database lives");
   const level = guide.slice(start).match(/^#+/)[0].length;
-  const rest = guide.slice(start + 1);
+  const rest = guide.slice(guide.indexOf("\n", start) + 1);
   const end = rest.search(new RegExp(`^#{1,${level}} `, "m"));
   return end < 0 ? rest : rest.slice(0, end);
 };
@@ -33,7 +33,7 @@ test("the member key is in the platform keystore, one entry per database, and a 
   const text = section();
   assert.match(text, /keystore/);
   assert.match(text, /one entry per database/);
-  assert.match(text, /mov(e|ed|ing)[^.]*(loses|lose)/);
+  assert.match(text, /mov(e|ed|ing)[^.]*(loses|lose)/i);
 });
 
 test("a key file is for headless agents, and only its permissions protect it", () => {
