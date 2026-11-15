@@ -81,3 +81,58 @@ pub(crate) fn shred(
     })?;
     Ok(ids)
 }
+
+/// The notice of a take-back (Carsten, 2026-11-15, on NOC-326, Q7 a; the
+/// text: pm, NOC-326, on the coding agent's proposal).
+pub(crate) const TAKEN_BACK: crate::members::Notice = crate::members::Notice {
+    code: crate::members::NoticeCode::TakenBack,
+    text: "The erasure is taken back in this space, and the person's fields read again; \
+           a finalize another device of the account wrote before it saw this take-back \
+           still wins, and the person stays erased.",
+};
+
+/// Takes back the provisional erasure `shred` of `space` (RFC 0008, "A
+/// provisional erasure in a space with one account"; Carsten, 2026-11-15,
+/// on NOC-326, Q7 a): writes the erasure decision whose key 9 is false.
+/// A shred that is not a provisional one still pending is refused with
+/// `InvalidValue`; a member that is not an admin of the performer's
+/// account with `NotAllowed`. Nothing is written when a call is refused.
+pub(crate) fn take_back(
+    inner: &mut Inner,
+    space: SpaceId,
+    shred: ChangeId,
+) -> Result<crate::members::Notice, Error> {
+    let id = crate::id::SpaceId(space);
+    writable(inner, id)?;
+    not_stopped(inner, id)?;
+    let resolved = inner.spaces[&space].checks.resolved();
+    let me = inner.member.key().id();
+    let pending = resolved.person_keys().map(|(_, key)| key).find(|key| {
+        key.shred == Some(shred)
+            && key.provisional
+            && key.taken_back.is_none()
+            && key.finalized.is_none()
+    });
+    let Some(performer) = pending.map(|key| key.performer) else {
+        return Err(Error::new(
+            crate::error::ErrorCode::InvalidValue,
+            "the shred is no provisional erasure of this space that is still pending",
+        ));
+    };
+    let may = resolved.role(me) == Some(Role::Admin)
+        && performer.is_some_and(|performer| resolved.same_account(me, performer));
+    if !may {
+        return Err(Error::new(
+            crate::error::ErrorCode::NotAllowed,
+            "only an admin of the performer's account takes an erasure back",
+        ));
+    }
+    write(inner, space, me, |batch, _, key, _| {
+        let entry = Entry::ErasureDecision(ErasureDecision {
+            shred,
+            finalize: false,
+        });
+        batch.write(key, entry, None);
+    })?;
+    Ok(TAKEN_BACK)
+}

@@ -93,6 +93,19 @@ impl Space {
 }
 
 impl Erasures<'_> {
+    /// Takes back the provisional erasure `shred` within its 7 days
+    /// (Carsten, 2026-11-15, on NOC-326, Q7 a; RFC 0008, "A provisional
+    /// erasure in a space with one account"): writes the erasure decision
+    /// that takes it back, and the person's fields read again. Returns the
+    /// notice `TakenBack`. Only an admin of the performer's account may;
+    /// another member is refused with `NotAllowed`. A shred that is final,
+    /// already decided, or not of this space is refused with
+    /// `InvalidValue`. Nothing is written when a call is refused.
+    pub async fn take_back(&self, shred: ChangeId) -> Result<crate::members::Notice, Error> {
+        let mut inner = lock(self.space.inner());
+        crate::members::erasure::take_back(&mut inner, self.space.id().0, shred.0)
+    }
+
     /// The erasures of the space, in shred-id order, as this copy's
     /// membership state holds them: an acknowledgement this copy has not
     /// received yet shows as missing.

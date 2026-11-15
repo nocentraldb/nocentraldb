@@ -123,7 +123,12 @@ async fn a_final_erasure_is_not_taken_back() {
     })
     .await;
     let signed = signer.account().sign_off(&request).await.unwrap();
-    let shred = performer.erase(&request, &signed.sign_offs).await.unwrap().shreds[0].shred;
+    let shred = performer
+        .erase(&request, &signed.sign_offs)
+        .await
+        .unwrap()
+        .shreds[0]
+        .shred;
 
     let refused = x.erasures().take_back(shred).await.unwrap_err();
 
@@ -145,18 +150,19 @@ async fn a_member_that_is_no_admin_may_not_take_it_back() {
     let object = x.get("projects", id).await.unwrap().unwrap();
     let request = performer.erasure_request(&object).await.unwrap();
     let signed = performer.account().sign_off(&request).await.unwrap();
-    let shred = performer.erase(&request, &signed.sign_offs).await.unwrap().shreds[0].shred;
+    let shred = performer
+        .erase(&request, &signed.sign_offs)
+        .await
+        .unwrap()
+        .shreds[0]
+        .shred;
     synced(&performer).await;
-    let on_writer = writer.spaces().get(x.id()).await;
-    eventually("the writer holds the space", || {
-        now(writer.spaces().get(x.id())).is_ok()
+    eventually("the writer holds the space and its shred", || {
+        now(writer.spaces().get(x.id()))
+            .is_ok_and(|space| now(space.erasures().list()).is_ok_and(|audit| !audit.is_empty()))
     })
     .await;
-    let on_writer = on_writer.unwrap_or_else(|_| now(writer.spaces().get(x.id())).unwrap());
-    eventually("the writer holds the shred", || {
-        now(on_writer.erasures().list()).is_ok_and(|audit| !audit.is_empty())
-    })
-    .await;
+    let on_writer = writer.spaces().get(x.id()).await.unwrap();
 
     let refused = on_writer.erasures().take_back(shred).await.unwrap_err();
 
