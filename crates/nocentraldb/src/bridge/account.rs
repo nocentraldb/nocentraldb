@@ -4,10 +4,14 @@
 //! bridge only in `account.recoveryCode`'s answer; no error text carries
 //! them.
 
+use std::str::FromStr;
+
 use ncdb_core::cbor::Value;
 
-use super::{Failed, entries, members::notice_of};
+use super::{Failed, entries, invalid, members::notice_of, text};
 use crate::db::Db;
+use crate::members::Invitation;
+use crate::pairing::{PairKind, PairingAnswer};
 
 /// `account.recoveryCode` `{}`: `{"words": [text; 12]}` while the person
 /// has not confirmed they stored the code, else `null`.
@@ -43,4 +47,57 @@ pub(super) async fn recovered(db: &Db) -> Result<Value, Failed> {
         .recovered()
         .await?
         .map_or(Value::Null, notice_of))
+}
+
+/// `account.pair` `{"kind": "device" | "agent", "invitation": text}`, on a
+/// device of the account: `{"answer": text, "added": [{"space": id,
+/// "notice": notice}], "askAdmins": [id]}` (NOC-321 points 3 and 4).
+pub(super) async fn pair(db: &Db, args: &Value) -> Result<Value, Failed> {
+    let kind = match text(args, "kind")? {
+        "device" => PairKind::Device,
+        "agent" => PairKind::Agent,
+        _ => return Err(invalid("a kind is \"device\" or \"agent\"")),
+    };
+    let invitation = Invitation::from_str(text(args, "invitation")?)?;
+    let paired = db.account().pair(kind, &invitation).await?;
+    Ok(entries([
+        ("answer", Value::Text(paired.answer.to_string())),
+        (
+            "added",
+            Value::Array(
+                paired
+                    .added
+                    .into_iter()
+                    .map(|(space, notice)| {
+                        entries([
+                            ("space", Value::Text(space.to_string())),
+                            ("notice", notice_of(notice)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "askAdmins",
+            Value::Array(
+                paired
+                    .ask_admins
+                    .iter()
+                    .map(|space| Value::Text(space.to_string()))
+                    .collect(),
+            ),
+        ),
+    ]))
+}
+
+/// `account.completePairing` `{"answer": text}`, on the new database:
+/// `{"notices": [notice]}` (NOC-321 point 5). A text that is no answer is
+/// `invalidValue`, naming what is wrong, never a byte.
+pub(super) async fn complete_pairing(db: &Db, args: &Value) -> Result<Value, Failed> {
+    let answer = PairingAnswer::from_str(text(args, "answer")?)?;
+    let notices = db.account().complete_pairing(&answer).await?;
+    Ok(entries([(
+        "notices",
+        Value::Array(notices.into_iter().map(notice_of).collect()),
+    )]))
 }
