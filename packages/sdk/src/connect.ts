@@ -523,6 +523,12 @@ export const connect = async (
         (await ask("space.leave", { space: id })) as unknown as {
           readonly notice: Notice;
         },
+      erasures: {
+        list: async () =>
+          (await ask("erasures.list", { space: id })) as unknown as Awaited<
+            ReturnType<Space["erasures"]["list"]>
+          >,
+      },
       status: {
         current: () => (statuses.get(id) as { status: SpaceStatus }).status,
         subscribe: (listener) => {
