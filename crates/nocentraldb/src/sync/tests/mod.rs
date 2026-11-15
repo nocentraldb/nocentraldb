@@ -18,6 +18,7 @@ mod codes;
 mod confirmed;
 mod counts;
 mod erase;
+mod erase_agents;
 mod erasures;
 mod fake;
 mod follow;
