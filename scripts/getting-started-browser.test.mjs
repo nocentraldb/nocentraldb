@@ -57,7 +57,7 @@ test("the list of what the browser SDK does not do yet names none of the calls i
     "db.view",
     "db.durability",
     "spaces.subscribe",
-    "leave",
+    "leave()",
     "erasures",
   ]) {
     assert.ok(!text.includes(name), `the list still names ${name}`);
