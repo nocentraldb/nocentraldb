@@ -92,7 +92,45 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-A machine without a keystore, such as a server or a container, keeps the keys in a file you name with `.key_file("data.keys")`. Only the file's permissions protect it. For tests, `.in_memory()` keeps the database and its keys in memory.
+### Where the database lives
+
+Your app always chooses where. `.path("data")` names a directory the SDK owns: it creates the directory and keeps the database in one SQLite file there, `nocentraldb.sqlite`. There is no default: an open with neither `.path(…)` nor `.in_memory()` is refused with `ErrorCode::InvalidValue`, so no data lands where the app did not say.
+
+The member key, which signs everything this database writes, is not in that directory. It is in the platform's keystore, in one entry per database, named by the directory's absolute path. Moving or renaming the directory therefore loses the link to its entry: the next open fails with `ErrorCode::StorageFailed` rather than draw a new key, which could read none of its spaces. Keep the directory where you created it.
+
+A server or an agent in a container often has no keystore. `.key_file("agent.keys")` keeps the keys in that file instead, for such a headless agent; only the file's permissions protect it, so let no other user read it. Without a keystore and without a key file, the open fails with `ErrorCode::KeyStoreUnavailable`, whose message names `key_file`. `.in_memory()` keeps the database and its keys in memory, for tests: they are gone when the `Db` is dropped.
+
+For an app, a sensible place is the platform's app-data directory, such as `~/Library/Application Support/<your app>` on macOS, `%APPDATA%\<your app>` on Windows or `$XDG_DATA_HOME/<your app>` on Linux, which a crate such as `directories` finds for you; pass it as `path`. The SDK does not pick one by itself: a server or an agent wants a directory of its own choosing.
+
+```rust no_run
+use nocentraldb::{Db, ErrorCode, OpenOptions};
+
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let lock = std::fs::read_to_string("model.lock.json")?;
+
+    // An app: the directory it chose; its keys in the platform keystore.
+    let app = Db::open(OpenOptions::new(&lock).path("data")).await?;
+
+    // A headless agent without a keystore: its keys in a file it names.
+    let agent = Db::open(
+        OpenOptions::new(&lock)
+            .path("agent-data")
+            .key_file("agent.keys")
+            .agent(),
+    )
+    .await?;
+
+    // A test: the database and its keys in memory, gone with the Db.
+    let test = Db::open(OpenOptions::new(&lock).in_memory()).await?;
+
+    // No place at all is refused.
+    let refused = Db::open(OpenOptions::new(&lock)).await.err().ok_or("refused")?;
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+    drop((app, agent, test));
+    Ok(())
+}
+```
 
 Every call runs on the device. A read never waits for the network.
 
