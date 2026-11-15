@@ -8,6 +8,7 @@
 // wasm module and finds them with `new URL(..., import.meta.url)` (Carsten,
 // 2026-11-12, NOC-274).
 
+import type { RecoveryCode } from "./account.ts";
 import { connectWorker } from "./connect.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
 import { SetElements } from "./elements.ts";
@@ -252,6 +253,13 @@ export interface Db {
     /** Calls `listener` with the report at once, and again whenever it changes. */
     subscribe(listener: (view: ViewStatus) => void): Stop;
   };
+  /** This member's account: its recovery code, and whether this open recovered it (RFC 0009, "Accounts and devices"). */
+  readonly account: {
+    /** The recovery code while the person has not confirmed they stored it, else `null`; shown again on every open until then. */
+    recoveryCode(): Promise<RecoveryCode | null>;
+    /** `accountRecovered` on the open that recovered the account with `recover`, else `null`. */
+    recovered(): Promise<import("./members.ts").Notice | null>;
+  };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
 }
@@ -269,6 +277,10 @@ interface OpenOptions {
   name?: string;
   /** `"on-open"`, the default: ask the browser for persistent storage on open, without waiting; `"on-request"`: only when the app calls `db.durability.requestPersistent()` (RFC 0006). */
   persistentStorage?: "on-open" | "on-request";
+  /** `"request"`: open a new database to be paired to an account; its invitation carries no certificate yet (RFC 0010). */
+  pairing?: "request";
+  /** The twelve words of a recovery code, as the person typed them: recovers the account on a new database (RFC 0010). Never logged. */
+  recover?: string;
 }
 
 /** Opens this member's database in the browser. */

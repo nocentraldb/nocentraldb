@@ -1,4 +1,10 @@
+// file: account.d.ts
+export interface RecoveryCode {
+    words(): readonly string[];
+    confirm(): Promise<void>;
+}
 // file: db.d.ts
+import type { RecoveryCode } from "./account.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
 import type { Invitation, Members } from "./members.ts";
 import type { Infer, model } from "./nc.ts";
@@ -122,6 +128,10 @@ export interface Db {
         current(): ViewStatus;
         subscribe(listener: (view: ViewStatus) => void): Stop;
     };
+    readonly account: {
+        recoveryCode(): Promise<RecoveryCode | null>;
+        recovered(): Promise<import("./members.ts").Notice | null>;
+    };
     close(): Promise<void>;
 }
 interface OpenOptions {
@@ -130,6 +140,8 @@ interface OpenOptions {
     relay?: string;
     name?: string;
     persistentStorage?: "on-open" | "on-request";
+    pairing?: "request";
+    recover?: string;
 }
 export declare const open: (options: OpenOptions) => Promise<Db>;
 export declare const add: <E>(...elements: E[]) => Elements<E>;
@@ -157,6 +169,7 @@ export declare class NcError extends Error {
 }
 // file: index.d.ts
 export declare function name(): string;
+export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 export type { Invitation, Notice } from "./members.ts";
