@@ -74,9 +74,9 @@ impl Role {
     /// The role's name in an error's text, with its article.
     fn name(self) -> &'static str {
         match self {
-            Role::Reader => "a member",
-            Role::Writer => "a writer or an admin",
-            Role::Admin => "an admin",
+            Role::Reader => crate::texts::part::ROLE_READER,
+            Role::Writer => crate::texts::part::ROLE_WRITER,
+            Role::Admin => crate::texts::part::ROLE_ADMIN,
         }
     }
 }
@@ -203,11 +203,11 @@ pub(crate) fn holds(
         Some(role) if role >= needed => Ok(()),
         Some(_) => Err(Error::new(
             ErrorCode::NotAllowed,
-            format!("only {} of the space {doing}", Role::of(needed).name()),
+            crate::texts::error::role_required(Role::of(needed).name(), doing),
         )),
         None => Err(Error::new(
             ErrorCode::NotMember,
-            "the member is no longer a member of the space",
+            crate::texts::error::NO_LONGER_MEMBER,
         )),
     }
 }
@@ -221,12 +221,17 @@ fn allowed(
     member: ncdb_core::ids::MemberId,
     subject: ncdb_core::ids::MemberId,
 ) -> Result<bool, Error> {
-    holds(resolved, member, membership::Role::Admin, "adds members")?;
+    holds(
+        resolved,
+        member,
+        membership::Role::Admin,
+        crate::texts::part::DOING_ADD_MEMBERS,
+    )?;
     match resolved.member(subject) {
         None => Ok(false),
         Some(state) if state.role.is_some() => Err(Error::new(
             ErrorCode::AlreadyMember,
-            "the invitation's member is a member of the space already",
+            crate::texts::error::ALREADY_MEMBER,
         )),
         Some(_) => Ok(true),
     }
@@ -241,7 +246,7 @@ fn certified(invitation: &Invitation) -> Result<&Certificate, Error> {
     let Some(certificate) = invitation.certificate() else {
         return Err(Error::new(
             ErrorCode::InvalidCertificate,
-            "the invitation's member waits to be paired and has no certificate yet",
+            crate::texts::error::INVITATION_WAITS_TO_BE_PAIRED,
         ));
     };
     let holds = certificate.member == invitation.key.id()
@@ -254,7 +259,7 @@ fn certified(invitation: &Invitation) -> Result<&Certificate, Error> {
         true => Ok(certificate),
         false => Err(Error::new(
             ErrorCode::InvalidCertificate,
-            "the invitation's certificate does not hold",
+            crate::texts::error::CERTIFICATE_DOES_NOT_HOLD,
         )),
     }
 }
@@ -282,7 +287,7 @@ fn current(inner: &Inner, resolved: &Resolved, certificate: &Certificate) -> Res
         false => Ok(()),
         true => Err(Error::new(
             ErrorCode::InvalidCertificate,
-            "the invitation's certificate is under an account key its account replaced",
+            crate::texts::error::CERTIFICATE_UNDER_REPLACED_KEY,
         )),
     }
 }
@@ -311,8 +316,7 @@ fn known(
     }
     Err(Error::new(
         ErrorCode::UnknownAccount,
-        "the invitation's account is new to this database: pass its fingerprint \
-         once a person compared it",
+        crate::texts::error::UNKNOWN_ACCOUNT,
     )
     .with_fingerprint(account))
 }

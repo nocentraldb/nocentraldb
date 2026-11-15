@@ -89,7 +89,7 @@ pub(crate) async fn replace(records: &impl Records, name: &str, keys: &Keys) -> 
         .read()
         .await?
         .wrapping_key
-        .ok_or_else(|| failed("IndexedDB holds no wrapping key for the database"))?;
+        .ok_or_else(|| failed(crate::texts::error::NO_WRAPPING_KEY))?;
     let sealed = seal(&wrapping_key, name, &keys.encode()).await?;
     records.replace(&sealed).await
 }
@@ -108,9 +108,9 @@ pub(crate) async fn from_records(
         record,
     } = records.read().await?;
     match (wrapping_key, record) {
-        (None, None) if database_existed => Err(failed(
-            "the database exists, but IndexedDB holds no keys for it; new keys would open none of its spaces",
-        )),
+        (None, None) if database_existed => {
+            Err(failed(crate::texts::error::INDEXED_DB_KEYS_MISSING))
+        }
         (None, None) => {
             let keys = new();
             let wrapping_key = generate().await?;
@@ -119,21 +119,18 @@ pub(crate) async fn from_records(
             Ok(keys)
         }
         (Some(wrapping_key), Some(record)) => {
-            let opened = open(&wrapping_key, name, &record).await.ok_or_else(|| {
-                failed("the key record of the database does not open under its wrapping key")
-            })?;
-            let keys = Keys::decode(&opened).ok_or_else(|| {
-                failed("the key record of the database holds no keys of this SDK's format")
-            })?;
+            let opened = open(&wrapping_key, name, &record)
+                .await
+                .ok_or_else(|| failed(crate::texts::error::KEY_RECORD_DOES_NOT_OPEN))?;
+            let keys = Keys::decode(&opened)
+                .ok_or_else(|| failed(crate::texts::error::KEY_RECORD_FORMAT))?;
             if keys.upgraded {
                 let sealed = seal(&wrapping_key, name, &keys.encode()).await?;
                 records.replace(&sealed).await?;
             }
             Ok(keys)
         }
-        _ => Err(failed(
-            "IndexedDB holds only one of the database's two key records; new keys would open none of its spaces",
-        )),
+        _ => Err(failed(crate::texts::error::INDEXED_DB_HALF_KEYS)),
     }
 }
 
@@ -144,10 +141,10 @@ pub(crate) async fn generate() -> Result<CryptoKey, Error> {
     let usages = Array::of2(&"encrypt".into(), &"decrypt".into());
     let promise = subtle()?
         .generate_key_with_object(&params, false, &usages)
-        .map_err(|error| crypto("the wrapping key cannot be made", &error))?;
+        .map_err(|error| crypto(crate::texts::part::WRAPPING_KEY_UNMAKEABLE, &error))?;
     let key = JsFuture::from(promise)
         .await
-        .map_err(|error| crypto("the wrapping key cannot be made", &error))?;
+        .map_err(|error| crypto(crate::texts::part::WRAPPING_KEY_UNMAKEABLE, &error))?;
     Ok(key.unchecked_into())
 }
 
@@ -158,10 +155,10 @@ pub(crate) async fn seal(key: &CryptoKey, name: &str, record: &[u8]) -> Result<V
     getrandom::fill(&mut iv).expect("the platform's secure random generator failed");
     let promise = subtle()?
         .encrypt_with_object_and_u8_array(&params(&iv, name), key, record)
-        .map_err(|error| crypto("the key record cannot be sealed", &error))?;
+        .map_err(|error| crypto(crate::texts::part::KEY_RECORD_UNSEALABLE, &error))?;
     let sealed = JsFuture::from(promise)
         .await
-        .map_err(|error| crypto("the key record cannot be sealed", &error))?;
+        .map_err(|error| crypto(crate::texts::part::KEY_RECORD_UNSEALABLE, &error))?;
     let mut out = iv.to_vec();
     out.extend(Uint8Array::new(&sealed).to_vec());
     Ok(out)
@@ -203,7 +200,7 @@ fn subtle() -> Result<SubtleCrypto, Error> {
         .ok_or_else(|| {
             Error::new(
                 ErrorCode::KeyStoreUnavailable,
-                "this browser context has no WebCrypto, which keeps the member's keys",
+                crate::texts::error::NO_WEB_CRYPTO,
             )
         })?;
     Ok(crypto.unchecked_into::<Crypto>().subtle())
@@ -217,5 +214,8 @@ fn failed(what: &str) -> Error {
 /// A WebCrypto failure: `what`, and the name of the error it threw, never
 /// any byte.
 fn crypto(what: &str, error: &JsValue) -> Error {
-    failed(&format!("{what}: {}", indexeddb::error_name(error)))
+    failed(&crate::texts::error::web_crypto_failed(
+        what,
+        indexeddb::error_name(error),
+    ))
 }

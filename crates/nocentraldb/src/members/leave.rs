@@ -34,11 +34,16 @@ impl Space {
         let me = inner.member.key().id();
         {
             let resolved = inner.spaces[&space.0].checks.resolved();
-            holds(resolved, me, membership::Role::Reader, "leaves it")?;
+            holds(
+                resolved,
+                me,
+                membership::Role::Reader,
+                crate::texts::part::DOING_LEAVE,
+            )?;
             if resolved.role(me) == Some(membership::Role::Admin) && admins(resolved) == 1 {
                 return Err(Error::new(
                     ErrorCode::LastAdmin,
-                    "the space's last admin may not leave it",
+                    crate::texts::error::LAST_ADMIN_LEAVES,
                 ));
             }
         }

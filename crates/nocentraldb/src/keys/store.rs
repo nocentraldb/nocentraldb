@@ -48,7 +48,7 @@ pub(crate) fn from_store(
             let keys = Keys::decode(&record).ok_or_else(|| {
                 Error::new(
                     ErrorCode::StorageFailed,
-                    "the keystore entry of the database holds no keys of this SDK's format",
+                    crate::texts::error::KEYSTORE_ENTRY_FORMAT,
                 )
             })?;
             if keys.upgraded {
@@ -58,7 +58,7 @@ pub(crate) fn from_store(
         }
         None if database_existed => Err(Error::new(
             ErrorCode::StorageFailed,
-            "the database exists, but the keystore holds no keys for it; new keys would open none of its spaces",
+            crate::texts::error::KEYSTORE_KEYS_MISSING,
         )),
         None => {
             let keys = new();
@@ -73,7 +73,7 @@ pub(crate) fn from_store(
 pub(crate) fn user(dir: &Path) -> Result<String, Error> {
     let dir = dir
         .canonicalize()
-        .map_err(|error| super::io("the database directory cannot be found", &error))?;
+        .map_err(|error| super::io(crate::texts::part::DATABASE_DIRECTORY_NOT_FOUND, &error))?;
     Ok(dir.to_string_lossy().into_owned())
 }
 
@@ -153,11 +153,11 @@ fn failed(error: KeyringError) -> Error {
         | KeyringError::NoDefaultStore => unavailable(error),
         KeyringError::BadEncoding(_) | KeyringError::BadDataFormat(..) => Error::new(
             ErrorCode::StorageFailed,
-            "the keystore entry of the database cannot be read",
+            crate::texts::error::KEYSTORE_ENTRY_UNREADABLE,
         ),
         error => Error::new(
             ErrorCode::StorageFailed,
-            format!("the keystore failed: {error}"),
+            crate::texts::error::keystore_failed(error),
         ),
     }
 }
@@ -167,19 +167,16 @@ fn failed(error: KeyringError) -> Error {
 pub(crate) fn unavailable(error: KeyringError) -> Error {
     Error::new(
         ErrorCode::KeyStoreUnavailable,
-        format!(
-            "no platform keystore is reachable ({}); name a key file with key_file(path)",
-            kind(&error)
-        ),
+        crate::texts::error::keystore_unreachable(kind(&error)),
     )
 }
 
 /// What failed, without anything the error holds.
 fn kind(error: &KeyringError) -> &'static str {
     match error {
-        KeyringError::PlatformFailure(_) => "the platform failed",
-        KeyringError::NoStorageAccess(_) => "access was refused",
-        KeyringError::NoDefaultStore => "this platform has none",
-        _ => "it failed",
+        KeyringError::PlatformFailure(_) => crate::texts::part::KEYSTORE_PLATFORM_FAILED,
+        KeyringError::NoStorageAccess(_) => crate::texts::part::KEYSTORE_ACCESS_REFUSED,
+        KeyringError::NoDefaultStore => crate::texts::part::KEYSTORE_NONE,
+        _ => crate::texts::part::KEYSTORE_OTHER_FAILURE,
     }
 }
