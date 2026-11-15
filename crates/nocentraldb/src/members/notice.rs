@@ -60,62 +60,56 @@ impl Notice {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const DEVICE_ADDED: Notice = Notice {
         code: NoticeCode::DeviceAdded,
-        text: "Your new device was added to this space and reads its whole history.",
+        text: crate::texts::notice::DEVICE_ADDED,
     };
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const DEVICE_PAIRED: Notice = Notice {
         code: NoticeCode::DevicePaired,
-        text: "This device now holds your account key. \
-               Keep your recovery code: it is the way back if you lose every device.",
+        text: crate::texts::notice::DEVICE_PAIRED,
     };
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) const AGENT_PAIRED: Notice = Notice {
         code: NoticeCode::AgentPaired,
-        text: "This agent acts for your account in the spaces an admin adds it to. \
-               It holds no account key.",
+        text: crate::texts::notice::AGENT_PAIRED,
     };
     pub(crate) const ACCOUNT_LINKED: Notice = Notice {
         code: NoticeCode::AccountLinked,
-        text: "Spaces this database joined before keep its old account. \
-               Other members see it as linked to yours.",
+        text: crate::texts::notice::ACCOUNT_LINKED,
     };
     pub(crate) const ACCOUNT_RECOVERED: Notice = Notice {
         code: NoticeCode::AccountRecovered,
-        text: "Your account is back with a new account key. \
-               Your spaces come back when one of their members adds this device.",
+        text: crate::texts::notice::ACCOUNT_RECOVERED,
     };
     pub(crate) const ACCOUNT_KEY_RENEWED: Notice = Notice {
         code: NoticeCode::AccountKeyRenewed,
-        text: "Your account has a new account key. \
-               Members that have not learnt it yet still accept the old one.",
+        text: crate::texts::notice::ACCOUNT_KEY_RENEWED,
     };
 
     /// The notice of [`Members::add`](crate::Members::add).
     pub(crate) const MEMBER_ADDED: Notice = Notice {
         code: NoticeCode::MemberAdded,
-        text: "The new member reads the whole history of this space.",
+        text: crate::texts::notice::MEMBER_ADDED,
     };
 
     /// The notice of [`Members::remove`](crate::Members::remove), RFC
     /// 0009's text.
     pub(crate) const MEMBER_REMOVED: Notice = Notice {
         code: NoticeCode::MemberRemoved,
-        text: "The removed member keeps its copy of everything it received before now.",
+        text: crate::texts::notice::MEMBER_REMOVED,
     };
 
     /// The notice of [`Members::set_role`](crate::Members::set_role), the
     /// text the owner decided on NOC-203.
     pub(crate) const ROLE_SET: Notice = Notice {
         code: NoticeCode::RoleSet,
-        text: "A member whose role was lowered keeps its copy of everything it received before now.",
+        text: crate::texts::notice::ROLE_SET,
     };
 
     /// The notice of [`Space::leave`](crate::Space::leave), the text the
     /// owner decided on NOC-219.
     pub(crate) const SPACE_LEFT: Notice = Notice {
         code: NoticeCode::SpaceLeft,
-        text: "This member keeps its copy of everything it received before now. \
-               Until an admin rotates the space key, the others write under a key it still holds.",
+        text: crate::texts::notice::SPACE_LEFT,
     };
 
     /// The notice of a provisional erasure, which
@@ -123,7 +117,6 @@ impl Notice {
     /// every device of the account (the text: pm, 2026-11-12, NOC-234).
     pub(crate) const ERASURE_PENDING: Notice = Notice {
         code: NoticeCode::ErasurePending,
-        text: "Personal data was erased on a device of this account. \
-               The erasure becomes final after 7 days; until then an admin of this account can take it back.",
+        text: crate::texts::notice::ERASURE_PENDING,
     };
 }
