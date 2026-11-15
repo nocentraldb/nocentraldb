@@ -66,6 +66,16 @@ const page = async () => {
   await opened.waitForFunction(() => window.ready === true);
   await opened.evaluate((MODEL) => {
     window.model = new Function("nc", `return ${MODEL}`)(window.nc);
+    /** Polls `check` until it gives a value, for up to 20 seconds. */
+    window.until = async (what, check) => {
+      const start = Date.now();
+      for (;;) {
+        const got = await check();
+        if (got) return got;
+        if (Date.now() - start > 20000) throw new Error(`never: ${what}`);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
   }, MODEL);
   return { page: opened, errors };
 };
@@ -84,20 +94,16 @@ test("a device removes a lost one from its spaces with the recovery code, which 
   const relay = await startRelay(["--allow-invitation", invitation]);
   try {
     const { page: phone, errors: phoneErrors } = await page();
-    const asked = await phone.evaluate(
-      async ({ lock, url }) => {
-        const { nc, model } = window;
-        window.db = await nc.open({
-          model,
-          lock,
-          name: "phone",
-          pairing: "request",
-          relay: url,
-        });
-        return String(await window.db.invitation());
-      },
-      { lock, url: relay.url },
-    );
+    const asked = await phone.evaluate(async (lock) => {
+      const { nc, model } = window;
+      window.db = await nc.open({
+        model,
+        lock,
+        name: "phone",
+        pairing: "request",
+      });
+      return String(await window.db.invitation());
+    }, lock);
     const paired = await laptop.evaluate(
       async ({ lock, url, asked }) => {
         const { nc, model } = window;
@@ -112,40 +118,59 @@ test("a device removes a lost one from its spaces with the recovery code, which 
       },
       { lock, url: relay.url, asked },
     );
-    await phone.evaluate(async (answer) => {
-      await window.db.account.completePairing(window.nc.pairingAnswer(answer));
-    }, paired);
+    // The phone completes the pairing, then opens again with the relay. A
+    // phone that syncs while it waits to be paired does not yet pick up
+    // the spaces the pairing adds it to (reported with NOC-316 slice 3).
+    // Once it holds the project, it writes a task there; the laptop
+    // reading that task shows that the phone's records, which it writes
+    // into the account space as it takes the project, have reached the
+    // laptop too.
+    const project = await laptop.evaluate(() => window.project);
+    const task = await phone.evaluate(
+      async ({ answer, lock, url, project }) => {
+        const { nc, model } = window;
+        await window.db.account.completePairing(nc.pairingAnswer(answer));
+        await window.db.close();
+        window.db = await nc.open({ model, lock, name: "phone", relay: url });
+        const space = await window.until("the phone holds the project", () =>
+          window.db.spaces.get(project).catch(() => null),
+        );
+        const { ids } = await space.create(model.tasks, {
+          title: "from the phone",
+          status: "open",
+          priority: 1,
+        });
+        return ids[0];
+      },
+      { answer: paired, lock, url: relay.url, project },
+    );
+    await laptop.evaluate(
+      async ({ project, task }) => {
+        const space = await window.db.spaces.get(project);
+        await window.until("the laptop reads the phone's task", () =>
+          space.get(window.model.tasks, task),
+        );
+      },
+      { project, task },
+    );
 
-    // Until the laptop has learnt the phone's records, the phone is not
-    // found; once it has, the laptop removes it.
     const result = await laptop.evaluate(async (words) => {
       const { db, project } = window;
       const space = await db.spaces.get(project);
       const others = (await space.members.list()).filter((m) => !m.self);
       const phone = others[0].id;
-      const start = Date.now();
-      for (;;) {
-        try {
-          const removed = await db.account.removeMember(phone, {
-            recover: words,
-          });
-          const left = await space.members.list();
-          return {
-            others: others.length,
-            removed: removed.removed.map(({ space, notice }) => [
-              space === project,
-              notice.code,
-            ]),
-            askAdmins: removed.askAdmins,
-            notice: removed.notice.code,
-            left: left.map((member) => member.self),
-          };
-        } catch (error) {
-          if (error.code !== "notFound" || Date.now() - start > 20000)
-            throw error;
-          await new Promise((resolve) => setTimeout(resolve, 200));
-        }
-      }
+      const removed = await db.account.removeMember(phone, { recover: words });
+      const left = await space.members.list();
+      return {
+        others: others.length,
+        removed: removed.removed.map(({ space, notice }) => [
+          space === project,
+          notice.code,
+        ]),
+        askAdmins: removed.askAdmins,
+        notice: removed.notice.code,
+        left: left.map((member) => member.self),
+      };
     }, words);
     assert.equal(result.others, 1, "the phone is the one other member");
     assert.deepEqual(result.removed, [[true, "memberRemoved"]]);
