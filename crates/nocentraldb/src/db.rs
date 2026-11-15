@@ -59,6 +59,8 @@ pub struct OpenOptions {
     /// Whether the database joins an account another device created, as a
     /// pairing one does (RFC 0010): it creates no account space of its own.
     joins_account: bool,
+    /// Whether the database is a sub-agent's (NOC-318).
+    sub_agent: bool,
     /// The name of a database on OPFS, in a dedicated worker (NOC-175):
     /// crate-internal until the browser export names it (NOC-176).
     #[cfg(target_arch = "wasm32")]
@@ -87,6 +89,7 @@ impl OpenOptions {
             recover: None,
             plugins: Vec::new(),
             joins_account: false,
+            sub_agent: false,
             #[cfg(target_arch = "wasm32")]
             browser: None,
         }
@@ -143,7 +146,7 @@ impl OpenOptions {
     /// `recovered`, a member key and no account when it waits to be
     /// paired, a new account and its recovery code otherwise.
     fn new_keys(&self, recovered: Option<&ncdb_core::recovery::RecoveryCode>) -> Keys {
-        match (recovered, self.pairing) {
+        match (recovered, self.pairing || self.sub_agent) {
             (Some(code), _) => Keys::recovered(code, crate::clock::now_millis() / 1000),
             (None, true) => Keys::pairing(),
             (None, false) => Keys::generate(),
@@ -157,6 +160,21 @@ impl OpenOptions {
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn browser(mut self, name: &str) -> OpenOptions {
         self.browser = Some(name.to_owned());
+        self
+    }
+
+    /// Opens the database of a sub-agent (RFC 0009, "Sub-agents and ad-hoc
+    /// spaces"; RFC 0003, "Sub-agents get an ad-hoc space"): it draws its
+    /// member key and holds no account, no recovery code and no account
+    /// space. Its invitation is version 3 and carries no certificate; an
+    /// agent's [`Members::add`](crate::Members::add) signs one with the
+    /// agent's own member key, which ties it to the agent's account. It
+    /// creates no space of its own: its parent adds it to the spaces it
+    /// works in. [`Db::open`] refuses it with `InvalidValue` together with
+    /// [`agent`](OpenOptions::agent), [`pairing`](OpenOptions::pairing) or
+    /// [`recover`](OpenOptions::recover).
+    pub fn sub_agent(mut self) -> OpenOptions {
+        self.sub_agent = true;
         self
     }
 
@@ -556,6 +574,12 @@ impl Db {
         let _ = &placed;
         #[cfg(target_arch = "wasm32")]
         let placed_drawn = placed.as_ref().is_some_and(|placed| placed.drawn);
+        if options.sub_agent && (options.agent || options.pairing || options.recover.is_some()) {
+            return Err(Error::new(
+                ErrorCode::InvalidValue,
+                crate::texts::error::OPTIONS_SUB_AGENT,
+            ));
+        }
         let code = options.recovery_code()?;
         let drawn = std::cell::Cell::new(false);
         let new = || {
@@ -623,9 +647,10 @@ impl Db {
             code: keys.code,
             recovered,
             home,
-            kind: match options.agent {
-                true => MemberKind::Agent,
-                false => MemberKind::Device,
+            kind: match (options.sub_agent, options.agent) {
+                (true, _) => MemberKind::SubAgent,
+                (false, true) => MemberKind::Agent,
+                (false, false) => MemberKind::Device,
             },
             storage,
             spaces,
