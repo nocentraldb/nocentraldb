@@ -119,9 +119,14 @@ export const tabCore = async (
   let worker: Core | undefined;
   let release: (() => void) | undefined;
   let ownOpen: Request | undefined;
+  // Whether this tab's worker opened the database, so it takes calls now.
+  let isOpen = false;
   let opened: () => void = () => {};
   let ready = new Promise<void>((resolve) => {
-    opened = resolve;
+    opened = () => {
+      isOpen = true;
+      resolve();
+    };
   });
   let sync: Cbor = null;
   // The calls this tab's worker is answering, its own and the others'.
@@ -322,8 +327,12 @@ export const tabCore = async (
     await openSent;
     if (closed || openRequest === undefined) return;
     const started = own();
+    isOpen = false;
     ready = new Promise<void>((resolve) => {
-      opened = resolve;
+      opened = () => {
+        isOpen = true;
+        resolve();
+      };
     });
     const answer = await started.call(openRequest.slice());
     noteSync(answer);
@@ -351,7 +360,7 @@ export const tabCore = async (
     emit(reopened);
     post({ kind: "event", bytes: reopened });
     // Taken over while hidden, for calls to send: give it up again once they are answered.
-    if (!visible()) void giveUp();
+    if (!visible()) giveUp();
   };
 
   const held = (lock: unknown): Promise<void> | void => {
@@ -392,18 +401,30 @@ export const tabCore = async (
     }
   }
 
-  /** Gives the database up (NOC-332): answers what this tab's worker took, tells the others, and releases the lock. */
-  async function giveUp() {
+  /** Gives the database up (NOC-332): answers what this tab's worker took, tells the others, and releases the lock. With nothing in flight it does so at once, inside the hide handler, since a phone runs nothing after it once it freezes the page. */
+  function giveUp() {
     if (worker === undefined || yielding) return;
     yielding = true;
-    await ready;
-    while (serving.size > 0) await Promise.allSettled([...serving]);
+    if (isOpen && serving.size === 0) return handOver();
+    void (async () => {
+      await ready;
+      while (serving.size > 0) await Promise.allSettled([...serving]);
+      handOver();
+    })();
+  }
+
+  /** Tells the others this tab answered all it took, stops its worker and releases the lock. */
+  function handOver() {
     const stopping = worker;
     post({ kind: "gone", tab: me, yielded: true });
     worker = undefined;
     owner = undefined;
+    isOpen = false;
     ready = new Promise<void>((resolve) => {
-      opened = resolve;
+      opened = () => {
+        isOpen = true;
+        resolve();
+      };
     });
     stopping?.terminate();
     const releasing = release;
@@ -429,7 +450,7 @@ export const tabCore = async (
   platform.page?.onVisibility((now) => {
     if (closed) return;
     if (!now) {
-      if (worker !== undefined) void giveUp();
+      if (worker !== undefined) giveUp();
       else unqueueIfIdle();
     } else queue();
   });
