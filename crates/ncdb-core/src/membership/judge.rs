@@ -79,7 +79,7 @@ pub(crate) fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved
     let provisional = valid
         && match &node.body.entry {
             Entry::Shred(shred) => {
-                rights::signed_off(input.space, node, shred, past)
+                rights::signed_off(input.space, node.author, shred, past)
                     == Some(rights::SignedOff::Provisional)
             }
             _ => false,

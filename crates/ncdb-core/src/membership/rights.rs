@@ -12,7 +12,7 @@ use super::certificate::{Certificate, MemberKind};
 use super::genesis::generation_id;
 use super::input::Node;
 use super::judge::Judged;
-use super::person_key::{ErasureDecision, ShredEntry};
+use super::person_key::{ErasureDecision, ShredEntry, SignOff};
 use super::resolve::Resolved;
 use super::statement::AccountKeyStatement;
 
@@ -85,7 +85,7 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
                 .and_then(|key| key.commitment)
                 .is_none_or(|commitment| commitment == entry.commitment);
         }
-        Entry::Shred(shred) => return signed_off(space, node, shred, past).is_some(),
+        Entry::Shred(shred) => return signed_off(space, node.author, shred, past).is_some(),
         Entry::ErasureDecision(decision) => return decides(node, decision, past),
         Entry::AccountKeyStatement(statement) => return carries(statement, past),
         _ => return true,
@@ -157,14 +157,14 @@ pub(crate) fn own_rules(space: SpaceId, node: &Node, past: &Resolved) -> bool {
 /// NOC-230).
 pub(crate) fn signed_off(
     space: SpaceId,
-    node: &Node,
+    author: MemberId,
     shred: &ShredEntry,
     past: &Resolved,
 ) -> Option<SignedOff> {
     let account = shred.sign_off.account_key;
-    let performer = past.member(node.author)?.certificate.account_key;
+    let performer = past.member(author)?.certificate.account_key;
     let held = past.person_key(shred.person_key).is_some()
-        && shred.sign_off.verify(space, shred.person_key, node.author)
+        && shred.sign_off.verify(space, shred.person_key, author)
         && !superseded(past, account, None);
     if !held {
         return None;
@@ -197,7 +197,7 @@ pub(crate) fn signed_off(
 
 /// What a valid sign-off makes of a shred (RFC 0008, "Shred entry").
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum SignedOff {
+pub enum SignedOff {
     /// Another account signed off: the shred is final when accepted.
     Final,
     /// The performer's own account signed off, in a space whose members
@@ -470,4 +470,25 @@ pub(crate) fn order(
         }
     }
     order
+}
+
+impl Resolved {
+    /// What `sign_off` would make of a shred of `person_key` that
+    /// `performer` writes in `space` on top of this state, or `None` when it
+    /// would not hold: the rule a written shred is judged by ([`signed_off`],
+    /// RFC 0008, "Shred entry"), for the SDK to check a sign-off before it
+    /// writes anything and to sign off only where its account may (NOC-325).
+    pub fn sign_off(
+        &self,
+        space: SpaceId,
+        performer: MemberId,
+        person_key: [u8; 16],
+        sign_off: &SignOff,
+    ) -> Option<SignedOff> {
+        let shred = ShredEntry {
+            person_key,
+            sign_off: sign_off.clone(),
+        };
+        signed_off(space, performer, &shred, self)
+    }
 }

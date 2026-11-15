@@ -31,6 +31,11 @@ const VERSION: u8 = 1;
 /// its length.
 const WAITING_VERSION: u8 = 2;
 const WAITING: usize = 66;
+/// The version of a sub-agent's invitation, before its parent adds it,
+/// and its length: the version byte and the two public keys (Carsten,
+/// 2026-11-15, NOC-320 Q1).
+const SUB_AGENT_VERSION: u8 = 3;
+const SUB_AGENT: usize = 65;
 /// The length of the layout without a statement, and with one.
 const PLAIN: usize = 163;
 const WITH_STATEMENT: usize = 267;
@@ -57,6 +62,9 @@ pub(crate) enum Form {
     /// No certificate yet: a member waiting to be paired as this kind,
     /// version 2.
     Waiting(MemberKind),
+    /// No certificate yet: a sub-agent, whose parent signs its
+    /// certificate when it adds it, version 3.
+    SubAgent,
 }
 
 /// The fingerprint of an account, which a person compares once before an
@@ -134,6 +142,7 @@ impl Invitation {
     pub(crate) fn of(inner: &Inner) -> Invitation {
         let member = inner.member.key();
         let form = match inner.account.certificate(member.id(), inner.kind) {
+            _ if inner.kind == MemberKind::SubAgent => Form::SubAgent,
             Some(certificate) => Form::Certified(certificate),
             None => Form::Waiting(inner.kind),
         };
@@ -151,7 +160,7 @@ impl Invitation {
     pub fn fingerprint(&self) -> Fingerprint {
         match &self.form {
             Form::Certified(certificate) => Fingerprint::of(certificate),
-            Form::Waiting(_) => Fingerprint::member(self.key.id().0),
+            Form::Waiting(_) | Form::SubAgent => Fingerprint::member(self.key.id().0),
         }
     }
 
@@ -161,7 +170,7 @@ impl Invitation {
     pub(crate) fn certificate_mut(&mut self) -> &mut Certificate {
         match &mut self.form {
             Form::Certified(certificate) => certificate,
-            Form::Waiting(_) => panic!("the invitation has no certificate"),
+            Form::Waiting(_) | Form::SubAgent => panic!("the invitation has no certificate"),
         }
     }
 
@@ -169,7 +178,7 @@ impl Invitation {
     pub(crate) fn certificate(&self) -> Option<&Certificate> {
         match &self.form {
             Form::Certified(certificate) => Some(certificate),
-            Form::Waiting(_) => None,
+            Form::Waiting(_) | Form::SubAgent => None,
         }
     }
 }
@@ -197,6 +206,13 @@ impl Invitation {
         };
         let certificate = match &self.form {
             Form::Certified(certificate) => certificate,
+            Form::SubAgent => {
+                let mut bytes = Vec::with_capacity(SUB_AGENT);
+                bytes.push(SUB_AGENT_VERSION);
+                bytes.extend_from_slice(&self.key.signing);
+                bytes.extend_from_slice(&self.key.agreement);
+                return bytes;
+            }
             Form::Waiting(waiting) => {
                 let mut bytes = Vec::with_capacity(WAITING);
                 bytes.push(WAITING_VERSION);
@@ -244,6 +260,18 @@ impl Invitation {
                     agreement: at(33),
                 },
                 form: Form::Waiting(kind(bytes[65])?),
+            });
+        }
+        if version == SUB_AGENT_VERSION {
+            if bytes.len() != SUB_AGENT {
+                return Err(crate::texts::part::INVITATION_LENGTH_V3);
+            }
+            return Ok(Invitation {
+                key: MemberPublicKey {
+                    signing: at(1),
+                    agreement: at(33),
+                },
+                form: Form::SubAgent,
             });
         }
         if version != VERSION {
