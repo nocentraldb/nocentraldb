@@ -232,11 +232,11 @@ impl Invitation {
         let kind = |byte: u8| match byte {
             1 => Ok(MemberKind::Device),
             2 => Ok(MemberKind::Agent),
-            _ => Err("its kind is neither a device nor an agent"),
+            _ => Err(crate::texts::part::INVITATION_KIND),
         };
         if version == WAITING_VERSION {
             if bytes.len() != WAITING {
-                return Err("its length is not that of version 2");
+                return Err(crate::texts::part::INVITATION_LENGTH_V2);
             }
             return Ok(Invitation {
                 key: MemberPublicKey {
@@ -247,10 +247,10 @@ impl Invitation {
             });
         }
         if version != VERSION {
-            return Err("its version is unknown");
+            return Err(crate::texts::part::INVITATION_VERSION);
         }
         if bytes.len() < PLAIN {
-            return Err("it is too short");
+            return Err(crate::texts::part::INVITATION_TOO_SHORT);
         }
         let kind = kind(bytes[97])?;
         let account_key = at(65);
@@ -259,7 +259,7 @@ impl Invitation {
             (1, WITH_STATEMENT) => {
                 let number = u64::from_be_bytes(bytes[195..203].try_into().unwrap());
                 if number == 0 {
-                    return Err("its account key number is 0");
+                    return Err(crate::texts::part::INVITATION_NUMBER_ZERO);
                 }
                 Some(Box::new(AccountKeyStatement {
                     recovery_key: at(163),
@@ -268,8 +268,8 @@ impl Invitation {
                     signature: bytes[203..267].try_into().unwrap(),
                 }))
             }
-            (0 | 1, _) => return Err("its length does not match its statement byte"),
-            _ => return Err("its statement byte is neither 0 nor 1"),
+            (0 | 1, _) => return Err(crate::texts::part::INVITATION_LENGTH),
+            _ => return Err(crate::texts::part::INVITATION_STATEMENT_BYTE),
         };
         let key = MemberPublicKey {
             signing: at(1),
@@ -310,15 +310,15 @@ impl FromStr for Invitation {
         let invalid = |why: &str| {
             Error::new(
                 ErrorCode::InvalidValue,
-                format!("the text is not an invitation: {why}"),
+                crate::texts::error::not_an_invitation(why),
             )
         };
         let body = text
             .strip_prefix(PREFIX)
-            .ok_or_else(|| invalid("it does not start with ncdb-invite-1:"))?;
+            .ok_or_else(|| invalid(crate::texts::part::INVITATION_PREFIX))?;
         let bytes = BASE64URL_NOPAD
             .decode(body.as_bytes())
-            .map_err(|_| invalid("it is not unpadded base64url"))?;
+            .map_err(|_| invalid(crate::texts::part::INVITATION_BASE64))?;
         Invitation::read(&bytes).map_err(invalid)
     }
 }

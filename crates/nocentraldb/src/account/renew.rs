@@ -52,7 +52,7 @@ fn number_value(number: u64) -> Result<Value, Error> {
     i64::try_from(number).map(Value::from).map_err(|_| {
         Error::new(
             ErrorCode::InvalidValue,
-            "the statement's number is too high",
+            crate::texts::error::STATEMENT_NUMBER_TOO_HIGH,
         )
     })
 }
@@ -82,14 +82,14 @@ pub(crate) fn renew(
     let Some(account) = space(inner) else {
         return Err(Error::new(
             ErrorCode::NotFound,
-            "the device holds no account space",
+            crate::texts::error::NO_ACCOUNT_SPACE,
         ));
     };
     crate::space::writable_by(inner, account, super::id())?;
     if number == 0 || statements(inner)?.iter().any(|s| s.number == number) {
         return Err(Error::new(
             ErrorCode::InvalidValue,
-            "the account space already records an account key with this number",
+            crate::texts::error::ACCOUNT_KEY_NUMBER_TAKEN,
         ));
     }
     let key = SigningKey::from_bytes(&crate::keys::random());

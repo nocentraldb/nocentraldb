@@ -134,7 +134,7 @@ impl OpenOptions {
             .map_err(|why| {
                 Error::new(
                     ErrorCode::InvalidValue,
-                    format!("the words are not a recovery code: {why}"),
+                    crate::texts::error::recovery_code_unreadable(why),
                 )
             })
     }
@@ -365,21 +365,17 @@ impl OpenOptions {
         #[cfg(target_arch = "wasm32")]
         if let Some(name) = &self.browser {
             if self.path.is_some() || self.in_memory || self.key_file.is_some() {
-                return invalid(
-                    "the options name a browser database together with a path, a key file or in_memory(); name one place",
-                );
+                return invalid(crate::texts::error::OPTIONS_BROWSER_AND_PATH);
             }
             return Ok(Place::Browser { name: name.clone() });
         }
         match (&self.path, self.in_memory) {
-            (Some(_), true) => invalid("the options name both a path and in_memory(); name one"),
-            (None, true) if self.key_file.is_some() => invalid(
-                "the options name both a key file and in_memory(); keys in memory need no file",
-            ),
-            (None, true) => Ok(Place::Memory),
-            (None, false) => {
-                invalid("the options name no place for the database: call path(dir) or in_memory()")
+            (Some(_), true) => invalid(crate::texts::error::OPTIONS_PATH_AND_MEMORY),
+            (None, true) if self.key_file.is_some() => {
+                invalid(crate::texts::error::OPTIONS_KEY_FILE_AND_MEMORY)
             }
+            (None, true) => Ok(Place::Memory),
+            (None, false) => invalid(crate::texts::error::OPTIONS_NO_PLACE),
             (Some(dir), false) => Ok(Place::Path {
                 dir: dir.clone(),
                 key_file: self.key_file.clone(),
@@ -416,7 +412,7 @@ fn open_at(
         None => Some(store().map_err(keys::store::unavailable)?),
     };
     std::fs::create_dir_all(&dir)
-        .map_err(|error| keys::io("the database directory cannot be created", &error))?;
+        .map_err(|error| keys::io(crate::texts::part::DATABASE_DIRECTORY_UNCREATABLE, &error))?;
     let file = dir.join(DATABASE_FILE);
     let existed = exists(&file)?;
     let (keys, home) = match (key_file, store) {
@@ -442,7 +438,7 @@ fn open_at(
 /// Whether the database file exists.
 fn exists(file: &Path) -> Result<bool, Error> {
     file.try_exists()
-        .map_err(|error| keys::io("the database file cannot be found", &error))
+        .map_err(|error| keys::io(crate::texts::part::DATABASE_FILE_NOT_FOUND, &error))
 }
 
 /// A view that does not open: a lock it cannot fold, one that is not a
@@ -454,15 +450,14 @@ fn view_error(error: ncdb_core::view::Error) -> Error {
     match error {
         ncdb_core::view::Error::Invalid(invalid) => Error::new(
             ErrorCode::ModelRefused,
-            format!("the lock is refused: {invalid:?}"),
+            crate::texts::error::lock_invalid(invalid),
         ),
         error @ ncdb_core::view::Error::Refused(_) => {
             Error::new(ErrorCode::ModelRefused, error.to_string())
         }
         ncdb_core::view::Error::Model => Error::new(
             ErrorCode::ModelRefused,
-            "the database was folded by another model than the lock's, \
-             and holds no lock to check this one against",
+            crate::texts::error::FOLDED_BY_ANOTHER_MODEL,
         ),
         error => storage(error),
     }
@@ -544,13 +539,13 @@ impl Db {
         {
             return Err(Error::new(
                 ErrorCode::InvalidValue,
-                "the relay URL must start with wss:// or ws://",
+                crate::texts::error::RELAY_URL_SCHEME,
             ));
         }
         let lock = ModelLock::from_json(&options.lock).map_err(|error| {
             Error::new(
                 ErrorCode::ModelRefused,
-                format!("the lock is refused: {error}"),
+                crate::texts::error::lock_refused(error),
             )
         })?;
         // The view folds the account space by the model the SDK ships,
@@ -602,7 +597,7 @@ impl Db {
             (Some(_), false) => {
                 return Err(Error::new(
                     ErrorCode::InvalidValue,
-                    "the database exists: a recovery code recovers the account onto a new one",
+                    crate::texts::error::RECOVERY_ONTO_EXISTING,
                 ));
             }
             (Some(_), true) => Some(crate::members::Notice::ACCOUNT_RECOVERED),
