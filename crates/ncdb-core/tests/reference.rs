@@ -110,7 +110,7 @@ fn a_target_the_member_holds_in_a_listed_collection_is_ok() {
 
 #[test]
 fn a_target_in_a_space_the_member_holds_no_copy_of_is_not_accessible() {
-    // Decision 20: the member never joined the customers' space, or left
+    // RFC 0004, "How a reference resolves": the member never joined the customers' space, or left
     // it and its rows were deleted. It holds only the orders' space.
     let copies: Copies = [(ORDERS, BTreeMap::new())].into();
     assert_eq!(status(&to(CUSTOMERS, 7), &copies), Status::NotAccessible);
@@ -163,7 +163,7 @@ fn an_object_whose_deletion_arrived_before_any_create_is_missing() {
 
 #[test]
 fn a_target_in_a_collection_the_schema_does_not_list_is_missing() {
-    // Decision 18: no fourth state; an old client reads a target in a
+    // RFC 0004, "How a reference resolves": no fourth state; an old client reads a target in a
     // collection added later as missing until it upgrades.
     let copies: Copies = [(CUSTOMERS, [(object(7), created("suppliers"))].into())].into();
     assert_eq!(status(&to(CUSTOMERS, 7), &copies), Status::Missing);
@@ -171,7 +171,7 @@ fn a_target_in_a_collection_the_schema_does_not_list_is_missing() {
 
 #[test]
 fn a_reference_into_its_own_space_resolves_as_any_other() {
-    // Decision 19: the member holds its own space, so ok or missing.
+    // RFC 0004, "The value and its encoding": the member holds its own space, so ok or missing.
     let mut copies: Copies = [(ORDERS, BTreeMap::new())].into();
     let state = to(ORDERS, 7);
     assert_eq!(status(&state, &copies), Status::Missing);
@@ -184,7 +184,7 @@ fn a_reference_into_its_own_space_resolves_as_any_other() {
 
 #[test]
 fn a_value_that_does_not_fit_is_missing_and_read_as_written() {
-    // Decision 17: a bare object id names no object, even where the
+    // RFC 0004, "The value and its encoding": a bare object id names no object, even where the
     // member holds a space whose copy has an object with those bytes.
     let copies: Copies = [(CUSTOMERS, [(object(7), created("customers"))].into())].into();
     let bare = Value::Bytes(object(7).0.to_vec());

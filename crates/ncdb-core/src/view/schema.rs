@@ -1,7 +1,7 @@
 //! The tables of the view (RFC 0006, "Where the view lives") and the
 //! version in `meta` that says whether they match the code and the model.
-//! The layout is internal to the core and not a stable format (RFC 0006,
-//! decision 2); only the `log` table follows RFC 0002, "The log on disk".
+//! The layout is internal to the core and not a stable format (the same
+//! section); only the `log` table follows RFC 0002, "The log on disk".
 //! `confirmed_accounts` is no part of the view: it holds what a person
 //! confirmed, which no fold computes (`super::accounts`). The `log`'s
 //! `written_at` came later (NOC-231): a database from before gains it on
