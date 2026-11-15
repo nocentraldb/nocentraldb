@@ -4,9 +4,12 @@
 // Rust module the SDK reads them from, crates/nocentraldb/src/texts.rs, and
 // checks for the gate (task repo:texts):
 //
-// - the file: each entry has an id, a kind, a code, a text, when it shows and
-//   the release it first appeared in; ids are unique; a code is one the SDK
-//   has (NoticeCode), and every NoticeCode has its notice;
+// - the file: each entry has an id, a kind, a code, a text and when it shows;
+//   ids are unique; a code is one the SDK has (NoticeCode), and every
+//   NoticeCode has its notice; the entries are sorted by id and the file is
+//   written one field per line, as `JSON.stringify(file, null, 2)` writes it,
+//   so that `git diff` shows each change to a text readably (the owner reviews
+//   the texts from git diff: Carsten, 2026-11-15, NOC-329);
 // - the generated module equals what this script writes from the file;
 // - no notice text is written in the SDK's code outside the generated
 //   module: a `text:` followed by a string literal fails;
@@ -31,9 +34,8 @@ export const PATHS = {
 };
 
 const KINDS = ["notice"];
-const FIELDS = ["id", "kind", "code", "text", "when", "since"];
+const FIELDS = ["id", "kind", "code", "text", "when"];
 const CODE = /^[a-z][A-Za-z0-9]*$/;
-const SINCE = /^(unreleased|\d+\.\d+\.\d+(-beta\.\d+)?)$/;
 
 /** `memberAdded` → `MEMBER_ADDED`. */
 export const constName = (code) =>
@@ -86,9 +88,7 @@ export const generate = (texts) => {
     out.push(`pub(crate) mod ${kind} {`);
     entries.forEach((entry, i) => {
       if (i > 0) out.push("");
-      out.push(
-        doc(`\`${entry.code}\` (since ${entry.since}): ${entry.when}`, "    "),
-      );
+      out.push(doc(`\`${entry.code}\`: ${entry.when}`, "    "));
       out.push(`    pub(crate) const ${constName(entry.code)}: &str =`);
       out.push(`        ${rustString(entry.text)};`);
     });
@@ -149,11 +149,6 @@ export const checkEntries = (file, variants) => {
         );
       }
     }
-    if (typeof entry.since === "string" && !SINCE.test(entry.since)) {
-      problems.push(
-        `${at}: since must be "unreleased" or a beta or stable version`,
-      );
-    }
   }
   const notices = new Set(
     file.texts.filter((t) => t?.kind === "notice").map((t) => t.code),
@@ -162,6 +157,29 @@ export const checkEntries = (file, variants) => {
     const code = v[0].toLowerCase() + v.slice(1);
     if (!notices.has(code))
       problems.push(`NoticeCode::${v} has no notice in texts.json`);
+  }
+  return problems;
+};
+
+/**
+ * The problems of the file's layout: entries sorted by id, and the file as
+ * `JSON.stringify(file, null, 2)` writes it, one field per line, so that a
+ * diff shows each changed field on a line of its own.
+ */
+export const checkLayout = (raw, file) => {
+  const problems = [];
+  const ids = (file?.texts ?? []).map((t) => t?.id);
+  const sorted = [...ids].sort();
+  const first = ids.findIndex((id, i) => id !== sorted[i]);
+  if (first >= 0) {
+    problems.push(
+      `texts.json: the entries must be sorted by id; ${ids[first]} is out of order`,
+    );
+  }
+  if (raw !== `${JSON.stringify(file, null, 2)}\n`) {
+    problems.push(
+      "texts.json: write it as JSON.stringify(file, null, 2) does, one field per line, with a final newline",
+    );
   }
   return problems;
 };
@@ -209,9 +227,10 @@ const main = () => {
     options: { check: { type: "boolean" }, write: { type: "boolean" } },
   });
   const at = (path) => join(ROOT, path);
-  const file = JSON.parse(readFileSync(at(PATHS.texts), "utf8"));
+  const raw = readFileSync(at(PATHS.texts), "utf8");
+  const file = JSON.parse(raw);
   const variants = noticeVariants(readFileSync(at(PATHS.noticeCodes), "utf8"));
-  const problems = checkEntries(file, variants);
+  const problems = [...checkEntries(file, variants), ...checkLayout(raw, file)];
   if (problems.length === 0) {
     const generated = generate(file.texts);
     if (values.write) writeFileSync(at(PATHS.module), generated);

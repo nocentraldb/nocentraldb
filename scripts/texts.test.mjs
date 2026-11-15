@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import {
   checkCode,
   checkEntries,
+  checkLayout,
   constName,
   generate,
   noticeVariants,
@@ -24,7 +25,6 @@ const ENTRY = {
   code: "memberAdded",
   text: "The new member reads the whole history of this space.",
   when: "Members::add returns it.",
-  since: "unreleased",
 };
 const VARIANTS = ["MemberAdded"];
 const file = (...texts) => ({ texts });
@@ -70,10 +70,11 @@ test("each broken entry fails", () => {
     ["a missing when", file({ ...ENTRY, when: undefined })],
     ["an empty when", file({ ...ENTRY, when: "  " })],
     ["a missing text", file({ ...ENTRY, text: undefined })],
-    ["a missing since", file({ ...ENTRY, since: undefined })],
-    ["a since that is an alpha", file({ ...ENTRY, since: "0.1.0-alpha.56" })],
-    ["a since that is no version", file({ ...ENTRY, since: "soon" })],
     ["an unknown field", file({ ...ENTRY, comment: "x" })],
+    [
+      "a since field, which git history replaces",
+      file({ ...ENTRY, since: "unreleased" }),
+    ],
     [
       "an unknown kind",
       file({ ...ENTRY, kind: "hint", id: "hint.memberAdded" }),
@@ -146,11 +147,7 @@ test("the module holds each text as a Rust literal, with when it shows", () => {
     module.includes(String.raw`"A \"quoted\" \\ text\u{9}with é."`),
     module,
   );
-  assert.ok(
-    module.includes(
-      "/// `memberAdded` (since unreleased): Members::add returns it.",
-    ),
-  );
+  assert.ok(module.includes("/// `memberAdded`: Members::add returns it."));
   assert.ok(module.includes("pub(crate) const MEMBER_ADDED: &str ="));
   assert.equal(constName("accountKeyRenewed"), "ACCOUNT_KEY_RENEWED");
 });
@@ -178,5 +175,26 @@ test("every notice text RFC 0009 quotes is a copy of texts.json's", () => {
   assert.ok(quotes.length >= 11, `only ${quotes.length} quotes found`);
   for (const [code, quoted] of quotes) {
     assert.equal(quoted, texts.get(code), `RFC 0009 quotes ${code} otherwise`);
+  }
+});
+
+test("the file is sorted by id and written one field per line", () => {
+  const second = { ...ENTRY, id: "notice.roleSet", code: "roleSet" };
+  const sorted = file(ENTRY, second);
+  assert.deepEqual(
+    checkLayout(`${JSON.stringify(sorted, null, 2)}\n`, sorted),
+    [],
+  );
+  const unsorted = file(second, ENTRY);
+  assert.equal(
+    checkLayout(`${JSON.stringify(unsorted, null, 2)}\n`, unsorted).length,
+    1,
+  );
+  for (const raw of [
+    JSON.stringify(sorted),
+    `${JSON.stringify(sorted, null, 4)}\n`,
+    JSON.stringify(sorted, null, 2),
+  ]) {
+    assert.equal(checkLayout(raw, sorted).length, 1, raw.slice(0, 40));
   }
 });
