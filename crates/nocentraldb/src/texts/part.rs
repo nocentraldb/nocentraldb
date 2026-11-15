@@ -130,6 +130,11 @@ pub(crate) const INVITATION_LENGTH: &str =
 pub(crate) const INVITATION_LENGTH_V2: &str =
     "its length is not that of version 2";
 
+/// `invitationLengthV3`: Why, in notAnInvitation: a version 3 invitation, a
+/// sub-agent's, is not 65 bytes long.
+pub(crate) const INVITATION_LENGTH_V3: &str =
+    "its length is not that of version 3";
+
 /// `invitationNumberZero`: Why, in notAnInvitation: its account key statement's
 /// number is 0.
 pub(crate) const INVITATION_NUMBER_ZERO: &str =

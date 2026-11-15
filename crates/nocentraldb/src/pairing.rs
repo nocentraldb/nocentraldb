@@ -84,6 +84,14 @@ impl Account<'_> {
             // keep the statement (pm, NOC-267).
             let (asked, old) = match &invitation.form {
                 Form::Waiting(asked) => (*asked, None),
+                // A sub-agent is not paired into an account: its parent
+                // adds it to the spaces it works in (NOC-320 Q1).
+                Form::SubAgent => {
+                    return Err(Error::new(
+                        ErrorCode::NotAllowed,
+                        crate::texts::error::SUB_AGENT_NOT_PAIRED,
+                    ));
+                }
                 Form::Certified(certificate) => {
                     if certificate.kind != MemberKind::Device || kind != MemberKind::Device {
                         return Err(Error::new(
