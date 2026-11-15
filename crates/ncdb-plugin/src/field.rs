@@ -102,8 +102,9 @@ pub type Written = (u64, BTreeMap<u64, Data>);
 /// then the other functions on the value it returns.
 ///
 /// Every function must be pure: no clock, no randomness, no order of a
-/// hash map, the same result natively and on wasm32 (RFC 0004, C3). The
-/// core cannot check this; `ncdb-harness` does, in the plugin's own CI.
+/// hash map, the same result natively and on wasm32 (RFC 0004's property
+/// C3). The core cannot check this; `ncdb-harness` does, in the plugin's
+/// own CI.
 /// `Debug` of the state and the operation must not show content.
 pub trait FieldType: Sized + Send + Sync + 'static {
     /// The state of one field. `Default` is the state of a field nobody
