@@ -57,6 +57,8 @@ const CHANGES = new Set([
   "members.remove",
   "members.setRole",
   "space.leave",
+  "account.pair",
+  "account.completePairing",
 ]);
 
 type Request = { id: number; call: string; args: Record<string, Cbor> };

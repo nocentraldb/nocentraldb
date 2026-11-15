@@ -2,9 +2,13 @@
 // devices"; the shapes the owner decided on NOC-321, Carsten, 2026-11-15).
 // Internal: the package's entry does not reach it.
 
-import type { RecoveryCode } from "./account.ts";
+import {
+  type PairingAnswer,
+  pairingAnswer,
+  type RecoveryCode,
+} from "./account.ts";
 import type { Cbor } from "./cbor.ts";
-import type { Notice } from "./members.ts";
+import type { Invitation, Notice } from "./members.ts";
 
 type Ask = (call: string, args: Record<string, unknown>) => Promise<Cbor>;
 
@@ -38,4 +42,29 @@ export const accountOf = (ask: Ask) => ({
   },
   recovered: async (): Promise<Notice | null> =>
     ((await ask("account.recovered", {})) as Notice | null) ?? null,
+  pair: async ({
+    kind,
+    invitation,
+  }: {
+    kind: "device" | "agent";
+    invitation: Invitation;
+  }) => {
+    const paired = (await ask("account.pair", {
+      kind,
+      invitation: String(invitation),
+    })) as unknown as {
+      answer: string;
+      added: { space: string; notice: Notice }[];
+      askAdmins: string[];
+    };
+    return {
+      answer: pairingAnswer(paired.answer) as PairingAnswer,
+      added: paired.added ?? [],
+      askAdmins: paired.askAdmins ?? [],
+    };
+  },
+  completePairing: async (answer: PairingAnswer) =>
+    (await ask("account.completePairing", {
+      answer: String(answer),
+    })) as unknown as { readonly notices: readonly Notice[] },
 });

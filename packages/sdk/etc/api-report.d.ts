@@ -3,6 +3,10 @@ export interface RecoveryCode {
     words(): readonly string[];
     confirm(): Promise<void>;
 }
+export interface PairingAnswer {
+    toString(): string;
+}
+export declare const pairingAnswer: (text: string) => PairingAnswer;
 // file: db.d.ts
 import type { RecoveryCode } from "./account.ts";
 import type { Durability, ViewStatus } from "./durability.ts";
@@ -131,6 +135,20 @@ export interface Db {
     readonly account: {
         recoveryCode(): Promise<RecoveryCode | null>;
         recovered(): Promise<import("./members.ts").Notice | null>;
+        pair(request: {
+            kind: "device" | "agent";
+            invitation: Invitation;
+        }): Promise<{
+            readonly answer: import("./account.ts").PairingAnswer;
+            readonly added: readonly {
+                readonly space: Id;
+                readonly notice: import("./members.ts").Notice;
+            }[];
+            readonly askAdmins: readonly Id[];
+        }>;
+        completePairing(answer: import("./account.ts").PairingAnswer): Promise<{
+            readonly notices: readonly import("./members.ts").Notice[];
+        }>;
     };
     close(): Promise<void>;
 }
@@ -169,7 +187,7 @@ export declare class NcError extends Error {
 }
 // file: index.d.ts
 export declare function name(): string;
-export type { RecoveryCode } from "./account.ts";
+export type { PairingAnswer, RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 export type { Invitation, Notice } from "./members.ts";
@@ -310,6 +328,7 @@ export declare const index: <const K extends readonly (string | {
     equal?: N;
     scope?: "space";
 }) => Index<Names<K>, N>;
+export { pairingAnswer } from "./account.ts";
 export { add, open, remove } from "./db.ts";
 export { NcError as Error } from "./error.ts";
 export { invitation } from "./members.ts";
