@@ -27,6 +27,7 @@ pub(crate) mod batch;
 mod change;
 pub(crate) use change::remove as remove_member;
 pub(crate) mod erasure;
+pub(crate) use erasure::shred;
 mod info;
 pub(crate) mod invitation;
 mod leave;

@@ -52,6 +52,9 @@ pub enum NoticeCode {
     AccountRecovered,
     /// The account has a new account key, from removing a lost member.
     AccountKeyRenewed,
+    /// A person was erased in the spaces of this database, from
+    /// `Db::erase` (Carsten, 2026-11-15, on NOC-326, Q6).
+    Erased,
 }
 
 impl Notice {

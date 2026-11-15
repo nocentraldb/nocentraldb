@@ -7,7 +7,7 @@
 //! take-back: RFC 0009 names no call for it yet.
 
 use ncdb_core::ids::{ChangeId, SpaceId};
-use ncdb_core::membership::{Entry, ErasureDecision, Role};
+use ncdb_core::membership::{Entry, ErasureDecision, Role, ShredEntry, SignOff};
 
 use crate::db::{Inner, SpaceState};
 use crate::error::Error;
@@ -57,4 +57,27 @@ pub(crate) fn finalize(inner: &mut Inner, space: SpaceId, shred: ChangeId) -> Re
         batch.write(key, entry, None);
     })?;
     Ok(true)
+}
+
+/// Writes the shreds of `signed`, each a person key of `space` with its
+/// sign-off, in one batch (NOC-325): the caller checked that the member
+/// may write there and that each sign-off holds. Their change ids, in
+/// the order of `signed`.
+pub(crate) fn shred(
+    inner: &mut Inner,
+    space: SpaceId,
+    signed: Vec<([u8; 16], SignOff)>,
+) -> Result<Vec<ChangeId>, Error> {
+    let me = inner.member.key().id();
+    let mut ids = Vec::new();
+    write(inner, space, me, |batch, _, key, _| {
+        for (person_key, sign_off) in signed {
+            let entry = Entry::Shred(ShredEntry {
+                person_key,
+                sign_off,
+            });
+            ids.push(batch.write(key, entry, None));
+        }
+    })?;
+    Ok(ids)
 }

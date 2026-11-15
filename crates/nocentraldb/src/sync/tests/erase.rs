@@ -193,12 +193,43 @@ async fn a_space_the_signer_cannot_sign_is_reported_and_skipped() {
     assert!(erased(&y, in_y.id()).await.is_empty());
 }
 
-/// Sign-offs for another person do not hold for this request: the
-/// erasure is refused before anything is written, in any space.
+/// A sign-off whose signature was altered does not hold: the erasure is
+/// refused before anything is written, in any space.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_sign_off_that_would_not_hold_refuses_the_erasure_before_anything_is_written() {
     let relay = LocalRelay::start().await;
     let (performer, signer, x, y, in_x, in_y) = two_spaces(&relay).await;
+    let request = performer.erasure_request(&in_x).await.unwrap();
+    let signed = signer.account().sign_off(&request).await.unwrap();
+    // The last byte of the text's layout is the last sign-off's signature.
+    let text = signed.sign_offs.to_string();
+    let body = text.strip_prefix("ncdb-sign-off-1:").unwrap();
+    let mut bytes = data_encoding::BASE64URL_NOPAD
+        .decode(body.as_bytes())
+        .unwrap();
+    *bytes.last_mut().unwrap() ^= 1;
+    let forged: SignOffs = format!(
+        "ncdb-sign-off-1:{}",
+        data_encoding::BASE64URL_NOPAD.encode(&bytes)
+    )
+    .parse()
+    .unwrap();
+
+    let refused = performer.erase(&request, &forged).await.unwrap_err();
+
+    assert_eq!(refused.code(), ErrorCode::InvalidValue);
+    assert!(x.erasures().list().await.unwrap().is_empty());
+    assert!(y.erasures().list().await.unwrap().is_empty());
+    assert!(erased(&x, in_x.id()).await.is_empty());
+    assert!(erased(&y, in_y.id()).await.is_empty());
+}
+
+/// Sign-offs of another person's keys sign off none of this person's:
+/// every space is skipped, and nothing is written.
+#[tokio::test(flavor = "multi_thread")]
+async fn sign_offs_of_another_person_sign_off_nothing_of_this_one() {
+    let relay = LocalRelay::start().await;
+    let (performer, signer, x, _y, in_x, _in_y) = two_spaces(&relay).await;
     let bob = x
         .write(|tx| {
             tx.create("projects", [("name", Value::from("Bob Meier"))])?;
@@ -222,13 +253,17 @@ async fn a_sign_off_that_would_not_hold_refuses_the_erasure_before_anything_is_w
     let bobs = signer.account().sign_off(&for_bob).await.unwrap().sign_offs;
 
     let for_anna = performer.erasure_request(&in_x).await.unwrap();
-    let refused = performer.erase(&for_anna, &bobs).await.unwrap_err();
+    let erased_now = performer.erase(&for_anna, &bobs).await.unwrap();
 
-    assert_eq!(refused.code(), ErrorCode::InvalidValue);
-    assert!(x.erasures().list().await.unwrap().is_empty());
-    assert!(y.erasures().list().await.unwrap().is_empty());
+    assert!(erased_now.shreds.is_empty());
+    assert_eq!(erased_now.skipped.len(), 2);
+    assert!(
+        erased_now
+            .skipped
+            .iter()
+            .all(|(_, why)| *why == Skipped::NoSignOff)
+    );
     assert!(erased(&x, in_x.id()).await.is_empty());
-    assert!(erased(&y, in_y.id()).await.is_empty());
 }
 
 /// Both texts round-trip, and a text of the wrong kind is refused.

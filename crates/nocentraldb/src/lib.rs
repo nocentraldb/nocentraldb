@@ -41,6 +41,7 @@ mod clock;
 mod db;
 mod durability;
 mod encode;
+mod erase;
 mod erasures;
 mod error;
 mod id;
@@ -89,6 +90,7 @@ mod shorthand_tests;
 mod wasm_tests;
 #[cfg(test)]
 mod writer_model_tests;
+pub use erase::{Erased, ErasedIn, ErasureRequest, SignOffs, Signed, Skipped};
 pub use erasures::{Acknowledged, Erasure, ErasureMember, ErasureState, Erasures};
 pub use error::{Error, ErrorCode};
 pub use id::{ChangeId, ObjectId, SpaceId};
