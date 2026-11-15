@@ -11,6 +11,8 @@ mod args;
 mod model;
 pub mod report;
 mod schema;
+#[rustfmt::skip]
+mod texts;
 
 use args::{Command, USAGE};
 

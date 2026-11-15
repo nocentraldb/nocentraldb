@@ -8,6 +8,8 @@
 
 use std::fmt::Write;
 
+use crate::texts;
+
 use ncdb_core::model_lock::{Collection, Field, Index, ModelLock, Person, Refusal, Scope};
 
 /// The width of the name column in a field's line.
@@ -18,7 +20,7 @@ const NAME: usize = 17;
 /// the line that says it is additive.
 pub fn changes(previous: Option<&ModelLock>, next: &ModelLock) -> String {
     let Some(previous) = previous else {
-        let mut out = format!("model version 1, a new model ({})\n", next.model.id);
+        let mut out = format!("{}\n", texts::new_model(next.model.id));
         for (name, collection) in &next.collections {
             let _ = writeln!(out, "  + collection {name} ({})", summary(collection));
         }
@@ -26,9 +28,9 @@ pub fn changes(previous: Option<&ModelLock>, next: &ModelLock) -> String {
     };
     let (from, to) = (previous.model.version, next.model.version);
     let mut out = if from == to {
-        format!("descriptions changed (model version stays {to})\n")
+        format!("{}\n", texts::descriptions_changed(to))
     } else {
-        format!("model version {from} -> {to}\n")
+        format!("{}\n", texts::version_changed(from, to))
     };
     for (name, collection) in &next.collections {
         match previous.collections.get(name) {
@@ -43,10 +45,7 @@ pub fn changes(previous: Option<&ModelLock>, next: &ModelLock) -> String {
         }
     }
     if from != to {
-        let _ = writeln!(
-            out,
-            "additive: clients on model version {from} keep every change written under version {to}."
-        );
+        let _ = writeln!(out, "{}", texts::additive(from, to));
     }
     out
 }
@@ -56,10 +55,10 @@ pub fn changes(previous: Option<&ModelLock>, next: &ModelLock) -> String {
 pub fn refused(lock: &str, previous: Option<&ModelLock>, refusals: &[Refusal]) -> String {
     let mut out = match previous {
         Some(previous) => format!(
-            "{lock}: refused, the change is not additive (model version stays {})\n",
-            previous.model.version
+            "{}\n",
+            texts::refused_not_additive(lock, previous.model.version)
         ),
-        None => format!("{lock}: refused, the model breaks the rules (no lock is written)\n"),
+        None => format!("{}\n", texts::refused_breaks_rules(lock)),
     };
     for refusal in refusals {
         for (i, line) in refusal.lines().iter().enumerate() {
@@ -85,7 +84,7 @@ fn summary(collection: &Collection) -> String {
         }
     };
     match (count, personal) {
-        (0, _) => "no fields".into(),
+        (0, _) => "no fields".into(), // notation
         (n, 0) => fields(n),
         (n, p) if n == p => format!("{} personal {}", n, if n == 1 { "field" } else { "fields" }),
         (n, p) => format!("{}, {p} personal", fields(n)),
@@ -174,7 +173,7 @@ fn describe(collection: &str, field: &Field) -> String {
     match &field.personal {
         Some(Person::Itself) => text.push_str(", personal (self)"),
         Some(Person::Link(link)) => {
-            let _ = write!(text, ", personal to {collection}.{link}");
+            let _ = write!(text, ", personal to {collection}.{link}"); // notation
         }
         None => {}
     }
@@ -196,7 +195,7 @@ fn index_summary(index: &Index) -> String {
         let _ = write!(text, "; equal {}", index.equal);
     }
     if index.scope == Scope::Space {
-        text.push_str("; scope space");
+        text.push_str("; scope space"); // notation
     }
     text
 }
