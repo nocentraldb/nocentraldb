@@ -86,13 +86,19 @@ fn a_sign_off_for_another_performer_person_key_or_space_does_not_hold() {
     let (s, held) = two_accounts();
     let state = resolve(s.space, held.iter());
     let for_alice = SignOff::sign(&other_account(1), s.space, person(1), id(ALICE));
-    assert_eq!(state.sign_off(s.space, id(BOB), person(1), &for_alice), None);
+    assert_eq!(
+        state.sign_off(s.space, id(BOB), person(1), &for_alice),
+        None
+    );
     let for_two = SignOff::sign(&other_account(1), s.space, person(2), id(BOB));
     assert_eq!(state.sign_off(s.space, id(BOB), person(1), &for_two), None);
     let mut elsewhere = s.space;
     elsewhere.0[0] ^= 1;
     let other_space = SignOff::sign(&other_account(1), elsewhere, person(1), id(BOB));
-    assert_eq!(state.sign_off(s.space, id(BOB), person(1), &other_space), None);
+    assert_eq!(
+        state.sign_off(s.space, id(BOB), person(1), &other_space),
+        None
+    );
 }
 
 #[test]
