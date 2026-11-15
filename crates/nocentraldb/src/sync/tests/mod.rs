@@ -47,6 +47,7 @@ mod space_status;
 mod space_status_sync;
 mod spaces;
 mod spaces_subscribe;
+mod sub_agent;
 pub(crate) mod support;
 mod timeouts;
 mod two_devices;

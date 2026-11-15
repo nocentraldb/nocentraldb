@@ -317,6 +317,12 @@ pub(crate) fn not_an_invitation(why: impl std::fmt::Display) -> String {
 pub(crate) const NOT_WAITING_TO_BE_PAIRED: &str =
     "this database is not waiting to be paired";
 
+/// `onlyAgentAddsSubAgent` (notAllowed): Members::add (members.add) with a
+/// sub-agent's invitation, version 3, on a device's or a sub-agent's database:
+/// only an agent signs a sub-agent's certificate (NOC-320 Q2).
+pub(crate) const ONLY_AGENT_ADDS_SUB_AGENT: &str =
+    "only an agent adds a sub-agent: it signs the sub-agent's certificate with its own member key";
+
 /// `openOutsideWorker` (invalidValue): nc.open in a browser, when a database at
 /// a name is opened outside a dedicated Web Worker, where OPFS cannot be used.
 pub(crate) const OPEN_OUTSIDE_WORKER: &str =
@@ -341,6 +347,11 @@ pub(crate) const OPTIONS_NO_PLACE: &str =
 /// path and in_memory().
 pub(crate) const OPTIONS_PATH_AND_MEMORY: &str =
     "the options name both a path and in_memory(); name one";
+
+/// `optionsSubAgent` (invalidValue): Opening with OpenOptions::sub_agent
+/// together with agent(), pairing() or recover().
+pub(crate) const OPTIONS_SUB_AGENT: &str =
+    "the options name sub_agent() together with agent(), pairing() or recover(); a sub-agent is none of them";
 
 /// `pageSize` (invalidValue): A query whose page size is 0 or above 1000.
 pub(crate) const PAGE_SIZE: &str =
@@ -461,6 +472,17 @@ pub(crate) const STATEMENT_DOES_NOT_VERIFY: &str =
 /// further.
 pub(crate) const STATEMENT_NUMBER_TOO_HIGH: &str =
     "the statement's number is too high";
+
+/// `subAgentCreatesNoSpace` (notAllowed): Spaces::create (db.spaces.create) on
+/// a sub-agent's database (OpenOptions::sub_agent): it works in the spaces its
+/// parent adds it to.
+pub(crate) const SUB_AGENT_CREATES_NO_SPACE: &str =
+    "a sub-agent creates no space: its parent adds it to the spaces it works in";
+
+/// `subAgentNotPaired` (notAllowed): Account::pair (db.account.pair) with a
+/// sub-agent's invitation, version 3 (NOC-320 Q1).
+pub(crate) const SUB_AGENT_NOT_PAIRED: &str =
+    "a sub-agent is not paired into an account: its parent agent adds it to the spaces it works in";
 
 /// `unknownAccount` (unknownAccount): Members::add (members.add) without a
 /// fingerprint when the invitation's account is new to this database; the error

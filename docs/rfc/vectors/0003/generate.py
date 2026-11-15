@@ -12,6 +12,9 @@ carries one, signed with number 1 by the recovery key of the same file,
 derived from the recovery code 0xa0, 0xa1, ... 0xaf (RFC 0003, "Recovery
 key"). `invitation-pairing` is version 2, of the same member waiting to be
 paired as a device: no certificate (Carsten, 2026-11-12, NOC-285).
+`invitation-sub-agent` is version 3, of the same keys opened as a sub-agent,
+whose parent signs its certificate when it adds it: no certificate and no
+kind (Carsten, 2026-11-15, NOC-320 Q1).
 
 Each vector is two files: `<name>.txt`, the invitation's text form, and
 `<name>.hex`, its bytes. `fields.txt` lists the fields of both by name. The
@@ -115,7 +118,15 @@ def pairing_invitation():
 
 write("invitation", invitation(statement=False))
 write("invitation-statement", invitation(statement=True))
+def sub_agent_invitation():
+    """RFC 0003, "Invitation", version 3: a sub-agent, before its parent adds it."""
+    data = bytes([3]) + SIGNING + AGREEMENT
+    assert len(data) == 65
+    return data
+
+
 write("invitation-pairing", pairing_invitation())
+write("invitation-sub-agent", sub_agent_invitation())
 
 fields = {
     "member id": MEMBER_ID,

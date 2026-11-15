@@ -49,6 +49,7 @@ mod list;
 mod members;
 mod next;
 mod object;
+mod options;
 mod pairing;
 mod personal;
 mod query;

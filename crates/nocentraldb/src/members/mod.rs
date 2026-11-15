@@ -142,9 +142,17 @@ impl Members<'_> {
         not_stopped(&inner, space)?;
         let resolved = inner.spaces[&space.0].checks.resolved();
         let former = allowed(resolved, inner.member.key().id(), invitation.key.id())?;
-        let certificate = certified(invitation)?.clone();
-        current(&inner, resolved, &certificate)?;
-        let confirming = known(&inner, invitation, options.fingerprint)?;
+        let (certificate, confirming) = match invitation.form {
+            // A sub-agent's account is its parent's own: no fingerprint to
+            // compare (NOC-320 Q2).
+            invitation::Form::SubAgent => (sub_agent(&inner, invitation)?, false),
+            _ => {
+                let certificate = certified(invitation)?.clone();
+                current(&inner, resolved, &certificate)?;
+                let confirming = known(&inner, invitation, options.fingerprint)?;
+                (certificate, confirming)
+            }
+        };
         let member = inner.member.key();
         let Inner {
             view,
@@ -321,6 +329,37 @@ fn known(
     .with_fingerprint(account))
 }
 
+/// The certificate of the sub-agent of `invitation`, which this member
+/// signs as its parent with its own member key, under its account and with
+/// its account's statement (RFC 0003, "Member certificate"). Only an agent
+/// adds a sub-agent, because the core accepts a sub-agent's certificate
+/// only from a parent whose own certificate is an agent's or a
+/// sub-agent's (NOC-320 Q2); a sub-agent adds none of its own yet, because
+/// it keeps no certificate of its own (NOC-318).
+fn sub_agent(inner: &Inner, invitation: &Invitation) -> Result<Certificate, Error> {
+    let not_allowed = || {
+        Error::new(
+            ErrorCode::NotAllowed,
+            crate::texts::error::ONLY_AGENT_ADDS_SUB_AGENT,
+        )
+    };
+    if inner.kind != membership::MemberKind::Agent {
+        return Err(not_allowed());
+    }
+    let (account_key, statement) = match &inner.account {
+        crate::keys::Account::Holds { key, statement } => {
+            (key.verifying_key().to_bytes(), statement.clone())
+        }
+        crate::keys::Account::Agent { statement, .. } => (statement.account_key, statement.clone()),
+        crate::keys::Account::None => return Err(not_allowed()),
+    };
+    let parent = inner.member.key();
+    Ok(
+        Certificate::sign_sub_agent(&parent, account_key, invitation.key.id())
+            .with_statement(statement),
+    )
+}
+
 /// Remembers that a person confirmed the account with the public key
 /// `account`, now.
 fn confirm(view: &mut View, account: &[u8; 32]) -> Result<(), Error> {
@@ -357,6 +396,8 @@ mod remove_tests;
 mod rotate_tests;
 #[cfg(test)]
 mod statement_tests;
+#[cfg(test)]
+mod sub_agent_tests;
 #[cfg(test)]
 pub(crate) mod tests;
 #[cfg(test)]
