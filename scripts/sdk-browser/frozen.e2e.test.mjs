@@ -3,6 +3,11 @@
 // is neither held until the frozen tab wakes nor left "may or may not have
 // run" (RFC 0006, "The browser": "One tab owns the database").
 //
+// iOS first hides a tab when the person switches away, then freezes it.
+// The test does the same: it hides the owning page (its visibilityState
+// reads "hidden" and a visibilitychange event fires, as Chromium cannot
+// hide a page itself), then freezes it.
+//
 // How the freeze is emulated: what matters is that the owning page stops
 // handling messages while it keeps the Web Lock, so the others' calls wait
 // in its queue. A busy loop on the owning page's main thread does that.
@@ -114,6 +119,16 @@ const eventually = async (check, what) => {
   }
 };
 
+/** Hides `page` as switching away from it does: its visibilityState reads "hidden", and visibilitychange fires. */
+const hide = (page) =>
+  page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
 /** Freezes `page`'s main thread for `ms`, as a phone freezes a hidden tab: it handles no message, and keeps the Web Lock. Does not wait. */
 const freeze = (page, ms = 20000) => {
   page
@@ -162,6 +177,7 @@ test("a write from a tab whose owner is frozen is written, and that tab sees it"
   const writer = await tab(context);
   const space = await createTask(owner.page, "before");
   await handle(writer.page, space);
+  await hide(owner.page);
   freeze(owner.page);
   await startWrite(writer.page, "while frozen");
   assert.equal(await outcomeWithin(writer.page, 5000), "written");
@@ -180,6 +196,7 @@ test("a write from a tab whose owner froze and then closed is written exactly on
   const writer = await tab(context);
   const space = await createTask(owner.page, "before");
   await handle(writer.page, space);
+  await hide(owner.page);
   freeze(owner.page);
   await startWrite(writer.page, "frozen, then closed");
   await new Promise((resolve) => setTimeout(resolve, 500));
