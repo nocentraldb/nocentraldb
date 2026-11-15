@@ -3,8 +3,10 @@
 //! this device has held a provisional shred for 7 days by its own clock,
 //! an admin of the space that belongs to the performer's account writes an
 //! erasure decision that finalizes it. When to write it, and the push again
-//! after a `too_early`, are syncing's (`sync::finalize`). The SDK writes no
-//! take-back: RFC 0009 names no call for it yet.
+//! after a `too_early`, are syncing's (`sync::finalize`). It writes a
+//! take-back only when an admin asks for it, through
+//! `space.erasures().take_back` ([`take_back`]), and a shred only for
+//! `Db::erase` ([`shred`], NOC-325).
 
 use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_core::membership::{Entry, ErasureDecision, Role, ShredEntry, SignOff};
