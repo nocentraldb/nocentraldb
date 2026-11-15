@@ -48,6 +48,7 @@ mod space_status;
 mod space_status_sync;
 mod spaces;
 mod spaces_subscribe;
+mod take_back;
 pub(crate) mod support;
 mod timeouts;
 mod two_devices;
