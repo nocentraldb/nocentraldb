@@ -52,6 +52,9 @@ pub enum NoticeCode {
     AccountRecovered,
     /// The account has a new account key, from removing a lost member.
     AccountKeyRenewed,
+    /// An ad-hoc space was created for a sub-agent, from
+    /// `Spaces::create_ad_hoc` (Carsten, 2026-11-15, NOC-320 Q10).
+    AdHocSpaceCreated,
 }
 
 impl Notice {
@@ -83,6 +86,12 @@ impl Notice {
     pub(crate) const ACCOUNT_KEY_RENEWED: Notice = Notice {
         code: NoticeCode::AccountKeyRenewed,
         text: crate::texts::notice::ACCOUNT_KEY_RENEWED,
+    };
+
+    /// The notice of [`Spaces::create_ad_hoc`](crate::Spaces::create_ad_hoc).
+    pub(crate) const AD_HOC_SPACE_CREATED: Notice = Notice {
+        code: NoticeCode::AdHocSpaceCreated,
+        text: crate::texts::notice::AD_HOC_SPACE_CREATED,
     };
 
     /// The notice of [`Members::add`](crate::Members::add).

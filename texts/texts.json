@@ -16,6 +16,41 @@
       "when": "Renewing the account key, on removing a lost member, when the account space already records an account key with the next number."
     },
     {
+      "id": "error.adHocLocalLater",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "a local ad-hoc space is not built yet; create a synced one",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) with `local`: local ad-hoc spaces wait for a ticket of their own (Carsten, 2026-11-15, NOC-320 Q3)."
+    },
+    {
+      "id": "error.adHocPersonalLater",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "personal fields are not copied into an ad-hoc space yet, until an erasure reaches the copy",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) with `personal`: copies of personal fields wait until an erasure reaches a copy in another space (Carsten, 2026-11-15, NOC-320 Q8)."
+    },
+    {
+      "id": "error.adHocSourceDeleted",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the object {id} is deleted, and a deleted object is not copied",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when an object to copy is deleted (Carsten, 2026-11-15, NOC-320 Q7)."
+    },
+    {
+      "id": "error.adHocSourceNotHeld",
+      "kind": "error",
+      "code": "notFound",
+      "text": "the space {space} holds no object {id} to copy",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when this database holds no such object in that space."
+    },
+    {
+      "id": "error.adHocSourceTwice",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the object {id} is named twice, and an ad-hoc space holds one copy of it",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) when the objects to copy name the same object twice."
+    },
+    {
       "id": "error.agentHasAccount",
       "kind": "error",
       "code": "notAllowed",
@@ -658,6 +693,13 @@
       "code": "accountRecovered",
       "text": "Your account is back with a new account key. Your spaces come back when one of their members adds this device.",
       "when": "db.account().recovered() gives it on the open that recovered the account from its code (OpenOptions::recover; nc.open with recover), with a new account key on this device. The owner's text, NOC-273; NOC-289."
+    },
+    {
+      "id": "notice.adHocSpaceCreated",
+      "kind": "notice",
+      "code": "adHocSpaceCreated",
+      "text": "This space limits what the sub-agent can decrypt, not what a process running as the same user can read. Its copies keep no link to an object that was not copied, and no personal or plugin field.",
+      "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) returns it once the ad-hoc space and its copies are written. The first sentence is the owner's, NOC-320 Q10; how many links and plugin fields were left out, the call returns beside it."
     },
     {
       "id": "notice.agentPaired",
