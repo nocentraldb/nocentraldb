@@ -54,5 +54,6 @@ pub use person_key_wrap::{
 };
 pub use person_keys::{EarlierShred, PersonKey};
 pub use resolve::{Resolved, resolve};
+pub use rights::SignedOff;
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
 pub use statement::AccountKeyStatement;
