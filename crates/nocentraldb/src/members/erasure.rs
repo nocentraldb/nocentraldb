@@ -85,12 +85,10 @@ pub(crate) fn shred(
 }
 
 /// The notice of a take-back (Carsten, 2026-11-15, on NOC-326, Q7 a; the
-/// text: pm, NOC-326, on the coding agent's proposal).
+/// text: pm, NOC-326, on the coding agent's proposal, in texts/texts.json).
 pub(crate) const TAKEN_BACK: crate::members::Notice = crate::members::Notice {
     code: crate::members::NoticeCode::TakenBack,
-    text: "The erasure is taken back in this space, and the person's fields read again; \
-           a finalize another device of the account wrote before it saw this take-back \
-           still wins, and the person stays erased.",
+    text: crate::texts::notice::TAKEN_BACK,
 };
 
 /// Takes back the provisional erasure `shred` of `space` (RFC 0008, "A

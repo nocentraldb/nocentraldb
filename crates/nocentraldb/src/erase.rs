@@ -52,13 +52,11 @@ const REQUEST: &str = "ncdb-erase-1:";
 const SIGN_OFFS: &str = "ncdb-sign-off-1:";
 const VERSION: u8 = 1;
 
-/// The notice of an erasure (Carsten, 2026-11-15, on NOC-326, Q6).
+/// The notice of an erasure (Carsten, 2026-11-15, on NOC-326, Q6); its
+/// text is in texts/texts.json (NOC-329).
 pub(crate) const ERASED: Notice = Notice {
     code: NoticeCode::Erased,
-    text: "The person's personal fields are erased in these spaces. \
-           Devices that never come back online, copies made outside the database \
-           and unmarked free text keep them; other devices and agents of this \
-           account erase only when they run the erasure too.",
+    text: crate::texts::notice::ERASED,
 };
 
 /// What an erasure asks to sign off: per space, the person keys of one

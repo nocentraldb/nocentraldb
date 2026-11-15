@@ -44,6 +44,13 @@
       "when": "Account::complete_pairing (db.account.completePairing) returns it on a device once it holds the account key. The owner's text, NOC-273."
     },
     {
+      "id": "notice.erased",
+      "kind": "notice",
+      "code": "erased",
+      "text": "The person's personal fields are erased in these spaces. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too.",
+      "when": "Db::erase returns it with the shreds it wrote, once per call, in every space of the database where a sign-off came for the person's keys. Carsten, 2026-11-15, NOC-326 (Q6)."
+    },
+    {
       "id": "notice.erasurePending",
       "kind": "notice",
       "code": "erasurePending",
@@ -77,6 +84,13 @@
       "code": "spaceLeft",
       "text": "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.",
       "when": "Space::leave (space.leave) returns it once this member's removal of itself is written: it keeps its copy, and the space key changes only when an admin rotates. The owner's text, NOC-219."
+    },
+    {
+      "id": "notice.takenBack",
+      "kind": "notice",
+      "code": "takenBack",
+      "text": "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.",
+      "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     }
   ]
 }
