@@ -12,6 +12,14 @@
 #
 # The build checks the built output (site/scripts/output.test.mjs) before it
 # uploads it, as repo:site does in `pnpm gates`. site/dist stays git-ignored.
+#
+# NOC-319: the landing page carries a live demo of the TypeScript SDK. The
+# build builds the SDK first, its core compiled to WebAssembly
+# (packages/sdk/build.mjs, with the wasm-bindgen that repo:wasm-runner
+# installs), copies it into site/public/demo (site/scripts/demo-assets.mjs)
+# and only then builds the site. The output check requires the demo's files
+# (SITE_DEMO_REQUIRED=1, site/scripts/demo-dist.test.mjs). GitHub Pages
+# serves the core's .wasm file as application/wasm.
 # scripts/site-pages-workflow.test.mjs asserts this file, and
 # scripts/toolchain-workflow.test.mjs how its build job installs the toolchain.
 name: site-pages
@@ -38,7 +46,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # The SDK's core compiles to WebAssembly in release: minutes on a cold
+    # Cargo cache.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -55,10 +65,34 @@ jobs:
       - name: Install proto and the tools in .prototools
         run: bash scripts/install-toolchain.sh
 
+      # The demo's SDK: its core compiles from the workspace's crates.
+      - name: Rust toolchain from rust-toolchain.toml
+        run: |
+          rustup toolchain install --no-self-update
+          rustup show active-toolchain
+      # As in ci.yml: no restore-keys, so an entry holds one build.
+      - name: Cache Cargo registry and target
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-site-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+      # The workspace's packages, for the SDK's TypeScript build.
+      - run: pnpm install --frozen-lockfile
+      # wasm-bindgen into target/tools; a shallow checkout, so moon must not
+      # diff against main.
+      - run: moon exec repo:wasm-runner --force --base HEAD --head HEAD
+      - run: node packages/sdk/build.mjs
+      - run: node site/scripts/demo-assets.mjs
+
       # site/ is its own pnpm project, with its own lockfile.
       - run: pnpm --dir site install --frozen-lockfile
       - run: pnpm --dir site build
       - run: node --test 'site/scripts/*.test.mjs'
+        env:
+          SITE_DEMO_REQUIRED: "1"
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:

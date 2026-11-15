@@ -3,3 +3,7 @@ dist/
 .astro/
 # Screenshots from `pnpm shots`; they go to the PR, never into git.
 drafts/
+# The live demo's copied assets (scripts/demo-assets.mjs): the SDK's build
+# output and the example's lock. demo.js beside them is in git.
+public/demo/sdk/
+public/demo/model.lock.json
