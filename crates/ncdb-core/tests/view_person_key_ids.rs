@@ -21,7 +21,6 @@ use std::collections::BTreeSet;
 use ncdb_core::basic::State;
 use ncdb_core::change::Payload;
 use ncdb_core::clock::Hlc;
-use ncdb_core::field::FieldType;
 use ncdb_core::field_op;
 use ncdb_core::ids::{ChangeId, ObjectId, OperationId, SpaceId};
 use ncdb_core::model_lock::{ModelLock, Person as Whom};
@@ -99,9 +98,27 @@ fn ids(ids: &[[u8; 16]]) -> BTreeSet<[u8; 16]> {
 fn a_person_s_key_is_found_by_the_person_id_once_however_many_objects_name_it() {
     let db = MemDb::new();
     let (mut view, mut control) = personal_view(&db);
-    person_change(&mut view, &mut control, 1, ObjectId([0x31; 16]), person(ANNA, ANNAS_KEY));
-    person_change(&mut view, &mut control, 2, ObjectId([0x32; 16]), person(ANNA, ANNAS_KEY));
-    person_change(&mut view, &mut control, 3, ObjectId([0x33; 16]), person(BOB, BOBS_KEY));
+    person_change(
+        &mut view,
+        &mut control,
+        1,
+        ObjectId([0x31; 16]),
+        person(ANNA, ANNAS_KEY),
+    );
+    person_change(
+        &mut view,
+        &mut control,
+        2,
+        ObjectId([0x32; 16]),
+        person(ANNA, ANNAS_KEY),
+    );
+    person_change(
+        &mut view,
+        &mut control,
+        3,
+        ObjectId([0x33; 16]),
+        person(BOB, BOBS_KEY),
+    );
 
     assert_eq!(view.person_key_ids(SPACE, ANNA).unwrap(), ids(&[ANNAS_KEY]));
     assert_eq!(view.person_key_ids(SPACE, BOB).unwrap(), ids(&[BOBS_KEY]));
@@ -114,7 +131,13 @@ fn a_person_s_key_is_found_by_the_person_id_once_however_many_objects_name_it() 
 fn every_key_a_person_has_in_the_space_is_found() {
     let db = MemDb::new();
     let (mut view, mut control) = personal_view(&db);
-    person_change(&mut view, &mut control, 1, ObjectId([0x31; 16]), person(ANNA, ANNAS_KEY));
+    person_change(
+        &mut view,
+        &mut control,
+        1,
+        ObjectId([0x31; 16]),
+        person(ANNA, ANNAS_KEY),
+    );
     person_change(
         &mut view,
         &mut control,
@@ -133,7 +156,13 @@ fn every_key_a_person_has_in_the_space_is_found() {
 fn a_person_without_objects_in_the_space_has_no_key_there() {
     let db = MemDb::new();
     let (mut view, mut control) = personal_view(&db);
-    person_change(&mut view, &mut control, 1, ObjectId([0x31; 16]), person(ANNA, ANNAS_KEY));
+    person_change(
+        &mut view,
+        &mut control,
+        1,
+        ObjectId([0x31; 16]),
+        person(ANNA, ANNAS_KEY),
+    );
 
     assert_eq!(view.person_key_ids(SPACE, BOB).unwrap(), BTreeSet::new());
     assert_eq!(

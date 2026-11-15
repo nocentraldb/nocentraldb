@@ -22,6 +22,7 @@ mod log_table;
 mod migrate;
 pub mod model;
 mod pending_links;
+mod person_keys;
 mod plugin;
 mod query;
 mod read;
