@@ -564,3 +564,50 @@ test("db.durability counts an unconfirmed write, requestPersistent answers a boo
   assert.deepEqual(result.view, { rebuild: null });
   assert.deepEqual(errors, []);
 });
+
+// NOC-316 slice 1: the recovery code and recovering an account (RFC 0009,
+// "Accounts and devices"). The code sits in the browser's sealed key record
+// until confirm(), so it survives a reopen; another database recovers the
+// account from its words.
+test("the recovery code is shown until confirmed, survives a reopen, and recovers the account elsewhere", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      let db = await nc.open({ model, lock, name: "account-a" });
+      const code = await db.account.recoveryCode();
+      const words = [...code.words()];
+      const forms = [String(code), JSON.stringify({ code })];
+      const recoveredFirst = await db.account.recovered();
+      await db.close();
+      db = await nc.open({ model, lock, name: "account-a" });
+      const again = [...(await db.account.recoveryCode()).words()];
+      await (await db.account.recoveryCode()).confirm();
+      await db.close();
+      db = await nc.open({ model, lock, name: "account-a" });
+      const afterConfirm = await db.account.recoveryCode();
+      await db.close();
+      const back = await nc.open({
+        model,
+        lock,
+        name: "account-b",
+        recover: words.join(" "),
+      });
+      const recovered = await back.account.recovered();
+      await back.close();
+      return { words, forms, recoveredFirst, again, afterConfirm, recovered };
+    },
+    { lock, MODEL },
+  );
+  assert.equal(result.words.length, 12);
+  assert.deepEqual(result.forms, [
+    "RecoveryCode(redacted)",
+    '{"code":"RecoveryCode(redacted)"}',
+  ]);
+  assert.equal(result.recoveredFirst, null);
+  assert.deepEqual(result.again, result.words);
+  assert.equal(result.afterConfirm, null);
+  assert.equal(result.recovered.code, "accountRecovered");
+  assert.deepEqual(errors, []);
+});
