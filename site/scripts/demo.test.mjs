@@ -34,3 +34,20 @@ test("the loader starts after the load event, near the viewport and when the bro
   assert.match(loader, /requestIdleCallback/);
   assert.match(loader, /import\(/);
 });
+
+test("a page loaded in the background starts the demo when idle, without waiting to be in view", () => {
+  // A hidden page gets no IntersectionObserver callback until it is shown,
+  // so a tab opened in the background would start the demo only then
+  // (the owner's report on #333). It has no first paint to protect.
+  const loader = html.slice(html.indexOf("data-demo-loader"));
+  assert.match(loader, /document\.visibilityState\s*===\s*"hidden"/);
+});
+
+test("the hint says that on a phone the other tab catches up when shown", () => {
+  // Phones keep one tab on screen and freeze the others (the owner's
+  // report on #333, Arc on iOS), so the hint promises no live update there.
+  const section = html.slice(html.indexOf('id="demo"'));
+  const hint = section.slice(section.indexOf("demo__hint"), section.indexOf("</p>", section.indexOf("demo__hint")));
+  assert.match(hint, /phone/);
+  assert.match(hint, /catches up/);
+});
