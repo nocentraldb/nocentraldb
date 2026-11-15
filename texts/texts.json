@@ -1,0 +1,82 @@
+{
+  "$comment": "Every text a developer reads from the SDKs, in one place (NOC-329). Each entry: its id (<kind>.<code>), its kind, its code as RFC 0009 spells it, the text, and when it shows. Entries are sorted by id, one field per line, so `git diff` shows each change readably; `pnpm texts` lists what changed since the last release for the owner's review. scripts/texts.mjs generates crates/nocentraldb/src/texts.rs from this file and checks it in the gates; run `node scripts/texts.mjs --write` after an edit.",
+  "texts": [
+    {
+      "id": "notice.accountKeyRenewed",
+      "kind": "notice",
+      "code": "accountKeyRenewed",
+      "text": "Your account has a new account key. Members that have not learnt it yet still accept the old one.",
+      "when": "Account::remove_member (db.account.removeMember) returns it once a lost member is removed and the account key renewed. The owner's text, NOC-273."
+    },
+    {
+      "id": "notice.accountLinked",
+      "kind": "notice",
+      "code": "accountLinked",
+      "text": "Spaces this database joined before keep its old account. Other members see it as linked to yours.",
+      "when": "Account::complete_pairing (db.account.completePairing) returns it besides devicePaired or agentPaired when the database had joined spaces under an account of its own, now linked into the one it paired with. The owner's text, NOC-273."
+    },
+    {
+      "id": "notice.accountRecovered",
+      "kind": "notice",
+      "code": "accountRecovered",
+      "text": "Your account is back with a new account key. Your spaces come back when one of their members adds this device.",
+      "when": "db.account().recovered() gives it on the open that recovered the account from its code (OpenOptions::recover; nc.open with recover), with a new account key on this device. The owner's text, NOC-273; NOC-289."
+    },
+    {
+      "id": "notice.agentPaired",
+      "kind": "notice",
+      "code": "agentPaired",
+      "text": "This agent acts for your account in the spaces an admin adds it to. It holds no account key.",
+      "when": "Account::complete_pairing (db.account.completePairing) returns it on an agent once its account certified it. The owner's text, NOC-273."
+    },
+    {
+      "id": "notice.deviceAdded",
+      "kind": "notice",
+      "code": "deviceAdded",
+      "text": "Your new device was added to this space and reads its whole history.",
+      "when": "Account::pair (db.account.pair) returns it once per space it added the new device to. The owner's text, NOC-273."
+    },
+    {
+      "id": "notice.devicePaired",
+      "kind": "notice",
+      "code": "devicePaired",
+      "text": "This device now holds your account key. Keep your recovery code: it is the way back if you lose every device.",
+      "when": "Account::complete_pairing (db.account.completePairing) returns it on a device once it holds the account key. The owner's text, NOC-273."
+    },
+    {
+      "id": "notice.erasurePending",
+      "kind": "notice",
+      "code": "erasurePending",
+      "text": "Personal data was erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
+      "when": "No call returns it: the space status gives it with each provisional erasure (provisional_erasures, provisionalErasures), on every device of the account, while an erasure in a space with one account waits out its 7 days. pm's text, NOC-234."
+    },
+    {
+      "id": "notice.memberAdded",
+      "kind": "notice",
+      "code": "memberAdded",
+      "text": "The new member reads the whole history of this space.",
+      "when": "Members::add (members.add in TypeScript) returns it once the member is added to the space: the new member reads every change written before it joined."
+    },
+    {
+      "id": "notice.memberRemoved",
+      "kind": "notice",
+      "code": "memberRemoved",
+      "text": "The removed member keeps its copy of everything it received before now.",
+      "when": "Members::remove (members.remove) returns it once a member is removed and the space key rotated: the removed member keeps what it already received. RFC 0009's text."
+    },
+    {
+      "id": "notice.roleSet",
+      "kind": "notice",
+      "code": "roleSet",
+      "text": "A member whose role was lowered keeps its copy of everything it received before now.",
+      "when": "Members::set_role (members.setRole) returns it on every role change, raised or lowered: a lowered member keeps what it received. The owner's text, NOC-203."
+    },
+    {
+      "id": "notice.spaceLeft",
+      "kind": "notice",
+      "code": "spaceLeft",
+      "text": "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.",
+      "when": "Space::leave (space.leave) returns it once this member's removal of itself is written: it keeps its copy, and the space key changes only when an admin rotates. The owner's text, NOC-219."
+    }
+  ]
+}
