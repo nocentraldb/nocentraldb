@@ -6,6 +6,7 @@
 // the package's entry does not reach it, so it is not in the API report;
 // the vitest tests pass a fake core to `connect`.
 
+import { accountOf } from "./accountCalls.ts";
 import { type Cbor, decode, encode } from "./cbor.ts";
 import {
   type Change,
@@ -177,6 +178,8 @@ export const connect = async (
       lock: JSON.stringify(options.lock),
       name: options.name ?? "default",
       relay: options.relay,
+      pairing: options.pairing === "request" ? true : undefined,
+      recover: options.recover,
     });
   } catch (error) {
     core.terminate();
@@ -658,6 +661,7 @@ export const connect = async (
         }
       },
     },
+    account: accountOf(ask),
     durability: reports.durability,
     view: reports.view,
     close: async () => {
