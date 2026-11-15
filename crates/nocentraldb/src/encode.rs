@@ -139,11 +139,11 @@ impl Site<'_> {
         let written = plugin.write(state, intent).map_err(|error| match error {
             WriteError::Invalid(why) => Error::new(
                 ErrorCode::InvalidValue,
-                format!("{}: {why}", self.invalid()),
+                crate::texts::error::value_does_not_fit_because(self.name, self.collection, why),
             ),
             WriteError::Corrupt => Error::new(
                 ErrorCode::StorageFailed,
-                "the database holds an unreadable plugin state",
+                crate::texts::error::PLUGIN_STATE_UNREADABLE,
             ),
         })?;
         written
@@ -182,10 +182,7 @@ impl Site<'_> {
     fn invalid(&self) -> Error {
         Error::new(
             ErrorCode::InvalidValue,
-            format!(
-                "the value does not fit the field {} of {}",
-                self.name, self.collection
-            ),
+            crate::texts::error::value_does_not_fit(self.name, self.collection),
         )
     }
 

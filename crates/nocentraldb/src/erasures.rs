@@ -102,7 +102,7 @@ impl Erasures<'_> {
         let state = inner.spaces.get(&space.0).ok_or_else(|| {
             Error::new(
                 ErrorCode::NotFound,
-                format!("the copy holds no space {space}"),
+                crate::texts::error::no_such_space(space),
             )
         })?;
         let resolved = state.checks.resolved();

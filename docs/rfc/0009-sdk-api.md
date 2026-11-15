@@ -757,7 +757,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `Written` | What `space.write` returns: `change` and `ids` | [RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit) |
 | `Value`, `Value::add`, `Value::remove`, `Value::clear` | A field value, set operations, and the clear of a field (`Value::clear`: Carsten, 2026-11-12, NOC-277) | [RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation) |
 | `db.index` | The handle of a declared index, by collection and name | [RFC 0005, "Indexes"](0005-schema-and-model-lock.md#indexes) |
-| `Error`, `ErrorCode`, `Error::fingerprint` | The error, its codes, and the fingerprint `UnknownAccount` carries | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
+| `Error`, `ErrorCode`, `Error::fingerprint` | The error, its codes, and the fingerprint `UnknownAccount` carries; every message lives in `texts/texts.json`, with when it shows (Carsten, 2026-11-15, NOC-329) | [RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry) |
 
 ## How this RFC is tested
 

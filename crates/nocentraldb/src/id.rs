@@ -37,10 +37,7 @@ macro_rules! hex_id {
             /// refused with `InvalidValue`.
             fn from_str(text: &str) -> Result<$name, Error> {
                 let invalid = || {
-                    Error::new(
-                        ErrorCode::InvalidValue,
-                        concat!("not ", stringify!($name), " in ", $len, " lowercase hex digits"),
-                    )
+                    Error::new(ErrorCode::InvalidValue, crate::texts::error::not_an_id(stringify!($name), $len))
                 };
                 if text.len() != $len {
                     return Err(invalid());
