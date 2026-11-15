@@ -126,6 +126,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: node scripts/sdk-browser/build.mjs
 
+      # The Rust device of the test with a browser (NOC-178), the example
+      # crates/nocentraldb/examples/browser_peer.rs, in
+      # target/sdk-browser/browser_peer (scripts/sdk-browser/peer.mjs),
+      # which the image runs as it runs the relay built above.
+      - name: The Rust device, built on the runner
+        if: ${{ !cancelled() }}
+        run: node scripts/sdk-browser/peer.mjs
+
       # The site with the landing page's demo, in site/dist
       # (scripts/site-demo/build.mjs): the demo's assets from the package
       # built above, then the site; run even when a build above failed.

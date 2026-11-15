@@ -4,7 +4,7 @@ This guide builds a small task list on NoCentralDB's Rust SDK, the crate `nocent
 
 NoCentralDB is not released yet. The SDK works, and this guide uses only what is merged, but names and formats can still change. Every Rust snippet below is compiled by the repository's tests, so the guide cannot drift from the SDK.
 
-For a finished app that does all of this from the command line, see [apps/tasks-rust](../apps/tasks-rust/README.md). [RFC 0009](rfc/0009-sdk-api.md) describes every call.
+For a finished app that does all of this from the command line, see [apps/tasks-rust](../apps/tasks-rust/README.md). [RFC 0009](rfc/0009-sdk-api.md) describes every call. For the TypeScript SDK in a web page, see [the browser guide](getting-started-browser.md).
 
 ## What you need
 
