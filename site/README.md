@@ -13,7 +13,7 @@ The static site lands in `site/dist/`, which git ignores. `pnpm --dir site previ
 
 ## The live demo
 
-The landing page's section "Try it in this browser" (`src/components/Demo.astro`, NOC-319) runs the example task list of `apps/tasks-ts` on the visitor's browser, with its database on OPFS and no relay. Its HTML is part of the page; the demo itself is not. An inline loader waits for the page's load event, for the section to come near the viewport and for the browser to be idle, checks for OPFS, Web Locks, BroadcastChannel, workers and WebAssembly, and only then imports `/demo/demo.js` (`public/demo/demo.js`, in git). That module brings the SDK, its worker and its WebAssembly core from `/demo/sdk/`, which `scripts/demo-assets.mjs` copies from the SDK's build output, with the example's lock:
+The landing page's section "Try it in this browser" (`src/components/Demo.astro`, NOC-319) runs the example task list of `apps/tasks-ts` on the visitor's browser, with its database on OPFS and no relay. Its HTML is part of the page; the demo itself is not. An inline loader waits for the page's load event, for the section to come near the viewport and for the browser to be idle (a page loaded in a background tab skips the wait for the viewport, which a hidden page never reports, so it follows the other tabs before it is shown), checks for OPFS, Web Locks, BroadcastChannel, workers and WebAssembly, and only then imports `/demo/demo.js` (`public/demo/demo.js`, in git). That module brings the SDK, its worker and its WebAssembly core from `/demo/sdk/`, which `scripts/demo-assets.mjs` copies from the SDK's build output, with the example's lock:
 
 ```sh
 node packages/sdk/build.mjs           # the SDK, its core compiled to WebAssembly
@@ -21,7 +21,7 @@ node site/scripts/demo-assets.mjs     # into site/public/demo, which git ignores
 pnpm --dir site build
 ```
 
-Without those two steps the site builds as before and the section says it could not load the demo. The deploy (`site-pages.yml`) runs them and requires the demo's files. `moon run repo:site-demo` checks the demo in Chromium (`scripts/site-demo/`); `node scripts/site-demo/measure.mjs` measures the page's paints, with `--throttle` for a slow phone and `--dist` for another build.
+Without those two steps the site builds as before and the section says it could not load the demo. The deploy (`site-pages.yml`) runs them and requires the demo's files. `moon run repo:site-demo` checks the demo in Chromium (`scripts/site-demo/`), tabs that are hidden or not focused included, through the DevTools protocol (`cdp.mjs`), since Playwright's pages always read visible and focused; `node scripts/site-demo/measure.mjs` measures the page's paints, with `--throttle` for a slow phone and `--dist` for another build.
 
 ## Screenshots
 

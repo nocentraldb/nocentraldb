@@ -97,7 +97,12 @@
     // reads the page from the top has scrolled by then, which ends the
     // page's Largest Contentful Paint, so the demo's download and its core's
     // compile never compete with the page's own first paints.
+    // A page loaded in the background has no first paint to protect, and
+    // its IntersectionObserver reports nothing until the tab is shown, so
+    // it starts when idle: the demo then follows the other tabs while
+    // hidden, and shows the current tasks as soon as it is shown.
     const near = () => {
+      if (document.visibilityState === "hidden") return idle();
       if (!("IntersectionObserver" in window)) return idle();
       const seen = new IntersectionObserver(
         (entries) => {
