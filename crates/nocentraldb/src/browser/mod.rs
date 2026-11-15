@@ -57,7 +57,7 @@ pub(crate) fn valid_name(name: &str) -> Result<(), Error> {
         true => Ok(()),
         false => Err(Error::new(
             ErrorCode::InvalidValue,
-            "a database name is 1 to 64 characters of a-z, 0-9, - and _",
+            crate::texts::error::DATABASE_NAME,
         )),
     }
 }
@@ -117,11 +117,11 @@ fn refused(error: InstallError) -> Error {
     match error {
         InstallError::NotInWorker => Error::new(
             ErrorCode::InvalidValue,
-            "a database at a name opens only in a dedicated Web Worker",
+            crate::texts::error::OPEN_OUTSIDE_WORKER,
         ),
         error => Error::new(
             ErrorCode::StorageFailed,
-            format!("the database cannot be opened: another tab holds it, or {error}"),
+            crate::texts::error::database_held(error),
         ),
     }
 }
