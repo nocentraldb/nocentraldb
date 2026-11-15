@@ -63,6 +63,15 @@ impl ViewReport<'_> {
     }
 }
 
+#[cfg(any(test, feature = "bridge"))]
+impl ViewReport<'_> {
+    /// The status now, and a [`Watch`](crate::sync::Watch) of it from now
+    /// on, for the bridge's events (NOC-315).
+    pub(crate) fn watch(&self) -> (ViewStatus, crate::sync::Watch<ViewStatus>) {
+        crate::sync::watch(&self.db.inner, status)
+    }
+}
+
 /// The view's status in the database `inner`.
 fn status(inner: &Inner) -> ViewStatus {
     ViewStatus {

@@ -7,7 +7,15 @@
 // the vitest tests pass a fake core to `connect`.
 
 import { type Cbor, decode, encode } from "./cbor.ts";
+import {
+  type Change,
+  type Fold,
+  flatten,
+  randomId,
+  type Subscription,
+} from "./connectParts.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
+import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
 import type { Notice } from "./members.ts";
@@ -181,6 +189,11 @@ export const connect = async (
   // another tab owns the database, that tab's (NOC-177).
   let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
   let sync = syncStatusOf((opened as { sync?: unknown } | null)?.sync, relay);
+  const reports = reportsOf(
+    ask,
+    (opened ?? {}) as { durability?: unknown; view?: unknown },
+    options.persistentStorage,
+  );
   const syncListeners = new Set<(status: SyncStatus) => void>();
   const spaceList = spaceListOf<SpaceEntry>(ask);
   // Who waits for the next sync status: `db.sync.confirmed`.
@@ -248,6 +261,16 @@ export const connect = async (
       synced(message.status);
       return;
     }
+    if (message.event === "durability") {
+      reports.durabilityChanged(
+        (message as { durability?: unknown }).durability,
+      );
+      return;
+    }
+    if (message.event === "view") {
+      reports.viewChanged((message as { view?: unknown }).view);
+      return;
+    }
     if (message.event === "spaces") {
       spaceList.changed((message as { spaces?: unknown }).spaces);
       return;
@@ -268,6 +291,7 @@ export const connect = async (
         );
       }
       spaceList.reopened();
+      reports.reopened();
       for (const subscription of subscriptions) rerun(subscription);
       return;
     }
@@ -634,6 +658,8 @@ export const connect = async (
         }
       },
     },
+    durability: reports.durability,
+    view: reports.view,
     close: async () => {
       if (closed) return;
       try {
@@ -644,6 +670,7 @@ export const connect = async (
         changeListeners.clear();
         syncListeners.clear();
         spaceList.clear();
+        reports.clear();
         for (const entry of statuses.values()) entry.listeners.clear();
         for (const waiter of syncWaiters) {
           waiter.reject(new NcError("closed", "the database is closed"));
@@ -653,41 +680,4 @@ export const connect = async (
       }
     },
   };
-};
-
-/** One fold the core reports: its space, the collections whose reads it may have changed, and the ids it touched per collection with their origin. */
-type Fold = {
-  space: string;
-  collections: string[];
-  changes?: {
-    collection: string;
-    ids: string[];
-    origin: "local" | "remote";
-  }[];
-};
-
-/** What `db.changes.subscribe` gives a listener. */
-type Change = Parameters<Parameters<Db["changes"]["subscribe"]>[0]>[0];
-
-/** A read a subscription re-runs, and what it follows. */
-type Subscription = {
-  collection: string;
-  space: string | undefined;
-  run: () => Promise<void>;
-  running: boolean;
-  again: boolean;
-};
-
-/** An object as the core answers it, with its fields beside `$id`, `$space` and `$deleted`. */
-const flatten = ({
-  fields,
-  ...rest
-}: {
-  fields: Record<string, unknown>;
-}): Record<string, unknown> => ({ ...rest, ...fields });
-
-/** 128 random bits from the browser's secure generator, as 32 hex digits (RFC 0002, "Object ids"). */
-const randomId = (): Id => {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
