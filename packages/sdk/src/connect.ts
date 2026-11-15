@@ -11,9 +11,11 @@ import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
+import type { Notice } from "./members.ts";
 import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
+import { spaceListOf } from "./spaceList.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 import { type Platform, tabCore } from "./tabs.ts";
@@ -186,6 +188,7 @@ export const connect = async (
     options.persistentStorage,
   );
   const syncListeners = new Set<(status: SyncStatus) => void>();
+  const spaceList = spaceListOf<SpaceEntry>(ask);
   // Who waits for the next sync status: `db.sync.confirmed`.
   const syncWaiters = new Set<{
     resolve: () => void;
@@ -261,6 +264,10 @@ export const connect = async (
       reports.viewChanged((message as { view?: unknown }).view);
       return;
     }
+    if (message.event === "spaces") {
+      spaceList.changed((message as { spaces?: unknown }).spaces);
+      return;
+    }
     if (message.event === "spaceStatus") {
       statusChanged((message as { space: Id }).space, message.status);
       return;
@@ -276,6 +283,7 @@ export const connect = async (
           () => {},
         );
       }
+      spaceList.reopened();
       reports.reopened();
       for (const subscription of subscriptions) rerun(subscription);
       return;
@@ -528,6 +536,16 @@ export const connect = async (
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
       members: membersOf(ask, id),
+      leave: async () =>
+        (await ask("space.leave", { space: id })) as unknown as {
+          readonly notice: Notice;
+        },
+      erasures: {
+        list: async () =>
+          (await ask("erasures.list", { space: id })) as unknown as Awaited<
+            ReturnType<Space["erasures"]["list"]>
+          >,
+      },
       status: {
         current: () => (statuses.get(id) as { status: SpaceStatus }).status,
         subscribe: (listener) => {
@@ -579,6 +597,8 @@ export const connect = async (
         handleOf((await ask("spaces.get", { space: id })) as string),
       list: async () =>
         (await ask("spaces.list", {})) as unknown as SpaceEntry[],
+      subscribe: (listener) =>
+        closed ? () => {} : spaceList.subscribe(listener),
     },
     find: (query) => find(query),
     changes: {
@@ -642,6 +662,7 @@ export const connect = async (
         subscriptions.clear();
         changeListeners.clear();
         syncListeners.clear();
+        spaceList.clear();
         reports.clear();
         for (const entry of statuses.values()) entry.listeners.clear();
         for (const waiter of syncWaiters) {

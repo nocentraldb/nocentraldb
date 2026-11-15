@@ -11,6 +11,7 @@ use ncdb_core::cbor::{self, Key, Value};
 use super::{entries, lower_camel, role_name};
 use crate::durability::Durability;
 use crate::id::{ChangeId, SpaceId};
+use crate::list::{SpaceInfo, SpaceModel};
 use crate::status::SpaceStatus;
 use crate::subscribe::FoldFeed;
 use crate::sync::{Connection, SyncStatus, Watch};
@@ -26,6 +27,8 @@ pub struct Events {
     pub(super) sync: Arc<Mutex<Watch<SyncStatus>>>,
     /// The spaces whose status the SDK follows.
     pub(super) spaces: Arc<Mutex<BTreeMap<SpaceId, Watch<SpaceStatus>>>>,
+    /// The space list, once `spaces.follow` asked for it (NOC-315).
+    pub(super) list: Arc<Mutex<Option<Watch<Vec<SpaceInfo>>>>>,
     /// The durability of the copy (NOC-315).
     pub(super) durability: Arc<Mutex<Watch<Durability>>>,
     /// The view's report (NOC-315).
@@ -54,6 +57,12 @@ impl Events {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
+    fn list(&self) -> std::sync::MutexGuard<'_, Option<Watch<Vec<SpaceInfo>>>> {
+        self.list
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     /// The messages since the last take, in order: the folds as one
     /// `folded` message (see below), then the sync status as `{"event":
     /// "sync", "status": status}` when it changed. None once the database
@@ -68,6 +77,12 @@ impl Events {
             messages.push(cbor::encode(&entries([
                 ("event", Value::Text("sync".into())),
                 ("status", sync_status(&status)),
+            ])));
+        }
+        if let Some(list) = self.list().as_mut().and_then(Watch::take) {
+            messages.push(cbor::encode(&entries([
+                ("event", Value::Text("spaces".into())),
+                ("spaces", space_list(&list)),
             ])));
         }
         if let Some(durability) = guard(&self.durability).take() {
@@ -149,6 +164,13 @@ impl Events {
             if events.sync().changed(cx.waker()) {
                 return Poll::Ready(());
             }
+            if events
+                .list()
+                .as_ref()
+                .is_some_and(|watch| watch.changed(cx.waker()))
+            {
+                return Poll::Ready(());
+            }
             if guard(&events.durability).changed(cx.waker())
                 || guard(&events.view).changed(cx.waker())
             {
@@ -174,6 +196,30 @@ impl Events {
     pub fn same(&self, other: &Events) -> bool {
         self.feed.same(&other.feed)
     }
+}
+
+/// The space list as `spaces.list` answers it and the `spaces` event
+/// carries it: `[{"id": id, "role": text | null, "model": "ours" |
+/// "another"}]` (RFC 0009, "Spaces").
+pub(super) fn space_list(list: &[SpaceInfo]) -> Value {
+    Value::Array(
+        list.iter()
+            .map(|info| {
+                let role = info
+                    .role
+                    .map_or(Value::Null, |role| Value::Text(role_name(role).into()));
+                let model = match info.model {
+                    SpaceModel::Ours => "ours",
+                    SpaceModel::Another => "another",
+                };
+                entries([
+                    ("id", Value::Text(info.id.to_string())),
+                    ("role", role),
+                    ("model", Value::Text(model.into())),
+                ])
+            })
+            .collect(),
+    )
 }
 
 /// A sync status as the bridge sends it (RFC 0009, "Sync and status").

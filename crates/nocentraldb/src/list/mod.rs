@@ -67,6 +67,15 @@ impl Spaces<'_> {
     }
 }
 
+#[cfg(any(test, feature = "bridge"))]
+impl Spaces<'_> {
+    /// The list now, and a [`Watch`](crate::sync::Watch) of it from now
+    /// on, for the bridge's events (NOC-315).
+    pub(crate) fn watch(&self) -> (Vec<SpaceInfo>, crate::sync::Watch<Vec<SpaceInfo>>) {
+        crate::sync::watch(&self.db.inner, list)
+    }
+}
+
 /// Every space of `inner` [`Spaces::list`] lists, in the order of their ids:
 /// the account space is no app space, so it is left out (RFC 0010, "The
 /// account space").

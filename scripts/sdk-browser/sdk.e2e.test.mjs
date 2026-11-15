@@ -122,7 +122,9 @@ test("opens, writes, reads, closes and reopens the database on OPFS", async () =
     },
     { lock, MODEL, space: written.space, id: written.id },
   );
-  assert.deepEqual(reread.spaces, [{ id: written.space, role: "admin" }]);
+  assert.deepEqual(reread.spaces, [
+    { id: written.space, role: "admin", model: "ours" },
+  ]);
   assert.equal(reread.title, "Ship the SDK");
   await context.close();
 });
@@ -407,6 +409,41 @@ test("space.status gives a new space's status, and its handles share it", async 
   assert.deepEqual(errors, []);
 });
 
+// NOC-315 slice 1: the space list as a report, and leaving a space (RFC
+// 0009, "Spaces").
+test("db.spaces.subscribe follows the list, and the last admin cannot leave", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "spaces" });
+      const seen = [];
+      const first = new Promise((resolve) =>
+        db.spaces.subscribe((all) => {
+          seen.push(all);
+          resolve();
+        }),
+      );
+      await first;
+      const project = await db.spaces.create();
+      for (let i = 0; i < 100 && seen.length < 2; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      const refused = await project.leave().catch((error) => error.code);
+      await db.close();
+      return { seen, id: project.id, refused };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(result.seen[0], []);
+  assert.deepEqual(result.seen[1], [
+    { id: result.id, role: "admin", model: "ours" },
+  ]);
+  assert.equal(result.refused, "lastAdmin");
+  assert.deepEqual(errors, []);
+});
+
 // NOC-176 slice 4b: invitations and members (RFC 0009, "Invitations and
 // members"), between two members, each in its own browser context: the
 // databases of one origin share one OPFS pool, which one worker holds.
@@ -464,6 +501,26 @@ test("an admin adds a member by invitation once its fingerprint is confirmed, re
   assert.equal(seen.removed, "memberRemoved");
   assert.equal(seen.left, 1);
   assert.deepEqual(otherErrors, []);
+  assert.deepEqual(errors, []);
+});
+
+// NOC-315 slice 2: the audit of a space's erasures (RFC 0009, "Erasures").
+// No TypeScript call erases yet, so a new space lists none.
+test("space.erasures.list() of a new space lists no erasure", async () => {
+  const { page: opened, errors } = await page();
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "erasures" });
+      const project = await db.spaces.create();
+      const erasures = await project.erasures.list();
+      await db.close();
+      return { erasures };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(result.erasures, []);
   assert.deepEqual(errors, []);
 });
 

@@ -5,9 +5,11 @@ use ncdb_core::cbor::{self, Key, Value};
 
 use super::Bridge;
 
+mod erasures;
 mod find;
 mod members;
 mod reports;
+mod spaces;
 mod sync;
 
 const LOCK: &str = include_str!("../../../tests/model/model.lock.json");

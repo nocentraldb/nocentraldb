@@ -115,6 +115,13 @@ export interface Space {
   readonly id: Id;
   /** The members of this space: add, list, re-role and remove (RFC 0009, "Invitations and members"). */
   readonly members: Members;
+  /** Leaves the space: this member writes its own removal and keeps its copy; the last admin is refused with `lastAdmin` (RFC 0009, "Spaces"). */
+  leave(): Promise<{ readonly notice: import("./members.ts").Notice }>;
+  /** The audit of this space's erasures; every member may read it, a reader too (RFC 0009, "Erasures"). */
+  readonly erasures: {
+    /** Each erasure, with who deleted the person key, who only saw it and who never answered. */
+    list(): Promise<ErasureEntry[]>;
+  };
   /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
   readonly status: {
     /** The report as it is now. */
@@ -159,10 +166,33 @@ export interface Space {
   ): Stop;
 }
 
+/** One erasure of a space, as `space.erasures.list()` gives it (RFC 0009, "Erasures"; Carsten, 2026-11-12, NOC-246). */
+interface ErasureEntry {
+  /** The change id of the erasure's shred entry. */
+  readonly shred: string;
+  /** `"final"` for a shred, or a provisional one a decision finalized; `"provisional"` while it waits; `"takenBack"` when its account took it back. */
+  readonly state: "final" | "provisional" | "takenBack";
+  /** The member that performed it, and its account's fingerprint. */
+  readonly performer: { readonly id: string; readonly account: string };
+  /** The fingerprint of the account that signed it off. */
+  readonly signOff: string;
+  /** Every member that could have held the person key. */
+  readonly members: readonly {
+    readonly id: string;
+    readonly account: string;
+    /** Whether it is still a member. */
+    readonly current: boolean;
+    /** Whether it confirmed it deleted the key, only saw the shred, or never answered. */
+    readonly acknowledged: "deleted" | "seen" | "missing";
+  }[];
+}
+
 /** A space as `db.spaces.list` gives it. */
 interface SpaceEntry {
   readonly id: Id;
   readonly role: string | null;
+  /** Whether the space is of this database's model, or of another (RFC 0009, "Spaces of another model"). */
+  readonly model: "ours" | "another";
 }
 
 /** This member's database (RFC 0009, "Open and close"). */
@@ -174,6 +204,8 @@ export interface Db {
     get(id: Id): Promise<Space>;
     /** Every space of this member, with its role. */
     list(): Promise<SpaceEntry[]>;
+    /** Calls `listener` with the list, then with each new list when a space is added, left or removed, or its role changes (RFC 0009, "Spaces"). */
+    subscribe(listener: (spaces: SpaceEntry[]) => void): Stop;
   };
   /** A page of a query of an index across every space of the member. */
   find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
