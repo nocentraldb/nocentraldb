@@ -29,7 +29,8 @@
       </div>
       <p class="demo__hint">
         Open this page in a <a href="/#demo" target="_blank" rel="noopener">second tab</a>: both tabs share one database,
-        and a task added in one appears in the other.
+        and a task added in one appears in the other. On a phone, which keeps only one tab running,
+        the other tab catches up when you switch to it.
       </p>
     </div>
 
@@ -97,7 +98,12 @@
     // reads the page from the top has scrolled by then, which ends the
     // page's Largest Contentful Paint, so the demo's download and its core's
     // compile never compete with the page's own first paints.
+    // A page loaded in the background has no first paint to protect, and
+    // its IntersectionObserver reports nothing until the tab is shown, so
+    // it starts when idle: the demo then follows the other tabs while
+    // hidden, and shows the current tasks as soon as it is shown.
     const near = () => {
+      if (document.visibilityState === "hidden") return idle();
       if (!("IntersectionObserver" in window)) return idle();
       const seen = new IntersectionObserver(
         (entries) => {

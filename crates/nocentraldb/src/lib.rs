@@ -57,6 +57,10 @@ mod space;
 mod status;
 mod subscribe;
 mod sync;
+// Generated from texts/texts.json by scripts/texts.mjs, which the gate
+// compares byte for byte, so rustfmt leaves it as written.
+#[rustfmt::skip]
+mod texts;
 mod tx;
 mod value;
 mod view_report;
