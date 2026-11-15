@@ -17,8 +17,8 @@ import {
   CLI_STRAYS,
   checkCode,
   checkEntries,
-  cliUse,
   checkLayout,
+  cliUse,
   constName,
   diffTexts,
   enumVariants,
@@ -540,7 +540,7 @@ test("a text written in the command line's code fails, in each of its forms", ()
     ['format!("{lock}: up to date (model version {v})")', "a text"],
     ['pub const USAGE: &str = "usage";', "a text constant"],
     [
-      'const S: &str = r#"\nfail(`cannot be run: ${e}`);\n"#;',
+      'const S: &str = r#"\nfail(`cannot be run: ` + e);\n"#;',
       "a message of the schema script",
     ],
     [
