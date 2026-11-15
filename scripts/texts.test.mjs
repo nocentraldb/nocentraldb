@@ -2,7 +2,14 @@
 // each check fails on its mutant.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -11,9 +18,13 @@ import {
   checkEntries,
   checkLayout,
   constName,
+  diffTexts,
+  formatReview,
   generate,
+  lastReleaseTag,
   noticeVariants,
   PATHS,
+  review,
 } from "./texts.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -196,5 +207,139 @@ test("the file is sorted by id and written one field per line", () => {
     JSON.stringify(sorted, null, 2),
   ]) {
     assert.equal(checkLayout(raw, sorted).length, 1, raw.slice(0, 40));
+  }
+});
+
+/** Entries of the review's tests: an error and a part, as T2 adds them. */
+const REVIEW_ERROR = {
+  id: "error.noSuchSpace",
+  kind: "error",
+  code: "notFound",
+  text: "the copy holds no space {space}",
+  when: "A call that names a space this copy does not hold.",
+};
+const REVIEW_PART = {
+  id: "part.kindText",
+  kind: "part",
+  text: "a text",
+  when: "What a read asked for.",
+};
+
+test("the last release tag is the newest beta or stable one, by number", () => {
+  assert.equal(lastReleaseTag([]), null);
+  assert.equal(lastReleaseTag(["v0.1.0-alpha.56", "v0.2.0-alpha.1"]), null);
+  assert.equal(
+    lastReleaseTag(["v0.3.1-beta.2", "v0.3.1-beta.10", "v0.3.1-alpha.99"]),
+    "v0.3.1-beta.10",
+  );
+  assert.equal(
+    lastReleaseTag(["v0.3.1-beta.10", "v0.3.1", "v0.3.0"]),
+    "v0.3.1",
+  );
+  assert.equal(
+    lastReleaseTag(["v0.10.0-beta.1", "v0.9.9", "v1.0.0-beta.1x"]),
+    "v0.10.0-beta.1",
+  );
+});
+
+test("the review lists new, changed and removed texts with what changed", () => {
+  const removed = { ...ENTRY, id: "notice.roleSet", code: "roleSet" };
+  const before = [ENTRY, removed, REVIEW_PART];
+  const after = [
+    { ...ENTRY, text: "The new member reads all of this space." },
+    { ...REVIEW_PART, when: "What a read asked for, newly worded." },
+    REVIEW_ERROR,
+  ];
+  const diff = diffTexts(before, after);
+  assert.deepEqual(
+    diff.added.map((t) => t.id),
+    ["error.noSuchSpace"],
+  );
+  assert.deepEqual(
+    diff.changed.map((c) => c.after.id),
+    ["notice.memberAdded", "part.kindText"],
+  );
+  assert.deepEqual(
+    diff.removed.map((t) => t.id),
+    ["notice.roleSet"],
+  );
+  const text = formatReview(diff, "v0.3.1-beta.2", 3);
+  assert.match(text, /^# Texts new or changed since v0\.3\.1-beta\.2\n/);
+  assert.ok(text.includes("1 new, 2 changed, 1 removed, of 3 texts"));
+  assert.ok(
+    text.includes(
+      '- text was: "The new member reads the whole history of this space."',
+    ),
+  );
+  assert.ok(
+    text.includes('- text now: "The new member reads all of this space."'),
+  );
+  assert.ok(text.includes("- when was: What a read asked for."));
+  assert.ok(text.includes('- text (unchanged): "a text"'));
+  assert.ok(text.includes("## Removed\n\n### notice.roleSet"));
+  assert.ok(text.includes("- error · notFound"));
+  assert.deepEqual(diffTexts([ENTRY], [ENTRY]), {
+    added: [],
+    changed: [],
+    removed: [],
+  });
+  assert.match(
+    formatReview(diffTexts([], [ENTRY]), null, 1),
+    /^# Texts: no beta or stable release yet/,
+  );
+});
+
+test("pnpm texts compares the file at the last release tag, found in git", () => {
+  const dir = mkdtempSync(join(tmpdir(), "texts-review-"));
+  try {
+    const git = (...args) => {
+      const run = spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
+      assert.equal(run.status, 0, run.stderr);
+    };
+    const put = (texts) => {
+      mkdirSync(join(dir, "texts"), { recursive: true });
+      writeFileSync(
+        join(dir, "texts", "texts.json"),
+        `${JSON.stringify({ texts }, null, 2)}\n`,
+      );
+      git("add", "-A");
+      git(
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "-m",
+        "texts",
+      );
+    };
+    git("init", "-q");
+    writeFileSync(join(dir, "README"), "x");
+    git("add", "-A");
+    git(
+      "-c",
+      "user.name=t",
+      "-c",
+      "user.email=t@t",
+      "commit",
+      "-q",
+      "-m",
+      "before texts",
+    );
+    git("tag", "v0.1.0");
+    assert.throws(() => review(dir), /ENOENT/);
+    put([ENTRY]);
+    git("tag", "v0.2.0-beta.1");
+    put([{ ...ENTRY, text: "Changed after the beta." }, REVIEW_PART]);
+    git("tag", "v0.2.0-alpha.3");
+    const text = review(dir);
+    assert.match(text, /^# Texts new or changed since v0\.2\.0-beta\.1$/m);
+    assert.ok(text.includes("1 new, 1 changed, 0 removed, of 2 texts"), text);
+    assert.ok(text.includes('- text now: "Changed after the beta."'));
+    // A tag from before texts.json: every text is new since it.
+    assert.ok(review(dir, "v0.1.0").includes("2 new, 0 changed, 0 removed"));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
