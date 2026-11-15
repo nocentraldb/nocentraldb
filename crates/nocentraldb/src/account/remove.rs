@@ -80,7 +80,7 @@ pub(super) fn check(inner: &Inner, lost: ids::MemberId) -> Result<(), Error> {
     if lost == inner.member.key().id() {
         return Err(Error::new(
             ErrorCode::InvalidValue,
-            "a device does not remove itself as lost",
+            crate::texts::error::DEVICE_REMOVES_ITSELF,
         ));
     }
     let Some(account) = space(inner) else {
@@ -102,7 +102,7 @@ pub(super) fn check(inner: &Inner, lost: ids::MemberId) -> Result<(), Error> {
 fn not_recorded() -> Error {
     Error::new(
         ErrorCode::NotFound,
-        "the account space records no such member of the account",
+        crate::texts::error::NO_SUCH_ACCOUNT_MEMBER,
     )
 }
 

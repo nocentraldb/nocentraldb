@@ -161,9 +161,8 @@ tasks:
     # Every text a developer reads from the SDKs lives in texts/texts.json
     # (NOC-329): each entry well-formed, with when it shows, sorted by id and
     # one field per line, so git diff shows each change; the generated
-    # crates/nocentraldb/src/texts.rs
-    # equal to the file; no notice text written in the SDK's code; and every
-    # text used.
+    # crates/nocentraldb/src/texts/ equal to the file; no notice or error
+    # text written in the SDK's code; and every text used.
     command: "node scripts/texts.mjs --check"
     inputs:
       - "/texts/**/*"

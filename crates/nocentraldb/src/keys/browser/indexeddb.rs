@@ -42,13 +42,13 @@ impl IndexedDb {
             .ok_or_else(|| {
                 Error::new(
                     ErrorCode::KeyStoreUnavailable,
-                    "this browser context has no IndexedDB, which keeps the member's keys",
+                    crate::texts::error::NO_INDEXED_DB,
                 )
             })?
             .unchecked_into::<IdbFactory>();
         let request = factory
             .open_with_u32(&format!("{PREFIX}{name}"), VERSION)
-            .map_err(|error| refused("IndexedDB cannot be opened", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNOPENABLE, &error))?;
         let upgrade = Closure::<dyn FnMut(Event)>::new(move |event: Event| {
             let db = event
                 .target()
@@ -63,7 +63,7 @@ impl IndexedDb {
         request.set_onupgradeneeded(Some(upgrade.as_ref().unchecked_ref()));
         let db = done(&request).await;
         request.set_onupgradeneeded(None);
-        let db = db.map_err(|error| refused("IndexedDB cannot be opened", &error))?;
+        let db = db.map_err(|error| refused(crate::texts::part::INDEXED_DB_UNOPENABLE, &error))?;
         Ok(IndexedDb {
             db: db.unchecked_into(),
         })
@@ -80,10 +80,10 @@ impl IndexedDb {
         let (_, store) = self.store(IdbTransactionMode::Readonly)?;
         let request = store
             .get(&JsValue::from_str(key))
-            .map_err(|error| refused("IndexedDB cannot be read", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNREADABLE, &error))?;
         done(&request)
             .await
-            .map_err(|error| refused("IndexedDB cannot be read", &error))
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNREADABLE, &error))
     }
 
     /// Deletes the value under `key`.
@@ -92,10 +92,10 @@ impl IndexedDb {
         let (transaction, store) = self.store(IdbTransactionMode::Readwrite)?;
         store
             .delete(&JsValue::from_str(key))
-            .map_err(|error| refused("IndexedDB cannot be written", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))?;
         complete(&transaction)
             .await
-            .map_err(|error| refused("IndexedDB cannot be written", &error))
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))
     }
 
     /// The keys the object store holds, sorted.
@@ -104,10 +104,10 @@ impl IndexedDb {
         let (_, store) = self.store(IdbTransactionMode::Readonly)?;
         let request = store
             .get_all_keys()
-            .map_err(|error| refused("IndexedDB cannot be read", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNREADABLE, &error))?;
         let keys = done(&request)
             .await
-            .map_err(|error| refused("IndexedDB cannot be read", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNREADABLE, &error))?;
         let mut keys: Vec<String> = js_sys::Array::from(&keys)
             .iter()
             .filter_map(|key| key.as_string())
@@ -121,10 +121,10 @@ impl IndexedDb {
         let transaction = self
             .db
             .transaction_with_str_and_mode(STORE, mode)
-            .map_err(|error| refused("IndexedDB cannot be used", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNUSABLE, &error))?;
         let store = transaction
             .object_store(STORE)
-            .map_err(|error| refused("IndexedDB cannot be used", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNUSABLE, &error))?;
         Ok((transaction, store))
     }
 }
@@ -153,10 +153,10 @@ impl Records for IndexedDb {
         store
             .add_with_key(wrapping_key, &JsValue::from_str(WRAPPING_KEY))
             .and_then(|_| store.add_with_key(&buffer, &JsValue::from_str(KEY_RECORD)))
-            .map_err(|error| refused("IndexedDB cannot be written", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))?;
         complete(&transaction)
             .await
-            .map_err(|error| refused("IndexedDB cannot be written", &error))
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))
     }
 
     async fn replace(&self, record: &[u8]) -> Result<(), Error> {
@@ -164,10 +164,10 @@ impl Records for IndexedDb {
         let buffer = Uint8Array::from(record).buffer();
         store
             .put_with_key(&buffer, &JsValue::from_str(KEY_RECORD))
-            .map_err(|error| refused("IndexedDB cannot be written", &error))?;
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))?;
         complete(&transaction)
             .await
-            .map_err(|error| refused("IndexedDB cannot be written", &error))
+            .map_err(|error| refused(crate::texts::part::INDEXED_DB_UNWRITABLE, &error))
     }
 }
 
@@ -243,12 +243,13 @@ fn refused(what: &str, error: &JsValue) -> Error {
         _ => ErrorCode::StorageFailed,
     };
     let hint = match name.as_str() {
-        "ConstraintError" => {
-            "; another context kept keys for this database meanwhile: open it again"
-        }
+        "ConstraintError" => crate::texts::part::INDEXED_DB_CONSTRAINT_HINT,
         _ => "",
     };
-    Error::new(code, format!("{what}: {name}{hint}"))
+    Error::new(
+        code,
+        crate::texts::error::indexed_db_refused(what, name, hint),
+    )
 }
 
 /// The name of a thrown JavaScript error, such as `QuotaExceededError`.

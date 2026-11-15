@@ -109,7 +109,10 @@ impl Query {
             .iter()
             .map(|(space, id)| {
                 Object::read(inner, *space, &self.collection, *id)?.ok_or_else(|| {
-                    Error::new(ErrorCode::StorageFailed, "an index row has no object")
+                    Error::new(
+                        ErrorCode::StorageFailed,
+                        crate::texts::error::INDEX_ROW_WITHOUT_OBJECT,
+                    )
                 })
             })
             .collect::<Result<_, _>>()?;
@@ -145,18 +148,18 @@ fn refused(error: QueryError) -> Error {
     let (code, message) = match error {
         QueryError::Cursor => (
             ErrorCode::CursorOfAnotherModel,
-            "the cursor belongs to another model, index or equality prefix",
+            crate::texts::error::CURSOR_OF_ANOTHER_QUERY,
         ),
-        QueryError::UnknownIndex => (ErrorCode::NotFound, "the model declares no such index"),
+        QueryError::UnknownIndex => (
+            ErrorCode::NotFound,
+            crate::texts::error::NO_SUCH_INDEX_QUERIED,
+        ),
         QueryError::Equality => (
             ErrorCode::InvalidValue,
-            "the query does not give one value per field of the index's equality prefix",
+            crate::texts::error::EQUALITY_PREFIX,
         ),
-        QueryError::PageSize => (ErrorCode::InvalidValue, "the page size is 0 or above 1000"),
-        QueryError::Space => (
-            ErrorCode::InvalidValue,
-            "an index that runs in one space is read with space.find, any other with db.find",
-        ),
+        QueryError::PageSize => (ErrorCode::InvalidValue, crate::texts::error::PAGE_SIZE),
+        QueryError::Space => (ErrorCode::InvalidValue, crate::texts::error::INDEX_SCOPE),
     };
     Error::new(code, message)
 }
@@ -176,7 +179,7 @@ impl Db {
             }),
             None => Err(Error::new(
                 ErrorCode::NotFound,
-                format!("the model declares no index {name} of {collection}"),
+                crate::texts::error::no_such_index(name, collection),
             )),
         }
     }
