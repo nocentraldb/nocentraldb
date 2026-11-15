@@ -86,6 +86,13 @@
       "when": "A query that does not give one value per field of the index's equality prefix."
     },
     {
+      "id": "error.erasureRequestOfAnotherMember",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the erasure request is another member's",
+      "when": "Db::erase with a request another member made: only its performer erases with it (NOC-325)."
+    },
+    {
       "id": "error.fieldDoesNotHold",
       "kind": "error",
       "code": "invalidValue",
@@ -254,6 +261,13 @@
       "when": "Account::remove_member (db.account.removeMember) while the account space records an account key newer than this device's own: the device takes it when it syncs."
     },
     {
+      "id": "error.noAccountKeyToSignOff",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "this database holds no account key; a device of the account signs off",
+      "when": "Account::sign_off on a database that holds no account key, an agent's or one waiting to be paired (NOC-325)."
+    },
+    {
       "id": "error.noAccountSpace",
       "kind": "error",
       "code": "notFound",
@@ -373,6 +387,13 @@
       "when": "Account::remove_member (db.account.removeMember) when the words it was given are no recovery code."
     },
     {
+      "id": "error.notAnErasureRequest",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the text is not an erasure request: {why}",
+      "when": "Parsing an erasure request from text (ErasureRequest::from_str) when the text is not one; the reason follows (NOC-325)."
+    },
+    {
       "id": "error.notAnId",
       "kind": "error",
       "code": "invalidValue",
@@ -387,11 +408,25 @@
       "when": "Parsing an invitation from text (Invitation::from_str; nc.invitation) when the text is not one; the reason follows."
     },
     {
+      "id": "error.notSignOffs",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the text is not a set of sign-offs: {why}",
+      "when": "Parsing sign-offs from text (SignOffs::from_str) when the text is not one; the reason follows (NOC-325)."
+    },
+    {
       "id": "error.notWaitingToBePaired",
       "kind": "error",
       "code": "notAllowed",
       "text": "this database is not waiting to be paired",
       "when": "Account::complete_pairing (db.account.completePairing) on a database not opened for pairing."
+    },
+    {
+      "id": "error.objectIsNoPerson",
+      "kind": "error",
+      "code": "noPerson",
+      "text": "the object is no person's: it has no personal field",
+      "when": "Db::erasure_request with an object that has no personal field, so it names no person to erase (NOC-325)."
     },
     {
       "id": "error.onlyAgentAddsSubAgent",
@@ -562,6 +597,13 @@
       "when": "A removal, or an add after a rotation, when this member lacks a person key of the space that the rotation must re-wrap; it works once it fetched the key's record."
     },
     {
+      "id": "error.signOffDoesNotHold",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a sign-off does not hold for this erasure in its space; nothing was erased",
+      "when": "Db::erase when one of the sign-offs would not hold in its space by RFC 0008's rules; it writes no shred in any space (NOC-325)."
+    },
+    {
       "id": "error.spaceClock",
       "kind": "error",
       "code": "storageFailed",
@@ -602,6 +644,20 @@
       "code": "notAllowed",
       "text": "a sub-agent is not paired into an account: its parent agent adds it to the spaces it works in",
       "when": "Account::pair (db.account.pair) with a sub-agent's invitation, version 3 (NOC-320 Q1)."
+    },
+    {
+      "id": "error.takeBackNotAllowed",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "only an admin of the performer's account takes an erasure back",
+      "when": "Erasures::take_back by a member that is not an admin of the account that performed the erasure (NOC-325)."
+    },
+    {
+      "id": "error.takeBackNotPending",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the shred is no provisional erasure of this space that is still pending",
+      "when": "Erasures::take_back with a shred that is final, already finalized or taken back, or not of the space (NOC-325)."
     },
     {
       "id": "error.unknownAccount",
@@ -681,6 +737,13 @@
       "when": "Account::complete_pairing (db.account.completePairing) returns it on a device once it holds the account key. The owner's text, NOC-273."
     },
     {
+      "id": "notice.erased",
+      "kind": "notice",
+      "code": "erased",
+      "text": "The person's personal fields are erased in these spaces. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too.",
+      "when": "Db::erase returns it with the shreds it wrote, once per call, in every space of the database where a sign-off came for the person's keys. Carsten, 2026-11-15, NOC-326 (Q6)."
+    },
+    {
       "id": "notice.erasurePending",
       "kind": "notice",
       "code": "erasurePending",
@@ -714,6 +777,13 @@
       "code": "spaceLeft",
       "text": "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.",
       "when": "Space::leave (space.leave) returns it once this member's removal of itself is written: it keeps its copy, and the space key changes only when an admin rotates. The owner's text, NOC-219."
+    },
+    {
+      "id": "notice.takenBack",
+      "kind": "notice",
+      "code": "takenBack",
+      "text": "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.",
+      "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     },
     {
       "id": "part.databaseDirectoryNotFound",
@@ -768,6 +838,54 @@
       "kind": "part",
       "text": "writes content",
       "when": "What the member does, in roleRequired: a write."
+    },
+    {
+      "id": "part.erasureRequestCertificate",
+      "kind": "part",
+      "text": "its certificate is not one",
+      "when": "Why a text is not an erasure request: the performer's certificate does not decode."
+    },
+    {
+      "id": "part.erasureRequestPrefix",
+      "kind": "part",
+      "text": "it does not start with ncdb-erase-1:",
+      "when": "Why a text is not an erasure request: its prefix."
+    },
+    {
+      "id": "part.erasureTextBase64",
+      "kind": "part",
+      "text": "it is not unpadded base64url",
+      "when": "Why a text is not an erasure request or a set of sign-offs: what follows its prefix is not unpadded base64url."
+    },
+    {
+      "id": "part.erasureTextEmpty",
+      "kind": "part",
+      "text": "it is empty",
+      "when": "Why a text is not an erasure request or a set of sign-offs: no layout at all."
+    },
+    {
+      "id": "part.erasureTextEntries",
+      "kind": "part",
+      "text": "its length does not match its number of entries",
+      "when": "Why a text is not an erasure request or a set of sign-offs: the entries do not fill it."
+    },
+    {
+      "id": "part.erasureTextEntryTwice",
+      "kind": "part",
+      "text": "it names an entry twice",
+      "when": "Why a text is not an erasure request or a set of sign-offs: one space and person key twice."
+    },
+    {
+      "id": "part.erasureTextTooShort",
+      "kind": "part",
+      "text": "it is too short",
+      "when": "Why a text is not an erasure request or a set of sign-offs: it ends before its layout does."
+    },
+    {
+      "id": "part.erasureTextVersion",
+      "kind": "part",
+      "text": "its version is not 1",
+      "when": "Why a text is not an erasure request or a set of sign-offs: its version byte."
     },
     {
       "id": "part.indexedDbConstraintHint",
@@ -960,6 +1078,12 @@
       "kind": "part",
       "text": "a writer or an admin",
       "when": "The role needed, in roleRequired: a writer or an admin."
+    },
+    {
+      "id": "part.signOffsPrefix",
+      "kind": "part",
+      "text": "it does not start with ncdb-sign-off-1:",
+      "when": "Why a text is not a set of sign-offs: its prefix."
     },
     {
       "id": "part.wrappingKeyUnmakeable",

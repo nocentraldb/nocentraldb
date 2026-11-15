@@ -68,6 +68,11 @@ pub(crate) const DEVICE_REMOVES_ITSELF: &str =
 pub(crate) const EQUALITY_PREFIX: &str =
     "the query does not give one value per field of the index's equality prefix";
 
+/// `erasureRequestOfAnotherMember` (invalidValue): Db::erase with a request
+/// another member made: only its performer erases with it (NOC-325).
+pub(crate) const ERASURE_REQUEST_OF_ANOTHER_MEMBER: &str =
+    "the erasure request is another member's";
+
 /// `fieldDoesNotHold` (invalidValue): Object::get::<T> when the field holds
 /// another kind of value than T.
 pub(crate) fn field_does_not_hold(asked: impl std::fmt::Display) -> String {
@@ -202,6 +207,11 @@ pub(crate) const MEMBER_REMOVES_ITSELF: &str =
 pub(crate) const NEWER_ACCOUNT_KEY_NOT_TAKEN: &str =
     "the account space already records a newer account key, which this device has not taken yet";
 
+/// `noAccountKeyToSignOff` (notAllowed): Account::sign_off on a database that
+/// holds no account key, an agent's or one waiting to be paired (NOC-325).
+pub(crate) const NO_ACCOUNT_KEY_TO_SIGN_OFF: &str =
+    "this database holds no account key; a device of the account signs off";
+
 /// `noAccountSpace` (notFound): Renewing the account key, on removing a lost
 /// member, on a device that holds no account space.
 pub(crate) const NO_ACCOUNT_SPACE: &str =
@@ -299,6 +309,13 @@ pub(crate) fn not_apairing_answer(why: impl std::fmt::Display) -> String {
 pub(crate) const NOT_ARECOVERY_CODE: &str =
     "the words are no recovery code";
 
+/// `notAnErasureRequest` (invalidValue): Parsing an erasure request from text
+/// (ErasureRequest::from_str) when the text is not one; the reason follows
+/// (NOC-325).
+pub(crate) fn not_an_erasure_request(why: impl std::fmt::Display) -> String {
+    format!("the text is not an erasure request: {why}")
+}
+
 /// `notAnId` (invalidValue): Parsing an id from text (SpaceId, ObjectId,
 /// ChangeId, MemberId) when the text is not that many lowercase hex digits.
 pub(crate) fn not_an_id(name: impl std::fmt::Display, len: impl std::fmt::Display) -> String {
@@ -312,10 +329,21 @@ pub(crate) fn not_an_invitation(why: impl std::fmt::Display) -> String {
     format!("the text is not an invitation: {why}")
 }
 
+/// `notSignOffs` (invalidValue): Parsing sign-offs from text
+/// (SignOffs::from_str) when the text is not one; the reason follows (NOC-325).
+pub(crate) fn not_sign_offs(why: impl std::fmt::Display) -> String {
+    format!("the text is not a set of sign-offs: {why}")
+}
+
 /// `notWaitingToBePaired` (notAllowed): Account::complete_pairing
 /// (db.account.completePairing) on a database not opened for pairing.
 pub(crate) const NOT_WAITING_TO_BE_PAIRED: &str =
     "this database is not waiting to be paired";
+
+/// `objectIsNoPerson` (noPerson): Db::erasure_request with an object that has
+/// no personal field, so it names no person to erase (NOC-325).
+pub(crate) const OBJECT_IS_NO_PERSON: &str =
+    "the object is no person's: it has no personal field";
 
 /// `onlyAgentAddsSubAgent` (notAllowed): Members::add (members.add) with a
 /// sub-agent's invitation, version 3, on a device's or a sub-agent's database:
@@ -450,6 +478,12 @@ pub(crate) const ROTATION_MISSING_GENERATION: &str =
 pub(crate) const ROTATION_MISSING_PERSON_KEY: &str =
     "the member does not hold a person key of the space, which the rotation must re-wrap; it rotates once it fetched the key's record";
 
+/// `signOffDoesNotHold` (invalidValue): Db::erase when one of the sign-offs
+/// would not hold in its space by RFC 0008's rules; it writes no shred in any
+/// space (NOC-325).
+pub(crate) const SIGN_OFF_DOES_NOT_HOLD: &str =
+    "a sign-off does not hold for this erasure in its space; nothing was erased";
+
 /// `spaceClock` (storageFailed): A write, when the space's clock cannot be read
 /// or written; the error follows.
 pub(crate) fn space_clock(error: impl std::fmt::Display) -> String {
@@ -483,6 +517,16 @@ pub(crate) const SUB_AGENT_CREATES_NO_SPACE: &str =
 /// sub-agent's invitation, version 3 (NOC-320 Q1).
 pub(crate) const SUB_AGENT_NOT_PAIRED: &str =
     "a sub-agent is not paired into an account: its parent agent adds it to the spaces it works in";
+
+/// `takeBackNotAllowed` (notAllowed): Erasures::take_back by a member that is
+/// not an admin of the account that performed the erasure (NOC-325).
+pub(crate) const TAKE_BACK_NOT_ALLOWED: &str =
+    "only an admin of the performer's account takes an erasure back";
+
+/// `takeBackNotPending` (invalidValue): Erasures::take_back with a shred that
+/// is final, already finalized or taken back, or not of the space (NOC-325).
+pub(crate) const TAKE_BACK_NOT_PENDING: &str =
+    "the shred is no provisional erasure of this space that is still pending";
 
 /// `unknownAccount` (unknownAccount): Members::add (members.add) without a
 /// fingerprint when the invitation's account is new to this database; the error
