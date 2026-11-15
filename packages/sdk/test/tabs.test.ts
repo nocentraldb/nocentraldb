@@ -44,6 +44,7 @@ const fakeLocks = (): Platform["locks"] => {
 /** A worker that answers like the bridge, logs each call, and never answers the calls in `hold`. */
 const fakeWorker = (log: string[], hold: Set<string>) => {
   let listener: ((event: Uint8Array) => void) | undefined;
+  let stopped = false;
   const core: Core = {
     call: async (bytes) => {
       const { id, call } = decode(bytes) as { id: number; call: string };
@@ -60,13 +61,16 @@ const fakeWorker = (log: string[], hold: Set<string>) => {
           return encode({ id, ok: null });
       }
     },
-    terminate: () => {},
+    terminate: () => {
+      stopped = true;
+    },
     listen: (given) => {
       listener = given;
     },
   };
   return {
     core,
+    stopped: () => stopped,
     emit: (event: Record<string, unknown>) => listener?.(encode(event)),
   };
 };
@@ -334,4 +338,13 @@ test("an owner shown again takes the database back when no other tab holds it", 
   only.show();
   expect((await ask(only.core, "spaces.list")).ok).toEqual([]);
   expect(only.log.filter((call) => call === "open")).toEqual(["open", "open"]);
+});
+
+test("an owner with no call in flight gives the database up inside the hide handler, before a phone can freeze it", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  first.hide();
+  // No await: a frozen page runs nothing after its visibilitychange handler.
+  expect(first.worker()?.stopped()).toBe(true);
 });
