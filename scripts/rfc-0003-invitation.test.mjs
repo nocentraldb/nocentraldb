@@ -92,6 +92,7 @@ test("the vectors' text and bytes are one invitation each", () => {
     "invitation",
     "invitation-statement",
     "invitation-pairing",
+    "invitation-sub-agent",
   ]) {
     assert.deepEqual(decode(file(`${name}.txt`).trim()), hex(`${name}.hex`));
   }
@@ -157,4 +158,30 @@ test("the version 2 vector holds the keys and the kind and no certificate", () =
   assert.deepEqual(bytes.subarray(1, 33), f["signing key"]);
   assert.deepEqual(bytes.subarray(33, 65), f["agreement key"]);
   assert.deepEqual(bytes.subarray(65, 66), f.kind);
+});
+
+test("the version 3 vector holds the two public keys and nothing else", () => {
+  const bytes = hex("invitation-sub-agent.hex");
+  const f = fields();
+  assert.equal(bytes.length, 65);
+  assert.equal(bytes[0], 3, "version 3");
+  assert.deepEqual(bytes.subarray(1, 33), f["signing key"]);
+  assert.deepEqual(bytes.subarray(33, 65), f["agreement key"]);
+});
+
+test("RFC 0003 gives version 3, the sub-agent's invitation, its layout and its refusals", () => {
+  const part = section(read(RFC_0003), "invitation");
+  for (const pattern of [
+    /\*\*Version 3: a sub-agent before its parent adds it\.\*\*/,
+    /\| 0 \| 1 \| version \| `3` \|/,
+    /65 bytes/,
+    /NOC-320 Q1/,
+    /holds four invitations/,
+  ]) {
+    assert.match(
+      part,
+      pattern,
+      `RFC 0003's Invitation does not say ${pattern}`,
+    );
+  }
 });

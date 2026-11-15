@@ -105,6 +105,12 @@ impl Spaces<'_> {
 /// the account space of the model the SDK ships (`crate::account`).
 pub(crate) fn create_space(inner: &mut Inner, model: [u8; 16]) -> Result<CoreSpaceId, Error> {
     let member = inner.member.key();
+    if inner.kind == membership::MemberKind::SubAgent {
+        return Err(Error::new(
+            ErrorCode::NotAllowed,
+            crate::texts::error::SUB_AGENT_CREATES_NO_SPACE,
+        ));
+    }
     let certificate = inner
         .account
         .certificate(member.id(), inner.kind)

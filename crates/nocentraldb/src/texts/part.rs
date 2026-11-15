@@ -45,6 +45,45 @@ pub(crate) const DOING_SET_ROLES: &str =
 pub(crate) const DOING_WRITE: &str =
     "writes content";
 
+/// `erasureRequestCertificate`: Why a text is not an erasure request: the
+/// performer's certificate does not decode.
+pub(crate) const ERASURE_REQUEST_CERTIFICATE: &str =
+    "its certificate is not one";
+
+/// `erasureRequestPrefix`: Why a text is not an erasure request: its prefix.
+pub(crate) const ERASURE_REQUEST_PREFIX: &str =
+    "it does not start with ncdb-erase-1:";
+
+/// `erasureTextBase64`: Why a text is not an erasure request or a set of
+/// sign-offs: what follows its prefix is not unpadded base64url.
+pub(crate) const ERASURE_TEXT_BASE64: &str =
+    "it is not unpadded base64url";
+
+/// `erasureTextEmpty`: Why a text is not an erasure request or a set of
+/// sign-offs: no layout at all.
+pub(crate) const ERASURE_TEXT_EMPTY: &str =
+    "it is empty";
+
+/// `erasureTextEntries`: Why a text is not an erasure request or a set of
+/// sign-offs: the entries do not fill it.
+pub(crate) const ERASURE_TEXT_ENTRIES: &str =
+    "its length does not match its number of entries";
+
+/// `erasureTextEntryTwice`: Why a text is not an erasure request or a set of
+/// sign-offs: one space and person key twice.
+pub(crate) const ERASURE_TEXT_ENTRY_TWICE: &str =
+    "it names an entry twice";
+
+/// `erasureTextTooShort`: Why a text is not an erasure request or a set of
+/// sign-offs: it ends before its layout does.
+pub(crate) const ERASURE_TEXT_TOO_SHORT: &str =
+    "it is too short";
+
+/// `erasureTextVersion`: Why a text is not an erasure request or a set of
+/// sign-offs: its version byte.
+pub(crate) const ERASURE_TEXT_VERSION: &str =
+    "its version is not 1";
+
 /// `indexedDbConstraintHint`: The hint of indexedDbRefused when IndexedDB
 /// answers ConstraintError: another tab or worker stored keys for this database
 /// meanwhile.
@@ -90,6 +129,11 @@ pub(crate) const INVITATION_LENGTH: &str =
 /// 66 bytes long.
 pub(crate) const INVITATION_LENGTH_V2: &str =
     "its length is not that of version 2";
+
+/// `invitationLengthV3`: Why, in notAnInvitation: a version 3 invitation, a
+/// sub-agent's, is not 65 bytes long.
+pub(crate) const INVITATION_LENGTH_V3: &str =
+    "its length is not that of version 3";
 
 /// `invitationNumberZero`: Why, in notAnInvitation: its account key statement's
 /// number is 0.
@@ -193,6 +237,10 @@ pub(crate) const ROLE_READER: &str =
 /// `roleWriter`: The role needed, in roleRequired: a writer or an admin.
 pub(crate) const ROLE_WRITER: &str =
     "a writer or an admin";
+
+/// `signOffsPrefix`: Why a text is not a set of sign-offs: its prefix.
+pub(crate) const SIGN_OFFS_PREFIX: &str =
+    "it does not start with ncdb-sign-off-1:";
 
 /// `wrappingKeyUnmakeable`: What failed, in webCryptoFailed: WebCrypto could
 /// not make the non-extractable key that wraps the member's keys.
