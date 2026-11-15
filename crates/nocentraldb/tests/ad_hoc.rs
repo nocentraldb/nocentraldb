@@ -353,3 +353,10 @@ fn the_parent_keeps_its_copies_across_a_reopen() {
     let space = now(db.spaces().get(ad_hoc_space)).unwrap();
     assert_eq!(now(space.source_of(copy)).unwrap(), Some((source_space, t)));
 }
+
+#[test]
+fn a_sub_agent_creates_no_ad_hoc_space() {
+    let sub_agent = now(Db::open(OpenOptions::new(LOCK).in_memory().sub_agent())).unwrap();
+    let refused = now(sub_agent.spaces().create_ad_hoc(AdHoc::default())).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotAllowed);
+}
