@@ -187,13 +187,14 @@ export declare class NcError extends Error {
 }
 // file: index.d.ts
 export declare function name(): string;
-export type { PairingAnswer, RecoveryCode } from "./account.ts";
+export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 export type { SyncStatus } from "./sync.ts";
+export type PairingAnswer = import("./account.ts").PairingAnswer;
 // file: members.d.ts
 export interface Invitation {
     readonly fingerprint?: string;
