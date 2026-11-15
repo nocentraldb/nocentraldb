@@ -102,12 +102,13 @@ test("a snippet on the SDK's public API type-checks", () => {
 });
 
 test("a snippet that calls what the SDK lacks fails at its line in the guide", () => {
-  const markdown = guide("await db.account.recoveryCode();");
-  const line = markdown.split("\n").indexOf("await db.account.recoveryCode();");
+  // A name no RFC gives the SDK, so this stays a call the SDK lacks.
+  const markdown = guide("await db.noSuchCall();");
+  const line = markdown.split("\n").indexOf("await db.noSuchCall();");
   const result = checked(markdown);
   assert.equal(result.ok, false);
   assert.match(result.output, new RegExp(`guide\\.md:${line + 1}:\\d+`));
-  assert.match(result.output, /account/);
+  assert.match(result.output, /noSuchCall/);
 });
 
 test("a snippet that writes a value its field does not take fails", () => {

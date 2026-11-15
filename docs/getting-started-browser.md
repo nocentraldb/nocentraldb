@@ -370,7 +370,7 @@ The relay refuses the changes of a space whose creator's account it does not all
 
 RFC 0009 names more than the browser SDK has today. This guide leaves out what it lacks:
 
-- **Accounts and devices.** A person's second device joins the space as a member of its own account, as in step 10. Pairing a device into one account, and the account's recovery code, are in the Rust SDK ([its guide](getting-started.md), steps 9 and 10) but not yet in the TypeScript SDK.
+- **Accounts and devices.** A person's second device joins the space as a member of its own account, as in step 10. Pairing a device into one account is in the Rust SDK ([its guide](getting-started.md), step 9) but not yet in the TypeScript SDK. The account's recovery code is: `db.account.recoveryCode()` gives it until `confirm()` ([RFC 0009, "Accounts and devices"](rfc/0009-sdk-api.md#accounts-and-devices)).
 - **Node.js.** `nc.open` runs in a browser. The options `path`, `keyFile`, `inMemory` and `agent` of RFC 0009 are not there yet.
 - **`space.inspect` and `db.view`,** the details of a conflict and the progress of a view rebuild.
 - **The check of the model against the lock** in `nc.open`, which fails with `lockOutOfDate`. Until it comes, a model whose lock was not built again gives types the database does not keep.
