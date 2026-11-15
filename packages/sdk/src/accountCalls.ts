@@ -67,4 +67,16 @@ export const accountOf = (ask: Ask) => ({
     (await ask("account.completePairing", {
       answer: String(answer),
     })) as unknown as { readonly notices: readonly Notice[] },
+  removeMember: async (member: string, { recover }: { recover: string }) =>
+    (await ask("account.removeMember", {
+      member,
+      recover,
+    })) as unknown as {
+      readonly removed: readonly {
+        readonly space: string;
+        readonly notice: Notice;
+      }[];
+      readonly askAdmins: readonly string[];
+      readonly notice: Notice;
+    },
 });
