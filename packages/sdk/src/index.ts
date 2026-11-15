@@ -4,7 +4,7 @@ export function name(): string {
 }
 
 /** The account's recovery code (RFC 0009, "Accounts and devices"; NOC-316). */
-export type { PairingAnswer, RecoveryCode } from "./account.ts";
+export type { RecoveryCode } from "./account.ts";
 /** The TypeScript types of a database, a space and a transaction (RFC 0009, "Public names"; Carsten, 2026-11-12, NOC-274). */
 /** The TypeScript types of a query and its page (RFC 0009, "Public names"; NOC-176 slice 2). */
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
@@ -18,3 +18,5 @@ export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 /** The sync report (RFC 0009, "Sync and status"; NOC-176 slice 4). */
 export type { SyncStatus } from "./sync.ts";
+/** A pairing answer, which a device of the account hands a new one (RFC 0009, "Accounts and devices"; NOC-316). Its own line, so that the export of `RecoveryCode` above stays as it was. */
+export type PairingAnswer = import("./account.ts").PairingAnswer;
