@@ -388,7 +388,7 @@ pub(crate) fn io(what: &str, error: &std::io::Error) -> Error {
         }
         _ => ErrorCode::StorageFailed,
     };
-    Error::new(code, format!("{what}: {error}"))
+    Error::new(code, crate::texts::error::io_failed(what, error))
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

@@ -68,7 +68,7 @@ impl<'a> Persons<'a> {
             if !self.held.contains_key(&person.person_key) {
                 return Err(Error::new(
                     KEY_NOT_HELD,
-                    "the person's key is not held on this device yet",
+                    crate::texts::error::PERSON_KEY_NOT_HELD,
                 ));
             }
             return Ok(person.person_key);

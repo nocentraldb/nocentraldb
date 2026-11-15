@@ -222,7 +222,7 @@ impl<'a> Transaction<'a> {
         let fields = self.model.collections.get(collection).ok_or_else(|| {
             Error::new(
                 ErrorCode::NotFound,
-                format!("the model has no collection {collection}"),
+                crate::texts::error::no_such_collection(collection),
             )
         })?;
         values
@@ -231,17 +231,14 @@ impl<'a> Transaction<'a> {
                 if let Some((type_id, rule)) = self.model.unregistered_type(collection, name) {
                     return Err(Error::new(
                         ErrorCode::UnknownType,
-                        format!(
-                            "the field {name} of {collection} has the plugin type {type_id}, \
-                             rule {rule}, which no plugin given to OpenOptions::plugin implements"
-                        ),
+                        crate::texts::error::no_plugin(name, collection, type_id, rule),
                     ));
                 }
                 match fields.contains_key(name) && !name.starts_with('$') {
                     true => Ok((name.to_owned(), value)),
                     false => Err(Error::new(
                         ErrorCode::NotFound,
-                        format!("the collection {collection} has no field {name}"),
+                        crate::texts::error::no_such_field(collection, name),
                     )),
                 }
             })
@@ -396,7 +393,7 @@ fn person_link(
     let no_person = || {
         Error::new(
             ErrorCode::NoPerson,
-            format!("the person link {link} of {collection} is unset"),
+            crate::texts::error::person_link_unset(link, collection),
         )
     };
     let target = match intents.get(&(object, link.to_owned())) {
@@ -453,10 +450,7 @@ fn held(
     let not_found = || {
         Error::new(
             ErrorCode::NotFound,
-            format!(
-                "the copy holds no object {} in {collection}",
-                ObjectId(object)
-            ),
+            crate::texts::error::no_such_object(ObjectId(object), collection),
         )
     };
     let in_view = format!("{prefix}{collection}");

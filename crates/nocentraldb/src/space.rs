@@ -111,7 +111,7 @@ pub(crate) fn create_space(inner: &mut Inner, model: [u8; 16]) -> Result<CoreSpa
         .ok_or_else(|| {
             Error::new(
                 ErrorCode::NotAllowed,
-                "a database waiting to be paired creates no space until its pairing completes",
+                crate::texts::error::PAIRING_CREATES_NO_SPACE,
             )
         })?;
     let nonce = CoreObjectId::random().0;
@@ -171,17 +171,13 @@ pub(crate) fn writable_or_account(inner: &Inner, id: SpaceId) -> Result<(), Erro
 /// (`crate::account`).
 pub(crate) fn writable_by(inner: &Inner, space: CoreSpaceId, model: [u8; 16]) -> Result<(), Error> {
     let id = SpaceId(space);
-    let not_found = || Error::new(ErrorCode::NotFound, format!("the copy holds no space {id}"));
+    let not_found = || Error::new(ErrorCode::NotFound, crate::texts::error::no_such_space(id));
     let state = inner.spaces.get(&id.0).ok_or_else(not_found)?;
     let model_id = state.checks.model_id().ok_or_else(not_found)?;
     if SpaceModel::of(model_id, model) == SpaceModel::Another {
         return Err(Error::new(
             ErrorCode::SpaceOfAnotherModel,
-            format!(
-                "the space {id} is of the model {}, the lock is of the model {}",
-                hex(&model_id),
-                hex(&model)
-            ),
+            crate::texts::error::space_of_another_model(id, hex(&model_id), hex(&model)),
         ));
     }
     let generation = state.checks.resolved().current_generation();
@@ -199,7 +195,7 @@ pub(crate) fn not_stopped(inner: &Inner, id: SpaceId) -> Result<(), Error> {
     match crate::sync::stopped(inner, id.0) {
         true => Err(Error::new(
             ErrorCode::NotMember,
-            format!("the relay no longer serves this member the space {id}"),
+            crate::texts::error::relay_no_longer_serves(id),
         )),
         false => Ok(()),
     }
@@ -308,7 +304,12 @@ pub(crate) fn write_change(
     let collections: BTreeSet<String> = operations.iter().map(|op| op.collection.clone()).collect();
     allowed(inner)?;
     let resolved = inner.spaces[&space].checks.resolved();
-    holds(resolved, member.id(), Role::Writer, "writes content")?;
+    holds(
+        resolved,
+        member.id(),
+        Role::Writer,
+        crate::texts::part::DOING_WRITE,
+    )?;
     let wall = crate::clock::now_millis();
     let Inner {
         view,
@@ -330,7 +331,7 @@ pub(crate) fn write_change(
     let clock = state.clock.now(wall).map_err(|error| {
         Error::new(
             ErrorCode::StorageFailed,
-            format!("the space's clock: {error}"),
+            crate::texts::error::space_clock(error),
         )
     })?;
     let mut payload = Payload::new(clock, next.heads, operations);
@@ -409,7 +410,7 @@ impl Space {
         if !inner.model.collections.contains_key(collection) {
             return Err(Error::new(
                 ErrorCode::NotFound,
-                format!("the model has no collection {collection}"),
+                crate::texts::error::no_such_collection(collection),
             ));
         }
         Object::read(&inner, self.id.0, collection, id.0)

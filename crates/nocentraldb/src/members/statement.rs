@@ -45,7 +45,7 @@ pub(crate) fn carry(
     if !statement.verify() {
         return Err(Error::new(
             ErrorCode::InvalidValue,
-            "the account key statement does not verify",
+            crate::texts::error::STATEMENT_DOES_NOT_VERIFY,
         ));
     }
     let me = inner.member.key().id();

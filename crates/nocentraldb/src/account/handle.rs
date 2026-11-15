@@ -63,8 +63,12 @@ impl Account<'_> {
     /// `NotFound`, and this database's own member `InvalidValue`. Nothing
     /// is written when the call is refused.
     pub async fn remove_member(&self, member: MemberId, words: &str) -> Result<Removed, Error> {
-        let code = RecoveryCode::parse(words)
-            .map_err(|_| Error::new(ErrorCode::InvalidValue, "the words are no recovery code"))?;
+        let code = RecoveryCode::parse(words).map_err(|_| {
+            Error::new(
+                ErrorCode::InvalidValue,
+                crate::texts::error::NOT_ARECOVERY_CODE,
+            )
+        })?;
         let recovery = code.recovery_key();
         let (keys, home, statement, removal) = {
             let mut inner = lock(&self.db.inner);
@@ -73,14 +77,14 @@ impl Account<'_> {
                 _ => {
                     return Err(Error::new(
                         ErrorCode::NotAllowed,
-                        "only a device that holds the account key removes a member of the account",
+                        crate::texts::error::REMOVE_MEMBER_NEEDS_ACCOUNT_KEY,
                     ));
                 }
             };
             if recovery.public() != held.recovery_key {
                 return Err(Error::new(
                     ErrorCode::NotAllowed,
-                    "the recovery code is not this account's",
+                    crate::texts::error::RECOVERY_CODE_OF_ANOTHER_ACCOUNT,
                 ));
             }
             let number = held.number + 1;
@@ -88,8 +92,7 @@ impl Account<'_> {
             if statements(&inner)?.iter().any(|s| s.number >= number) {
                 return Err(Error::new(
                     ErrorCode::InvalidValue,
-                    "the account space already records a newer account key, \
-                     which this device has not taken yet",
+                    crate::texts::error::NEWER_ACCOUNT_KEY_NOT_TAKEN,
                 ));
             }
             let removal = remove_lost(&mut inner, member.0)?;
