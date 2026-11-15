@@ -62,6 +62,8 @@ async fn an_empty_code_is_stored_as_unknown_error() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_overlong_code_is_stored_as_unknown_error() {
-    let overlong: &'static str = "not_member".repeat(1000).leak();
+    // 2,000 characters: overlong for a code, and the relay's answer with
+    // one per change still fits into one message of 23 KiB (NOC-338).
+    let overlong: &'static str = "not_member".repeat(200).leak();
     assert_all(&stored(overlong).await, "unknown_error");
 }

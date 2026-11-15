@@ -91,7 +91,7 @@ Then follow steps 4 to 6 of the example's README: create a space, add tasks, inv
 
 Check two more things:
 
-- **A large change.** Add a task whose title is larger than 128 KiB. It goes up through a presigned S3 URL and comes down through another. Both devices show it.
+- **A large change.** Add a task whose title is larger than 22 KiB, such as 40 KiB. It goes up through a presigned S3 URL and comes down through another. Both devices show it.
 - **Message order.** API Gateway and Lambda do not promise that one connection's messages reach the function in order (#279, "Risk for NOC-272").
   1. Run `tasks $PHONE watch` while you add ten tasks quickly on the laptop.
   2. Every task arrives, and `tasks $LAPTOP sync` ends with nothing unconfirmed.

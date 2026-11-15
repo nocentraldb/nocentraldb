@@ -16,10 +16,33 @@ use ncdb_core::keys::MemberPublicKey;
 
 /// The largest message, in bytes, on every backend (RFC 0007, "Transport
 /// and encoding").
-pub const MAX_MESSAGE: usize = 128 * 1024;
+pub const MAX_MESSAGE: usize = 23 * 1024;
 
 /// The most frames one push carries (RFC 0007, "Transport and encoding").
 pub const MAX_PUSH: usize = 32;
+
+/// The largest text frame that carries a message: [`MAX_MESSAGE`] bytes
+/// as base64 (RFC 0007, "Transport and encoding"; NOC-338).
+pub const MAX_TEXT: usize = MAX_MESSAGE.div_ceil(3) * 4;
+
+/// The text frame that carries the message `bytes`: its standard base64,
+/// with padding. API Gateway's WebSocket APIs close a connection that sends
+/// a binary frame, so every relay and every member sends text (Carsten,
+/// 2026-11-15, NOC-338, option A).
+pub fn to_text(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
+}
+
+/// The message a text frame carries, or `None` when the text is no
+/// standard base64, or longer than [`MAX_TEXT`].
+pub fn from_text(text: &str) -> Option<Vec<u8>> {
+    use base64::Engine;
+    if text.len() > MAX_TEXT {
+        return None;
+    }
+    base64::engine::general_purpose::STANDARD.decode(text).ok()
+}
 
 /// The largest frame an entry carries inline: one whose entry still fits
 /// into one `entries` message. A larger one comes as a download URL.
