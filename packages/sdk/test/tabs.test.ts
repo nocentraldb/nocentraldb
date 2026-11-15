@@ -44,6 +44,7 @@ const fakeLocks = (): Platform["locks"] => {
 /** A worker that answers like the bridge, logs each call, and never answers the calls in `hold`. */
 const fakeWorker = (log: string[], hold: Set<string>) => {
   let listener: ((event: Uint8Array) => void) | undefined;
+  let stopped = false;
   const core: Core = {
     call: async (bytes) => {
       const { id, call } = decode(bytes) as { id: number; call: string };
@@ -60,13 +61,16 @@ const fakeWorker = (log: string[], hold: Set<string>) => {
           return encode({ id, ok: null });
       }
     },
-    terminate: () => {},
+    terminate: () => {
+      stopped = true;
+    },
     listen: (given) => {
       listener = given;
     },
   };
   return {
     core,
+    stopped: () => stopped,
     emit: (event: Record<string, unknown>) => listener?.(encode(event)),
   };
 };
@@ -77,12 +81,25 @@ const origin = () => {
   counter += 1;
   const name = `test-${counter}`;
   const locks = fakeLocks();
-  /** A tab: its core, the calls its own worker got, and the events it heard. */
+  /** A tab: its core, the calls its own worker got, the events it heard, whether its worker stopped, and its page, which a test hides and shows. */
   const tab = async (hold = new Set<string>()) => {
     const log: string[] = [];
     const heard: unknown[] = [];
     let worker: ReturnType<typeof fakeWorker> | undefined;
+    let visible = true;
+    const watchers: ((visible: boolean) => void)[] = [];
+    const page = {
+      visible: () => visible,
+      onVisibility: (listener: (visible: boolean) => void) => {
+        watchers.push(listener);
+      },
+    };
+    const show = (now: boolean) => {
+      visible = now;
+      for (const watcher of watchers) watcher(now);
+    };
     const core = await tabCore(name, {
+      page,
       locks,
       channel: (channel) =>
         new BroadcastChannel(channel) as unknown as ReturnType<
@@ -94,7 +111,14 @@ const origin = () => {
       },
     });
     core.listen((bytes) => heard.push(decode(bytes)));
-    return { core, log, heard, worker: () => worker };
+    return {
+      core,
+      log,
+      heard,
+      worker: () => worker,
+      hide: () => show(false),
+      show: () => show(true),
+    };
   };
   return { tab };
 };
@@ -245,4 +269,85 @@ test("a follower's open names the owner's relay, which serves every tab", async 
     sync: { connection: "none" },
     relay: "ws://owner",
   });
+});
+
+// NOC-332: a phone freezes a hidden tab but leaves it the lock, so the
+// owner gives up the database when its page is hidden, and the visible tab
+// takes over.
+
+test("a hidden owner gives up the database, and the visible tab takes it over and runs its write", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  const second = await tab();
+  await ask(second.core, "open", { lock: LOCK });
+  first.hide();
+  await until(() => second.log.includes("open"));
+  expect((await ask(second.core, "write", { space: "s", ops: [] })).ok).toEqual(
+    {
+      change: "c",
+      ids: [],
+    },
+  );
+  expect(second.log).toContain("write");
+  expect(first.log).not.toContain("write");
+});
+
+test("a hidden owner first answers the calls it already took", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  const second = await tab();
+  await ask(second.core, "open", { lock: LOCK });
+  const write = ask(second.core, "write", { space: "s", ops: [] });
+  await until(() => first.log.includes("write"));
+  first.hide();
+  expect((await write).ok).toEqual({ change: "c", ids: [] });
+  expect(second.log.filter((call) => call === "write")).toEqual([]);
+});
+
+test("a hidden tab does not take the database over; a visible one does", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  const hidden = await tab();
+  await ask(hidden.core, "open", { lock: LOCK });
+  hidden.hide();
+  const visible = await tab();
+  await ask(visible.core, "open", { lock: LOCK });
+  first.hide();
+  await until(() => visible.log.includes("open"));
+  expect(hidden.log).not.toContain("open");
+});
+
+test("with every tab hidden, a tab that calls takes the database over", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  const second = await tab();
+  await ask(second.core, "open", { lock: LOCK });
+  second.hide();
+  first.hide();
+  expect((await ask(second.core, "spaces.list")).ok).toEqual([]);
+  expect(second.log).toContain("open");
+});
+
+test("an owner shown again takes the database back when no other tab holds it", async () => {
+  const { tab } = origin();
+  const only = await tab();
+  await ask(only.core, "open", { lock: LOCK });
+  only.hide();
+  await settle();
+  only.show();
+  expect((await ask(only.core, "spaces.list")).ok).toEqual([]);
+  expect(only.log.filter((call) => call === "open")).toEqual(["open", "open"]);
+});
+
+test("an owner with no call in flight gives the database up inside the hide handler, before a phone can freeze it", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  first.hide();
+  // No await: a frozen page runs nothing after its visibilitychange handler.
+  expect(first.worker()?.stopped()).toBe(true);
 });

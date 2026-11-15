@@ -1,0 +1,6 @@
+# 2026-11-15 · NOC-333 · A hidden owner tab gives the database up
+
+- Decided by: Carsten, 2026-11-15, on NOC-333 (A)
+- Why: a phone freezes a hidden tab but leaves it its Web Lock, and its worker keeps the OPFS access handles, so the tab that owned the database held every other tab's calls until it woke, and a write that waited there ended "may or may not have run" when it closed (NOC-332). The owner now gives the database up when its tab is hidden (`visibilitychange`, `pagehide`): it answers the calls it already took, tells the other tabs, closes the database and releases the lock, at once when nothing is in flight. A tab waits for the lock only while visible or with calls to send, so the visible tab takes over and runs its writes at once. A call that reaches a tab that no longer owns the database is declined and goes to the next owner. A hidden tab syncs only while it owns the database. RFC 0006's "The browser" says so.
+- Instead of: writes carrying an id the core deduplicates, so a new owner runs an unanswered write exactly once (B), which alone does not free a frozen owner's lock and needs core work; and both (C). B stays a possible follow-up if A is not enough.
+- Topics: browser, sdk-ts, tabs

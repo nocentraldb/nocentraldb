@@ -349,7 +349,17 @@ A reader refuses the text with `invalidValue`, and reads nothing from it, when t
 
 It is 66 bytes, about 90 characters as text, and a reader refuses it with `invalidValue` when its kind is not `1` or `2` or its length is not 66. Only pairing accepts it: an admin's `members.add` refuses it with `invalidCertificate`, because a member without a certificate cannot join a space. Version 1 stays as it is. Changing version 1, with a byte after the kind that says whether a certificate follows, was not taken: readers already written would refuse the new form.
 
-`docs/rfc/vectors/0003/` holds three invitations, version 1 without and with a statement and version 2, as text and as bytes, with every field in `fields.txt`; both SDKs check them. A fixed layout was taken because it is compact enough for a QR code and has one way to write each invitation. JSON with hex fields was not taken: about twice as long, so a QR code gets dense, and with more than one way to write the same invitation. CBOR was not taken either: the certificate's own canonical map would carry its keys a second time, and a person or a parser could not tell an invitation from other CBOR without a prefix anyway.
+**Version 3: a sub-agent before its parent adds it.** A sub-agent's database holds no account and no certificate; its parent agent signs its certificate when it adds it to a space ([Sub-agents get an ad-hoc space](#sub-agents-get-an-ad-hoc-space); [Member certificate](#member-certificate)). Its invitation is version 3, under the same prefix (Carsten, 2026-11-15, NOC-320 Q1):
+
+| Offset | Length | Field | Bytes |
+| --- | --- | --- | --- |
+| 0 | 1 | version | `3` |
+| 1 | 32 | signing key | the member's Ed25519 public key |
+| 33 | 32 | agreement key | the member's X25519 public key |
+
+It is 65 bytes, about 90 characters as text, and a reader refuses it with `invalidValue` when its length is not 65. It carries no kind: version 3 is always a sub-agent. Its fingerprint is the member's own, as version 2's is, since its account is its parent's and the parent compares nothing. Only an agent's `members.add` takes it, refusing it on a device's or a sub-agent's database with `notAllowed`; pairing refuses it, because a sub-agent is never paired into an account. Version 2 with kind `3` was not taken: version 2 means a member asking to be paired, which pairing would then have to refuse by its kind rather than by its version.
+
+`docs/rfc/vectors/0003/` holds four invitations, version 1 without and with a statement, version 2 and version 3, as text and as bytes, with every field in `fields.txt`; both SDKs check them. A fixed layout was taken because it is compact enough for a QR code and has one way to write each invitation. JSON with hex fields was not taken: about twice as long, so a QR code gets dense, and with more than one way to write the same invitation. CBOR was not taken either: the certificate's own canonical map would carry its keys a second time, and a person or a parser could not tell an invitation from other CBOR without a prefix anyway.
 
 ### Account sign-off of a shred
 
