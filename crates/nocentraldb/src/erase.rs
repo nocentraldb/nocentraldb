@@ -12,7 +12,9 @@
 //! 2. [`Account::sign_off`] on a device of another account, or of the
 //!    performer's own account in a space whose members all belong to it
 //!    (Q4), signs each space where its account may sign off by RFC 0008,
-//!    checked against its own copy of the space, and names the others:
+//!    checked against its own copy of the space, and a space it does not
+//!    hold only for an agent of its own account, by the certificate the
+//!    request carries (pm, NOC-325); it names the others:
 //!    [`SignOffs`], whose text is `ncdb-sign-off-1:` and unpadded
 //!    base64url of its layout.
 //! 3. [`Db::erase`] checks every sign-off against the space first, and
@@ -22,7 +24,9 @@
 //!    (Q6).
 //!
 //! The layouts: a request is version 1 (one byte), the performer's member
-//! id (32 bytes), the number of entries (two bytes, big-endian), and per
+//! id (32 bytes), the length of its certificate (two bytes, big-endian) and
+//! the certificate, as RFC 0003 encodes it, the number of entries (two
+//! bytes), and per
 //! entry the space id and the person-key id (16 bytes each), in order of
 //! space and person key. Sign-offs are version 1, the number of entries,
 //! and per entry the space id, the person-key id, the account key (32
@@ -34,7 +38,7 @@ use std::str::FromStr;
 
 use data_encoding::BASE64URL_NOPAD;
 use ncdb_core::ids::{MemberId as CoreMemberId, SpaceId as CoreSpaceId};
-use ncdb_core::membership::{Resolved, Role, SignOff, SignedOff};
+use ncdb_core::membership::{Certificate, MemberKind, Resolved, Role, SignOff, SignedOff};
 
 use crate::db::{Db, lock};
 use crate::error::{Error, ErrorCode};
@@ -63,6 +67,10 @@ pub(crate) const ERASED: Notice = Notice {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ErasureRequest {
     performer: CoreMemberId,
+    /// The performer's certificate, public as in an invitation, so that a
+    /// device of its account can sign off a space of agents it does not
+    /// hold (pm, NOC-325).
+    certificate: Option<Certificate>,
     /// Each space with a person key of the person, in order.
     keys: BTreeSet<(CoreSpaceId, [u8; 16])>,
 }
@@ -76,6 +84,13 @@ impl ErasureRequest {
     fn bytes(&self) -> Vec<u8> {
         let mut bytes = vec![VERSION];
         bytes.extend(self.performer.0);
+        let certificate = self
+            .certificate
+            .as_ref()
+            .map(Certificate::encode)
+            .unwrap_or_default();
+        bytes.extend((certificate.len() as u16).to_be_bytes());
+        bytes.extend(certificate);
         bytes.extend((self.keys.len() as u16).to_be_bytes());
         for (space, key) in &self.keys {
             bytes.extend(space.0);
@@ -90,6 +105,15 @@ impl ErasureRequest {
             return Err("its version is not 1");
         }
         let (performer, rest) = rest.split_at_checked(32).ok_or("it is too short")?;
+        let (length, rest) = rest.split_at_checked(2).ok_or("it is too short")?;
+        let length = u16::from_be_bytes([length[0], length[1]]) as usize;
+        let (certificate, rest) = rest.split_at_checked(length).ok_or("it is too short")?;
+        let certificate = match certificate.is_empty() {
+            true => None,
+            false => {
+                Some(Certificate::decode(certificate).map_err(|_| "its certificate is not one")?)
+            }
+        };
         let (count, mut rest) = rest.split_at_checked(2).ok_or("it is too short")?;
         let count = u16::from_be_bytes([count[0], count[1]]) as usize;
         if rest.len() != count * 32 {
@@ -106,6 +130,7 @@ impl ErasureRequest {
         }
         Ok(ErasureRequest {
             performer: CoreMemberId(performer.try_into().expect("32 bytes")),
+            certificate,
             keys,
         })
     }
@@ -276,6 +301,25 @@ pub struct Erased {
 /// sign-offs, and whether the shreds are provisional.
 type Planned = (CoreSpaceId, Vec<([u8; 16], SignOff)>, bool);
 
+/// Whether the request's performer is an agent of the account `account`,
+/// by the certificate the request carries: it names the performer, is an
+/// agent's, and is signed with `account` (pm, NOC-325, on the coding
+/// agent's proposal, carrying out the owner's NOC-326 Q4). A device signs
+/// a space it does not hold only for such a performer: its sign-off holds
+/// only where every member belongs to the account, and makes the erasure
+/// provisional; the performer's `Db::erase` checks it before it writes.
+/// A sub-agent's certificate is signed by its parent, so it does not
+/// qualify.
+fn own_agent(request: &ErasureRequest, account: &ed25519_dalek::SigningKey) -> bool {
+    let account = account.verifying_key().to_bytes();
+    request.certificate.as_ref().is_some_and(|certificate| {
+        certificate.member == request.performer
+            && certificate.kind == MemberKind::Agent
+            && certificate.account_key == account
+            && certificate.verify(&account)
+    })
+}
+
 /// Whether the person key `key` of `resolved` exists and is not erased.
 fn live(resolved: &Resolved, key: [u8; 16]) -> bool {
     resolved.person_key(key).is_some_and(|held| !held.erased())
@@ -312,6 +356,7 @@ impl Db {
         }
         Ok(ErasureRequest {
             performer: me,
+            certificate: inner.account.certificate(me, inner.kind),
             keys,
         })
     }
@@ -428,13 +473,14 @@ impl Account<'_> {
         let mut not_signed = BTreeSet::new();
         for (space, person_key) in &request.keys {
             let sign_off = SignOff::sign(key, *space, *person_key, request.performer);
-            let holds = inner.spaces.get(space).is_some_and(|state| {
-                state
+            let holds = match inner.spaces.get(space) {
+                Some(state) => state
                     .checks
                     .resolved()
                     .sign_off(*space, request.performer, *person_key, &sign_off)
-                    .is_some()
-            });
+                    .is_some(),
+                None => own_agent(request, key),
+            };
             if holds {
                 sign_offs.insert((*space, *person_key), sign_off);
             } else {
