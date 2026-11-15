@@ -7,6 +7,13 @@
 // the vitest tests pass a fake core to `connect`.
 
 import { type Cbor, decode, encode } from "./cbor.ts";
+import {
+  type Change,
+  type Fold,
+  flatten,
+  randomId,
+  type Subscription,
+} from "./connectParts.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
@@ -673,41 +680,4 @@ export const connect = async (
       }
     },
   };
-};
-
-/** One fold the core reports: its space, the collections whose reads it may have changed, and the ids it touched per collection with their origin. */
-type Fold = {
-  space: string;
-  collections: string[];
-  changes?: {
-    collection: string;
-    ids: string[];
-    origin: "local" | "remote";
-  }[];
-};
-
-/** What `db.changes.subscribe` gives a listener. */
-type Change = Parameters<Parameters<Db["changes"]["subscribe"]>[0]>[0];
-
-/** A read a subscription re-runs, and what it follows. */
-type Subscription = {
-  collection: string;
-  space: string | undefined;
-  run: () => Promise<void>;
-  running: boolean;
-  again: boolean;
-};
-
-/** An object as the core answers it, with its fields beside `$id`, `$space` and `$deleted`. */
-const flatten = ({
-  fields,
-  ...rest
-}: {
-  fields: Record<string, unknown>;
-}): Record<string, unknown> => ({ ...rest, ...fields });
-
-/** 128 random bits from the browser's secure generator, as 32 hex digits (RFC 0002, "Object ids"). */
-const randomId = (): Id => {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
 };
