@@ -66,6 +66,13 @@
 //! `{"space": id}`, the audit of the space's erasures (RFC 0009,
 //! "Erasures").
 //!
+//! The calls of NOC-315, slice 3 (RFC 0006, "What the SDK reports"; RFC
+//! 0009, "Sync and status"), in `reports.rs`: `open` also answers
+//! `"durability"` and `"view"`; `durability` `{}` reads again whether the
+//! browser keeps the copy persistent and answers the durability; `view`
+//! `{}` answers the view's report. A `durability` or `view` event follows
+//! each change.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -84,6 +91,7 @@
 mod erasures;
 mod events;
 mod members;
+mod reports;
 #[cfg(test)]
 mod tests;
 
@@ -213,6 +221,11 @@ impl Bridge {
                 Ok(Value::Null)
             }
             "erasures.list" => erasures::list(&db, args).await,
+            "durability" => {
+                db.refresh_storage().await;
+                Ok(reports::durability(&db.durability()))
+            }
+            "view" => Ok(reports::view(&db.view().current())),
             "find" => self.find(&db, args).await,
             "invitation" => members::invitation(&db).await,
             "members.add" => members::add(&db, args).await,
@@ -293,14 +306,22 @@ impl Bridge {
         }
         let db = Db::open(options).await?;
         let (status, sync) = db.sync().watch();
+        let (durability, durability_watch) = db.durability_watch();
+        let (view, view_watch) = db.view().watch();
         self.events = Some(Events {
             feed: db.folds(),
             sync: Arc::new(Mutex::new(sync)),
             spaces: Arc::new(Mutex::new(BTreeMap::new())),
             list: Arc::new(Mutex::new(None)),
+            durability: Arc::new(Mutex::new(durability_watch)),
+            view: Arc::new(Mutex::new(view_watch)),
         });
         self.db = Some(db);
-        Ok(entries([("sync", sync_status(&status))]))
+        Ok(entries([
+            ("sync", sync_status(&status)),
+            ("durability", reports::durability(&durability)),
+            ("view", reports::view(&view)),
+        ]))
     }
 }
 

@@ -535,7 +535,7 @@ An unknown relay code is shown as `unknown_error` because a faulty or hostile re
 
 **Durability** is RFC 0006's `db.durability`, unchanged: `current()`, `subscribe(listener)` and `requestPersistent()`, with `storage`, `unconfirmed`, `oldestUnconfirmedAt` and `atRisk` ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). It is on every target; natively `storage` is `"persistent"`.
 
-**`db.view`**, a report of the view itself: whether a rebuild runs and how far it is ([RFC 0006, "What a rebuild costs"](0006-local-view.md#what-a-rebuild-costs)).
+**`db.view`**, a report of the view itself: whether a rebuild runs and how far it is ([RFC 0006, "What a rebuild costs"](0006-local-view.md#what-a-rebuild-costs)). In TypeScript its value is `{ rebuild: { folded, total } | null }`, Rust's `ViewStatus` in camelCase, with `rebuild` null while no rebuild runs (Carsten, 2026-11-14, NOC-317).
 
 **Confirmation of one write.** `write` resolves on the device. An app that must know when the relay holds a change reads `db.sync.isConfirmed(result.change)` or waits for it with `db.sync.confirmed(result.change)`, a promise that resolves when the relay records a position for it. It may never resolve: the relay can refuse the change, or never be reached.
 

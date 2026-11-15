@@ -92,7 +92,7 @@ pub(crate) async fn place(name: &str, new: impl FnOnce() -> Keys) -> Result<Plac
 /// worker's `navigator.storage.persisted()`. The page asks for it, since a
 /// worker cannot (RFC 0006, "What the SDK reports"); `false` when the
 /// browser does not say.
-async fn persisted() -> bool {
+pub(crate) async fn persisted() -> bool {
     let call = || -> Option<Promise> {
         let navigator = Reflect::get(&js_sys::global(), &JsValue::from_str("navigator")).ok()?;
         let storage = Reflect::get(&navigator, &JsValue::from_str("storage")).ok()?;

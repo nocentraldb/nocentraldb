@@ -8,6 +8,7 @@ use super::Bridge;
 mod erasures;
 mod find;
 mod members;
+mod reports;
 mod spaces;
 mod sync;
 
