@@ -240,9 +240,15 @@ addEventListener("pagehide", stop);
 
 Open the page in a second tab. Both tabs open the database of the same name, and the SDK makes them share it: one tab owns the database and runs its worker, and the other reaches it through that tab. Nothing in your code changes. A write in one tab shows in the other's subscriptions, and when the owning tab closes, another tab takes the database over without losing a write.
 
+When the owning tab is hidden, as when a person switches tabs on a phone, it gives the database up, and the visible tab takes it over, so a phone that freezes the hidden tab does not hold the visible tab's writes. Safari has a limit here, which the end of this step describes.
+
 Every tab must open it with the same lock. A tab that opens it with another lock, such as an old tab after you deployed a new version of the page, fails with `modelRefused`; reloading that tab loads the new version.
 
 So a page opens the database once per tab, by name, as above. One browser holds one database at a time per origin: while a tab has one open, a page of the same origin that opens another name fails. A second member, as in the next steps, is a second browser, or a second profile of the same browser.
+
+### A frozen tab in Safari
+
+In Safari a tab can give the database's storage back only while it still runs. A phone may freeze a hidden tab right after it gave the database up, before it gave the storage back. The visible tab then cannot open the database yet: its writes wait, and run once the frozen tab runs again. They are not lost, and they do not fail. In Chromium and Firefox the visible tab takes over while the hidden tab is frozen.
 
 ## 9. Sync through a relay
 
