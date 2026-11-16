@@ -134,7 +134,7 @@ pub(crate) const NAME_KIND_VIEW: &str =
 /// model check` refuses a model that breaks a rule on its own: a name breaks
 /// the naming rules. `kind` is a core.nameKind text; `name` is the name, after
 /// its collection's for a name in a collection. Opening with such a lock shows
-/// error.lockInvalid, which does not print this text.
+/// it after error.lockInvalid's colon.
 pub(crate) fn refusal_bad_name(kind: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
     format!("{kind} {name}: the name breaks the naming rules.\u{a}A name starts with a lower-case letter and has at most 63 ASCII letters and digits.")
 }
@@ -166,8 +166,8 @@ pub(crate) fn refusal_config_changed(collection: impl std::fmt::Display, field: 
 
 /// `refusalDuplicateOption`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a choice
-/// lists an option twice. Opening with such a lock shows error.lockInvalid,
-/// which does not print this text.
+/// lists an option twice. Opening with such a lock shows it after
+/// error.lockInvalid's colon.
 pub(crate) fn refusal_duplicate_option(collection: impl std::fmt::Display, field: impl std::fmt::Display, option: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: option {option} is listed twice.")
 }
@@ -185,7 +185,7 @@ pub(crate) fn refusal_field_removed(collection: impl std::fmt::Display, field: i
 /// `refusalIndexEqualTooLarge`: Under the lock's name, when `ncdb model build`
 /// or `ncdb model check` refuses a model that breaks a rule on its own: an
 /// index's equal is larger than its number of fields. Opening with such a lock
-/// shows error.lockInvalid, which does not print this text.
+/// shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_index_equal_too_large(collection: impl std::fmt::Display, index: impl std::fmt::Display, equal: impl std::fmt::Display, fields: impl std::fmt::Display) -> String {
     format!("index {collection}.{index}: equal is {equal}, but the index has {fields} fields.\u{a}No query could fix more fields than the index has.")
 }
@@ -193,7 +193,7 @@ pub(crate) fn refusal_index_equal_too_large(collection: impl std::fmt::Display, 
 /// `refusalIndexNotIndexable`: Under the lock's name, when `ncdb model build`
 /// or `ncdb model check` refuses a model that breaks a rule on its own: an
 /// index names a field of a type that cannot be indexed. Opening with such a
-/// lock shows error.lockInvalid, which does not print this text.
+/// lock shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_index_not_indexable(collection: impl std::fmt::Display, index: impl std::fmt::Display, field: impl std::fmt::Display, type_id: impl std::fmt::Display) -> String {
     format!("index {collection}.{index}: {collection}.{field} is {type_id}, which cannot be indexed.\u{a}An index can use basic values and single links (nc.link).")
 }
@@ -201,7 +201,7 @@ pub(crate) fn refusal_index_not_indexable(collection: impl std::fmt::Display, in
 /// `refusalIndexUnknownField`: Under the lock's name, when `ncdb model build`
 /// or `ncdb model check` refuses a model that breaks a rule on its own: an
 /// index names a field its collection does not have. Opening with such a lock
-/// shows error.lockInvalid, which does not print this text.
+/// shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_index_unknown_field(collection: impl std::fmt::Display, index: impl std::fmt::Display, field: impl std::fmt::Display) -> String {
     format!("index {collection}.{index}: {collection} has no field {field}.")
 }
@@ -226,8 +226,8 @@ pub(crate) fn refusal_marked_personal(collection: impl std::fmt::Display, field:
 /// `refusalNameClash`: Under the lock's name, when `ncdb model build` or `ncdb
 /// model check` refuses a model that breaks a rule on its own: two names in one
 /// scope are equal, or differ only in case. `kind` and `other_kind` are
-/// core.nameKind texts. Opening with such a lock shows error.lockInvalid, which
-/// does not print this text.
+/// core.nameKind texts. Opening with such a lock shows it after
+/// error.lockInvalid's colon.
 pub(crate) fn refusal_name_clash(kind: impl std::fmt::Display, name: impl std::fmt::Display, other_kind: impl std::fmt::Display, other: impl std::fmt::Display) -> String {
     format!("{kind} {name}: the name collides with the {other_kind} {other}.\u{a}Names in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.")
 }
@@ -266,7 +266,7 @@ pub(crate) fn refusal_person_changed(collection: impl std::fmt::Display, field: 
 /// `refusalPersonLinkPersonal`: Under the lock's name, when `ncdb model build`
 /// or `ncdb model check` refuses a model that breaks a rule on its own: a
 /// personal field's person is a link field that is itself personal. Opening
-/// with such a lock shows error.lockInvalid, which does not print this text.
+/// with such a lock shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_person_link_personal(collection: impl std::fmt::Display, field: impl std::fmt::Display, person: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: personal to {collection}.{person}, which is itself personal.\u{a}The link that names the person must stay readable, so the SDK can find the person's key.")
 }
@@ -274,7 +274,7 @@ pub(crate) fn refusal_person_link_personal(collection: impl std::fmt::Display, f
 /// `refusalPersonNotLink`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a personal
 /// field's person is no link field of its collection. Opening with such a lock
-/// shows error.lockInvalid, which does not print this text.
+/// shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_person_not_link(collection: impl std::fmt::Display, field: impl std::fmt::Display, person: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: personal to {person}, which is no link field of {collection}.\u{a}person is \"self\" or the name of an nc.link field of {collection}.")
 }
@@ -282,7 +282,7 @@ pub(crate) fn refusal_person_not_link(collection: impl std::fmt::Display, field:
 /// `refusalPersonalNotBasic`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a field of
 /// a type that cannot be personal is marked personal. Opening with such a lock
-/// shows error.lockInvalid, which does not print this text.
+/// shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_personal_not_basic(collection: impl std::fmt::Display, field: impl std::fmt::Display, type_id: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: {type_id} cannot be personal.\u{a}Only basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.")
 }
@@ -323,7 +323,7 @@ pub(crate) fn refusal_undeprecated(collection: impl std::fmt::Display, field: im
 /// `refusalUnknownPlugin`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a plugin
 /// field type's namespace is not in the model's plugins. Opening with such a
-/// lock shows error.lockInvalid, which does not print this text.
+/// lock shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_unknown_plugin(collection: impl std::fmt::Display, field: impl std::fmt::Display, type_id: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: {type_id} names no plugin of the model.\u{a}A plugin's field type needs its namespace in plugins.")
 }
@@ -331,16 +331,15 @@ pub(crate) fn refusal_unknown_plugin(collection: impl std::fmt::Display, field: 
 /// `refusalUnknownRule`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a built-in
 /// field type names a rule version this core does not know. `known` is the one
-/// it knows. Opening with such a lock shows error.lockInvalid, which does not
-/// print this text.
+/// it knows. Opening with such a lock shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_unknown_rule(collection: impl std::fmt::Display, field: impl std::fmt::Display, type_id: impl std::fmt::Display, rule: impl std::fmt::Display, known: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: {type_id} has no rule version {rule}.\u{a}This version knows rule version {known} of every built-in type.")
 }
 
 /// `refusalUnknownTarget`: Under the lock's name, when `ncdb model build` or
 /// `ncdb model check` refuses a model that breaks a rule on its own: a link's
-/// target is no collection of the model. Opening with such a lock shows
-/// error.lockInvalid, which does not print this text.
+/// target is no collection of the model. Opening with such a lock shows it
+/// after error.lockInvalid's colon.
 pub(crate) fn refusal_unknown_target(collection: impl std::fmt::Display, field: impl std::fmt::Display, target: impl std::fmt::Display) -> String {
     format!("{collection}.{field}: target {target} is no collection of the model.")
 }

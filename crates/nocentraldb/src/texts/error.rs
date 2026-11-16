@@ -218,9 +218,10 @@ pub(crate) const LAST_ADMIN_LOWERS_ROLE: &str =
     "the space's last admin may not lower its own role";
 
 /// `lockInvalid` (modelRefused): Opening, when the lock breaks the rules RFC
-/// 0005 gives a lock; the core's finding follows.
-pub(crate) fn lock_invalid(invalid: impl std::fmt::Debug) -> String {
-    format!("the lock is refused: {invalid:?}")
+/// 0005 gives a lock: the lock's refusals follow, one core.refusal* text after
+/// another, or a core.viewInvalid* text.
+pub(crate) fn lock_invalid(invalid: impl std::fmt::Display) -> String {
+    format!("the lock is refused: {invalid}")
 }
 
 /// `lockRefused` (modelRefused): Opening, when the lock cannot be read; the

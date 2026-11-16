@@ -112,10 +112,46 @@ pub(crate) fn view_format(found: impl std::fmt::Display, writes: impl std::fmt::
 }
 
 /// `viewInvalid`: The core's reason when the model cannot be folded into a
-/// view; `invalid` is the core's finding in its Debug form. Not shown to a
-/// developer today: opening replaces it with error.lockInvalid.
-pub(crate) fn view_invalid(invalid: impl std::fmt::Debug) -> String {
-    format!("the model cannot be folded: {invalid:?}")
+/// view; `invalid` is the lock's refusals, one core.refusal* text after
+/// another, or a core.viewInvalid* text. Not shown to a developer today:
+/// opening replaces it with error.lockInvalid.
+pub(crate) fn view_invalid(invalid: impl std::fmt::Display) -> String {
+    format!("the model cannot be folded: {invalid}")
+}
+
+/// `viewInvalidDuplicateIndex`: Two indexes of one collection share a name:
+/// from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock
+/// that `ncdb model build` wrote does not reach it.
+pub(crate) fn view_invalid_duplicate_index(collection: impl std::fmt::Display, index: impl std::fmt::Display) -> String {
+    format!("index {collection}.{index} is declared twice.")
+}
+
+/// `viewInvalidEquality`: An index's equal is larger than its number of fields:
+/// from opening (Db::open; nc.open), after error.lockInvalid's colon; a lock
+/// that `ncdb model build` wrote does not reach it.
+pub(crate) fn view_invalid_equality(index: impl std::fmt::Display) -> String {
+    format!("index {index} fixes more fields with equality than it orders by.")
+}
+
+/// `viewInvalidReservedId`: The lock has the model.id of the model the SDK
+/// ships (its accounts), so a space could not say which of the two it folds by:
+/// from opening (Db::open; nc.open), after error.lockInvalid's colon.
+pub(crate) const VIEW_INVALID_RESERVED_ID: &str =
+    "model.id is the id of the model the SDK ships; the app's model needs an id of its own.";
+
+/// `viewInvalidUnknownCollection`: An index names a collection the model does
+/// not have: from opening (Db::open; nc.open), after error.lockInvalid's colon;
+/// a lock that `ncdb model build` wrote does not reach it.
+pub(crate) fn view_invalid_unknown_collection(index: impl std::fmt::Display) -> String {
+    format!("index {index} names a collection the model does not have.")
+}
+
+/// `viewInvalidUnsortableKey`: An index orders by a field its collection does
+/// not have, or by one without a single sortable value: from opening (Db::open;
+/// nc.open), after error.lockInvalid's colon; a lock that `ncdb model build`
+/// wrote does not reach it.
+pub(crate) fn view_invalid_unsortable_key(index: impl std::fmt::Display) -> String {
+    format!("index {index} orders by a field without a single sortable value.")
 }
 
 /// `viewModel`: The core's reason when the database's view was folded by
@@ -136,9 +172,9 @@ pub(crate) fn view_opfs(error: impl std::fmt::Display) -> String {
     format!("OPFS could not be opened: {error}")
 }
 
-/// `viewPlan`: After error.viewFailed's colon, from opening (Db::open;
-/// nc.open), when a declared index's lookup would not run through it, or would
-/// sort in a temporary B-tree; `index` is <collection>.<index>.
+/// `viewPlan`: The whole error of opening (modelRefused; Db::open, nc.open)
+/// when a declared index's lookup would not run through it, or would sort in a
+/// temporary B-tree; `index` is <collection>.<index>.
 pub(crate) fn view_plan(index: impl std::fmt::Display) -> String {
     format!("the lookup of index {index} does not run through it")
 }

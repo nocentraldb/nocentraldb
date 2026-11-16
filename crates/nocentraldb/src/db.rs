@@ -213,16 +213,17 @@ fn exists(file: &Path) -> Result<bool, Error> {
 
 /// A view that does not open: a lock it cannot fold, one that is not a
 /// successor of the lock the database was last opened with (RFC 0005,
-/// D11), naming each refused change, or a database that holds no lock to
-/// check it against and was folded by another model, is `ModelRefused`;
-/// any other failure a failure of storage.
+/// D11), naming each refused change, a declared index whose lookup would
+/// not run through it (RFC 0006, "The check"), or a database that holds no
+/// lock to check it against and was folded by another model, is
+/// `ModelRefused`; any other failure a failure of storage.
 fn view_error(error: ncdb_core::view::Error) -> Error {
     match error {
         ncdb_core::view::Error::Invalid(invalid) => Error::new(
             ErrorCode::ModelRefused,
             crate::texts::error::lock_invalid(invalid),
         ),
-        error @ ncdb_core::view::Error::Refused(_) => {
+        error @ (ncdb_core::view::Error::Refused(_) | ncdb_core::view::Error::Plan(_)) => {
             Error::new(ErrorCode::ModelRefused, error.to_string())
         }
         ncdb_core::view::Error::Model => Error::new(
