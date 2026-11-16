@@ -138,6 +138,23 @@ const MODULES = {
   notice: "The texts of [`crate::Notice`], by code.",
   error: "The messages of [`crate::Error`], by name.",
   part: "Pieces of the messages of [`crate::Error`], such as a reason.",
+  bridge:
+    "The bridge's own messages of [`crate::Error`], for a request the TypeScript SDK sent malformed (T3).",
+};
+
+/** The bridge's errors, `error.bridge<Name>`, have a file of their own (T3). */
+const BRIDGE = /^bridge[A-Z]/;
+
+/** The generated file of `entry`: its kind's, or `bridge` for the bridge's errors. */
+const fileOf = (entry) =>
+  entry.kind === "error" && BRIDGE.test(nameOf(entry)) ? "bridge" : entry.kind;
+
+/** The name `entry` has in its file: a bridge error's without `bridge`. */
+const itemName = (entry) => {
+  const name = nameOf(entry);
+  return fileOf(entry) === "bridge"
+    ? name[6].toLowerCase() + name.slice(7)
+    : name;
 };
 
 const GENERATED = [
@@ -152,7 +169,9 @@ const GENERATED = [
  */
 export const generate = (texts) => {
   const files = {};
-  const kinds = SDK_KINDS.filter((kind) => texts.some((t) => t.kind === kind));
+  const kinds = [...SDK_KINDS, "bridge"].filter((kind) =>
+    texts.some((t) => SDK_KINDS.includes(t.kind) && fileOf(t) === kind),
+  );
   files["mod.rs"] = [
     ...GENERATED,
     "//! Every text a developer reads from the SDK, from texts/texts.json",
@@ -170,7 +189,7 @@ export const generate = (texts) => {
   for (const kind of kinds) {
     const out = [...GENERATED, `//! ${MODULES[kind]}`];
     texts
-      .filter((t) => t.kind === kind)
+      .filter((t) => SDK_KINDS.includes(t.kind) && fileOf(t) === kind)
       .forEach((entry) => {
         out.push("");
         // A notice's name is its code.
@@ -178,7 +197,7 @@ export const generate = (texts) => {
         out.push(doc(`\`${nameOf(entry)}\`${code}: ${entry.when}`, ""));
         const params = placeholders(entry.text);
         if (params.length === 0) {
-          out.push(`pub(crate) const ${constName(nameOf(entry))}: &str =`);
+          out.push(`pub(crate) const ${constName(itemName(entry))}: &str =`);
           out.push(`    ${rustString(entry.text)};`);
         } else {
           const args = params
@@ -188,7 +207,7 @@ export const generate = (texts) => {
             )
             .join(", ");
           out.push(
-            `pub(crate) fn ${fnName(nameOf(entry))}(${args}) -> String {`,
+            `pub(crate) fn ${fnName(itemName(entry))}(${args}) -> String {`,
           );
           out.push(`    format!(${rustString(entry.text)})`);
           out.push("}");
@@ -412,8 +431,8 @@ const STRAYS = [
 /** How code names a text of the SDK: `<kind>::NAME` or `<kind>::name(`. */
 const sdkUse = (entry) =>
   placeholders(entry.text).length === 0
-    ? `${entry.kind}::${constName(nameOf(entry))}`
-    : `${entry.kind}::${fnName(nameOf(entry))}(`;
+    ? `${fileOf(entry)}::${constName(itemName(entry))}`
+    : `${fileOf(entry)}::${fnName(itemName(entry))}(`;
 
 /** Texts written in the command line's code, each with what it is. */
 export const CLI_STRAYS = [

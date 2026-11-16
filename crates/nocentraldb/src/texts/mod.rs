@@ -13,3 +13,6 @@ pub(crate) mod error;
 /// Pieces of the messages of [`crate::Error`], such as a reason.
 #[allow(dead_code)]
 pub(crate) mod part;
+/// The bridge's own messages of [`crate::Error`], for a request the TypeScript SDK sent malformed (T3).
+#[allow(dead_code)]
+pub(crate) mod bridge;
