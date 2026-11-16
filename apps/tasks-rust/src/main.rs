@@ -7,6 +7,7 @@
 
 mod args;
 mod commands;
+mod output;
 mod wait;
 
 use std::process::ExitCode;
@@ -25,7 +26,7 @@ fn main() -> ExitCode {
             command: Command::Help,
             ..
         }) => {
-            print!("{USAGE}");
+            output::out!("{USAGE}");
             return ExitCode::SUCCESS;
         }
         Ok(args) => args,
