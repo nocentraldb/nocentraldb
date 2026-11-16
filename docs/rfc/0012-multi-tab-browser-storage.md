@@ -71,10 +71,12 @@ The spike ran on 2026-11-16 in the Playwright 1.63 image the CI uses (`mcr.micro
 | One tab stops inside a transaction and holds on; the other asks for the lock with a 1 s limit | waits 1 s, then `TimeoutError` | the same | the same |
 | Meanwhile the waiting tab writes 50 entries to IndexedDB with `durability: "strict"` | 1.1 ms each; `tx.durability` reads `"strict"` | 0.8 ms; `"strict"` | 0.7 ms; `"strict"` |
 | The stopped tab closes; the other replays the outbox, "crashes" before deleting it, and replays again | 50 applied, then 0; the stopped transaction rolled back | the same | the same |
+| One tab holds a second Web Lock and never lets go; the other requests it with `steal: true` | the stealer runs at once; the holder's request ends with `AbortError` | the same | the same |
+| One tab commits; the other then reads SQLite's file change counter (header bytes 24 to 27) | rose by one per commit of the other tab | the same | the same |
 | `opfs-wl` with COOP/COEP, two tabs with an open connection each | installs (`crossOriginIsolated`, `Atomics.waitAsync` present), but opening a database did not finish within 120 s | works; 100 writes per tab at the same time took about 255 ms per write | not run |
 | `opfs-wl`: one tab stops inside a transaction; the other writes with `busy_timeout = 3000` | not reached | the write had not returned when the run hit its 120 s limit | not run |
 
-What the spike shows: the pool of the VFS we already use can be taken per transaction, in all three engines, with a bounded wait, at about three times the cost of a small transaction (more in Firefox, where a resume costs 11 ms). The outbox's write and its exactly-once replay work. `opfs-wl` is not usable in WebKit as tested.
+What the spike shows: the pool of the VFS we already use can be taken per transaction, in all three engines, with a bounded wait, at about three times the cost of a small transaction (more in Firefox, where a resume costs 11 ms). A tab can tell from the file's header that another tab committed, and a tab can take a Web Lock from a holder that does not let go. The outbox's write and its exactly-once replay work. `opfs-wl` is not usable in WebKit as tested.
 
 What it does not show:
 
@@ -102,13 +104,13 @@ An intent has consequences a developer would see:
 
 The Rust SDK's `Db` keeps, per space, the membership checks with their space keys, the clock, and the person keys fetched from the relay; the core's `View` keeps each space's log with its states and tips (`crates/nocentraldb/src/db.rs`, `crates/ncdb-core/src/view/mod.rs`). Today that memory is right because one core is the only writer for the session. With a lock per transaction, another tab may have written since this tab last held the database. Each time a core takes the database, it must first learn whether the file changed, and if it did, bring its memory up to date: the new log rows, their states, the control changes they add to the checks, the clock.
 
-Reading everything again costs as much as an open, which grows with the log. An incremental refresh reads only the log rows after the last one this core saw. It needs a cheap test for "the file changed since I last held it", such as SQLite's `PRAGMA data_version` or a counter row each commit raises, and it touches the core's view and the SDK's `Db` together. This is the largest piece of work in every option but A, and it is work in the core, which is the same on every target (principle 7).
+Reading everything again costs as much as an open, which grows with the log. An incremental refresh reads only the log rows after the last one this core saw. It needs a cheap test for "the file changed since I last held it". `PRAGMA data_version` does not serve, because it compares within one connection, and a core that pauses the pool closes its connection after every transaction. SQLite's file change counter, four bytes of the database header that every commit raises, does: in the spike it rose by one with each commit of the other tab, in all three engines. The refresh touches the core's view and the SDK's `Db` together. This is the largest piece of work in every option but A, and it is work in the core, which is the same on every target (principle 7).
 
 ### One tab syncs
 
 One relay connection per tab would push every unconfirmed change once per tab. That is harmless, since a push is idempotent and the relay answers `duplicate` ([RFC 0007, "Push"](0007-relay.md#push-append-signed-encrypted-changes)), but it multiplies traffic and pulls. RFC 0007 says "a member opens one connection" and does not say what the relay does with two at once. So one tab syncs at a time, chosen with a second Web Lock, `nocentraldb/<name>/sync`, and folds what it pulls by taking the database lock per page.
 
-A frozen sync tab keeps that lock too. Unlike the storage, a Web Lock can be taken from its holder: `navigator.locks.request(name, { steal: true }, …)` releases the holder's lock and gives it to the caller, and the holder's request ends with an `AbortError` (the Web Locks API; not checked in the spike). So the visible tab may steal the sync lock when the sync tab does not answer. A frozen tab that wakes after losing it may still push once before it notices, which the relay answers with `duplicate`. Stealing does not help the database itself: the OPFS access handles stay with the frozen worker whoever holds the lock.
+A frozen sync tab keeps that lock too. Unlike the storage, a Web Lock can be taken from its holder: `navigator.locks.request(name, { steal: true }, …)` gives the lock to the caller at once, and the holder's request ends with an `AbortError`. The spike showed both in WebKit ("Lock was stolen by another request"), Chromium and Firefox, with a holder that never let go; it did not freeze the holder. So the visible tab may steal the sync lock when the sync tab does not answer. A frozen tab that wakes after losing it may still push once before it notices, which the relay answers with `duplicate`. Stealing does not help the database itself: the OPFS access handles stay with the frozen worker whoever holds the lock.
 
 ### Every wait has a limit
 
@@ -231,6 +233,23 @@ const stall = () => navigator.locks.request("spike/db", async () => {
   db.exec("BEGIN IMMEDIATE"); db.exec("INSERT INTO t VALUES ('stalled', 'B')");
   await new Promise(() => {});
 });
+```
+
+The sync lock and the counter:
+
+```js
+/** The visible tab takes the sync lock from a holder that does not let go. */
+await navigator.locks.request("spike/sync", { steal: true }, async () => {});
+// The holder's request rejects: AbortError (WebKit: "Lock was stolen by another request").
+
+/** SQLite's file change counter, read while this tab holds the pool. */
+const counter = () => locked(5000, async () => {
+  await pool.unpauseVfs();
+  try {
+    const bytes = pool.exportFile(pool.getFileNames().find((n) => n.endsWith("spike.sqlite")));
+    return new DataView(bytes.buffer, bytes.byteOffset).getUint32(24);
+  } finally { pool.pauseVfs(); }
+}); // the spike exports the whole file; the core would read the header page only
 ```
 
 The `opfs-wl` check opened `new sqlite3.oo1.OpfsWlDb("/spike-wl.sqlite")` in each tab, set `PRAGMA busy_timeout=3000`, wrote 100 rows from each tab at the same time, and then had one tab stop after `BEGIN IMMEDIATE`.
