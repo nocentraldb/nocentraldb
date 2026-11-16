@@ -98,8 +98,10 @@ test("TypeScript code that uses its texts passes", () => {
 test("a text written in the TypeScript SDK's code fails, in each of its forms", () => {
   for (const [source, what] of [
     ['throw new NcError("closed", "the database is closed");', "an nc.Error"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TypeScript source with a template, as the check reads it.
     ["throw new NcError(\n  code,\n  `no ${what} here`,\n);", "an nc.Error"],
     ['throw new Error("not a query");', "an error"],
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: TypeScript source with a template, as the check reads it.
     ["throw new Error(`${path}: not a field`);", "an error"],
     [
       'failure(request.id, "storageFailed", "the tab closed");',
