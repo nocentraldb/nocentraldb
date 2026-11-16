@@ -252,6 +252,23 @@ fn a_deleted_source_or_one_named_twice_is_refused_and_creates_nothing() {
     assert_eq!(spaces(&db), before);
 }
 
+// The message names the space, then the object, as its text says.
+#[test]
+fn a_source_this_database_does_not_hold_is_not_found_and_named() {
+    let other = open(&lock());
+    let project = now(other.spaces().create()).unwrap();
+    let (_, t) = project_and_task(&project);
+    let task = read(&project, "tasks", t);
+
+    let db = open(&lock());
+    let refused = now(db.spaces().create_ad_hoc(ad_hoc(vec![task]))).unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::NotFound);
+    assert_eq!(
+        refused.to_string(),
+        format!("the space {} holds no object {t} to copy", project.id()),
+    );
+}
+
 #[test]
 fn personal_and_local_ad_hoc_spaces_come_later() {
     let db = open(&lock());
