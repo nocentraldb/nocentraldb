@@ -21,7 +21,8 @@
 //! - `synced`: `ok` once connected with no change unconfirmed.
 //! - `holds <space> <task>`: `ok` once the space holds the task.
 //! - `update <space> <task>`: this device's concurrent write; `ok`.
-//! - `read <space> <task>...`: the tasks as JSON; `ok <json>`.
+//! - `read <space> <task>...`: the tasks as JSON, a task's `project` link
+//!   as its object id; `ok <json>`.
 
 use std::io::{BufRead, Write};
 use std::str::FromStr;
@@ -107,14 +108,24 @@ fn read(project: &Space, id: ObjectId) -> Result<String, String> {
     }
     tags.sort();
     let tags: Vec<String> = tags.iter().map(|t| json(t)).collect();
+    // A link reads as an object id; one written as anything else is refused
+    // here as another kind (NOC-353).
+    let project = match object
+        .get::<ObjectId>("project")
+        .map_err(|e| format!("project: {e}"))?
+    {
+        Some(id) => json(&id.to_string()),
+        None => "null".into(),
+    };
     Ok(format!(
-        "{{\"id\":{},\"deleted\":{},\"title\":{},\"status\":{},\"priority\":{},\"tags\":[{}]}}",
+        "{{\"id\":{},\"deleted\":{},\"title\":{},\"status\":{},\"priority\":{},\"tags\":[{}],\"project\":{}}}",
         json(&object.id().to_string()),
         object.deleted(),
         text("title")?,
         text("status")?,
         priority,
-        tags.join(",")
+        tags.join(","),
+        project
     ))
 }
 

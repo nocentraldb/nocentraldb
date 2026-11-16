@@ -5,7 +5,9 @@
 // creates the space and adds the tab with `members().add` and the tab's
 // invitation, once its fingerprint is compared; both write, also
 // concurrently into one object while the network is cut; both sync, and
-// their reads compare equal (GENESIS.md, "Convergence").
+// their reads compare equal (GENESIS.md, "Convergence"). The tab's task
+// links a project, set on create and moved on update, and the Rust device
+// reads that link as an object id (NOC-353).
 //
 // Both reach the relay through a proxy the test cuts. Each is of its own
 // account; the relay lets the Rust device's account create spaces
@@ -45,7 +47,7 @@ after(async () => {
 
 const lock = JSON.parse(readFileSync(LOCK, "utf8"));
 
-/** The tab's model: the test lock's tasks, as sdk.e2e.test.mjs declares them. */
+/** The tab's model: the test lock's model, as crates/nocentraldb/tests/model/model.ts declares it. */
 const MODEL = `nc.model({
   tasks: nc.collection(
     {
@@ -55,6 +57,7 @@ const MODEL = `nc.model({
       estimate: nc.float(),
       urgent: nc.boolean(),
       tags: nc.set(nc.string()),
+      project: nc.link("projects"),
     },
     {
       indexes: {
@@ -64,6 +67,7 @@ const MODEL = `nc.model({
       },
     },
   ),
+  projects: nc.collection({ name: nc.string() }),
 })`;
 
 /** Code the tab runs in the page, where `window.tab` holds its database. */
@@ -96,6 +100,7 @@ const TAB = `
           status: task.status ?? null,
           priority: task.priority ?? null,
           tags: [...(task.tags ?? [])].sort(),
+          project: task.project ?? null,
         },
       );
     }
@@ -147,7 +152,7 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
     await rust.ask("synced");
 
     // The tab stays connected: the relay tells it that it was added.
-    const ofTab = await tab.evaluate(
+    const { task: ofTab, projects } = await tab.evaluate(
       async ({ space, shared }) => {
         const { db, model } = window.tab;
         const project = await window.waitFor("the tab holds the space", () =>
@@ -156,12 +161,19 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
         await window.waitFor("the tab holds the Rust device's task", () =>
           project.get(model.tasks, shared),
         );
-        const { ids } = await project.create(model.tasks, {
-          title: "from the tab",
-          priority: 2,
+        let task;
+        const projects = [];
+        await project.write((tx) => {
+          projects.push(tx.create(model.projects, { name: "first" }));
+          projects.push(tx.create(model.projects, { name: "second" }));
+          task = tx.create(model.tasks, {
+            title: "from the tab",
+            priority: 2,
+            project: projects[0],
+          });
         });
         await window.synced();
-        return ids[0];
+        return { task, projects };
       },
       { space, shared },
     );
@@ -173,7 +185,7 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
     proxy.cut();
     await rust.ask(`update ${space} ${shared}`);
     await tab.evaluate(
-      async ({ space, shared, ofTab }) => {
+      async ({ space, shared, ofTab, moved }) => {
         const { db, model, nc } = { ...window.tab, nc: window.nc };
         const project = await db.spaces.get(space);
         await project.write((tx) => {
@@ -182,10 +194,10 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
             tags: nc.add("y"),
             priority: 5,
           });
-          tx.update(model.tasks, ofTab, { status: "done" });
+          tx.update(model.tasks, ofTab, { status: "done", project: moved });
         });
       },
-      { space, shared, ofTab },
+      { space, shared, ofTab, moved: projects[1] },
     );
     proxy.restore();
 
@@ -224,7 +236,9 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
       status: "done",
       priority: 2,
       tags: [],
+      project: projects[1],
     });
+    assert.equal(onRust[0].project, null);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
