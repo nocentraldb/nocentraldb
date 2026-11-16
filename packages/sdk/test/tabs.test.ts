@@ -351,3 +351,19 @@ test("an owner with no call in flight gives the database up inside the hide hand
   // No await: a frozen page runs nothing after its visibilitychange handler.
   expect(first.worker()?.stopped()).toBe(true);
 });
+
+test("the worker's wait for another tab's storage reaches only its own tab, never the others", async () => {
+  const { tab } = origin();
+  const first = await tab();
+  await ask(first.core, "open", { lock: LOCK });
+  const second = await tab();
+  await ask(second.core, "open", { lock: LOCK });
+  first.worker()?.emit({ event: "waitingForTab", waiting: true });
+  first.worker()?.emit({ event: "folded", folds: [] });
+  await until(() => second.heard.length === 1);
+  expect(first.heard).toEqual([
+    { event: "waitingForTab", waiting: true },
+    { event: "folded", folds: [] },
+  ]);
+  expect(second.heard).toEqual([{ event: "folded", folds: [] }]);
+});

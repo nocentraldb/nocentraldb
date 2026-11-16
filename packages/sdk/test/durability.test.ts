@@ -21,6 +21,11 @@ const BEST = {
   atRisk: false,
 };
 const PERSISTENT = { ...BEST, storage: "persistent" };
+/** A durability as the SDK reports it: the core's, and whether this tab waits for another (NOC-355). */
+const reported = (durability: Record<string, unknown>) => ({
+  ...durability,
+  waitingForTab: false,
+});
 
 const fake = (refreshed: Record<string, unknown> = PERSISTENT) => {
   let listener: ((event: Uint8Array) => void) | undefined;
@@ -74,7 +79,7 @@ test("db.durability.current() is the durability open answered", async () => {
   browser(false);
   const { core } = fake();
   const db = await connect(core, { model, lock });
-  expect(db.durability.current()).toEqual(BEST);
+  expect(db.durability.current()).toEqual(reported(BEST));
 });
 
 test("subscribe gives the durability at once and each new one the core sends", async () => {
@@ -92,8 +97,8 @@ test("subscribe gives the durability at once and each new one the core sends", a
   send({ event: "durability", durability: risky });
   stop();
   send({ event: "durability", durability: BEST });
-  expect(seen).toEqual([BEST, risky]);
-  expect(db.durability.current()).toEqual(BEST);
+  expect(seen).toEqual([reported(BEST), reported(risky)]);
+  expect(db.durability.current()).toEqual(reported(BEST));
 });
 
 test("nc.open asks the browser for persistent storage without waiting, and reports its answer", async () => {
@@ -171,6 +176,7 @@ test("their types are what the owner decided", async () => {
     readonly unconfirmed: number;
     readonly oldestUnconfirmedAt: number | null;
     readonly atRisk: boolean;
+    readonly waitingForTab: boolean;
   }>();
   expectTypeOf(db.durability.current).returns.toEqualTypeOf<Durability>();
   expectTypeOf(db.durability.requestPersistent).returns.toEqualTypeOf<
