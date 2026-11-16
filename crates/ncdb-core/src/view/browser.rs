@@ -3,7 +3,9 @@
 //! `sqlite-wasm-vfs`, in a dedicated Web Worker.
 //!
 //! The one asynchronous step is [`install`], once per worker: it makes
-//! `opfs-sahpool` SQLite's default VFS. After it, [`View::open`] opens the
+//! `opfs-sahpool` SQLite's default VFS. [`release`] gives the pool's OPFS
+//! handles back before the worker ends, so that the next tab's worker can
+//! take them at once (NOC-352). After it, [`View::open`] opens the
 //! database at a path as it does natively, and every SQLite call is
 //! synchronous inside the worker (RFC 0006, "The same fold code on every
 //! target"). Where OPFS is missing, as in a private window of Firefox or
@@ -17,7 +19,7 @@ use std::fmt;
 use crate::texts;
 use sqlite_wasm_rs::WasmOsCallback;
 use sqlite_wasm_rs::vfs::VfsFilesManager;
-use sqlite_wasm_vfs::sahpool::{self, OpfsSAHError, OpfsSAHPoolCfg};
+use sqlite_wasm_vfs::sahpool::{self, OpfsSAHError, OpfsSAHPoolCfg, OpfsSAHPoolUtil};
 use wasm_bindgen::JsCast;
 use web_sys::DedicatedWorkerGlobalScope;
 
@@ -56,16 +58,51 @@ impl fmt::Display for InstallError {
 impl std::error::Error for InstallError {}
 
 /// Makes `opfs-sahpool` SQLite's default VFS in this worker, so that a
-/// view opened afterwards lives on OPFS; a second call reuses the pool.
+/// view opened afterwards lives on OPFS; a second call reuses the pool, and
+/// takes its handles again after [`release`].
 /// Where OPFS is missing, it leaves the in-memory VFS as the default and
 /// returns [`Storage::Memory`] (RFC 0006, "The browser").
 pub async fn install() -> Result<Storage, InstallError> {
+    match pool().await? {
+        Some(_) => Ok(Storage::Opfs),
+        None => Ok(Storage::Memory),
+    }
+}
+
+/// Gives the pool's OPFS handles back, so that another worker can open it
+/// while this one still exists (NOC-352): WebKit frees the handles of a
+/// worker it ends only when the page that started it runs again, which a
+/// frozen page does not. Every view must be closed first; with one still
+/// open it fails and keeps the handles. Nothing where no pool is installed.
+pub fn release() -> Result<(), InstallError> {
+    let installed = INSTALLED.with(|installed| installed.borrow().clone());
+    match installed {
+        Some(pool) => pool.pause().map_err(InstallError::Opfs),
+        None => Ok(()),
+    }
+}
+
+thread_local! {
+    /// The pool [`pool`] installed in this worker.
+    static INSTALLED: std::cell::RefCell<Option<OpfsSAHPoolUtil>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The worker's pool, installed or reused, with its handles taken again
+/// after [`release`]; `None` where OPFS is missing.
+async fn pool() -> Result<Option<OpfsSAHPoolUtil>, InstallError> {
     if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
         return Err(InstallError::NotInWorker);
     }
     match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
-        Ok(_) => Ok(Storage::Opfs),
-        Err(error) if opfs_is_missing(&error) => Ok(Storage::Memory),
+        Ok(pool) => {
+            if pool.is_paused() {
+                pool.resume().await.map_err(InstallError::Opfs)?;
+            }
+            INSTALLED.with(|installed| *installed.borrow_mut() = Some(pool.clone()));
+            Ok(Some(pool))
+        }
+        Err(error) if opfs_is_missing(&error) => Ok(None),
         Err(error) => Err(InstallError::Opfs(error)),
     }
 }
@@ -76,13 +113,9 @@ pub async fn install() -> Result<Storage, InstallError> {
 /// It fails as `install` does: outside a dedicated Web Worker, or when the
 /// pool cannot be opened.
 pub async fn exists(path: &str) -> Result<bool, InstallError> {
-    if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
-        return Err(InstallError::NotInWorker);
-    }
-    match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
-        Ok(pool) => pool.contains(path).map_err(InstallError::Opfs),
-        Err(error) if opfs_is_missing(&error) => Ok(false),
-        Err(error) => Err(InstallError::Opfs(error)),
+    match pool().await? {
+        Some(pool) => pool.contains(path).map_err(InstallError::Opfs),
+        None => Ok(false),
     }
 }
 
@@ -91,18 +124,14 @@ pub async fn exists(path: &str) -> Result<bool, InstallError> {
 /// lives"; NOC-231): the pool grows when it has fewer. Nothing where OPFS
 /// is missing. It fails as `install` does.
 pub async fn reserve(slots: usize) -> Result<(), InstallError> {
-    if !js_sys::global().is_instance_of::<DedicatedWorkerGlobalScope>() {
-        return Err(InstallError::NotInWorker);
-    }
-    match sahpool::install::<WasmOsCallback>(&OpfsSAHPoolCfg::default(), true).await {
-        Ok(pool) => {
+    match pool().await? {
+        Some(pool) => {
             let files = pool.len().map_err(InstallError::Opfs)?;
             pool.ensure_capacity(files + slots)
                 .await
                 .map_err(InstallError::Opfs)
         }
-        Err(error) if opfs_is_missing(&error) => Ok(()),
-        Err(error) => Err(InstallError::Opfs(error)),
+        None => Ok(()),
     }
 }
 
