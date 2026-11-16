@@ -20,7 +20,7 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 | --- | --- |
 | Does the note's diagnosis hold? | Yes. WebKit does not reliably fire `visibilitychange` before it suspends a page or when a tab is closed from the tab overview (WebKit bugs 207256 and 205942, both open), a suspended page keeps its Web Locks, and WebKit frees a worker's OPFS access handles only once its page runs again (NOC-352). |
 | Does a VFS from the note solve it? | Not as the note says. wa-sqlite's `OPFSCoopSyncVFS` keeps its handles after a transaction and gives them up only when another tab asks, which a frozen tab cannot answer: TanStack DB #1883 is that hang. `opfs-wl` needs COOP and COEP, and did not open a database in WebKit in our spike. Both are a second SQLite module behind JavaScript, which RFC 0006 rejected. |
-| What does solve most of it? | Taking the database per transaction with the VFS we already ship: `opfs-sahpool`, resumed before and paused after each transaction under a Web Lock. Then a frozen tab blocks the others only if it froze inside a transaction. Measured in WebKit: it works across two tabs, at about 5 ms per small write against 1.6 ms with the handles held. |
+| What does solve most of it? | Taking the database per transaction with the VFS we already ship: `opfs-sahpool`, resumed before and paused after each transaction under a Web Lock. Then a frozen tab blocks the others only if it froze inside a transaction. Measured in WebKit: it works across two tabs. A small write costs about 8 ms through our Rust VFS (5 ms through the official build) against 1.5 ms with the handles held. |
 | Does the outbox work? | Its mechanics do: in all three engines a tab wrote to IndexedDB while another tab held the database, and the replay applied each entry exactly once, a crash between replay and delete included. Its meaning for NoCentralDB is the hard part: an entry cannot be a signed change, so it is an intent that is signed later, which changes what a resolved write promises. |
 | What is the cost for the core? | Large. The core keeps each space's log state, tips, membership checks, clock and person keys in memory. A core that holds the database only per transaction has to bring that memory up to date each time another tab has written. |
 | Recommendation | Option B: a lock per transaction on `opfs-sahpool`, one tab syncing at a time, no outbox yet. Test it on a real iPhone before and after. The outbox (option C) waits until a device test shows that freezes inside a transaction matter. |
@@ -73,15 +73,17 @@ The spike ran on 2026-11-16 in the Playwright 1.63 image the CI uses (`mcr.micro
 | The stopped tab closes; the other replays the outbox, "crashes" before deleting it, and replays again | 50 applied, then 0; the stopped transaction rolled back | the same | the same |
 | One tab holds a second Web Lock and never lets go; the other requests it with `steal: true` | the stealer runs at once; the holder's request ends with `AbortError` | the same | the same |
 | One tab commits; the other then reads SQLite's file change counter (header bytes 24 to 27) | rose by one per commit of the other tab | the same | the same |
+| Our Rust port (`sqlite-wasm-vfs` 0.3.0 through `ncdb_core::view::browser`), handles held, one small write transaction | 1.5 ms | 1.5 ms | 5.1 ms |
+| The same, with `browser::install` before and `browser::release` after each transaction (one tab) | 4.9 + 2.2 + 1.2 = 8.4 ms | 8.4 + 2.3 + 2.2 = 12.9 ms | 16.5 + 4.5 + 10.2 = 31.2 ms |
 | `opfs-wl` with COOP/COEP, two tabs with an open connection each | installs (`crossOriginIsolated`, `Atomics.waitAsync` present), but opening a database did not finish within 120 s | works; 100 writes per tab at the same time took about 255 ms per write | not run |
 | `opfs-wl`: one tab stops inside a transaction; the other writes with `busy_timeout = 3000` | not reached | the write had not returned when the run hit its 120 s limit | not run |
 
-What the spike shows: the pool of the VFS we already use can be taken per transaction, in all three engines, with a bounded wait, at about three times the cost of a small transaction (more in Firefox, where a resume costs 11 ms). A tab can tell from the file's header that another tab committed, and a tab can take a Web Lock from a holder that does not let go. The outbox's write and its exactly-once replay work. `opfs-wl` is not usable in WebKit as tested.
+What the spike shows: the pool of the VFS we already use can be taken per transaction, in all three engines, with a bounded wait, at about three times the cost of a small transaction through the official build and five to nine times through our Rust port, whose `install` takes the pool back more slowly (4.9 ms in WebKit, 8.4 ms in Chromium, 16.5 ms in Firefox). It goes through `sqlite_wasm_vfs::sahpool::install` each time before it resumes; resuming the pool it keeps may be cheaper, which was not tried. A tab can tell from the file's header that another tab committed, and a tab can take a Web Lock from a holder that does not let go. The outbox's write and its exactly-once replay work. `opfs-wl` is not usable in WebKit as tested.
 
 What it does not show:
 
 - **A real freeze.** Playwright cannot freeze a WebKit page. "A tab that stops inside a transaction" is a tab whose code waits forever with the lock and the handles, and "the tab is gone" is a closed page. Whether iOS frees a frozen worker's handles when it discards the tab is unknown. Only a real iPhone shows it.
-- **The Rust port.** The spike used the official JavaScript build. Our core uses `sqlite-wasm-vfs`'s port, which has `pause` and `resume` (NOC-352 uses them), but its cost per transaction was not measured.
+- **The Rust port across tabs.** Our Rust port was timed in one tab only, from a local example that is not committed; the locks, the outbox and the two tabs ran with the official JavaScript build.
 - **Power loss.** Neither `synchronous = FULL` on `opfs-sahpool` nor a `strict` IndexedDB transaction can be checked without cutting a real device's power. Killing a tab is not the same.
 - **Pool size.** A resume takes every handle of the pool again; the spike's pool had the default six slots. A database with more files, or several databases on one origin, costs more per resume.
 
@@ -130,7 +132,7 @@ Today's design, with NOC-333 (give up on hide), NOC-352 (free the handles before
 Every tab runs its own worker and its own core on the same file. A core takes the Web Lock `nocentraldb/<name>` and resumes the pool only for one transaction (a write, a read, a fold page, a rebuild step), brings its memory up to date if the file changed, runs, commits, pauses the pool and releases the lock. One tab syncs, under `nocentraldb/<name>/sync`, which the visible tab may steal. A tab tells the others over the existing `BroadcastChannel` when it committed, so their subscriptions fire.
 
 - **Gives:** a frozen tab blocks the others only if it froze inside a transaction, which lasts milliseconds. `nc.open` no longer waits for another tab outside that window, so NOC-356's case mostly goes away. Sync continues in the visible tab. No new dependency, no COOP/COEP, and the same Rust SQLite on every target (principle 7): `opfs-sahpool`'s `pause` and `resume` are already in our VFS.
-- **Costs:** the core's refresh of its memory ([The core keeps state in memory](#the-core-keeps-state-in-memory)). A small write costs about three times what it does today in WebKit and Chromium, and five times in Firefox; folds and rebuilds amortise it over a page. The SDK's tab layer (`tabs.ts`) is rewritten: no owner, no forwarding of calls.
+- **Costs:** the core's refresh of its memory ([The core keeps state in memory](#the-core-keeps-state-in-memory)). Through our Rust VFS, a small write costs about five times what it does today in WebKit, six in Firefox and nine in Chromium (8.4, 31.2 and 12.9 ms); folds and rebuilds amortise it over a page, and a faster resume may lower it. The SDK's tab layer (`tabs.ts`) is rewritten: no owner, no forwarding of calls.
 - **Remaining risk:** a tab frozen inside a transaction holds the handles until it runs again or is discarded; the others' writes wait, reported by `waitingForTab`. How often iOS freezes a worker inside a transaction of a few milliseconds is unknown.
 
 ### C. B plus an outbox in IndexedDB
@@ -165,7 +167,7 @@ Each of these changes what developers or their users see, so each is the owner's
 1. **Which option:** A, B, B then C, or another. Recommendation: the device test first, then B; C only on evidence.
 2. **Under B: every tab opens the database itself.** RFC 0006's "One tab owns the database" and RFC 0009's "Open and close" change: `db.close()` ends only the tab's own core; there is no owner to hand over to. A tab whose model lock differs from the file's is still refused with `modelRefused`.
 3. **Under B: which relay a tab's status names.** Today every tab names the owner's relay ([RFC 0009, "Sync and status"](0009-sdk-api.md#sync-and-status)). Under B it is the relay of the tab that syncs, which may change when the visible tab steals the sync lock. Two tabs opened with different relays would sync alternately with each; the recommendation is to refuse the second, as a different lock is refused.
-4. **Under B: writes are slower.** About 5 ms instead of 1.6 ms for a small write in WebKit, about 28 ms instead of 5 ms in Firefox, measured with the JavaScript build.
+4. **Under B: writes are slower.** Through our Rust VFS, about 8 ms instead of 1.5 ms for a small write in WebKit, 13 ms instead of 1.5 ms in Chromium, and 31 ms instead of 5 ms in Firefox, before any work on a faster resume.
 5. **Under B: what `waitingForTab` (NOC-355) means.** It stays, with a narrower meaning: another tab froze inside a transaction. NOC-356's `nc.open` wait becomes the same rare case. NOC-355 is being built now; its name and texts can stay, and its docs would change.
 6. **Under C: when a write resolves.** Either `write` waits as it does today and only falls back to the outbox after its limit, or it always queues first. In both, a queued write resolves without `result.change`, is not read back at once, and can be refused after it resolved, reported by a new event; and `db.durability` gains a count of queued intents. Each is a public name to confirm.
 
@@ -251,6 +253,8 @@ const counter = () => locked(5000, async () => {
   } finally { pool.pauseVfs(); }
 }); // the spike exports the whole file; the core would read the header page only
 ```
+
+The Rust port was timed with a wasm example built like `crates/ncdb-core/examples/browser_view.rs`, which looped over `browser::install().await`, `rusqlite::Connection::open("/rust-spike.sqlite")`, one `BEGIN IMMEDIATE; INSERT …; COMMIT`, the connection dropped, and `browser::release()`.
 
 The `opfs-wl` check opened `new sqlite3.oo1.OpfsWlDb("/spike-wl.sqlite")` in each tab, set `PRAGMA busy_timeout=3000`, wrote 100 rows from each tab at the same time, and then had one tab stop after `BEGIN IMMEDIATE`.
 
