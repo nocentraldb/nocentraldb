@@ -18,7 +18,8 @@
 //!
 //! `status` follows the report and the confirmation of one write; `pause`
 //! stops and restarts syncing; `again` pushes a refused change once more
-//! when the member's own fold newly accepts it (RFC 0008, M19); `large`
+//! when the member's own fold newly accepts it (RFC 0008, "How the relay
+//! applies the rules"); `large`
 //! carries a change too large for one message through the relay's upload
 //! and download URLs (RFC 0007, "Large changes"), with the small HTTP/1.1
 //! client of `http`, or in the browser with `fetch()` (`http_browser`).
@@ -105,7 +106,7 @@ pub struct SyncStatus {
     /// This member's changes the relay has neither confirmed nor refused.
     pub unconfirmed: u64,
     /// This member's changes the relay refused. They stay folded on this
-    /// member (RFC 0002, D12).
+    /// member (RFC 0002, "A change the relay refuses after the member folded it").
     pub refused: u64,
     /// Whether the relay was restored and the SDK is pushing again what it
     /// lost (RFC 0007, "Restores and the relay epoch").
@@ -204,7 +205,7 @@ pub(crate) struct SyncState {
     pub(crate) folds: u64,
     /// The changes the relay refused, per space, each with whether the
     /// member's fold rejected it since: one folded again is pushed once
-    /// more (RFC 0008, M19).
+    /// more (RFC 0008, "How the relay applies the rules").
     pub(crate) refused: BTreeMap<CoreSpaceId, BTreeMap<CoreChangeId, bool>>,
     /// The person-key records this member wrote that wait to be put, per
     /// space (`person_keys`).
