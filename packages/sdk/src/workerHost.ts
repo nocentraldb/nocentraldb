@@ -1,11 +1,15 @@
 // The page's side of the worker that runs the core (RFC 0009, "Open and
 // close"): it starts the worker shipped next to this module, sends it one
 // bridge request at a time and hands back its answers, in order, and its
-// events. Internal: `connect` and the tabs layer reach it as a `Core`.
+// events. Asked to end, it lets the worker end itself, so that it gives
+// the database's storage back first (NOC-352). Internal: `connect` and the tabs layer reach it as a `Core`.
 
 import type { Core } from "./connect.ts";
 import { NcError } from "./error.ts";
 import * as texts from "./texts.ts";
+
+/** What the page sends the worker, besides bridge requests, to end it (worker.ts). */
+const STOP = "stop";
 
 /** The worker that runs the core, shipped next to this module. */
 export const startWorker = (): Core => {
@@ -43,7 +47,11 @@ export const startWorker = (): Core => {
         failing.push(reject);
         worker.postMessage(request, [request.buffer]);
       }),
-    terminate: () => worker.terminate(),
+    // The worker answers what it took, gives the database's storage back
+    // and ends itself (NOC-352, worker.ts). Never ended from here, not
+    // even late: the browser would free its storage after the lock passes
+    // on, and the next tab's open would fail.
+    terminate: () => worker.postMessage(STOP),
     listen: (given) => {
       listener = given;
     },

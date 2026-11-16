@@ -138,6 +138,18 @@ impl Core {
         })
     }
 
+    /// Closes the open database and gives its OPFS handles back, before
+    /// the worker ends (NOC-352): whether they are free. The worker calls
+    /// it once every request is answered.
+    #[cfg(target_arch = "wasm32")]
+    pub fn release(&self) -> bool {
+        *self.events.borrow_mut() = None;
+        match self.bridge.borrow_mut().as_mut() {
+            Some(bridge) => bridge.release(),
+            None => false,
+        }
+    }
+
     /// Gives every fold event, a `Uint8Array` of CBOR, to `listener`.
     #[cfg(target_arch = "wasm32")]
     pub fn listen(&self, listener: js_sys::Function) {
