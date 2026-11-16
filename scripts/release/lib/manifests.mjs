@@ -250,15 +250,13 @@ export function publishLine(text) {
 }
 
 /**
- * name -> version of every [[package]] block of a Cargo.lock. When a name
- * appears more than once, the block without a `source` (a workspace member)
- * wins.
+ * The [[package]] blocks of a Cargo.lock: name, version, source when it has
+ * one, and the index of its version line. Throws on a block with no name or
+ * no version.
  */
-export function lockVersions(cargoLock) {
-  const out = new Map();
+const lockBlocks = (lines) => {
   const blocks = [];
   let block = null;
-  const lines = cargoLock.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].replace(/\r$/, "");
     if (/^\s*\[/.test(line)) {
@@ -267,15 +265,28 @@ export function lockVersions(cargoLock) {
       continue;
     }
     const m = /^(name|version|source)\s*=\s*"([^"]*)"\s*$/.exec(line);
-    if (block && m) block[m[1]] = m[2];
+    if (block && m) {
+      block[m[1]] = m[2];
+      if (m[1] === "version") block.versionLine = i;
+    }
   }
-  for (const b of blocks) {
+  for (const b of blocks)
     if (b.name === undefined || b.version === undefined)
       throw new Error(
-        `Cargo.lock: the [[package]] block at line ${b.lineNo} has no name or no version`,
+        `the [[package]] block at line ${b.lineNo} has no name or no version`,
       );
+  return blocks;
+};
+
+/**
+ * name -> version of every [[package]] block of a Cargo.lock. When a name
+ * appears more than once, the block without a `source` (a workspace member)
+ * wins.
+ */
+export function lockVersions(cargoLock) {
+  const out = new Map();
+  for (const b of lockBlocks(cargoLock.split("\n")))
     if (!out.has(b.name) || b.source === undefined) out.set(b.name, b.version);
-  }
   return out;
 }
 
@@ -293,29 +304,10 @@ export function lockVersions(cargoLock) {
  */
 export function writeLockVersions(cargoLock, version) {
   const lines = cargoLock.split("\n");
-  const blocks = [];
-  let block = null;
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].replace(/\r$/, "");
-    if (/^\s*\[/.test(line)) {
-      block = line.trim() === "[[package]]" ? { lineNo: i + 1 } : null;
-      if (block) blocks.push(block);
-      continue;
-    }
-    const m = /^(name|version|source)\s*=\s*"([^"]*)"\s*$/.exec(line);
-    if (block && m) {
-      block[m[1]] = m[2];
-      if (m[1] === "version") block.versionLine = i;
-    }
-  }
-  const sourced = new Set();
-  for (const b of blocks) {
-    if (b.name === undefined || b.version === undefined)
-      throw new Error(
-        `the [[package]] block at line ${b.lineNo} has no name or no version`,
-      );
-    if (b.source !== undefined) sourced.add(b.name);
-  }
+  const blocks = lockBlocks(lines);
+  const sourced = new Set(
+    blocks.filter((b) => b.source !== undefined).map((b) => b.name),
+  );
   for (const b of blocks) {
     if (b.source !== undefined) continue;
     if (sourced.has(b.name))
