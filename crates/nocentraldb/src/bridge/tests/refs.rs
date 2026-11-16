@@ -66,7 +66,11 @@ fn a_reference_written_as_space_and_id_reads_back_as_that_reference() {
         field(&fields(&mut bridge, &space, "tasks", &task), "customer"),
         Some(&second)
     );
-    write(&mut bridge, &space, update(map(&[("customer", Value::Null)])));
+    write(
+        &mut bridge,
+        &space,
+        update(map(&[("customer", Value::Null)])),
+    );
     let cleared = field(&fields(&mut bridge, &space, "tasks", &task), "customer").cloned();
     assert!(matches!(cleared, None | Some(Value::Null)), "{cleared:?}");
 }

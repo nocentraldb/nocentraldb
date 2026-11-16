@@ -60,7 +60,12 @@ pub(super) fn fields(bridge: &mut Bridge, space: &Value, collection: &str, id: &
 
 /// The object `id` of `collection` as the Rust SDK reads it, on the
 /// bridge's own database.
-pub(super) fn native(bridge: &Bridge, space: &Value, collection: &str, id: &Value) -> crate::Object {
+pub(super) fn native(
+    bridge: &Bridge,
+    space: &Value,
+    collection: &str,
+    id: &Value,
+) -> crate::Object {
     let db = bridge.db.as_ref().expect("a database is open");
     let space = now(db.spaces().get(as_text(space).parse::<SpaceId>().unwrap())).unwrap();
     let id: ObjectId = as_text(id).parse().unwrap();
