@@ -4,7 +4,7 @@
 // proxy in front of the relay that the test can cut, as the Rust SDK's own
 // sync tests cut theirs.
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
@@ -24,7 +24,11 @@ export const buildPeer = () => {
     throw new Error(`cargo build of browser_peer failed (${result.status})`);
   }
   mkdirSync(dirname(PEER), { recursive: true });
-  copyFileSync(join(ROOT, "target", "debug", "examples", "browser_peer"), PEER);
+  // A copy beside it, renamed over it: a copy onto the binary another
+  // e2e file runs fails with ETXTBSY, and a rename does not (NOC-336).
+  const copy = `${PEER}.${process.pid}`;
+  copyFileSync(join(ROOT, "target", "debug", "examples", "browser_peer"), copy);
+  renameSync(copy, PEER);
 };
 
 /** The Rust device built before; fails at once when it is missing. */

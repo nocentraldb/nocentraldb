@@ -8,9 +8,11 @@ use std::str::FromStr;
 
 use ncdb_core::cbor::Value;
 
-use super::{Failed, entries, invalid, members::notice_of, text};
+use super::members::{member_id, notice_of};
+use super::{Failed, entries, invalid, text};
 use crate::db::Db;
-use crate::members::Invitation;
+use crate::id::SpaceId;
+use crate::members::{Invitation, Notice};
 use crate::pairing::{PairKind, PairingAnswer};
 
 /// `account.recoveryCode` `{}`: `{"words": [text; 12]}` while the person
@@ -62,31 +64,8 @@ pub(super) async fn pair(db: &Db, args: &Value) -> Result<Value, Failed> {
     let paired = db.account().pair(kind, &invitation).await?;
     Ok(entries([
         ("answer", Value::Text(paired.answer.to_string())),
-        (
-            "added",
-            Value::Array(
-                paired
-                    .added
-                    .into_iter()
-                    .map(|(space, notice)| {
-                        entries([
-                            ("space", Value::Text(space.to_string())),
-                            ("notice", notice_of(notice)),
-                        ])
-                    })
-                    .collect(),
-            ),
-        ),
-        (
-            "askAdmins",
-            Value::Array(
-                paired
-                    .ask_admins
-                    .iter()
-                    .map(|space| Value::Text(space.to_string()))
-                    .collect(),
-            ),
-        ),
+        ("added", spaces_with_notices(paired.added)),
+        ("askAdmins", space_ids(&paired.ask_admins)),
     ]))
 }
 
@@ -100,4 +79,47 @@ pub(super) async fn complete_pairing(db: &Db, args: &Value) -> Result<Value, Fai
         "notices",
         Value::Array(notices.into_iter().map(notice_of).collect()),
     )]))
+}
+
+/// `account.removeMember` `{"member": id, "recover": words}`, on a device
+/// of the account: `{"removed": [{"space": id, "notice": notice}],
+/// "askAdmins": [id], "notice": notice}` (NOC-321 point 6). Words that are
+/// no recovery code are `invalidValue`, and no error names them.
+pub(super) async fn remove_member(db: &Db, args: &Value) -> Result<Value, Failed> {
+    let member = member_id(args)?;
+    let removed = db
+        .account()
+        .remove_member(member, text(args, "recover")?)
+        .await?;
+    Ok(entries([
+        ("removed", spaces_with_notices(removed.removed)),
+        ("askAdmins", space_ids(&removed.ask_admins)),
+        ("notice", notice_of(removed.notice)),
+    ]))
+}
+
+/// `[{"space": id, "notice": notice}]`, objects as the TypeScript SDK
+/// returns them (NOC-321 point 4).
+fn spaces_with_notices(spaces: Vec<(SpaceId, Notice)>) -> Value {
+    Value::Array(
+        spaces
+            .into_iter()
+            .map(|(space, notice)| {
+                entries([
+                    ("space", Value::Text(space.to_string())),
+                    ("notice", notice_of(notice)),
+                ])
+            })
+            .collect(),
+    )
+}
+
+/// `[id]`.
+fn space_ids(spaces: &[SpaceId]) -> Value {
+    Value::Array(
+        spaces
+            .iter()
+            .map(|space| Value::Text(space.to_string()))
+            .collect(),
+    )
 }

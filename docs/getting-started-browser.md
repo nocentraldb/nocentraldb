@@ -123,7 +123,7 @@ addEventListener("pagehide", () => {
 
 The SDK runs the core in a worker it starts itself. The database lives in this browser's OPFS, under the origin of the page and the name you give: 1 to 64 characters of `a`–`z`, `0`–`9`, `-` and `_`, or `"default"` when you leave it out. Its keys never reach your code.
 
-The database folds and checks every change by the lock. So build the lock again after every change to `model.ts`: the browser SDK does not yet compare the model with the lock, as RFC 0009's `lockOutOfDate` will.
+The database folds and checks every change by the lock. So build the lock again after every change to `model.ts`. `nc.open` compares the model with the lock: when the model names a collection, field or index the lock does not have, or with another type or options, it fails with `lockOutOfDate`, and its message names what differs and says to run `ncdb model build`.
 
 Every call runs in the browser. A read never waits for the network.
 
@@ -373,7 +373,6 @@ RFC 0009 names more than the browser SDK has today. This guide leaves out what i
 - **Accounts and devices.** A person's second device joins the space as a member of its own account, as in step 10. Pairing a device into one account is in the Rust SDK ([its guide](getting-started.md), step 9) but not yet in the TypeScript SDK. The account's recovery code is: `db.account.recoveryCode()` gives it until `confirm()` ([RFC 0009, "Accounts and devices"](rfc/0009-sdk-api.md#accounts-and-devices)).
 - **Node.js.** `nc.open` runs in a browser. The options `path`, `keyFile`, `inMemory` and `agent` of RFC 0009 are not there yet.
 - **`space.inspect`,** the details of a conflict. `db.view`, the progress of a view rebuild, is there, but in the browser it always reports `rebuild: null`: the browser runs no rebuild yet.
-- **The check of the model against the lock** in `nc.open`, which fails with `lockOutOfDate`. Until it comes, a model whose lock was not built again gives types the database does not keep.
 
 ## Where to go next
 
