@@ -47,6 +47,12 @@ pub(crate) const DEVICE_ADDED: &str =
 pub(crate) const DEVICE_PAIRED: &str =
     "This device now holds your account key. Keep your recovery code: it is the way back if you lose every device.";
 
+/// `erased`: Db::erase returns it with the shreds it wrote, once per call, in
+/// every space of the database where a sign-off came for the person's keys.
+/// Carsten, 2026-11-15, NOC-326 (Q6).
+pub(crate) const ERASED: &str =
+    "The person's personal fields are erased in these spaces. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too.";
+
 /// `erasurePending`: No call returns it: the space status gives it with each
 /// provisional erasure (provisional_erasures, provisionalErasures), on every
 /// device of the account, while an erasure in a space with one account waits
@@ -77,3 +83,9 @@ pub(crate) const ROLE_SET: &str =
 /// only when an admin rotates. The owner's text, NOC-219.
 pub(crate) const SPACE_LEFT: &str =
     "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.";
+
+/// `takenBack`: space.erasures().take_back(shred) returns it once an admin of
+/// the performer's account took a provisional erasure back within its 7 days.
+/// pm, NOC-326, on the coding agent's proposal (Q7).
+pub(crate) const TAKEN_BACK: &str =
+    "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.";

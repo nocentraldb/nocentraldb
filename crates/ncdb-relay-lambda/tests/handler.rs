@@ -102,12 +102,16 @@ fn live(json: &str) -> Event {
     }
 }
 
-/// The posts, decoded.
+/// The posts, decoded: each is the base64 text of a message (NOC-338).
 fn posts(api: &Recording) -> Vec<(String, Value)> {
     let posts = api.posts.lock().unwrap();
     posts
         .iter()
-        .map(|(id, bytes)| (id.clone(), cbor::decode(bytes).unwrap()))
+        .map(|(id, text)| {
+            let text = std::str::from_utf8(text).expect("a post is text");
+            let bytes = ncdb_relay::wire::from_text(text).expect("a post is base64");
+            (id.clone(), cbor::decode(&bytes).unwrap())
+        })
         .collect()
 }
 
@@ -143,10 +147,10 @@ fn recorded_events_read_as_their_routes() {
 
     let message = recorded(MESSAGE);
     assert_eq!(message.route, Route::Message);
-    // The recorded message is a binary `hello`, base64 as API Gateway
-    // hands it to Lambda.
-    let Body::Binary(bytes) = &message.body else {
-        panic!("a binary message");
+    // The recorded message is a `hello`, sent as base64 in a text frame,
+    // which API Gateway hands to Lambda as it is (NOC-338).
+    let Body::Message(bytes) = &message.body else {
+        panic!("a message");
     };
     assert_eq!(kind(&cbor::decode(bytes).unwrap()), "hello");
 
@@ -156,11 +160,16 @@ fn recorded_events_read_as_their_routes() {
 }
 
 #[test]
-fn a_text_message_keeps_only_its_size() {
-    let json = MESSAGE
-        .replace("\"isBase64Encoded\": true", "\"isBase64Encoded\": false")
-        .replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "some text");
-    assert_eq!(recorded(&json).body, Body::Text(9));
+fn a_body_that_is_no_base64_or_marked_binary_keeps_only_its_size() {
+    let text = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "some text");
+    assert_eq!(recorded(&text).body, Body::Unreadable(9));
+    let bad = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "%%%");
+    assert_eq!(recorded(&bad).body, Body::Unreadable(3));
+    // A binary frame never reaches Lambda: API Gateway closes the
+    // connection with 1003. A body marked as base64-encoded binary is no
+    // message of RFC 0007.
+    let binary = MESSAGE.replace("\"isBase64Encoded\": false", "\"isBase64Encoded\": true");
+    assert_eq!(recorded(&binary).body, Body::Unreadable(32));
 }
 
 #[test]
@@ -171,9 +180,6 @@ fn an_event_without_a_connection_or_a_type_is_not_one() {
     let unknown: ApiGatewayWebsocketProxyRequest =
         serde_json::from_str(&MESSAGE.replace("\"MESSAGE\"", "\"OTHER\"")).unwrap();
     assert!(Event::from_request(&unknown).is_err());
-    let bad: ApiGatewayWebsocketProxyRequest =
-        serde_json::from_str(&MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "%%%")).unwrap();
-    assert!(Event::from_request(&bad).is_err());
 }
 
 #[tokio::test]
@@ -211,12 +217,10 @@ async fn a_message_on_a_connection_without_a_record_is_refused_and_closed() {
 }
 
 #[tokio::test]
-async fn a_text_message_before_auth_closes_the_connection() {
+async fn a_message_that_is_no_base64_before_auth_closes_the_connection() {
     let (handler, _dir) = handler();
     handler.handle(live(CONNECT)).await;
-    let text = MESSAGE
-        .replace("\"isBase64Encoded\": true", "\"isBase64Encoded\": false")
-        .replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "hello");
+    let text = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "hello");
     handler.handle(live(&text)).await;
     let posts = posts(handler_api(&handler));
     assert_eq!(code(&posts[0].1), "unauthenticated");

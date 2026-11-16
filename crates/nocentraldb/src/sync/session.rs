@@ -20,23 +20,28 @@ use crate::db::{Inner, lock};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
 /// "Liveness"). The tests shorten this and every bound below.
-const IDLE: Duration = if cfg!(test) {
+pub(super) const IDLE: Duration = if cfg!(test) {
     Duration::from_millis(300)
 } else {
     Duration::from_secs(5 * 60)
 };
 
-/// The longest the WebSocket handshake may take.
-const CONNECT: Duration = if cfg!(test) {
-    Duration::from_millis(500)
+/// The longest the WebSocket handshake may take. The tests' bound is
+/// short enough for `tests/timeouts.rs` to see a hung relay lost, and long
+/// enough that a relay answering late on a loaded machine is not: at 500
+/// ms, the sync suites lost such a relay again and again under `pnpm
+/// gates`, until their wait ran out (NOC-331).
+pub(super) const CONNECT: Duration = if cfg!(test) {
+    Duration::from_secs(5)
 } else {
     Duration::from_secs(30)
 };
 
 /// The longest the relay may take to answer a request, `ping` included;
-/// a relay that does not answer in time is a lost connection.
-const ANSWER: Duration = if cfg!(test) {
-    Duration::from_millis(500)
+/// a relay that does not answer in time is a lost connection. The tests'
+/// bound is [`CONNECT`]'s, for the same reason.
+pub(super) const ANSWER: Duration = if cfg!(test) {
+    Duration::from_secs(5)
 } else {
     Duration::from_secs(30)
 };

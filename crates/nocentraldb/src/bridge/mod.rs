@@ -79,6 +79,12 @@
 //! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
 //! `account.recovered` `{}` answers a notice or `null`.
 //!
+//! The calls of NOC-316, slice 2, in `account.rs`: `account.pair` `{"kind":
+//! "device" | "agent", "invitation": text}` answers `{"answer": text,
+//! "added": [{"space": id, "notice": notice}], "askAdmins": [id]}`;
+//! `account.completePairing` `{"answer": text}` answers `{"notices":
+//! [notice]}`.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -231,6 +237,8 @@ impl Bridge {
             "account.recoveryCode" => account::recovery_code(&db).await,
             "account.confirmRecoveryCode" => account::confirm_recovery_code(&db).await,
             "account.recovered" => account::recovered(&db).await,
+            "account.pair" => account::pair(&db, args).await,
+            "account.completePairing" => account::complete_pairing(&db, args).await,
             "durability" => {
                 db.refresh_storage().await;
                 Ok(reports::durability(&db.durability()))

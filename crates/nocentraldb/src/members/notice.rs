@@ -55,6 +55,12 @@ pub enum NoticeCode {
     /// An ad-hoc space was created for a sub-agent, from
     /// `Spaces::create_ad_hoc` (Carsten, 2026-11-15, NOC-320 Q10).
     AdHocSpaceCreated,
+    /// A person was erased in the spaces of this database, from
+    /// `Db::erase` (Carsten, 2026-11-15, on NOC-326, Q6).
+    Erased,
+    /// A provisional erasure was taken back, from
+    /// `space.erasures().take_back` (Carsten, 2026-11-15, on NOC-326, Q7).
+    TakenBack,
 }
 
 impl Notice {

@@ -26,7 +26,7 @@ import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import { spaceListOf } from "./spaceList.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
-import { type Platform, tabCore } from "./tabs.ts";
+import { browserPage, type Platform, tabCore } from "./tabs.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {
@@ -106,6 +106,7 @@ export const connectWorker = async (options: OpenOptions): Promise<Db> => {
               Platform["channel"]
             >,
           startWorker,
+          page: browserPage(),
         })
       : startWorker();
   return connect(core, options);

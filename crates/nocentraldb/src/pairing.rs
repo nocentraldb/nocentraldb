@@ -276,8 +276,13 @@ impl Account<'_> {
             // It joined the account: a device of it added it to the account
             // space, so it creates none of its own.
             inner.joins_account = true;
-            let _ = crate::account::reconcile(&mut inner);
         }
+        // A database that synced while it waited may already hold the
+        // account space and the spaces the pairing added it to; no fold
+        // follows to write its records there, so they are written now, and
+        // the write wakes the sync, which pushes them (NOC-337). A failed
+        // write is made again by the next fold or open.
+        let _ = crate::account::reconcile(&mut inner);
         Ok(notices)
     }
 }

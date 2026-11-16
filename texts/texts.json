@@ -1,6 +1,180 @@
 {
-  "$comment": "Every text a developer reads from the SDKs, in one place (NOC-329). Each entry: its id (<kind>.<name>), its kind (notice, error, or part of an error's message), for a notice or an error its code as RFC 0009 spells it (an error returned with several codes names each, separated by ' | '), the text, with {name} or {name:?} where a value goes, and when it shows. Entries are sorted by id, one field per line, so `git diff` shows each change readably; `pnpm texts` lists what changed since the last release for the owner's review. scripts/texts.mjs generates crates/nocentraldb/src/texts/ from this file and checks it in the gates; run `node scripts/texts.mjs --write` after an edit.",
+  "$comment": "Every text a developer reads from the SDKs and the ncdb command line, in one place (NOC-329). Each entry: its id (<kind>.<name>), its kind (notice, error, part of an error's message, or cli, a text of the command line), for a notice or an error its code as RFC 0009 spells it (an error returned with several codes names each, separated by ' | '), the text, with {name} or {name:?} where a value goes, and when it shows. Entries are sorted by id, one field per line, so `git diff` shows each change readably; `pnpm texts` lists what changed since the last release for the owner's review. scripts/texts.mjs generates crates/nocentraldb/src/texts/ and crates/ncdb/src/texts.rs from this file and checks it in the gates; run `node scripts/texts.mjs --write` after an edit.",
   "texts": [
+    {
+      "id": "cli.additive",
+      "kind": "cli",
+      "text": "additive: clients on model version {from} keep every change written under version {to}.",
+      "when": "`ncdb model build`, the last line of a new model version's report: the change is additive."
+    },
+    {
+      "id": "cli.cannotBeOpened",
+      "kind": "cli",
+      "text": "cannot be opened: {error}",
+      "when": "After the schema module's name, when its path cannot be resolved; `error` is the system's reason."
+    },
+    {
+      "id": "cli.cannotBeRead",
+      "kind": "cli",
+      "text": "cannot be read: {error}",
+      "when": "After the lock's name, when the lock cannot be read from disk, or is no lock JSON; `error` is the system's or the core's reason."
+    },
+    {
+      "id": "cli.cannotBeWritten",
+      "kind": "cli",
+      "text": "cannot be written: {error}",
+      "when": "After the lock's name, from `ncdb model build`, when the lock cannot be written; `error` is the system's reason."
+    },
+    {
+      "id": "cli.descriptionUnreadable",
+      "kind": "cli",
+      "text": "the SDK described the model in a form this ncdb cannot read: {error}",
+      "when": "After the schema module's name, when the SDK's description of the model is no JSON this `ncdb` reads, as when the SDK and `ncdb` are of different releases; `error` is the core's reason."
+    },
+    {
+      "id": "cli.descriptionsChanged",
+      "kind": "cli",
+      "text": "descriptions changed (model version stays {version})",
+      "when": "`ncdb model build`, after the lock's name, when only descriptions changed, so the model version stays; a line per change follows."
+    },
+    {
+      "id": "cli.handEdited",
+      "kind": "cli",
+      "text": "its model.hash does not match its content, so it was edited by hand. Restore it from version control, and change the schema instead.",
+      "when": "After the lock's name, when the lock's `model.hash` does not match its content."
+    },
+    {
+      "id": "cli.lockMissing",
+      "kind": "cli",
+      "text": "{lock}: missing; run ncdb model build.",
+      "when": "`ncdb model check` when there is no lock at `--lock`."
+    },
+    {
+      "id": "cli.modelNeedsCommand",
+      "kind": "cli",
+      "text": "model needs a command: build or check",
+      "when": "`ncdb model` with nothing after it; the usage follows."
+    },
+    {
+      "id": "cli.newModel",
+      "kind": "cli",
+      "text": "model version 1, a new model ({id})",
+      "when": "`ncdb model build`, after the lock's name, when it wrote the first lock of a model; `id` is the new model id. A line per collection follows."
+    },
+    {
+      "id": "cli.noCommand",
+      "kind": "cli",
+      "text": "no command",
+      "when": "`ncdb` run with no arguments; the usage follows."
+    },
+    {
+      "id": "cli.noSchemaFile",
+      "kind": "cli",
+      "text": "no such file; the schema module is ./model.ts unless --model names another.",
+      "when": "After the schema module's name, from `ncdb model build` and `ncdb model check`, when there is no file at `--model`."
+    },
+    {
+      "id": "cli.nodeNotFound",
+      "kind": "cli",
+      "text": "ncdb runs the schema with Node.js {major} or later, and found no `node` on PATH.",
+      "when": "After the schema module's name, from `ncdb model build` and `ncdb model check`, when no `node` is on PATH."
+    },
+    {
+      "id": "cli.nodeNotStarted",
+      "kind": "cli",
+      "text": "cannot start Node.js: {error}",
+      "when": "After the schema module's name, when `node` is on PATH but cannot be started; `error` is the system's reason."
+    },
+    {
+      "id": "cli.nodeTooOld",
+      "kind": "cli",
+      "text": "ncdb runs the schema with Node.js {major} or later, and the `node` on PATH is {version}.",
+      "when": "After the schema module's name, when the `node` on PATH is older than Node.js 24, or does not say its version; `version` is its version, or `cli.nodeVersionUnknown`."
+    },
+    {
+      "id": "cli.nodeVersionUnknown",
+      "kind": "cli",
+      "text": "of an unknown version",
+      "when": "The `version` of `cli.nodeTooOld` when `node --version` printed nothing."
+    },
+    {
+      "id": "cli.optionNeedsPath",
+      "kind": "cli",
+      "text": "{option} needs a path",
+      "when": "`--model` or `--lock` given last, or followed by another option; the usage follows."
+    },
+    {
+      "id": "cli.outOfDate",
+      "kind": "cli",
+      "text": "{lock}: out of date; run ncdb model build. It would write {would}",
+      "when": "`ncdb model check` when the lock differs from what `ncdb model build` would write; `would` is what build would report, or `cli.rewriteCanonical`."
+    },
+    {
+      "id": "cli.refusedBreaksRules",
+      "kind": "cli",
+      "text": "{lock}: refused, the model breaks the rules (no lock is written)",
+      "when": "`ncdb model build` and `ncdb model check` when the core refuses a first model; each refusal follows on a line of its own."
+    },
+    {
+      "id": "cli.refusedNotAdditive",
+      "kind": "cli",
+      "text": "{lock}: refused, the change is not additive (model version stays {version})",
+      "when": "`ncdb model build` and `ncdb model check` when the core refuses the change against the previous lock; each refusal follows on a line of its own."
+    },
+    {
+      "id": "cli.rewriteCanonical",
+      "kind": "cli",
+      "text": "rewrite it in its canonical form (model version stays {version})",
+      "when": "After `cli.outOfDate`, from `ncdb model check`, when the lock describes the model but is not written in its canonical form, so `build` would only rewrite it."
+    },
+    {
+      "id": "cli.schemaCannotBeRun",
+      "kind": "cli",
+      "text": "cannot be run: {error}",
+      "when": "After the schema module's name, when Node.js cannot import it; `error` is the exception's message."
+    },
+    {
+      "id": "cli.schemaExportsNoModel",
+      "kind": "cli",
+      "text": "exports no model; export the model as `export const model = nc.model(...)`.",
+      "when": "After the schema module's name, when the module imports but exports no `model` made with `nc.model`."
+    },
+    {
+      "id": "cli.unknownCommand",
+      "kind": "cli",
+      "text": "unknown command: {command}",
+      "when": "`ncdb` run with a first word other than `model` or `help`; the usage follows."
+    },
+    {
+      "id": "cli.unknownModelCommand",
+      "kind": "cli",
+      "text": "unknown command: model {command}",
+      "when": "`ncdb model` followed by a word other than `build` or `check`; the usage follows."
+    },
+    {
+      "id": "cli.unknownOption",
+      "kind": "cli",
+      "text": "unknown option: {option}",
+      "when": "`ncdb model build` and `ncdb model check` given an option other than `--model` or `--lock`; the usage follows."
+    },
+    {
+      "id": "cli.upToDate",
+      "kind": "cli",
+      "text": "{lock}: up to date (model version {version})",
+      "when": "`ncdb model build` and `ncdb model check` when the lock already says what the schema says, byte for byte."
+    },
+    {
+      "id": "cli.usage",
+      "kind": "cli",
+      "text": "usage: ncdb model build [--model <path>] [--lock <path>]\n       ncdb model check [--model <path>] [--lock <path>]\n\nbuild reads the schema module (--model, default ./model.ts, which exports\n`model`) and the previous lock (--lock, default ./model.lock.json), refuses a\nchange that clients on the previous model could not keep, and writes the lock.\ncheck does the same and writes nothing: it fails when the lock is missing or\nout of date, or the change is refused. Both run the schema with Node.js 24 or\nlater, found on PATH.\n",
+      "when": "`ncdb --help`, `ncdb -h` or `ncdb help` prints it; after a usage error, `ncdb` prints it below the error."
+    },
+    {
+      "id": "cli.versionChanged",
+      "kind": "cli",
+      "text": "model version {from} -> {to}",
+      "when": "`ncdb model build`, after the lock's name, when it wrote a new model version; a line per change follows, then `cli.additive`."
+    },
     {
       "id": "error.accountKeyNotSealable",
       "kind": "error",
@@ -119,6 +293,13 @@
       "code": "invalidValue",
       "text": "the query does not give one value per field of the index's equality prefix",
       "when": "A query that does not give one value per field of the index's equality prefix."
+    },
+    {
+      "id": "error.erasureRequestOfAnotherMember",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the erasure request is another member's",
+      "when": "Db::erase with a request another member made: only its performer erases with it (NOC-325)."
     },
     {
       "id": "error.fieldDoesNotHold",
@@ -289,6 +470,13 @@
       "when": "Account::remove_member (db.account.removeMember) while the account space records an account key newer than this device's own: the device takes it when it syncs."
     },
     {
+      "id": "error.noAccountKeyToSignOff",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "this database holds no account key; a device of the account signs off",
+      "when": "Account::sign_off on a database that holds no account key, an agent's or one waiting to be paired (NOC-325)."
+    },
+    {
       "id": "error.noAccountSpace",
       "kind": "error",
       "code": "notFound",
@@ -408,6 +596,13 @@
       "when": "Account::remove_member (db.account.removeMember) when the words it was given are no recovery code."
     },
     {
+      "id": "error.notAnErasureRequest",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the text is not an erasure request: {why}",
+      "when": "Parsing an erasure request from text (ErasureRequest::from_str) when the text is not one; the reason follows (NOC-325)."
+    },
+    {
       "id": "error.notAnId",
       "kind": "error",
       "code": "invalidValue",
@@ -422,11 +617,25 @@
       "when": "Parsing an invitation from text (Invitation::from_str; nc.invitation) when the text is not one; the reason follows."
     },
     {
+      "id": "error.notSignOffs",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the text is not a set of sign-offs: {why}",
+      "when": "Parsing sign-offs from text (SignOffs::from_str) when the text is not one; the reason follows (NOC-325)."
+    },
+    {
       "id": "error.notWaitingToBePaired",
       "kind": "error",
       "code": "notAllowed",
       "text": "this database is not waiting to be paired",
       "when": "Account::complete_pairing (db.account.completePairing) on a database not opened for pairing."
+    },
+    {
+      "id": "error.objectIsNoPerson",
+      "kind": "error",
+      "code": "noPerson",
+      "text": "the object is no person's: it has no personal field",
+      "when": "Db::erasure_request with an object that has no personal field, so it names no person to erase (NOC-325)."
     },
     {
       "id": "error.onlyAgentAddsSubAgent",
@@ -597,6 +806,13 @@
       "when": "A removal, or an add after a rotation, when this member lacks a person key of the space that the rotation must re-wrap; it works once it fetched the key's record."
     },
     {
+      "id": "error.signOffDoesNotHold",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a sign-off does not hold for this erasure in its space; nothing was erased",
+      "when": "Db::erase when one of the sign-offs would not hold in its space by RFC 0008's rules; it writes no shred in any space (NOC-325)."
+    },
+    {
       "id": "error.spaceClock",
       "kind": "error",
       "code": "storageFailed",
@@ -637,6 +853,20 @@
       "code": "notAllowed",
       "text": "a sub-agent is not paired into an account: its parent agent adds it to the spaces it works in",
       "when": "Account::pair (db.account.pair) with a sub-agent's invitation, version 3 (NOC-320 Q1)."
+    },
+    {
+      "id": "error.takeBackNotAllowed",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "only an admin of the performer's account takes an erasure back",
+      "when": "Erasures::take_back by a member that is not an admin of the account that performed the erasure (NOC-325)."
+    },
+    {
+      "id": "error.takeBackNotPending",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the shred is no provisional erasure of this space that is still pending",
+      "when": "Erasures::take_back with a shred that is final, already finalized or taken back, or not of the space (NOC-325)."
     },
     {
       "id": "error.unknownAccount",
@@ -723,6 +953,13 @@
       "when": "Account::complete_pairing (db.account.completePairing) returns it on a device once it holds the account key. The owner's text, NOC-273."
     },
     {
+      "id": "notice.erased",
+      "kind": "notice",
+      "code": "erased",
+      "text": "The person's personal fields are erased in these spaces. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too.",
+      "when": "Db::erase returns it with the shreds it wrote, once per call, in every space of the database where a sign-off came for the person's keys. Carsten, 2026-11-15, NOC-326 (Q6)."
+    },
+    {
       "id": "notice.erasurePending",
       "kind": "notice",
       "code": "erasurePending",
@@ -756,6 +993,13 @@
       "code": "spaceLeft",
       "text": "This member keeps its copy of everything it received before now. Until an admin rotates the space key, the others write under a key it still holds.",
       "when": "Space::leave (space.leave) returns it once this member's removal of itself is written: it keeps its copy, and the space key changes only when an admin rotates. The owner's text, NOC-219."
+    },
+    {
+      "id": "notice.takenBack",
+      "kind": "notice",
+      "code": "takenBack",
+      "text": "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.",
+      "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     },
     {
       "id": "part.databaseDirectoryNotFound",
@@ -810,6 +1054,54 @@
       "kind": "part",
       "text": "writes content",
       "when": "What the member does, in roleRequired: a write."
+    },
+    {
+      "id": "part.erasureRequestCertificate",
+      "kind": "part",
+      "text": "its certificate is not one",
+      "when": "Why a text is not an erasure request: the performer's certificate does not decode."
+    },
+    {
+      "id": "part.erasureRequestPrefix",
+      "kind": "part",
+      "text": "it does not start with ncdb-erase-1:",
+      "when": "Why a text is not an erasure request: its prefix."
+    },
+    {
+      "id": "part.erasureTextBase64",
+      "kind": "part",
+      "text": "it is not unpadded base64url",
+      "when": "Why a text is not an erasure request or a set of sign-offs: what follows its prefix is not unpadded base64url."
+    },
+    {
+      "id": "part.erasureTextEmpty",
+      "kind": "part",
+      "text": "it is empty",
+      "when": "Why a text is not an erasure request or a set of sign-offs: no layout at all."
+    },
+    {
+      "id": "part.erasureTextEntries",
+      "kind": "part",
+      "text": "its length does not match its number of entries",
+      "when": "Why a text is not an erasure request or a set of sign-offs: the entries do not fill it."
+    },
+    {
+      "id": "part.erasureTextEntryTwice",
+      "kind": "part",
+      "text": "it names an entry twice",
+      "when": "Why a text is not an erasure request or a set of sign-offs: one space and person key twice."
+    },
+    {
+      "id": "part.erasureTextTooShort",
+      "kind": "part",
+      "text": "it is too short",
+      "when": "Why a text is not an erasure request or a set of sign-offs: it ends before its layout does."
+    },
+    {
+      "id": "part.erasureTextVersion",
+      "kind": "part",
+      "text": "its version is not 1",
+      "when": "Why a text is not an erasure request or a set of sign-offs: its version byte."
     },
     {
       "id": "part.indexedDbConstraintHint",
@@ -1002,6 +1294,12 @@
       "kind": "part",
       "text": "a writer or an admin",
       "when": "The role needed, in roleRequired: a writer or an admin."
+    },
+    {
+      "id": "part.signOffsPrefix",
+      "kind": "part",
+      "text": "it does not start with ncdb-sign-off-1:",
+      "when": "Why a text is not a set of sign-offs: its prefix."
     },
     {
       "id": "part.wrappingKeyUnmakeable",

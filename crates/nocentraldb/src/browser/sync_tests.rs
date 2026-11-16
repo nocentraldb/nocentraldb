@@ -132,7 +132,7 @@ async fn two_databases_share_a_space_through_the_relay_over_the_browsers_websock
 #[ignore = "needs the harness's relay: the sdk-keys step of browser-view.yml runs it in Chromium"]
 async fn a_large_change_goes_up_and_comes_down_through_fetch_from_another_origin() {
     let (a, b, project) = shared().await;
-    // A title of 300 KiB: its change does not fit into a 128 KiB message.
+    // A title of 300 KiB: its change does not fit into a 23 KiB message.
     let big = "x".repeat(300 * 1024);
     let written = task(&project, &big);
     let status = synced(&a).await;
