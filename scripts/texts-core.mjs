@@ -34,11 +34,14 @@ export const CORE_PATHS = {
  */
 const WORD = String.raw`(?<![A-Za-z])(?=[A-Za-z]*[a-z])[A-Za-z]{2,}(?![A-Za-z])`;
 
-/** A literal with two words in a row: T5's rule, with the core's words. */
+/**
+ * A literal with two words in a row: T5's rule, with the core's words, and
+ * a literal continued over lines with a backslash read as one.
+ */
 const CORE_STRAYS = [
   [
     new RegExp(
-      String.raw`"(?:[^"\\\n]|\\.)*?${WORD} ${WORD}(?:[^"\\\n]|\\.)*"`,
+      String.raw`"(?:[^"\\\n]|\\[\s\S])*?${WORD} ${WORD}(?:[^"\\\n]|\\[\s\S])*"`,
       "g",
     ),
     "a text",
