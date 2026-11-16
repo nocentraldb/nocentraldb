@@ -24,6 +24,7 @@
 import { type Cbor, decode, encode } from "./cbor.ts";
 import type { Core } from "./connect.ts";
 import { NcError } from "./error.ts";
+import * as texts from "./texts.ts";
 
 /** What a tab reaches the others with; the browser's, or a test's fakes. */
 export interface Platform {
@@ -193,11 +194,7 @@ export const tabCore = async (
       answer =
         ownOpen?.args.lock === request.args.lock
           ? encode({ id: request.id, ok: { sync, ...relayOfOwner() } })
-          : failure(
-              request.id,
-              "modelRefused",
-              "another tab has this database open with another lock",
-            );
+          : failure(request.id, "modelRefused", texts.ANOTHER_LOCK);
     } else {
       answer = await track(
         (worker as Core)
@@ -233,12 +230,7 @@ export const tabCore = async (
         CHANGES.has(entry.call)
       ) {
         sent.delete(id);
-        entry.reject(
-          new NcError(
-            "storageFailed",
-            "the tab that held the database closed before it answered; the call may or may not have run",
-          ),
-        );
+        entry.reject(new NcError("storageFailed", texts.OWNER_TAB_CLOSED));
         continue;
       }
       entry.to = tab;
@@ -467,7 +459,7 @@ export const tabCore = async (
       release?.();
     }
     for (const entry of sent.values()) {
-      entry.reject(new NcError("closed", "the database is closed"));
+      entry.reject(new NcError("closed", texts.DATABASE_CLOSED));
     }
     sent.clear();
     channel.close();

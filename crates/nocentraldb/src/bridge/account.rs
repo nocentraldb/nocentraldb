@@ -56,7 +56,7 @@ pub(super) async fn pair(db: &Db, args: &Value) -> Result<Value, Failed> {
     let kind = match text(args, "kind")? {
         "device" => PairKind::Device,
         "agent" => PairKind::Agent,
-        _ => return Err(invalid("a kind is \"device\" or \"agent\"")),
+        _ => return Err(invalid(crate::texts::error::BRIDGE_KIND_IS_DEVICE_OR_AGENT)),
     };
     let invitation = Invitation::from_str(text(args, "invitation")?)?;
     let paired = db.account().pair(kind, &invitation).await?;

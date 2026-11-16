@@ -4,7 +4,8 @@
 // (NOC-329; the owner's decision of 2026-11-15). This script generates the
 // Rust module the SDK reads them from, crates/nocentraldb/src/texts/, one
 // file per kind of text, and the one the `ncdb` command line reads its own
-// from, crates/ncdb/src/texts.rs (kind `cli`, T5), and
+// from, crates/ncdb/src/texts.rs (kind `cli`, T5), and the TypeScript
+// SDK's, packages/sdk/src/texts.ts (kind `ts`, T3, scripts/texts-ts.mjs), and
 // checks for the gate (task repo:texts):
 //
 // - the file: each entry has an id (`<kind>.<name>`), a kind, a text and when
@@ -41,7 +42,6 @@
 // new text. With no release tag yet, every text counts as new. `--since
 // <tag>` compares against another tag.
 
-import { execFileSync } from "node:child_process";
 import {
   mkdirSync,
   readdirSync,
@@ -53,6 +53,15 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { review } from "./texts-review.mjs";
+import { rfcErrorCodes, TS_PATHS, tsGate } from "./texts-ts.mjs";
+
+export {
+  diffTexts,
+  formatReview,
+  lastReleaseTag,
+  review,
+} from "./texts-review.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -67,7 +76,7 @@ export const PATHS = {
   cliModule: "crates/ncdb/src/texts.rs",
 };
 
-const KINDS = ["notice", "error", "part", "cli"];
+const KINDS = ["notice", "error", "part", "cli", "ts"];
 /** The kinds the SDK's module holds; `cli` is the command line's. */
 const SDK_KINDS = ["notice", "error", "part"];
 /** The kinds without a code. */
@@ -243,7 +252,12 @@ export const enumVariants = (source, name) => {
 export const noticeVariants = (source) => enumVariants(source, "NoticeCode");
 
 /** The problems of the file's entries, each a line. */
-export const checkEntries = (file, variants, errorVariants = []) => {
+export const checkEntries = (
+  file,
+  variants,
+  errorVariants = [],
+  tsCodes = [],
+) => {
   const problems = [];
   if (!file || !Array.isArray(file.texts)) {
     return ['texts.json: a "texts" array is required'];
@@ -255,9 +269,12 @@ export const checkEntries = (file, variants, errorVariants = []) => {
       problems.push(`${at}: not an object`);
       continue;
     }
-    const needed = CODELESS.includes(entry.kind)
-      ? FIELDS.filter((f) => f !== "code")
-      : FIELDS;
+    // A ts text has a code when the SDK throws it as an nc.Error (T3).
+    const needed =
+      CODELESS.includes(entry.kind) ||
+      (entry.kind === "ts" && !("code" in entry))
+        ? FIELDS.filter((f) => f !== "code")
+        : FIELDS;
     for (const field of needed) {
       if (typeof entry[field] !== "string" || entry[field].trim() === "") {
         problems.push(`${at}: "${field}" must be a non-empty text`);
@@ -303,7 +320,13 @@ export const checkEntries = (file, variants, errorVariants = []) => {
         }
       }
     }
+    if (entry.kind === "ts" && typeof entry.code === "string") {
+      if (!tsCodes.includes(entry.code))
+        problems.push(`${at}: RFC 0009 lists no error code ${entry.code}`);
+    }
     if (typeof entry.text === "string") {
+      if (entry.kind === "ts" && entry.text.includes(":?}"))
+        problems.push(`${at}: a ts text has no Debug placeholder {name:?}`);
       if (entry.text.replace(PLACEHOLDER, "").match(/[{}]/)) {
         problems.push(
           `${at}: a brace that is no placeholder {name} or {name:?}`,
@@ -349,14 +372,12 @@ export const checkLayout = (raw, file) => {
 };
 
 /** Every non-test .rs file under `dir`, as [path, source]. */
-const rustFiles = (dir) => {
+export const rustFiles = (dir) => {
   const out = [];
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
     if (statSync(path).isDirectory()) {
-      // The bridge's own messages, which the TypeScript SDK shows, move
-      // with the TypeScript SDK's texts (NOC-329, T3).
-      if (!["tests", "relay_tests", "bridge"].includes(name))
+      if (!["tests", "relay_tests"].includes(name))
         out.push(...rustFiles(path));
     } else if (name.endsWith(".rs") && !/(^|_)tests?\.rs$/.test(name)) {
       out.push([path, readFileSync(path, "utf8")]);
@@ -460,127 +481,6 @@ export const checkCode = (
   return problems;
 };
 
-/** A release tag, `vX.Y.Z` or `vX.Y.Z-beta.N`: never an alpha. */
-const RELEASE_TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-beta\.(\d+))?$/;
-
-/** The newest release tag of `tags`, compared by number; a stable release is above its betas. */
-export const lastReleaseTag = (tags) => {
-  const key = (tag) => {
-    const [, x, y, z, beta] = tag.match(RELEASE_TAG);
-    return [
-      Number(x),
-      Number(y),
-      Number(z),
-      beta === undefined ? Infinity : Number(beta),
-    ];
-  };
-  const newer = (a, b) => {
-    const [ka, kb] = [key(a), key(b)];
-    for (let i = 0; i < ka.length; i++)
-      if (ka[i] !== kb[i]) return ka[i] > kb[i];
-    return false;
-  };
-  return tags
-    .filter((tag) => RELEASE_TAG.test(tag))
-    .reduce(
-      (best, tag) => (best === null || newer(tag, best) ? tag : best),
-      null,
-    );
-};
-
-/** The entries new, changed and removed between two lists of texts. */
-export const diffTexts = (before, after) => {
-  const old = new Map(before.map((t) => [t.id, t]));
-  const now = new Map(after.map((t) => [t.id, t]));
-  const same = (a, b) =>
-    ["kind", "code", "text", "when"].every((f) => a[f] === b[f]);
-  return {
-    added: after.filter((t) => !old.has(t.id)),
-    changed: after
-      .filter((t) => old.has(t.id) && !same(old.get(t.id), t))
-      .map((t) => ({ before: old.get(t.id), after: t })),
-    removed: before.filter((t) => !now.has(t.id)),
-  };
-};
-
-const kindAndCode = (t) => `${t.kind}${t.code ? ` · ${t.code}` : ""}`;
-
-/** The review as Markdown, for the owner and pm. */
-export const formatReview = (diff, tag, total) => {
-  const { added, changed, removed } = diff;
-  const out = [
-    tag
-      ? `# Texts new or changed since ${tag}`
-      : "# Texts: no beta or stable release yet, so every text is new",
-    "",
-    `${added.length} new, ${changed.length} changed, ${removed.length} removed, of ${total} texts in texts/texts.json.`,
-  ];
-  if (added.length > 0) {
-    out.push("", "## New");
-    for (const t of added) {
-      out.push(
-        "",
-        `### ${t.id}`,
-        "",
-        `- ${kindAndCode(t)}`,
-        `- when: ${t.when}`,
-        `- text: "${t.text}"`,
-      );
-    }
-  }
-  if (changed.length > 0) {
-    out.push("", "## Changed");
-    for (const { before, after } of changed) {
-      out.push("", `### ${after.id}`, "", `- ${kindAndCode(after)}`);
-      if (kindAndCode(before) !== kindAndCode(after))
-        out.push(`- was: ${kindAndCode(before)}`);
-      out.push(`- when: ${after.when}`);
-      if (before.when !== after.when) out.push(`- when was: ${before.when}`);
-      if (before.text !== after.text) {
-        out.push(`- text was: "${before.text}"`, `- text now: "${after.text}"`);
-      } else out.push(`- text (unchanged): "${after.text}"`);
-    }
-  }
-  if (removed.length > 0) {
-    out.push("", "## Removed");
-    for (const t of removed) {
-      out.push(
-        "",
-        `### ${t.id}`,
-        "",
-        `- ${kindAndCode(t)}`,
-        `- when: ${t.when}`,
-        `- text: "${t.text}"`,
-      );
-    }
-  }
-  return `${out.join("\n")}\n`;
-};
-
-/** The review of the texts in the repository at `cwd`, against `since` or the last release tag. */
-export const review = (cwd, since) => {
-  const git = (...args) =>
-    execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
-  const tag =
-    since ??
-    lastReleaseTag(git("tag", "--list", "v*").split("\n").filter(Boolean));
-  const now = JSON.parse(readFileSync(join(cwd, PATHS.texts), "utf8")).texts;
-  let before = [];
-  if (tag) {
-    try {
-      before = JSON.parse(
-        execFileSync("git", ["-C", cwd, "show", `${tag}:${PATHS.texts}`], {
-          encoding: "utf8",
-          stdio: ["ignore", "pipe", "ignore"],
-        }),
-      ).texts;
-    } catch {
-      // The tag predates texts.json: every text is new since it.
-    }
-  }
-  return formatReview(diffTexts(before, now), tag, now.length);
-};
-
 const main = () => {
   const { values } = parseArgs({
     options: {
@@ -602,7 +502,12 @@ const main = () => {
     "ErrorCode",
   );
   const problems = [
-    ...checkEntries(file, variants, errorVariants),
+    ...checkEntries(
+      file,
+      variants,
+      errorVariants,
+      rfcErrorCodes(readFileSync(at(TS_PATHS.rfc), "utf8")),
+    ),
     ...checkLayout(raw, file),
   ];
   if (problems.length === 0) {
@@ -637,7 +542,7 @@ const main = () => {
       relative(ROOT, p),
       s,
     ]);
-    const sdk = file.texts.filter((t) => t.kind !== "cli");
+    const sdk = file.texts.filter((t) => SDK_KINDS.includes(t.kind));
     problems.push(...checkCode(files, PATHS.module, sdk));
     // The command line's own module, one file.
     const cli = generateCli(file.texts);
@@ -663,6 +568,8 @@ const main = () => {
         { strays: CLI_STRAYS, use: cliUse, where: "crate::texts" },
       ),
     );
+    // The TypeScript SDK's module and code (T3, scripts/texts-ts.mjs).
+    problems.push(...tsGate(ROOT, file.texts, values.write));
   }
   if (problems.length > 0) {
     for (const problem of problems) console.error(`texts: ${problem}`);

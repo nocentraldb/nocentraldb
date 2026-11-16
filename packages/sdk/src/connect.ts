@@ -27,6 +27,7 @@ import { spaceListOf } from "./spaceList.ts";
 import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 import { browserPage, type Platform, tabCore } from "./tabs.ts";
+import * as texts from "./texts.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {
@@ -70,10 +71,7 @@ const startWorker = (): Core => {
     if (answer !== undefined) waiting.shift()?.(answer);
   };
   worker.onerror = (event) => {
-    failed = new NcError(
-      "storageFailed",
-      `the worker failed: ${event.message}`,
-    );
+    failed = new NcError("storageFailed", texts.workerFailed(event.message));
     for (const fail of failing.splice(0)) fail(failed);
     waiting.length = 0;
   };
@@ -114,10 +112,7 @@ export const connectWorker = async (options: OpenOptions): Promise<Db> => {
 
 const checkName = (name: string | undefined) => {
   if (name !== undefined && !NAME.test(name)) {
-    throw new NcError(
-      "invalidValue",
-      "a database name is 1 to 64 characters of a-z, 0-9, - and _",
-    );
+    throw new NcError("invalidValue", texts.NOT_ADATABASE_NAME);
   }
 };
 
@@ -153,7 +148,7 @@ export const connect = async (
     call: string,
     args: Record<string, unknown>,
   ): Promise<Cbor> => {
-    if (closed) throw new NcError("closed", "the database is closed");
+    if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
     next += 1;
     const answer = decode(
       await core.call(encode({ id: next, call, args })),
@@ -380,13 +375,10 @@ export const connect = async (
 
   /** A page of `query`, in `spaceId` when it names one. */
   const find = async <T>(query: object, spaceId?: string): Promise<Page<T>> => {
-    if (closed) throw new NcError("closed", "the database is closed");
+    if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
     const state = queryState(query);
     if (state === undefined) {
-      throw new NcError(
-        "invalidValue",
-        "not a query; start one from an index, such as model.tasks.indexes.byPriority",
-      );
+      throw new NcError("invalidValue", texts.NOT_AQUERY_START_ONE);
     }
     const asked: Record<string, unknown> = {
       collection: nameOf(state.collection),
@@ -406,7 +398,7 @@ export const connect = async (
       if (handle === undefined) {
         throw new NcError(
           "cursorOfAnotherModel",
-          "the cursor is not of this database; start from the first page",
+          texts.CURSOR_OF_ANOTHER_DATABASE,
         );
       }
       asked.after = handle;
@@ -432,7 +424,7 @@ export const connect = async (
   const collectionOf = (query: object): string => {
     const state = queryState(query);
     if (state === undefined) {
-      throw new NcError("invalidValue", "not a query");
+      throw new NcError("invalidValue", texts.NOT_AQUERY);
     }
     return nameOf(state.collection);
   };
@@ -440,10 +432,7 @@ export const connect = async (
   const nameOf = (collection: object): string => {
     const name = names.get(collection);
     if (name === undefined) {
-      throw new NcError(
-        "notFound",
-        "the model has no such collection; pass a handle such as model.tasks",
-      );
+      throw new NcError("notFound", texts.NO_SUCH_COLLECTION);
     }
     return name;
   };
@@ -477,7 +466,7 @@ export const connect = async (
     ) {
       throw new NcError(
         "invalidValue",
-        `${collection}.${field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1`,
+        texts.notASafeInteger(collection, field),
       );
     }
     if (typeof written === "string") return written.normalize("NFC");
@@ -494,7 +483,7 @@ export const connect = async (
 
   const space = (id: Id): Space => {
     const write = async (record: (tx: Tx) => void): Promise<Written> => {
-      if (closed) throw new NcError("closed", "the database is closed");
+      if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
       const ops: Record<string, unknown>[] = [];
       const tx: Tx = {
         create: (collection, written) => {
@@ -592,7 +581,7 @@ export const connect = async (
   };
 
   const get = async (spaceId: Id, collection: object, object: Id) => {
-    if (closed) throw new NcError("closed", "the database is closed");
+    if (closed) throw new NcError("closed", texts.DATABASE_CLOSED);
     const answer = (await ask("get", {
       space: spaceId,
       collection: nameOf(collection),
@@ -678,7 +667,7 @@ export const connect = async (
         reports.clear();
         for (const entry of statuses.values()) entry.listeners.clear();
         for (const waiter of syncWaiters) {
-          waiter.reject(new NcError("closed", "the database is closed"));
+          waiter.reject(new NcError("closed", texts.DATABASE_CLOSED));
         }
         syncWaiters.clear();
         core.terminate();

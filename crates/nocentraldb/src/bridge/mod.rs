@@ -200,7 +200,7 @@ impl Bridge {
         };
         let answer = match (get(&request, "call"), get(&request, "args")) {
             (Some(Value::Text(call)), Some(args)) if id > 0 => self.call(call, args).await,
-            _ => Err(invalid("a request is {id, call, args}")),
+            _ => Err(invalid(crate::texts::error::BRIDGE_NOT_AREQUEST)),
         };
         cbor::encode(&match answer {
             Ok(value) => entries([("id", Value::Unsigned(id)), ("ok", value)]),
@@ -268,7 +268,7 @@ impl Bridge {
             }
             "sync.isConfirmed" => {
                 let change = ChangeId::from_str(text(args, "change")?)
-                    .map_err(|_| invalid("change is not a change id"))?;
+                    .map_err(|_| invalid(crate::texts::error::BRIDGE_NOT_ACHANGE_ID))?;
                 Ok(Value::Bool(db.sync().is_confirmed(change)))
             }
             "spaces.create" => Ok(Value::Text(db.spaces().create().await?.id().to_string())),
@@ -298,13 +298,13 @@ impl Bridge {
                 let object = space.get(collection, object_id(args, "id")?).await?;
                 Ok(object.map_or(Value::Null, |object| read(&object)))
             }
-            other => Err(invalid(format!("no call {other}"))),
+            other => Err(invalid(crate::texts::error::bridge_no_such_call(other))),
         }
     }
 
     async fn open(&mut self, args: &Value) -> Result<Value, Failed> {
         if self.db.is_some() {
-            return Err(invalid("the database is open already"));
+            return Err(invalid(crate::texts::error::BRIDGE_OPEN_ALREADY));
         }
         let mut options = OpenOptions::new(text(args, "lock")?);
         match (get(args, "inMemory"), get(args, "name")) {
@@ -315,7 +315,7 @@ impl Bridge {
             }
             _ => {
                 return Err(invalid(
-                    "open takes inMemory: true, or a name in the browser",
+                    crate::texts::error::BRIDGE_OPEN_TAKES_IN_MEMORY_OR_NAME,
                 ));
             }
         }
@@ -356,20 +356,20 @@ impl Bridge {
     /// "cursor": handle | null, "hasMore": bool}`.
     async fn find(&mut self, db: &Db, args: &Value) -> Result<Value, Failed> {
         let Some(query) = get(args, "query") else {
-            return Err(invalid("find takes a query"));
+            return Err(invalid(crate::texts::error::BRIDGE_FIND_TAKES_AQUERY));
         };
         let mut built = db.index(text(query, "collection")?, text(query, "index")?)?;
         match get(query, "equal") {
             Some(Value::Array(values)) => built = built.equal(elements(values)?),
             None => {}
-            Some(_) => return Err(invalid("equal is an array")),
+            Some(_) => return Err(invalid(crate::texts::error::BRIDGE_EQUAL_IS_AN_ARRAY)),
         }
         match get(query, "take") {
             Some(Value::Unsigned(n)) => {
                 built = built.take(usize::try_from(*n).unwrap_or(usize::MAX));
             }
             None => {}
-            Some(_) => return Err(invalid("take is a number")),
+            Some(_) => return Err(invalid(crate::texts::error::BRIDGE_TAKE_IS_ANUMBER)),
         }
         match get(query, "after") {
             Some(Value::Unsigned(handle)) => match self.cursors.get(handle) {
@@ -383,7 +383,7 @@ impl Bridge {
                 }
             },
             None => {}
-            Some(_) => return Err(invalid("after is a cursor")),
+            Some(_) => return Err(invalid(crate::texts::error::BRIDGE_AFTER_IS_ACURSOR)),
         }
         let page = match get(args, "space") {
             Some(_) => db.spaces().get(space_id(args)?).await?.find(&built).await?,
@@ -410,7 +410,7 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     let space = db.spaces().get(space_id(args)?).await?;
     let model = db.lock().model.clone();
     let Some(Value::Array(ops)) = get(args, "ops") else {
-        return Err(invalid("a write takes ops"));
+        return Err(invalid(crate::texts::error::BRIDGE_WRITE_TAKES_OPS));
     };
     let mut parsed = Vec::with_capacity(ops.len());
     for op in ops {
@@ -418,13 +418,13 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
         let values = match get(op, "values") {
             Some(Value::Map(map)) => fields(&model, &collection, map)?,
             None => Vec::new(),
-            Some(_) => return Err(invalid("values is a map")),
+            Some(_) => return Err(invalid(crate::texts::error::BRIDGE_VALUES_IS_AMAP)),
         };
         let kind = text(op, "op")?;
         let id = match (kind, get(op, "id")) {
             ("create", None) => None,
             ("create" | "update" | "delete" | "restore", _) => Some(object_id(op, "id")?),
-            (other, _) => return Err(invalid(format!("no op {other}"))),
+            (other, _) => return Err(invalid(crate::texts::error::bridge_no_such_op(other))),
         };
         parsed.push((kind.to_owned(), collection, id, values));
     }
@@ -487,7 +487,7 @@ fn fields(
                 }
                 Ok((name.clone(), value))
             }
-            Key::Unsigned(_) => Err(invalid("a field's name is text")),
+            Key::Unsigned(_) => Err(invalid(crate::texts::error::BRIDGE_FIELD_NAME_IS_TEXT)),
         })
         .collect()
 }
@@ -507,9 +507,12 @@ fn as_float(value: Field) -> Field {
 fn field(value: &Value) -> Result<Field, Failed> {
     Ok(match value {
         Value::Text(text) => Field::from(text.as_str()),
-        Value::Unsigned(n) => Field::from(i64::try_from(*n).map_err(|_| invalid("too large"))?),
+        Value::Unsigned(n) => Field::from(
+            i64::try_from(*n).map_err(|_| invalid(crate::texts::error::BRIDGE_NUMBER_TOO_LARGE))?,
+        ),
         Value::Negative(n) => {
-            let n = i64::try_from(*n).map_err(|_| invalid("too small"))?;
+            let n = i64::try_from(*n)
+                .map_err(|_| invalid(crate::texts::error::BRIDGE_NUMBER_TOO_SMALL))?;
             Field::from(-1 - n)
         }
         Value::Float(f) => Field::from(*f),
@@ -519,14 +522,14 @@ fn field(value: &Value) -> Result<Field, Failed> {
             match (map.len(), one("$add"), one("$remove")) {
                 (1, Some(Value::Array(items)), None) => Field(Repr::Add(elements(items)?)),
                 (1, None, Some(Value::Array(items))) => Field(Repr::Remove(elements(items)?)),
-                _ => return Err(invalid("a map value is {$add: [..]} or {$remove: [..]}")),
+                _ => return Err(invalid(crate::texts::error::BRIDGE_NOT_AN_ELEMENTS_OP)),
             }
         }
         // `null` clears a basic field or a link (RFC 0009, "Field operations
         // per field type"; Carsten, 2026-11-12, NOC-277); the SDK refuses it
         // for a set or many links.
         Value::Null => Field::clear(),
-        _ => return Err(invalid("not a value a field takes")),
+        _ => return Err(invalid(crate::texts::error::BRIDGE_NOT_AFIELD_VALUE)),
     })
 }
 
@@ -590,16 +593,18 @@ fn get<'a>(value: &'a Value, key: &str) -> Option<&'a Value> {
 fn text<'a>(value: &'a Value, key: &str) -> Result<&'a str, Failed> {
     match get(value, key) {
         Some(Value::Text(text)) => Ok(text),
-        _ => Err(invalid(format!("{key} is text"))),
+        _ => Err(invalid(crate::texts::error::bridge_argument_is_text(key))),
     }
 }
 
 fn space_id(args: &Value) -> Result<SpaceId, Failed> {
-    SpaceId::from_str(text(args, "space")?).map_err(|_| invalid("not a space id"))
+    SpaceId::from_str(text(args, "space")?)
+        .map_err(|_| invalid(crate::texts::error::BRIDGE_NOT_ASPACE_ID))
 }
 
 fn object_id(args: &Value, key: &str) -> Result<ObjectId, Failed> {
-    ObjectId::from_str(text(args, key)?).map_err(|_| invalid("not an object id"))
+    ObjectId::from_str(text(args, key)?)
+        .map_err(|_| invalid(crate::texts::error::BRIDGE_NOT_AN_OBJECT_ID))
 }
 
 fn entries<'a>(pairs: impl IntoIterator<Item = (&'a str, Value)>) -> Value {
