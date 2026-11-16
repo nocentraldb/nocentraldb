@@ -8,7 +8,13 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { checkEntries, PATHS, rustFiles } from "./texts.mjs";
+import {
+  checkCode,
+  checkEntries,
+  generate,
+  PATHS,
+  rustFiles,
+} from "./texts.mjs";
 import {
   checkTsCode,
   generateTs,
@@ -149,5 +155,48 @@ test("the gate reads the bridge's code, whose messages are entries since T3", ()
   assert.ok(
     !paths.some((path) => path.includes("/bridge/tests/")),
     "the bridge's tests are not",
+  );
+});
+
+const BRIDGE = {
+  id: "error.bridgeNoSuchCall",
+  kind: "error",
+  code: "invalidValue",
+  text: "no call {call}",
+  when: "The bridge, given a call it does not know.",
+};
+const BRIDGE_CONST = {
+  id: "error.bridgeOpenAlready",
+  kind: "error",
+  code: "invalidValue",
+  text: "the database is open already",
+  when: "The bridge's open, on a database it opened already.",
+};
+const NOT_FOUND = {
+  id: "error.noSuchSpace",
+  kind: "error",
+  code: "notFound",
+  text: "no such space",
+  when: "db.spaces().get with a space the copy does not hold.",
+};
+
+test("the bridge's errors generate a file of their own, bridge.rs, without their prefix, and code names them as bridge::", () => {
+  const files = generate([BRIDGE, BRIDGE_CONST, NOT_FOUND]);
+  assert.match(files["mod.rs"], /pub\(crate\) mod bridge;/);
+  assert.match(
+    files["bridge.rs"],
+    /pub\(crate\) fn no_such_call\(call: impl std::fmt::Display\) -> String/,
+  );
+  assert.match(files["bridge.rs"], /pub\(crate\) const OPEN_ALREADY: &str =/);
+  assert.doesNotMatch(files["error.rs"], /OPEN_ALREADY|no_such_call/);
+  assert.match(files["error.rs"], /NO_SUCH_SPACE/);
+  const module = "crates/nocentraldb/src/texts";
+  const uses = [
+    "crates/nocentraldb/src/bridge/mod.rs",
+    "texts::bridge::no_such_call(other) texts::bridge::OPEN_ALREADY texts::error::NO_SUCH_SPACE",
+  ];
+  assert.deepEqual(
+    checkCode([uses], module, [BRIDGE, BRIDGE_CONST, NOT_FOUND]),
+    [],
   );
 });
