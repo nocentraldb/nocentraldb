@@ -49,12 +49,44 @@ export const engineFrom = (env) => {
 export const engine = engineFrom(process.env);
 
 /**
+ * What each engine's private window launches with (NOC-347). In WebKit
+ * every `browser.newContext()` is one, an ephemeral context; in Chromium
+ * it is an off-the-record context, as Incognito is. Firefox's contexts
+ * are normal windows, so its prefs start the browser in private browsing,
+ * where every window is private.
+ */
+const PRIVATE = {
+  chromium: {},
+  firefox: {
+    firefoxUserPrefs: {
+      ...OPTIONS.firefox.firefoxUserPrefs,
+      "browser.privatebrowsing.autostart": true,
+    },
+  },
+  webkit: {},
+};
+
+/**
+ * This run's engine with private windows only: `newContext()` opens a
+ * private window, and `close()` closes the browser. Only private.e2e.test.mjs
+ * uses it; every other file runs in normal windows, from `launch`.
+ */
+export const launchPrivate = async () => {
+  const browser = await TYPES[engine].launch(PRIVATE[engine]);
+  return {
+    newContext: () => browser.newContext(),
+    close: () => browser.close(),
+  };
+};
+
+/**
  * This run's engine, as the e2e files use a browser: `newContext()` opens
  * a normal window on a fresh profile, with an OPFS of its own, and `close()`
  * closes every window it opened and removes the profiles. Not
  * `browser.newContext()`: in WebKit that is a private window, which has no
- * OPFS, so the SDK keeps the database in memory and another page of the
- * context does not see it (NOC-174 tests that case on its own).
+ * OPFS, so the SDK keeps the database in memory and loses it when its
+ * owning tab closes or is hidden (private.e2e.test.mjs tests that case on
+ * its own, from `launchPrivate`).
  */
 export const launch = async () => {
   const open = new Set();
