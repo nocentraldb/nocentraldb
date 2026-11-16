@@ -94,9 +94,9 @@ impl Site<'_> {
             (Field::Ref(reference), FieldState::Basic(state), Intent::Set(value)) => {
                 let target = match value.0 {
                     Repr::Clear => None,
-                    Repr::Ref(space, object) => Some(Target {
-                        space: space.0,
-                        object: object.0,
+                    Repr::Ref(reference) => Some(Target {
+                        space: reference.space.0,
+                        object: reference.id.0,
                     }),
                     _ => return Err(invalid()),
                 };

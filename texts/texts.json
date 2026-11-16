@@ -2245,6 +2245,12 @@
       "when": "What the read asked for, in fieldDoesNotHold: an object id."
     },
     {
+      "id": "part.kindReference",
+      "kind": "part",
+      "text": "a reference",
+      "when": "What the read asked for, in fieldDoesNotHold: a reference into a space."
+    },
+    {
       "id": "part.kindText",
       "kind": "part",
       "text": "a text",
