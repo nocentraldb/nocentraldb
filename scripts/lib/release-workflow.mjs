@@ -29,6 +29,7 @@ export const alpha = (ctx) => workflow(ctx).jobs?.alpha ?? {};
 export const steps = (ctx) => alpha(ctx).steps ?? [];
 export const JOBS = [
   "alpha",
+  "alpha-npm",
   "verify",
   "build",
   "publish",
