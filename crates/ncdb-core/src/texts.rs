@@ -4,6 +4,108 @@
 //! Every text the core words itself, from texts/texts.json (NOC-329, T6).
 //! Each text's comment says when it shows.
 
+/// `lockExpectedArray`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: an index's fields are not a list.
+pub(crate) const LOCK_EXPECTED_ARRAY: &str =
+    "expected an array";
+
+/// `lockExpectedDirection`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: an index field's direction is neither.
+pub(crate) const LOCK_EXPECTED_DIRECTION: &str =
+    "expected \"asc\" or \"desc\"";
+
+/// `lockExpectedModelId`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: `model.id` is not 32 lower-case hex digits.
+pub(crate) const LOCK_EXPECTED_MODEL_ID: &str =
+    "expected 32 lower-case hex digits";
+
+/// `lockExpectedNames`: After the JSON path of the value at fault, when the
+/// schema's description cannot be read (cli.descriptionUnreadable): a
+/// collection's list of names, such as its deprecated fields, is not a list.
+pub(crate) const LOCK_EXPECTED_NAMES: &str =
+    "expected an array of names";
+
+/// `lockExpectedObject`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a value that must be an object is something else.
+pub(crate) const LOCK_EXPECTED_OBJECT: &str =
+    "expected an object";
+
+/// `lockExpectedScope`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: an index's scope is something other than "space".
+pub(crate) const LOCK_EXPECTED_SCOPE: &str =
+    "expected \"space\" or no scope";
+
+/// `lockExpectedString`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a value that must be a string is something else.
+pub(crate) const LOCK_EXPECTED_STRING: &str =
+    "expected a string";
+
+/// `lockExpectedStrings`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a value that must be a list of strings is something else.
+pub(crate) const LOCK_EXPECTED_STRINGS: &str =
+    "expected an array of strings";
+
+/// `lockExpectedWholeNumber`: After the JSON path of the value at fault, when
+/// the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a value that must be a whole number is something else.
+pub(crate) const LOCK_EXPECTED_WHOLE_NUMBER: &str =
+    "expected a whole number";
+
+/// `lockMissing`: After the JSON path of the value at fault, when the lock
+/// (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a required key is missing.
+pub(crate) const LOCK_MISSING: &str =
+    "missing";
+
+/// `lockNoFieldType`: After the JSON path of the value at fault, when the lock
+/// (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a field's type names no built-in type and no plugin's.
+pub(crate) fn lock_no_field_type(type_id: impl std::fmt::Display) -> String {
+    format!("{type_id} is no field type: expected ncdb/<type> or <plugin>/<type>")
+}
+
+/// `lockNotJson`: After the JSON path of the value at fault, when the lock
+/// (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: the text is no JSON; `error` is the JSON parser's reason.
+pub(crate) fn lock_not_json(error: impl std::fmt::Display) -> String {
+    format!("not valid JSON: {error}")
+}
+
+/// `lockSetElementNotBasic`: After the JSON path of the value at fault, when
+/// the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: a set's element is not a basic value.
+pub(crate) fn lock_set_element_not_basic(type_id: impl std::fmt::Display) -> String {
+    format!("a set's element is a basic value, not {type_id}")
+}
+
+/// `lockUnknownFormat`: After the JSON path of the value at fault, when the
+/// lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening,
+/// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
+/// cannot be read: the lock's format is one this version does not read. `known`
+/// is the one it reads.
+pub(crate) fn lock_unknown_format(format: impl std::fmt::Display, known: impl std::fmt::Display) -> String {
+    format!("format {format} is not known to this version; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade.")
+}
+
 /// `nameKindCollection`: In core.refusalBadName and core.refusalNameClash, as
 /// `kind` or `other_kind`, for the name of a collection.
 pub(crate) const NAME_KIND_COLLECTION: &str =

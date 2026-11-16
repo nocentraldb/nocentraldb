@@ -303,7 +303,7 @@ impl Kind {
     /// id, such as `ncdb/set of ncdb/string`.
     pub fn describe(&self) -> String {
         match self {
-            Kind::Set(element) => format!("ncdb/set of {}", element.type_id()),
+            Kind::Set(element) => format!("ncdb/set of {}", element.type_id()), // notation
             other => other.type_id().to_owned(),
         }
     }

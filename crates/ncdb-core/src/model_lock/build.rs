@@ -14,6 +14,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value};
 
+use crate::texts;
+
 use super::read::{
     direction, entries, error, field_core, join, object, parse, plugins, required, scope, string,
     whole,
@@ -84,7 +86,7 @@ fn draft_collection(map: &Map<String, Value>, path: &str) -> Result<DraftCollect
         };
         let items = value
             .as_array()
-            .ok_or_else(|| error(&at, "expected an array of names"))?;
+            .ok_or_else(|| error(&at, texts::LOCK_EXPECTED_NAMES))?;
         items
             .iter()
             .enumerate()
@@ -122,7 +124,7 @@ fn draft_index(map: &Map<String, Value>, path: &str) -> Result<Index, LockError>
     let at = join(path, "fields");
     let items = required(map, path, "fields")?
         .as_array()
-        .ok_or_else(|| error(&at, "expected an array"))?;
+        .ok_or_else(|| error(&at, texts::LOCK_EXPECTED_ARRAY))?;
     let fields = items
         .iter()
         .enumerate()

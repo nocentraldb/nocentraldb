@@ -176,6 +176,90 @@
       "when": "`ncdb model build`, after the lock's name, when it wrote a new model version; a line per change follows, then `cli.additive`."
     },
     {
+      "id": "core.lockExpectedArray",
+      "kind": "core",
+      "text": "expected an array",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index's fields are not a list."
+    },
+    {
+      "id": "core.lockExpectedDirection",
+      "kind": "core",
+      "text": "expected \"asc\" or \"desc\"",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index field's direction is neither."
+    },
+    {
+      "id": "core.lockExpectedModelId",
+      "kind": "core",
+      "text": "expected 32 lower-case hex digits",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: `model.id` is not 32 lower-case hex digits."
+    },
+    {
+      "id": "core.lockExpectedNames",
+      "kind": "core",
+      "text": "expected an array of names",
+      "when": "After the JSON path of the value at fault, when the schema's description cannot be read (cli.descriptionUnreadable): a collection's list of names, such as its deprecated fields, is not a list."
+    },
+    {
+      "id": "core.lockExpectedObject",
+      "kind": "core",
+      "text": "expected an object",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be an object is something else."
+    },
+    {
+      "id": "core.lockExpectedScope",
+      "kind": "core",
+      "text": "expected \"space\" or no scope",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index's scope is something other than \"space\"."
+    },
+    {
+      "id": "core.lockExpectedString",
+      "kind": "core",
+      "text": "expected a string",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a string is something else."
+    },
+    {
+      "id": "core.lockExpectedStrings",
+      "kind": "core",
+      "text": "expected an array of strings",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a list of strings is something else."
+    },
+    {
+      "id": "core.lockExpectedWholeNumber",
+      "kind": "core",
+      "text": "expected a whole number",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a whole number is something else."
+    },
+    {
+      "id": "core.lockMissing",
+      "kind": "core",
+      "text": "missing",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a required key is missing."
+    },
+    {
+      "id": "core.lockNoFieldType",
+      "kind": "core",
+      "text": "{type_id} is no field type: expected ncdb/<type> or <plugin>/<type>",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a field's type names no built-in type and no plugin's."
+    },
+    {
+      "id": "core.lockNotJson",
+      "kind": "core",
+      "text": "not valid JSON: {error}",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the text is no JSON; `error` is the JSON parser's reason."
+    },
+    {
+      "id": "core.lockSetElementNotBasic",
+      "kind": "core",
+      "text": "a set's element is a basic value, not {type_id}",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a set's element is not a basic value."
+    },
+    {
+      "id": "core.lockUnknownFormat",
+      "kind": "core",
+      "text": "format {format} is not known to this version; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade.",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the lock's format is one this version does not read. `known` is the one it reads."
+    },
+    {
       "id": "core.nameKindCollection",
       "kind": "core",
       "text": "collection",

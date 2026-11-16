@@ -118,7 +118,7 @@ impl fmt::Debug for Registry {
         let mut list = f.debug_list();
         list.entries(self.types.keys());
         if let Some(lock) = &self.reserved {
-            list.entry(&("reserved model", lock.model.version));
+            list.entry(&("reserved model", lock.model.version)); // notation
         }
         list.finish()
     }
