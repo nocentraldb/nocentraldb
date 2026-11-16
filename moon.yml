@@ -158,16 +158,18 @@ tasks:
       - "/factory/decisions/**/*"
       - "/scripts/decisions.mjs"
   texts:
-    # Every text a developer reads from the SDKs lives in texts/texts.json
-    # (NOC-329): each entry well-formed, with when it shows, sorted by id and
-    # one field per line, so git diff shows each change; the generated
-    # crates/nocentraldb/src/texts/ equal to the file; no notice or error
-    # text written in the SDK's code; and every text used.
+    # Every text a developer reads from the SDKs and the ncdb command line
+    # lives in texts/texts.json (NOC-329): each entry well-formed, with when
+    # it shows, sorted by id and one field per line, so git diff shows each
+    # change; the generated crates/nocentraldb/src/texts/ and
+    # crates/ncdb/src/texts.rs equal to the file; no text written in the
+    # SDK's or the command line's code; and every text used.
     command: "node scripts/texts.mjs --check"
     inputs:
       - "/texts/**/*"
       - "/scripts/texts.mjs"
       - "/crates/nocentraldb/src/**/*"
+      - "/crates/ncdb/src/**/*"
   version:
     # The one version of the project: Cargo.toml [workspace.package] holds a
     # plain X.Y.Z, every crate inherits it, inter-crate dependencies are
