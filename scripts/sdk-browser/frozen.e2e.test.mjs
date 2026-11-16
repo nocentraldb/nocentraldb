@@ -160,16 +160,26 @@ const startWrite = (page, title) =>
       );
   }, title);
 
-/** What `window.outcome` settled as within `ms`, or "pending". */
-const outcomeWithin = (page, ms) =>
-  page.evaluate(
-    (ms) =>
-      Promise.race([
-        window.outcome,
-        new Promise((resolve) => setTimeout(() => resolve("pending"), ms)),
-      ]),
-    ms,
-  );
+/**
+ * What `window.outcome` settled as within `ms`, or "pending". The time is
+ * Node's, not a timer of the page: in WebKit the frozen owner can hold the
+ * other pages' timers too, and a timer that fires only after the freeze
+ * would let a write that waited for the owner pass (NOC-352).
+ */
+const outcomeWithin = async (page, ms) => {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => resolve("pending"), ms);
+  });
+  const settled = page.evaluate(() => window.outcome);
+  // Once late, the page may close before it answers.
+  settled.catch(() => {});
+  try {
+    return await Promise.race([settled, late]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
 
 test("a write from a tab whose owner is frozen is written, and that tab sees it", async () => {
   const context = await browser.newContext();
