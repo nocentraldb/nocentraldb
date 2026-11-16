@@ -79,6 +79,43 @@ function staleSession() {
   return { dir, old, head };
 }
 
+/**
+ * The same start in a shallow clone, as the cloud clones (NOC-350): the
+ * snapshot checked out `old` and kept it on main, and main has since moved on
+ * by more commits than the clone's depth. The fresh HEAD's history then ends
+ * at the shallow boundary, before it reaches `old`.
+ */
+function shallowStaleSession() {
+  const origin = mkdtempSync(join(tmpdir(), "session-start-git-origin-"));
+  const dir = mkdtempSync(join(tmpdir(), "session-start-git-"));
+  fixtures.push(origin, dir);
+  git(origin, "init", "-q", "-b", "main");
+  git(origin, "config", "user.email", "test@example.com");
+  git(origin, "config", "user.name", "Test");
+  const old = commit(
+    origin,
+    { "AGENTS.md": "old steering\n", "gone.txt": "removed later\n" },
+    "old",
+  );
+  git(origin, "branch", "snapshot");
+  commit(origin, { "gone.txt": null }, "between");
+  const head = commit(
+    origin,
+    { "AGENTS.md": "new steering\n", "new.txt": "added\n" },
+    "new",
+  );
+  const url = `file://${origin}`;
+  git(dir, "clone", "-q", "--depth", "1", "--branch", "snapshot", url, ".");
+  git(dir, "branch", "-q", "-m", "main");
+  appendFileSync(join(dir, "AGENTS.md"), CLOUD);
+  git(dir, "update-index", "--skip-worktree", "AGENTS.md");
+  git(dir, "fetch", "-q", "--depth", "1", "origin", "main");
+  git(dir, "checkout", "-q", "--detach");
+  git(dir, "update-ref", "--no-deref", "HEAD", head);
+  git(dir, "checkout", "-q", "-b", "ticket");
+  return { dir, old, head };
+}
+
 function run(dir, env = { CLAUDE_CODE_REMOTE: "true" }) {
   const result = spawnSync(process.execPath, [script], {
     cwd: dir,
@@ -117,6 +154,25 @@ test("the cloud block survives on top of HEAD's AGENTS.md, hidden from git", () 
   assert.equal(git(dir, "ls-files", "-v", "AGENTS.md"), "S AGENTS.md");
 });
 
+test("the shallow fixture hides the old commit from HEAD's history", () => {
+  const { dir, old } = shallowStaleSession();
+  assert.equal(git(dir, "rev-parse", "--is-shallow-repository"), "true");
+  assert.doesNotMatch(git(dir, "log", "--format=%H", "HEAD"), new RegExp(old));
+  assert.match(status(dir), /^A {2}gone\.txt$/m);
+});
+
+test("a stale tree from a commit behind the shallow boundary is reset to HEAD", () => {
+  const { dir, old } = shallowStaleSession();
+  const out = run(dir);
+  assert.equal(status(dir), "");
+  assert.equal(existsSync(join(dir, "gone.txt")), false);
+  assert.equal(
+    readFileSync(join(dir, "AGENTS.md"), "utf8"),
+    `new steering\n${CLOUD}`,
+  );
+  assert.ok(out.includes(old), `names the old commit: ${out}`);
+});
+
 test("staged work that matches no commit is left alone", () => {
   const { dir } = staleSession();
   writeFileSync(join(dir, "mine.txt"), "an agent's own work\n");
@@ -125,6 +181,18 @@ test("staged work that matches no commit is left alone", () => {
   const out = run(dir);
   assert.equal(status(dir), before);
   assert.match(out, /git status/);
+});
+
+test("a stale tree left alone is reported loudly, with its size", () => {
+  const { dir } = staleSession();
+  writeFileSync(join(dir, "mine.txt"), "an agent's own work\n");
+  git(dir, "add", "mine.txt");
+  const out = run(dir);
+  assert.match(
+    out,
+    /^session-start-git: WARNING: 4 paths are staged over HEAD/,
+  );
+  assert.match(out, /a commit now would revert/);
 });
 
 test("unstaged edits over the stale tree are left alone", () => {
