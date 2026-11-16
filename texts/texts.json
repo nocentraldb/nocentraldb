@@ -176,6 +176,198 @@
       "when": "`ncdb model build`, after the lock's name, when it wrote a new model version; a line per change follows, then `cli.additive`."
     },
     {
+      "id": "core.nameKindCollection",
+      "kind": "core",
+      "text": "collection",
+      "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a collection."
+    },
+    {
+      "id": "core.nameKindComputed",
+      "kind": "core",
+      "text": "computed field",
+      "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a computed field."
+    },
+    {
+      "id": "core.nameKindField",
+      "kind": "core",
+      "text": "field",
+      "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a field."
+    },
+    {
+      "id": "core.nameKindIndex",
+      "kind": "core",
+      "text": "index",
+      "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of an index."
+    },
+    {
+      "id": "core.nameKindView",
+      "kind": "core",
+      "text": "view",
+      "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a view."
+    },
+    {
+      "id": "core.refusalBadName",
+      "kind": "core",
+      "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lower-case letter and has at most 63 ASCII letters and digits.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection."
+    },
+    {
+      "id": "core.refusalCollectionRemoved",
+      "kind": "core",
+      "text": "collection {collection}: removed. Changes name collections; data in {collection} would belong to nothing.\nTo stop using it, keep it in the schema. To rename it, add the collection under its new name.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a collection of the previous lock is missing from the next one."
+    },
+    {
+      "id": "core.refusalCollectionUndeprecated",
+      "kind": "core",
+      "text": "collection {collection}: no longer deprecated.\nClients that stopped writing it would not write it again.\nKeep it deprecated, and add a new collection instead.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a deprecated collection is no longer deprecated."
+    },
+    {
+      "id": "core.refusalConfigChanged",
+      "kind": "core",
+      "text": "{collection}.{field}: the config of {type_id} changes.\nThe config is part of the type's merge rule: members would merge existing values differently.\nAdd a new field with the new config instead, and deprecate {collection}.{field}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a plugin field's config changes, appears or disappears."
+    },
+    {
+      "id": "core.refusalDuplicateOption",
+      "kind": "core",
+      "text": "{collection}.{field}: option {option} is listed twice.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a choice lists an option twice."
+    },
+    {
+      "id": "core.refusalFieldRemoved",
+      "kind": "core",
+      "text": "{collection}.{field}: removed. Changes name fields; data in {collection}.{field} would belong to nothing.\nTo stop using it, keep it in the schema with .deprecated(\"...\"). To rename it, add {rename}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a field of the previous lock is missing from the next one. `rename` is the one new field of the same type in the collection, when there is exactly one, else core.refusalNoRename."
+    },
+    {
+      "id": "core.refusalIndexEqualTooLarge",
+      "kind": "core",
+      "text": "index {collection}.{index}: equal is {equal}, but the index has {fields} fields.\nNo query could fix more fields than the index has.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index's equal is larger than its number of fields."
+    },
+    {
+      "id": "core.refusalIndexNotIndexable",
+      "kind": "core",
+      "text": "index {collection}.{index}: {collection}.{field} is {type_id}, which cannot be indexed.\nAn index can use basic values and single links (nc.link).",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field of a type that cannot be indexed."
+    },
+    {
+      "id": "core.refusalIndexUnknownField",
+      "kind": "core",
+      "text": "index {collection}.{index}: {collection} has no field {field}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field its collection does not have."
+    },
+    {
+      "id": "core.refusalLowerVersion",
+      "kind": "core",
+      "text": "model.version: {next} is lower than {previous}.\nThe lock is older than the previous one; it is not its successor.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: the next lock's model version is lower than the previous one's."
+    },
+    {
+      "id": "core.refusalMarkedPersonal",
+      "kind": "core",
+      "text": "{collection}.{field}: marked personal.\nIts earlier values are in the log under the space key only; erasing a person would not reach them.\nAdd a new personal field instead, and deprecate {collection}.{field}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: an existing field is marked personal."
+    },
+    {
+      "id": "core.refusalNameClash",
+      "kind": "core",
+      "text": "{kind} {name}: the name collides with the {other_kind} {other}.\nNames in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts."
+    },
+    {
+      "id": "core.refusalNoRename",
+      "kind": "core",
+      "text": "a field under the new name",
+      "when": "In core.refusalFieldRemoved, as `rename`, when the collection has no one new field of the removed field's type."
+    },
+    {
+      "id": "core.refusalOptionsChanged",
+      "kind": "core",
+      "text": "{collection}.{field}: options change from [{from}] to [{to}].\nStored values name options, and their order may become sort order.\nKeep every option where it is, and append new options at the end.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a choice's options are not the previous ones with new ones appended. `from` and `to` are the options, separated by commas."
+    },
+    {
+      "id": "core.refusalOtherModel",
+      "kind": "core",
+      "text": "model.id: {next} is not {previous}.\nThe lock belongs to another model; it is not a successor of the previous one.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: the next lock is of another lineage. `next` and `previous` are the model ids."
+    },
+    {
+      "id": "core.refusalPersonChanged",
+      "kind": "core",
+      "text": "{collection}.{field}: its person changes from {from} to {to}.\nOld values stay sealed under the keys of the old person: the field would be half erasable.\nKeep .personal({{ person: \"{from}\" }}), or add a new personal field.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a personal field's person changes."
+    },
+    {
+      "id": "core.refusalPersonLinkPersonal",
+      "kind": "core",
+      "text": "{collection}.{field}: personal to {collection}.{person}, which is itself personal.\nThe link that names the person must stay readable, so the SDK can find the person's key.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is a link field that is itself personal."
+    },
+    {
+      "id": "core.refusalPersonNotLink",
+      "kind": "core",
+      "text": "{collection}.{field}: personal to {person}, which is no link field of {collection}.\nperson is \"self\" or the name of an nc.link field of {collection}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is no link field of its collection."
+    },
+    {
+      "id": "core.refusalPersonalNotBasic",
+      "kind": "core",
+      "text": "{collection}.{field}: {type_id} cannot be personal.\nOnly basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a field of a type that cannot be personal is marked personal."
+    },
+    {
+      "id": "core.refusalRuleChanged",
+      "kind": "core",
+      "text": "{collection}.{field}: the rule version of {type_id} changes from {from} to {to}.\nA new rule version needs a migration that every member runs first, and there is none yet.\nAdd a new field with rule version {to} instead, and deprecate {collection}.{field}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a field moves to another rule version of its type."
+    },
+    {
+      "id": "core.refusalTargetRemoved",
+      "kind": "core",
+      "text": "{collection}.{field}: target {target} removed.\nExisting links into {target} would read as wrong collection, and references into it as missing, on upgraded clients only.\nKeep {target} in the targets.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a collection is removed from the targets of a link or a reference."
+    },
+    {
+      "id": "core.refusalTypeChanged",
+      "kind": "core",
+      "text": "{collection}.{field}: type changes from {from} to {to}.\nClients would merge and read existing values differently.\nAdd a new field instead, and deprecate {collection}.{field}.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a field's type changes (for a set, its element's type)."
+    },
+    {
+      "id": "core.refusalUndeprecated",
+      "kind": "core",
+      "text": "{collection}.{field}: no longer deprecated.\nClients that stopped writing it would not write it again.\nKeep it deprecated, and add a new field instead.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a deprecated field is no longer deprecated."
+    },
+    {
+      "id": "core.refusalUnknownPlugin",
+      "kind": "core",
+      "text": "{collection}.{field}: {type_id} names no plugin of the model.\nA plugin's field type needs its namespace in plugins.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a plugin field type's namespace is not in the model's plugins."
+    },
+    {
+      "id": "core.refusalUnknownRule",
+      "kind": "core",
+      "text": "{collection}.{field}: {type_id} has no rule version {rule}.\nThis version knows rule version {known} of every built-in type.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a built-in field type names a rule version this core does not know. `known` is the one it knows."
+    },
+    {
+      "id": "core.refusalUnknownTarget",
+      "kind": "core",
+      "text": "{collection}.{field}: target {target} is no collection of the model.",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a link's target is no collection of the model."
+    },
+    {
+      "id": "core.refusalUnmarkedPersonal",
+      "kind": "core",
+      "text": "{collection}.{field}: no longer personal.\nOld values stay sealed under person keys and new ones would not be: the field would be half erasable.\nKeep .personal({{ person: \"{person}\" }}).",
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a personal field is no longer personal."
+    },
+    {
       "id": "error.accountKeyNotSealable",
       "kind": "error",
       "code": "invalidValue",

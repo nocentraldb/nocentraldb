@@ -8,6 +8,7 @@
 use std::fmt;
 
 use super::ModelId;
+use crate::texts;
 
 /// What kind of name a name in a collection's scope is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,11 +28,11 @@ pub enum NameKind {
 impl NameKind {
     fn as_str(self) -> &'static str {
         match self {
-            NameKind::Collection => "collection",
-            NameKind::Field => "field",
-            NameKind::Computed => "computed field",
-            NameKind::View => "view",
-            NameKind::Index => "index",
+            NameKind::Collection => texts::NAME_KIND_COLLECTION,
+            NameKind::Field => texts::NAME_KIND_FIELD,
+            NameKind::Computed => texts::NAME_KIND_COMPUTED,
+            NameKind::View => texts::NAME_KIND_VIEW,
+            NameKind::Index => texts::NAME_KIND_INDEX,
         }
     }
 }
@@ -191,135 +192,145 @@ pub enum Refusal {
 
 impl Refusal {
     /// The message, one line each: what changed, why it is refused, and
-    /// (for most) what to do instead.
+    /// (for most) what to do instead. Its text is the refusal's entry of
+    /// texts/texts.json (NOC-329).
     pub fn lines(&self) -> Vec<String> {
         use Refusal::*;
-        let lines: Vec<String> = match self {
-            OtherModel { previous, next } => vec![
-                format!("model.id: {next} is not {previous}."),
-                "The lock belongs to another model; it is not a successor of the previous one.".into(),
-            ],
-            LowerVersion { previous, next } => vec![
-                format!("model.version: {next} is lower than {previous}."),
-                "The lock is older than the previous one; it is not its successor.".into(),
-            ],
-            CollectionRemoved { collection: c } => vec![
-                format!("collection {c}: removed. Changes name collections; data in {c} would belong to nothing."),
-                "To stop using it, keep it in the schema. To rename it, add the collection under its new name.".into(),
-            ],
-            CollectionUndeprecated { collection: c } => vec![
-                format!("collection {c}: no longer deprecated."),
-                "Clients that stopped writing it would not write it again.".into(),
-                "Keep it deprecated, and add a new collection instead.".into(),
-            ],
-            FieldRemoved { collection: c, field: f, rename } => vec![
-                format!("{c}.{f}: removed. Changes name fields; data in {c}.{f} would belong to nothing."),
-                format!(
-                    "To stop using it, keep it in the schema with .deprecated(\"...\"). To rename it, add {}.",
-                    match rename {
-                        Some(new) => format!("{c}.{new}"),
-                        None => "a field under the new name".into(),
-                    }
-                ),
-            ],
-            TypeChanged { collection: c, field: f, from, to } => vec![
-                format!("{c}.{f}: type changes from {from} to {to}."),
-                "Clients would merge and read existing values differently.".into(),
-                format!("Add a new field instead, and deprecate {c}.{f}."),
-            ],
-            RuleChanged { collection: c, field: f, type_id, from, to } => vec![
-                format!("{c}.{f}: the rule version of {type_id} changes from {from} to {to}."),
-                "A new rule version needs a migration that every member runs first, and there is none yet.".into(),
-                format!("Add a new field with rule version {to} instead, and deprecate {c}.{f}."),
-            ],
-            ConfigChanged { collection: c, field: f, type_id } => vec![
-                format!("{c}.{f}: the config of {type_id} changes."),
-                "The config is part of the type's merge rule: members would merge existing values differently.".into(),
-                format!("Add a new field with the new config instead, and deprecate {c}.{f}."),
-            ],
-            OptionsChanged { collection: c, field: f, from, to } => vec![
-                format!("{c}.{f}: options change from [{}] to [{}].", from.join(", "), to.join(", ")),
-                "Stored values name options, and their order may become sort order.".into(),
-                "Keep every option where it is, and append new options at the end.".into(),
-            ],
-            TargetRemoved { collection: c, field: f, target: t } => vec![
-                format!("{c}.{f}: target {t} removed."),
-                format!("Existing links into {t} would read as wrong collection, and references into it as missing, on upgraded clients only."),
-                format!("Keep {t} in the targets."),
-            ],
-            MarkedPersonal { collection: c, field: f } => vec![
-                format!("{c}.{f}: marked personal."),
-                "Its earlier values are in the log under the space key only; erasing a person would not reach them.".into(),
-                format!("Add a new personal field instead, and deprecate {c}.{f}."),
-            ],
-            UnmarkedPersonal { collection: c, field: f, person } => vec![
-                format!("{c}.{f}: no longer personal."),
-                "Old values stay sealed under person keys and new ones would not be: the field would be half erasable.".into(),
-                format!("Keep .personal({{ person: \"{person}\" }})."),
-            ],
-            PersonChanged { collection: c, field: f, from, to } => vec![
-                format!("{c}.{f}: its person changes from {from} to {to}."),
-                "Old values stay sealed under the keys of the old person: the field would be half erasable.".into(),
-                format!("Keep .personal({{ person: \"{from}\" }}), or add a new personal field."),
-            ],
-            Undeprecated { collection: c, field: f } => vec![
-                format!("{c}.{f}: no longer deprecated."),
-                "Clients that stopped writing it would not write it again.".into(),
-                "Keep it deprecated, and add a new field instead.".into(),
-            ],
-            BadName { kind, collection, name } => vec![
-                format!("{} {}: the name breaks the naming rules.", kind.as_str(), scoped(collection, name)),
-                "A name starts with a lower-case letter and has at most 63 ASCII letters and digits.".into(),
-            ],
-            NameClash { collection, first, second } => vec![
-                format!(
-                    "{} {}: the name collides with the {} {}.",
-                    second.0.as_str(),
-                    scoped(collection, &second.1),
-                    first.0.as_str(),
-                    scoped(collection, &first.1),
-                ),
-                "Names in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.".into(),
-            ],
-            UnknownRule { collection: c, field: f, type_id, rule } => vec![
-                format!("{c}.{f}: {type_id} has no rule version {rule}."),
-                format!("This version knows rule version {} of every built-in type.", super::BUILT_IN_RULE),
-            ],
-            UnknownPlugin { collection: c, field: f, type_id } => vec![
-                format!("{c}.{f}: {type_id} names no plugin of the model."),
-                "A plugin's field type needs its namespace in plugins.".into(),
-            ],
-            UnknownTarget { collection: c, field: f, target: t } => vec![
-                format!("{c}.{f}: target {t} is no collection of the model."),
-            ],
-            DuplicateOption { collection: c, field: f, option } => vec![
-                format!("{c}.{f}: option {option} is listed twice."),
-            ],
-            PersonalNotBasic { collection: c, field: f, type_id } => vec![
-                format!("{c}.{f}: {type_id} cannot be personal."),
-                "Only basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.".into(),
-            ],
-            PersonNotLink { collection: c, field: f, person } => vec![
-                format!("{c}.{f}: personal to {person}, which is no link field of {c}."),
-                format!("person is \"self\" or the name of an nc.link field of {c}."),
-            ],
-            PersonLinkPersonal { collection: c, field: f, person } => vec![
-                format!("{c}.{f}: personal to {c}.{person}, which is itself personal."),
-                "The link that names the person must stay readable, so the SDK can find the person's key.".into(),
-            ],
-            IndexUnknownField { collection: c, index, field: f } => vec![
-                format!("index {c}.{index}: {c} has no field {f}."),
-            ],
-            IndexNotIndexable { collection: c, index, field: f, type_id } => vec![
-                format!("index {c}.{index}: {c}.{f} is {type_id}, which cannot be indexed."),
-                "An index can use basic values and single links (nc.link).".into(),
-            ],
-            IndexEqualTooLarge { collection: c, index, equal, fields } => vec![
-                format!("index {c}.{index}: equal is {equal}, but the index has {fields} fields."),
-                "No query could fix more fields than the index has.".into(),
-            ],
+        let text = match self {
+            OtherModel { previous, next } => texts::refusal_other_model(next, previous),
+            LowerVersion { previous, next } => texts::refusal_lower_version(next, previous),
+            CollectionRemoved { collection } => texts::refusal_collection_removed(collection),
+            CollectionUndeprecated { collection } => {
+                texts::refusal_collection_undeprecated(collection)
+            }
+            FieldRemoved {
+                collection: c,
+                field,
+                rename,
+            } => texts::refusal_field_removed(
+                c,
+                field,
+                match rename {
+                    Some(new) => format!("{c}.{new}"),
+                    None => texts::REFUSAL_NO_RENAME.into(),
+                },
+            ),
+            TypeChanged {
+                collection,
+                field,
+                from,
+                to,
+            } => texts::refusal_type_changed(collection, field, from, to),
+            RuleChanged {
+                collection,
+                field,
+                type_id,
+                from,
+                to,
+            } => texts::refusal_rule_changed(collection, field, type_id, from, to),
+            ConfigChanged {
+                collection,
+                field,
+                type_id,
+            } => texts::refusal_config_changed(collection, field, type_id),
+            OptionsChanged {
+                collection,
+                field,
+                from,
+                to,
+            } => texts::refusal_options_changed(collection, field, from.join(", "), to.join(", ")),
+            TargetRemoved {
+                collection,
+                field,
+                target,
+            } => texts::refusal_target_removed(collection, field, target),
+            MarkedPersonal { collection, field } => {
+                texts::refusal_marked_personal(collection, field)
+            }
+            UnmarkedPersonal {
+                collection,
+                field,
+                person,
+            } => texts::refusal_unmarked_personal(collection, field, person),
+            PersonChanged {
+                collection,
+                field,
+                from,
+                to,
+            } => texts::refusal_person_changed(collection, field, from, to),
+            Undeprecated { collection, field } => texts::refusal_undeprecated(collection, field),
+            BadName {
+                kind,
+                collection,
+                name,
+            } => texts::refusal_bad_name(kind.as_str(), scoped(collection, name)),
+            NameClash {
+                collection,
+                first,
+                second,
+            } => texts::refusal_name_clash(
+                second.0.as_str(),
+                scoped(collection, &second.1),
+                first.0.as_str(),
+                scoped(collection, &first.1),
+            ),
+            UnknownRule {
+                collection,
+                field,
+                type_id,
+                rule,
+            } => {
+                texts::refusal_unknown_rule(collection, field, type_id, rule, super::BUILT_IN_RULE)
+            }
+            UnknownPlugin {
+                collection,
+                field,
+                type_id,
+            } => texts::refusal_unknown_plugin(collection, field, type_id),
+            UnknownTarget {
+                collection,
+                field,
+                target,
+            } => texts::refusal_unknown_target(collection, field, target),
+            DuplicateOption {
+                collection,
+                field,
+                option,
+            } => texts::refusal_duplicate_option(collection, field, option),
+            PersonalNotBasic {
+                collection,
+                field,
+                type_id,
+            } => texts::refusal_personal_not_basic(collection, field, type_id),
+            PersonNotLink {
+                collection,
+                field,
+                person,
+            } => texts::refusal_person_not_link(collection, field, person),
+            PersonLinkPersonal {
+                collection,
+                field,
+                person,
+            } => texts::refusal_person_link_personal(collection, field, person),
+            IndexUnknownField {
+                collection,
+                index,
+                field,
+            } => texts::refusal_index_unknown_field(collection, index, field),
+            IndexNotIndexable {
+                collection,
+                index,
+                field,
+                type_id,
+            } => texts::refusal_index_not_indexable(collection, index, field, type_id),
+            IndexEqualTooLarge {
+                collection,
+                index,
+                equal,
+                fields,
+            } => texts::refusal_index_equal_too_large(collection, index, equal, fields),
         };
-        lines
+        text.lines().map(String::from).collect()
     }
 }
 
