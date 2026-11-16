@@ -1,10 +1,12 @@
-// NOC-347: what a private window does with the database across an owner
-// handover (NOC-177). Firefox and WebKit have no OPFS in a private window,
-// so the owning tab's worker keeps the copy in memory (RFC 0006, "Private
-// windows"). That memory goes with the worker: the tab that takes over
-// opens an empty copy. Chromium has OPFS in a private window, so its copy
-// outlives the owning tab. The test runs in each engine's private window
-// (engine.mjs, `launchPrivate`) and asserts what that engine does.
+// NOC-347: a private window without OPFS does not open the database.
+// Firefox and WebKit have no OPFS in a private window. A copy there could
+// live only in the memory of the tab that owns it, and it went with that
+// tab when it closed or was hidden: the next owner opened an empty copy,
+// and unconfirmed changes were lost silently. So the owner decided that
+// `nc.open` refuses there with `storageUnavailable`, and the app tells
+// the user (Carsten, 2026-11-16, NOC-347). Chromium has OPFS in a private
+// window: it opens there, and its copy outlives the owning tab. The test
+// runs in each engine's private window (engine.mjs, `launchPrivate`).
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
 // `repo:sdk-browser` and the workflow browser-view.yml run it.
@@ -53,28 +55,41 @@ const MODEL = `nc.model({
   ),
 })`;
 
-/** Whether this engine's private window has no OPFS, so the copy is in memory. */
-const inMemory = engine !== "chromium";
+/** Whether this engine's private window has OPFS, so the database opens there. */
+const opens = engine === "chromium";
 
-/** A page of `context` with the database opened as `window.db`. */
+/** A page of `context` that opened the database: answers the page and how the open ended, `"opened"` or the error's code. */
 const tab = async (context) => {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error));
   await page.goto(`${server.url}/`);
   await page.waitForFunction(() => window.ready === true);
-  await page.evaluate(
+  const open = await page.evaluate(
     async ({ lock, MODEL }) => {
       const { nc } = window;
       window.model = new Function("nc", `return ${MODEL}`)(nc);
-      window.db = await nc.open({ model: window.model, lock, name: "private" });
+      try {
+        window.db = await nc.open({
+          model: window.model,
+          lock,
+          name: "private",
+        });
+        return { outcome: "opened" };
+      } catch (error) {
+        return {
+          outcome: error.code,
+          name: error.name,
+          message: error.message,
+        };
+      }
     },
     { lock, MODEL },
   );
-  return { page, errors };
+  return { page, errors, open };
 };
 
-/** Creates a space with one task in it; answers the space id. */
+/** Creates a space with one task in it. */
 const createSpace = (page) =>
   page.evaluate(async () => {
     const space = await window.db.spaces.create();
@@ -83,73 +98,25 @@ const createSpace = (page) =>
       status: "open",
       priority: 1,
     });
-    return space.id;
   });
 
-/** What `page` reads of the database: its spaces, its open tasks, and its durability. */
-const copyOf = (page) =>
-  page.evaluate(async () => {
-    const spaces = await window.db.spaces.list();
-    const found = await window.db.find(
-      window.model.tasks.indexes.byStatusPriority.equal("open"),
-    );
-    return {
-      spaces: spaces.length,
-      titles: found.items.map((task) => task.title),
-      durability: window.db.durability.current(),
-    };
-  });
-
-/** Waits until the tab of `page` owns the database again: a read answers. */
-const settled = async (page) => {
+/** The titles of the open tasks `page` reads, once a read answers. */
+const titlesOf = async (page) => {
   const start = Date.now();
   for (;;) {
-    const read = await copyOf(page).catch((error) => error);
+    const read = await page
+      .evaluate(async () => {
+        const found = await window.db.find(
+          window.model.tasks.indexes.byStatusPriority.equal("open"),
+        );
+        return found.items.map((task) => task.title);
+      })
+      .catch((error) => error);
     if (!(read instanceof Error)) return read;
     if (Date.now() - start > 15000) assert.fail(`no read answered: ${read}`);
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 };
-
-test("a private window's copy is temporary where OPFS is missing", async () => {
-  const context = await browser.newContext();
-  const { page, errors } = await tab(context);
-  await createSpace(page);
-  const copy = await copyOf(page);
-  assert.equal(copy.durability.storage, inMemory ? "temporary" : "best-effort");
-  assert.equal(copy.durability.unconfirmed > 0, true);
-  assert.deepEqual(errors, []);
-  await context.close();
-});
-
-test("closing the owning tab of a private window: the copy goes with it where it is in memory", async () => {
-  const context = await browser.newContext();
-  const first = await tab(context);
-  const second = await tab(context);
-  const space = await createSpace(first.page);
-  assert.deepEqual((await copyOf(second.page)).titles, ["before the handover"]);
-  await first.page.close();
-  const after = await settled(second.page);
-  if (inMemory) {
-    // The new owner's worker opened a copy of its own, in its own memory.
-    assert.equal(after.spaces, 0);
-    assert.deepEqual(after.titles, []);
-    const write = await second.page.evaluate(
-      (space) =>
-        window.db.spaces.get(space).then(
-          () => "found",
-          (error) => error.code,
-        ),
-      space,
-    );
-    assert.equal(write, "notFound");
-  } else {
-    assert.equal(after.spaces, 1);
-    assert.deepEqual(after.titles, ["before the handover"]);
-  }
-  assert.deepEqual(second.errors, []);
-  await context.close();
-});
 
 /** Hides `page` as switching away from it does (frozen.e2e.test.mjs does the same): its visibilityState reads "hidden", and visibilitychange fires. */
 const hide = (page) =>
@@ -161,24 +128,53 @@ const hide = (page) =>
     document.dispatchEvent(new Event("visibilitychange"));
   });
 
-test("hiding the owning tab of a private window: the visible tab takes over, and the copy goes with the hidden one where it is in memory", async () => {
+test("nc.open in a private window refuses with storageUnavailable where OPFS is missing, and opens where it is not", async () => {
+  const context = await browser.newContext();
+  const { page, errors, open } = await tab(context);
+  if (opens) {
+    assert.equal(open.outcome, "opened");
+    const storage = await page.evaluate(
+      () => window.db.durability.current().storage,
+    );
+    assert.equal(storage, "best-effort");
+  } else {
+    assert.equal(open.outcome, "storageUnavailable", JSON.stringify(open));
+    assert.equal(open.name, "nc.Error");
+    assert.match(open.message, /private window/);
+  }
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test("a second tab of a private window holds no copy of its own where OPFS is missing", async () => {
   const context = await browser.newContext();
   const first = await tab(context);
   const second = await tab(context);
+  if (opens) {
+    assert.equal(second.open.outcome, "opened");
+  } else {
+    // Neither tab owns a database, so no tab can take one over empty.
+    assert.equal(first.open.outcome, "storageUnavailable");
+    assert.equal(second.open.outcome, "storageUnavailable");
+  }
+  await context.close();
+});
+
+test("in a private window that opens, the copy outlives its owning tab, closed or hidden", async () => {
+  const context = await browser.newContext();
+  const first = await tab(context);
+  if (!opens) {
+    assert.equal(first.open.outcome, "storageUnavailable");
+    await context.close();
+    return;
+  }
+  const second = await tab(context);
+  const third = await tab(context);
   await createSpace(first.page);
   await hide(first.page);
-  const after = await settled(second.page);
-  // Both tabs are still open; only the owner changed (NOC-332).
-  assert.equal(first.page.isClosed(), false);
-  if (inMemory) {
-    assert.equal(after.spaces, 0);
-    assert.deepEqual(after.titles, []);
-    assert.equal(after.durability.unconfirmed, 0);
-  } else {
-    assert.equal(after.spaces, 1);
-    assert.deepEqual(after.titles, ["before the handover"]);
-  }
-  assert.deepEqual(first.errors, []);
-  assert.deepEqual(second.errors, []);
+  assert.deepEqual(await titlesOf(second.page), ["before the handover"]);
+  await second.page.close();
+  assert.deepEqual(await titlesOf(third.page), ["before the handover"]);
+  assert.deepEqual(third.errors, []);
   await context.close();
 });
