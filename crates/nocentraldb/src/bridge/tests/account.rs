@@ -1,7 +1,8 @@
-//! The account calls of slice 1 through the bridge (NOC-316; RFC 0009,
-//! "Accounts and devices"; the shapes the owner decided on NOC-321,
-//! Carsten, 2026-11-15): opening for pairing or for recovery, the recovery
-//! code until the person confirmed it, and `recovered`.
+//! The account calls through the bridge (NOC-316; RFC 0009, "Accounts and
+//! devices"; the shapes the owner decided on NOC-321, Carsten, 2026-11-15):
+//! opening for pairing or for recovery, the recovery code until the person
+//! confirmed it, and `recovered` (slice 1); pairing (slice 2); removing a
+//! lost device (slice 3).
 
 use ncdb_core::cbor::Value;
 
@@ -197,4 +198,102 @@ fn a_kind_that_is_not_one_and_a_text_that_is_no_answer_are_refused() {
     assert_eq!(field(error, "code"), Some(&text("invalidValue")));
     let message = as_text(field(error, "message").expect("a message"));
     assert!(!message.contains("secret"), "{message}");
+}
+
+// Slice 3: removing a lost device (RFC 0010, "Losing a device"; NOC-321
+// point 6).
+
+/// A laptop with its recovery code's words, and a phone paired into its
+/// account and added to the laptop's one space, whose id it answers.
+fn paired_phone() -> (Bridge, String, Value) {
+    let mut laptop = opened();
+    let code = words(&mut laptop).expect("a code").join(" ");
+    let space = ok(&mut laptop, "spaces.create", map(&[]));
+    let (mut phone, _) = open_with(&[("pairing", Value::Bool(true))]);
+    let paired = ok(
+        &mut laptop,
+        "account.pair",
+        map(&[
+            ("kind", text("device")),
+            ("invitation", invitation(&mut phone)),
+        ]),
+    );
+    let answer = field(&paired, "answer").expect("an answer").clone();
+    ok(
+        &mut phone,
+        "account.completePairing",
+        map(&[("answer", answer)]),
+    );
+    (laptop, code, space)
+}
+
+/// The member id of the one member of `space` that is not `bridge`'s own.
+fn other_member(bridge: &mut Bridge, space: &Value) -> Value {
+    let Value::Array(members) = ok(bridge, "members.list", map(&[("space", space.clone())])) else {
+        panic!("members")
+    };
+    let others: Vec<_> = members
+        .iter()
+        .filter(|member| field(member, "self") == Some(&Value::Bool(false)))
+        .collect();
+    let [other] = others.as_slice() else {
+        panic!("one other member: {members:?}")
+    };
+    field(other, "id").expect("an id").clone()
+}
+
+// Removing a member needs the lost device's records in the account space,
+// which each device writes for itself and the others learn by syncing: the
+// end-to-end test in Chromium removes one through the local relay
+// (scripts/sdk-browser/account.e2e.test.mjs). Here, a phone whose records
+// the laptop has not learnt yet.
+
+#[test]
+fn a_device_whose_records_the_account_space_lacks_is_not_found_and_nothing_is_removed() {
+    let (mut laptop, code, space) = paired_phone();
+    let phone = other_member(&mut laptop, &space);
+    assert_eq!(
+        super::code(
+            &mut laptop,
+            "account.removeMember",
+            map(&[("member", phone.clone()), ("recover", text(&code))])
+        ),
+        "notFound"
+    );
+    assert_eq!(other_member(&mut laptop, &space), phone, "still a member");
+}
+
+#[test]
+fn a_member_id_or_words_that_are_not_one_are_refused_without_naming_the_words() {
+    let (mut laptop, code, space) = paired_phone();
+    let phone = other_member(&mut laptop, &space);
+    let refused = send(
+        &mut laptop,
+        8,
+        "account.removeMember",
+        map(&[("member", text("not-a-member")), ("recover", text(&code))]),
+    );
+    let error = field(&refused, "error").expect("refused");
+    assert_eq!(field(error, "code"), Some(&text("invalidValue")));
+    let message = as_text(field(error, "message").expect("a message"));
+    assert!(message.contains("member id"), "{message}");
+    let refused = send(
+        &mut laptop,
+        9,
+        "account.removeMember",
+        map(&[
+            ("member", phone),
+            (
+                "recover",
+                text(
+                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon zebrafish",
+                ),
+            ),
+        ]),
+    );
+    let error = field(&refused, "error").expect("refused");
+    assert_eq!(field(error, "code"), Some(&text("invalidValue")));
+    let message = as_text(field(error, "message").expect("a message"));
+    assert!(!message.contains("zebrafish"), "{message}");
+    assert!(message.contains("recovery code"), "{message}");
 }

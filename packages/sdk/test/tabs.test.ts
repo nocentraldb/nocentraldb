@@ -227,6 +227,7 @@ for (const call of [
   "space.leave",
   "account.pair",
   "account.completePairing",
+  "account.removeMember",
 ]) {
   test(`${call} in flight when the owner goes away fails, and the new owner never runs it`, async () => {
     const { tab } = origin();

@@ -149,6 +149,16 @@ export interface Db {
         completePairing(answer: import("./account.ts").PairingAnswer): Promise<{
             readonly notices: readonly import("./members.ts").Notice[];
         }>;
+        removeMember(member: string, options: {
+            recover: string;
+        }): Promise<{
+            readonly removed: readonly {
+                readonly space: Id;
+                readonly notice: import("./members.ts").Notice;
+            }[];
+            readonly askAdmins: readonly Id[];
+            readonly notice: import("./members.ts").Notice;
+        }>;
     };
     close(): Promise<void>;
 }

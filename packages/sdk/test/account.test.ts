@@ -228,3 +228,77 @@ test("the pairing types are what the owner decided", async () => {
     Promise<{ readonly notices: readonly Notice[] }>
   >();
 });
+
+// Slice 3: removing a lost device (NOC-321 point 6).
+const CODE_WORDS = WORDS.join(" ");
+const MEMBER = "ab".repeat(32);
+const REMOVED = {
+  code: "memberRemoved",
+  text: "The removed member keeps its copy of everything it received before now.",
+};
+const RENEWED = {
+  code: "accountKeyRenewed",
+  text: "Your account has a new account key. Members that have not learnt it yet still accept the old one.",
+};
+
+const removing = () => {
+  const calls: { call: string; args: Record<string, unknown> }[] = [];
+  const core: Core = {
+    call: async (bytes) => {
+      const { id, call, args } = decode(bytes) as {
+        id: number;
+        call: string;
+        args: Record<string, unknown>;
+      };
+      calls.push({ call, args });
+      return call === "account.removeMember"
+        ? encode({
+            id,
+            ok: {
+              removed: [{ space: SPACE, notice: REMOVED }],
+              askAdmins: [],
+              notice: RENEWED,
+            },
+          })
+        : encode({ id, ok: null });
+    },
+    terminate: () => {},
+    listen: () => {},
+  };
+  return { core, calls };
+};
+
+test("removeMember sends the member and the words, and gives the spaces it was removed from, the admins to ask and the notice", async () => {
+  const { core, calls } = removing();
+  const db = await connect(core, { model, lock });
+  const removed = await db.account.removeMember(MEMBER, {
+    recover: CODE_WORDS,
+  });
+  expect(calls.at(-1)).toEqual({
+    call: "account.removeMember",
+    args: { member: MEMBER, recover: CODE_WORDS },
+  });
+  expect(removed).toEqual({
+    removed: [{ space: SPACE, notice: REMOVED }],
+    askAdmins: [],
+    notice: RENEWED,
+  });
+});
+
+test("the removeMember types are what the owner decided", async () => {
+  const { core } = removing();
+  const db = await connect(core, { model, lock });
+  expectTypeOf(db.account.removeMember).parameters.toEqualTypeOf<
+    [string, { recover: string }]
+  >();
+  expectTypeOf(db.account.removeMember).returns.toEqualTypeOf<
+    Promise<{
+      readonly removed: readonly {
+        readonly space: string;
+        readonly notice: Notice;
+      }[];
+      readonly askAdmins: readonly string[];
+      readonly notice: Notice;
+    }>
+  >();
+});

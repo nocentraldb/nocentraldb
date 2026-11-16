@@ -85,6 +85,10 @@
 //! `account.completePairing` `{"answer": text}` answers `{"notices":
 //! [notice]}`.
 //!
+//! The call of NOC-316, slice 3, in `account.rs`: `account.removeMember`
+//! `{"member": id, "recover": words}` answers `{"removed": [{"space": id,
+//! "notice": notice}], "askAdmins": [id], "notice": notice}`.
+//!
 //! A sync status is `{"connection": "connected" | "connecting" |
 //! "offline" | "paused" | "none", "unconfirmed": u64, "refused": u64,
 //! "epochChanged": bool, "error": text | null}`.
@@ -239,6 +243,7 @@ impl Bridge {
             "account.recovered" => account::recovered(&db).await,
             "account.pair" => account::pair(&db, args).await,
             "account.completePairing" => account::complete_pairing(&db, args).await,
+            "account.removeMember" => account::remove_member(&db, args).await,
             "durability" => {
                 db.refresh_storage().await;
                 Ok(reports::durability(&db.durability()))
