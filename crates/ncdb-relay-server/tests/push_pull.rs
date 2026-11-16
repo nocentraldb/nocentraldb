@@ -163,7 +163,9 @@ async fn a_pull_page_fits_one_message() {
     let (mut client, welcome) = Client::member(addr, 0).await;
     let mut space = Space::new(0);
     let genesis = space.genesis.clone();
-    let big: Vec<_> = (0..3).map(|_| large(&mut space, 50_000)).collect();
+    // Each fits into a push of its own, and three into no one message of
+    // 23 KiB (NOC-338).
+    let big: Vec<_> = (0..3).map(|_| large(&mut space, 10_000)).collect();
     let mut changes = vec![&genesis];
     changes.extend(big.iter());
     for (n, change) in changes.iter().enumerate() {

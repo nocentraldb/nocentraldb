@@ -98,14 +98,17 @@ impl FakeRelay {
 type Ws = WebSocketStream<TcpStream>;
 
 async fn send(ws: &mut Ws, value: &Value) -> Option<()> {
-    let bytes = cbor::encode(value);
-    ws.send(Message::Binary(bytes.into())).await.ok()
+    // As every relay does, base64 in a text frame (NOC-338).
+    let text = ncdb_relay::wire::to_text(&cbor::encode(value));
+    ws.send(Message::Text(text.into())).await.ok()
 }
 
 async fn recv(ws: &mut Ws) -> Option<Value> {
     loop {
         match ws.next().await? {
-            Ok(Message::Binary(bytes)) => return cbor::decode(&bytes).ok(),
+            Ok(Message::Text(text)) => {
+                return cbor::decode(&ncdb_relay::wire::from_text(&text)?).ok();
+            }
             Ok(Message::Ping(_) | Message::Pong(_)) => {}
             _ => return None,
         }
@@ -136,7 +139,7 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
         return;
     }
     let limits = map(vec![
-        (1, Value::Unsigned(128 * 1024)),
+        (1, Value::Unsigned(23 * 1024)),
         (2, Value::Unsigned(32)),
         (3, Value::Unsigned(127 * 1024)),
     ]);

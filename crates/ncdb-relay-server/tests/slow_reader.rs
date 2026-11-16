@@ -20,8 +20,10 @@ use support::*;
 /// How long the test server waits for progress in writing to a member.
 const WRITE_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// The size of each change's payload: about 100 KB, one entry per message.
-const SIZE: usize = 100_000;
+/// The size of each change's payload: about 20 KB, which fits into one
+/// message of 23 KiB, and two of which do not: one entry per message
+/// (NOC-338).
+const SIZE: usize = 20_000;
 
 fn subscribe(req: u64, space: SpaceId, epoch: &[u8], after: u64) -> Value {
     message(
@@ -102,9 +104,9 @@ async fn a_slow_reader_gets_every_entry_in_order() {
 async fn a_member_that_stops_reading_is_closed_and_resumes_from_its_cursor() {
     let (addr, _dir) = server_with_write_timeout(WRITE_TIMEOUT).await;
     let (mut zero, mut one, mut space, epoch) = subscribed(addr).await;
-    // About 30 MB: more than the server's queue and both sockets' buffers
-    // hold, while member 1 reads nothing.
-    let count = 300;
+    // About 30 MB, 40 MB as base64: more than the server's queue and both
+    // sockets' buffers hold, while member 1 reads nothing.
+    let count = 1500;
     let head = 2 + count;
     push_large(&mut zero, &mut space, count).await;
     tokio::time::sleep(WRITE_TIMEOUT * 4).await;

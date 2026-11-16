@@ -11,6 +11,9 @@ description = "The NoCentralDB relay core: the checks of RFC 0007, the backend i
 # browser. Every dependency is pinned to one exact version, the one the core
 # already uses.
 [dependencies]
+# A message travels as base64 in a text frame (RFC 0007, "Transport and
+# encoding"; NOC-338).
+base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 ncdb-core.workspace = true
 # The relay authenticates a connection with the member's Ed25519 key over
 # H("nocentraldb/relay-auth" || relay id || nonce) (RFC 0003, "The member key").

@@ -77,9 +77,11 @@ pub(crate) async fn serve<S: TokenUrls + 'static>(
     shared: Arc<Shared<S>>,
     handshake: OwnedSemaphorePermit,
 ) {
+    // Each message travels as base64 in one text frame (RFC 0007,
+    // "Transport and encoding"; NOC-338).
     let config = WebSocketConfig::default()
-        .max_message_size(Some(MAX_MESSAGE))
-        .max_frame_size(Some(MAX_MESSAGE));
+        .max_message_size(Some(ncdb_relay::wire::MAX_TEXT))
+        .max_frame_size(Some(ncdb_relay::wire::MAX_TEXT));
     let step_timeout = shared.handshake_timeout;
     let Some(stream) = http::route(stream, &shared).await else {
         return;
@@ -95,7 +97,8 @@ pub(crate) async fn serve<S: TokenUrls + 'static>(
         while let Some(next) = outgoing.recv().await {
             match next {
                 Out::Message(bytes) => {
-                    let sent = sink.send(Message::Binary(bytes.into()));
+                    let text = ncdb_relay::wire::to_text(&bytes);
+                    let sent = sink.send(Message::Text(text.into()));
                     if !matches!(tokio::time::timeout(timeout, sent).await, Ok(Ok(()))) {
                         return;
                     }
@@ -129,8 +132,12 @@ pub(crate) async fn serve<S: TokenUrls + 'static>(
             () = expires(deadline) => break,
         };
         let open = match message {
-            Some(Ok(Message::Binary(bytes))) => connection.receive(&bytes).await,
-            Some(Ok(Message::Text(_))) => connection.malformed(Malformed { req: None }).await,
+            Some(Ok(Message::Text(text))) => match ncdb_relay::wire::from_text(&text) {
+                Some(bytes) => connection.receive(&bytes).await,
+                None => connection.malformed(Malformed { req: None }).await,
+            },
+            // A binary frame is no message of RFC 0007 since NOC-338.
+            Some(Ok(Message::Binary(_))) => connection.malformed(Malformed { req: None }).await,
             Some(Ok(Message::Close(_))) | Some(Err(_)) | None => false,
             Some(Ok(_)) => true,
         };

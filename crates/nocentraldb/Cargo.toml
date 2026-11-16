@@ -17,6 +17,9 @@ bridge = []
 
 [dependencies]
 ncdb-core.workspace = true
+# A message travels as base64 in a text frame (RFC 0007, "Transport and
+# encoding"; NOC-338).
+base64 = { version = "=0.22.1", default-features = false, features = ["std"] }
 # What a plugin field type implements, and Data, which its fields read and
 # write as (RFC 0011).
 ncdb-plugin.workspace = true
