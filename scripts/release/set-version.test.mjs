@@ -186,7 +186,7 @@ test("--help exits 0; no version or an unknown flag exits 2", () => {
   assert.equal(run(tmpdir(), "0.1.0", "0.2.0").status, 2);
 });
 
-test("without --no-lock a prerelease version resolves between two crates and Cargo.lock follows it (needs cargo)", (t) => {
+test("without --no-lock a prerelease version resolves between two crates, Cargo.lock follows it and cargo accepts it (needs cargo)", (t) => {
   const dir = fixture(t, {
     // The repository's pinned toolchain, which the gate installs.
     "rust-toolchain.toml": toolchain,
@@ -237,6 +237,14 @@ b = { path = "crates/b", version = "=0.1.0" }
     read(dir, "Cargo.toml"),
     /^b = \{ path = "crates\/b", version = "=0\.1\.0-beta\.1" \}$/m,
   );
+  // cargo takes the rewritten lock as it is: --locked fails on a lock it
+  // would change.
+  const locked = spawnSync(
+    "cargo",
+    ["metadata", "--locked", "--offline", "--format-version", "1"],
+    { cwd: dir, encoding: "utf8" },
+  );
+  assert.equal(locked.status, 0, locked.stderr);
 
   // The checkout would pass check-version but for R1, which keeps the stage
   // suffix out of committed manifests.
