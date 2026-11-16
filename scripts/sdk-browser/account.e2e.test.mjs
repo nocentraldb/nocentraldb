@@ -94,16 +94,22 @@ test("a device removes a lost one from its spaces with the recovery code, which 
   const relay = await startRelay(["--allow-invitation", invitation]);
   try {
     const { page: phone, errors: phoneErrors } = await page();
-    const asked = await phone.evaluate(async (lock) => {
-      const { nc, model } = window;
-      window.db = await nc.open({
-        model,
-        lock,
-        name: "phone",
-        pairing: "request",
-      });
-      return String(await window.db.invitation());
-    }, lock);
+    // The phone opens with the relay as it waits to be paired, as an app
+    // opens a new device.
+    const asked = await phone.evaluate(
+      async ({ lock, url }) => {
+        const { nc, model } = window;
+        window.db = await nc.open({
+          model,
+          lock,
+          name: "phone",
+          pairing: "request",
+          relay: url,
+        });
+        return String(await window.db.invitation());
+      },
+      { lock, url: relay.url },
+    );
     const paired = await laptop.evaluate(
       async ({ lock, url, asked }) => {
         const { nc, model } = window;
@@ -118,22 +124,24 @@ test("a device removes a lost one from its spaces with the recovery code, which 
       },
       { lock, url: relay.url, asked },
     );
-    // The phone completes the pairing, then opens again with the relay. A
-    // phone that syncs while it waits to be paired does not yet pick up
-    // the spaces the pairing adds it to (reported with NOC-316 slice 3).
-    // Once it holds the project, it writes a task there; the laptop
-    // reading that task shows that the phone's records, which it writes
-    // into the account space as it takes the project, have reached the
-    // laptop too.
+    // The phone completes the pairing while it syncs (NOC-337). It writes
+    // its records into the account space as it completes the pairing and
+    // as it takes the project. Once the relay has confirmed them, it
+    // writes a task in the project, and the laptop waits until it reads
+    // that task. The laptop may still learn the account space's changes a
+    // moment later than the project's, so it tries again while the phone
+    // is not found, which writes nothing.
     const project = await laptop.evaluate(() => window.project);
     const task = await phone.evaluate(
-      async ({ answer, lock, url, project }) => {
+      async ({ answer, project }) => {
         const { nc, model } = window;
         await window.db.account.completePairing(nc.pairingAnswer(answer));
-        await window.db.close();
-        window.db = await nc.open({ model, lock, name: "phone", relay: url });
         const space = await window.until("the phone holds the project", () =>
           window.db.spaces.get(project).catch(() => null),
+        );
+        await window.until(
+          "the relay confirmed the phone's records",
+          () => window.db.sync.current().unconfirmed === 0,
         );
         const { ids } = await space.create(model.tasks, {
           title: "from the phone",
@@ -142,7 +150,7 @@ test("a device removes a lost one from its spaces with the recovery code, which 
         });
         return ids[0];
       },
-      { answer: paired, lock, url: relay.url, project },
+      { answer: paired, project },
     );
     await laptop.evaluate(
       async ({ project, task }) => {
@@ -159,7 +167,12 @@ test("a device removes a lost one from its spaces with the recovery code, which 
       const space = await db.spaces.get(project);
       const others = (await space.members.list()).filter((m) => !m.self);
       const phone = others[0].id;
-      const removed = await db.account.removeMember(phone, { recover: words });
+      const removed = await window.until("the laptop knows the phone", () =>
+        db.account.removeMember(phone, { recover: words }).catch((error) => {
+          if (error.code === "notFound") return null;
+          throw error;
+        }),
+      );
       const left = await space.members.list();
       return {
         others: others.length,
