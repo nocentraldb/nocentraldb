@@ -12,6 +12,7 @@ import {
   publishLine,
   readWorkspaceVersion,
   workspaceDependencies,
+  writeLockVersions,
   writePackageVersion,
   writeWorkspaceVersion,
 } from "./manifests.mjs";
@@ -199,6 +200,22 @@ version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 `;
   assert.equal(lockVersions(lock).get("a"), "0.1.0");
+});
+
+test("writeLockVersions refuses a workspace crate named like a registry package", () => {
+  const lock = `[[package]]
+name = "a"
+version = "0.1.0"
+
+[[package]]
+name = "a"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+`;
+  assert.throws(
+    () => writeLockVersions(lock, "0.2.0"),
+    /^Error: the workspace crate a shares its name with a package from a registry; refresh the lock with cargo update --workspace$/,
+  );
 });
 
 test("packageJsonFiles and crateManifestFiles list the workspace manifests", (t) => {

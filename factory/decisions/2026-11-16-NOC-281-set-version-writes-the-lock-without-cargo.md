@@ -1,0 +1,6 @@
+# 2026-11-16 · NOC-281 · set-version writes the workspace members' versions into Cargo.lock itself, without cargo
+
+- Decided by: coding agent (NOC-281), for the owner's review on the PR
+- Why: `cargo update --workspace --offline` needs cargo's registry cache, which a fresh runner lacks, so the alpha-npm job failed in set-version on every alpha since the workspace has third-party crates (run 43920023149, "no matching package named `futures-core`"). When only the version changes, cargo writes nothing but the `version` line of each workspace member's `[[package]]` block, so set-version writes that line itself: no cargo, no index, no network, the same result in every job and on every machine. On this repository the rewrite is byte-identical to what cargo writes, and a test checks that cargo accepts it with `--locked`. It refuses a lock in which a workspace crate shares its name with a registry package, the one case where cargo would also change dependency lists. docs/release-management.md named this as the fallback.
+- Instead of: a `cargo fetch --locked` step before set-version in each job that runs it, which downloads every crate first and must be repeated in alpha-npm, build and any future job; or dropping `--offline`, which makes set-version, and the cut on a developer's machine, depend on the registry being reachable.
+- Topics: release, ci, cargo

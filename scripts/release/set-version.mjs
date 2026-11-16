@@ -10,20 +10,21 @@
 //   resolves between workspace crates.
 // - every packages/*/package.json and apps/*/package.json: the value of its
 //   top-level "version", and no other byte of the file.
-// - Cargo.lock: refreshed with cargo update --workspace --offline, unless
-//   --no-lock. When cargo fails, every file is restored as it was before the
-//   run and the error says so: a rewritten manifest never stays beside a
-//   stale lock.
+// - Cargo.lock, unless --no-lock: the version of every workspace member,
+//   rewritten directly, the way cargo update --workspace writes it. It needs
+//   no cargo, registry index or network, so it works in a fresh CI runner
+//   without a cargo cache (NOC-281).
 //
 // Everything is read and validated before anything is written: an invalid
-// version or a manifest the reader cannot parse leaves every file as it was.
+// version or a manifest or lock the reader cannot parse leaves every file as
+// it was, so a rewritten manifest never stays beside a stale lock.
 // Exit 0 on success, 1 with a message naming the version or the file, 2 on a
 // usage error.
-import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
   packageJsonFiles,
   pinWorkspaceDependencies,
+  writeLockVersions,
   writePackageVersion,
   writeWorkspaceVersion,
 } from "./lib/manifests.mjs";
@@ -33,8 +34,8 @@ const USAGE = `usage: set-version <version> [--no-lock]
 Writes <version> (X.Y.Z, X.Y.Z-alpha.N or X.Y.Z-beta.N) into Cargo.toml
 [workspace.package], pins every [workspace.dependencies] path entry to
 =<version>, sets "version" in every packages/*/package.json and
-apps/*/package.json, then refreshes Cargo.lock with
-cargo update --workspace --offline (skipped with --no-lock).`;
+apps/*/package.json, and sets the version of every workspace member in
+Cargo.lock (skipped with --no-lock).`;
 
 const fail = (message) => {
   console.error(`set-version: ${message}`);
@@ -87,32 +88,20 @@ const main = () => {
         ),
       ),
     ]);
-    const originals = new Map([["Cargo.toml", cargo]]);
     for (const file of packageJsonFiles(".")) {
       const text = readFileSync(file, "utf8");
-      originals.set(file, text);
       writes.push([file, at(file, () => writePackageVersion(text, version))]);
     }
-    if (lock && existsSync("Cargo.lock"))
-      originals.set("Cargo.lock", readFileSync("Cargo.lock", "utf8"));
-    for (const [file, text] of writes) writeFileSync(file, text);
-    if (lock) {
-      try {
-        execFileSync("cargo", ["update", "--workspace", "--offline"], {
-          stdio: "inherit",
-        });
-      } catch {
-        // cargo said why above. A rewritten manifest beside a stale lock
-        // fails every --locked build, so the tree goes back as it was.
-        for (const [file, text] of originals) writeFileSync(file, text);
-        throw new Error(
-          `cargo update --workspace --offline failed, so Cargo.lock could not follow ${version}; every manifest was restored as it was`,
-        );
-      }
+    const manifests = writes.length;
+    if (lock && existsSync("Cargo.lock")) {
+      const text = readFileSync("Cargo.lock", "utf8");
+      writes.push([
+        "Cargo.lock",
+        at("Cargo.lock", () => writeLockVersions(text, version)),
+      ]);
     }
-    console.log(
-      `set-version: ${version} written to ${writes.length} manifests`,
-    );
+    for (const [file, text] of writes) writeFileSync(file, text);
+    console.log(`set-version: ${version} written to ${manifests} manifests`);
   } catch (error) {
     fail(error.message);
   }
