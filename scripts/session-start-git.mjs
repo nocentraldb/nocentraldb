@@ -14,9 +14,9 @@
 // branch, the working tree matches the index, no file is untracked, and every
 // skip-worktree file (AGENTS.md with the setup script's cloud block) is its
 // indexed content plus an addition, which is kept on top of HEAD's version.
-// In any other case it changes nothing and says so. It runs only in cloud
-// sessions (CLAUDE_CODE_REMOTE=true) and always exits 0, so it cannot block a
-// session from starting.
+// In any other case it changes nothing and warns, counting the staged paths.
+// It runs only in cloud sessions (CLAUDE_CODE_REMOTE=true) and always exits 0,
+// so it cannot block a session from starting.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
@@ -27,9 +27,13 @@ function git(...args) {
   return { ok: run.status === 0, raw: run.stdout, out: run.stdout.trimEnd() };
 }
 
+// The session must not start on a stale tree unnoticed: a commit would carry
+// it. The hook's output goes into the agent's context, so it says so plainly.
 function leave(reason) {
+  const staged = git("diff", "--cached", "--name-only", "HEAD").out;
+  const paths = staged === "" ? 0 : staged.split("\n").length;
   console.log(
-    `${NAME}: the index differs from HEAD and was left alone (${reason}). Check \`git status\` and stash anything you did not write.`,
+    `${NAME}: WARNING: ${paths} paths are staged over HEAD and were left alone (${reason}); a commit now would revert them. Check \`git status\` and stash anything you did not write, as factory/roles/coder.md describes.`,
   );
   process.exit(0);
 }
