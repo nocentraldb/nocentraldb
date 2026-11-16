@@ -78,7 +78,11 @@ test("the core texts generate the core's module, not the SDK's or the command li
     /format!\("Keep \.personal\(\{\{ person: \\"\{person\}\\" \}\}\)\."\)/,
   );
   assert.ok(!generateCli([CORE]).includes("refusal"));
-  assert.ok(!Object.values(generate([CORE])).join("").includes("refusal"));
+  assert.ok(
+    !Object.values(generate([CORE]))
+      .join("")
+      .includes("refusal"),
+  );
 });
 
 test("a constant core text with doubled braces holds single ones", () => {
@@ -105,7 +109,7 @@ test("a text written in the core's code fails; notation and comments do not", ()
   );
   const fine = [
     '    Some(c) => format!("{c}.{name}"),',
-    "    // a comment that says \"two words\"",
+    '    // a comment that says "two words"',
     '    let x = "two words"; // notation',
   ].join("\n");
   assert.deepEqual(checkCoreCode([USES, [REFUSAL, fine]], []), []);

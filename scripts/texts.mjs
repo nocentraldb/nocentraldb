@@ -56,8 +56,8 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { review } from "./texts-review.mjs";
 import { coreGate } from "./texts-core.mjs";
+import { review } from "./texts-review.mjs";
 import { rfcErrorCodes, TS_PATHS, tsGate } from "./texts-ts.mjs";
 
 export {
@@ -368,10 +368,7 @@ export const checkEntries = (
       if (entry.kind === "ts" && /\{\{|\}\}/.test(entry.text))
         problems.push(`${at}: a ts text has no doubled brace {{ or }}`);
       if (
-        entry.text
-          .replace(ESCAPED, "")
-          .replace(PLACEHOLDER, "")
-          .match(/[{}]/)
+        entry.text.replace(ESCAPED, "").replace(PLACEHOLDER, "").match(/[{}]/)
       ) {
         problems.push(
           `${at}: a brace that is no placeholder {name} or {name:?}`,
