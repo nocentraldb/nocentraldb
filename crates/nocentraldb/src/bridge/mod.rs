@@ -476,9 +476,11 @@ async fn write(db: &Db, args: &Value) -> Result<Value, Failed> {
     ]))
 }
 
-/// The values of a create or an update of `collection`, by field name. A
-/// whole number for a float field, or for an element of a set of floats,
-/// is that float: canonical CBOR writes 2.0 as the integer 2.
+/// The values of a create or an update of `collection`, by field name, as
+/// the field's type reads them. A whole number for a float field, or for an
+/// element of a set of floats, is that float: canonical CBOR writes 2.0 as
+/// the integer 2. An object id for a link, or for an element of many
+/// links, arrives as its 32 hex digits and is that object id (NOC-353).
 fn fields(
     model: &Model,
     collection: &str,
@@ -487,15 +489,13 @@ fn fields(
     map.iter()
         .map(|(key, value)| match key {
             Key::Text(name) => {
-                let float = matches!(
-                    model.field(collection, name),
+                let value = field(value)?;
+                let value = match model.field(collection, name) {
                     Some(ModelField::Basic(BasicValue { kind: Kind::Float }))
-                        | Some(ModelField::Set(Set { kind: Kind::Float }))
-                );
-                let mut value = field(value)?;
-                if float {
-                    value = as_float(value);
-                }
+                    | Some(ModelField::Set(Set { kind: Kind::Float })) => as_float(value),
+                    Some(ModelField::Link(_) | ModelField::Links(_)) => as_link(value)?,
+                    _ => value,
+                };
                 Ok((name.clone(), value))
             }
             Key::Unsigned(_) => Err(invalid(crate::texts::bridge::FIELD_NAME_IS_TEXT)),
@@ -512,6 +512,26 @@ fn as_float(value: Field) -> Field {
         Repr::Remove(items) => Repr::Remove(floats(items)),
         other => other,
     })
+}
+
+/// `value` with each text in it as the object id it spells; a text that
+/// spells none is `invalidValue`.
+fn as_link(value: Field) -> Result<Field, Failed> {
+    let ids = |items: Vec<Field>| {
+        items
+            .into_iter()
+            .map(as_link)
+            .collect::<Result<Vec<_>, _>>()
+    };
+    Ok(Field(match value.0 {
+        Repr::Text(text) => Repr::Id(
+            ObjectId::from_str(&text)
+                .map_err(|_| invalid(crate::texts::bridge::NOT_AN_OBJECT_ID))?,
+        ),
+        Repr::Add(items) => Repr::Add(ids(items)?),
+        Repr::Remove(items) => Repr::Remove(ids(items)?),
+        other => other,
+    }))
 }
 
 /// A value to write, from its protocol form.
