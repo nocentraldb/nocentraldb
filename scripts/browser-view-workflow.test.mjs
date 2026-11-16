@@ -9,9 +9,10 @@
 // Chromium (scripts/sdk-keys/), built on the runner as the view's harness
 // is, whenever a pull request touches the SDK.
 //
-// NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
+// NOC-176 slice 1: the same job runs the TypeScript SDK
 // (scripts/sdk-browser/), its package built on the runner, whenever a pull
-// request touches the TypeScript SDK or the crate its core is built from.
+// request touches the TypeScript SDK or the crate its core is built from;
+// NOC-344: in Chromium, Firefox and WebKit, one step each.
 //
 // The example app apps/tasks-ts: the same job runs it in Chromium, on the
 // SDK built above, whenever a pull request touches the app or the SDK.

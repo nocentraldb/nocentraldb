@@ -1,5 +1,5 @@
 // End to end with a browser (NOC-178; the last step of NOC-66, "the
-// browser"): a Chromium tab with the TypeScript SDK and a Rust device with
+// browser"): a browser tab with the TypeScript SDK and a Rust device with
 // the Rust SDK share a space through the local relay server on SQLite, as
 // the Rust SDK's own two-device test does (two_devices.rs). The Rust device
 // creates the space and adds the tab with `members().add` and the tab's
@@ -11,14 +11,14 @@
 // account; the relay lets the Rust device's account create spaces
 // (`--allow-invitation`), and the tab only as a member.
 //
-// Chromium only, until NOC-174 shows the Rust port runs in Firefox and
-// WebKit. Not part of `pnpm gates`, which runs without browsers: the task
+// It runs in the engine SDK_BROWSER_ENGINE names (engine.mjs).
+// Not part of `pnpm gates`, which runs without browsers: the task
 // `repo:sdk-browser` and the workflow browser-view.yml run it.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { build, LOCK, prebuilt } from "./build.mjs";
-import { launch } from "./engine.mjs";
+import { engine, launch } from "./engine.mjs";
 import { buildPeer, prebuiltPeer, startPeer, startProxy } from "./peer.mjs";
 import { startRelay } from "./relay.mjs";
 import { startServer } from "./server.mjs";
@@ -103,7 +103,7 @@ const TAB = `
   };
 `;
 
-test("a Chromium tab and a Rust device share a space through the local relay and read the same", async () => {
+test(`a ${engine} tab and a Rust device share a space through the local relay and read the same`, async () => {
   const proxy = await startProxy();
   const rust = await startPeer(LOCK, proxy.url);
   const relay = await startRelay(["--allow-invitation", rust.invitation]);

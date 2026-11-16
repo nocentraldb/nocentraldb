@@ -1,5 +1,6 @@
-// End to end (NOC-176 slice 1): the TypeScript SDK in Chromium through
-// Playwright, as an app uses it. The page imports the package's build
+// End to end (NOC-176 slice 1): the TypeScript SDK in a browser through
+// Playwright, as an app uses it, in the engine SDK_BROWSER_ENGINE names
+// (engine.mjs; NOC-344). The page imports the package's build
 // output (packages/sdk/dist/, built by `pnpm --filter @nocentraldb/sdk
 // build`); `nc.open` starts the worker the package ships, which loads the
 // core's WebAssembly module next to it with `new URL(..., import.meta.url)`
@@ -9,8 +10,8 @@
 // Not part of `pnpm gates`, which runs without browsers: the task
 // `repo:sdk-browser` and the workflow browser-view.yml run it, the workflow
 // in Playwright's image on the package built before (SDK_BROWSER_PREBUILT=1).
-// A missing Chromium fails it: install it with
-// `pnpm exec playwright install chromium`.
+// A missing browser fails it: install the three with
+// `pnpm exec playwright install --with-deps chromium firefox webkit`.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
@@ -526,8 +527,9 @@ test("space.erasures.list() of a new space lists no erasure", async () => {
 
 // NOC-315 slice 3: the durability of the copy and the view's report (RFC
 // 0006, "What the SDK reports"; NOC-317). A write raises `unconfirmed`
-// without a relay; whether headless Chromium grants persistent storage is
-// the browser's choice, so the storage is one of the two OPFS values.
+// without a relay; whether the browser grants persistent storage is its
+// own choice, so the storage is one of the two OPFS values. Firefox asks
+// the person first, and its testing prefs answer for them (engine.mjs).
 test("db.durability counts an unconfirmed write, requestPersistent answers a boolean, and db.view reports no rebuild", async () => {
   const { page: opened, errors } = await page();
   const result = await opened.evaluate(

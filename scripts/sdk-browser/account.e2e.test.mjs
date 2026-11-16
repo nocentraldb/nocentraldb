@@ -1,4 +1,4 @@
-// Accounts in Chromium through the local relay (NOC-316, slice 3; RFC
+// Accounts in the browser through the local relay (NOC-316, slice 3; RFC
 // 0009, "Accounts and devices"; RFC 0010, "Losing a device"): a laptop
 // pairs a phone into its account, both sync, and the laptop removes the
 // lost phone with the recovery code. Removing needs the phone's records

@@ -1,4 +1,4 @@
-// nc.open checks the model against its lock in Chromium (NOC-323; RFC
+// nc.open checks the model against its lock in the browser (NOC-323; RFC
 // 0009, "Open and close", 2. "Checks the model against the lock"): a model
 // with a field the lock does not have is refused with `lockOutOfDate`,
 // whose message says to run `ncdb model build`, and no database is

@@ -4,7 +4,7 @@
 // workflow cannot quietly run Chromium a second time.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { engineFrom, skipIn } from "./sdk-browser/engine.mjs";
+import { engineFrom } from "./sdk-browser/engine.mjs";
 
 test("no SDK_BROWSER_ENGINE means Chromium", () => {
   assert.equal(engineFrom({}), "chromium");
@@ -20,10 +20,4 @@ test("an engine Playwright does not have fails, naming the ones it has", () => {
     () => engineFrom({ SDK_BROWSER_ENGINE: "safari" }),
     /safari.*chromium, firefox, webkit/,
   );
-});
-
-test("skipIn gives the reason in the engine it names, and nothing elsewhere", () => {
-  const gaps = { webkit: "no visibilitychange" };
-  assert.equal(skipIn(gaps, "webkit"), "webkit: no visibilitychange");
-  assert.equal(skipIn(gaps, "firefox"), false);
 });

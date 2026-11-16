@@ -5,7 +5,7 @@
 //
 // iOS first hides a tab when the person switches away, then freezes it.
 // The test does the same: it hides the owning page (its visibilityState
-// reads "hidden" and a visibilitychange event fires, as Chromium cannot
+// reads "hidden" and a visibilitychange event fires, as Playwright cannot
 // hide a page itself), then freezes it.
 //
 // How the freeze is emulated: what matters is that the owning page stops
