@@ -119,7 +119,8 @@ pub fn depends_on() -> Links {
     }
 }
 
-// The field `customer` of the collection `orders` (RFC 0004, E15 to E17).
+// The field `customer` of the collection `orders` (RFC 0004's byte-exact examples E15 to
+// E17).
 pub fn customer() -> Reference {
     Reference {
         collections: ["customers".to_owned()].into(),

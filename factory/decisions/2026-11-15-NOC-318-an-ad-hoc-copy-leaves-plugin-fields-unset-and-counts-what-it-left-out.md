@@ -1,0 +1,6 @@
+# 2026-11-15 · NOC-318 · An ad-hoc copy leaves plugin fields unset, and counts what it left out beside the notice
+
+- Decided by: pm, NOC-318, on the coding agent's proposal
+- Why: a plugin's read is no intent its `write` takes (`test/counter` reads 5 and takes an increment), and the plugin API has no copy operation, so `Spaces::create_ad_hoc` cannot copy a plugin field from what it reads. It leaves the field unset in the copy and counts each set plugin field it left out in `AdHocCreated::plugin_fields_not_copied`. `Notice::text` is one static text per code, generated from `texts/texts.json`, so the number of links cleared because their target was not copied, which NOC-320 Q6 asks the notice to say, goes into `AdHocCreated::cleared_links` beside it; the text of `notice.adHocSpaceCreated` says that such links are cleared and that personal and plugin fields are not copied. The owner can overrule the plugin rule; a plugin copy operation would be a ticket of its own.
+- Instead of: refusing an object with a set plugin field, which keeps the sub-agent from objects a task needs; a copy operation in the plugin API now, a change of ncdb-plugin for the owner; or a notice whose text is made per call, which changes the public `Notice` of every call.
+- Topics: sub-agents, ad-hoc-spaces, plugins, sdk-rust

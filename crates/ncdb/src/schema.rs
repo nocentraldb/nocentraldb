@@ -12,22 +12,27 @@ use std::process::Command;
 
 use ncdb_core::model_lock::Draft;
 
+use crate::texts;
+
 /// Imports the schema module and prints the description of its `model`.
+/// Its arguments: the module's path, then its two messages, from
+/// texts/texts.json, the first with `{error}` where the exception goes.
 const SCRIPT: &str = r#"
 const { pathToFileURL } = await import("node:url");
+const [, path, cannotBeRun, exportsNoModel] = process.argv;
 const fail = (message) => {
   process.stderr.write(`${message}\n`);
   process.exit(3);
 };
 let schema;
 try {
-  schema = await import(pathToFileURL(process.argv[1]).href);
+  schema = await import(pathToFileURL(path).href);
 } catch (error) {
-  fail(`cannot be run: ${error?.message ?? error}`);
+  fail(cannotBeRun.replace("{error}", () => String(error?.message ?? error)));
 }
 const describe = schema.model?.[Symbol.for("nocentraldb.model.describe")];
 if (typeof describe !== "function") {
-  fail("exports no model; export the model as `export const model = nc.model({ ... })`.");
+  fail(exportsNoModel);
 }
 try {
   process.stdout.write(JSON.stringify(describe()));
@@ -40,18 +45,20 @@ try {
 /// as RFC 0005's schema module needs.
 const NODE_MAJOR: u32 = 24;
 
+/// Why `node` did not start.
+fn not_started(error: std::io::Error) -> String {
+    match error.kind() {
+        ErrorKind::NotFound => texts::node_not_found(NODE_MAJOR),
+        _ => texts::node_not_started(error),
+    }
+}
+
 /// Refuses a missing `node`, or one older than [`NODE_MAJOR`].
 fn check_node() -> Result<(), String> {
     let output = Command::new("node")
         .arg("--version")
         .output()
-        .map_err(|error| match error.kind() {
-            ErrorKind::NotFound => {
-                "ncdb runs the schema with Node.js 24 or later, and found no `node` on PATH."
-                    .to_owned()
-            }
-            _ => format!("cannot start Node.js: {error}"),
-        })?;
+        .map_err(not_started)?;
     let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     let major = version
         .strip_prefix('v')
@@ -59,13 +66,13 @@ fn check_node() -> Result<(), String> {
         .and_then(|m| m.parse::<u32>().ok());
     match major {
         Some(major) if major >= NODE_MAJOR => Ok(()),
-        _ => Err(format!(
-            "ncdb runs the schema with Node.js {NODE_MAJOR} or later, and the `node` on PATH is {}.",
+        _ => Err(texts::node_too_old(
+            NODE_MAJOR,
             if version.is_empty() {
-                "of an unknown version"
+                texts::NODE_VERSION_UNKNOWN
             } else {
                 &version
-            }
+            },
         )),
     }
 }
@@ -74,33 +81,23 @@ fn check_node() -> Result<(), String> {
 /// after the module's name.
 pub fn describe(path: &Path) -> Result<Draft, String> {
     if !path.is_file() {
-        return Err(
-            "no such file; the schema module is ./model.ts unless --model names another.".into(),
-        );
+        return Err(texts::NO_SCHEMA_FILE.into());
     }
-    let absolute = path
-        .canonicalize()
-        .map_err(|error| format!("cannot be opened: {error}"))?;
+    let absolute = path.canonicalize().map_err(texts::cannot_be_opened)?;
     check_node()?;
     let output = Command::new("node")
         .arg("--input-type=module")
         .arg("--eval")
         .arg(SCRIPT)
         .arg(absolute)
+        .arg(texts::schema_cannot_be_run("{error}"))
+        .arg(texts::SCHEMA_EXPORTS_NO_MODEL)
         .output()
-        .map_err(|error| match error.kind() {
-            ErrorKind::NotFound => {
-                "ncdb runs the schema with Node.js 24 or later, and found no `node` on PATH."
-                    .to_owned()
-            }
-            _ => format!("cannot start Node.js: {error}"),
-        })?;
+        .map_err(not_started)?;
     if !output.status.success() {
         let message = String::from_utf8_lossy(&output.stderr);
         return Err(message.trim_end().to_owned());
     }
     let text = String::from_utf8_lossy(&output.stdout);
-    Draft::from_json(&text).map_err(|error| {
-        format!("the SDK described the model in a form this ncdb cannot read: {error}")
-    })
+    Draft::from_json(&text).map_err(texts::description_unreadable)
 }

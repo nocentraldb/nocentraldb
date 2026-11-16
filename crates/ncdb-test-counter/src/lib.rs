@@ -3,9 +3,9 @@
 //!
 //! An add, operation 64 with the argument `{1: n}`, adds the integer `n`.
 //! The state is the set of adds received, so the sum is the same in any
-//! order of arrival and an add received twice counts once (RFC 0004, C1
-//! and C2). Every add is visible in the read value. The type takes no
-//! `config`, or an empty map.
+//! order of arrival and an add received twice counts once (RFC 0004's
+//! properties C1 and C2). Every add is visible in the read value. The type
+//! takes no `config`, or an empty map.
 
 use std::collections::BTreeMap;
 

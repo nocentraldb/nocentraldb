@@ -22,6 +22,8 @@ use crate::value::{Repr, Value};
 pub struct Object {
     id: ObjectId,
     space: SpaceId,
+    /// Its collection, which an ad-hoc space's copy reads its source by.
+    collection: String,
     deleted: bool,
     /// Every field of the collection, with its value when it is set.
     fields: BTreeMap<String, Option<Value>>,
@@ -50,8 +52,7 @@ impl std::fmt::Debug for Object {
 
 impl Object {
     /// Every field of the collection, with its value when it is set; for
-    /// the TypeScript SDK's bridge (NOC-176).
-    #[cfg(any(test, feature = "bridge"))]
+    /// the TypeScript SDK's bridge (NOC-176) and an ad-hoc space's copies.
     pub(crate) fn fields(&self) -> &BTreeMap<String, Option<Value>> {
         &self.fields
     }
@@ -94,6 +95,11 @@ impl Object {
     /// this device does not hold yet reads as unset too, but is not named.
     pub fn erased(&self) -> &[String] {
         &self.erased
+    }
+
+    /// The object's collection.
+    pub(crate) fn collection(&self) -> &str {
+        &self.collection
     }
 
     /// The person id of the object, when it is a person.
@@ -151,6 +157,7 @@ impl Object {
         Ok(Some(Object {
             id: ObjectId(object),
             space: SpaceId(space),
+            collection: collection.to_owned(),
             deleted: row.object.is_deleted(),
             fields,
             person,

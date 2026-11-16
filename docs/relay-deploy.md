@@ -83,8 +83,8 @@ Run the example app (`apps/tasks-rust/README.md`) against the deployed relay ins
 cargo build -p tasks-rust
 alias tasks="$PWD/target/debug/tasks"
 RELAY=wss://<api id>.execute-api.eu-central-1.amazonaws.com/prod
-LAPTOP="--data /tmp/laptop --key-file /tmp/laptop.keys --relay $RELAY"
-PHONE="--data /tmp/phone --key-file /tmp/phone.keys --relay $RELAY"
+LAPTOP=(--data /tmp/laptop --key-file /tmp/laptop.keys --relay "$RELAY")
+PHONE=(--data /tmp/phone --key-file /tmp/phone.keys --relay "$RELAY")
 ```
 
 Then follow steps 4 to 6 of the example's README: create a space, add tasks, invite the phone, sync, watch live updates, complete a task.
@@ -93,8 +93,8 @@ Check two more things:
 
 - **A large change.** Add a task whose title is larger than 22 KiB, such as 40 KiB. It goes up through a presigned S3 URL and comes down through another. Both devices show it.
 - **Message order.** API Gateway and Lambda do not promise that one connection's messages reach the function in order (#279, "Risk for NOC-272").
-  1. Run `tasks $PHONE watch` while you add ten tasks quickly on the laptop.
-  2. Every task arrives, and `tasks $LAPTOP sync` ends with nothing unconfirmed.
+  1. Run `tasks "${PHONE[@]}" watch` while you add ten tasks quickly on the laptop.
+  2. Every task arrives, and `tasks "${LAPTOP[@]}" sync` ends with nothing unconfirmed.
   3. In CloudWatch Logs, the function's logs hold one JSON line per invocation. During the test, no line may hold the code `unauthenticated` or `malformed`.
 
 If a check fails, roll back (below) and tell pm what you saw, with the log lines. The log lines hold no content.

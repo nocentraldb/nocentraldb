@@ -2,17 +2,9 @@
 
 use std::path::PathBuf;
 
-pub const USAGE: &str = "\
-usage: ncdb model build [--model <path>] [--lock <path>]
-       ncdb model check [--model <path>] [--lock <path>]
+use crate::texts;
 
-build reads the schema module (--model, default ./model.ts, which exports
-`model`) and the previous lock (--lock, default ./model.lock.json), refuses a
-change that clients on the previous model could not keep, and writes the lock.
-check does the same and writes nothing: it fails when the lock is missing or
-out of date, or the change is refused. Both run the schema with Node.js 24 or
-later, found on PATH.
-";
+pub(crate) use crate::texts::USAGE;
 
 /// The paths `ncdb model` works on, as given.
 pub struct Paths {
@@ -31,10 +23,10 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         ["--help" | "-h" | "help"] => return Ok(Command::Help),
         ["model", "build", rest @ ..] => (false, rest),
         ["model", "check", rest @ ..] => (true, rest),
-        [] => return Err("no command".into()),
-        ["model", other, ..] => return Err(format!("unknown command: model {other}")),
-        ["model"] => return Err("model needs a command: build or check".into()),
-        [other, ..] => return Err(format!("unknown command: {other}")),
+        [] => return Err(texts::NO_COMMAND.into()),
+        ["model", other, ..] => return Err(texts::unknown_model_command(other)),
+        ["model"] => return Err(texts::MODEL_NEEDS_COMMAND.into()),
+        [other, ..] => return Err(texts::unknown_command(other)),
     };
     let mut paths = Paths {
         model: PathBuf::from("model.ts"),
@@ -45,11 +37,11 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         let target = match *option {
             "--model" => &mut paths.model,
             "--lock" => &mut paths.lock,
-            other => return Err(format!("unknown option: {other}")),
+            other => return Err(texts::unknown_option(other)),
         };
         match rest.next() {
             Some(value) if !value.starts_with("--") => *target = PathBuf::from(value),
-            _ => return Err(format!("{option} needs a path")),
+            _ => return Err(texts::option_needs_path(option)),
         }
     }
     Ok(Command::Model { check, paths })

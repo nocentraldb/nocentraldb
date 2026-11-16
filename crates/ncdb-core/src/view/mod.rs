@@ -106,8 +106,8 @@ pub enum Error {
     /// the database holds no lock to check the new one against.
     Model,
     /// The lock is not a successor of the lock the database was last
-    /// opened with, nor that lock one of it (RFC 0005, D11): each refused
-    /// change.
+    /// opened with, nor that lock one of it (RFC 0005, "Two checks: at
+    /// build and on the device"): each refused change.
     Refused(Vec<Refusal>),
     /// The model cannot be folded into a view.
     Invalid(Invalid),
@@ -176,9 +176,11 @@ impl View {
 
     /// Opens the view in the database file at `path`, creating it when it
     /// does not exist: WAL mode, `synchronous = FULL` and `secure_delete`
-    /// on (RFC 0006, decisions 7 and 9). The view folds by the model of
+    /// on (RFC 0006, "Desktop and mobile" and "What the view stores in
+    /// plaintext"). The view folds by the model of
     /// `lock`, the member's `model.lock.json` (RFC 0005), which is checked
-    /// against the lock the database was last opened with (RFC 0005, D11):
+    /// against the lock the database was last opened with (RFC 0005, "Two
+    /// checks: at build and on the device"):
     /// a lock that is not a successor of it, nor it a successor of the
     /// lock, is [`Error::Refused`], and nothing is written. A change the
     /// check accepts that changes the view's model is [`Error::Model`]
@@ -363,7 +365,8 @@ impl View {
 
     /// Receives a frame: appends it to the log of its space, takes it
     /// through the steps and folds it, and, when it is a control change
-    /// that passes, checks rejected changes again (D11) and un-folds the
+    /// that passes, checks rejected changes again (RFC 0002, "Rejected
+    /// changes") and un-folds the
     /// folded changes it now rejects (RFC 0006, "Un-folding"), all in one
     /// SQLite transaction. A duplicate changes nothing. When anything fails,
     /// neither the log nor the view changes.

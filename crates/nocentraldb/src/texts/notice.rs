@@ -23,6 +23,13 @@ pub(crate) const ACCOUNT_LINKED: &str =
 pub(crate) const ACCOUNT_RECOVERED: &str =
     "Your account is back with a new account key. Your spaces come back when one of their members adds this device.";
 
+/// `adHocSpaceCreated`: Spaces::create_ad_hoc (db.spaces.createAdHoc) returns
+/// it once the ad-hoc space and its copies are written. The first sentence is
+/// the owner's, NOC-320 Q10; how many links and plugin fields were left out,
+/// the call returns beside it.
+pub(crate) const AD_HOC_SPACE_CREATED: &str =
+    "This space limits what the sub-agent can decrypt, not what a process running as the same user can read. Its copies keep no link to an object that was not copied, and no personal or plugin field.";
+
 /// `agentPaired`: Account::complete_pairing (db.account.completePairing)
 /// returns it on an agent once its account certified it. The owner's text,
 /// NOC-273.

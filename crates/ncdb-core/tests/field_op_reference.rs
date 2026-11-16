@@ -83,7 +83,7 @@ fn a_value_that_does_not_fit_names_no_target() {
 
 #[test]
 fn a_value_that_does_not_fit_is_decoded_and_kept_as_written() {
-    // Decision 17: a buggy or hostile writer's bare object id is applied
+    // RFC 0004, "The value and its encoding": a buggy or hostile writer's bare object id is applied
     // as every basic value is; it is not parked.
     let bare = write(Value::Bytes(ObjectId([0x44; 16]).0.to_vec()), &[]);
     let operation = field_op::encode(&customer(), &bare, T1, "orders", "customer");
