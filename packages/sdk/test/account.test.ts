@@ -11,7 +11,12 @@ const inspect = (value: unknown, _options?: object): string =>
 import { expect, expectTypeOf, test } from "vitest";
 import { decode, encode } from "../src/cbor.ts";
 import { type Core, connect } from "../src/connect.ts";
-import { type Notice, nc, type RecoveryCode } from "../src/index.ts";
+import {
+  type Notice,
+  nc,
+  type PairingAnswer,
+  type RecoveryCode,
+} from "../src/index.ts";
 
 const model = nc.model({
   tasks: nc.collection({ title: nc.string() }),
@@ -121,5 +126,105 @@ test("their types are what the owner decided", async () => {
   >();
   expectTypeOf(db.account.recovered).returns.toEqualTypeOf<
     Promise<Notice | null>
+  >();
+});
+
+// Slice 2: pairing (NOC-321 points 3 to 5).
+const ANSWER = "ncdb-pair-1:AAECAwQFBgc";
+const SPACE = "0123456789abcdef0123456789abcdef";
+const ADDED = {
+  code: "deviceAdded",
+  text: "Your new device was added to this space and reads its whole history.",
+};
+const PAIRED = {
+  code: "devicePaired",
+  text: "This device now holds your account key. Keep your recovery code: it is the way back if you lose every device.",
+};
+
+const pairing = () => {
+  const calls: { call: string; args: Record<string, unknown> }[] = [];
+  const core: Core = {
+    call: async (bytes) => {
+      const { id, call, args } = decode(bytes) as {
+        id: number;
+        call: string;
+        args: Record<string, unknown>;
+      };
+      calls.push({ call, args });
+      switch (call) {
+        case "account.pair":
+          return encode({
+            id,
+            ok: {
+              answer: ANSWER,
+              added: [{ space: SPACE, notice: ADDED }],
+              askAdmins: [],
+            },
+          });
+        case "account.completePairing":
+          return encode({ id, ok: { notices: [PAIRED] } });
+        default:
+          return encode({ id, ok: null });
+      }
+    },
+    terminate: () => {},
+    listen: () => {},
+  };
+  return { core, calls };
+};
+
+test("pair sends the kind and the invitation's text, and gives the answer, the spaces added and the admins to ask", async () => {
+  const { core, calls } = pairing();
+  const db = await connect(core, { model, lock });
+  const invitation = nc.invitation("ncdb-invite-1:AAECAwQ");
+  const paired = await db.account.pair({ kind: "device", invitation });
+  expect(calls.at(-1)).toEqual({
+    call: "account.pair",
+    args: { kind: "device", invitation: "ncdb-invite-1:AAECAwQ" },
+  });
+  expect(String(paired.answer)).toBe(ANSWER);
+  expect(paired.added).toEqual([{ space: SPACE, notice: ADDED }]);
+  expect(paired.askAdmins).toEqual([]);
+});
+
+test("completePairing sends the answer's text and gives the notices", async () => {
+  const { core, calls } = pairing();
+  const db = await connect(core, { model, lock, pairing: "request" });
+  const result = await db.account.completePairing(nc.pairingAnswer(ANSWER));
+  expect(calls.at(-1)).toEqual({
+    call: "account.completePairing",
+    args: { answer: ANSWER },
+  });
+  expect(result).toEqual({ notices: [PAIRED] });
+});
+
+test("nc.pairingAnswer reads an answer's text back, and refuses a text that is not one", () => {
+  expect(String(nc.pairingAnswer(`  ${ANSWER}\n`))).toBe(ANSWER);
+  for (const text of [
+    "",
+    "ncdb-invite-1:AAAA",
+    "ncdb-pair-1:",
+    "ncdb-pair-1:A",
+    "ncdb-pair-1:AA=A",
+  ]) {
+    expect(() => nc.pairingAnswer(text), text).toThrow(
+      expect.objectContaining({ code: "invalidValue" }),
+    );
+  }
+});
+
+test("the pairing types are what the owner decided", async () => {
+  const { core } = pairing();
+  const db = await connect(core, { model, lock });
+  expectTypeOf(nc.pairingAnswer).returns.toEqualTypeOf<PairingAnswer>();
+  expectTypeOf<PairingAnswer["toString"]>().returns.toEqualTypeOf<string>();
+  type Paired = Awaited<ReturnType<typeof db.account.pair>>;
+  expectTypeOf<Paired["answer"]>().toEqualTypeOf<PairingAnswer>();
+  expectTypeOf<Paired["added"]>().toEqualTypeOf<
+    readonly { readonly space: string; readonly notice: Notice }[]
+  >();
+  expectTypeOf<Paired["askAdmins"]>().toEqualTypeOf<readonly string[]>();
+  expectTypeOf(db.account.completePairing).returns.toEqualTypeOf<
+    Promise<{ readonly notices: readonly Notice[] }>
   >();
 });

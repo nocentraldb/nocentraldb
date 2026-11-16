@@ -259,6 +259,22 @@ export interface Db {
     recoveryCode(): Promise<RecoveryCode | null>;
     /** `accountRecovered` on the open that recovered the account with `recover`, else `null`. */
     recovered(): Promise<import("./members.ts").Notice | null>;
+    /** On a device of the account, after a person confirmed the new device: the answer to show it, the spaces the new device was added to, each with its notice, and the spaces whose admins the app asks (RFC 0010). `kind` is `"device"` or `"agent"`. */
+    pair(request: {
+      kind: "device" | "agent";
+      invitation: Invitation;
+    }): Promise<{
+      readonly answer: import("./account.ts").PairingAnswer;
+      readonly added: readonly {
+        readonly space: Id;
+        readonly notice: import("./members.ts").Notice;
+      }[];
+      readonly askAdmins: readonly Id[];
+    }>;
+    /** On the new database, opened with `pairing: "request"`: takes the answer and makes it a device or an agent of the account; gives the notices of the pairing. */
+    completePairing(
+      answer: import("./account.ts").PairingAnswer,
+    ): Promise<{ readonly notices: readonly import("./members.ts").Notice[] }>;
   };
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
