@@ -1,0 +1,6 @@
+# 2026-11-16 · NOC-318 · The TypeScript shape of ad-hoc spaces
+
+- Decided by: Carsten, 2026-11-16, on NOC-351 (T1 to T4, A each)
+- Why: RFC 0009 names `db.spaces.createAdHoc({ copy, personal, local })` for TypeScript but leaves its shapes open, and NOC-320 settled them for Rust only. `copy` takes the objects the SDK read, as the RFC's example passes them; the SDK remembers, weakly, each read object's collection, which a read object does not carry, and refuses any other object, a spread of one too, with `invalidValue` before the core. The call gives `{ space, notice, copies: [{ source, copy }], clearedLinks, pluginFieldsNotCopied }`, mirroring `AdHocCreated`. `space.sourceOf(copy)` gives `{ space, id } | undefined` and `space.copyOf(sourceSpace, source)` the copy's id or `undefined`, as in Rust. The browser SDK gets `createAdHoc` and the lookups; `nc.open({ subAgent: true })` waits for the SDK in Node.js (NOC-181), since a browser database is a device and cannot add a sub-agent (NOC-320 Q2).
+- Instead of: `{ collection, id }` pairs in `copy` (T1 B); only `space` in the result, the rest through lookups (T2 B); holding back all of `createAdHoc` in TypeScript until Node.js exists (T4 B).
+- Topics: sub-agents, ad-hoc-spaces, sdk-ts, naming
