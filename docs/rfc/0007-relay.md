@@ -690,4 +690,3 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
-- 2026-11-15 · Every message travels as base64 in a text frame, and no message is over 23 KiB, so none is over API Gateway's 32 KB frame (Carsten, NOC-338, option A, variant b)
