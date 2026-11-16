@@ -62,6 +62,12 @@ pub(crate) fn valid_name(name: &str) -> Result<(), Error> {
     }
 }
 
+/// Gives the pool's OPFS handles back before the worker ends (NOC-352);
+/// whether they are free. Every database of the worker must be closed.
+pub(crate) fn release() -> bool {
+    false
+}
+
 /// Prepares the database named `name` in this dedicated worker: installs
 /// the VFS, reserves its slots, and takes its keys from IndexedDB.
 #[cfg_attr(not(test), allow(dead_code))]
