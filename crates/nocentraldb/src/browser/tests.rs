@@ -12,7 +12,7 @@ use ncdb_core::view::View;
 use ncdb_core::view::browser::{Storage as Vfs, exists, install};
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use super::{Placed, place, valid_name};
+use super::{Placed, place, release, valid_name};
 use crate::durability::Storage;
 use crate::error::ErrorCode;
 use crate::keys::Keys;
@@ -153,6 +153,63 @@ async fn opfs_each_database_reserves_its_two_slots_in_the_pool() {
             .unwrap();
         open_view(&placed);
     }
+}
+
+#[wasm_bindgen::prelude::wasm_bindgen(inline_js = r#"
+export async function poolIsFree() {
+    const files = async (dir) => {
+        const all = [];
+        for await (const handle of dir.values()) {
+            if (handle.kind === "file") all.push(handle);
+            else all.push(...(await files(handle)));
+        }
+        return all;
+    };
+    const root = await navigator.storage.getDirectory();
+    const pool = await root.getDirectoryHandle(".opfs-sahpool");
+    for (const file of await files(pool)) {
+        try {
+            (await file.createSyncAccessHandle()).close();
+        } catch {
+            return false;
+        }
+    }
+    return true;
+}
+"#)]
+extern "C" {
+    #[wasm_bindgen(js_name = poolIsFree)]
+    fn pool_is_free_js() -> js_sys::Promise;
+}
+
+/// Whether this worker can take every file of the pool with a sync access
+/// handle, as another tab's worker would: whether no pool holds them.
+async fn pool_is_free() -> bool {
+    wasm_bindgen_futures::JsFuture::from(pool_is_free_js())
+        .await
+        .unwrap()
+        .as_bool()
+        .unwrap()
+}
+
+#[test]
+#[ignore = "needs OPFS in a dedicated worker: the sdk-keys step of browser-view.yml runs it in Chromium"]
+async fn opfs_release_gives_the_pools_handles_back_and_the_next_open_takes_them_again() {
+    // NOC-352: the next tab's worker can open the database while this
+    // worker still exists.
+    let placed = place(&fresh("release"), Keys::generate).await.unwrap();
+    open_view(&placed);
+    assert!(
+        !pool_is_free().await,
+        "the open pool lets its files be taken"
+    );
+
+    assert!(release(), "the pool kept its handles");
+    assert!(pool_is_free().await, "a file of the pool is still held");
+
+    let again = place(&placed.name, Keys::generate).await.unwrap();
+    assert!(!again.drawn, "the database was not found again");
+    open_view(&again);
 }
 
 const DB_LOCK: &str = LOCK;

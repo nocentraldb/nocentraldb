@@ -222,6 +222,17 @@ impl Bridge {
         self.events.clone()
     }
 
+    /// Closes the open database, as `close` does, and gives its OPFS
+    /// handles back, before the worker ends (NOC-352): the next tab's
+    /// worker can then open the database at once, even while the page of
+    /// this one is frozen. Whether the handles are free: with the database
+    /// still in use elsewhere, they are not, and they go with the worker.
+    #[cfg(target_arch = "wasm32")]
+    pub fn release(&mut self) -> bool {
+        self.close();
+        crate::browser::release()
+    }
+
     async fn call(&mut self, call: &str, args: &Value) -> Result<Value, Failed> {
         if call == "open" {
             return self.open(args).await;
@@ -235,11 +246,7 @@ impl Bridge {
         };
         match call {
             "close" => {
-                self.db = None;
-                if let Some(events) = self.events.take() {
-                    events.feed.close();
-                }
-                self.cursors.clear();
+                self.close();
                 Ok(Value::Null)
             }
             "erasures.list" => erasures::list(&db, args).await,
@@ -313,6 +320,15 @@ impl Bridge {
             }
             other => Err(invalid(crate::texts::bridge::no_such_call(other))),
         }
+    }
+
+    /// Drops the open database, its events and its cursors.
+    fn close(&mut self) {
+        self.db = None;
+        if let Some(events) = self.events.take() {
+            events.feed.close();
+        }
+        self.cursors.clear();
     }
 
     async fn open(&mut self, args: &Value) -> Result<Value, Failed> {

@@ -3,7 +3,9 @@
 // browser-view.yml runs every e2e file once per engine, one step each, so
 // a failing engine names itself in its step. Every test runs in all three;
 // an engine that cannot run one would skip it with the reason in the test,
-// and docs/getting-started-browser.md would list the gap.
+// and docs/getting-started-browser.md would list the gap. Where an engine
+// has a documented limit, the test asserts the limit there instead, as
+// frozen.e2e.test.mjs does for WebKit (NOC-352).
 //
 //   SDK_BROWSER_ENGINE=firefox node --test 'scripts/sdk-browser/*.test.mjs'
 import { mkdtemp, rm } from "node:fs/promises";
