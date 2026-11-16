@@ -6,6 +6,7 @@ use ncdb_core::cbor::{self, Key, Value};
 use super::Bridge;
 
 mod account;
+mod ad_hoc;
 mod erasures;
 mod find;
 mod members;
