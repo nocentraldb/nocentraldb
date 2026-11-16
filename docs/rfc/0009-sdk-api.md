@@ -513,7 +513,7 @@ await db.sync.resume();
 | `unconfirmed` | This member's changes the relay has not confirmed, as `db.durability` counts them ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
 | `refused` | Changes of this member the relay refused ([RFC 0002, "A change the relay refuses after the member folded it"](0002-change-and-log-format.md#a-change-the-relay-refuses-after-the-member-folded-it)). |
 | `epochChanged` | The relay was restored and the SDK is pushing again what it lost ([RFC 0007, "Restores and the relay epoch"](0007-relay.md#restores-and-the-relay-epoch)). |
-| `error` | The last error that stops syncing, such as `unsupported_version`, by its RFC 0007 code; never content. A code RFC 0007 does not list shows as `unknown_error`, so the app still learns that syncing stopped, and the relay's own text never reaches the app. |
+| `error` | The last error of syncing; never content. Either an error that stops syncing, such as `unsupported_version`, by its RFC 0007 code, where a code RFC 0007 does not list shows as `unknown_error`, so the app still learns that syncing stopped, and the relay's own text never reaches the app; or `upload_failed` while the upload URL of a large change refuses its upload with an HTTP status ([RFC 0007, "Large changes"](0007-relay.md#large-changes)): the connection stays up, the change stays unconfirmed and goes up again after a backoff, and an upload that goes through clears the code (Carsten, 2026-11-16, NOC-349). |
 
 In Rust the report is a `SyncReport`, and its values are a `SyncStatus`; a space's report, below, is a `SpaceStatusReport`, and its values are a `SpaceStatus` ([The Rust SDK](#the-rust-sdk)).
 
@@ -715,6 +715,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `unknownType` | Error of a write to a plugin field whose type is not registered | [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount`, `invalidCertificate`, `alreadyMember` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
 | `unknown_error` | The sync report's `error` for a relay code RFC 0007 does not list | [RFC 0007, "The errors"](0007-relay.md#the-errors) |
+| `upload_failed` | The sync report's `error` while a large change's upload URL refuses its upload | [RFC 0007, "Large changes"](0007-relay.md#large-changes) |
 
 **Rust** (`nocentraldb`): every name above in snake case, and:
 

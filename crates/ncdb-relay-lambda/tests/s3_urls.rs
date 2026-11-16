@@ -89,3 +89,58 @@ async fn a_download_url_gets_its_frame_for_5_minutes() {
     assert_eq!(param(&url, "X-Amz-Expires"), Some("300"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The function's own S3 client (`s3::client`), configured as Lambda
+/// configures it: a region and a role's session credentials.
+fn function_urls() -> S3Urls {
+    let aws = aws_config::SdkConfig::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .region(Region::new("eu-central-1"))
+        .credentials_provider(aws_sdk_s3::config::SharedCredentialsProvider::new(
+            Credentials::new(
+                "ASIAEXAMPLE",
+                "secret",
+                Some("session".into()),
+                None,
+                "test",
+            ),
+        ))
+        .build();
+    S3Urls::new(ncdb_relay_lambda::s3::client(&aws), "ncdb-frames")
+}
+
+/// S3 checks a presigned PUT against what its query parameters sign
+/// (NOC-348). The URL signs only the size and the host, as the URL names
+/// it without a port, and carries no checksum, which the emulator would
+/// not check: a checksum of any other body than the member's frame would
+/// make S3 refuse the upload.
+#[tokio::test]
+async fn the_functions_upload_url_signs_only_size_and_host_and_no_checksum() {
+    let url = Urls::<SqliteStore>::upload(
+        &function_urls(),
+        UploadId([0xab; 16]),
+        Token([1; 32]),
+        30_000,
+    )
+    .await
+    .unwrap();
+    let host = url
+        .strip_prefix("https://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    assert_eq!(host, "ncdb-frames.s3.eu-central-1.amazonaws.com");
+    assert_eq!(
+        param(&url, "X-Amz-SignedHeaders"),
+        Some("content-length%3Bhost")
+    );
+    let query = url.split_once('?').unwrap().1;
+    for pair in query.split('&') {
+        let name = pair.split('=').next().unwrap().to_ascii_lowercase();
+        assert!(
+            !name.starts_with("x-amz-checksum") && name != "x-amz-sdk-checksum-algorithm",
+            "{url}"
+        );
+    }
+}

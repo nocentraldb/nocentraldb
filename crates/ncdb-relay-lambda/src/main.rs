@@ -90,7 +90,7 @@ async fn main() -> ExitCode {
     let aws = aws_config::defaults(BehaviorVersion::latest()).load().await;
     let runtime = Handle::current();
     let db = aws_sdk_dynamodb::Client::new(&aws);
-    let s3 = aws_sdk_s3::Client::new(&aws);
+    let s3 = ncdb_relay_lambda::s3::client(&aws);
     let store = AwsStore::new(
         db.clone(),
         s3.clone(),

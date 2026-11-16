@@ -323,7 +323,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `members.add` returns a notice. Its text says what the call does not do: here, that the new member reads the whole history of the space. The phone receives the space at its next sync, and a subscription on the phone shows the laptop's writes as they arrive.
 
-`db.sync().current()` reports the connection, how many of this device's changes the relay has not confirmed, and the last error that stops syncing. `space.status().current()` reports what a space holds that a read does not show, such as changes that wait for a newer version of the app.
+`db.sync().current()` reports the connection, how many of this device's changes the relay has not confirmed, and the last error of syncing. `space.status().current()` reports what a space holds that a read does not show, such as changes that wait for a newer version of the app.
 
 ## 9. Pair a second device of your own account
 

@@ -242,6 +242,14 @@ pub(crate) const ROLE_WRITER: &str =
 pub(crate) const SIGN_OFFS_PREFIX: &str =
     "it does not start with ncdb-sign-off-1:";
 
+/// `uploadFailed`: SyncStatus::error (db.sync().current().error) while S3, or
+/// the relay's own upload URL, refuses the upload of a large change with an
+/// HTTP status. The connection stays up, the change stays unconfirmed and goes
+/// up again after a backoff; an upload that goes through clears it. Carsten,
+/// 2026-11-16, NOC-349 (option A).
+pub(crate) const UPLOAD_FAILED: &str =
+    "upload_failed";
+
 /// `wrappingKeyUnmakeable`: What failed, in webCryptoFailed: WebCrypto could
 /// not make the non-extractable key that wraps the member's keys.
 pub(crate) const WRAPPING_KEY_UNMAKEABLE: &str =

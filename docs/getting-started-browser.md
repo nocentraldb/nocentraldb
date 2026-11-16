@@ -332,7 +332,7 @@ console.log("The relay holds the task.");
 
 ## 11. Show the sync status
 
-`db.sync` reports the connection, how many of this member's changes the relay has not confirmed, and the last error that stops syncing. A page follows it to show whether its data has left the browser:
+`db.sync` reports the connection, how many of this member's changes the relay has not confirmed, and the last error of syncing. A page follows it to show whether its data has left the browser:
 
 ```ts
 import { nc } from "@nocentraldb/sdk";

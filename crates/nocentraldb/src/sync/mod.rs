@@ -111,8 +111,12 @@ pub struct SyncStatus {
     /// Whether the relay was restored and the SDK is pushing again what it
     /// lost (RFC 0007, "Restores and the relay epoch").
     pub epoch_changed: bool,
-    /// The last error that stops syncing, by its RFC 0007 code, such as
-    /// `unsupported_version`; never content. A code the relay sent that
+    /// The last error of syncing; never content. Either an error that
+    /// stops syncing, by its RFC 0007 code, such as
+    /// `unsupported_version`, or `upload_failed` while a large change's
+    /// upload URL refuses its upload, which keeps the connection and
+    /// retries the upload after a backoff until one goes through (Carsten,
+    /// 2026-11-16, NOC-349). A code the relay sent that
     /// RFC 0007 does not list shows as `unknown_error`, so the relay's own
     /// text never reaches the app (NOC-146). Once the relay answered
     /// `not_member` or `removed_member` for a space, that code stays here,

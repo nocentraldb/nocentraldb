@@ -19,6 +19,6 @@ export interface SyncStatus {
   readonly refused: number;
   /** Whether the relay was restored and the SDK is pushing again what it lost. */
   readonly epochChanged: boolean;
-  /** The last error that stops syncing, by its RFC 0007 code, such as `unsupported_version`, or `unknown_error`; never content. Absent while syncing runs. */
+  /** The last error of syncing; never content. An error that stops syncing, by its RFC 0007 code, such as `unsupported_version`, or `unknown_error`; or `upload_failed` while a large change's upload is refused, which keeps syncing and retries the upload after a backoff. Absent while syncing runs. */
   readonly error?: string;
 }

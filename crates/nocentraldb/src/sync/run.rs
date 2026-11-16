@@ -19,11 +19,11 @@ use super::{Connection, SyncState};
 use crate::db::{Inner, lock};
 
 /// The first wait before a reconnect.
-const FIRST: Duration = Duration::from_millis(100);
+pub(super) const FIRST: Duration = Duration::from_millis(100);
 
 /// The longest wait between two attempts: a few minutes (RFC 0007,
 /// "Island mode").
-const LONGEST: Duration = Duration::from_secs(120);
+pub(super) const LONGEST: Duration = Duration::from_secs(120);
 
 /// Starts syncing the database `inner` with the relay at `url`.
 pub(crate) fn start(inner: &Arc<Mutex<Inner>>, url: String) {
