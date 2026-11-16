@@ -1,16 +1,16 @@
 # RFC 0012: Several tabs on one browser database, without one owning tab
 
-REQUEST FOR COMMENTS · DRAFT 1 · NOVEMBER 2026 · Ticket NOC-357
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-357
 
-This RFC asks whether a browser database can do without the tab that owns it. Today one tab's worker holds the database for the whole session, and every other tab reaches it through that tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). On iOS, WebKit freezes a hidden tab without a reliable warning, and a frozen owner keeps its lock and its storage. The other tabs then wait for it: their writes (NOC-352, reported as waiting by NOC-355), a new tab's `nc.open` (NOC-356), and the relay's updates, since the owner syncs.
+This RFC lets a browser database do without the tab that owns it. Today one tab's worker holds the database for the whole session, and every other tab reaches it through that tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). On iOS, WebKit freezes a hidden tab without a reliable warning, and a frozen owner keeps its lock and its storage. The other tabs then wait for it: their writes (NOC-352, reported as waiting by NOC-355), a new tab's `nc.open` (NOC-356), and the relay's updates, since the owner syncs.
 
-A research note shared with the owner on 2026-11-16 ("Local-First SQLite auf dem iPhone: Multi-Tab-Strategien") proposes another design: every tab has its own connection, which holds the storage only for the length of one transaction, and every write goes first into an outbox in IndexedDB, which a frozen tab cannot block. This RFC checks the note's claims against their sources, measures the two mechanisms in WebKit, works out what they mean for a database whose core signs, validates and syncs, and lists the options and the one the owner chose. Every change a developer would see is listed for the owner in [What the owner decides](#what-the-owner-decides).
+A research note shared with the owner on 2026-11-16 ("Local-First SQLite auf dem iPhone: Multi-Tab-Strategien") proposes another design: every tab has its own connection, which holds the storage only for the length of one transaction, and every write goes first into an outbox in IndexedDB, which a frozen tab cannot block. This RFC checks the note's claims against their sources, measures the two mechanisms in WebKit, works out what they mean for a database whose core signs, validates and syncs, and lists the options and the one the owner chose. [What changes for developers](#what-changes-for-developers) lists every change a developer will see, and [Follow-up tickets](#follow-up-tickets) the work it leads to.
 
 It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a dedicated worker with the `opfs-sahpool` VFS; on [RFC 0002](0002-change-and-log-format.md), whose author sequence makes one member key a single writer; on [RFC 0007](0007-relay.md), whose push is idempotent; and on [RFC 0009](0009-sdk-api.md), which says when a write resolves.
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0012 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner chose option B (Carsten, 2026-11-16): every tab takes the database per transaction, and no tab owns it. Questions 2 to 5 of [What the owner decides](#what-the-owner-decides) are still open, and the outbox waits for telemetry (NOC-364). Nothing in it is built, and RFC 0006 and RFC 0009 stay as they are until the owner decides the whole RFC.
+**Status.** Decided by the owner (Carsten, 2026-11-16): option B, every tab takes the database per transaction and no tab owns it, with the answers in [What changes for developers](#what-changes-for-developers). The outbox is deferred until telemetry gathered with the app's consent shows whether it is needed (NOC-364). Nothing is built yet. RFC 0006 and RFC 0009 still describe the owning tab; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
 
 **Out of scope.** Native apps and Node.js, where the database is a file with WAL and several connections already ([RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers)). Private windows, which do not open a database at all ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). Eviction of the copy.
 
@@ -165,18 +165,32 @@ The outbox (C) waits for the telemetry of NOC-364. The note's VFS (D) is not tak
 
 The note's fourth point, offering the app as a home-screen app with `navigator.storage.persist()`, needs no decision here: the SDK already asks for persistent storage on open, and NOC-33 measured that iOS denies it even in a home-screen app ([RFC 0006, "What a browser does with the copy"](0006-local-view.md#what-a-browser-does-with-the-copy)). It is advice for developers, not a remedy for frozen tabs.
 
-## What the owner decides
+## What changes for developers
 
-Each of these changes what developers or their users see, so each is the owner's (GENESIS.md, "What has to come back through me").
+Each of these changes what developers or their users see, so the owner decided each (GENESIS.md, "What has to come back through me").
 
-1. **Which option.** Decided: B (Carsten, 2026-11-16). A is not taken; C is deferred until telemetry (NOC-364); D is not taken.
-2. **Under B: every tab opens the database itself.** RFC 0006's "One tab owns the database" and RFC 0009's "Open and close" change: `db.close()` ends only the tab's own core; there is no owner to hand over to. A tab whose model lock differs from the file's is still refused with `modelRefused`.
-3. **Under B: which relay a tab's status names.** Today every tab names the owner's relay ([RFC 0009, "Sync and status"](0009-sdk-api.md#sync-and-status)). Under B it is the relay of the tab that syncs, which may change when the visible tab steals the sync lock. Two tabs opened with different relays would sync alternately with each; the recommendation is to refuse the second, as a different lock is refused.
-4. **Under B: writes are slower.** Through our Rust VFS, about 8 ms instead of 1.5 ms for a small write in WebKit, 13 ms instead of 1.5 ms in Chromium, and 31 ms instead of 5 ms in Firefox, before any work on a faster resume.
-5. **Under B: what `waitingForTab` (NOC-355) means.** It stays, with a narrower meaning: another tab froze inside a transaction. NOC-356's `nc.open` wait becomes the same rare case. NOC-355 is being built now; its name and texts can stay, and its docs would change.
-6. **Under C: when a write resolves.** Deferred with C (NOC-364). Either `write` waits as it does today and only falls back to the outbox after its limit, or it always queues first. In both, a queued write resolves without `result.change`, is not read back at once, and can be refused after it resolved, reported by a new event; and `db.durability` gains a count of queued intents. Each is a public name to confirm.
+1. **Option B.** Every tab takes the database per transaction, and no tab owns it (Carsten, 2026-11-16). Keeping one owning tab (A) and the note's VFS (D) are not taken; the outbox (C) is deferred until telemetry (NOC-364).
+2. **Every tab opens the database itself** (Carsten, 2026-11-16). Each tab runs its own worker and core; no tab forwards another's calls and there is no owner to hand over to. `db.close()` ends only the tab's own core. A tab whose model lock differs from the file's is still refused with `modelRefused`. RFC 0006's "One tab owns the database" and RFC 0009's "Open and close" are rewritten to say so ([Follow-up tickets](#follow-up-tickets)).
+3. **Tabs opened with different relays are refused** (Carsten, 2026-11-16). One tab syncs at a time, and a tab's status names the relay of the tab that syncs ([RFC 0009, "Sync and status"](0009-sdk-api.md#sync-and-status)). A tab whose `nc.open` names another relay than the tabs already open is refused, as a different lock is, so two relays never take turns on one database. The error's name is a public name, which the implementation ticket brings to the owner.
+4. **Writes cost more, and that is accepted** (Carsten, 2026-11-16: "we'll see, it is worth the risk"). Through our Rust VFS a small write took about 8 ms instead of 1.5 ms in WebKit, 13 ms instead of 1.5 ms in Chromium, and 31 ms instead of 5 ms in Firefox in the spike, before any work on a faster resume. The cost is measured in practice, in the browser tests of every engine, once the design is built.
+5. **`waitingForTab` keeps its name, with a narrower meaning** (Carsten, 2026-11-16). It reports that a write waits because another tab froze inside a transaction, the only case left in which a tab waits for another. NOC-356's `nc.open` wait becomes the same rare case. What the user sees meanwhile is the optimistic UI layer's (NOC-363).
+6. **When a write resolves under an outbox** stays open with the outbox (NOC-364). Either `write` waits as it does today and only falls back to the outbox after its limit, or it always queues first. In both, a queued write would resolve without `result.change`, would not be read back at once, and could be refused after it resolved, reported by a new event; and `db.durability` would gain a count of queued intents. Each is a public name for that RFC to bring to the owner.
 
-## How it would be tested
+## Follow-up tickets
+
+This RFC changes no other RFC and no code. The decided design leads to these tickets:
+
+1. **RFC 0006, the browser.** Rewrite "One tab owns the database" and the points under it, the browser's row of the targets table ("One connection, in a dedicated Web Worker") and "One writer, many readers", for a lock per transaction on `opfs-sahpool`, one syncing tab under a stealable sync lock, and the refusal of a different relay. The rejected-stacks table keeps wa-sqlite and `opfs` and gains the reasons found here (lazy release, `opfs-wl` in WebKit).
+2. **RFC 0009, the SDK.** Rewrite "Open and close" (every tab opens the database itself; `db.close()` ends only the tab's own core), the `relay` row of "Sync and status" (the syncing tab's relay), the refusal of a tab with another relay and its error name, and the meaning of `waitingForTab`.
+3. **The core's refresh.** In `ncdb-core` and the Rust SDK's `Db`: a core that takes the database reads SQLite's file change counter and, when another core committed, brings its log states, tips, checks, clock and person keys up to date from the rows after the last one it saw. Tested with two cores on one file, natively and in wasm32: after the other core wrote, it reads exactly what a freshly opened core reads.
+4. **A faster resume in the browser.** `ncdb_core::view::browser::install` goes through `sqlite_wasm_vfs::sahpool::install` before it resumes; resuming the pool it keeps may cost less. Measured before and after in the three engines.
+5. **The SDK's tab layer.** Replace the owning tab in `packages/sdk` (`tabs.ts`, the worker and `connect.ts`) with a worker and core per tab: the database lock per transaction with a time limit, the sync lock that the visible tab may steal, a commit notice over the `BroadcastChannel` so other tabs' subscriptions fire, the refusal of a different relay, and `waitingForTab` with its new meaning. The browser tests of NOC-344 in all three engines: two tabs writing interleaved, a tab stopped inside a transaction, a stolen sync lock, a crashed tab whose transaction rolls back, and Chromium's DevTools freeze.
+6. **The write cost in practice.** A measurement in the browser tests of every engine, so the cost the owner accepted is known and watched as the design is built.
+7. **The device checks.** Rows in [docs/browser-storage-checklist.md](../browser-storage-checklist.md) for a real iPhone: a tab frozen while another writes, a tab closed from the tab overview, a tab frozen mid-sync, and whether iOS frees a frozen worker's OPFS handles when it discards the tab.
+8. **The developer pages.** [Getting started in the browser](../getting-started-browser.md) and [Browser apps and durability](../browser-durability.md) say how several tabs behave, and what `waitingForTab` now means.
+9. **NOC-356** is rescoped or closed: with every tab opening the database itself, `nc.open` waits for another tab only when that tab froze inside a transaction.
+
+## How it is tested
 
 - **Unit and gate tests** for the core's refresh: a core that holds the database after another core wrote must read exactly what a freshly opened core reads. This runs natively and in wasm32 like the fold tests, with two cores on one file.
 - **Browser tests in all three engines** (NOC-344's harness): two tabs writing interleaved, a tab stopped inside a transaction (as in the spike), a stolen sync lock, a crashed tab whose transaction rolls back.
@@ -191,7 +205,7 @@ Each of these changes what developers or their users see, so each is the owner's
 | Principle 3: nothing is lost silently. | Option C's intents are counted and a late refusal is reported; option B loses nothing a resolved write promised. A transaction a tab did not finish rolls back, as the spike showed. |
 | Principle 4: say plainly what it does not do. | The remaining risk of B, the unknowns of WebKit (frozen handles, `strict`), and what Playwright cannot show are named. |
 | Principle 6: apps read only from the computed view. | Queued intents are not laid over query results. |
-| Principle 7: the same core on every target. | Options B and C keep the Rust SQLite and our `opfs-sahpool`; option D, which would fork the binding, is not recommended. |
+| Principle 7: the same core on every target. | Option B keeps the Rust SQLite and our `opfs-sahpool`; option D, which would fork the binding, is not taken. |
 | "Runs on any device … Safari." | The design targets WebKit's suspension, measured in WebKit where Playwright can, and leaves the rest to a real device. |
 
 ## Appendix: the spike
@@ -265,4 +279,4 @@ The `opfs-wl` check opened `new sqlite3.oo1.OpfsWlDb("/spike-wl.sqlite")` in eac
 
 ## History
 
-- 2026-11-16 · Draft 1 (NOC-357)
+- 2026-11-16 · First published, decided by the owner (NOC-357, #381)
