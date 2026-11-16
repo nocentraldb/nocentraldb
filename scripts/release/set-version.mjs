@@ -101,9 +101,7 @@ const main = () => {
       ]);
     }
     for (const [file, text] of writes) writeFileSync(file, text);
-    console.log(
-      `set-version: ${version} written to ${manifests} manifests`,
-    );
+    console.log(`set-version: ${version} written to ${manifests} manifests`);
   } catch (error) {
     fail(error.message);
   }
