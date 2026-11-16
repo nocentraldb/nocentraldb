@@ -20,7 +20,7 @@ use crate::db::{Inner, lock};
 
 mod upload;
 
-use upload::Uploaded;
+use upload::{Retries, Uploaded};
 
 /// A member sends `ping` after this long without a message (RFC 0007,
 /// "Liveness"). The tests shorten this and every bound below.
@@ -90,6 +90,9 @@ struct Session<'a, T: Transport> {
     /// hold, when to fetch the person keys again and the wait after that
     /// (`person_keys::missing`).
     refetch: BTreeMap<SpaceId, (Instant, Duration)>,
+    /// The spaces whose upload S3 refused, and when each pushes again
+    /// (`upload`).
+    uploads: Retries,
 }
 
 /// How long after a fetch that left a named person key missing the
@@ -148,6 +151,7 @@ pub(super) async fn session(
         gaps: BTreeSet::new(),
         progress: false,
         refetch: BTreeMap::new(),
+        uploads: Retries::default(),
     };
     if let Err(end) = session.authenticate().await {
         return end;
@@ -263,6 +267,9 @@ impl<T: Transport> Session<'_, T> {
             for space in again {
                 self.push(space).await?;
             }
+            for space in self.uploads.due(Instant::now()) {
+                self.push(space).await?;
+            }
             // A person key the log names but the member does not hold, as
             // after an entry that announced a new person, is fetched again
             // (RFC 0009, "How a personal field reads": the object reads
@@ -287,9 +294,10 @@ impl<T: Transport> Session<'_, T> {
                 }
             }
             let refetch = self.refetch.values().map(|(at, _)| *at).min();
+            let uploads = self.uploads.next();
             let deadline = with(self.db, |inner| {
                 let finalizes = finalize::next(inner, crate::clock::now_millis(), Instant::now());
-                [merge::next(inner), finalizes, refetch]
+                [merge::next(inner), finalizes, refetch, uploads]
                     .into_iter()
                     .flatten()
                     .min()
@@ -378,6 +386,10 @@ impl<T: Transport> Session<'_, T> {
         if with(self.db, |inner| finalize::waiting(inner, space))? {
             return Ok(());
         }
+        // A space whose upload S3 refused waits until it is due again.
+        if self.uploads.waiting(space, Instant::now()) {
+            return Ok(());
+        }
         let unconfirmed =
             with(self.db, |inner| apply::unconfirmed(inner, space))?.map_err(|_| lost())?;
         let (ids, frames): (Vec<_>, Vec<_>) = unconfirmed.into_iter().unzip();
@@ -390,7 +402,7 @@ impl<T: Transport> Session<'_, T> {
                     let id = match self.upload(space, batch_ids[0], frame).await? {
                         Uploaded::Id(id) => id,
                         Uploaded::Refused => continue,
-                        Uploaded::Stopped => return Ok(()),
+                        Uploaded::Stopped | Uploaded::Failed => return Ok(()),
                     };
                     self.send(wire::push_upload(req, space, &id)).await?;
                 }
