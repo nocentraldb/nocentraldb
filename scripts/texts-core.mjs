@@ -96,6 +96,9 @@ export const coreFiles = (root) =>
     source,
   ]);
 
+/** The concerns' check. Stub for the red step. */
+export const checkConcerns = (_texts) => [];
+
 /** The core's module, crates/ncdb-core/src/texts.rs, of the `core` texts. */
 export const generateCore = (texts) =>
   rustModule(texts, "core", [
