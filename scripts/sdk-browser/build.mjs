@@ -5,7 +5,7 @@
 // builds on the runner this way and runs the test in Playwright's image,
 // which has no Rust (NOC-221).
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, renameSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,7 +36,11 @@ const buildRelay = () => {
     throw new Error(`cargo build of ncdb-relay failed (${result.status})`);
   }
   mkdirSync(dirname(RELAY), { recursive: true });
-  copyFileSync(join(ROOT, "target", "debug", "ncdb-relay"), RELAY);
+  // A copy beside it, renamed over it: a copy onto the binary another
+  // e2e file runs fails with ETXTBSY, and a rename does not (NOC-336).
+  const copy = `${RELAY}.${process.pid}`;
+  copyFileSync(join(ROOT, "target", "debug", "ncdb-relay"), copy);
+  renameSync(copy, RELAY);
 };
 
 /** Builds packages/sdk/dist and the local relay server. */
