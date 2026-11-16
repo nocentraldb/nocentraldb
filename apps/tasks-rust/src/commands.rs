@@ -7,6 +7,7 @@ use nocentraldb::{
 };
 
 use crate::args::Command;
+use crate::output::{out, outln};
 use crate::wait;
 
 /// The collection and index of the lock (model.ts).
@@ -23,18 +24,18 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
         Command::Help => unreachable!("main prints the usage"),
         Command::Invitation => {
             let invitation = db.invitation().await;
-            println!("{invitation}");
-            println!("fingerprint: {}", invitation.fingerprint());
+            outln!("{invitation}");
+            outln!("fingerprint: {}", invitation.fingerprint());
         }
         Command::Create => {
             let space = db.spaces().create().await.map_err(text)?;
             settle_write(db, syncs).await?;
-            println!("{}", space.id());
+            outln!("{}", space.id());
         }
         Command::Spaces => {
             for info in db.spaces().list().await.map_err(text)? {
                 let role = info.role.map_or("none", role_name);
-                println!("{}  {role}", info.id);
+                outln!("{}  {role}", info.id);
             }
         }
         Command::Invite {
@@ -58,7 +59,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
                 .await
                 .map_err(text)?;
             settle_write(db, syncs).await?;
-            println!("{}", written.ids[0]);
+            outln!("{}", written.ids[0]);
         }
         Command::Done { space, task } => {
             let space = space_of(db, &space).await?;
@@ -71,7 +72,7 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
         }
         Command::List => {
             let query = db.index(TASKS, BY_STATUS).map_err(text)?.take(PAGE);
-            print!("{}", lines(&db.find(query).await.map_err(text)?)?);
+            out!("{}", lines(&db.find(query).await.map_err(text)?)?);
         }
         Command::Watch { until, timeout } => watch(db, until, timeout).await?,
         Command::Status { space } => {
@@ -87,9 +88,11 @@ pub async fn run(db: &Db, command: Command, syncs: bool) -> Result<(), String> {
                 .transpose()?;
             wait::synced(db, space, timeout, false).await?;
             let now = db.sync().current();
-            println!(
+            outln!(
                 "connection: {:?}, unconfirmed: {}, refused: {}",
-                now.connection, now.unconfirmed, now.refused
+                now.connection,
+                now.unconfirmed,
+                now.refused
             );
         }
     }
@@ -125,7 +128,7 @@ async fn invite(
         fingerprint: confirmed,
     };
     match space.members().add(&invitation, options).await {
-        Ok(notice) => println!("{}", notice.text),
+        Ok(notice) => outln!("{}", notice.text),
         Err(e) if e.code() == ErrorCode::UnknownAccount => {
             return Err(format!(
                 "the invitation is from an account this database does not know yet. \
@@ -146,8 +149,8 @@ async fn watch(db: &Db, until: Option<String>, timeout: Option<Duration>) -> Res
     let follow = async {
         while let Some(page) = wait::next(&mut pages).await {
             let page = page.map_err(text)?;
-            println!("--");
-            print!("{}", lines(&page)?);
+            outln!("--");
+            out!("{}", lines(&page)?);
             if let Some(title) = &until
                 && titles(&page)?.iter().any(|t| t == title)
             {
@@ -225,15 +228,15 @@ fn titles(page: &Page) -> Result<Vec<String>, String> {
 
 fn status(space: &Space) {
     let s = space.status().current();
-    println!("role: {}", s.role.map_or("none", role_name));
-    println!("initial sync complete: {}", s.initial_sync_complete);
-    println!("behind: {}", s.behind);
-    println!("missing changes: {}", s.gaps.len());
-    println!("parked: {:?}", s.parked);
-    println!("rejected: {:?}", s.rejected);
-    println!("refused by the relay: {}", s.refused.len());
-    println!("key exposed to a former member: {}", s.exposed);
-    println!("waiting for a key: {}", s.waiting_for_key);
+    outln!("role: {}", s.role.map_or("none", role_name));
+    outln!("initial sync complete: {}", s.initial_sync_complete);
+    outln!("behind: {}", s.behind);
+    outln!("missing changes: {}", s.gaps.len());
+    outln!("parked: {:?}", s.parked);
+    outln!("rejected: {:?}", s.rejected);
+    outln!("refused by the relay: {}", s.refused.len());
+    outln!("key exposed to a former member: {}", s.exposed);
+    outln!("waiting for a key: {}", s.waiting_for_key);
 }
 
 fn role_name(role: Role) -> &'static str {
