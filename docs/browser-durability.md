@@ -49,15 +49,15 @@ What the relay has confirmed is never lost with a browser copy: the relay holds 
 
 ## Private windows
 
-In a private window, the copy lasts at most as long as the private session:
+Your app does not open in a private window of Firefox or Safari, and in Chromium's private window its copy lasts at most as long as the private session:
 
-- **Firefox and WebKit** offer no OPFS in a private window: opening it fails, while IndexedDB works (measured: Firefox (Playwright) · Private window: storage (private browsing mode); measured: WebKit (Playwright) · Private window: storage (ephemeral context)). The SDK then keeps the copy in memory and reports it as `temporary` ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy), decision 12), so a reload of the page loses the copy.
+- **Firefox and WebKit** offer no OPFS in a private window: opening it fails, while IndexedDB works (measured: Firefox (Playwright) · Private window: storage (private browsing mode); measured: WebKit (Playwright) · Private window: storage (ephemeral context)). The SDK does not open the database there: `nc.open` fails with `storageUnavailable` ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A copy in memory would live only in the tab that owns the database, and go with that tab when it closes or is hidden, together with the changes the relay had not confirmed.
 - **Chromium** offers OPFS in a private window and deletes it when the window closes (measured: Chromium (Playwright) · Private window: storage (off-the-record context); measured: Chromium (Playwright) · Private window: after close (off-the-record context)). The SDK cannot tell such a window from a normal one, so it reports `best-effort` there.
-- **The member key**, which lives in IndexedDB, survives a reload within one open private session in all three engines (measured: Chromium (Playwright) · Private window: survives a reload (off-the-record context); measured: Firefox (Playwright) · Private window: survives a reload (private browsing mode); measured: WebKit (Playwright) · Private window: survives a reload (ephemeral context)). So a reload in a private window is not a new device, even where the copy itself is lost with it.
+- **IndexedDB**, where the member key lives, survives a reload within one open private session in all three engines (measured: Chromium (Playwright) · Private window: survives a reload (off-the-record context); measured: Firefox (Playwright) · Private window: survives a reload (private browsing mode); measured: WebKit (Playwright) · Private window: survives a reload (ephemeral context)). So in Chromium's private window, where the SDK opens, a reload is not a new device.
 - **Firefox** as a branded browser has no OPFS in a private window either, and what IndexedDB held was gone once the private window closed (measured: Firefox · Private window). Whether IndexedDB lasts across a reload in branded Firefox, Safari, Chrome and Edge has not been checked by hand; only Playwright's builds measured it.
 - **Safari, Chrome and Edge** as branded browsers: unknown (unknown: Safari (macOS) · Private window; unknown: Safari (iOS) · Private window; unknown: Chrome, Edge (desktop) · Private window (Incognito, InPrivate)).
 
-Each private session is a new device: its member key is created in the session, kept across reloads in it, and deleted with it (measured: Firefox (Playwright) · Private window: after close (private browsing mode); measured: WebKit (Playwright) · Private window: after close (ephemeral context)), so the person pairs it again every time. When the SDK reports `temporary`, tell your users, with the private-window text below, and suggest a normal window.
+Each private session of Chromium is a new device: its member key is created in the session, kept across reloads in it, and deleted with it (measured: Chromium (Playwright) · Private window: after close (off-the-record context)), so the person pairs it again every time. When `nc.open` fails with `storageUnavailable`, tell your users with the private-window text below.
 
 ## What the SDK tells you
 
@@ -77,7 +77,7 @@ await db.durability.requestPersistent(); // asks the browser; Firefox asks the u
 | --- | --- | --- |
 | `persistent` | A native app, or a browser that granted persistent storage. | That the copy survives the user clearing site data, a lost device, or, in Safari, the seven-day deletion (unknown). |
 | `best-effort` | The browser may delete the copy when storage runs low, and Safari after seven days without interaction. Most browser copies start here. | Anything about when: the browser decides. A Chromium private window also reports `best-effort`. |
-| `temporary` | The copy is in memory and lives at most until the private session ends. | That it survives a reload. |
+| `temporary` | A database opened in memory for tests, in Node.js with `inMemory`. A browser never reports it: where OPFS is missing, `nc.open` fails with `storageUnavailable`. | That it survives closing the database. |
 
 `unconfirmed` counts this member's changes that the relay has not confirmed; they exist only on this device. `atRisk` is true while `unconfirmed` is above zero and `storage` is not `persistent`. In development, the SDK logs one warning per page load when `storage` is not `persistent`.
 
@@ -109,8 +109,8 @@ Show it while `atRisk` is true and the oldest unconfirmed change is a few minute
 
 ### Private window
 
-Show it when `storage` is `temporary`.
+Show it when `nc.open` fails with `storageUnavailable`.
 
 ```text
-You are using {appName} in a private window. What {appName} stores here is deleted when you close the window, or sooner, together with changes not yet sent to the server. Next time, you set up {appName} again. Use a normal window to keep your data in this browser.
+{appName} does not work in a private window. A private window keeps nothing, and {appName} keeps your data in this browser so it works offline. Open {appName} in a normal window.
 ```
