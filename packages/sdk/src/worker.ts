@@ -16,7 +16,8 @@
 // next worker's open would fail. In WebKit the worker can give them back
 // only while its page runs, so a tab that freezes right after it gave the
 // database up keeps them until it runs again; the next worker waits until
-// then (docs/getting-started-browser.md, "Safari").
+// then (docs/getting-started-browser.md, "Safari"), and while it waits its
+// tab reports `waitingForTab` in `db.durability` (NOC-355).
 
 import { decode, encode } from "./cbor.ts";
 // @ts-expect-error: generated into dist/wasm/ by the build step.
@@ -69,17 +70,37 @@ const STOP = "stop";
 let held: (() => void) | undefined;
 let freed: Promise<unknown> = Promise.resolve();
 
-/** Waits for the lock of the database `name`, held by a worker that is still ending, and holds it. */
+/** Tells this worker's tab whether it waits for the storage another tab still holds (NOC-355): the tab reports it as `db.durability`'s `waitingForTab`. */
+const waiting = (waiting: boolean) =>
+  post({ event: encode({ event: "waitingForTab", waiting }) });
+
+/** Asks for the lock of the database `name`; `holding` runs once it is held, `busy` at once if another worker holds it. */
+const request = (name: string, ifAvailable: boolean, holding: () => void) =>
+  navigator.locks.request(
+    `nocentraldb/${name}/worker`,
+    { ifAvailable },
+    (lock) =>
+      lock === null
+        ? false
+        : new Promise<void>((done) => {
+            held = done;
+            holding();
+          }),
+  );
+
+/** Holds the lock of the database `name`; while a worker that is still ending holds it, waits, and says so (NOC-355). */
 const hold = (name: string) =>
   new Promise<void>((taken) => {
-    freed = navigator.locks.request(
-      `nocentraldb/${name}/worker`,
-      () =>
-        new Promise<void>((done) => {
-          held = done;
-          taken();
-        }),
-    );
+    const tried = request(name, true, taken);
+    freed = tried;
+    void tried.then((answer) => {
+      if (answer !== false) return;
+      waiting(true);
+      freed = request(name, false, () => {
+        waiting(false);
+        taken();
+      });
+    });
   });
 
 /** The database an `open` request names, or undefined for any other request. */

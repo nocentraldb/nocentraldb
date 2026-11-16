@@ -231,6 +231,12 @@ export const connect = async (
       );
       return;
     }
+    if (message.event === "waitingForTab") {
+      reports.waitingChanged(
+        (message as { waiting?: unknown }).waiting === true,
+      );
+      return;
+    }
     if (message.event === "view") {
       reports.viewChanged((message as { view?: unknown }).view);
       return;

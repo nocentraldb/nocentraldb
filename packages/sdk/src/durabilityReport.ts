@@ -11,8 +11,8 @@ import { notify } from "./reports.ts";
 
 type Ask = (call: string, args: Record<string, unknown>) => Promise<Cbor>;
 
-/** A durability the core sent. */
-const durabilityOf = (raw: unknown): Durability => {
+/** A durability the core sent; the core knows nothing of tabs, so whether this tab waits for another is the page's (NOC-355). */
+const durabilityOf = (raw: unknown, waitingForTab = false): Durability => {
   const given = (raw ?? {}) as Record<string, unknown>;
   return {
     storage: (given.storage ?? "temporary") as Durability["storage"],
@@ -23,6 +23,7 @@ const durabilityOf = (raw: unknown): Durability => {
         ? null
         : Number(given.oldestUnconfirmedAt),
     atRisk: given.atRisk === true,
+    waitingForTab,
   };
 };
 
@@ -62,7 +63,12 @@ export const reportsOf = (
   const viewListeners = new Set<(view: ViewStatus) => void>();
 
   const durabilityChanged = (raw: unknown) => {
-    durability = durabilityOf(raw);
+    durability = durabilityOf(raw, durability.waitingForTab);
+    notify(durabilityListeners, durability);
+  };
+  const waitingChanged = (waitingForTab: boolean) => {
+    if (waitingForTab === durability.waitingForTab) return;
+    durability = { ...durability, waitingForTab };
     notify(durabilityListeners, durability);
   };
   const viewChanged = (raw: unknown) => {
@@ -134,6 +140,8 @@ export const reportsOf = (
     },
     /** A `durability` event of the core. */
     durabilityChanged,
+    /** A `waitingForTab` event of this tab's worker (NOC-355, worker.ts). */
+    waitingChanged,
     /** A `view` event of the core. */
     viewChanged,
     /** Another tab took the database over (NOC-177): read both again. */
