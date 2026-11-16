@@ -6,7 +6,7 @@
 // file per kind of text, and the one the `ncdb` command line reads its own
 // from, crates/ncdb/src/texts.rs (kind `cli`, T5), the TypeScript
 // SDK's, packages/sdk/src/texts.ts (kind `ts`, T3, scripts/texts-ts.mjs), and
-// the core's, crates/ncdb-core/src/texts.rs (kind `core`, T6,
+// the core's, crates/ncdb-core/src/texts/ (kind `core`, T6,
 // scripts/texts-core.mjs), and checks for the gate (task repo:texts):
 //
 // - the file: each entry has an id (`<kind>.<name>`), a kind, a text and when
