@@ -94,9 +94,10 @@ test("every relative link in RFC 0001, 0002, 0003, 0006 and 0008 and the FAQ res
   }
 });
 
-// RFC 0008's M10 had RFC 0001 define a group as a list the SDK expands; the
-// owner withdrew M10 and groups altogether (Carsten, 2026-11-09, NOC-76), so
-// the "Spaces" bullet now defines a member and names no group at all.
+// A former decision of RFC 0008 had RFC 0001 define a group as a list the
+// SDK expands; the owner withdrew it and groups altogether (Carsten,
+// 2026-11-09, NOC-76; RFC 0008, "Groups"), so the "Spaces" bullet now
+// defines a member and names no group at all.
 test("RFC 0001 no longer says groups can be members, and its Spaces bullet names no group", () => {
   const rfc = read(RFC_0001);
   assert.ok(
@@ -265,11 +266,12 @@ test("the decision log records NOC-44's routing and the owner's D13", () => {
   );
 });
 
-// The owner decided GENESIS.md follows RFC 0008's M10 (Carsten, 2026-11-08):
+// The owner decided GENESIS.md follows RFC 0008 on who is a member (Carsten,
+// 2026-11-08; RFC 0008, "Groups"):
 // a member is a person's device, an agent or a sub-agent, and GENESIS.md no
 // longer offers groups as members. The owner then dropped the sentence on
 // groups from GENESIS.md (Carsten, 2026-11-09); RFC 0008 keeps the details.
-test("GENESIS.md's Spaces bullet follows M10: members are devices, agents and sub-agents", () => {
+test("GENESIS.md's Spaces bullet follows RFC 0008: members are devices, agents and sub-agents", () => {
   const genesis = read("factory/GENESIS.md");
   assert.ok(
     !/groups can be members of many spaces/i.test(genesis),
