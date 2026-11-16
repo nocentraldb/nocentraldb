@@ -164,8 +164,8 @@ tasks:
     # shows each change; the generated crates/nocentraldb/src/texts/,
     # crates/ncdb/src/texts.rs, packages/sdk/src/texts.ts and
     # crates/ncdb-core/src/texts.rs equal to the file; no text written in the
-    # Rust SDK's (its bridge too), the TypeScript SDK's or the command line's
-    # code, or in the core's lock refusals (T6); and every text used. A
+    # Rust SDK's (its bridge too), the TypeScript SDK's, the command line's
+    # or the core's code (T6); and every text used. A
     # TypeScript text's code is one RFC 0009's error table lists (T3).
     command: "node scripts/texts.mjs --check"
     inputs:
