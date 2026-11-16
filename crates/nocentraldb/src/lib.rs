@@ -28,6 +28,7 @@
 //! leaves out.
 
 mod account;
+mod ad_hoc;
 #[cfg(target_arch = "wasm32")]
 mod browser;
 // The worker's side of the TypeScript SDK (NOC-176): public only with the
@@ -67,6 +68,7 @@ mod value;
 mod view_report;
 
 pub use account::Removed;
+pub use ad_hoc::{AdHoc, AdHocCreated};
 pub use db::{Db, OpenOptions};
 
 // The Rust snippets of docs/getting-started.md, compiled by the doc tests,

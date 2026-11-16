@@ -14,6 +14,39 @@ pub(crate) const ACCOUNT_KEY_NOT_SEALABLE: &str =
 pub(crate) const ACCOUNT_KEY_NUMBER_TAKEN: &str =
     "the account space already records an account key with this number";
 
+/// `adHocLocalLater` (notAllowed): Spaces::create_ad_hoc
+/// (db.spaces.createAdHoc) with `local`: local ad-hoc spaces wait for a ticket
+/// of their own (Carsten, 2026-11-15, NOC-320 Q3).
+pub(crate) const AD_HOC_LOCAL_LATER: &str =
+    "a local ad-hoc space is not built yet; create a synced one";
+
+/// `adHocPersonalLater` (notAllowed): Spaces::create_ad_hoc
+/// (db.spaces.createAdHoc) with `personal`: copies of personal fields wait
+/// until an erasure reaches a copy in another space (Carsten, 2026-11-15,
+/// NOC-320 Q8).
+pub(crate) const AD_HOC_PERSONAL_LATER: &str =
+    "personal fields are not copied into an ad-hoc space yet, until an erasure reaches the copy";
+
+/// `adHocSourceDeleted` (invalidValue): Spaces::create_ad_hoc
+/// (db.spaces.createAdHoc) when an object to copy is deleted (Carsten,
+/// 2026-11-15, NOC-320 Q7).
+pub(crate) fn ad_hoc_source_deleted(id: impl std::fmt::Display) -> String {
+    format!("the object {id} is deleted, and a deleted object is not copied")
+}
+
+/// `adHocSourceNotHeld` (notFound): Spaces::create_ad_hoc
+/// (db.spaces.createAdHoc) when this database holds no such object in that
+/// space.
+pub(crate) fn ad_hoc_source_not_held(space: impl std::fmt::Display, id: impl std::fmt::Display) -> String {
+    format!("the space {space} holds no object {id} to copy")
+}
+
+/// `adHocSourceTwice` (invalidValue): Spaces::create_ad_hoc
+/// (db.spaces.createAdHoc) when the objects to copy name the same object twice.
+pub(crate) fn ad_hoc_source_twice(id: impl std::fmt::Display) -> String {
+    format!("the object {id} is named twice, and an ad-hoc space holds one copy of it")
+}
+
 /// `agentHasAccount` (notAllowed): Account::pair (db.account.pair) with the
 /// invitation of an agent that already has an account.
 pub(crate) const AGENT_HAS_ACCOUNT: &str =
