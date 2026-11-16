@@ -5,6 +5,9 @@
 // Each text's comment says when it shows. Internal: the package's entry
 // does not reach it.
 
+/** `adHocCopyNotRead` (invalidValue): db.spaces.createAdHoc, given in copy an object the SDK of this database did not read, such as a spread of one or an object of another database. */
+export const AD_HOC_COPY_NOT_READ = "copy takes objects this database read, as space.get, find or subscribe gives them, not a copy of one";
+
 /** `anotherLock` (modelRefused): nc.open in a tab while another tab of the origin has the database open with another lock. */
 export const ANOTHER_LOCK = "another tab has this database open with another lock";
 
