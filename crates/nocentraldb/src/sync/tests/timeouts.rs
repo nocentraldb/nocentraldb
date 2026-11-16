@@ -6,18 +6,22 @@
 
 use std::time::Duration;
 
+use super::super::session;
 use super::fake::{FakeRelay, Trouble};
 use super::support::*;
 
 const ME: Who = 1;
 
 /// How many connections `trouble` gets from a database with a space of
-/// its own within 3 seconds.
+/// its own within the time a first connection takes to be found lost and
+/// a second to be made: the longer bound, after the idle time a ping
+/// waits, and 2 seconds for the reconnect.
 async fn connections(trouble: Trouble) -> usize {
     let relay = FakeRelay::start(trouble).await;
     let db = open(ME, &relay.url()).await;
     db.spaces().create().await.unwrap();
-    tokio::time::sleep(Duration::from_secs(3)).await;
+    let bound = session::CONNECT.max(session::ANSWER);
+    tokio::time::sleep(session::IDLE + bound + Duration::from_secs(2)).await;
     relay.connections()
 }
 

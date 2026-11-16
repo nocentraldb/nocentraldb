@@ -46,6 +46,7 @@ mod removed;
 mod renewed_key;
 mod reopen;
 mod rotation;
+mod slow_relay;
 mod space_status;
 mod space_status_sync;
 mod spaces;

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeSet;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -178,6 +178,33 @@ pub struct Proxy {
     target: Arc<Mutex<SocketAddr>>,
     up: Arc<AtomicBool>,
     links: Arc<Mutex<Vec<JoinHandle<()>>>>,
+    /// What [`Proxy::slow`] set, in milliseconds.
+    latency: Arc<AtomicU64>,
+}
+
+/// Forwards what `from` reads to `to`, each read held back by the
+/// proxy's latency at the time, until either side closes.
+async fn forward(
+    mut from: tokio::net::tcp::OwnedReadHalf,
+    mut to: tokio::net::tcp::OwnedWriteHalf,
+    latency: Arc<AtomicU64>,
+) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut buffer = vec![0; 64 * 1024];
+    loop {
+        let n = match from.read(&mut buffer).await {
+            Ok(0) | Err(_) => break,
+            Ok(n) => n,
+        };
+        let millis = latency.load(Ordering::SeqCst);
+        if millis > 0 {
+            tokio::time::sleep(Duration::from_millis(millis)).await;
+        }
+        if to.write_all(&buffer[..n]).await.is_err() {
+            break;
+        }
+    }
+    let _ = to.shutdown().await;
 }
 
 impl Proxy {
@@ -187,19 +214,27 @@ impl Proxy {
         let target = Arc::new(Mutex::new(target));
         let up = Arc::new(AtomicBool::new(true));
         let links = Arc::new(Mutex::new(Vec::new()));
+        let latency = Arc::new(AtomicU64::new(0));
         let (accept_target, accept_up, accept_links) = (target.clone(), up.clone(), links.clone());
+        let accept_latency = latency.clone();
         tokio::spawn(async move {
             loop {
-                let Ok((mut inbound, _)) = listener.accept().await else {
+                let Ok((inbound, _)) = listener.accept().await else {
                     return;
                 };
                 if !accept_up.load(Ordering::SeqCst) {
                     continue;
                 }
                 let target = *accept_target.lock().unwrap();
+                let latency = accept_latency.clone();
                 let link = tokio::spawn(async move {
-                    if let Ok(mut outbound) = TcpStream::connect(target).await {
-                        let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
+                    if let Ok(outbound) = TcpStream::connect(target).await {
+                        let (from_member, to_member) = inbound.into_split();
+                        let (from_relay, to_relay) = outbound.into_split();
+                        tokio::join!(
+                            forward(from_member, to_relay, latency.clone()),
+                            forward(from_relay, to_member, latency),
+                        );
                     }
                 });
                 accept_links.lock().unwrap().push(link);
@@ -210,7 +245,15 @@ impl Proxy {
             target,
             up,
             links,
+            latency,
         }
+    }
+
+    /// Holds back everything it forwards, each way, by `latency`, as a
+    /// relay on a loaded machine answers late; zero forwards at once.
+    pub fn slow(&self, latency: Duration) {
+        let millis = u64::try_from(latency.as_millis()).expect("a short latency");
+        self.latency.store(millis, Ordering::SeqCst);
     }
 
     /// Drops every connection and refuses new ones.
