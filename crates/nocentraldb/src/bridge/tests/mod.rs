@@ -8,6 +8,7 @@ use super::Bridge;
 mod account;
 mod ad_hoc;
 mod erasures;
+mod fields;
 mod find;
 mod members;
 mod reports;
