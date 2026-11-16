@@ -47,6 +47,14 @@ impl S3Urls {
     }
 }
 
+/// The S3 client the function presigns with and stores through, from
+/// the function's AWS configuration. The tests presign with it too, so a
+/// change of the client's settings shows in the URLs they inspect
+/// (NOC-348).
+pub fn client(aws: &aws_config::SdkConfig) -> Client {
+    Client::new(aws)
+}
+
 fn valid_for(ms: u64) -> Result<PresigningConfig, ErrorCode> {
     PresigningConfig::expires_in(Duration::from_millis(ms)).map_err(|_| ErrorCode::Unavailable)
 }
