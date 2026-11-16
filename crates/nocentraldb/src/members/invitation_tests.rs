@@ -201,3 +201,39 @@ fn a_waiting_members_fingerprint_is_over_its_member_id_and_never_an_accounts() {
         "the same bytes under the account context are another fingerprint"
     );
 }
+
+const SUB_AGENT: &str = include_str!("../../../../docs/rfc/vectors/0003/invitation-sub-agent.txt");
+
+/// Version 3: a sub-agent before its parent adds it, the version byte and
+/// the two public keys, 65 bytes (Carsten, 2026-11-15, NOC-320 Q1).
+#[test]
+fn the_version_3_vector_reads_as_a_sub_agent_and_writes_back() {
+    let invitation: Invitation = SUB_AGENT.trim().parse().unwrap();
+
+    assert_eq!(invitation.key.signing.to_vec(), field("signing key"));
+    assert_eq!(invitation.key.agreement.to_vec(), field("agreement key"));
+    assert!(invitation.certificate().is_none());
+    assert!(matches!(invitation.form, super::invitation::Form::SubAgent));
+    assert_eq!(invitation.to_string(), SUB_AGENT.trim());
+    // Its member has no account of its own: the fingerprint is over its
+    // member id, as a waiting member's is.
+    let pairing: Invitation = PAIRING.trim().parse().unwrap();
+    assert_eq!(invitation.fingerprint(), pairing.fingerprint());
+}
+
+#[test]
+fn a_version_3_text_of_another_length_is_refused() {
+    let mut bytes = vec![3u8];
+    bytes.extend([0x11; 64]);
+    for (bad, why) in [
+        (bytes[..64].to_vec(), "too short"),
+        (
+            [bytes.clone(), vec![1]].concat(),
+            "too long, as a version 2 would be",
+        ),
+    ] {
+        let refused = text_of(&bad).parse::<Invitation>().unwrap_err();
+        assert_eq!(refused.code(), ErrorCode::InvalidValue, "{why}");
+    }
+    assert!(text_of(&bytes).parse::<Invitation>().is_ok());
+}

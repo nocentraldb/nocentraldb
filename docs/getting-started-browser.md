@@ -123,7 +123,7 @@ addEventListener("pagehide", () => {
 
 The SDK runs the core in a dedicated worker it starts itself. Your code never sees a key.
 
-The database folds and checks every change by the lock. So build the lock again after every change to `model.ts`: the browser SDK does not yet compare the model with the lock, as RFC 0009's `lockOutOfDate` will.
+The database folds and checks every change by the lock. So build the lock again after every change to `model.ts`. `nc.open` compares the model with the lock: when the model names a collection, field or index the lock does not have, or with another type or options, it fails with `lockOutOfDate`, and its message names what differs and says to run `ncdb model build`.
 
 Every call runs in the browser. A read never waits for the network.
 
@@ -476,7 +476,6 @@ RFC 0009 names more than the browser SDK has today. This guide leaves out what i
 - **Node.js.** `nc.open` runs in a browser. The options `path`, `keyFile`, `inMemory` and `agent` of RFC 0009 are not there yet.
 - **`space.inspect`,** the details of a conflict.
 - **Erasing a person.** The browser SDK reads the erasure audit (step 14) but cannot start an erasure or take one back yet.
-- **The check of the model against the lock** in `nc.open`, which fails with `lockOutOfDate`. Until it comes, a model whose lock was not built again gives types the database does not keep.
 
 ## Where to go next
 

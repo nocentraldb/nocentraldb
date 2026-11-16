@@ -611,3 +611,65 @@ test("the recovery code is shown until confirmed, survives a reopen, and recover
   assert.equal(result.recovered.code, "accountRecovered");
   assert.deepEqual(errors, []);
 });
+
+// NOC-316 slice 2: pairing a new device into the account (RFC 0010,
+// "Adding a device or an agent to an account"), each device in its own
+// browser context, as two devices are; the answer travels as text.
+test("a device pairs a new browser database into its account, and the new one completes it", async () => {
+  const { page: phone, errors: phoneErrors } = await page();
+  const invitation = await phone.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      window.db = await nc.open({
+        model,
+        lock,
+        name: "phone",
+        pairing: "request",
+      });
+      return String(await window.db.invitation());
+    },
+    { lock, MODEL },
+  );
+  const { page: laptop, errors } = await page();
+  const paired = await laptop.evaluate(
+    async ({ lock, MODEL, invitation }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "laptop" });
+      const project = await db.spaces.create();
+      const paired = await db.account.pair({
+        kind: "device",
+        invitation: nc.invitation(invitation),
+      });
+      const fingerprint = (await db.invitation()).fingerprint;
+      await db.close();
+      return {
+        answer: String(paired.answer),
+        added: paired.added.map(({ space, notice }) => [
+          space === project.id,
+          notice.code,
+        ]),
+        askAdmins: paired.askAdmins,
+        fingerprint,
+      };
+    },
+    { lock, MODEL, invitation },
+  );
+  const completed = await phone.evaluate(async (answer) => {
+    const { nc } = window;
+    const { notices } = await window.db.account.completePairing(
+      nc.pairingAnswer(answer),
+    );
+    const fingerprint = (await window.db.invitation()).fingerprint;
+    await window.db.close();
+    return { codes: notices.map((notice) => notice.code), fingerprint };
+  }, paired.answer);
+  assert.ok(paired.answer.startsWith("ncdb-pair-1:"));
+  assert.deepEqual(paired.added, [[true, "deviceAdded"]]);
+  assert.deepEqual(paired.askAdmins, []);
+  assert.deepEqual(completed.codes, ["devicePaired"]);
+  assert.equal(completed.fingerprint, paired.fingerprint);
+  assert.deepEqual(phoneErrors, []);
+  assert.deepEqual(errors, []);
+});

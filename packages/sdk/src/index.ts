@@ -18,3 +18,5 @@ export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
 /** The sync report (RFC 0009, "Sync and status"; NOC-176 slice 4). */
 export type { SyncStatus } from "./sync.ts";
+/** A pairing answer, which a device of the account hands a new one (RFC 0009, "Accounts and devices"; NOC-316). Its own line, so that the export of `RecoveryCode` above stays as it was. */
+export type PairingAnswer = import("./account.ts").PairingAnswer;

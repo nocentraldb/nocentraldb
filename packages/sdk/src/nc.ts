@@ -455,6 +455,7 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
   }
 };
 
+export { pairingAnswer } from "./account.ts";
 /** Opens this member's database (RFC 0009, "Open and close"). */
 /** Field operations on sets and many links (RFC 0009, "Field operations per field type"). */
 export { add, open, remove } from "./db.ts";

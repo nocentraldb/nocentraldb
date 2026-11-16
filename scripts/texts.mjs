@@ -3,14 +3,16 @@
 // Every text a developer reads from the SDKs lives in texts/texts.json
 // (NOC-329; the owner's decision of 2026-11-15). This script generates the
 // Rust module the SDK reads them from, crates/nocentraldb/src/texts/, one
-// file per kind of text, and
+// file per kind of text, and the one the `ncdb` command line reads its own
+// from, crates/ncdb/src/texts.rs (kind `cli`, T5), and
 // checks for the gate (task repo:texts):
 //
 // - the file: each entry has an id (`<kind>.<name>`), a kind, a text and when
 //   it shows, and a notice or an error its code; ids are unique; a notice's
 //   name is its code, a NoticeCode, and every NoticeCode has its notice; an
 //   error's code names the ErrorCode it is returned with, or several,
-//   separated by ` | `; a part is a piece of an error's text, with no code; a
+//   separated by ` | `; a part is a piece of an error's text, with no code,
+//   and so is a text of the command line, of kind `cli`; a
 //   text holds no braces but its placeholders, `{name}` or `{name:?}`; the
 //   entries are sorted by id and the file is written one field per line, as
 //   `JSON.stringify(file, null, 2)` writes it, so that `git diff` shows each
@@ -21,6 +23,11 @@
 // - no text is written in the SDK's non-test code outside the generated
 //   module: a notice's `text:`, `Error::new`'s message, an `Err` or a helper
 //   that builds an error, given a string literal, `format!` or `concat!`;
+// - no text is written in the command line's non-test code outside its
+//   module: a `&str` constant, the schema script's `fail` given a literal,
+//   or any literal with two words in a row, except
+//   on a line marked `// notation`, for the report's diff notation (pm,
+//   NOC-329);
 // - every text is used outside the generated module.
 //
 // `node scripts/texts.mjs --write` regenerates the module after an edit;
@@ -56,9 +63,15 @@ export const PATHS = {
   module: "crates/nocentraldb/src/texts",
   noticeCodes: "crates/nocentraldb/src/members/notice.rs",
   errorCodes: "crates/nocentraldb/src/error.rs",
+  cli: "crates/ncdb/src",
+  cliModule: "crates/ncdb/src/texts.rs",
 };
 
-const KINDS = ["notice", "error", "part"];
+const KINDS = ["notice", "error", "part", "cli"];
+/** The kinds the SDK's module holds; `cli` is the command line's. */
+const SDK_KINDS = ["notice", "error", "part"];
+/** The kinds without a code. */
+const CODELESS = ["part", "cli"];
 const FIELDS = ["id", "kind", "code", "text", "when"];
 const NAME = /^[a-z][A-Za-z0-9]*$/;
 const PLACEHOLDER = /\{(\w+)(:\?)?\}/g;
@@ -130,7 +143,7 @@ const GENERATED = [
  */
 export const generate = (texts) => {
   const files = {};
-  const kinds = KINDS.filter((kind) => texts.some((t) => t.kind === kind));
+  const kinds = SDK_KINDS.filter((kind) => texts.some((t) => t.kind === kind));
   files["mod.rs"] = [
     ...GENERATED,
     "//! Every text a developer reads from the SDK, from texts/texts.json",
@@ -177,6 +190,42 @@ export const generate = (texts) => {
   return files;
 };
 
+/** A text's constant, or its function that fills its placeholders. */
+const item = (entry) => {
+  const params = placeholders(entry.text);
+  if (params.length === 0) {
+    return [
+      `pub(crate) const ${constName(nameOf(entry))}: &str =`,
+      `    ${rustString(entry.text)};`,
+    ];
+  }
+  const args = params
+    .map(([p, debug]) => `${p}: impl std::fmt::${debug ? "Debug" : "Display"}`)
+    .join(", ");
+  return [
+    `pub(crate) fn ${fnName(nameOf(entry))}(${args}) -> String {`,
+    `    format!(${rustString(entry.text)})`,
+    "}",
+  ];
+};
+
+/** The command line's module, crates/ncdb/src/texts.rs, of the `cli` texts. */
+export const generateCli = (texts) => {
+  const out = [
+    ...GENERATED,
+    "//! Every text the `ncdb` command line shows, from texts/texts.json",
+    "//! (NOC-329, T5). Each text's comment says when it shows.",
+  ];
+  for (const entry of texts.filter((t) => t.kind === "cli")) {
+    out.push(
+      "",
+      doc(`\`${nameOf(entry)}\`: ${entry.when}`, ""),
+      ...item(entry),
+    );
+  }
+  return `${out.join("\n")}\n`;
+};
+
 /** The variants of `pub enum <name>` in `source`. */
 export const enumVariants = (source, name) => {
   const body = source.match(
@@ -206,8 +255,9 @@ export const checkEntries = (file, variants, errorVariants = []) => {
       problems.push(`${at}: not an object`);
       continue;
     }
-    const needed =
-      entry.kind === "part" ? FIELDS.filter((f) => f !== "code") : FIELDS;
+    const needed = CODELESS.includes(entry.kind)
+      ? FIELDS.filter((f) => f !== "code")
+      : FIELDS;
     for (const field of needed) {
       if (typeof entry[field] !== "string" || entry[field].trim() === "") {
         problems.push(`${at}: "${field}" must be a non-empty text`);
@@ -217,8 +267,8 @@ export const checkEntries = (file, variants, errorVariants = []) => {
       if (!FIELDS.includes(field))
         problems.push(`${at}: unknown field "${field}"`);
     }
-    if (entry.kind === "part" && "code" in entry) {
-      problems.push(`${at}: a part has no code`);
+    if (CODELESS.includes(entry.kind) && "code" in entry) {
+      problems.push(`${at}: a ${entry.kind} text has no code`);
     }
     if (typeof entry.id === "string") {
       if (ids.has(entry.id)) problems.push(`${at}: the id is used twice`);
@@ -338,29 +388,74 @@ const STRAYS = [
   ],
 ];
 
-/** The problems of the SDK's code: stray texts, and texts no code uses. */
-export const checkCode = (files, module, texts) => {
+/** How code names a text of the SDK: `<kind>::NAME` or `<kind>::name(`. */
+const sdkUse = (entry) =>
+  placeholders(entry.text).length === 0
+    ? `${entry.kind}::${constName(nameOf(entry))}`
+    : `${entry.kind}::${fnName(nameOf(entry))}(`;
+
+/** Texts written in the command line's code, each with what it is. */
+export const CLI_STRAYS = [
+  [/:\s*&str\s*=\s*"/g, "a text constant"],
+  [/\bfail\(\s*["`]/g, "a message of the schema script"],
+  [/"(?:[^"\\\n]|\\.)*?[A-Za-z]{2,} [A-Za-z]{2,}(?:[^"\\\n]|\\.)*"/g, "a text"],
+];
+
+/**
+ * How the command line names a text: `texts::NAME`, or `texts::name`
+ * called or passed as a function, as `map_err(texts::name)` does.
+ */
+export const cliUse = (entry) =>
+  placeholders(entry.text).length === 0
+    ? `texts::${constName(nameOf(entry))}`
+    : new RegExp(String.raw`\btexts::${fnName(nameOf(entry))}\b`);
+
+/**
+ * Blanks out what the stray check does not read: comment lines, and lines
+ * marked `// notation`, the report's diff notation (pm, NOC-329).
+ */
+const readable = (source) =>
+  source
+    .split("\n")
+    .map((line) =>
+      /^\s*\/\//.test(line) || /\/\/ notation\b/.test(line) ? "" : line,
+    )
+    .join("\n");
+
+/**
+ * The problems of code: stray texts, and texts no code uses. `module` is
+ * the generated module's path, a folder or a file; `strays` what counts as
+ * a text written in code; `use` how code names a text.
+ */
+export const checkCode = (
+  files,
+  module,
+  texts,
+  { strays = STRAYS, use = sdkUse, where = "crate::texts" } = {},
+) => {
   const problems = [];
-  const code = files.filter(([path]) => !path.startsWith(`${module}/`));
-  for (const [path, source] of code) {
-    for (const [pattern, what] of STRAYS) {
+  const code = files.filter(
+    ([path]) => path !== module && !path.startsWith(`${module}/`),
+  );
+  for (const [path, original] of code) {
+    const source = strays === STRAYS ? original : readable(original);
+    for (const [pattern, what] of strays) {
       for (const match of source.matchAll(pattern)) {
         const line = source.slice(0, match.index).split("\n").length;
         problems.push(
-          `${path}:${line}: ${what} written in code; add it to texts/texts.json and use crate::texts`,
+          `${path}:${line}: ${what} written in code; add it to texts/texts.json and use ${where}`,
         );
       }
     }
   }
   const all = code.map(([, source]) => source).join("\n");
   for (const entry of texts) {
-    const name = nameOf(entry);
-    const used =
-      placeholders(entry.text).length === 0
-        ? `${entry.kind}::${constName(name)}`
-        : `${entry.kind}::${fnName(name)}(`;
-    if (!all.includes(used))
-      problems.push(`${entry.id}: no code uses texts::${used}`);
+    const used = use(entry);
+    const found = used instanceof RegExp ? used.test(all) : all.includes(used);
+    if (!found)
+      problems.push(
+        `${entry.id}: no code uses ${String(used).startsWith("texts::") || used instanceof RegExp ? String(used) : `texts::${used}`}`,
+      );
   }
   return problems;
 };
@@ -542,7 +637,32 @@ const main = () => {
       relative(ROOT, p),
       s,
     ]);
-    problems.push(...checkCode(files, PATHS.module, file.texts));
+    const sdk = file.texts.filter((t) => t.kind !== "cli");
+    problems.push(...checkCode(files, PATHS.module, sdk));
+    // The command line's own module, one file.
+    const cli = generateCli(file.texts);
+    if (values.write) writeFileSync(at(PATHS.cliModule), cli);
+    let committedCli = null;
+    try {
+      committedCli = readFileSync(at(PATHS.cliModule), "utf8");
+    } catch {}
+    if (committedCli !== cli) {
+      problems.push(
+        `${PATHS.cliModule} differs from texts/texts.json: run node scripts/texts.mjs --write`,
+      );
+    }
+    const cliFiles = rustFiles(at(PATHS.cli)).map(([p, s]) => [
+      relative(ROOT, p),
+      s,
+    ]);
+    problems.push(
+      ...checkCode(
+        cliFiles,
+        PATHS.cliModule,
+        file.texts.filter((t) => t.kind === "cli"),
+        { strays: CLI_STRAYS, use: cliUse, where: "crate::texts" },
+      ),
+    );
   }
   if (problems.length > 0) {
     for (const problem of problems) console.error(`texts: ${problem}`);

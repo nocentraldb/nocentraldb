@@ -165,7 +165,7 @@ fn digits(text: &str) -> String {
 }
 
 /// The member a call names by its 64 lowercase hex digits.
-fn member_id(args: &Value) -> Result<MemberId, Failed> {
+pub(super) fn member_id(args: &Value) -> Result<MemberId, Failed> {
     MemberId::from_str(text(args, "member")?)
         .map_err(|_| invalid("a member id is 64 lowercase hex digits"))
 }

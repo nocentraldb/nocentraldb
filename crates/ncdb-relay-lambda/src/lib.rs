@@ -25,10 +25,12 @@
 //! which needs the feature, runs them over the AWS backend of
 //! `ncdb-relay-aws`.
 //!
-//! Limits, as RFC 0007 has them: API Gateway refuses a message above
-//! 128 KiB and closes every connection after 2 hours; the handler posts no
-//! message above 128 KiB, sends a frame that does not fit inline as a
-//! download URL, and lets a connection's record expire 2 hours after it
+//! Limits, as RFC 0007 has them: API Gateway closes a connection that
+//! sends a binary frame or a frame above 32 KB, and every connection after
+//! 2 hours; each message travels as base64 in one text frame, at most 23
+//! KiB before base64 (NOC-338). The handler reads and posts base64 text,
+//! posts no message above 23 KiB, sends a frame that does not fit inline as
+//! a download URL, and lets a connection's record expire 2 hours after it
 //! opened.
 //!
 //! In tests and in the local harness (`harness`, with the feature
