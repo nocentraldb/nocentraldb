@@ -563,7 +563,7 @@
       "id": "core.refusalBadName",
       "kind": "core",
       "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lower-case letter and has at most 63 ASCII letters and digits.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalCollectionRemoved",
@@ -587,7 +587,7 @@
       "id": "core.refusalDuplicateOption",
       "kind": "core",
       "text": "{collection}.{field}: option {option} is listed twice.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a choice lists an option twice."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a choice lists an option twice. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalFieldRemoved",
@@ -599,19 +599,19 @@
       "id": "core.refusalIndexEqualTooLarge",
       "kind": "core",
       "text": "index {collection}.{index}: equal is {equal}, but the index has {fields} fields.\nNo query could fix more fields than the index has.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index's equal is larger than its number of fields."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index's equal is larger than its number of fields. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalIndexNotIndexable",
       "kind": "core",
       "text": "index {collection}.{index}: {collection}.{field} is {type_id}, which cannot be indexed.\nAn index can use basic values and single links (nc.link).",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field of a type that cannot be indexed."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field of a type that cannot be indexed. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalIndexUnknownField",
       "kind": "core",
       "text": "index {collection}.{index}: {collection} has no field {field}.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field its collection does not have."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field its collection does not have. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalLowerVersion",
@@ -629,7 +629,7 @@
       "id": "core.refusalNameClash",
       "kind": "core",
       "text": "{kind} {name}: the name collides with the {other_kind} {other}.\nNames in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalNoRename",
@@ -659,19 +659,19 @@
       "id": "core.refusalPersonLinkPersonal",
       "kind": "core",
       "text": "{collection}.{field}: personal to {collection}.{person}, which is itself personal.\nThe link that names the person must stay readable, so the SDK can find the person's key.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is a link field that is itself personal."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is a link field that is itself personal. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalPersonNotLink",
       "kind": "core",
       "text": "{collection}.{field}: personal to {person}, which is no link field of {collection}.\nperson is \"self\" or the name of an nc.link field of {collection}.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is no link field of its collection."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is no link field of its collection. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalPersonalNotBasic",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} cannot be personal.\nOnly basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a field of a type that cannot be personal is marked personal."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a field of a type that cannot be personal is marked personal. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalRuleChanged",
@@ -701,19 +701,19 @@
       "id": "core.refusalUnknownPlugin",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} names no plugin of the model.\nA plugin's field type needs its namespace in plugins.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a plugin field type's namespace is not in the model's plugins."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a plugin field type's namespace is not in the model's plugins. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnknownRule",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} has no rule version {rule}.\nThis version knows rule version {known} of every built-in type.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a built-in field type names a rule version this core does not know. `known` is the one it knows."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a built-in field type names a rule version this core does not know. `known` is the one it knows. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnknownTarget",
       "kind": "core",
       "text": "{collection}.{field}: target {target} is no collection of the model.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a link's target is no collection of the model."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a link's target is no collection of the model. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnmarkedPersonal",
@@ -852,6 +852,12 @@
       "kind": "core",
       "text": "the view has format version {found}, this core writes {writes}",
       "when": "After error.viewFailed's colon, from opening (Db::open; nc.open), when the database holds a view of another format version."
+    },
+    {
+      "id": "core.viewInvalid",
+      "kind": "core",
+      "text": "the model cannot be folded: {invalid:?}",
+      "when": "The core's reason when the model cannot be folded into a view; `invalid` is the core's finding in its Debug form. Not shown to a developer today: opening replaces it with error.lockInvalid."
     },
     {
       "id": "core.viewModel",
@@ -1733,7 +1739,7 @@
       "kind": "error",
       "code": "storageFailed",
       "text": "the space's clock: {error}",
-      "when": "A write, when the space's clock cannot be read or written; the error follows."
+      "when": "A write (Space::write and its shorthands), when the space's clock has reached its largest value, after it saw a received clock at the maximum; core.clockExhausted follows."
     },
     {
       "id": "error.spaceOfAnotherModel",

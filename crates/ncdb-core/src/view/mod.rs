@@ -136,7 +136,7 @@ impl fmt::Display for Error {
                 }
                 Ok(())
             }
-            Error::Invalid(invalid) => write!(f, "the model cannot be folded: {invalid:?}"),
+            Error::Invalid(invalid) => f.write_str(&texts::view_invalid(invalid)),
             Error::Corrupt(what) => f.write_str(&texts::view_corrupt(what)),
             Error::Query(error) => f.write_str(&texts::view_query(error)),
             Error::Plan(index) => f.write_str(&texts::view_plan(index)),
