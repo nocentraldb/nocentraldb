@@ -4,17 +4,20 @@
 // (NOC-329; the owner's decision of 2026-11-15). This script generates the
 // Rust module the SDK reads them from, crates/nocentraldb/src/texts/, one
 // file per kind of text, and the one the `ncdb` command line reads its own
-// from, crates/ncdb/src/texts.rs (kind `cli`, T5), and the TypeScript
+// from, crates/ncdb/src/texts.rs (kind `cli`, T5), the TypeScript
 // SDK's, packages/sdk/src/texts.ts (kind `ts`, T3, scripts/texts-ts.mjs), and
-// checks for the gate (task repo:texts):
+// the core's, crates/ncdb-core/src/texts.rs (kind `core`, T6,
+// scripts/texts-core.mjs), and checks for the gate (task repo:texts):
 //
 // - the file: each entry has an id (`<kind>.<name>`), a kind, a text and when
 //   it shows, and a notice or an error its code; ids are unique; a notice's
 //   name is its code, a NoticeCode, and every NoticeCode has its notice; an
 //   error's code names the ErrorCode it is returned with, or several,
 //   separated by ` | `; a part is a piece of an error's text, with no code,
-//   and so is a text of the command line, of kind `cli`; a
-//   text holds no braces but its placeholders, `{name}` or `{name:?}`; the
+//   and so is a text of the command line, of kind `cli`, and of the core, of
+//   kind `core`; a text holds no braces but its placeholders, `{name}` or
+//   `{name:?}`, and a brace written as Rust writes it, doubled, `{{` or
+//   `}}`, which a ts text does not hold; the
 //   entries are sorted by id and the file is written one field per line, as
 //   `JSON.stringify(file, null, 2)` writes it, so that `git diff` shows each
 //   change to a text readably (the owner reviews the texts from git diff:
@@ -53,6 +56,7 @@ import {
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { coreGate } from "./texts-core.mjs";
 import { review } from "./texts-review.mjs";
 import { rfcErrorCodes, TS_PATHS, tsGate } from "./texts-ts.mjs";
 
@@ -76,14 +80,19 @@ export const PATHS = {
   cliModule: "crates/ncdb/src/texts.rs",
 };
 
-const KINDS = ["notice", "error", "part", "cli", "ts"];
+const KINDS = ["notice", "error", "part", "cli", "ts", "core"];
 /** The kinds the SDK's module holds; `cli` is the command line's. */
 const SDK_KINDS = ["notice", "error", "part"];
 /** The kinds without a code. */
-const CODELESS = ["part", "cli"];
+const CODELESS = ["part", "cli", "core"];
 const FIELDS = ["id", "kind", "code", "text", "when"];
 const NAME = /^[a-z][A-Za-z0-9]*$/;
 const PLACEHOLDER = /\{(\w+)(:\?)?\}/g;
+/** A brace written as Rust's format! writes it, doubled: `{{` or `}}`. */
+const ESCAPED = /\{\{|\}\}/g;
+
+/** `text` with its doubled braces single, as a constant holds it. */
+const unescaped = (text) => text.replace(/\{\{/g, "{").replace(/\}\}/g, "}");
 
 /** `memberAdded` → `MEMBER_ADDED`. */
 export const constName = (name) =>
@@ -101,7 +110,10 @@ const nameOf = (entry) => entry.id.slice(entry.kind.length + 1);
 /** The placeholders of `text`, each once, in order, with whether it is Debug. */
 export const placeholders = (text) => {
   const seen = new Map();
-  for (const [, name, debug] of text.matchAll(PLACEHOLDER)) {
+  // A doubled brace is no placeholder's; blanking it keeps the offsets.
+  for (const [, name, debug] of text
+    .replace(ESCAPED, "  ")
+    .matchAll(PLACEHOLDER)) {
     if (!seen.has(name)) seen.set(name, Boolean(debug));
   }
   return [...seen];
@@ -198,7 +210,7 @@ export const generate = (texts) => {
         const params = placeholders(entry.text);
         if (params.length === 0) {
           out.push(`pub(crate) const ${constName(itemName(entry))}: &str =`);
-          out.push(`    ${rustString(entry.text)};`);
+          out.push(`    ${rustString(unescaped(entry.text))};`);
         } else {
           const args = params
             .map(
@@ -224,7 +236,7 @@ const item = (entry) => {
   if (params.length === 0) {
     return [
       `pub(crate) const ${constName(nameOf(entry))}: &str =`,
-      `    ${rustString(entry.text)};`,
+      `    ${rustString(unescaped(entry.text))};`,
     ];
   }
   const args = params
@@ -237,14 +249,13 @@ const item = (entry) => {
   ];
 };
 
-/** The command line's module, crates/ncdb/src/texts.rs, of the `cli` texts. */
-export const generateCli = (texts) => {
-  const out = [
-    ...GENERATED,
-    "//! Every text the `ncdb` command line shows, from texts/texts.json",
-    "//! (NOC-329, T5). Each text's comment says when it shows.",
-  ];
-  for (const entry of texts.filter((t) => t.kind === "cli")) {
+/**
+ * A Rust module of the texts of one `kind`, a constant or a function per
+ * text, below the `header` lines of its module comment.
+ */
+export const rustModule = (texts, kind, header) => {
+  const out = [...GENERATED, ...header.map((line) => `//! ${line}`)];
+  for (const entry of texts.filter((t) => t.kind === kind)) {
     out.push(
       "",
       doc(`\`${nameOf(entry)}\`: ${entry.when}`, ""),
@@ -253,6 +264,13 @@ export const generateCli = (texts) => {
   }
   return `${out.join("\n")}\n`;
 };
+
+/** The command line's module, crates/ncdb/src/texts.rs, of the `cli` texts. */
+export const generateCli = (texts) =>
+  rustModule(texts, "cli", [
+    "Every text the `ncdb` command line shows, from texts/texts.json",
+    "(NOC-329, T5). Each text's comment says when it shows.",
+  ]);
 
 /** The variants of `pub enum <name>` in `source`. */
 export const enumVariants = (source, name) => {
@@ -346,7 +364,12 @@ export const checkEntries = (
     if (typeof entry.text === "string") {
       if (entry.kind === "ts" && entry.text.includes(":?}"))
         problems.push(`${at}: a ts text has no Debug placeholder {name:?}`);
-      if (entry.text.replace(PLACEHOLDER, "").match(/[{}]/)) {
+      // TypeScript's module does not read Rust's doubled braces.
+      if (entry.kind === "ts" && /\{\{|\}\}/.test(entry.text))
+        problems.push(`${at}: a ts text has no doubled brace {{ or }}`);
+      if (
+        entry.text.replace(ESCAPED, "").replace(PLACEHOLDER, "").match(/[{}]/)
+      ) {
         problems.push(
           `${at}: a brace that is no placeholder {name} or {name:?}`,
         );
@@ -589,6 +612,8 @@ const main = () => {
     );
     // The TypeScript SDK's module and code (T3, scripts/texts-ts.mjs).
     problems.push(...tsGate(ROOT, file.texts, values.write));
+    // The core's module and code (T6, scripts/texts-core.mjs).
+    problems.push(...coreGate(ROOT, file.texts, values.write));
   }
   if (problems.length > 0) {
     for (const problem of problems) console.error(`texts: ${problem}`);

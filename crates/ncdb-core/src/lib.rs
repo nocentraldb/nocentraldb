@@ -61,6 +61,10 @@ mod redact;
 pub mod reference;
 pub mod seal;
 pub mod set;
+/// Every text the core words itself, generated from texts/texts.json (NOC-329).
+// The gate repo:texts compares it byte for byte, so rustfmt leaves it as written.
+#[rustfmt::skip]
+mod texts;
 pub mod tips;
 mod unfold;
 pub mod view;

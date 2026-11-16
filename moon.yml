@@ -158,22 +158,25 @@ tasks:
       - "/factory/decisions/**/*"
       - "/scripts/decisions.mjs"
   texts:
-    # Every text a developer reads from the SDKs and the ncdb command line
-    # lives in texts/texts.json (NOC-329): each entry well-formed, with when
-    # it shows, sorted by id and one field per line, so git diff shows each
-    # change; the generated crates/nocentraldb/src/texts/,
-    # crates/ncdb/src/texts.rs and packages/sdk/src/texts.ts equal to the
-    # file; no text written in the Rust SDK's (its bridge too), the
-    # TypeScript SDK's or the command line's code; and every text used. A
+    # Every text a developer reads from the SDKs, the ncdb command line and
+    # the core lives in texts/texts.json (NOC-329): each entry well-formed,
+    # with when it shows, sorted by id and one field per line, so git diff
+    # shows each change; the generated crates/nocentraldb/src/texts/,
+    # crates/ncdb/src/texts.rs, packages/sdk/src/texts.ts and
+    # crates/ncdb-core/src/texts.rs equal to the file; no text written in the
+    # Rust SDK's (its bridge too), the TypeScript SDK's or the command line's
+    # code, or in the core's lock refusals (T6); and every text used. A
     # TypeScript text's code is one RFC 0009's error table lists (T3).
     command: "node scripts/texts.mjs --check"
     inputs:
       - "/texts/**/*"
       - "/scripts/texts.mjs"
       - "/scripts/texts-ts.mjs"
+      - "/scripts/texts-core.mjs"
       - "/scripts/texts-review.mjs"
       - "/crates/nocentraldb/src/**/*"
       - "/crates/ncdb/src/**/*"
+      - "/crates/ncdb-core/src/**/*"
       - "/packages/sdk/src/**/*"
       - "/docs/rfc/0009-sdk-api.md"
   version:

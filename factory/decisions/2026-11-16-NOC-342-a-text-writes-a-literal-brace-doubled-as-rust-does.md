@@ -1,0 +1,6 @@
+# 2026-11-16 · NOC-342 · A text writes a literal brace doubled, as Rust does, and a ts text holds none
+
+- Decided by: coding agent, NOC-342 (NOC-329 T6), within pm's decision that the core's placeholders work as in Rust
+- Why: two of the lock's refusals tell the developer what to write in the schema, `Keep .personal({ person: "owner" }).`, so their text holds braces that are no placeholder. Rust's `format!` writes such a brace doubled, `{{` and `}}`, and the generated function passes the text to `format!` unchanged; a constant holds it single. So the refusals keep their wording, and the gate still fails on a single brace that is no placeholder, which is most likely a mistyped one. A `ts` text holds no doubled brace, as the TypeScript module fills its placeholders in a template literal, which does not read them. The core's refusals are one entry each, their lines separated by a newline, as `Refusal::lines` gives them, so the owner reviews each refusal as one message; the five name kinds a refusal names (`computed field` among them) are core texts too.
+- Instead of: rewording the two refusals to avoid the braces, which would change what the developer reads; a placeholder that the code fills with the braces, which would put part of the text back in code; or one entry per line, which would split one message across three entries.
+- Topics: texts, core, gates
