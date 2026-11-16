@@ -18,4 +18,4 @@ The tab that opened the database first owns it, and the other tabs send their ca
 
 ## Fix
 
-The owning tab gives the database up when it is hidden, after answering the calls it already took, and the visible tab takes it over, so its writes run and show at once. A hidden tab now syncs only while it owns the database.
+The owning tab gives the database up when it is hidden, after answering the calls it already took, and the visible tab takes it over, so its writes run and show at once; in Safari, behind a tab frozen right after it was hidden, they wait until that tab runs again. A hidden tab now syncs only while it owns the database.
