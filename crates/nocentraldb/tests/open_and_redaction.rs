@@ -20,6 +20,24 @@ fn a_lock_that_does_not_read_is_refused() {
     }
 }
 
+/// A lock that breaks a rule on its own shows the refusal's text, as
+/// `ncdb model build` does, not the core's Debug form (NOC-343).
+#[test]
+fn a_lock_that_breaks_a_rule_shows_the_refusal_text() {
+    let lock = LOCK.replace(
+        r#"[{ "direction": "asc", "field": "priority" }]"#,
+        r#"[{ "direction": "asc", "field": "nope" }]"#,
+    );
+
+    let error = now(Db::open(OpenOptions::new(&lock).in_memory())).unwrap_err();
+
+    assert_eq!(error.code(), ErrorCode::ModelRefused);
+    assert_eq!(
+        error.to_string(),
+        "the lock is refused: index tasks.byPriority: tasks has no field nope."
+    );
+}
+
 #[test]
 fn one_write_is_one_change() {
     let db = open();

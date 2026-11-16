@@ -463,3 +463,21 @@ pub(crate) fn lock(inner: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    /// A declared index whose lookup would not run through it is a
+    /// problem of the model, not of storage (NOC-343).
+    #[test]
+    fn an_index_that_would_not_run_is_model_refused() {
+        let error = view_error(ncdb_core::view::Error::Plan("tasks.byPriority".into()));
+
+        assert_eq!(error.code(), ErrorCode::ModelRefused);
+        assert!(error.to_string().contains("tasks.byPriority"), "{error}");
+    }
+}

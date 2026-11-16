@@ -212,6 +212,12 @@ pub enum Invalid {
     ReservedId,
 }
 
+impl std::fmt::Display for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 impl Field {
     /// Whether the field has a column in `c_<collection>`: a single value
     /// that sorts (RFC 0006, "Where the view lives").
