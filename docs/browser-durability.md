@@ -61,13 +61,13 @@ Each private session of Chromium is a new device: its member key is created in t
 
 ## What the SDK tells you
 
-The SDK reports how durable this copy is and how many changes would be lost with it. The names below are decided in [RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy), decision 10; the SDK does not have them yet.
+The SDK reports how durable this copy is, how many changes would be lost with it, and whether this tab waits for another tab of your app. The names below are decided in [RFC 0006, "What the SDK reports"](rfc/0006-local-view.md#what-the-sdk-reports).
 
 ```ts
 const db = await nc.open({ model });
 
 const now = db.durability.current();
-// { storage: "best-effort", unconfirmed: 3, oldestUnconfirmedAt: Date, atRisk: true }
+// { storage: "best-effort", unconfirmed: 3, oldestUnconfirmedAt: 1763000000000, atRisk: true, waitingForTab: false }
 
 const stop = db.durability.subscribe((durability) => showBanner(durability));
 await db.durability.requestPersistent(); // asks the browser; Firefox asks the user
@@ -79,7 +79,7 @@ await db.durability.requestPersistent(); // asks the browser; Firefox asks the u
 | `best-effort` | The browser may delete the copy when storage runs low, and Safari after seven days without interaction. Most browser copies start here. | Anything about when: the browser decides. A Chromium private window also reports `best-effort`. |
 | `temporary` | A database opened in memory for tests, in Node.js with `inMemory`. A browser never reports it: where OPFS is missing, `nc.open` fails with `storageUnavailable`. | That it survives closing the database. |
 
-`unconfirmed` counts this member's changes that the relay has not confirmed; they exist only on this device. `atRisk` is true while `unconfirmed` is above zero and `storage` is not `persistent`. In development, the SDK logs one warning per page load when `storage` is not `persistent`.
+`unconfirmed` counts this member's changes that the relay has not confirmed; they exist only on this device. `atRisk` is true while `unconfirmed` is above zero and `storage` is not `persistent`. `waitingForTab` is true while this tab has waited 1 s or longer for the database's storage, which another tab of your app still holds: in Safari, a tab that was hidden and frozen right after it gave the database up ([Getting started in the browser, "A frozen tab in Safari"](getting-started-browser.md#a-frozen-tab-in-safari)). This tab's writes wait and run once that tab runs again; they are not counted in `unconfirmed`, and they are lost if the user closes this tab first. In development, the SDK logs one warning per page load when `storage` is not `persistent`.
 
 ## Text for your users
 
@@ -113,4 +113,12 @@ Show it when `nc.open` fails with `storageUnavailable`.
 
 ```text
 {appName} does not work in a private window. A private window keeps nothing, and {appName} keeps your data in this browser so it works offline. Open {appName} in a normal window.
+```
+
+### Another tab is open
+
+Show it while `waitingForTab` is true, and hide it when it turns false.
+
+```text
+Another tab of {appName} is open in this browser, and {appName} can't save here until that tab runs again. Your changes here wait and are saved then. Switch to the other tab for a moment, or close it. Until then, keep this tab open.
 ```

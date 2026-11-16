@@ -13,6 +13,8 @@ export interface Durability {
   readonly oldestUnconfirmedAt: number | null;
   /** Whether some changes are unconfirmed while the copy is not persistent. */
   readonly atRisk: boolean;
+  /** Whether this browser tab waits for the database's storage, which another tab of the app still holds, as a frozen tab in Safari does: this tab's calls, writes included, wait until that tab runs again, and none fails. Always `false` outside a browser (NOC-355). */
+  readonly waitingForTab: boolean;
 }
 
 /** The view's report: whether a rebuild runs, and how far it is, in frames of the log. */

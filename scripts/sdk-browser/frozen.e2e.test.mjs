@@ -253,3 +253,72 @@ test("a write from a tab whose owner froze and then closed is written exactly on
   );
   await context.close();
 });
+
+/** Records in `page` each `waitingForTab` its durability reports, with the page's clock, and when the write it starts settles. */
+const recordWaiting = (page) =>
+  page.evaluate(() => {
+    window.waits = [];
+    window.db.durability.subscribe(({ waitingForTab }) => {
+      const last = window.waits.at(-1);
+      if (last?.waiting !== waitingForTab)
+        window.waits.push({ waiting: waitingForTab, at: Date.now() });
+    });
+  });
+
+/**
+ * Hides `page` and freezes it for `ms` right after, with only microtasks
+ * between, as a phone that freezes a tab at once: the hide handler gives
+ * the database up and releases the tabs' lock, but the owner's worker has
+ * no time to give the storage back before the page stops. With the two in
+ * separate steps, WebKit's worker sometimes gave it back in between, and
+ * nothing waited. Does not wait.
+ */
+const hideAndFreeze = (page, ms = FROZEN) => {
+  page
+    .evaluate(async (ms) => {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        get: () => "hidden",
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const end = Date.now() + ms;
+      while (Date.now() < end) {
+        // Frozen.
+      }
+    }, ms)
+    .catch(() => {
+      // The page closed while frozen.
+    });
+};
+
+test("while a write waits for a frozen owner, the tab reports waitingForTab, and clears it once the write goes through (NOC-355)", async () => {
+  const context = await browser.newContext();
+  const owner = await tab(context);
+  const writer = await tab(context);
+  const space = await createTask(owner.page, "before");
+  await handle(writer.page, space);
+  await recordWaiting(writer.page);
+  const started = Date.now();
+  hideAndFreeze(owner.page);
+  await startWrite(writer.page, "waits for the owner");
+  await writtenAfterFreeze(writer.page, started, 10000);
+  const waits = await writer.page.evaluate(() => window.waits);
+  const states = waits.map(({ waiting }) => waiting);
+  if (takesOverWhileFrozen) {
+    // The hidden owner gave the storage back before it froze: nothing waits.
+    assert.deepEqual(states, [false], JSON.stringify(waits));
+  } else {
+    assert.deepEqual(states, [false, true, false], JSON.stringify(waits));
+    // It appeared while the owner was frozen, not only once it ran again.
+    assert.ok(waits[1].at < started + FROZEN, JSON.stringify(waits));
+    assert.ok(waits[2].at >= waits[1].at, JSON.stringify(waits));
+  }
+  assert.equal(
+    await writer.page.evaluate(
+      () => window.db.durability.current().waitingForTab,
+    ),
+    false,
+  );
+  await context.close();
+});

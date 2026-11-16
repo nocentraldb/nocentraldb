@@ -169,6 +169,9 @@ export const tabCore = async (
   const workerEvent = (bytes: Uint8Array) => {
     noteSync(bytes);
     emit(bytes);
+    // This tab's own wait for the storage (NOC-355, worker.ts) is no event
+    // of the database: the other tabs do not wait for it.
+    if ((decode(bytes) as { event?: string }).event === "waitingForTab") return;
     post({ kind: "event", bytes });
   };
 

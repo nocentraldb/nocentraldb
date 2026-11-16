@@ -200,6 +200,7 @@ export interface Durability {
     readonly unconfirmed: number;
     readonly oldestUnconfirmedAt: number | null;
     readonly atRisk: boolean;
+    readonly waitingForTab: boolean;
 }
 export interface ViewStatus {
     readonly rebuild: {

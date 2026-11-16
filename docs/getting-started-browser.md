@@ -267,7 +267,27 @@ So a page opens the database once per tab, by name, as above. One browser holds 
 
 ### A frozen tab in Safari
 
-In Safari a tab can give the database's storage back only while it still runs. A phone may freeze a hidden tab right after it gave the database up, before it gave the storage back. The visible tab then cannot open the database yet: its writes wait, and run once the frozen tab runs again. They are not lost, and they do not fail. In Chromium and Firefox the visible tab takes over while the hidden tab is frozen.
+In Safari a tab can give the database's storage back only while it still runs. A phone may freeze a hidden tab right after it gave the database up, before it gave the storage back. The visible tab then cannot open the database yet: its writes wait, and run once the frozen tab runs again. They do not fail, but they are not written yet, so they are lost if the user closes the visible tab first. In Chromium and Firefox the visible tab takes over while the hidden tab is frozen.
+
+`db.durability` tells your app while this happens: `waitingForTab` turns true once the tab has waited 1 s for the other tab, and false again when the other tab runs and the waiting writes go through. Tell the user why nothing is saved yet:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "tasks" });
+
+const otherTab = document.createElement("p");
+otherTab.textContent = "Another tab of this app is open. Until it is back, nothing is saved here.";
+document.body.append(otherTab);
+
+db.durability.subscribe((durability) => {
+  otherTab.hidden = !durability.waitingForTab;
+});
+```
+
+[Browser apps and durability](browser-durability.md#another-tab-is-open) has a text for it. A tab that opens the database while the owner is frozen, such as a new tab, waits in `nc.open` itself, and has no `db` yet that could report it; until [NOC-356](https://linear.app/nocentraldb/issue/NOC-356) changes that, your app sees only an `nc.open` that takes long.
 
 ## 9. Sync through a relay
 

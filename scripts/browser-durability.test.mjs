@@ -208,7 +208,12 @@ const userTexts = (title) => {
   );
 };
 
-const TEXTS = ["Onboarding", "Changes not yet saved", "Private window"];
+const TEXTS = [
+  "Onboarding",
+  "Changes not yet saved",
+  "Private window",
+  "Another tab is open",
+];
 
 test("the page offers each text for users", () => {
   for (const title of TEXTS) {
