@@ -1483,6 +1483,41 @@
       "when": "Any call after db.close(), and the calls still waiting when it closes."
     },
     {
+      "id": "ts.lockFieldDiffers",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: {collection}.{field} differs from the lock in its type or options. Run ncdb model build.",
+      "when": "nc.open, on a model whose field has another type or other options in the lock, as when the lock was not built again after the field changed."
+    },
+    {
+      "id": "ts.lockHasNoCollection",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no collection {collection}. Run ncdb model build.",
+      "when": "nc.open, on a model that names a collection the lock does not have, as when the lock was not built again after the collection was added."
+    },
+    {
+      "id": "ts.lockHasNoField",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no field {collection}.{field}. Run ncdb model build.",
+      "when": "nc.open, on a model that names a field the lock does not have, as when the lock was not built again after the field was added."
+    },
+    {
+      "id": "ts.lockHasNoIndex",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no index {collection}.{index}. Run ncdb model build.",
+      "when": "nc.open, on a model that names an index the lock does not have, as when the lock was not built again after the index was added."
+    },
+    {
+      "id": "ts.lockIndexDiffers",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: {collection}.{index} differs from the lock in its fields or options. Run ncdb model build.",
+      "when": "nc.open, on a model whose index has other fields, another equality prefix or another scope in the lock."
+    },
+    {
       "id": "ts.noSuchCollection",
       "kind": "ts",
       "code": "notFound",
