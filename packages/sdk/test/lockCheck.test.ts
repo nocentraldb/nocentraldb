@@ -4,21 +4,13 @@
 // options. Against the lock the Rust SDK's test model builds, which the
 // browser tests open with too. Chromium runs nc.open with an out-of-date
 // lock (scripts/sdk-browser/model.e2e.test.mjs).
-import { readFileSync } from "node:fs";
 import { expect, test } from "vitest";
+import lock from "../../../crates/nocentraldb/tests/model/model.lock.json" with {
+  type: "json",
+};
 import { model as fullModel } from "../../../crates/nocentraldb/tests/model/model.ts";
 import { nc } from "../src/index.ts";
 import { lockOutOfDate } from "../src/lockCheck.ts";
-
-const lock = JSON.parse(
-  readFileSync(
-    new URL(
-      "../../../crates/nocentraldb/tests/model/model.lock.json",
-      import.meta.url,
-    ),
-    "utf8",
-  ),
-);
 
 /** The test model's tasks, with `fields` and `indexes` changed as a test asks. */
 const tasks = (
