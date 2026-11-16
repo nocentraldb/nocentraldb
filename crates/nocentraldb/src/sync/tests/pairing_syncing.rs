@@ -26,17 +26,22 @@ fn member(db: &Db) -> [u8; 32] {
 
 /// The laptop pairs a phone that syncs while it waits, and the phone
 /// completes the pairing; returns the phone. With `received`, the phone
-/// first holds the app space the pairing added it to; without, it
-/// completes at once, before the spaces may reach it.
+/// first holds every space the pairing added it to, the account space
+/// too: the relay announces each with an `added` of its own, in no order
+/// RFC 0007 sets, so holding the app space says nothing of the account
+/// space. Without, it completes at once, before the spaces may reach it.
 async fn paired(laptop: &Db, url: &str, received: bool) -> Db {
     let phone = waiting(url).await;
     let invitation = now(phone.invitation());
     let paired = now(laptop.account().pair(PairKind::Device, &invitation)).unwrap();
     if received {
         synced(laptop).await;
+        let account = crate::account::space(&crate::db::lock(&laptop.inner)).unwrap();
         let added = paired.added[0].0;
-        eventually("the phone holds the app space before it completes", || {
-            now(phone.spaces().get(added)).is_ok()
+        eventually("the phone holds its spaces before it completes", || {
+            let inner = crate::db::lock(&phone.inner);
+            crate::space::writable_by(&inner, account, crate::account::id()).is_ok()
+                && crate::space::writable_by(&inner, added.0, inner.model_id).is_ok()
         })
         .await;
     }
