@@ -91,12 +91,14 @@ async fn timed<T>(
 }
 
 /// Where a URL leads: over TLS or not, the host as TLS names it, the
-/// authority (`host:port`) and the path.
+/// authority to connect to (`host:port`), the authority as the URL names
+/// it, which the `Host` header carries, and the path.
 #[derive(Debug, PartialEq, Eq)]
 struct Target<'a> {
     tls: bool,
     host: String,
     authority: String,
+    named: &'a str,
     path: &'a str,
 }
 
@@ -138,6 +140,7 @@ fn split(url: &str) -> Result<Target<'_>, Failed> {
             .trim_end_matches(']')
             .to_owned(),
         authority: format!("{host}:{port}"),
+        named: authority,
         path,
     })
 }
@@ -200,11 +203,13 @@ async fn exchange(
     Ok((status, length, stream, rest))
 }
 
-/// The head of a request for `target` with a body of `length` bytes.
+/// The head of a request for `target` with a body of `length` bytes. Its
+/// `Host` is the authority as the URL names it, without a default port the
+/// URL leaves out: a presigned S3 URL signs it that way (NOC-348).
 fn head(method: &str, target: &Target<'_>, length: usize) -> String {
     format!(
         "{method} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n",
-        target.path, target.authority,
+        target.path, target.named,
     )
 }
 
@@ -376,10 +381,11 @@ mod tests {
             Err(Failed::Unsupported)
         );
         assert_eq!(split("http://relay.example/x y"), Err(Failed::Unsupported));
-        let target = |tls, host: &str, authority: &str, path| Target {
+        let target = |tls, host: &str, authority: &str, named, path| Target {
             tls,
             host: host.to_owned(),
             authority: authority.to_owned(),
+            named,
             path,
         };
         assert_eq!(
@@ -388,6 +394,7 @@ mod tests {
                 false,
                 "relay.example",
                 "relay.example:80",
+                "relay.example",
                 "/frames/ab"
             ))
         );
@@ -397,16 +404,23 @@ mod tests {
                 true,
                 "relay.example",
                 "relay.example:443",
+                "relay.example",
                 "/frames/ab"
             ))
         );
         assert_eq!(
             split("http://127.0.0.1:7700/x"),
-            Ok(target(false, "127.0.0.1", "127.0.0.1:7700", "/x"))
+            Ok(target(
+                false,
+                "127.0.0.1",
+                "127.0.0.1:7700",
+                "127.0.0.1:7700",
+                "/x"
+            ))
         );
         assert_eq!(
             split("https://[::1]:8443/x"),
-            Ok(target(true, "::1", "[::1]:8443", "/x"))
+            Ok(target(true, "::1", "[::1]:8443", "[::1]:8443", "/x"))
         );
     }
 }
