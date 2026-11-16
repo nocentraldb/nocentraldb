@@ -50,6 +50,9 @@ pub enum Trouble {
     /// `hello` is answered with the error of this code, and the connection
     /// ends.
     Refuse(&'static str),
+    /// Every `upload` is answered with a URL of the fake's S3, which
+    /// refuses the first `n` PUTs with 403 and takes the others.
+    RefuseUploads(usize),
 }
 
 /// A fake relay on a free local port.
@@ -57,6 +60,7 @@ pub struct FakeRelay {
     pub addr: SocketAddr,
     connections: Arc<AtomicUsize>,
     requests: Arc<AtomicUsize>,
+    puts: Arc<AtomicUsize>,
 }
 
 impl FakeRelay {
@@ -65,17 +69,20 @@ impl FakeRelay {
         let addr = listener.local_addr().expect("an address");
         let connections = Arc::new(AtomicUsize::new(0));
         let requests = Arc::new(AtomicUsize::new(0));
+        let puts = Arc::new(AtomicUsize::new(0));
+        let s3 = s3(trouble, puts.clone()).await;
         let (counted, asked) = (connections.clone(), requests.clone());
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
                 counted.fetch_add(1, Ordering::SeqCst);
-                tokio::spawn(serve(stream, trouble, asked.clone()));
+                tokio::spawn(serve(stream, trouble, asked.clone(), s3));
             }
         });
         FakeRelay {
             addr,
             connections,
             requests,
+            puts,
         }
     }
 
@@ -93,6 +100,67 @@ impl FakeRelay {
     pub fn requests(&self) -> usize {
         self.requests.load(Ordering::SeqCst)
     }
+
+    /// How many PUTs reached the fake's S3.
+    pub fn puts(&self) -> usize {
+        self.puts.load(Ordering::SeqCst)
+    }
+}
+
+/// The fake's S3: answers each request with 403 while it has refused
+/// fewer than [`Trouble::RefuseUploads`] asks for, then with 200.
+async fn s3(trouble: Trouble, puts: Arc<AtomicUsize>) -> SocketAddr {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let refuse = match trouble {
+        Trouble::RefuseUploads(n) => n,
+        _ => 0,
+    };
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
+    let addr = listener.local_addr().expect("an address");
+    tokio::spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            let put = puts.fetch_add(1, Ordering::SeqCst);
+            tokio::spawn(async move {
+                // The head, then the body its Content-Length declares.
+                let mut read = Vec::new();
+                let mut buf = [0u8; 64 * 1024];
+                let total = loop {
+                    let Ok(n) = stream.read(&mut buf).await else {
+                        return;
+                    };
+                    if n == 0 {
+                        return;
+                    }
+                    read.extend_from_slice(&buf[..n]);
+                    let Some(end) = read.windows(4).position(|w| w == b"\r\n\r\n") else {
+                        continue;
+                    };
+                    let head = String::from_utf8_lossy(&read[..end]).to_ascii_lowercase();
+                    let length = head
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length:"))
+                        .and_then(|v| v.trim().parse::<usize>().ok())
+                        .unwrap_or(0);
+                    break end + 4 + length;
+                };
+                while read.len() < total {
+                    match stream.read(&mut buf).await {
+                        Ok(0) | Err(_) => return,
+                        Ok(n) => read.extend_from_slice(&buf[..n]),
+                    }
+                }
+                let status = if put < refuse {
+                    "403 Forbidden"
+                } else {
+                    "200 OK"
+                };
+                let response = format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\n\r\n");
+                let _ = stream.write_all(response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            });
+        }
+    });
+    addr
 }
 
 type Ws = WebSocketStream<TcpStream>;
@@ -123,7 +191,7 @@ fn map(entries: Vec<(u64, Value)>) -> Value {
     Value::Map(map)
 }
 
-async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) {
+async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>, s3: SocketAddr) {
     if let Trouble::Hang = trouble {
         let _held = stream;
         tokio::time::sleep(Duration::from_secs(3600)).await;
@@ -189,7 +257,7 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
     }
     while let Some(request) = recv(&mut ws).await {
         requests.fetch_add(1, Ordering::SeqCst);
-        let Some(answer) = answer(&request, trouble) else {
+        let Some(answer) = answer(&request, trouble, s3) else {
             continue;
         };
         if send(&mut ws, &answer).await.is_none() {
@@ -198,7 +266,7 @@ async fn serve(stream: TcpStream, trouble: Trouble, requests: Arc<AtomicUsize>) 
     }
 }
 
-fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
+fn answer(request: &Value, trouble: Trouble, s3: SocketAddr) -> Option<Value> {
     let req = get(request, 2).map(uint);
     let error = |code: &str, extra: Vec<(u64, Value)>| {
         let mut fields = vec![(3, Value::Text(code.to_owned()))];
@@ -225,6 +293,14 @@ fn answer(request: &Value, trouble: Trouble) -> Option<Value> {
             ))
         }
         (_, "pull" | "subscribe") => Some(error("unknown_space", Vec::new())),
+        (_, "upload") => Some(message(
+            "upload",
+            req,
+            &[
+                (3, Value::Bytes(vec![0x0u8; 16])),
+                (4, Value::Text(format!("http://{s3}/uploads/x"))),
+            ],
+        )),
         (Trouble::Unavailable, "push") => rejected(request, req, "unavailable"),
         (Trouble::RejectPush(code), "push") => rejected(request, req, code),
         (Trouble::RateLimited(secs), "push") => {
