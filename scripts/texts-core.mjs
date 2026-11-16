@@ -29,6 +29,9 @@ export const CORE_PATHS = {
  */
 const coreStrays = () => CLI_STRAYS.filter(([, what]) => what === "a text");
 
+/** The files of the core's code the gate reads, as [path, source]. Stub for the red step. */
+export const coreFiles = (_root) => [];
+
 /** The core's module, crates/ncdb-core/src/texts.rs, of the `core` texts. */
 export const generateCore = (texts) =>
   rustModule(texts, "core", [

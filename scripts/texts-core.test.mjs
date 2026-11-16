@@ -7,7 +7,12 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { checkEntries, generate, generateCli } from "./texts.mjs";
-import { CORE_PATHS, checkCoreCode, generateCore } from "./texts-core.mjs";
+import {
+  CORE_PATHS,
+  checkCoreCode,
+  coreFiles,
+  generateCore,
+} from "./texts-core.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(ROOT, path), "utf8");
@@ -128,8 +133,17 @@ test("a core text no code uses fails, and the generated module does not count", 
   );
 });
 
-test("the gate reads the core's refusals, refusal.rs", () => {
-  assert.deepEqual(CORE_PATHS.read, [REFUSAL]);
+test("the gate reads all of crates/ncdb-core/src, outside its tests", () => {
+  const paths = coreFiles(ROOT).map(([path]) => path);
+  for (const path of [
+    REFUSAL,
+    "crates/ncdb-core/src/seal.rs",
+    "crates/ncdb-core/src/view/mod.rs",
+    "crates/ncdb-core/src/membership/body.rs",
+  ])
+    assert.ok(paths.includes(path), path);
+  assert.ok(!paths.some((path) => path.includes("/tests/")));
+  assert.ok(!paths.some((path) => path.startsWith("crates/ncdb-core/tests")));
 });
 
 test("the core's committed module is the one the texts generate", () => {
@@ -137,11 +151,11 @@ test("the core's committed module is the one the texts generate", () => {
   assert.equal(read(CORE_PATHS.module), generateCore(texts));
 });
 
-test("refusal.rs writes no text in code", () => {
+test("the core writes no text in code", () => {
   const texts = JSON.parse(read("texts/texts.json")).texts;
   assert.deepEqual(
     checkCoreCode(
-      CORE_PATHS.read.map((path) => [path, read(path)]),
+      coreFiles(ROOT),
       texts.filter((t) => t.kind === "core"),
     ),
     [],
