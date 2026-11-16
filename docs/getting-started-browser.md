@@ -121,11 +121,19 @@ addEventListener("pagehide", () => {
 });
 ```
 
-The SDK runs the core in a worker it starts itself. The database lives in this browser's OPFS, under the origin of the page and the name you give: 1 to 64 characters of `a`–`z`, `0`–`9`, `-` and `_`, or `"default"` when you leave it out. Its keys never reach your code.
+The SDK runs the core in a dedicated worker it starts itself. Your code never sees a key.
 
 The database folds and checks every change by the lock. So build the lock again after every change to `model.ts`. `nc.open` compares the model with the lock: when the model names a collection, field or index the lock does not have, or with another type or options, it fails with `lockOutOfDate`, and its message names what differs and says to run `ncdb model build`.
 
 Every call runs in the browser. A read never waits for the network.
+
+### Where the database lives
+
+The database lives in the origin's private file system (OPFS), under the `name` you give: 1 to 64 characters of `a`–`z`, `0`–`9`, `-` and `_`, or `"default"` when you leave it out. Every database of the page's origin shares one pool there, and each name is a file of its own in it. Your app chooses only the name; the browser decides where on the disk OPFS is, and no path of yours reaches it ([RFC 0009, "Open and close"](rfc/0009-sdk-api.md#open-and-close); [RFC 0006, "The browser"](rfc/0006-local-view.md#the-browser)).
+
+The keys are not in OPFS. A page reaches no platform keystore, so the SDK keeps them in IndexedDB, in a database of the same name, sealed under a non-extractable WebCrypto key: the page can use that key, but no code can read its bytes ([RFC 0003, "The member key"](rfc/0003-keys-and-cryptography.md#the-member-key)).
+
+The browser may evict an origin's data when storage runs low, and Safari deletes a site's data after seven days without a visit unless it was added to the home screen. An eviction takes the database and its keys together, and with them every change the relay has not confirmed yet. `nc.open` asks the browser for persistent storage, unless you open with `persistentStorage` set to `"on-request"` and ask later; `db.durability` reports what is at risk, as step 12 shows ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A private window of Firefox or Safari has no OPFS: the database then lives in memory until the window closes, and `db.durability` says `"temporary"`.
 
 ## 4. Create a space and write
 
@@ -365,6 +373,100 @@ The relay refuses the changes of a space whose creator's account it does not all
 `connection` is `"connected"`, `"connecting"`, `"offline"` (no relay reachable, and the SDK retries), `"paused"`, or `"none"` without a relay. In a tab that reaches another tab's database, it is the owning tab's connection.
 
 `project.status.current()` and `project.status.subscribe(listener)` report what a space holds that a read does not show, such as changes that wait for a newer version of the app, or the relay's refusal of one of your changes.
+## 12. Keep what the browser could lose
+
+`db.durability` answers the question a user of a browser app has: what would I lose if the browser deleted this copy now? It reports whether the browser granted persistent storage, how many of this member's changes the relay has not confirmed, and whether they are at risk. A page that asks for persistent storage only when the user acts opens with `persistentStorage: "on-request"`:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "tasks",
+  persistentStorage: "on-request",
+});
+
+const warning = document.createElement("p");
+const keep = document.createElement("button");
+keep.textContent = "Keep my data on this device";
+document.body.append(warning, keep);
+
+db.durability.subscribe((durability) => {
+  warning.textContent = durability.atRisk
+    ? `${durability.unconfirmed} changes exist only in this browser, which may delete them.`
+    : "";
+  keep.hidden = durability.storage === "persistent";
+});
+keep.addEventListener("click", () => {
+  db.durability.requestPersistent().catch(() => {});
+});
+
+// A view rebuild after a model change runs in the background.
+const rebuild = db.view.current().rebuild;
+if (rebuild !== null) console.log(`rebuilding: ${rebuild.folded} of ${rebuild.total}`);
+```
+
+`storage` is `"persistent"`, `"best-effort"` (the browser may delete the copy) or `"temporary"` (in memory, in a private window). `atRisk` is true while changes are unconfirmed and storage is not persistent. [Browser apps and durability](browser-durability.md) says what each browser does, and what to tell your users. `db.view` reports a rebuild of the view; in the browser it reports `rebuild: null` for now, because the browser runs no rebuild yet.
+
+## 13. Follow your spaces, and leave one
+
+`db.spaces.subscribe(listener)` gives the space list at once, and again when a space is added, left or removed, or this member's role in one changes, as when another member shares a space with it. `space.leave()` removes this member from a space:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "tasks" });
+
+const list = document.createElement("ul");
+document.body.append(list);
+const stop = db.spaces.subscribe((spaces) => {
+  list.replaceChildren(
+    ...spaces.map((space) => {
+      const item = document.createElement("li");
+      item.textContent = `${space.id} (${space.role ?? "left"})`;
+      return item;
+    }),
+  );
+});
+addEventListener("pagehide", stop);
+
+const leave = new URLSearchParams(location.search).get("leave");
+if (leave !== null) {
+  const project = await db.spaces.get(leave);
+  const left = await project.leave();
+  console.log(left.notice.text);
+}
+```
+
+The notice says what leaving does not do: this member keeps its copy of everything it received, and until an admin rotates the space key, the others write under a key it still holds. The last admin of a space cannot leave it; the call fails with `lastAdmin`.
+
+## 14. Read the erasure audit
+
+When a person's personal fields are erased, every member destroys its copy of the person's key and says so. `space.erasures.list()` is the audit: for each erasure, whether it is final, provisional or taken back, who performed and who signed it off, and which members confirmed that they deleted the key:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock, name: "tasks" });
+
+const space = new URLSearchParams(location.search).get("space") ?? "";
+const project = await db.spaces.get(space);
+for (const erasure of await project.erasures.list()) {
+  const missing = erasure.members.filter((m) => m.acknowledged === "missing");
+  console.log(
+    `${erasure.shred}: ${erasure.state}, ${missing.length} members have not confirmed`,
+  );
+}
+```
+
+A member that never comes back online is listed as `"missing"` for good: that is what the audit is for. Every member may read it, a reader too.
 
 ## What the browser SDK does not do yet
 
@@ -372,7 +474,8 @@ RFC 0009 names more than the browser SDK has today. This guide leaves out what i
 
 - **Accounts and devices.** A person's second device joins the space as a member of its own account, as in step 10. Pairing a device into one account is in the Rust SDK ([its guide](getting-started.md), step 9) but not yet in the TypeScript SDK. The account's recovery code is: `db.account.recoveryCode()` gives it until `confirm()` ([RFC 0009, "Accounts and devices"](rfc/0009-sdk-api.md#accounts-and-devices)).
 - **Node.js.** `nc.open` runs in a browser. The options `path`, `keyFile`, `inMemory` and `agent` of RFC 0009 are not there yet.
-- **`space.inspect`,** the details of a conflict. `db.view`, the progress of a view rebuild, is there, but in the browser it always reports `rebuild: null`: the browser runs no rebuild yet.
+- **`space.inspect`,** the details of a conflict.
+- **Erasing a person.** The browser SDK reads the erasure audit (step 14) but cannot start an erasure or take one back yet.
 
 ## Where to go next
 

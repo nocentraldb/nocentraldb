@@ -157,6 +157,14 @@ test("the browser guide shows each step the ticket names, in its snippets", () =
     "members.add(",
     "db.sync.subscribe(",
     "db.sync.confirmed(",
+    // NOC-327: the calls #330-#332 added.
+    "db.spaces.subscribe(",
+    ".leave()",
+    ".erasures.list()",
+    "db.durability.subscribe(",
+    "db.durability.requestPersistent()",
+    'persistentStorage: "on-request"',
+    "db.view.current()",
   ]) {
     assert.ok(code.includes(name), `no snippet shows ${name}`);
   }
