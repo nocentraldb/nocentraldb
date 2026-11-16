@@ -1,9 +1,9 @@
 //! How a field's net write in a transaction becomes operations of RFC 0004
-//! (RFC 0009, "Field operations per field type"): a basic value or a link
-//! one set, which replaces the winner and every conflict the copy holds; a
-//! set or many links one add or remove per element, an add replacing the
-//! element's removals the copy holds and a remove naming the additions it
-//! observed.
+//! (RFC 0009, "Field operations per field type"): a basic value, a link or
+//! a reference one set, which replaces the winner and every conflict the
+//! copy holds; a set or many links one add or remove per element, an add
+//! replacing the element's removals the copy holds and a remove naming the
+//! additions it observed.
 
 use ncdb_core::cbor;
 use ncdb_core::change::Operation;
@@ -90,6 +90,18 @@ impl Site<'_> {
                     .set(state, id, author, stamp, self.space, target)
                     .map_err(|_| invalid())?;
                 Ok(vec![self.operation(link, &write)])
+            }
+            (Field::Ref(reference), FieldState::Basic(state), Intent::Set(value)) => {
+                let target = match value.0 {
+                    Repr::Clear => None,
+                    Repr::Ref(reference) => Some(Target {
+                        space: reference.space.0,
+                        object: reference.id.0,
+                    }),
+                    _ => return Err(invalid()),
+                };
+                let write = reference.set(state, id, author, stamp, target);
+                Ok(vec![self.operation(reference, &write)])
             }
             (Field::Set(set), FieldState::Set(state), Intent::Elements(actions)) => actions
                 .iter()

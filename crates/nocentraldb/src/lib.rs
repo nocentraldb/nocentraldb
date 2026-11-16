@@ -118,5 +118,5 @@ pub use status::{
 pub use sync::{Connection, SyncReport, SyncStatus};
 pub use tx::Create;
 pub use tx::Transaction;
-pub use value::Value;
+pub use value::{Reference, Value};
 pub use view_report::{RebuildProgress, ViewReport, ViewStatus};

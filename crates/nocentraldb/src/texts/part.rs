@@ -222,6 +222,11 @@ pub(crate) const KIND_LIST: &str =
 pub(crate) const KIND_OBJECT_ID: &str =
     "an object id";
 
+/// `kindReference`: What the read asked for, in fieldDoesNotHold: a reference
+/// into a space.
+pub(crate) const KIND_REFERENCE: &str =
+    "a reference";
+
 /// `kindText`: What the read asked for, in fieldDoesNotHold: a text (&str).
 pub(crate) const KIND_TEXT: &str =
     "a text";

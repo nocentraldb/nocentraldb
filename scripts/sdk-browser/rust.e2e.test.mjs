@@ -7,7 +7,9 @@
 // concurrently into one object while the network is cut; both sync, and
 // their reads compare equal (GENESIS.md, "Convergence"). The tab's task
 // links a project, set on create and moved on update, and the Rust device
-// reads that link as an object id (NOC-353).
+// reads that link as an object id (NOC-353). Each writes a reference
+// (`customer`) on its own task, which the other reads as `{ space, id }`,
+// and then clears the reference the other wrote (NOC-354).
 //
 // Both reach the relay through a proxy the test cuts. Each is of its own
 // account; the relay lets the Rust device's account create spaces
@@ -58,6 +60,7 @@ const MODEL = `nc.model({
       urgent: nc.boolean(),
       tags: nc.set(nc.string()),
       project: nc.link("projects"),
+      customer: nc.ref("projects"),
     },
     {
       indexes: {
@@ -101,6 +104,7 @@ const TAB = `
           priority: task.priority ?? null,
           tags: [...(task.tags ?? [])].sort(),
           project: task.project ?? null,
+          customer: task.customer ?? null,
         },
       );
     }
@@ -170,6 +174,7 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
             title: "from the tab",
             priority: 2,
             project: projects[0],
+            customer: { space, id: projects[0] },
           });
         });
         await window.synced();
@@ -184,6 +189,7 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
     // before it writes its own.
     proxy.cut();
     await rust.ask(`update ${space} ${shared}`);
+    await rust.ask(`refer ${space} ${shared} ${space} ${projects[0]}`);
     await tab.evaluate(
       async ({ space, shared, ofTab, moved }) => {
         const { db, model, nc } = { ...window.tab, nc: window.nc };
@@ -194,7 +200,11 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
             tags: nc.add("y"),
             priority: 5,
           });
-          tx.update(model.tasks, ofTab, { status: "done", project: moved });
+          tx.update(model.tasks, ofTab, {
+            status: "done",
+            project: moved,
+            customer: { space, id: moved },
+          });
         });
       },
       { space, shared, ofTab, moved: projects[1] },
@@ -237,8 +247,38 @@ test(`a ${engine} tab and a Rust device share a space through the local relay an
       priority: 2,
       tags: [],
       project: projects[1],
+      customer: { space, id: projects[1] },
     });
     assert.equal(onRust[0].project, null);
+    // The tab reads the reference the Rust device wrote.
+    assert.deepEqual(onTab[0].customer, { space, id: projects[0] });
+
+    // Each clears the reference the other wrote; both read it cleared.
+    await rust.ask(`refer ${space} ${ofTab} null`);
+    await tab.evaluate(
+      async ({ space, shared }) => {
+        const { db, model } = window.tab;
+        const project = await db.spaces.get(space);
+        await project.update(model.tasks, shared, { customer: null });
+        await window.synced();
+      },
+      { space, shared },
+    );
+    await rust.ask("synced");
+    const cleared = (tasks) =>
+      tasks[0]?.customer === null && tasks[1]?.customer === null;
+    const clearing = Date.now();
+    for (;;) {
+      onRust = JSON.parse(await rust.ask(`read ${space} ${ids.join(" ")}`));
+      onTab = await tab.evaluate(({ space, ids }) => window.read(space, ids), {
+        space,
+        ids,
+      });
+      if (cleared(onRust) && cleared(onTab)) break;
+      assert.ok(Date.now() - clearing < 30000, "both read both clears in time");
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.deepEqual(onTab, onRust);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

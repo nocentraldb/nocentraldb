@@ -9,7 +9,7 @@ use ncdb_core::cbor::Value;
 use super::{Bridge, LOCK, as_text, field, map, now, ok, text};
 use crate::id::{ObjectId, SpaceId};
 
-fn opened_with(lock: &str) -> Bridge {
+pub(super) fn opened_with(lock: &str) -> Bridge {
     let mut bridge = Bridge::new();
     ok(
         &mut bridge,
@@ -20,7 +20,7 @@ fn opened_with(lock: &str) -> Bridge {
 }
 
 /// One write of `ops` into `space`; the ids it created.
-fn write(bridge: &mut Bridge, space: &Value, ops: Vec<Value>) -> Vec<Value> {
+pub(super) fn write(bridge: &mut Bridge, space: &Value, ops: Vec<Value>) -> Vec<Value> {
     let written = ok(
         bridge,
         "write",
@@ -32,7 +32,7 @@ fn write(bridge: &mut Bridge, space: &Value, ops: Vec<Value>) -> Vec<Value> {
     }
 }
 
-fn op(op: &str, collection: &str, id: Option<&Value>, values: Value) -> Value {
+pub(super) fn op(op: &str, collection: &str, id: Option<&Value>, values: Value) -> Value {
     let mut entries = vec![
         ("op", text(op)),
         ("collection", text(collection)),
@@ -45,7 +45,7 @@ fn op(op: &str, collection: &str, id: Option<&Value>, values: Value) -> Value {
 }
 
 /// The fields of the object `id` of `collection`, as `get` answers them.
-fn fields(bridge: &mut Bridge, space: &Value, collection: &str, id: &Value) -> Value {
+pub(super) fn fields(bridge: &mut Bridge, space: &Value, collection: &str, id: &Value) -> Value {
     let read = ok(
         bridge,
         "get",
@@ -60,7 +60,12 @@ fn fields(bridge: &mut Bridge, space: &Value, collection: &str, id: &Value) -> V
 
 /// The object `id` of `collection` as the Rust SDK reads it, on the
 /// bridge's own database.
-fn native(bridge: &Bridge, space: &Value, collection: &str, id: &Value) -> crate::Object {
+pub(super) fn native(
+    bridge: &Bridge,
+    space: &Value,
+    collection: &str,
+    id: &Value,
+) -> crate::Object {
     let db = bridge.db.as_ref().expect("a database is open");
     let space = now(db.spaces().get(as_text(space).parse::<SpaceId>().unwrap())).unwrap();
     let id: ObjectId = as_text(id).parse().unwrap();

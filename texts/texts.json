@@ -1121,6 +1121,13 @@
       "when": "The bridge, on a request from the TypeScript SDK: a membership or account call given a member id that is not 64 lowercase hex digits."
     },
     {
+      "id": "error.bridgeNotAReference",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a reference is a map of space and id, the target's space id and object id",
+      "when": "The bridge, on a request from the TypeScript SDK: a write into an nc.ref field of a value that is neither a map of space and id nor null."
+    },
+    {
       "id": "error.bridgeNotARequest",
       "kind": "error",
       "code": "invalidValue",
@@ -2243,6 +2250,12 @@
       "kind": "part",
       "text": "an object id",
       "when": "What the read asked for, in fieldDoesNotHold: an object id."
+    },
+    {
+      "id": "part.kindReference",
+      "kind": "part",
+      "text": "a reference",
+      "when": "What the read asked for, in fieldDoesNotHold: a reference into a space."
     },
     {
       "id": "part.kindText",

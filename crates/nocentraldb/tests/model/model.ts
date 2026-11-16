@@ -15,6 +15,7 @@ export const model = nc.model({
       urgent: nc.boolean(),
       tags: nc.set(nc.string()),
       project: nc.link("projects"),
+      customer: nc.ref("projects"),
     },
     {
       indexes: {

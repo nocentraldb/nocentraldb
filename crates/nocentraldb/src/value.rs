@@ -1,18 +1,19 @@
 //! A field value, read and written by the field's name (RFC 0009, "The Rust
-//! SDK"): a text, an integer, a float, a boolean or an object id, as the
-//! field's type in the lock asks; a set or many links reads as the list of its
-//! elements and is written with [`Value::add`] and [`Value::remove`], never
-//! whole (RFC 0009, "Field operations per field type"). [`Value::clear`]
-//! empties a basic field or a link. Its `Debug` output
-//! prints `[redacted]`: a value is content.
+//! SDK"): a text, an integer, a float, a boolean, an object id or a
+//! [`Reference`], as the field's type in the lock asks; a set or many links
+//! reads as the list of its elements and is written with [`Value::add`] and
+//! [`Value::remove`], never whole (RFC 0009, "Field operations per field
+//! type"). [`Value::clear`] empties a basic field, a link or a reference.
+//! Its `Debug` output prints `[redacted]`: a value is content.
 
 use std::fmt;
 
 use ncdb_core::cbor;
+use ncdb_core::reference::Target;
 use ncdb_plugin::Data;
 
 use crate::error::{Error, ErrorCode};
-use crate::id::ObjectId;
+use crate::id::{ObjectId, SpaceId};
 
 /// A value to write into a field, or one read from it.
 #[derive(Clone, PartialEq)]
@@ -25,6 +26,9 @@ pub(crate) enum Repr {
     Float(f64),
     Boolean(bool),
     Id(ObjectId),
+    /// A reference: the target's space id and object id (RFC 0004,
+    /// "References").
+    Ref(Reference),
     /// The elements of a set or of many links, as a read gives them.
     List(Vec<Value>),
     /// Elements to add to a set or to many links.
@@ -34,7 +38,8 @@ pub(crate) enum Repr {
     /// A plugin field's read value, or a write intent for it (RFC 0011,
     /// "The data a plugin reads and writes").
     Data(Data),
-    /// The clear of a basic field or a link: a set (1) with no value.
+    /// The clear of a basic field, a link or a reference: a set (1) with
+    /// no value.
     Clear,
 }
 
@@ -50,8 +55,8 @@ impl Value {
         Value(Repr::Remove(elements.into_iter().map(Into::into).collect()))
     }
 
-    /// Clears a basic field or a link, as `null` does in TypeScript: a set
-    /// (1) with no value (RFC 0009, "The Rust SDK"). A clear of a set or of
+    /// Clears a basic field, a link or a reference, as `null` does in
+    /// TypeScript: a set (1) with no value (RFC 0009, "The Rust SDK"). A clear of a set or of
     /// many links is `InvalidValue`; a create with a clear leaves the field
     /// unset.
     pub fn clear() -> Value {
@@ -101,6 +106,33 @@ impl From<bool> for Value {
     }
 }
 
+/// A reference into a space, the value of an `nc.ref` field: the target's
+/// space id and object id (RFC 0004, "References"; Carsten, 2026-11-16,
+/// NOC-354). Written with `Value::from`, read with `get::<Reference>`. It
+/// names the target and holds nothing of it: an app that wants the target
+/// reads it in its space.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub struct Reference {
+    /// The target's space id.
+    pub space: SpaceId,
+    /// The target's object id.
+    pub id: ObjectId,
+}
+
+impl Reference {
+    /// The reference to the object `id` in `space`.
+    pub fn new(space: SpaceId, id: ObjectId) -> Reference {
+        Reference { space, id }
+    }
+}
+
+impl From<Reference> for Value {
+    fn from(reference: Reference) -> Value {
+        Value(Repr::Ref(reference))
+    }
+}
+
 impl From<ObjectId> for Value {
     fn from(id: ObjectId) -> Value {
         Value(Repr::Id(id))
@@ -135,6 +167,7 @@ read_as!(i64, crate::texts::part::KIND_INTEGER, Repr::Integer(n) => *n);
 read_as!(f64, crate::texts::part::KIND_FLOAT, Repr::Float(x) => *x);
 read_as!(bool, crate::texts::part::KIND_BOOLEAN, Repr::Boolean(b) => *b);
 read_as!(ObjectId, crate::texts::part::KIND_OBJECT_ID, Repr::Id(id) => *id);
+read_as!(Reference, crate::texts::part::KIND_REFERENCE, Repr::Ref(reference) => *reference);
 read_as!(&'a [Value], crate::texts::part::KIND_LIST, Repr::List(elements) => elements.as_slice());
 read_as!(Data, crate::texts::part::KIND_DATA, Repr::Data(data) => data.clone());
 
@@ -158,6 +191,10 @@ impl Value {
             Repr::Float(x) => cbor::Value::Float(*x),
             Repr::Boolean(b) => cbor::Value::Bool(*b),
             Repr::Id(id) => ncdb_core::link::value(id.0),
+            Repr::Ref(reference) => ncdb_core::reference::value(Target {
+                space: reference.space.0,
+                object: reference.id.0,
+            }),
             Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) | Repr::Clear => {
                 return None;
             }
@@ -179,5 +216,16 @@ impl Value {
             _ => return None,
         };
         Some(Value(repr))
+    }
+
+    /// The reference a field of `ncdb/ref` holds, or `None` for a value
+    /// that names no target: the field reads unset (RFC 0004, "The value
+    /// and its encoding").
+    pub(crate) fn from_reference(value: &cbor::Value) -> Option<Value> {
+        let target = ncdb_core::reference::target(value)?;
+        Some(Value::from(Reference::new(
+            SpaceId(target.space),
+            ObjectId(target.object),
+        )))
     }
 }

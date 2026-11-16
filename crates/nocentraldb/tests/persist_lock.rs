@@ -19,19 +19,31 @@ fn options(dir: &TempDir, lock: &str) -> OpenOptions {
         .key_file(dir.join("member.key"))
 }
 
-/// [`LOCK`] with `old` replaced by `new` once, at version 2.
+/// The model version of [`LOCK`].
+fn version() -> u64 {
+    let (_, after) = LOCK.split_once(r#""version": "#).expect("a version");
+    let digits: String = after.chars().take_while(char::is_ascii_digit).collect();
+    digits.parse().unwrap()
+}
+
+/// [`LOCK`] with `old` replaced by `new` once, one version on.
 fn changed(old: &str, new: &str) -> String {
     assert!(LOCK.contains(old));
-    LOCK.replacen(old, new, 1)
-        .replacen(r#""version": 1"#, r#""version": 2"#, 1)
+    let version = version();
+    LOCK.replacen(old, new, 1).replacen(
+        &format!(r#""version": {version}"#),
+        &format!(r#""version": {}"#, version + 1),
+        1,
+    )
 }
 
 /// [`LOCK`] one version on, with a text `note` on projects: additive.
 fn with_note() -> String {
     let name = r#""name": { "rule": 1, "since": 1, "type": "ncdb/string" }"#;
+    let since = version() + 1;
     changed(
         name,
-        &format!(r#"{name}, "note": {{ "rule": 1, "since": 2, "type": "ncdb/string" }}"#),
+        &format!(r#"{name}, "note": {{ "rule": 1, "since": {since}, "type": "ncdb/string" }}"#),
     )
 }
 
