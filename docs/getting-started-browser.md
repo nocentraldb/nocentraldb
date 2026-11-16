@@ -10,7 +10,7 @@ For a finished page that does the first half of this, see [apps/tasks-ts](../app
 
 - Rust, as `rust-toolchain.toml` pins it, to compile the SDK's core to WebAssembly. `rustup` installs it on the first `cargo` call.
 - Node.js 24 or later and pnpm.
-- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them; the repository tests in Chromium.
+- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window; Playwright's WebKit is not Safari, and no test is skipped in any of them.
 - A clone of this repository. Until the SDK is published to npm, you build your app inside it, in a folder under `apps/`, as [apps/tasks-ts](../apps/tasks-ts/README.md) does: the SDK and the schema build come from the clone. Run every command below from the clone's root.
 
 ## 1. Make the app

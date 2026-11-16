@@ -1,4 +1,4 @@
-// nc.open checks the model against its lock in Chromium (NOC-323; RFC
+// nc.open checks the model against its lock in the browser (NOC-323; RFC
 // 0009, "Open and close", 2. "Checks the model against the lock"): a model
 // with a field the lock does not have is refused with `lockOutOfDate`,
 // whose message says to run `ncdb model build`, and no database is
@@ -10,8 +10,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -21,7 +21,7 @@ before(async () => {
   if (process.env.SDK_BROWSER_PREBUILT === "1") prebuilt();
   else build();
   server = await startServer({ port: 0 });
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

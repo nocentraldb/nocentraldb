@@ -1,0 +1,6 @@
+# 2026-11-16 · NOC-344 · The TypeScript SDK's browser tests run once per engine, each in a normal window on a fresh profile
+
+- Decided by: coding agent
+- Why: the e2e files already drive Chromium through Playwright, not CDP, so the same files run in Firefox and WebKit when `SDK_BROWSER_ENGINE` picks the engine (`scripts/sdk-browser/engine.mjs`); browser-view.yml runs them in one step per engine, so a failing engine names itself, and the three runs took 35 s, 69 s and 40 s, well inside the job's 30 minutes, so the job is not split. Each test gets a persistent context on a fresh profile, because `browser.newContext()` in WebKit is a private window without OPFS, where the SDK keeps the database in memory and the tab tests fail for that reason alone (NOC-174 tests the private window on its own). Firefox's testing prefs answer its persistent-storage prompt with "allow", since a headless Firefox shows the prompt to no one and `requestPersistent()` would wait forever. All 25 tests pass in all three engines, so none is skipped.
+- Instead of: a loop over the three engines inside every e2e file (three browsers per process, and one failing engine hides in a shared step), a job per engine (each would build the Rust and wasm parts again), or `browser.newContext()` with WebKit's tab tests skipped
+- Topics: browser, ci, sdk-ts, testing

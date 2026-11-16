@@ -1,4 +1,4 @@
-// Accounts in Chromium through the local relay (NOC-316, slice 3; RFC
+// Accounts in the browser through the local relay (NOC-316, slice 3; RFC
 // 0009, "Accounts and devices"; RFC 0010, "Losing a device"): a laptop
 // pairs a phone into its account, both sync, and the laptop removes the
 // lost phone with the recovery code. Removing needs the phone's records
@@ -14,8 +14,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { launch } from "./engine.mjs";
 import { startRelay } from "./relay.mjs";
 import { startServer } from "./server.mjs";
 
@@ -26,7 +26,7 @@ before(async () => {
   if (process.env.SDK_BROWSER_PREBUILT === "1") prebuilt();
   else build();
   server = await startServer({ port: 0 });
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

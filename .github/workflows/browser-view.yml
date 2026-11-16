@@ -24,11 +24,12 @@
 # to the tests and the test starts in the image; it runs on pull requests
 # that touch the relay too.
 #
-# NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
+# NOC-176 slice 1: the same job runs the TypeScript SDK
 # (scripts/sdk-browser/): the package is built on the runner, its core
 # compiled to wasm from crates/nocentraldb-wasm, and a page in the image
 # opens it as an app does. It runs on pull requests that touch the
-# TypeScript SDK or what its core is built from.
+# TypeScript SDK or what its core is built from. NOC-344: it runs in
+# Chromium, Firefox and WebKit, one step each.
 #
 # The example app apps/tasks-ts: the same job runs the browser task list in
 # Chromium on the package built above, as a person uses it, on pull
@@ -180,13 +181,33 @@ jobs:
           node --test 'scripts/sdk-keys/*.test.mjs'
 
       # The TypeScript SDK as an app uses it, its worker and its database on
-      # OPFS, in Chromium; run even when a step above failed.
+      # OPFS, once in each engine (NOC-344), SDK_BROWSER_ENGINE naming it
+      # (scripts/sdk-browser/engine.mjs); each runs even when a step above
+      # failed, so a failing engine names itself in its step.
       - name: The TypeScript SDK in Chromium
         if: ${{ !cancelled() }}
         run: >-
           docker run --rm --ipc=host
           -v "$PWD:/work" -w /work
-          -e SDK_BROWSER_PREBUILT=1
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=chromium
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/*.test.mjs'
+
+      - name: The TypeScript SDK in Firefox
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=firefox
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/*.test.mjs'
+
+      - name: The TypeScript SDK in WebKit
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=webkit
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/sdk-browser/*.test.mjs'
 

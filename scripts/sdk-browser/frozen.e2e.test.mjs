@@ -5,7 +5,7 @@
 //
 // iOS first hides a tab when the person switches away, then freezes it.
 // The test does the same: it hides the owning page (its visibilityState
-// reads "hidden" and a visibilitychange event fires, as Chromium cannot
+// reads "hidden" and a visibilitychange event fires, as Playwright cannot
 // hide a page itself), then freezes it.
 //
 // How the freeze is emulated: what matters is that the owning page stops
@@ -22,8 +22,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -33,7 +33,7 @@ before(async () => {
   if (process.env.SDK_BROWSER_PREBUILT === "1") prebuilt();
   else build();
   server = await startServer({ port: 0 });
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

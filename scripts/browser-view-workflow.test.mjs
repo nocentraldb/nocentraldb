@@ -9,9 +9,10 @@
 // Chromium (scripts/sdk-keys/), built on the runner as the view's harness
 // is, whenever a pull request touches the SDK.
 //
-// NOC-176 slice 1: the same job runs the TypeScript SDK in Chromium
+// NOC-176 slice 1: the same job runs the TypeScript SDK
 // (scripts/sdk-browser/), its package built on the runner, whenever a pull
-// request touches the TypeScript SDK or the crate its core is built from.
+// request touches the TypeScript SDK or the crate its core is built from;
+// NOC-344: in Chromium, Firefox and WebKit, one step each.
 //
 // The example app apps/tasks-ts: the same job runs it in Chromium, on the
 // SDK built above, whenever a pull request touches the app or the SDK.
@@ -35,6 +36,8 @@ const KEYS_BUILD = "node scripts/sdk-keys/build.mjs";
 const KEYS_TESTS = "scripts/sdk-keys/*.test.mjs";
 const SDK_BUILD = "node scripts/sdk-browser/build.mjs";
 const SDK_TESTS = "scripts/sdk-browser/*.test.mjs";
+/** The engines the TypeScript SDK's browser tests run in (NOC-344). */
+const SDK_ENGINES = ["chromium", "firefox", "webkit"];
 const APP_TESTS = "apps/tasks-ts/e2e/*.e2e.mjs";
 const DEMO_BUILD = "node scripts/site-demo/build.mjs";
 const DEMO_TESTS = "scripts/site-demo/*.test.mjs";
@@ -179,10 +182,55 @@ runWorkflowChecks({
         },
         "no TypeScript SDK tests at all": (ctx) => {
           const all = jobSteps(ctx);
+          while (all.some((s) => s.run?.includes(SDK_TESTS))) {
+            all.splice(
+              all.findIndex((s) => s.run?.includes(SDK_TESTS)),
+              1,
+            );
+          }
+        },
+      },
+    },
+    {
+      name: "the TypeScript SDK's browser tests run in Chromium, Firefox and WebKit, one step each",
+      check: (ctx) => {
+        const all = steps(ctx);
+        const build = all.findIndex((s) => s.run?.includes(SDK_BUILD));
+        for (const engine of SDK_ENGINES) {
+          const test = all.findIndex(
+            (s) =>
+              s.run?.includes("docker run") &&
+              s.run.includes(SDK_TESTS) &&
+              s.run.includes(`SDK_BROWSER_ENGINE=${engine}`),
+          );
+          assert.ok(test > build, `the SDK's tests do not run in ${engine}`);
+          assert.match(
+            all[test].if ?? "",
+            /^\$\{\{ !cancelled\(\) \}\}$/,
+            `a failed step above skips the SDK's tests in ${engine}`,
+          );
+          assert.match(all[test].run, /SDK_BROWSER_PREBUILT=1/);
+        }
+      },
+      mutants: {
+        "no Firefox run": (ctx) => {
+          const all = jobSteps(ctx);
           all.splice(
-            all.findIndex((s) => s.run?.includes(SDK_TESTS)),
+            all.findIndex((s) => s.run?.includes("SDK_BROWSER_ENGINE=firefox")),
             1,
           );
+        },
+        "the WebKit run names no engine": (ctx) => {
+          const step = jobSteps(ctx).find((s) =>
+            s.run?.includes("SDK_BROWSER_ENGINE=webkit"),
+          );
+          step.run = step.run.replace("SDK_BROWSER_ENGINE=webkit", "X=1");
+        },
+        "the Chromium run skipped after a failure above": (ctx) => {
+          const step = jobSteps(ctx).find((s) =>
+            s.run?.includes("SDK_BROWSER_ENGINE=chromium"),
+          );
+          delete step.if;
         },
       },
     },
