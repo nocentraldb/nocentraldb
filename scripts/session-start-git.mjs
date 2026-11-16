@@ -1,14 +1,17 @@
 // Puts a cloud session's checkout back on HEAD at session start (NOC-52).
 //
 // A cloud session's container is restored from a snapshot taken when the
-// environment was built. Its checkout is the commit of that day. At session
-// start, HEAD is moved to the freshly fetched main without updating the index
-// or the working tree, and the ticket branch is checked out from there. The
-// old tree then sits staged over HEAD, ready to be committed as a revert.
+// environment was built. Its checkout is the commit of that day, and its local
+// main still points there. At session start, HEAD is moved to the freshly
+// fetched main without updating the index or the working tree, and the ticket
+// branch is checked out from there. The old tree then sits staged over HEAD,
+// ready to be committed as a revert. The clone is shallow (depth 50), so once
+// main is more than 50 commits past the snapshot, HEAD's history no longer
+// reaches the snapshot's commit (NOC-350).
 //
 // This script resets index and working tree to HEAD, but only when that loses
-// nothing: the index holds exactly the tree of a commit in HEAD's history, the
-// working tree matches the index, no file is untracked, and every
+// nothing: the index holds exactly the tree of a commit on HEAD or on a local
+// branch, the working tree matches the index, no file is untracked, and every
 // skip-worktree file (AGENTS.md with the setup script's cloud block) is its
 // indexed content plus an addition, which is kept on top of HEAD's version.
 // In any other case it changes nothing and says so. It runs only in cloud
@@ -38,9 +41,11 @@ const index = git("write-tree");
 if (!head.ok || !index.ok) process.exit(0);
 if (head.out === index.out) process.exit(0);
 
-const commits = git("log", "--format=%H %T", "HEAD").out.split("\n");
+const commits = git("log", "--format=%H %T", "HEAD", "--branches").out.split(
+  "\n",
+);
 const old = commits.find((line) => line.endsWith(` ${index.out}`));
-if (!old) leave("its tree is no commit in HEAD's history");
+if (!old) leave("its tree is no commit on HEAD or a local branch");
 const oldCommit = old.split(" ")[0];
 
 if (!git("diff", "--quiet").ok) leave("the working tree has unstaged changes");
