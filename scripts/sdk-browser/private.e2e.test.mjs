@@ -150,3 +150,35 @@ test("closing the owning tab of a private window: the copy goes with it where it
   assert.deepEqual(second.errors, []);
   await context.close();
 });
+
+/** Hides `page` as switching away from it does (frozen.e2e.test.mjs does the same): its visibilityState reads "hidden", and visibilitychange fires. */
+const hide = (page) =>
+  page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => "hidden",
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+
+test("hiding the owning tab of a private window: the visible tab takes over, and the copy goes with the hidden one where it is in memory", async () => {
+  const context = await browser.newContext();
+  const first = await tab(context);
+  const second = await tab(context);
+  await createSpace(first.page);
+  await hide(first.page);
+  const after = await settled(second.page);
+  // Both tabs are still open; only the owner changed (NOC-332).
+  assert.equal(first.page.isClosed(), false);
+  if (inMemory) {
+    assert.equal(after.spaces, 0);
+    assert.deepEqual(after.titles, []);
+    assert.equal(after.durability.unconfirmed, 0);
+  } else {
+    assert.equal(after.spaces, 1);
+    assert.deepEqual(after.titles, ["before the handover"]);
+  }
+  assert.deepEqual(first.errors, []);
+  assert.deepEqual(second.errors, []);
+  await context.close();
+});
