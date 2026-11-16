@@ -9,7 +9,7 @@ use ncdb_plugin::Plugin;
 use crate::error::{Error, ErrorCode};
 use crate::keys::Keys;
 
-/// The options of [`Db::open`]: the text of the app's `model.lock.json`,
+/// The options of [`Db::open`](crate::Db::open): the text of the app's `model.lock.json`,
 /// where the database lives, and the relay to sync with.
 #[derive(Clone)]
 pub struct OpenOptions {
@@ -40,7 +40,7 @@ pub struct OpenOptions {
 
 impl OpenOptions {
     /// Options to open a database from the text of `model.lock.json`.
-    /// [`Db::open`] refuses them with `InvalidValue` until they name where
+    /// [`Db::open`](crate::Db::open) refuses them with `InvalidValue` until they name where
     /// the database lives, with [`path`](OpenOptions::path) or
     /// [`in_memory`](OpenOptions::in_memory) (RFC 0009, "Open and close",
     /// **Where the database lives.**). Without [`relay`](OpenOptions::relay),
@@ -85,7 +85,7 @@ impl OpenOptions {
     /// letter case. The new database draws a new account key, with the
     /// next statement number, and certifies its member with it; the
     /// account's fingerprint stays the same, and the database is a member
-    /// of nothing until other members add it. [`Db::open`] fails with
+    /// of nothing until other members add it. [`Db::open`](crate::Db::open) fails with
     /// `InvalidValue`, and creates nothing, when they are not twelve words
     /// of the list or their checksum fails, or when the database exists.
     pub fn recover(mut self, words: &str) -> OpenOptions {
@@ -138,7 +138,7 @@ impl OpenOptions {
     /// agent's [`Members::add`](crate::Members::add) signs one with the
     /// agent's own member key, which ties it to the agent's account. It
     /// creates no space of its own: its parent adds it to the spaces it
-    /// works in. [`Db::open`] refuses it with `InvalidValue` together with
+    /// works in. [`Db::open`](crate::Db::open) refuses it with `InvalidValue` together with
     /// [`agent`](OpenOptions::agent), [`pairing`](OpenOptions::pairing) or
     /// [`recover`](OpenOptions::recover).
     pub fn sub_agent(mut self) -> OpenOptions {
@@ -176,7 +176,7 @@ impl OpenOptions {
     }
 
     /// Keeps the database and its keys in memory, for tests: they are gone
-    /// when the [`Db`] is dropped (RFC 0009, "The Rust SDK", **Where the
+    /// when the [`Db`](crate::Db) is dropped (RFC 0009, "The Rust SDK", **Where the
     /// database lives.**).
     pub fn in_memory(mut self) -> OpenOptions {
         self.in_memory = true;
@@ -188,7 +188,7 @@ impl OpenOptions {
     /// "Handing plugins to the core"). A plugin field of the lock folds
     /// through its code; one whose type and rule no plugin given here
     /// implements parks, and a write to it is refused with `UnknownType`.
-    /// A plugin the lock does not name is ignored. [`Db::open`] refuses two
+    /// A plugin the lock does not name is ignored. [`Db::open`](crate::Db::open) refuses two
     /// plugins of one namespace, or a plugin of the namespace `ncdb`, with
     /// `InvalidValue`.
     pub fn plugin(mut self, plugin: Plugin) -> OpenOptions {
@@ -199,7 +199,7 @@ impl OpenOptions {
     /// The one relay the database syncs with (RFC 0009, "Sync and status",
     /// **The relay connection.**), by
     /// its URL: `wss://`, WebSocket over TLS verified against the
-    /// platform's trust store, or `ws://` on a local network. [`Db::open`]
+    /// platform's trust store, or `ws://` on a local network. [`Db::open`](crate::Db::open)
     /// refuses any other URL with `InvalidValue`. In a browser, the relay
     /// URL is `wss://`, except for localhost while developing: a page
     /// served over `https://` cannot open `ws://` (RFC 0009, NOC-245).
