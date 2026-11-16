@@ -77,7 +77,7 @@ fn set_writes_a_target_in_any_space_and_replaces_what_the_copy_holds() {
     assert!(first.replaces.is_empty());
     field.apply(&mut state, &first);
 
-    // Decision 19: the writer's own space is a space like any other.
+    // RFC 0004, "The value and its encoding": the writer's own space is a space like any other.
     let second = field.set(
         &state,
         op(2),

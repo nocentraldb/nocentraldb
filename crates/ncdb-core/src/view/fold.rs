@@ -528,7 +528,8 @@ pub(super) fn open_personal(
 /// The column value of a reference's winning write: the target's space id
 /// followed by its object id, 32 bytes, as stored and whatever its state
 /// (RFC 0006, "Declared indexes"). NULL when no write is live, the reference is
-/// cleared, or its value does not fit (RFC 0004, decision 17).
+/// cleared, or its value does not fit (RFC 0004, "The value and its
+/// encoding").
 fn reference_column(winner: Option<Entry>) -> Sql {
     winner.map_or(Sql::Null, |entry| reference_sql(&entry.value))
 }
