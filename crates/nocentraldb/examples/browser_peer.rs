@@ -21,16 +21,20 @@
 //! - `synced`: `ok` once connected with no change unconfirmed.
 //! - `holds <space> <task>`: `ok` once the space holds the task.
 //! - `update <space> <task>`: this device's concurrent write; `ok`.
+//! - `refer <space> <task> <target space> <target>`: sets the task's
+//!   `customer` reference to the target; `refer <space> <task> null`
+//!   clears it; `ok`.
 //! - `read <space> <task>...`: the tasks as JSON, a task's `project` link
-//!   as its object id; `ok <json>`.
+//!   as its object id and its `customer` reference as `{"space", "id"}`;
+//!   `ok <json>`.
 
 use std::io::{BufRead, Write};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use nocentraldb::{
-    AddMember, Connection, Db, ErrorCode, Invitation, ObjectId, OpenOptions, Role, Space, SpaceId,
-    Value,
+    AddMember, Connection, Db, ErrorCode, Invitation, ObjectId, OpenOptions, Reference, Role,
+    Space, SpaceId, Value,
 };
 
 /// How long a command waits for syncing.
@@ -117,15 +121,29 @@ fn read(project: &Space, id: ObjectId) -> Result<String, String> {
         Some(id) => json(&id.to_string()),
         None => "null".into(),
     };
+    // A reference reads as a Reference; one written as anything else is
+    // refused here as another kind (NOC-354).
+    let customer = match object
+        .get::<Reference>("customer")
+        .map_err(|e| format!("customer: {e}"))?
+    {
+        Some(reference) => format!(
+            "{{\"space\":{},\"id\":{}}}",
+            json(&reference.space.to_string()),
+            json(&reference.id.to_string())
+        ),
+        None => "null".into(),
+    };
     Ok(format!(
-        "{{\"id\":{},\"deleted\":{},\"title\":{},\"status\":{},\"priority\":{},\"tags\":[{}],\"project\":{}}}",
+        "{{\"id\":{},\"deleted\":{},\"title\":{},\"status\":{},\"priority\":{},\"tags\":[{}],\"project\":{},\"customer\":{}}}",
         json(&object.id().to_string()),
         object.deleted(),
         text("title")?,
         text("status")?,
         priority,
         tags.join(","),
-        project
+        project,
+        customer
     ))
 }
 
@@ -219,6 +237,20 @@ fn command(db: &Db, line: &str) -> Result<String, String> {
                 Ok(())
             }))
             .map_err(|e| format!("{e}"))?;
+            Ok(String::new())
+        }
+        ["refer", project, id, target @ ..] => {
+            let project = space(db, project)?;
+            let id = task(id)?;
+            let value = match target {
+                ["null"] => Value::clear(),
+                [target_space, target] => Value::from(Reference::new(
+                    SpaceId::from_str(target_space).map_err(|e| format!("{e}"))?,
+                    task(target)?,
+                )),
+                _ => return Err(format!("unknown command: {line}")),
+            };
+            now(project.update("tasks", id, [("customer", value)])).map_err(|e| format!("{e}"))?;
             Ok(String::new())
         }
         ["read", project, ids @ ..] => {
