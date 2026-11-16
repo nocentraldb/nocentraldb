@@ -29,6 +29,7 @@ import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 import { browserPage, type Platform, tabCore } from "./tabs.ts";
 import * as texts from "./texts.ts";
+import { startWorker } from "./workerHost.ts";
 
 /** The core, as the SDK reaches it: one CBOR request, one CBOR answer, and the events it sends unasked. Internal; a test passes a fake. */
 export interface Core {
@@ -47,49 +48,6 @@ type Id = string;
 const NAME = /^[a-z0-9_-]{1,64}$/;
 
 const DESCRIBE = Symbol.for("nocentraldb.model.describe");
-
-/** The worker that runs the core, shipped next to this module. */
-const startWorker = (): Core => {
-  const worker = new Worker(new URL("./worker.js", import.meta.url), {
-    type: "module",
-    name: "nocentraldb",
-  });
-  const waiting: ((answer: Uint8Array) => void)[] = [];
-  let failed: Error | undefined;
-  const failing: ((error: Error) => void)[] = [];
-  let listener: ((event: Uint8Array) => void) | undefined;
-  // The worker sends `{answer}` for each request, in order, and `{event}`
-  // for what the core reports unasked.
-  worker.onmessage = (
-    message: MessageEvent<{ answer?: Uint8Array; event?: Uint8Array }>,
-  ) => {
-    const { answer, event } = message.data;
-    if (event !== undefined) {
-      listener?.(event);
-      return;
-    }
-    failing.shift();
-    if (answer !== undefined) waiting.shift()?.(answer);
-  };
-  worker.onerror = (event) => {
-    failed = new NcError("storageFailed", texts.workerFailed(event.message));
-    for (const fail of failing.splice(0)) fail(failed);
-    waiting.length = 0;
-  };
-  return {
-    call: (request) =>
-      new Promise((resolve, reject) => {
-        if (failed) return reject(failed);
-        waiting.push(resolve);
-        failing.push(reject);
-        worker.postMessage(request, [request.buffer]);
-      }),
-    terminate: () => worker.terminate(),
-    listen: (given) => {
-      listener = given;
-    },
-  };
-};
 
 /** Opens the database in the worker the package ships, or, when another tab owns it, through that tab (NOC-177; RFC 0006, "The browser"). */
 export const connectWorker = async (options: OpenOptions): Promise<Db> => {
