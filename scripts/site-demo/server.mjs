@@ -73,7 +73,13 @@ export const startServer = ({ port = 0, root = DIST } = {}) =>
       const { port: bound } = server.address();
       done({
         url: `http://localhost:${bound}`,
-        close: () => new Promise((closed) => server.close(closed)),
+        // A connection a browser left open, even in the middle of a
+        // request, would keep close() and the test file waiting (NOC-341).
+        close: () =>
+          new Promise((closed) => {
+            server.close(closed);
+            server.closeAllConnections();
+          }),
       });
     });
   });

@@ -9,10 +9,13 @@
 // on the SDK built before (SDK_BROWSER_PREBUILT=1). A missing Chromium
 // fails it: install it with `pnpm exec playwright install chromium`.
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, before } from "node:test";
 import { chromium } from "playwright";
 import { build } from "./build.mjs";
 import { startServer } from "./server.mjs";
+import { endsWhenDone, test } from "./teardown.mjs";
+
+endsWhenDone();
 
 let server;
 let browser;
@@ -24,8 +27,11 @@ before(async () => {
 });
 
 after(async () => {
-  await browser?.close();
-  await server?.close();
+  try {
+    await browser?.close();
+  } finally {
+    await server?.close();
+  }
 });
 
 /** The demo's state, as its status element says it. */

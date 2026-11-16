@@ -7,10 +7,13 @@
 // focused. Not part of `pnpm gates`; `repo:site-demo` and the workflow
 // browser-view.yml run it, as demo.e2e.test.mjs.
 import assert from "node:assert/strict";
-import { after, before, test } from "node:test";
+import { after, before } from "node:test";
 import { build } from "./build.mjs";
 import { launch } from "./cdp.mjs";
 import { startServer } from "./server.mjs";
+import { endsWhenDone, test } from "./teardown.mjs";
+
+endsWhenDone();
 
 let server;
 
