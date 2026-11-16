@@ -1464,6 +1464,13 @@
       "when": "A membership call or a write by a member that was removed from the space, or that the relay answered not_member or removed_member for."
     },
     {
+      "id": "error.noPersistentStorage",
+      "kind": "error",
+      "code": "storageUnavailable",
+      "text": "this browser window offers no storage that outlives its tabs (no OPFS), as a private window of Safari or Firefox; open the app in a normal window",
+      "when": "nc.open in a browser window without OPFS, such as a private window of Safari or Firefox, where the database could live only in one tab's memory and would be lost with it."
+    },
+    {
       "id": "error.noPlugin",
       "kind": "error",
       "code": "unknownType",
