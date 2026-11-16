@@ -10,17 +10,23 @@
 //   on a line marked `// notation`; a comment is no text;
 // - every core text is used, as `texts::NAME` or `texts::name`.
 //
-// The gate reads the files of `CORE_PATHS.read`: the lock's refusals first
-// (pm, NOC-342, the first of two PRs), then all of crates/ncdb-core/src.
+// The gate reads all of crates/ncdb-core/src, outside its tests and the
+// generated module.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { CLI_STRAYS, checkCode, cliUse, rustModule } from "./texts.mjs";
+import { join, relative } from "node:path";
+import {
+  CLI_STRAYS,
+  checkCode,
+  cliUse,
+  rustFiles,
+  rustModule,
+} from "./texts.mjs";
 
 /** The core's generated module, and the code the gate reads, relative to the root. */
 export const CORE_PATHS = {
+  src: "crates/ncdb-core/src",
   module: "crates/ncdb-core/src/texts.rs",
-  read: ["crates/ncdb-core/src/model_lock/refusal.rs"],
 };
 
 /**
@@ -29,8 +35,12 @@ export const CORE_PATHS = {
  */
 const coreStrays = () => CLI_STRAYS.filter(([, what]) => what === "a text");
 
-/** The files of the core's code the gate reads, as [path, source]. Stub for the red step. */
-export const coreFiles = (_root) => [];
+/** The files of the core's code the gate reads, as [path, source], outside its tests. */
+export const coreFiles = (root) =>
+  rustFiles(join(root, CORE_PATHS.src)).map(([path, source]) => [
+    relative(root, path),
+    source,
+  ]);
 
 /** The core's module, crates/ncdb-core/src/texts.rs, of the `core` texts. */
 export const generateCore = (texts) =>
@@ -62,10 +72,6 @@ export const coreGate = (root, texts, write) => {
     problems.push(
       `${CORE_PATHS.module} differs from texts/texts.json: run node scripts/texts.mjs --write`,
     );
-  const files = CORE_PATHS.read.map((path) => [
-    path,
-    readFileSync(join(root, path), "utf8"),
-  ]);
-  problems.push(...checkCoreCode(files, texts));
+  problems.push(...checkCoreCode(coreFiles(root), texts));
   return problems;
 };
