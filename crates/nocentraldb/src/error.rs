@@ -51,6 +51,11 @@ pub enum ErrorCode {
     /// No platform keystore is reachable and the app named no key file;
     /// the message names `key_file` (RFC 0009, "Open and close").
     KeyStoreUnavailable,
+    /// The browser window offers no storage that outlives its tabs, as a
+    /// private window of Safari or Firefox has no OPFS: the database does
+    /// not open there, since its copy could live only in one tab's memory
+    /// (Carsten, 2026-11-16, NOC-347).
+    StorageUnavailable,
     /// The invitation's account is new to this database, and no
     /// fingerprint of it was passed to `members().add`. The error's
     /// [`fingerprint`](Error::fingerprint) is the account's.

@@ -5,7 +5,7 @@
 
 /** What this copy would lose if the browser deleted it now (RFC 0006, "What the SDK reports"). */
 export interface Durability {
-  /** `"persistent"`: native, or the browser keeps the copy; `"best-effort"`: the browser may delete it; `"temporary"`: in memory, where OPFS is missing. */
+  /** `"persistent"`: native, or the browser keeps the copy; `"best-effort"`: the browser may delete it; `"temporary"`: in memory, as Node.js's `inMemory` opens it; a browser never reports it. */
   readonly storage: "persistent" | "best-effort" | "temporary";
   /** This member's changes the relay has not confirmed: they exist only on this device. */
   readonly unconfirmed: number;

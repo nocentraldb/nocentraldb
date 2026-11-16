@@ -9,9 +9,10 @@
 //! only for a database that did not exist (`keys::browser`); and how
 //! durable the copy is. A name is 1 to 64 characters of `a`–`z`, `0`–`9`,
 //! `-` and `_`. Where OPFS is missing, as in a private window of Firefox or
-//! WebKit, the database runs in memory and the copy is temporary. An open
-//! whose pool another tab holds fails with `StorageFailed`, until the owner
-//! tab is built (NOC-176).
+//! WebKit, the open fails with `StorageUnavailable`: a copy in memory would
+//! live only as long as the tab that owns it, and go with that tab
+//! (Carsten, 2026-11-16, NOC-347). An open whose pool another tab holds
+//! fails with `StorageFailed`, until the owner tab is built (NOC-176).
 
 #[cfg(test)]
 mod tests;
@@ -69,21 +70,25 @@ pub(crate) fn release() -> bool {
 }
 
 /// Prepares the database named `name` in this dedicated worker: installs
-/// the VFS, reserves its slots, and takes its keys from IndexedDB.
+/// the VFS, reserves its slots, and takes its keys from IndexedDB. Where
+/// OPFS is missing it refuses with `StorageUnavailable`, before it creates
+/// keys.
 #[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn place(name: &str, new: impl FnOnce() -> Keys) -> Result<Placed, Error> {
     valid_name(name)?;
-    let vfs = install().await.map_err(refused)?;
+    if install().await.map_err(refused)? == Vfs::Memory {
+        return Err(Error::new(
+            ErrorCode::StorageUnavailable,
+            crate::texts::error::NO_PERSISTENT_STORAGE,
+        ));
+    }
     let path = format!("/{name}/{FILE}");
     let existed = exists(&path).await.map_err(refused)?;
-    if vfs == Vfs::Opfs {
-        reserve(SLOTS).await.map_err(refused)?;
-    }
+    reserve(SLOTS).await.map_err(refused)?;
     let keys = load_or_create(name, existed, new).await?;
-    let storage = match vfs {
-        Vfs::Opfs if persisted().await => Storage::Persistent,
-        Vfs::Opfs => Storage::BestEffort,
-        Vfs::Memory => Storage::Temporary,
+    let storage = match persisted().await {
+        true => Storage::Persistent,
+        false => Storage::BestEffort,
     };
     Ok(Placed {
         path,

@@ -96,7 +96,7 @@ await db.close();
 
 **Spaces of another model.** A space records the `model.id` it was created with in its genesis ([RFC 0008, "What it names"](0008-membership.md#what-it-names)). `nc.open` does not fail because one space belongs to another model. That space's changes are not folded, nothing is written into it, and `db.spaces.get` on it throws `spaceOfAnotherModel`, an error that names both model ids, as NOC-57 builds it. `db.spaces.list()` shows the space with that state, so an app can tell its user which spaces it cannot open.
 
-**No persistent storage** is not an error. A browser copy opens as `best-effort` or, where OPFS is missing, as `temporary` in memory, and `db.durability` reports it ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
+**Persistent storage the browser has not granted** is not an error: a browser copy opens as `best-effort`, and `db.durability` reports it ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). **No OPFS at all**, as in a private window of Firefox or Safari, is: `nc.open` fails with `storageUnavailable`, since the copy could live only in one tab's memory (Carsten, 2026-11-16, NOC-347). A full disk or quota fails a write with `storageFull`, never silently ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
 
 **The relay URL in a browser** is `wss://`, except for `ws://localhost` while developing: a page served over `https://` cannot open a `ws://` connection, and the browser refuses it. The SDK adds no rule of its own; a `ws://` URL the browser refuses leaves the database offline.
 
@@ -553,6 +553,7 @@ The SDK throws one error class, `nc.Error`, with a string `code`, the ids it con
 | `storageFull` | writes, `nc.open` | The disk or the browser's quota is full. |
 | `storageFailed` | writes, reads, `nc.open`, `Db::open` | Any other storage failure, such as a damaged database file, or an existing database whose key file or keystore entry is gone or does not read as a key record ([The Rust SDK](#the-rust-sdk)). Freeing space would not help, so it is not `storageFull`, at the cost of one more code. |
 | `keyStoreUnavailable` | `nc.open` in Node.js, `Db::open` | No platform keystore is reachable and the app named no key file. The message names the key-file option, `keyFile` or `key_file` ([Open and close](#open-and-close)). |
+| `storageUnavailable` | `nc.open` in a browser | The browser window has no OPFS, as a private window of Firefox or Safari: the database would live only in one tab's memory, so it does not open, and the app tells its user to use a normal window (Carsten, 2026-11-16, NOC-347; [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). |
 | `closed` | every call | The database was closed. |
 | `notFound` | `space.update`, `delete`, `restore`, `db.spaces.get`, writes, queries | The copy holds no such object or space, or a call names a collection, field or index the lock does not have. TypeScript catches the latter when it compiles; Rust, which names them by text, cannot. |
 | `personKeyNotHeld` | writes | A personal field's person has a person key this device does not hold yet; the app retries once sync has fetched it (Carsten, 2026-11-12, NOC-255; [Personal fields](#personal-fields)). |
@@ -714,6 +715,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `lockOutOfDate`, `modelRefused`, `spaceOfAnotherModel` | Model errors | [RFC 0005, "Two checks: at build and on the device"](0005-schema-and-model-lock.md#two-checks-at-build-and-on-the-device) |
 | `storageFull`, `storageFailed`, `closed`, `notFound`, `cursorOfAnotherModel` | Errors of the view | [RFC 0006, "Ordered pages"](0006-local-view.md#ordered-pages) |
 | `keyStoreUnavailable` | Error of opening: no platform keystore and no key file | [RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) |
+| `storageUnavailable` | Error of opening in a browser window without OPFS | [RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports) |
 | `invalidValue`, `deprecated`, `noPerson`, `personKeyNotHeld` | Errors of a write | [RFC 0005, "Data from a newer model"](0005-schema-and-model-lock.md#data-from-a-newer-model) |
 | `unknownType` | Error of a write to a plugin field whose type is not registered | [RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered) |
 | `notAllowed`, `notMember`, `lastAdmin`, `unknownAccount`, `invalidCertificate`, `alreadyMember` | Errors of rights and membership | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |

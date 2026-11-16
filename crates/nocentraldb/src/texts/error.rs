@@ -262,6 +262,12 @@ pub(crate) const NO_INDEXED_DB: &str =
 pub(crate) const NO_LONGER_MEMBER: &str =
     "the member is no longer a member of the space";
 
+/// `noPersistentStorage` (storageUnavailable): nc.open in a browser window
+/// without OPFS, such as a private window of Safari or Firefox, where the
+/// database could live only in one tab's memory and would be lost with it.
+pub(crate) const NO_PERSISTENT_STORAGE: &str =
+    "this browser window offers no storage that outlives its tabs (no OPFS), as a private window of Safari or Firefox; open the app in a normal window";
+
 /// `noPlugin` (unknownType): A write to a plugin field whose plugin type no
 /// plugin given to OpenOptions::plugin implements.
 pub(crate) fn no_plugin(name: impl std::fmt::Display, collection: impl std::fmt::Display, type_id: impl std::fmt::Display, rule: impl std::fmt::Display) -> String {

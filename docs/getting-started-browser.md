@@ -10,7 +10,7 @@ For a finished page that does the first half of this, see [apps/tasks-ts](../app
 
 - Rust, as `rust-toolchain.toml` pins it, to compile the SDK's core to WebAssembly. `rustup` installs it on the first `cargo` call.
 - Node.js 24 or later and pnpm.
-- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window; Playwright's WebKit is not Safari, and no test is skipped in any of them.
+- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window, and the owner handover in a private window too; Playwright's WebKit is not Safari, and no test is skipped in any of them.
 - A clone of this repository. Until the SDK is published to npm, you build your app inside it, in a folder under `apps/`, as [apps/tasks-ts](../apps/tasks-ts/README.md) does: the SDK and the schema build come from the clone. Run every command below from the clone's root.
 
 ## 1. Make the app
@@ -133,7 +133,26 @@ The database lives in the origin's private file system (OPFS), under the `name` 
 
 The keys are not in OPFS. A page reaches no platform keystore, so the SDK keeps them in IndexedDB, in a database of the same name, sealed under a non-extractable WebCrypto key: the page can use that key, but no code can read its bytes ([RFC 0003, "The member key"](rfc/0003-keys-and-cryptography.md#the-member-key)).
 
-The browser may evict an origin's data when storage runs low, and Safari deletes a site's data after seven days without a visit unless it was added to the home screen. An eviction takes the database and its keys together, and with them every change the relay has not confirmed yet. `nc.open` asks the browser for persistent storage, unless you open with `persistentStorage` set to `"on-request"` and ask later; `db.durability` reports what is at risk, as step 12 shows ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A private window of Firefox or Safari has no OPFS: the database then lives in memory until the window closes, and `db.durability` says `"temporary"`.
+The browser may evict an origin's data when storage runs low, and Safari deletes a site's data after seven days without a visit unless it was added to the home screen. An eviction takes the database and its keys together, and with them every change the relay has not confirmed yet. `nc.open` asks the browser for persistent storage, unless you open with `persistentStorage` set to `"on-request"` and ask later; `db.durability` reports what is at risk, as step 12 shows ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A private window of Firefox or Safari has no OPFS, and there `nc.open` fails with `storageUnavailable`. The database could live there only in the memory of the tab that owns it (step 8), and would go with that tab when it closed or was hidden, together with every change the relay had not confirmed. So catch the error and tell the user that your app does not work in a private window; [Browser apps and durability](browser-durability.md#private-window) has a text for it:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+try {
+  const db = await nc.open({ model, lock, name: "tasks" });
+  console.log(`spaces: ${(await db.spaces.list()).length}`);
+} catch (error) {
+  if (!(error instanceof nc.Error) || error.code !== "storageUnavailable") {
+    throw error;
+  }
+  document.body.textContent =
+    "Tasks does not work in a private window. Open it in a normal window.";
+}
+```
+
+Chromium has OPFS in a private window, so the database opens there; it is deleted when the window closes.
 
 ## 4. Create a space and write
 
@@ -415,7 +434,7 @@ const rebuild = db.view.current().rebuild;
 if (rebuild !== null) console.log(`rebuilding: ${rebuild.folded} of ${rebuild.total}`);
 ```
 
-`storage` is `"persistent"`, `"best-effort"` (the browser may delete the copy) or `"temporary"` (in memory, in a private window). `atRisk` is true while changes are unconfirmed and storage is not persistent. [Browser apps and durability](browser-durability.md) says what each browser does, and what to tell your users. `db.view` reports a rebuild of the view; in the browser it reports `rebuild: null` for now, because the browser runs no rebuild yet.
+`storage` is `"persistent"` or `"best-effort"` (the browser may delete the copy); `"temporary"`, a database in memory, does not occur in a browser. `atRisk` is true while changes are unconfirmed and storage is not persistent. [Browser apps and durability](browser-durability.md) says what each browser does, and what to tell your users. `db.view` reports a rebuild of the view; in the browser it reports `rebuild: null` for now, because the browser runs no rebuild yet.
 
 ## 13. Follow your spaces, and leave one
 
