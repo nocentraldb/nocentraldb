@@ -11,6 +11,7 @@ mod erasures;
 mod fields;
 mod find;
 mod members;
+mod refs;
 mod reports;
 mod spaces;
 mod sync;
