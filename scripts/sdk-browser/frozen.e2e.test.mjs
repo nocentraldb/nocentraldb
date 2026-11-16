@@ -23,7 +23,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
 import { build, LOCK, prebuilt } from "./build.mjs";
-import { launch } from "./engine.mjs";
+import { engine, launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -129,8 +129,20 @@ const hide = (page) =>
     document.dispatchEvent(new Event("visibilitychange"));
   });
 
+/** How long a frozen owner stays frozen, in milliseconds. */
+const FROZEN = 20000;
+
+/**
+ * Whether the engine lets the visible tab take over while the owner is
+ * still frozen. WebKit does not (NOC-352; docs/getting-started-browser.md,
+ * "Safari"): a worker gives its OPFS handles back only while its page
+ * runs, so the visible tab opens the database once the frozen one runs
+ * again. Until then the write waits; it never fails.
+ */
+const takesOverWhileFrozen = engine !== "webkit";
+
 /** Freezes `page`'s main thread for `ms`, as a phone freezes a hidden tab: it handles no message, and keeps the Web Lock. Does not wait. */
-const freeze = (page, ms = 20000) => {
+const freeze = (page, ms = FROZEN) => {
   page
     .evaluate((ms) => {
       const end = Date.now() + ms;
@@ -181,6 +193,23 @@ const outcomeWithin = async (page, ms) => {
   }
 };
 
+/**
+ * Asserts that the write `page` started at `started` (Node's clock) is
+ * written within `ms` of the owner's freeze, or, in an engine that takes
+ * over only once the owner runs again, that it waits without failing until
+ * then and is written within `ms` after it.
+ */
+const writtenAfterFreeze = async (page, started, ms) => {
+  if (takesOverWhileFrozen) {
+    assert.equal(await outcomeWithin(page, ms), "written");
+    return;
+  }
+  const thawed = started + FROZEN;
+  const early = await outcomeWithin(page, Math.max(0, thawed - Date.now()));
+  assert.ok(early === "written" || early === "pending", early);
+  assert.equal(await outcomeWithin(page, ms), "written");
+};
+
 test("a write from a tab whose owner is frozen is written, and that tab sees it", async () => {
   const context = await browser.newContext();
   const owner = await tab(context);
@@ -188,9 +217,10 @@ test("a write from a tab whose owner is frozen is written, and that tab sees it"
   const space = await createTask(owner.page, "before");
   await handle(writer.page, space);
   await hide(owner.page);
+  const started = Date.now();
   freeze(owner.page);
   await startWrite(writer.page, "while frozen");
-  assert.equal(await outcomeWithin(writer.page, 5000), "written");
+  await writtenAfterFreeze(writer.page, started, 5000);
   await eventually(
     async () =>
       (await titles(writer.page)).includes("while frozen") ||
@@ -207,11 +237,14 @@ test("a write from a tab whose owner froze and then closed is written exactly on
   const space = await createTask(owner.page, "before");
   await handle(writer.page, space);
   await hide(owner.page);
+  const started = Date.now();
   freeze(owner.page);
   await startWrite(writer.page, "frozen, then closed");
   await new Promise((resolve) => setTimeout(resolve, 500));
-  await owner.page.close();
-  assert.equal(await outcomeWithin(writer.page, 10000), "written");
+  // In WebKit the page closes only once its freeze ends.
+  const closing = owner.page.close();
+  await writtenAfterFreeze(writer.page, started, 10000);
+  await closing;
   const got = await titles(writer.page);
   assert.equal(
     got.filter((title) => title === "frozen, then closed").length,
