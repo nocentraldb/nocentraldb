@@ -4,17 +4,20 @@
 // (NOC-329; the owner's decision of 2026-11-15). This script generates the
 // Rust module the SDK reads them from, crates/nocentraldb/src/texts/, one
 // file per kind of text, and the one the `ncdb` command line reads its own
-// from, crates/ncdb/src/texts.rs (kind `cli`, T5), and the TypeScript
+// from, crates/ncdb/src/texts.rs (kind `cli`, T5), the TypeScript
 // SDK's, packages/sdk/src/texts.ts (kind `ts`, T3, scripts/texts-ts.mjs), and
-// checks for the gate (task repo:texts):
+// the core's, crates/ncdb-core/src/texts.rs (kind `core`, T6,
+// scripts/texts-core.mjs), and checks for the gate (task repo:texts):
 //
 // - the file: each entry has an id (`<kind>.<name>`), a kind, a text and when
 //   it shows, and a notice or an error its code; ids are unique; a notice's
 //   name is its code, a NoticeCode, and every NoticeCode has its notice; an
 //   error's code names the ErrorCode it is returned with, or several,
 //   separated by ` | `; a part is a piece of an error's text, with no code,
-//   and so is a text of the command line, of kind `cli`; a
-//   text holds no braces but its placeholders, `{name}` or `{name:?}`; the
+//   and so is a text of the command line, of kind `cli`, and of the core, of
+//   kind `core`; a text holds no braces but its placeholders, `{name}` or
+//   `{name:?}`, and a brace written as Rust writes it, doubled, `{{` or
+//   `}}`, which a ts text does not hold; the
 //   entries are sorted by id and the file is written one field per line, as
 //   `JSON.stringify(file, null, 2)` writes it, so that `git diff` shows each
 //   change to a text readably (the owner reviews the texts from git diff:
