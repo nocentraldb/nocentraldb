@@ -12,7 +12,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
 
-/** Starts Chromium; resolves to { tab, window, close }. */
+/** How long Chromium has to say where it listens, or to answer a call. */
+const PATIENCE_MS = 30_000;
+
+/**
+ * Starts Chromium; resolves to { tab, window, close, pid }. Chromium runs in
+ * a process group of its own, and close() ends the whole group, so no
+ * renderer is left holding the pipe this process reads, which would keep
+ * the test file running after its tests (NOC-341).
+ */
 export const launch = async () => {
   const profile = mkdtempSync(join(tmpdir(), "site-demo-cdp-"));
   const browser = spawn(
@@ -26,26 +34,77 @@ export const launch = async () => {
       "--no-sandbox",
       "about:blank",
     ],
-    { stdio: ["ignore", "ignore", "pipe"] },
+    { stdio: ["ignore", "ignore", "pipe"], detached: true },
   );
-  const endpoint = await new Promise((resolve, reject) => {
-    let out = "";
-    browser.stderr.on("data", (chunk) => {
-      out += chunk;
-      const found = out.match(/ws:\/\/\S+/);
-      if (found) resolve(found[0]);
-    });
-    browser.on("exit", (code) =>
-      reject(new Error(`Chromium ended (${code}): ${out}`)),
-    );
-  });
-  const socket = new WebSocket(endpoint);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener("open", resolve, { once: true });
-    socket.addEventListener("error", reject, { once: true });
-  });
-  let last = 0;
+  const exited = new Promise((resolve) => browser.once("exit", resolve));
+  const running = () =>
+    browser.exitCode === null && browser.signalCode === null;
+  /** Sends `signal` to Chromium's process group, which may have ended. */
+  const signal = (name) => {
+    try {
+      process.kill(-browser.pid, name);
+    } catch {}
+  };
+  let socket;
   const pending = new Map();
+  /** Fails every call still waiting for an answer. */
+  const fail = (why) => {
+    for (const call of pending.values()) call.reject(new Error(why));
+    pending.clear();
+  };
+  let closing;
+  const close = () => {
+    closing ??= (async () => {
+      fail("Chromium was closed");
+      socket?.close();
+      if (running()) {
+        signal("SIGTERM");
+        const timer = setTimeout(() => signal("SIGKILL"), 5000);
+        await exited;
+        clearTimeout(timer);
+      }
+      // Its renderers and helpers, should one outlive it.
+      signal("SIGKILL");
+      browser.stderr.destroy();
+      rmSync(profile, { recursive: true, force: true });
+    })();
+    return closing;
+  };
+  exited.then((code) => fail(`Chromium ended (${code ?? browser.signalCode})`));
+
+  try {
+    const endpoint = await new Promise((resolve, reject) => {
+      let out = "";
+      const timer = setTimeout(
+        () => reject(new Error(`Chromium did not start: ${out}`)),
+        PATIENCE_MS,
+      );
+      browser.stderr.on("data", (chunk) => {
+        out += chunk;
+        const found = out.match(/ws:\/\/\S+/);
+        if (found) {
+          clearTimeout(timer);
+          resolve(found[0]);
+        }
+      });
+      exited.then((code) => {
+        clearTimeout(timer);
+        reject(new Error(`Chromium ended (${code}): ${out}`));
+      });
+    });
+    socket = new WebSocket(endpoint);
+    await new Promise((resolve, reject) => {
+      socket.addEventListener("open", resolve, { once: true });
+      socket.addEventListener("error", reject, { once: true });
+    });
+  } catch (error) {
+    await close();
+    throw error;
+  }
+  socket.addEventListener("close", () =>
+    fail("Chromium's DevTools connection closed"),
+  );
+  let last = 0;
   socket.addEventListener("message", (event) => {
     const message = JSON.parse(event.data);
     const call = pending.get(message.id);
@@ -56,10 +115,27 @@ export const launch = async () => {
   });
   const send = (method, params = {}, sessionId = undefined) =>
     new Promise((resolve, reject) => {
+      if (!running()) {
+        reject(new Error(`Chromium ended before ${method}`));
+        return;
+      }
       last += 1;
       pending.set(last, { resolve, reject });
       socket.send(JSON.stringify({ id: last, method, params, sessionId }));
     });
+
+  // Chromium says where it listens before its first window is open, and
+  // until then it refuses a new tab ("no browser is open").
+  const since = Date.now();
+  for (;;) {
+    const { targetInfos } = await send("Target.getTargets");
+    if (targetInfos.some((target) => target.type === "page")) break;
+    if (Date.now() - since > PATIENCE_MS) {
+      await close();
+      throw new Error("Chromium opened no window");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 
   /** Opens `url` in a new tab, or a new window; `background` leaves it hidden behind the current tab. */
   const open = async (url, { background = false, window = false } = {}) => {
@@ -92,12 +168,7 @@ export const launch = async () => {
   return {
     tab: (url, options) => open(url, options),
     window: (url) => open(url, { window: true }),
-    close: async () => {
-      socket.close();
-      const ended = new Promise((resolve) => browser.once("exit", resolve));
-      browser.kill();
-      await ended;
-      rmSync(profile, { recursive: true, force: true });
-    },
+    close,
+    pid: browser.pid,
   };
 };
