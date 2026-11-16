@@ -170,7 +170,7 @@ fn sources(inner: &Inner, copy: &[Object]) -> Result<Vec<Source>, Error> {
             let Some(read) = read else {
                 return Err(Error::new(
                     ErrorCode::NotFound,
-                    crate::texts::error::ad_hoc_source_not_held(id, space),
+                    crate::texts::error::ad_hoc_source_not_held(space, id),
                 ));
             };
             if read.deleted() {

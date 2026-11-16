@@ -7,6 +7,7 @@
 // the vitest tests pass a fake core to `connect`.
 
 import { accountOf } from "./accountCalls.ts";
+import { createAdHoc, lookupsOf, readObjects } from "./adHoc.ts";
 import { type Cbor, decode, encode } from "./cbor.ts";
 import {
   type Change,
@@ -238,6 +239,7 @@ export const connect = async (
     notify(entry.listeners, entry.status);
   };
   /** A handle of the space `id`, with its status, which the core follows from now on. */
+  const read = readObjects();
   const handleOf = async (id: Id): Promise<Space> => {
     const raw = await ask("space.status", { space: id });
     const entry = statuses.get(id);
@@ -416,7 +418,9 @@ export const connect = async (
       hasMore: boolean;
     };
     return {
-      items: answer.items.map(flatten) as T[],
+      items: answer.items.map((item) =>
+        read.remember(flatten(item), asked.collection as string),
+      ) as T[],
       cursor:
         answer.cursor === null
           ? undefined
@@ -541,6 +545,7 @@ export const connect = async (
       restore: (collection, object) =>
         write((tx) => tx.restore(collection, object)),
       members: membersOf(ask, id),
+      ...lookupsOf(ask, id),
       leave: async () =>
         (await ask("space.leave", { space: id })) as unknown as {
           readonly notice: Notice;
@@ -592,7 +597,9 @@ export const connect = async (
       collection: nameOf(collection),
       id: object,
     })) as { fields: Record<string, unknown> } | null;
-    return answer === null ? undefined : flatten(answer);
+    return answer === null
+      ? undefined
+      : read.remember(flatten(answer), nameOf(collection));
   };
 
   return {
@@ -604,6 +611,10 @@ export const connect = async (
         (await ask("spaces.list", {})) as unknown as SpaceEntry[],
       subscribe: (listener) =>
         closed ? () => {} : spaceList.subscribe(listener),
+      createAdHoc: async (options) => {
+        const answer = await createAdHoc(ask, read, options);
+        return { ...answer, space: await handleOf(answer.space) };
+      },
     },
     find: (query) => find(query),
     changes: {

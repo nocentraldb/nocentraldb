@@ -62,6 +62,10 @@
 //!   itself. Answers `{"notice": notice}`; the last admin is refused with
 //!   `lastAdmin`.
 //!
+//! The calls of NOC-318 S4, ad-hoc spaces (RFC 0009, "Sub-agents and
+//! ad-hoc spaces"), in `ad_hoc.rs`: `spaces.createAdHoc`,
+//! `space.sourceOf` and `space.copyOf`.
+//!
 //! The call of NOC-315, slice 2, in `erasures.rs`: `erasures.list`
 //! `{"space": id}`, the audit of the space's erasures (RFC 0009,
 //! "Erasures").
@@ -105,6 +109,7 @@
 //! `null`, which clears a basic field or a link (`Value::clear`).
 
 mod account;
+mod ad_hoc;
 mod erasures;
 mod events;
 mod members;
@@ -238,6 +243,9 @@ impl Bridge {
                 Ok(Value::Null)
             }
             "erasures.list" => erasures::list(&db, args).await,
+            "spaces.createAdHoc" => ad_hoc::create(&db, args).await,
+            "space.sourceOf" => ad_hoc::source_of(&db, args).await,
+            "space.copyOf" => ad_hoc::copy_of(&db, args).await,
             "account.recoveryCode" => account::recovery_code(&db).await,
             "account.confirmRecoveryCode" => account::confirm_recovery_code(&db).await,
             "account.recovered" => account::recovered(&db).await,

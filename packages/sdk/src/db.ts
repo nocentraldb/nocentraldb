@@ -116,6 +116,12 @@ export interface Space {
   readonly id: Id;
   /** The members of this space: add, list, re-role and remove (RFC 0009, "Invitations and members"). */
   readonly members: Members;
+  /** In an ad-hoc space this database created: the space and id of the object `copy` was copied from, or `undefined` on any other database; the mapping never syncs (RFC 0009, "Sub-agents and ad-hoc spaces"; Carsten, 2026-11-16, NOC-351). */
+  sourceOf(
+    copy: Id,
+  ): Promise<{ readonly space: Id; readonly id: Id } | undefined>;
+  /** In an ad-hoc space this database created: the copy of the object `source` of `sourceSpace`, or `undefined` when this database copied no such object into it. */
+  copyOf(sourceSpace: Id, source: Id): Promise<Id | undefined>;
   /** Leaves the space: this member writes its own removal and keeps its copy; the last admin is refused with `lastAdmin` (RFC 0009, "Spaces"). */
   leave(): Promise<{ readonly notice: import("./members.ts").Notice }>;
   /** The audit of this space's erasures; every member may read it, a reader too (RFC 0009, "Erasures"). */
@@ -207,6 +213,23 @@ export interface Db {
     list(): Promise<SpaceEntry[]>;
     /** Calls `listener` with the list, then with each new list when a space is added, left or removed, or its role changes (RFC 0009, "Spaces"). */
     subscribe(listener: (spaces: SpaceEntry[]) => void): Stop;
+    /**
+     * Creates an ad-hoc space for a sub-agent: a space with a fresh key, which syncs as any other, holding a copy of each object of `copy` as a new object with a fresh id (RFC 0009, "Sub-agents and ad-hoc spaces"; Carsten, 2026-11-16, NOC-351).
+     * `copy` takes objects this database read, as `space.get`, `find` and `subscribe` give them; any other object, a spread of one too, is refused with `invalidValue`.
+     * A copied link points to the copy of its target, or is cleared; personal and plugin fields are not copied. `personal` and `local` are refused with `notAllowed` for now.
+     * Gives the space, its `adHocSpaceCreated` notice, each source with its copy in the order of `copy`, and how many links were cleared and plugin fields not copied.
+     */
+    createAdHoc(options: {
+      copy: readonly object[];
+      personal?: boolean;
+      local?: boolean;
+    }): Promise<{
+      readonly space: Space;
+      readonly notice: import("./members.ts").Notice;
+      readonly copies: readonly { readonly source: Id; readonly copy: Id }[];
+      readonly clearedLinks: number;
+      readonly pluginFieldsNotCopied: number;
+    }>;
   };
   /** A page of a query of an index across every space of the member. */
   find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;

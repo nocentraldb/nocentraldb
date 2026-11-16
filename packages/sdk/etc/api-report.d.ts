@@ -62,6 +62,11 @@ export interface Tx {
 export interface Space {
     readonly id: Id;
     readonly members: Members;
+    sourceOf(copy: Id): Promise<{
+        readonly space: Id;
+        readonly id: Id;
+    } | undefined>;
+    copyOf(sourceSpace: Id, source: Id): Promise<Id | undefined>;
     leave(): Promise<{
         readonly notice: import("./members.ts").Notice;
     }>;
@@ -108,6 +113,20 @@ export interface Db {
         get(id: Id): Promise<Space>;
         list(): Promise<SpaceEntry[]>;
         subscribe(listener: (spaces: SpaceEntry[]) => void): Stop;
+        createAdHoc(options: {
+            copy: readonly object[];
+            personal?: boolean;
+            local?: boolean;
+        }): Promise<{
+            readonly space: Space;
+            readonly notice: import("./members.ts").Notice;
+            readonly copies: readonly {
+                readonly source: Id;
+                readonly copy: Id;
+            }[];
+            readonly clearedLinks: number;
+            readonly pluginFieldsNotCopied: number;
+        }>;
     };
     find<T>(query: Query<T, readonly unknown[]>): Promise<Page<T>>;
     subscribe<T>(query: Query<T, readonly unknown[]>, listener: (page: Page<T>) => void): Stop;

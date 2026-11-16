@@ -401,15 +401,17 @@ Not taken: a field of `space.status`, which the SDK recomputes after every fold 
 
 ```ts
 // The parent agent:
-const { space: adhoc, notice } = await db.spaces.createAdHoc({ copy: [taskA, taskB], personal: false });
+const { space: adhoc, notice, copies } = await db.spaces.createAdHoc({ copy: [taskA, taskB], personal: false });
 await adhoc.members.add(subAgentInvitation, { role: "writer" });
+const copyOfTaskA = copies[0].copy; // later: await adhoc.copyOf(project.id, taskA.$id)
 const result = await adhoc.get(model.tasks, copyOfTaskA);
 await project.update(model.tasks, taskA.$id, { status: result.status });
 ```
 
-- **`db.spaces.createAdHoc({ copy, personal, local })`** creates a space with a fresh key and copies the given objects into it as new objects ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). Personal fields are not copied unless `personal: true` ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)), and then the person key is shared into the space. `local: true` keeps the space off the relay, for a sub-agent on the same machine. The notice says that the space limits what the sub-agent can decrypt, not what a process running as the same user can read.
+- **`db.spaces.createAdHoc({ copy, personal, local })`** creates a space with a fresh key and copies the given objects into it as new objects ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)). Personal fields are not copied unless `personal: true` ([RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space)), and then the person key is shared into the space. `local: true` keeps the space off the relay, for a sub-agent on the same machine. The notice says that the space limits what the sub-agent can decrypt, not what a process running as the same user can read. `copy` takes the objects the SDK read, as `space.get`, `find` and `subscribe` give them: the SDK knows each one's collection, which a read object does not carry, and refuses any other object, a spread of one too, with `invalidValue`. The call gives `{ space, notice, copies, clearedLinks, pluginFieldsNotCopied }`: `copies` is `[{ source, copy }]`, each source's id and its copy's in the order of `copy`, and the two counts are the Rust SDK's `cleared_links` and `plugin_fields_not_copied` (Carsten, 2026-11-16, NOC-351 T1, T2). Plain `{ collection, id }` pairs in `copy` were not taken: more to type, and the objects at hand are the ones read.
 - **A sub-agent** opens its own database with `nc.open({ model, lock, subAgent: true })`; its invitation carries no certificate, and the parent's `members.add` signs one with the parent's member key ([RFC 0008, "What this RFC uses from RFC 0003"](0008-membership.md#what-this-rfc-uses-from-rfc-0003)).
-- **The source of a copy.** RFC 0003 says the copies "keep a reference to their source". The parent's SDK keeps the mapping locally, which is all the parent needs to write results back; the sub-agent never learns the source's id.
+- **The source of a copy.** RFC 0003 says the copies "keep a reference to their source". The parent's SDK keeps the mapping locally, which is all the parent needs to write results back; the sub-agent never learns the source's id. `adhoc.sourceOf(copy)` gives `{ space, id }` of the copy's source, and `adhoc.copyOf(sourceSpace, source)` the copy's id, each `undefined` on any database but the parent's (Carsten, 2026-11-16, NOC-351 T3).
+- **In the browser** a database is a device, which may create an ad-hoc space but not add a sub-agent (Carsten, 2026-11-15, NOC-320 Q2). The browser SDK has `createAdHoc`, `sourceOf` and `copyOf`; `subAgent: true` comes with the SDK in Node.js, where agents run (Carsten, 2026-11-16, NOC-351 T4).
 - **Deleting the ad-hoc space** is a local deletion while it stayed local (`adhoc.discard()`); a synced one waits for the RFC that deletes spaces.
 
 ### Accounts and devices
@@ -672,9 +674,10 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 | `db.spaces.create` | Creates a space: its genesis | [RFC 0008, "The first change of a space"](0008-membership.md#the-first-change-of-a-space); sketched in [RFC 0003](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |
 | `db.spaces.get`, `db.spaces.list` | A space handle; every space of the member | [RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives) |
 | `db.spaces.subscribe` | The space list as a stream: at once, then on every change (Carsten, 2026-11-12, NOC-241) | [RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives) |
-| `db.spaces.createAdHoc` | An ad-hoc space for a sub-agent; options `copy`, `personal`, `local` | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
+| `db.spaces.createAdHoc` | An ad-hoc space for a sub-agent; options `copy`, the objects the SDK read, `personal`, `local`; gives `space`, `notice`, `copies` as `[{ source, copy }]`, `clearedLinks`, `pluginFieldsNotCopied` (Carsten, 2026-11-16, NOC-351) | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `space.id` | The space id | [RFC 0008, "What it names"](0008-membership.md#what-it-names) |
 | `space.leave` | Removes this member from the space | [RFC 0008, "Roles and rights"](0008-membership.md#roles-and-rights) |
+| `space.sourceOf`, `space.copyOf` | In an ad-hoc space, on the parent only: the source `{ space, id }` of a copy, and the copy of a source (Carsten, 2026-11-16, NOC-351) | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `space.discard` | Deletes a local ad-hoc space | [RFC 0003, "Sub-agents get an ad-hoc space"](0003-keys-and-cryptography.md#sub-agents-get-an-ad-hoc-space) |
 | `db.invitation`, `nc.invitation` | This member's invitation; parses one from text | [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys); [RFC 0003, "Invitation"](0003-keys-and-cryptography.md#invitation) |
 | `space.members.add` | Adds members by invitation; options `role`, `fingerprint` | Sketched in [RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys) |

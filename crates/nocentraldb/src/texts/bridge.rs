@@ -18,12 +18,24 @@ pub(crate) const ADD_TAKES_INVITATIONS: &str =
 pub(crate) const AFTER_IS_ACURSOR: &str =
     "after is a cursor";
 
+/// `bridgeArgumentIsABool` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a request whose option, such as personal or local of
+/// spaces.createAdHoc, is not a boolean.
+pub(crate) fn argument_is_abool(key: impl std::fmt::Display) -> String {
+    format!("{key} is true or false")
+}
+
 /// `bridgeArgumentIsText` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: a request whose argument, such as space or lock, is missing
 /// or not text.
 pub(crate) fn argument_is_text(key: impl std::fmt::Display) -> String {
     format!("{key} is text")
 }
+
+/// `bridgeCopyIsAList` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: spaces.createAdHoc given a copy that is not such a list.
+pub(crate) const COPY_IS_ALIST: &str =
+    "copy is a list of objects, each with space, collection and id";
 
 /// `bridgeDeviceJoinsWithRole` (invalidValue): The bridge, on a request from
 /// the TypeScript SDK: members.add of a device without a role.
