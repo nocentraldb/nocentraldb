@@ -213,16 +213,17 @@ fn exists(file: &Path) -> Result<bool, Error> {
 
 /// A view that does not open: a lock it cannot fold, one that is not a
 /// successor of the lock the database was last opened with (RFC 0005,
-/// D11), naming each refused change, or a database that holds no lock to
-/// check it against and was folded by another model, is `ModelRefused`;
-/// any other failure a failure of storage.
+/// D11), naming each refused change, a declared index whose lookup would
+/// not run through it (RFC 0006, "The check"), or a database that holds no
+/// lock to check it against and was folded by another model, is
+/// `ModelRefused`; any other failure a failure of storage.
 fn view_error(error: ncdb_core::view::Error) -> Error {
     match error {
         ncdb_core::view::Error::Invalid(invalid) => Error::new(
             ErrorCode::ModelRefused,
             crate::texts::error::lock_invalid(invalid),
         ),
-        error @ ncdb_core::view::Error::Refused(_) => {
+        error @ (ncdb_core::view::Error::Refused(_) | ncdb_core::view::Error::Plan(_)) => {
             Error::new(ErrorCode::ModelRefused, error.to_string())
         }
         ncdb_core::view::Error::Model => Error::new(
@@ -462,4 +463,22 @@ pub(crate) fn lock(inner: &Mutex<Inner>) -> MutexGuard<'_, Inner> {
     inner
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
+    use super::*;
+
+    /// A declared index whose lookup would not run through it is a
+    /// problem of the model, not of storage (NOC-343).
+    #[test]
+    fn an_index_that_would_not_run_is_model_refused() {
+        let error = view_error(ncdb_core::view::Error::Plan("tasks.byPriority".into()));
+
+        assert_eq!(error.code(), ErrorCode::ModelRefused);
+        assert!(error.to_string().contains("tasks.byPriority"), "{error}");
+    }
 }

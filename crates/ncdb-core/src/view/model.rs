@@ -23,6 +23,7 @@ use crate::model_lock::{Person, Refusal};
 use crate::personal::PersonField;
 use crate::reference::Reference;
 use crate::set::{self, Set};
+use crate::texts;
 
 /// The model the view folds by: collections by name, each a map of field
 /// names to field types, and the declared indexes.
@@ -210,6 +211,28 @@ pub enum Invalid {
     /// The shipped model has the `model.id` of the app's lock, so a space
     /// could not say which of the two it folds by.
     ReservedId,
+}
+
+/// What a developer reads: a lock's refusals print their lines, as
+/// `ncdb model build` does; each finding of [`Model::validate`] its own
+/// text (texts/texts.json, NOC-343).
+impl std::fmt::Display for Invalid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let text = match self {
+            Invalid::Lock(refusals) => {
+                let lines: Vec<String> = refusals.iter().flat_map(Refusal::lines).collect();
+                lines.join("\n")
+            }
+            Invalid::DuplicateIndex { collection, index } => {
+                texts::view_invalid_duplicate_index(collection, index)
+            }
+            Invalid::UnknownCollection(index) => texts::view_invalid_unknown_collection(index),
+            Invalid::UnsortableKey(index) => texts::view_invalid_unsortable_key(index),
+            Invalid::Equality(index) => texts::view_invalid_equality(index),
+            Invalid::ReservedId => texts::VIEW_INVALID_RESERVED_ID.to_owned(),
+        };
+        f.write_str(&text)
+    }
 }
 
 impl Field {
