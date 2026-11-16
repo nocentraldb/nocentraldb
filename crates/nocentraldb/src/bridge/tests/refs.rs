@@ -4,22 +4,9 @@
 //! it, and a read gives the reference back as `{ space, id }`.
 
 use ncdb_core::cbor::Value;
-use ncdb_core::model_lock::{Kind, ModelLock};
 
 use super::fields::{fields, op, opened_with, write};
 use super::{Bridge, LOCK, code, field, map, ok, text};
-
-/// The test model with `tasks.customer`, a reference to a project in any
-/// space.
-fn lock() -> String {
-    let mut lock = ModelLock::from_json(LOCK).unwrap();
-    let tasks = lock.collections.get_mut("tasks").unwrap();
-    let mut customer = tasks.fields["project"].clone();
-    customer.kind = Kind::Ref(vec!["projects".into()]);
-    tasks.fields.insert("customer".into(), customer);
-    lock.model.hash = lock.compute_hash();
-    lock.to_json().to_string()
-}
 
 /// A project in a space of its own, as the reference `{ space, id }` to it.
 fn customer(bridge: &mut Bridge) -> Value {
@@ -35,7 +22,7 @@ fn customer(bridge: &mut Bridge) -> Value {
 
 #[test]
 fn a_reference_written_as_space_and_id_reads_back_as_that_reference() {
-    let mut bridge = opened_with(&lock());
+    let mut bridge = opened_with(LOCK);
     let first = customer(&mut bridge);
     let second = customer(&mut bridge);
     let space = ok(&mut bridge, "spaces.create", map(&[]));
@@ -77,7 +64,7 @@ fn a_reference_written_as_space_and_id_reads_back_as_that_reference() {
 
 #[test]
 fn a_reference_that_is_not_space_and_id_is_refused() {
-    let mut bridge = opened_with(&lock());
+    let mut bridge = opened_with(LOCK);
     let target = customer(&mut bridge);
     let space = ok(&mut bridge, "spaces.create", map(&[]));
     let (target_space, target_id) = (
