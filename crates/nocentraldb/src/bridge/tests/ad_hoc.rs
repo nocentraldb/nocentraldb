@@ -5,7 +5,8 @@
 
 use ncdb_core::cbor::Value;
 
-use super::{Bridge, as_text, code, field, get_task, map, ok, opened, text, write_one};
+use super::{Bridge, as_text, code, field, get_task, map, now, ok, opened, text, write_one};
+use crate::value::Value as Field;
 
 /// Creates a task in `space` with `values` and answers its id.
 fn task(bridge: &mut Bridge, space: &Value, values: Value) -> Value {
@@ -88,23 +89,23 @@ fn create_ad_hoc_answers_the_space_its_notice_and_each_source_with_its_copy() {
 fn a_link_whose_target_was_not_copied_is_counted_as_cleared() {
     let mut bridge = opened();
     let space = ok(&mut bridge, "spaces.create", map(&[]));
-    let project = write_one(
-        &mut bridge,
-        &space,
-        map(&[
-            ("op", text("create")),
-            ("collection", text("projects")),
-            ("values", map(&[("name", text("P"))])),
-        ]),
-    );
-    let Some(Value::Array(ids)) = field(&project, "ids") else {
-        panic!("{project:?}")
-    };
-    let linked = task(
-        &mut bridge,
-        &space,
-        map(&[("title", text("A")), ("project", ids[0].clone())]),
-    );
+    // The bridge writes no link yet, so the Rust SDK writes this one.
+    let db = bridge.db.as_ref().expect("open");
+    let id = as_text(&space).parse().expect("a space id");
+    let in_rust = now(db.spaces().get(id)).expect("the space");
+    let written = now(in_rust.write(|tx| {
+        let project = tx.create("projects", [("name", Field::from("P"))])?;
+        tx.create(
+            "tasks",
+            [
+                ("title", Field::from("A")),
+                ("project", Field::from(project)),
+            ],
+        )?;
+        Ok(())
+    }))
+    .expect("written");
+    let linked = text(&written.ids[1].to_string());
 
     let created = ok(
         &mut bridge,
@@ -179,13 +180,19 @@ fn create_ad_hoc_refuses_what_the_rust_sdk_refuses() {
     let unknown = text("0123456789abcdef0123456789abcdef");
 
     let not_held = create_ad_hoc(vec![source(&space, "tasks", &unknown)]);
-    assert_eq!(code(&mut bridge, "spaces.createAdHoc", not_held), "notFound");
+    assert_eq!(
+        code(&mut bridge, "spaces.createAdHoc", not_held),
+        "notFound"
+    );
 
     let twice = create_ad_hoc(vec![
         source(&space, "tasks", &a),
         source(&space, "tasks", &a),
     ]);
-    assert_eq!(code(&mut bridge, "spaces.createAdHoc", twice), "invalidValue");
+    assert_eq!(
+        code(&mut bridge, "spaces.createAdHoc", twice),
+        "invalidValue"
+    );
 
     for option in ["personal", "local"] {
         let args = map(&[
