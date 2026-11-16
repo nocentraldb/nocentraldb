@@ -15,7 +15,7 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const RFC_DIR = `${ROOT}docs/rfc`;
 
 /** The ids an RFC text defines: the first cell of a table row. */
-export const definedIds = (text) =>
+const definedIds = (text) =>
   new Set(
     [...text.matchAll(/^\|\s*([A-Z]{1,2}(?:-[A-Z])?\d+)\s*\|/gm)].map(
       (match) => match[1],
@@ -30,7 +30,7 @@ export const definedIds = (text) =>
 const CITATION = /RFC (00\d\d),? (?:decisions? )?([A-Z]{0,2}\d{1,3})\b/g;
 
 /** The citations in `text` whose id `rfcs` (number → defined ids) lacks. */
-export const staleCitations = (text, rfcs) => {
+const staleCitations = (text, rfcs) => {
   const stale = [];
   text.split("\n").forEach((line, index) => {
     for (const [cited, rfc, id] of line.matchAll(CITATION)) {
@@ -59,6 +59,8 @@ const trackedTexts = () =>
       (file) =>
         file !== "" &&
         !file.startsWith("factory/decisions/") &&
+        // This file's own examples.
+        file !== "scripts/rfc-citations.test.mjs" &&
         /\.(md|rs|toml|ts|tsx|js|mjs|cjs|json|ya?ml|sh|astro|html|txt)$/.test(
           file,
         ),
