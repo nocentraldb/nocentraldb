@@ -8,6 +8,12 @@
     },
     "tasks": {
       "fields": {
+        "customer": {
+          "rule": 1,
+          "since": 2,
+          "targets": ["projects"],
+          "type": "ncdb/ref"
+        },
         "estimate": { "rule": 1, "since": 1, "type": "ncdb/float" },
         "priority": { "rule": 1, "since": 1, "type": "ncdb/int" },
         "project": {
@@ -60,9 +66,9 @@
   },
   "format": 1,
   "model": {
-    "hash": "sha256:a9dcb18d1cc851f14f7f13c22a749b295fe3e5d08c2afe383c166a9d7a7fac1d",
+    "hash": "sha256:b22eb1bbed1aa1704fb80d17c681b07688ab9e3d123b1644fa059c1d89342cd0",
     "id": "f959ef26820d478a108e9261abf83a69",
-    "version": 1
+    "version": 2
   },
   "plugins": {}
 }
