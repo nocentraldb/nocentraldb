@@ -1,7 +1,7 @@
 # 2026-11-16 · NOC-341 · A site-demo test file that outlives its tests fails after 30 seconds, naming what kept it running
 
 - Decided by: coding agent (NOC-341)
-- Why: run 43828084330 passed all six tests of `demo.e2e.test.mjs` and then ran into the view job's 30-minute limit. The log cannot tell which handle stayed open, and the hang did not reproduce here in 20 full runs. So every way found to stay alive is closed:
+- Why: run 43828084330 passed all six tests of `demo.e2e.test.mjs` and then ran into the view job's 30-minute limit. The log cannot tell which handle stayed open, and the hang did not reproduce here in 3 full runs before the change nor in 16 after it. So every way found to stay alive is closed:
   - the server's `close()` waited for a connection a browser left in the middle of a request;
   - `cdp.mjs`'s `close()` waited for an exit event when Chromium had already ended;
   - a call to a Chromium that went away never settled;
