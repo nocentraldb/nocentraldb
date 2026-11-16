@@ -24,7 +24,7 @@ On AWS this store is the `connections` table, whose TTL clears a record 2 hours 
 
 ## Limits
 
-- **128 KiB per message.** API Gateway refuses a larger message and closes the connection. The handler posts no message above 128 KiB: a frame that does not fit inline comes as a download URL, and an answer that does not fit is `too_large`.
+- **Text frames of at most 32 KB.** API Gateway closes a connection that sends a binary frame (code 1003) or a frame above 32 KB (code 1009). Every message therefore travels as base64 in one text frame, and is at most 23 KiB before base64, 31,404 characters after (RFC 0007, "Transport and encoding"; NOC-338). The handler decodes each message's text and posts its answers as base64 text. It posts no message above 23 KiB: a frame that does not fit inline comes as a download URL, and an answer that does not fit is `too_large`.
 - **2 hours per connection.** API Gateway closes every connection after 2 hours and then sends `$disconnect`, which forgets the connection and its subscriptions. The member reconnects and resubscribes (RFC 0007, "Liveness").
 - **Best-effort delivery.** A failed post is not retried, as RFC 0007 says. A post to a connection that is gone forgets that connection.
 
@@ -48,7 +48,7 @@ With the feature `harness`, `harness::Gateway` stands in for API Gateway on the 
 - It listens for WebSocket connections.
 - It turns each open, message and close into the event API Gateway sends. Each event is built from a recorded one in `src/harness/events/` and read back through `aws_lambda_events`, as Lambda reads it.
 - It calls the handler with each event, and writes the handler's posts to the sockets.
-- Like API Gateway, it closes a connection that sends a message above 128 KiB, closes every connection at its maximum age (2 hours, or shorter in tests), and hands each connection's messages to the handler one at a time.
+- Like API Gateway, it closes a connection that sends a binary frame (1003) or a frame above 32 KB (1009), refuses a post above 32 KB, delivers each post as a text frame, closes every connection at its maximum age (2 hours, or shorter in tests), and hands each connection's messages to the handler one at a time.
 - A second port serves the upload and download URLs of large changes, which S3's presigned URLs serve on AWS.
 
 The recorded events follow the shape of real API Gateway events. They are not captured from a deployed API: the AWS Emulator serves no WebSocket data plane (NOC-278), and the relay is not deployed yet.

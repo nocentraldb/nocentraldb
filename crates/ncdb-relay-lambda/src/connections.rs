@@ -112,7 +112,8 @@ pub enum Posted {
 /// API Gateway's connection API: post a message to a connection, and close
 /// one. Its futures are `Send`.
 pub trait ConnectionApi: Send + Sync {
-    /// Posts one binary message to the connection `id`.
+    /// Posts one message to the connection `id`: the base64 text of an
+    /// RFC 0007 message, within one of API Gateway's 32 KB frames.
     fn post(
         &self,
         id: &str,

@@ -1,11 +1,11 @@
 //! An API Gateway WebSocket event, as the handler reads it: which route,
 //! which connection, the message's bytes and when API Gateway received it.
-//! API Gateway hands a binary WebSocket message to Lambda base64-encoded,
-//! with `isBase64Encoded` set; a text message arrives as its text.
+//! A member sends each message as base64 in a text frame, since API
+//! Gateway closes a connection that sends a binary frame (RFC 0007,
+//! "Transport and encoding"; NOC-338); API Gateway hands the text to Lambda
+//! as it is, with `isBase64Encoded` false.
 
 use aws_lambda_events::apigw::ApiGatewayWebsocketProxyRequest;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 
 /// The three routes of RFC 0007's WebSocket API.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,10 +35,12 @@ impl Route {
 pub enum Body {
     /// No message: `$connect` and `$disconnect`.
     None,
-    /// A binary message, decoded from base64.
-    Binary(Vec<u8>),
-    /// A text message, which RFC 0007 never sends; only its size is kept.
-    Text(usize),
+    /// A message of RFC 0007, decoded from the base64 of its text frame.
+    Message(Vec<u8>),
+    /// A body that is no message of RFC 0007: text that is no base64, or
+    /// one API Gateway marked as base64-encoded binary. Only its size is
+    /// kept.
+    Unreadable(usize),
 }
 
 impl Body {
@@ -46,8 +48,8 @@ impl Body {
     pub fn len(&self) -> usize {
         match self {
             Body::None => 0,
-            Body::Binary(bytes) => bytes.len(),
-            Body::Text(len) => *len,
+            Body::Message(bytes) => bytes.len(),
+            Body::Unreadable(len) => *len,
         }
     }
 
@@ -80,8 +82,6 @@ pub enum NotAnEvent {
     NoConnection,
     /// The event names no event type, or one the API does not send.
     UnknownType,
-    /// A binary message whose base64 does not decode.
-    BadBase64,
 }
 
 impl Event {
@@ -102,9 +102,12 @@ impl Event {
         let body = match (&request.body, route) {
             (_, Route::Connect | Route::Disconnect) | (None, Route::Message) => Body::None,
             (Some(body), Route::Message) if request.is_base64_encoded => {
-                Body::Binary(STANDARD.decode(body).map_err(|_| NotAnEvent::BadBase64)?)
+                Body::Unreadable(body.len())
             }
-            (Some(body), Route::Message) => Body::Text(body.len()),
+            (Some(body), Route::Message) => match ncdb_relay::wire::from_text(body) {
+                Some(bytes) => Body::Message(bytes),
+                None => Body::Unreadable(body.len()),
+            },
         };
         Ok(Event {
             route,

@@ -7,9 +7,43 @@ use super::support::*;
 use crate::members::{AddMember, Role};
 use crate::value::Value;
 
-/// A title of 300 KiB: its change does not fit into a 128 KiB message.
+/// A title of 300 KiB: its change does not fit into a 23 KiB message.
 fn large_title() -> String {
     "x".repeat(300 * 1024)
+}
+
+/// The largest message, as base64 in one text frame, stays under API
+/// Gateway's 32 KB frame however AWS counts a KB; a change of 40 KiB, which
+/// fitted into a message before NOC-338, now goes through an upload.
+#[test]
+fn a_message_fits_one_32_kb_frame_and_a_40_kib_change_goes_up_through_an_upload() {
+    use crate::sync::wire::{MAX_MESSAGE, MAX_TEXT, fits_a_push, to_text};
+    assert_eq!(MAX_MESSAGE, 23 * 1024);
+    assert_eq!(to_text(&vec![0xff; MAX_MESSAGE]).len(), MAX_TEXT);
+    assert_eq!(MAX_TEXT, 31_404);
+    const { assert!(MAX_TEXT <= 32_000) };
+    assert!(!fits_a_push(&vec![0; 40 * 1024]));
+    assert!(fits_a_push(&vec![0; 20 * 1024]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_change_of_40_kib_goes_up_and_reaches_a_subscribed_member() {
+    let relay = LocalRelay::start().await;
+    let (admin, member, project) = admin_and_member(&relay).await;
+    eventually("the member holds the space", || {
+        now(member.spaces().get(project.id())).is_ok()
+    })
+    .await;
+    let middle = "x".repeat(40 * 1024);
+    let task = now(project.create("tasks", [("title", Value::from(middle.as_str()))]))
+        .unwrap()
+        .ids[0];
+    let status = synced(&admin).await;
+    assert_eq!(status.refused, 0, "the relay refused the change");
+    eventually("the member holds the 40 KiB task", || {
+        title(&member, project.id(), task).as_deref() == Some(middle.as_str())
+    })
+    .await;
 }
 
 async fn admin_and_member(relay: &LocalRelay) -> (crate::Db, crate::Db, crate::Space) {

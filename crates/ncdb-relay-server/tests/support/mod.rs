@@ -233,13 +233,15 @@ impl Client {
     /// Sends `bytes` and reads the next message, none when the connection
     /// ends first.
     async fn try_ask(&mut self, bytes: Vec<u8>) -> Option<Value> {
-        self.ws.send(Message::Binary(bytes.into())).await.ok()?;
+        let text = ncdb_relay::wire::to_text(&bytes);
+        self.ws.send(Message::Text(text.into())).await.ok()?;
         loop {
             let next = tokio::time::timeout(WAIT, self.ws.next())
                 .await
                 .expect("a message or a close in time");
             match next?.ok()? {
-                Message::Binary(bytes) => {
+                Message::Text(text) => {
+                    let bytes = ncdb_relay::wire::from_text(&text).expect("base64");
                     return Some(cbor::decode(&bytes).expect("canonical CBOR"));
                 }
                 Message::Ping(_) | Message::Pong(_) => continue,
@@ -300,14 +302,16 @@ impl Client {
     }
 
     pub async fn send_bytes(&mut self, bytes: Vec<u8>) {
+        // Each message travels as base64 in a text frame (RFC 0007,
+        // "Transport and encoding"; NOC-338).
         self.ws
-            .send(Message::Binary(bytes.into()))
+            .send(Message::Text(ncdb_relay::wire::to_text(&bytes).into()))
             .await
             .expect("the message is sent");
     }
 
-    /// The next message, decoded; it must be canonical CBOR in one binary
-    /// WebSocket message of at most 128 KiB.
+    /// The next message, decoded; it must be canonical CBOR of at most
+    /// RFC 0007's largest message, as base64 in one text frame.
     pub async fn recv(&mut self) -> Value {
         loop {
             let next = tokio::time::timeout(WAIT, self.ws.next())
@@ -316,12 +320,13 @@ impl Client {
                 .expect("the connection is open")
                 .expect("a message");
             match next {
-                Message::Binary(bytes) => {
+                Message::Text(text) => {
+                    let bytes = ncdb_relay::wire::from_text(&text).expect("base64");
                     assert!(bytes.len() <= ncdb_relay_server::MAX_MESSAGE);
                     return cbor::decode(&bytes).expect("canonical CBOR");
                 }
                 Message::Ping(_) | Message::Pong(_) => continue,
-                other => panic!("not a binary message: {other:?}"),
+                other => panic!("not a text message: {other:?}"),
             }
         }
     }
@@ -333,6 +338,30 @@ impl Client {
     }
 
     /// The server closes the connection.
+    /// Sends `bytes` as one binary frame, which no relay reads since
+    /// NOC-338.
+    pub async fn send_binary(&mut self, bytes: Vec<u8>) {
+        self.ws
+            .send(Message::Binary(bytes.into()))
+            .await
+            .expect("the frame is sent");
+    }
+
+    /// The code the server closes the connection with; none when it
+    /// closes without a close frame.
+    pub async fn close_code(&mut self) -> Option<u16> {
+        loop {
+            let next = tokio::time::timeout(WAIT, self.ws.next())
+                .await
+                .expect("the server closes in time");
+            match next {
+                None | Some(Err(_)) => return None,
+                Some(Ok(Message::Close(frame))) => return frame.map(|f| u16::from(f.code)),
+                Some(Ok(_)) => continue,
+            }
+        }
+    }
+
     pub async fn closed(&mut self) {
         loop {
             let next = tokio::time::timeout(WAIT, self.ws.next())
@@ -378,7 +407,8 @@ impl Client {
                 .expect("the server ends the connection in time");
             match next {
                 None | Some(Err(_)) | Some(Ok(Message::Close(_))) => return messages,
-                Some(Ok(Message::Binary(bytes))) => {
+                Some(Ok(Message::Text(text))) => {
+                    let bytes = ncdb_relay::wire::from_text(&text).expect("base64");
                     messages.push(cbor::decode(&bytes).expect("canonical CBOR"));
                 }
                 Some(Ok(_)) => continue,

@@ -6,8 +6,11 @@
 //! handler with each and serves its posts through a fake connection API
 //! that writes to the sockets.
 //!
-//! Like API Gateway, it refuses a message above 128 KiB by closing the
-//! connection, closes every connection after its maximum age (2 hours,
+//! Like API Gateway, it closes with 1003 a connection that sends a binary
+//! frame, and with 1009 one that sends a frame above 32 KB or a message
+//! above 128 KB; it refuses a post above 32 KB, which API Gateway would
+//! have to split (NOC-338, quoting AWS's quotas for WebSocket APIs); it
+//! delivers each post as a text frame; it closes every connection after its maximum age (2 hours,
 //! shorter in tests) and then sends `$disconnect`, and hands each
 //! connection's messages to the handler one at a time. A second listener
 //! serves the upload and download URLs of large changes, which S3's
@@ -28,7 +31,6 @@ use futures_util::{SinkExt, StreamExt};
 use ncdb_core::ids::SpaceId;
 use ncdb_relay::page::{Downloads, TokenDownloads};
 use ncdb_relay::store::{Entry, StoreError, Token, TokenUrls, UploadId};
-use ncdb_relay::wire::MAX_MESSAGE;
 use ncdb_relay::{ErrorCode, Relay};
 use serde_json::Value;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
@@ -79,10 +81,21 @@ impl FakeApi {
     }
 }
 
+/// API Gateway's largest WebSocket frame, 32 KB ("Amazon API Gateway
+/// quotas for configuring and running a WebSocket API").
+const API_FRAME: usize = 32 * 1024;
+
+/// API Gateway's largest WebSocket message, 128 KB, in frames of at most
+/// [`API_FRAME`].
+const API_MESSAGE: usize = 128 * 1024;
+
 impl ConnectionApi for FakeApi {
     async fn post(&self, id: &str, message: Vec<u8>) -> Result<Posted, StoreError> {
-        if message.len() > MAX_MESSAGE {
-            return Err(StoreError("a post above 128 KiB".into()));
+        // AWS says a message above 32 KB "must be split into multiple
+        // frames" for `@connections` commands, and not how a post is: a
+        // relay that posts more than one frame's worth is refused here.
+        if message.len() > API_FRAME {
+            return Err(StoreError("a post above 32 KB".into()));
         }
         match self.sender(id) {
             Some(out) if out.send(Out::Message(message)).is_ok() => Ok(Posted::Sent),
@@ -244,8 +257,8 @@ struct Link<S> {
 impl<S: TokenUrls + 'static> Link<S> {
     async fn serve(mut self, stream: TcpStream) {
         let config = WebSocketConfig::default()
-            .max_message_size(Some(MAX_MESSAGE))
-            .max_frame_size(Some(MAX_MESSAGE));
+            .max_message_size(Some(API_MESSAGE))
+            .max_frame_size(Some(API_FRAME));
         let Ok(ws) = tokio_tungstenite::accept_async_with_config(stream, Some(config)).await else {
             return;
         };
@@ -259,7 +272,8 @@ impl<S: TokenUrls + 'static> Link<S> {
             while let Some(next) = outgoing.recv().await {
                 match next {
                     Out::Message(bytes) => {
-                        if sink.send(Message::Binary(bytes.into())).await.is_err() {
+                        let text = String::from_utf8_lossy(&bytes).into_owned();
+                        if sink.send(Message::Text(text.into())).await.is_err() {
                             return;
                         }
                     }
@@ -278,6 +292,7 @@ impl<S: TokenUrls + 'static> Link<S> {
         let expired = tokio::time::sleep(self.max_age);
         tokio::pin!(expired);
         let mut too_large = false;
+        let mut binary = false;
         loop {
             let message = tokio::select! {
                 message = incoming.next() => message,
@@ -288,8 +303,12 @@ impl<S: TokenUrls + 'static> Link<S> {
                 Ok(()) = self.expired.changed() => break,
             };
             let body = match message {
-                Some(Ok(Message::Binary(bytes))) => Some((bytes.to_vec(), true)),
-                Some(Ok(Message::Text(text))) => Some((text.as_bytes().to_vec(), false)),
+                // API Gateway refuses binary frames and closes with 1003.
+                Some(Ok(Message::Binary(_))) => {
+                    binary = true;
+                    break;
+                }
+                Some(Ok(Message::Text(text))) => Some(text.to_string()),
                 Some(Err(tokio_tungstenite::tungstenite::Error::Capacity(_))) => {
                     too_large = true;
                     break;
@@ -299,9 +318,12 @@ impl<S: TokenUrls + 'static> Link<S> {
             };
             self.invoke(event(MESSAGE, &id, connected_at, body)).await;
         }
-        // API Gateway closes with 1009 a connection that sent a message
-        // above its limit, and with 1001 one that reached its maximum age.
-        let code = if too_large {
+        // API Gateway closes with 1003 a connection that sent a binary
+        // frame, with 1009 one that sent a message above its limit, and
+        // with 1001 one that reached its maximum age.
+        let code = if binary {
+            CloseCode::Unsupported
+        } else if too_large {
             CloseCode::Size
         } else {
             CloseCode::Away
@@ -340,20 +362,17 @@ fn event(
     recorded: &str,
     id: &str,
     connected_at: u64,
-    body: Option<(Vec<u8>, bool)>,
+    body: Option<String>,
 ) -> ApiGatewayWebsocketProxyRequest {
     let mut event: Value = serde_json::from_str(recorded).expect("a recorded event");
     let context = &mut event["requestContext"];
     context["connectionId"] = Value::from(id);
     context["connectedAt"] = Value::from(connected_at);
     context["requestTimeEpoch"] = Value::from(now());
-    if let Some((bytes, binary)) = body {
-        event["isBase64Encoded"] = Value::from(binary);
-        event["body"] = if binary {
-            Value::from(STANDARD.encode(bytes))
-        } else {
-            Value::from(String::from_utf8_lossy(&bytes).into_owned())
-        };
+    // A text message reaches Lambda as its text, not base64-encoded.
+    if let Some(text) = body {
+        event["isBase64Encoded"] = Value::from(false);
+        event["body"] = Value::from(text);
     }
     serde_json::from_value(event).expect("an event Lambda reads")
 }
