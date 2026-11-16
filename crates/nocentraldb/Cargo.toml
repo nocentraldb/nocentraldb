@@ -45,7 +45,8 @@ data-encoding = { version = "=2.11.1", default-features = false, features = ["al
 # (below). The version Cargo.lock already held for the relay server.
 tokio = { version = "=1.54.1", default-features = false, features = ["sync"] }
 # The member key and the account key of a database at a path live in the
-# platform keystore (RFC 0003, "The member key"; RFC 0009, S19), through
+# platform keystore (RFC 0003, "The member key"; RFC 0009, "The Rust SDK",
+# **Where the database lives.**), through
 # keyring-core and one store per platform: the Keychain on macOS, the
 # Credential Manager on Windows, the Secret Service on Linux, reached in pure
 # Rust over D-Bus, so no system library is needed to build.

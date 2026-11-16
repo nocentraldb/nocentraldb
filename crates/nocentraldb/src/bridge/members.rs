@@ -34,15 +34,15 @@ pub(super) async fn invitation(db: &Db) -> Result<Value, Failed> {
 pub(super) async fn add(db: &Db, args: &Value) -> Result<Value, Failed> {
     let space = db.spaces().get(space_id(args)?).await?;
     let Some(Value::Array(texts)) = get(args, "invitations") else {
-        return Err(invalid("members.add takes invitations"));
+        return Err(invalid(crate::texts::bridge::ADD_TAKES_INVITATIONS));
     };
     if texts.is_empty() {
-        return Err(invalid("members.add takes at least one invitation"));
+        return Err(invalid(crate::texts::bridge::ADD_TAKES_AN_INVITATION));
     }
     let role = match get(args, "role") {
         None | Some(Value::Null) => None,
         Some(Value::Text(name)) => Some(role_of(name)?),
-        Some(_) => return Err(invalid("a role is text")),
+        Some(_) => return Err(invalid(crate::texts::bridge::ROLE_IS_TEXT)),
     };
     let typed = match get(args, "fingerprint") {
         Some(Value::Text(typed)) => Some(digits(typed)),
@@ -51,7 +51,7 @@ pub(super) async fn add(db: &Db, args: &Value) -> Result<Value, Failed> {
     let mut notice = None;
     for value in texts {
         let Value::Text(text) = value else {
-            return Err(invalid("an invitation is text"));
+            return Err(invalid(crate::texts::bridge::INVITATION_IS_TEXT));
         };
         let invitation = Invitation::from_str(text)?;
         let shown = invitation.fingerprint();
@@ -62,7 +62,7 @@ pub(super) async fn add(db: &Db, args: &Value) -> Result<Value, Failed> {
         let role = match role {
             Some(role) => role,
             None if is_agent(&invitation) => Role::Writer,
-            None => return Err(invalid("a device joins with a role")),
+            None => return Err(invalid(crate::texts::bridge::DEVICE_JOINS_WITH_ROLE)),
         };
         notice = Some(
             space
@@ -148,7 +148,7 @@ fn role_of(name: &str) -> Result<Role, Failed> {
         "reader" => Ok(Role::Reader),
         "writer" => Ok(Role::Writer),
         "admin" => Ok(Role::Admin),
-        _ => Err(invalid("a role is reader, writer or admin")),
+        _ => Err(invalid(crate::texts::bridge::NOT_AROLE)),
     }
 }
 
@@ -167,5 +167,5 @@ fn digits(text: &str) -> String {
 /// The member a call names by its 64 lowercase hex digits.
 pub(super) fn member_id(args: &Value) -> Result<MemberId, Failed> {
     MemberId::from_str(text(args, "member")?)
-        .map_err(|_| invalid("a member id is 64 lowercase hex digits"))
+        .map_err(|_| invalid(crate::texts::bridge::NOT_AMEMBER_ID))
 }

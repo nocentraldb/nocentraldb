@@ -11,7 +11,7 @@
 //!
 //! **What this does not do yet.** The account key that signs the member's
 //! certificate is drawn per database, until the accounts RFC designs
-//! accounts (RFC 0003, decision 17).
+//! accounts (RFC 0003, "The account key", **Until RFC 0010 is built.**).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -240,7 +240,8 @@ impl Db {
     /// key file, are refused with `InvalidValue`; a lock that cannot be
     /// read, or breaks the rules RFC 0005 gives a lock, with
     /// `ModelRefused`. An existing database checks the lock against the one
-    /// it was last opened with (RFC 0005, D11): a lock of another
+    /// it was last opened with (RFC 0005, "Two checks: at build and on the
+    /// device"): a lock of another
     /// `model.id`, or a change that is not additive, is `ModelRefused`,
     /// naming each refused change, and nothing changes; an additive change
     /// folds the database's log again by the new model before `open`

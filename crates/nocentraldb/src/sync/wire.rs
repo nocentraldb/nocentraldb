@@ -11,7 +11,8 @@ use ncdb_core::ids::SpaceId;
 /// The protocol versions the SDK speaks.
 pub(crate) const VERSIONS: [u64; 1] = [1];
 
-/// The largest message, in bytes (RFC 0007, decision R4).
+/// The largest message, in bytes (RFC 0007, "Transport and encoding",
+/// **Limits that hold on every backend.**).
 pub(crate) const MAX_MESSAGE: usize = 23 * 1024;
 
 /// The longest text that carries a message: [`MAX_MESSAGE`] bytes as
@@ -40,7 +41,8 @@ pub(crate) fn from_text(text: &[u8]) -> Option<Vec<u8>> {
     base64::engine::general_purpose::STANDARD.decode(text).ok()
 }
 
-/// The most frames one push carries (RFC 0007, decision R4).
+/// The most frames one push carries (RFC 0007, "Transport and encoding",
+/// **Limits that hold on every backend.**).
 pub(crate) const MAX_PUSH: usize = 32;
 
 /// What a message holds besides its frames: the type, the request id, the

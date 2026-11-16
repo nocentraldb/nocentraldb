@@ -69,7 +69,8 @@ pub struct SpaceStatus {
     pub rejected: BTreeMap<RejectReason, u64>,
     /// This member's changes in this space the relay refused, in local
     /// order. They stay folded on this member and do not reach members
-    /// that sync only through the relay (RFC 0002, D12).
+    /// that sync only through the relay (RFC 0002, "A change the relay
+    /// refuses after the member folded it").
     pub refused: Vec<Refused>,
     /// The accepted grants that a concurrent revocation of their subject
     /// capped, so that they stay accepted without effect (RFC 0008,

@@ -5,6 +5,7 @@
 // an invitation's.
 
 import { NcError } from "./error.ts";
+import * as texts from "./texts.ts";
 
 /** The account's recovery code, held until the person stored it (RFC 0010, "The recovery code"). Its string, JSON and inspect forms are `"RecoveryCode(redacted)"`. */
 export interface RecoveryCode {
@@ -45,10 +46,7 @@ export const pairingAnswer = (text: string): PairingAnswer => {
     ? trimmed.slice(PREFIX.length)
     : undefined;
   if (body === undefined || !BASE64URL.test(body) || body.length % 4 === 1) {
-    throw new NcError(
-      "invalidValue",
-      "the text is not a pairing answer: ncdb-pair-1: and unpadded base64url",
-    );
+    throw new NcError("invalidValue", texts.NOT_APAIRING_ANSWER);
   }
   return new PairingAnswerText(trimmed);
 };

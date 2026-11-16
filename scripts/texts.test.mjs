@@ -60,6 +60,7 @@ test("the committed module is the one the texts generate, file by file", () => {
   const texts = JSON.parse(read(PATHS.texts)).texts;
   const generated = generate(texts);
   assert.deepEqual(Object.keys(generated).sort(), [
+    "bridge.rs",
     "error.rs",
     "mod.rs",
     "notice.rs",
