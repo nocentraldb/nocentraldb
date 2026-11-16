@@ -20,6 +20,7 @@
 // tab reports `waitingForTab` in `db.durability` (NOC-355).
 
 import { decode, encode } from "./cbor.ts";
+import { waitNotice } from "./waitNotice.ts";
 // @ts-expect-error: generated into dist/wasm/ by the build step.
 import init, { Core } from "./wasm/nocentraldb_wasm.js";
 
@@ -71,8 +72,9 @@ let held: (() => void) | undefined;
 let freed: Promise<unknown> = Promise.resolve();
 
 /** Tells this worker's tab whether it waits for the storage another tab still holds (NOC-355): the tab reports it as `db.durability`'s `waitingForTab`. */
-const waiting = (waiting: boolean) =>
-  post({ event: encode({ event: "waitingForTab", waiting }) });
+const waiting = waitNotice((waiting) =>
+  post({ event: encode({ event: "waitingForTab", waiting }) }),
+);
 
 /** Asks for the lock of the database `name`; `holding` runs once it is held, `busy` at once if another worker holds it. */
 const request = (name: string, ifAvailable: boolean, holding: () => void) =>
@@ -95,9 +97,9 @@ const hold = (name: string) =>
     freed = tried;
     void tried.then((answer) => {
       if (answer !== false) return;
-      waiting(true);
+      waiting.started();
       freed = request(name, false, () => {
-        waiting(false);
+        waiting.ended();
         taken();
       });
     });
