@@ -31,6 +31,7 @@ mod members;
 mod merge;
 mod newest_model;
 mod pairing;
+mod pairing_syncing;
 mod pause;
 mod person_keys;
 mod personal;
