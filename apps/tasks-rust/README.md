@@ -43,11 +43,11 @@ cargo build -p tasks-rust -p ncdb-relay-server
 alias tasks=./target/debug/tasks
 ```
 
-Each device below has its own database directory and key file. A key file keeps the device's keys in that file, for a machine without a keystore such as a container. Leave `--key-file` out to keep them in your platform's keystore.
+Each device below has its own database directory and key file. A key file keeps the device's keys in that file, for a machine without a keystore such as a container. Leave `--key-file` out to keep them in your platform's keystore. Each device's options are an array, which bash and zsh both pass on as separate words with `"${LAPTOP[@]}"`; a string such as `LAPTOP="--data …"` stays one word in zsh, the default shell on macOS.
 
 ```sh
-LAPTOP="--data /tmp/laptop --key-file /tmp/laptop.keys --relay ws://127.0.0.1:7700"
-PHONE="--data /tmp/phone --key-file /tmp/phone.keys --relay ws://127.0.0.1:7700"
+LAPTOP=(--data /tmp/laptop --key-file /tmp/laptop.keys --relay ws://127.0.0.1:7700)
+PHONE=(--data /tmp/phone --key-file /tmp/phone.keys --relay ws://127.0.0.1:7700)
 ```
 
 ## 3. Start a local relay
@@ -64,9 +64,9 @@ It prints the address it listens on, `ws://127.0.0.1:7700`. Leave it running in 
 ## 4. Create a space and add tasks
 
 ```sh
-SPACE=$(tasks $LAPTOP create)
-tasks $LAPTOP add $SPACE "Write the README"
-tasks $LAPTOP list
+SPACE=$(tasks "${LAPTOP[@]}" create)
+tasks "${LAPTOP[@]}" add $SPACE "Write the README"
+tasks "${LAPTOP[@]}" list
 ```
 
 `list` prints every task of every space on the device, open ones first:
@@ -80,26 +80,26 @@ tasks $LAPTOP list
 The second device prints its invitation, a line of text that holds its public keys and its account's certificate, and the fingerprint of its account:
 
 ```sh
-tasks $PHONE invitation
+tasks "${PHONE[@]}" invitation
 ```
 
 Send the invitation line to the laptop in any way: it holds no secret. The laptop adds the phone to the space:
 
 ```sh
-tasks $LAPTOP invite $SPACE "ncdb-invite-1:…"
+tasks "${LAPTOP[@]}" invite $SPACE "ncdb-invite-1:…"
 ```
 
 The first time, the laptop refuses. The phone's account is new to it, and it prints the account's fingerprint. Compare that fingerprint with the one the phone printed, the way messaging apps compare safety numbers. Then run the command again with it:
 
 ```sh
-tasks $LAPTOP invite $SPACE "ncdb-invite-1:…" --fingerprint "12345 67890 …"
+tasks "${LAPTOP[@]}" invite $SPACE "ncdb-invite-1:…" --fingerprint "12345 67890 …"
 ```
 
 The phone receives the space from the relay:
 
 ```sh
-tasks $PHONE sync --space $SPACE
-tasks $PHONE spaces
+tasks "${PHONE[@]}" sync --space $SPACE
+tasks "${PHONE[@]}" spaces
 ```
 
 ## 6. Live updates
@@ -107,20 +107,20 @@ tasks $PHONE spaces
 In one terminal, let the phone follow the list. It prints the list again on every change:
 
 ```sh
-tasks $PHONE watch
+tasks "${PHONE[@]}" watch
 ```
 
 In another, add a task on the laptop:
 
 ```sh
-tasks $LAPTOP add $SPACE "Buy milk"
+tasks "${LAPTOP[@]}" add $SPACE "Buy milk"
 ```
 
 The phone's terminal shows it within a moment. Complete it on the phone, using the task id that `list` shows, and the laptop sees it done:
 
 ```sh
-tasks $PHONE done $SPACE <task id>
-tasks $LAPTOP sync && tasks $LAPTOP list
+tasks "${PHONE[@]}" done $SPACE <task id>
+tasks "${LAPTOP[@]}" sync && tasks "${LAPTOP[@]}" list
 ```
 
 Stop the relay and keep adding tasks on both devices. Each works on its own copy: a write succeeds and says where it is.
@@ -134,7 +134,7 @@ When the relay is back, `sync` on each device brings both to the same list.
 ## 7. The space's status
 
 ```sh
-tasks $PHONE status $SPACE
+tasks "${PHONE[@]}" status $SPACE
 ```
 
 It prints the device's role in the space, whether its first sync is done, how far it is behind, and whether anything was parked, rejected or refused by the relay (RFC 0009, "Sync and status").
