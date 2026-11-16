@@ -24,8 +24,7 @@
 // C8 Then it prints the next steps: for X.Y.0 the pull request that raises
 //    main to X.(Y+1).0 with the skip-changes label, and the owner's beta tag.
 //
-// Test-only seam: CUT_NO_LOCK=1 passes --no-lock to set-version, so the
-// tests need no cargo.
+// Test-only seam: CUT_NO_LOCK=1 passes --no-lock to set-version.
 //
 // Exit 0 on success, 1 with `cut: <message>` naming the branch or the
 // version, 2 on a usage error.

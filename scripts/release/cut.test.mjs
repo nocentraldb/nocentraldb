@@ -237,17 +237,15 @@ test("refuses a detached HEAD", (t) => {
 test("a failure after the switch still ends on the branch it started from, with a clean tree", (t) => {
   const repo = repoWithOrigin(t);
   assert.equal(run(repo, ["0.1.0"]).status, 0);
-  repo.run("switch", "-q", "-c", "feature");
+  // A Cargo.lock on the release branch that set-version cannot read: its
+  // [[package]] block has no version.
+  repo.run("switch", "-q", "release/0.1");
+  repo.commit("a lock set-version cannot read", {
+    "Cargo.lock": '[[package]]\nname = "a"\n',
+  });
+  repo.run("switch", "-q", "-c", "feature", "main");
   const before = head(repo, "release/0.1");
-  // set-version refreshes Cargo.lock with cargo; this cargo always fails.
-  const bin = mkdtempSync(join(tmpdir(), "cut-bin-"));
-  t.after(() => rmSync(bin, { recursive: true, force: true }));
-  writeFileSync(
-    join(bin, "cargo"),
-    "#!/bin/sh\necho cargo broke >&2\nexit 1\n",
-  );
-  chmodSync(join(bin, "cargo"), 0o755);
-  const r = run(repo, ["0.1.1"], { PATH: `${bin}:${process.env.PATH}` });
+  const r = run(repo, ["0.1.1"], {});
   assert.equal(r.status, 1);
   assert.match(r.stderr, /cut: node .*set-version\.mjs 0\.1\.1 failed/);
   assert.equal(branch(repo), "feature");
