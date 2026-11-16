@@ -8,9 +8,31 @@ import { expect, test } from "vitest";
 import lock from "../../../crates/nocentraldb/tests/model/model.lock.json" with {
   type: "json",
 };
-import { model as fullModel } from "../../../crates/nocentraldb/tests/model/model.ts";
 import { nc } from "../src/index.ts";
 import { lockOutOfDate } from "../src/lockCheck.ts";
+
+/** The model the lock was built from: crates/nocentraldb/tests/model/model.ts, as it declares it. */
+const fullModel = nc.model({
+  tasks: nc.collection(
+    {
+      title: nc.string(),
+      status: nc.oneOf(["open", "done"]),
+      priority: nc.int(),
+      estimate: nc.float(),
+      urgent: nc.boolean(),
+      tags: nc.set(nc.string()),
+      project: nc.link("projects"),
+    },
+    {
+      indexes: {
+        byPriority: nc.index(["priority"]),
+        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
+        open: nc.index(["status", "priority"], { equal: 1, scope: "space" }),
+      },
+    },
+  ),
+  projects: nc.collection({ name: nc.string() }),
+});
 
 /** The test model's tasks, with `fields` and `indexes` changed as a test asks. */
 const tasks = (
