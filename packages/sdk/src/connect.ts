@@ -19,6 +19,7 @@ import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
 import { NcError } from "./error.ts";
+import { lockOutOfDate } from "./lockCheck.ts";
 import type { Notice } from "./members.ts";
 import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
@@ -95,6 +96,10 @@ const startWorker = (): Core => {
 /** Opens the database in the worker the package ships, or, when another tab owns it, through that tab (NOC-177; RFC 0006, "The browser"). */
 export const connectWorker = async (options: OpenOptions): Promise<Db> => {
   checkName(options.name);
+  // Before the worker starts, so that no database opens with a model its
+  // lock was not built from (NOC-323; RFC 0009, "Open and close").
+  const outOfDate = lockOutOfDate(options.model, options.lock);
+  if (outOfDate !== undefined) throw new NcError("lockOutOfDate", outOfDate);
   const core =
     typeof navigator !== "undefined" &&
     navigator.locks !== undefined &&
