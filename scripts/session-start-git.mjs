@@ -10,8 +10,9 @@
 // reaches the snapshot's commit (NOC-350).
 //
 // The working tree is the snapshot's too, so its copy of this script is as old
-// as the snapshot. The hook in .claude/settings.json therefore runs the script
-// as HEAD holds it, and a fix merged since the snapshot takes effect.
+// as the snapshot. The hooks in .claude/settings.json therefore run this script
+// and session-start-deps.mjs as HEAD holds them, and a fix merged since the
+// snapshot takes effect.
 //
 // This script resets index and working tree to HEAD when that loses nothing:
 // the index holds exactly the tree of a commit on HEAD or on a local branch,
