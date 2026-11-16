@@ -12,6 +12,7 @@ use super::state::{self, ObjectState};
 use super::{Error, View};
 use crate::ids::{ObjectId, SpaceId};
 use crate::object::Object;
+use crate::texts;
 
 /// What the view holds of one object in one collection: the object, with
 /// its creates and its deletion, and the merge state of each field of the
@@ -54,7 +55,10 @@ impl View {
         while let Some(row) = rows.next()? {
             let name: String = row.get(0)?;
             let bytes: Vec<u8> = row.get(1)?;
-            let state = match model.get(&name).ok_or(Error::Corrupt("field"))? {
+            let state = match model
+                .get(&name)
+                .ok_or(Error::Corrupt(texts::UNREADABLE_FIELD))?
+            {
                 Field::Basic(_) | Field::Link(_) | Field::Ref(_) | Field::Person(_) => {
                     FieldState::Basic(state::basic(&bytes)?)
                 }

@@ -17,6 +17,7 @@ use rusqlite::params;
 
 use super::{Error, View};
 use crate::ids::ChangeId;
+use crate::texts;
 
 /// A kept link statement: its bytes, and the change that wrote it into
 /// the account space, once one did.
@@ -72,7 +73,7 @@ impl View {
                     bytes
                         .try_into()
                         .map(ChangeId)
-                        .map_err(|_| Error::Corrupt("pending link change id"))
+                        .map_err(|_| Error::Corrupt(texts::UNREADABLE_PENDING_LINK_CHANGE_ID))
                 })
                 .transpose()?;
             links.push((statement, change));

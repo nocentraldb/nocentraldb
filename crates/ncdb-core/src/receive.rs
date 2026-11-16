@@ -23,6 +23,7 @@ use crate::log::{
     State,
 };
 use crate::object::ObjectOperation;
+use crate::texts;
 use crate::tips::Opened;
 
 /// Where a change stops when it fails a check: parked or rejected, with
@@ -197,7 +198,7 @@ pub enum ReceiveError {
 impl fmt::Display for ReceiveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ReceiveError::Decode(error) => write!(f, "the frame does not decode: {error}"),
+            ReceiveError::Decode(error) => f.write_str(&texts::receive_decode(error)),
             ReceiveError::WrongSpace => AppendError::WrongSpace.fmt(f),
         }
     }

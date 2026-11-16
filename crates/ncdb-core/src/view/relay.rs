@@ -18,6 +18,7 @@ use crate::change::Change;
 use crate::ids::MemberId;
 use crate::ids::{ChangeId, SpaceId};
 use crate::log::{RelayCounts, RelayRefusal};
+use crate::texts;
 
 impl View {
     /// The changes of `space` the relay has neither confirmed nor refused,
@@ -43,7 +44,8 @@ impl View {
         let mut refused = Vec::new();
         while let Some(row) = rows.next()? {
             let frame: Vec<u8> = row.get(0)?;
-            let change = Change::decode(&frame).map_err(|_| Error::Corrupt("log frame"))?;
+            let change =
+                Change::decode(&frame).map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?;
             refused.push((change, RelayRefusal(row.get(1)?)));
         }
         Ok(refused)
@@ -115,7 +117,8 @@ impl View {
     /// Records the relay position of a change the log holds: the relay
     /// accepted it there, or already held it there.
     pub fn confirm(&mut self, space: SpaceId, id: ChangeId, position: u64) -> Result<(), Error> {
-        let position = i64::try_from(position).map_err(|_| Error::Corrupt("relay position"))?;
+        let position = i64::try_from(position)
+            .map_err(|_| Error::Corrupt(texts::UNREADABLE_RELAY_POSITION))?;
         self.conn.execute(
             "UPDATE log SET relay_position = ?3 WHERE space_id = ?1 AND change_id = ?2",
             params![space.0, id.0, position],
@@ -171,7 +174,7 @@ impl View {
             });
         match ok {
             true => Ok(Some(epoch)),
-            false => Err(Error::Corrupt("relay epoch")),
+            false => Err(Error::Corrupt(texts::UNREADABLE_RELAY_EPOCH)),
         }
     }
 
@@ -201,7 +204,7 @@ impl View {
         let mut cursor = 0u64;
         while let Some(row) = rows.next()? {
             let position = u64::try_from(row.get::<_, i64>(0)?)
-                .map_err(|_| Error::Corrupt("relay position"))?;
+                .map_err(|_| Error::Corrupt(texts::UNREADABLE_RELAY_POSITION))?;
             match position {
                 p if p <= cursor => {}
                 p if p == cursor + 1 => cursor = p,
@@ -229,7 +232,9 @@ impl View {
         let mut changes = Vec::new();
         while let Some(row) = rows.next()? {
             let frame: Vec<u8> = row.get(0)?;
-            changes.push(Change::decode(&frame).map_err(|_| Error::Corrupt("log frame"))?);
+            changes.push(
+                Change::decode(&frame).map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?,
+            );
         }
         Ok(changes)
     }

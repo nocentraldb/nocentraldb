@@ -20,6 +20,7 @@ use super::model::{Direction, Field, Index, Model, Scope};
 use super::{Error, stored_lock};
 use crate::basic::Kind;
 use crate::model_lock::ModelLock;
+use crate::texts;
 
 /// The tables every view has, whatever its model.
 const FIXED: &str = "
@@ -231,7 +232,9 @@ pub(super) fn open(
             Ok(Fit::Current)
         }
         Some(format) => {
-            let found = format.parse().map_err(|_| Error::Corrupt("meta format"))?;
+            let found = format
+                .parse()
+                .map_err(|_| Error::Corrupt(texts::UNREADABLE_META_FORMAT))?;
             if found != super::View::FORMAT {
                 return Err(Error::Format { found });
             }

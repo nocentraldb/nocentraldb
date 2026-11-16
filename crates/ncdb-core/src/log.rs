@@ -21,6 +21,7 @@ use std::fmt;
 use crate::change::{Change, Kind};
 use crate::ids::{ChangeId, MemberId, SpaceId};
 use crate::receive::Checks;
+use crate::texts;
 use crate::tips::{Opened, Tips};
 
 /// A position in the log: 1 for the first entry. A cursor at position `p`
@@ -52,7 +53,7 @@ pub enum AppendError {
 impl fmt::Display for AppendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            AppendError::WrongSpace => f.write_str("the change belongs to another space"),
+            AppendError::WrongSpace => f.write_str(texts::APPEND_WRONG_SPACE),
         }
     }
 }

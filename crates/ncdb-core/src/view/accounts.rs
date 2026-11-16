@@ -15,13 +15,15 @@
 use rusqlite::{OptionalExtension, params};
 
 use super::{Error, View};
+use crate::texts;
 
 impl View {
     /// Records that a person confirmed the account with the public key
     /// `account` at `at`, in milliseconds since the Unix epoch. An account
     /// confirmed before keeps the time of its first confirmation.
     pub fn confirm_account(&mut self, account: &[u8; 32], at: u64) -> Result<(), Error> {
-        let at = i64::try_from(at).map_err(|_| Error::Corrupt("confirmation time"))?;
+        let at =
+            i64::try_from(at).map_err(|_| Error::Corrupt(texts::UNREADABLE_CONFIRMATION_TIME))?;
         self.conn.execute(
             "INSERT INTO confirmed_accounts (account_key, confirmed_at) VALUES (?1, ?2)
              ON CONFLICT (account_key) DO NOTHING",
@@ -41,7 +43,9 @@ impl View {
                 |row| row.get(0),
             )
             .optional()?;
-        at.map(|at| u64::try_from(at).map_err(|_| Error::Corrupt("confirmation time")))
-            .transpose()
+        at.map(|at| {
+            u64::try_from(at).map_err(|_| Error::Corrupt(texts::UNREADABLE_CONFIRMATION_TIME))
+        })
+        .transpose()
     }
 }

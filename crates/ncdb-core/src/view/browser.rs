@@ -14,6 +14,7 @@
 
 use std::fmt;
 
+use crate::texts;
 use sqlite_wasm_rs::WasmOsCallback;
 use sqlite_wasm_rs::vfs::VfsFilesManager;
 use sqlite_wasm_vfs::sahpool::{self, OpfsSAHError, OpfsSAHPoolCfg};
@@ -46,10 +47,8 @@ pub enum InstallError {
 impl fmt::Display for InstallError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            InstallError::NotInWorker => {
-                f.write_str("the view runs only in a dedicated Web Worker")
-            }
-            InstallError::Opfs(error) => write!(f, "OPFS could not be opened: {error}"),
+            InstallError::NotInWorker => f.write_str(texts::VIEW_NOT_IN_WORKER),
+            InstallError::Opfs(error) => f.write_str(&texts::view_opfs(error)),
         }
     }
 }

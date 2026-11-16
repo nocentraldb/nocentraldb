@@ -23,6 +23,7 @@ use crate::cbor::{self, DecodeError, Key, Value};
 use crate::clock::Hlc;
 use crate::ids::{self, ChangeId, MemberId, ObjectId, OperationId, SpaceId};
 use crate::redact::Size;
+use crate::texts;
 pub use crate::writer_model::{WriterModel, WrongShape};
 
 /// The depth of the header map in a change: inside the frame.
@@ -237,19 +238,15 @@ impl fmt::Display for ChangeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ChangeError::Encoding(error) => error.fmt(f),
-            ChangeError::FrameShape => {
-                f.write_str("the frame is not [version, header bytes, signature]")
+            ChangeError::FrameShape => f.write_str(texts::CHANGE_FRAME_SHAPE),
+            ChangeError::FrameVersion(version) => {
+                f.write_str(&texts::change_frame_version(version))
             }
-            ChangeError::FrameVersion(version) => write!(f, "unknown frame version {version}"),
-            ChangeError::NotAMap => f.write_str("expected a map"),
-            ChangeError::TextKey => f.write_str("a text key where only unsigned keys are allowed"),
-            ChangeError::MissingKey(key) => write!(f, "key {key} is missing"),
-            ChangeError::InvalidValue(key) => {
-                write!(f, "key {key} holds a value of the wrong type or length")
-            }
-            ChangeError::UnsortedDependencies => {
-                f.write_str("the dependencies are not sorted, or repeat an id")
-            }
+            ChangeError::NotAMap => f.write_str(texts::CHANGE_NOT_MAP),
+            ChangeError::TextKey => f.write_str(texts::CHANGE_TEXT_KEY),
+            ChangeError::MissingKey(key) => f.write_str(&texts::change_missing_key(key)),
+            ChangeError::InvalidValue(key) => f.write_str(&texts::change_invalid_value(key)),
+            ChangeError::UnsortedDependencies => f.write_str(texts::CHANGE_UNSORTED_DEPENDENCIES),
         }
     }
 }

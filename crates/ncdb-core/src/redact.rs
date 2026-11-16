@@ -26,3 +26,12 @@ impl fmt::Debug for Hidden {
 pub(crate) fn hex(f: &mut fmt::Formatter<'_>, bytes: &[u8]) -> fmt::Result {
     bytes.iter().try_for_each(|byte| write!(f, "{byte:02x}"))
 }
+
+/// Bytes as lower-case hex, as a value a text's placeholder takes.
+pub(crate) struct Hex<'a>(pub &'a [u8]);
+
+impl fmt::Display for Hex<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        hex(f, self.0)
+    }
+}

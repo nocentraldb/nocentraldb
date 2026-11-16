@@ -31,6 +31,7 @@ use zeroize::Zeroizing;
 use crate::change::{Change, ChangeError, Header, Kind, Payload};
 use crate::ids::SpaceId;
 use crate::keys::{self, MemberKey, MemberPublicKey, SpaceKey};
+use crate::texts;
 
 /// Suite 1 of RFC 0003: Ed25519, HPKE with X25519, XChaCha20-Poly1305,
 /// HKDF-SHA256 and SHA-256.
@@ -72,17 +73,13 @@ pub enum OpenError {
 impl fmt::Display for OpenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OpenError::NotSealed(kind) => write!(f, "the change is not sealed: kind {kind}"),
-            OpenError::UnknownSuite(suite) => write!(f, "unknown suite {suite}"),
-            OpenError::AuthorMismatch => {
-                f.write_str("the header's author is not the member of these public keys")
-            }
-            OpenError::AuthorKey => f.write_str("the author's public key is not an Ed25519 key"),
-            OpenError::Signature => f.write_str("the signature does not verify"),
-            OpenError::Decryption => {
-                f.write_str("the payload does not decrypt under the key the header names")
-            }
-            OpenError::Payload(error) => write!(f, "the decrypted payload is invalid: {error}"),
+            OpenError::NotSealed(kind) => f.write_str(&texts::open_not_sealed(kind)),
+            OpenError::UnknownSuite(suite) => f.write_str(&texts::open_unknown_suite(suite)),
+            OpenError::AuthorMismatch => f.write_str(texts::OPEN_AUTHOR_MISMATCH),
+            OpenError::AuthorKey => f.write_str(texts::OPEN_AUTHOR_KEY),
+            OpenError::Signature => f.write_str(texts::OPEN_SIGNATURE),
+            OpenError::Decryption => f.write_str(texts::OPEN_DECRYPTION),
+            OpenError::Payload(error) => f.write_str(&texts::open_payload(error)),
         }
     }
 }

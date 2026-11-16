@@ -13,6 +13,7 @@ use crate::ids::{ChangeId, SpaceId};
 use crate::log::{
     Log, OperationParkReason, ParkReason, ParkedOperation, RejectReason, RelayRefusal, State,
 };
+use crate::texts;
 
 /// The `state` and `reason` columns of a state.
 fn columns(state: &State) -> (&'static str, Option<&'static str>) {
@@ -66,7 +67,7 @@ fn parse<T: Copy>(table: &[(T, &'static str)], name: Option<&str>) -> Result<T, 
         .iter()
         .find(|(_, n)| Some(*n) == name)
         .map(|(reason, _)| *reason)
-        .ok_or(Error::Corrupt("log reason"))
+        .ok_or(Error::Corrupt(texts::UNREADABLE_LOG_REASON))
 }
 
 fn park_reason(reason: ParkReason) -> &'static str {
@@ -118,7 +119,8 @@ pub(super) fn update(conn: &Connection, log: &Log, id: ChangeId) -> Result<(), E
                 params![
                     space,
                     id.0,
-                    i64::try_from(operation.position).map_err(|_| Error::Corrupt("position"))?,
+                    i64::try_from(operation.position)
+                        .map_err(|_| Error::Corrupt(texts::UNREADABLE_POSITION))?,
                     name(&OPERATION, operation.reason)
                 ],
             )?;
@@ -140,11 +142,12 @@ pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
     while let Some(row) = rows.next()? {
         let space = SpaceId(row.get(0)?);
         let frame: Vec<u8> = row.get(1)?;
-        let change = Change::decode(&frame).map_err(|_| Error::Corrupt("log frame"))?;
+        let change =
+            Change::decode(&frame).map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_FRAME))?;
         let id = change.id();
         let log = logs.entry(space).or_insert_with(|| Log::new(space));
         log.append(change)
-            .map_err(|_| Error::Corrupt("log space"))?;
+            .map_err(|_| Error::Corrupt(texts::UNREADABLE_LOG_SPACE))?;
         let reason: Option<String> = row.get(3)?;
         let reason = reason.as_deref();
         let state = match row.get::<_, String>(2)?.as_str() {
@@ -153,7 +156,7 @@ pub(super) fn load(conn: &Connection) -> Result<BTreeMap<SpaceId, Log>, Error> {
             },
             "parked" => State::Parked(parse(&PARK, reason)?),
             "rejected" => State::Rejected(parse(&REJECT, reason)?),
-            _ => return Err(Error::Corrupt("log state")),
+            _ => return Err(Error::Corrupt(texts::UNREADABLE_LOG_STATE)),
         };
         log.set_state(id, state);
         if let Some(refusal) = row.get::<_, Option<String>>(4)? {
@@ -178,7 +181,8 @@ fn parked(conn: &Connection, space: SpaceId, id: ChangeId) -> Result<Vec<ParkedO
         let reason: String = row.get(1)?;
         let position: i64 = row.get(0)?;
         parked.push(ParkedOperation {
-            position: u64::try_from(position).map_err(|_| Error::Corrupt("parked position"))?,
+            position: u64::try_from(position)
+                .map_err(|_| Error::Corrupt(texts::UNREADABLE_PARKED_POSITION))?,
             reason: parse(&OPERATION, Some(&reason))?,
         });
     }

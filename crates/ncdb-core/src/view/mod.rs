@@ -36,6 +36,7 @@ mod state;
 mod stored_lock;
 
 use crate::plugins::Registry;
+use crate::texts;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::path::Path;
@@ -124,27 +125,21 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Error::Sqlite(error) => write!(f, "SQLite failed: {error}"),
+            Error::Sqlite(error) => f.write_str(&texts::view_sqlite(error)),
             Error::Receive(error) => error.fmt(f),
-            Error::Format { found } => write!(
-                f,
-                "the view has format version {found}, this core writes {}",
-                View::FORMAT
-            ),
-            Error::Model => f.write_str("the view was folded by another model"),
+            Error::Format { found } => f.write_str(&texts::view_format(found, View::FORMAT)),
+            Error::Model => f.write_str(texts::VIEW_MODEL),
             Error::Refused(refused) => {
-                f.write_str(
-                    "the lock is refused against the lock the database was last opened with:",
-                )?;
+                f.write_str(texts::VIEW_REFUSED)?;
                 for line in refused.iter().flat_map(Refusal::lines) {
                     write!(f, "\n  {line}")?;
                 }
                 Ok(())
             }
             Error::Invalid(invalid) => write!(f, "the model cannot be folded: {invalid:?}"),
-            Error::Corrupt(what) => write!(f, "the database holds an unreadable {what}"),
-            Error::Query(error) => write!(f, "the lookup was refused: {error:?}"),
-            Error::Plan(index) => write!(f, "the lookup of index {index} does not run through it"),
+            Error::Corrupt(what) => f.write_str(&texts::view_corrupt(what)),
+            Error::Query(error) => f.write_str(&texts::view_query(error)),
+            Error::Plan(index) => f.write_str(&texts::view_plan(index)),
         }
     }
 }

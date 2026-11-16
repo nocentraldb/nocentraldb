@@ -16,6 +16,7 @@ use crate::cbor::{Key, Value};
 use crate::change::Operation;
 use crate::field_op::Origin;
 use crate::log::OperationParkReason;
+use crate::texts;
 
 /// The first operation number of plugin types (RFC 0004, "Operation
 /// numbers").
@@ -45,7 +46,7 @@ pub(super) fn apply(
     {
         Ok(bytes) => Ok(Ok(bytes)),
         Err(ApplyError::Park(reason)) => Ok(Err(park(reason))),
-        Err(ApplyError::Corrupt) => Err(Error::Corrupt("plugin state")),
+        Err(ApplyError::Corrupt) => Err(Error::Corrupt(texts::UNREADABLE_PLUGIN_STATE)),
     }
 }
 

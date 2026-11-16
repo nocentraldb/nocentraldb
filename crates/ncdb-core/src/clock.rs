@@ -14,6 +14,7 @@
 //! would break convergence.
 
 use crate::ids::MemberId;
+use crate::texts;
 
 /// A hybrid logical clock value, compared as a number. It lives in
 /// `ncdb-plugin`, since a plugin sees an operation's stamp (RFC 0011).
@@ -26,7 +27,7 @@ pub struct ClockExhausted;
 
 impl std::fmt::Display for ClockExhausted {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("the clock has reached its largest value")
+        f.write_str(texts::CLOCK_EXHAUSTED)
     }
 }
 
@@ -50,13 +51,10 @@ pub struct ClockAhead {
 
 impl std::fmt::Display for ClockAhead {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("a change by member ")?;
-        crate::redact::hex(f, &self.author.0)?;
-        write!(
-            f,
-            " has a clock {} ms ahead of the local wall clock",
-            self.ahead_millis
-        )
+        f.write_str(&texts::clock_ahead(
+            crate::redact::Hex(&self.author.0),
+            self.ahead_millis,
+        ))
     }
 }
 
