@@ -30,7 +30,7 @@ async fn hello_gets_a_challenge_with_the_relay_id_a_nonce_and_the_limits() {
     assert_eq!(bytes(field(&challenge, 5)).len(), 32);
     let limits = field(&challenge, 6);
     assert_eq!(keys(limits), [1, 2, 3]);
-    assert_eq!(uint(field(limits, 1)), 128 * 1024);
+    assert_eq!(uint(field(limits, 1)), 23 * 1024);
     assert_eq!(uint(field(limits, 2)), 32);
     assert_eq!(uint(field(limits, 3)), ncdb_relay_server::MAX_FRAME as u64);
 }

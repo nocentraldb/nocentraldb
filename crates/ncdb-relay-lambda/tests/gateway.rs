@@ -1,8 +1,9 @@
 //! The handler behind the local stand-in for API Gateway, over real
 //! sockets, with the relay server's own test client: a member speaks RFC
-//! 0007 to it exactly as to the WebSocket server. API Gateway's limits
-//! hold: a message above 128 KiB closes the connection, and so does the
-//! connection's maximum age; either way `$disconnect` forgets it.
+//! 0007 to it exactly as to the WebSocket server. API Gateway's rules
+//! hold: a binary frame closes the connection with 1003, a frame above 32
+//! KB with 1009, and so does the connection's maximum age; either way
+//! `$disconnect` forgets it (NOC-338).
 
 #[path = "../../ncdb-relay-server/tests/support/mod.rs"]
 mod support;
@@ -161,11 +162,28 @@ async fn a_member_added_while_connected_hears_added() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_message_above_128_kib_closes_the_connection() {
+async fn a_binary_frame_closes_the_connection_with_1003() {
     let local = gateway(None).await;
     let (mut zero, _) = Client::member(local.addr, 0).await;
-    zero.send_bytes(vec![0xa0; 128 * 1024 + 1]).await;
-    zero.closed().await;
+    zero.send_binary(vec![0xa0; 16]).await;
+    assert_eq!(zero.close_code().await, Some(1003));
+    local.forgotten().await;
+    // The frame never reached the handler.
+    let routes: Vec<String> = local
+        .lines()
+        .iter()
+        .map(|line| line["route"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(routes, ["connect", "message", "message", "disconnect"]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_message_above_one_32_kb_frame_closes_the_connection_with_1009() {
+    let local = gateway(None).await;
+    let (mut zero, _) = Client::member(local.addr, 0).await;
+    // 25 KiB is 34,136 characters of base64: one frame above 32 KB.
+    zero.send_bytes(vec![0xa0; 25 * 1024]).await;
+    assert_eq!(zero.close_code().await, Some(1009));
     local.forgotten().await;
     // The message never reached the handler: only the handshake and the
     // close did.
@@ -178,18 +196,24 @@ async fn a_message_above_128_kib_closes_the_connection() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_message_of_128_kib_still_reaches_the_handler() {
+async fn a_message_of_rfc_0007_s_largest_still_reaches_the_handler() {
     let local = gateway(None).await;
     let (mut zero, _) = Client::member(local.addr, 0).await;
     // Not a request, so the relay answers malformed and keeps the
-    // connection: what counts is that the gateway let it through.
-    zero.send_bytes(vec![0xa0; 128 * 1024]).await;
+    // connection: what counts is that the gateway let it through, in one
+    // frame of 31,404 characters.
+    zero.send_bytes(vec![0xa0; ncdb_relay::wire::MAX_MESSAGE])
+        .await;
     let answer = zero.recv().await;
     assert_eq!(text(field(&answer, 3)), "malformed");
     // The handler posts its answer before the gateway writes the
     // invocation's log line, so the line may come a moment after.
     let started = Instant::now();
-    while !local.lines().iter().any(|line| line["in"] == 128 * 1024) {
+    while !local
+        .lines()
+        .iter()
+        .any(|line| line["in"] == ncdb_relay::wire::MAX_MESSAGE)
+    {
         assert!(
             started.elapsed() < Duration::from_secs(20),
             "logged in time"

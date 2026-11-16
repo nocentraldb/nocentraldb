@@ -23,11 +23,11 @@ async fn a_message_the_server_cannot_read_is_malformed_and_the_connection_stays(
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_message_above_128_kib_closes_the_connection() {
+async fn a_message_above_23_kib_closes_the_connection() {
     let (addr, _dir) = server().await;
     let (mut client, _) = Client::member(addr, 0).await;
     let space = Space::new(0);
-    let frames = Value::Array(vec![Value::Bytes(vec![0; 128 * 1024])]);
+    let frames = Value::Array(vec![Value::Bytes(vec![0; 23 * 1024])]);
     let push = message(
         "push",
         Some(1),
@@ -35,4 +35,17 @@ async fn a_message_above_128_kib_closes_the_connection() {
     );
     client.send(&push).await;
     client.closed().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_binary_frame_is_no_message() {
+    let (addr, _dir) = server().await;
+    let (mut client, _) = Client::member(addr, 0).await;
+    // A member's push as one binary frame, as members sent before NOC-338.
+    client
+        .send_binary(ncdb_core::cbor::encode(&message("ping", Some(1), &[])))
+        .await;
+    let error = client.recv().await;
+    assert_eq!(kind(&error), "error");
+    assert_eq!(text(field(&error, 3)), "malformed");
 }

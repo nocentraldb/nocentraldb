@@ -159,7 +159,10 @@ where
     async fn post_to(&self, call: &mut Call<'_>, id: &str, bytes: Vec<u8>) -> bool {
         debug_assert!(bytes.len() <= MAX_MESSAGE);
         let len = bytes.len();
-        match self.api.post(id, bytes).await {
+        // The base64 of the message, as the member reads it from a text
+        // frame (RFC 0007, "Transport and encoding"; NOC-338).
+        let text = wire::to_text(&bytes).into_bytes();
+        match self.api.post(id, text).await {
             Ok(Posted::Sent) => {
                 call.line.posts += 1;
                 call.line.bytes_out += len;
@@ -214,8 +217,8 @@ where
             call.line.member = Some(member);
         }
         let request = match body {
-            Body::Binary(bytes) => wire::decode(&bytes),
-            Body::Text(_) | Body::None => Err(wire::Malformed { req: None }),
+            Body::Message(bytes) => wire::decode(&bytes),
+            Body::Unreadable(_) | Body::None => Err(wire::Malformed { req: None }),
         };
         let request = match request {
             Ok(request) => request,
