@@ -18,6 +18,10 @@ use super::wire::{self, Answer};
 use super::{Connection, apply, finalize, large, merge};
 use crate::db::{Inner, lock};
 
+mod upload;
+
+use upload::Uploaded;
+
 /// A member sends `ping` after this long without a message (RFC 0007,
 /// "Liveness"). The tests shorten this and every bound below.
 pub(super) const IDLE: Duration = if cfg!(test) {
@@ -52,17 +56,6 @@ async fn until(deadline: Option<Instant>) {
         Some(deadline) => time::sleep_until(deadline).await,
         None => std::future::pending().await,
     }
-}
-
-/// What became of an upload.
-enum Uploaded {
-    /// The frame is uploaded under this id; the push names it.
-    Id(Vec<u8>),
-    /// The relay refused the frame as too large; it is recorded as refused.
-    Refused,
-    /// The relay answered with another error, handled as an answer to the
-    /// push, which stops.
-    Stopped,
 }
 
 /// How a session ended.
@@ -419,37 +412,6 @@ impl<T: Transport> Session<'_, T> {
             }
         }
         self.put_person_keys(space).await
-    }
-
-    /// Uploads `frame`, too large for one push, to an upload URL the relay
-    /// hands out (RFC 0007, "Large changes"). A frame the relay refuses as
-    /// `too_large` is recorded as refused, as a push would; any other error
-    /// is handled as an answer to the push, which then stops. An upload that
-    /// fails ends the connection, and the change is pushed again on the next
-    /// one.
-    async fn upload(
-        &mut self,
-        space: SpaceId,
-        change: ncdb_core::ids::ChangeId,
-        frame: &[u8],
-    ) -> Result<Uploaded, End> {
-        let req = self.req();
-        self.send(wire::upload(req, space, frame.len())).await?;
-        match self.ask(req).await? {
-            Answer::Upload { id, url, .. } => {
-                large::upload(&url, frame).await.map_err(|_| lost())?;
-                Ok(Uploaded::Id(id))
-            }
-            Answer::Error { code, .. } if code == "too_large" => {
-                let refused = vec![wire::Pushed::Rejected(code)];
-                with(self.db, |inner| {
-                    apply::pushed(inner, space, &[change], refused)
-                })?
-                .map_err(|_| lost())?;
-                Ok(Uploaded::Refused)
-            }
-            answer => self.answer(space, answer).map(|()| Uploaded::Stopped),
-        }
     }
 
     /// Puts the person-key records of `space` this member wrote, once the
