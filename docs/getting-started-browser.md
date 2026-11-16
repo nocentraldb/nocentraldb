@@ -468,11 +468,95 @@ for (const erasure of await project.erasures.list()) {
 
 A member that never comes back online is listed as `"missing"` for good: that is what the audit is for. Every member may read it, a reader too.
 
+## 15. Pair a second device of your own account
+
+A person's devices share one account. The account key stays on the person's devices. A new device opens its database for pairing and shows its invitation, as a QR code or text. It may sync while it waits:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "tablet",
+  pairing: "request",
+  relay: "ws://localhost:7700",
+});
+console.log(String(await db.invitation()));
+
+// The answer the laptop shows, once it paired this device.
+const answer = new URLSearchParams(location.search).get("answer");
+if (answer !== null) {
+  const { notices } = await db.account.completePairing(
+    nc.pairingAnswer(answer),
+  );
+  for (const notice of notices) console.log(notice.text);
+}
+```
+
+A device that holds the account key pairs it, after a person scanned its code or confirmed on both screens that it is their own device. The answer carries the account key, sealed so that only the new device opens it:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "laptop",
+  relay: "ws://localhost:7700",
+});
+
+// The tablet's invitation, as its page printed it.
+const text = new URLSearchParams(location.search).get("invitation") ?? "";
+if (confirm("Pair this device with your account?")) {
+  const paired = await db.account.pair({
+    kind: "device",
+    invitation: nc.invitation(text),
+  });
+  console.log(String(paired.answer));
+  console.log(`added to ${paired.added.length} spaces`);
+}
+```
+
+The laptop adds the new device to every space where it is an admin, each with its notice in `paired.added`. `paired.askAdmins` lists the spaces whose admins your app asks to add it.
+
+## 16. Remove a lost device
+
+The first open of an account creates its recovery code: twelve words, which `db.account.recoveryCode()` gives your app until the person confirms they stored them with `confirm()`. When a device is lost, another device of the account removes it with those words. That removes it from every space this device administers and gives the account a new account key, so the lost device's is no longer accepted:
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+import { model } from "../model.ts";
+
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({
+  model,
+  lock,
+  name: "laptop",
+  relay: "ws://localhost:7700",
+});
+
+// The lost device's member id, from space.members.list().
+const lost = new URLSearchParams(location.search).get("member") ?? "";
+const words = prompt("Your recovery code") ?? "";
+const { removed, askAdmins, notice } = await db.account.removeMember(lost, {
+  recover: words,
+});
+console.log(`removed from ${removed.length} spaces`);
+console.log(`ask the admins of ${askAdmins.length} more spaces`);
+console.log(notice.text);
+```
+
+Each space in `removed` comes with the notice `memberRemoved`. `askAdmins` lists the spaces where no device of the account is an admin, whose admins your app asks to remove it. The notice `accountKeyRenewed` says that members that have not learnt the new account key yet still accept the old one. The words are never logged; a code that is not this account's fails with `notAllowed`, and nothing is removed.
+
 ## What the browser SDK does not do yet
 
 RFC 0009 names more than the browser SDK has today. This guide leaves out what it lacks:
 
-- **Accounts and devices.** A person's second device joins the space as a member of its own account, as in step 10. Pairing a device into one account is in the Rust SDK ([its guide](getting-started.md), step 9) but not yet in the TypeScript SDK. The account's recovery code is: `db.account.recoveryCode()` gives it until `confirm()` ([RFC 0009, "Accounts and devices"](rfc/0009-sdk-api.md#accounts-and-devices)).
 - **Node.js.** `nc.open` runs in a browser. The options `path`, `keyFile`, `inMemory` and `agent` of RFC 0009 are not there yet.
 - **`space.inspect`,** the details of a conflict.
 - **Erasing a person.** The browser SDK reads the erasure audit (step 14) but cannot start an erasure or take one back yet.
