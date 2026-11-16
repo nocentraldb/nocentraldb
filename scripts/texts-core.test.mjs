@@ -217,3 +217,18 @@ test("a word in the core's code needs a lower-case letter, so SQL is no text", (
   ])
     assert.ok(checkCoreCode([[REFUSAL, text]], []).length, text);
 });
+
+test("a text continued over lines with a backslash is a text written in code", () => {
+  const source = [
+    "format!(",
+    '    "format {format} is not known to this version; \\',
+    '     Build the lock with the matching version of ncdb."',
+    ")",
+  ].join("\n");
+  const problems = checkCoreCode([[REFUSAL, source]], []);
+  assert.deepEqual(
+    problems.map((p) => p.split(":")[1]),
+    ["2"],
+    String(problems),
+  );
+});
