@@ -8,6 +8,11 @@
 //
 // - any literal with two words in a row is a text written in code, except
 //   on a line marked `// notation`; a comment is no text;
+// - unlike the command line's rule, a word has a lower-case letter, so SQL's
+//   keywords in capitals are no words; a panic's message (`expect`,
+//   `unreachable!`, `panic!`, `assert!` and its kin) is no text, as it
+//   describes a bug in the core; and an inline `#[cfg(test)]` module is a
+//   test (pm, NOC-342);
 // - every core text is used, as `texts::NAME` or `texts::name`.
 //
 // The gate reads all of crates/ncdb-core/src, outside its tests and the
@@ -15,13 +20,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import {
-  CLI_STRAYS,
-  checkCode,
-  cliUse,
-  rustFiles,
-  rustModule,
-} from "./texts.mjs";
+import { checkCode, cliUse, rustFiles, rustModule } from "./texts.mjs";
 
 /** The core's generated module, and the code the gate reads, relative to the root. */
 export const CORE_PATHS = {
@@ -30,10 +29,62 @@ export const CORE_PATHS = {
 };
 
 /**
- * A literal with two words in a row: T5's rule for the command line. A
- * function, as texts.mjs imports this module before it defines CLI_STRAYS.
+ * A word: two letters or more, one of them lower-case, so that SQL's
+ * keywords in capitals are no words (pm, NOC-342).
  */
-const coreStrays = () => CLI_STRAYS.filter(([, what]) => what === "a text");
+const WORD = String.raw`(?<![A-Za-z])(?=[A-Za-z]*[a-z])[A-Za-z]{2,}(?![A-Za-z])`;
+
+/** A literal with two words in a row: T5's rule, with the core's words. */
+const CORE_STRAYS = [
+  [
+    new RegExp(
+      String.raw`"(?:[^"\\\n]|\\.)*?${WORD} ${WORD}(?:[^"\\\n]|\\.)*"`,
+      "g",
+    ),
+    "a text",
+  ],
+];
+
+/** `text` with every character but a newline a space, so lines keep their numbers. */
+const blank = (text) => text.replace(/[^\n]/g, " ");
+
+/** The index just after the bracket that closes the one at `open`, or the end. */
+const closing = (source, open, [left, right]) => {
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === left) depth++;
+    else if (source[i] === right && --depth === 0) return i + 1;
+  }
+  return source.length;
+};
+
+/** A call whose message describes a bug in the core: a panic's (pm, NOC-342). */
+const PANIC = /\b(?:expect|unreachable!|panic!|assert(?:_eq|_ne)?!)\(/g;
+
+/**
+ * `source` as the gate reads it: an inline `#[cfg(test)]` module and the
+ * string literals of a panic's call blanked out (pm, NOC-342).
+ */
+export const coreReadable = (source) => {
+  let out = source;
+  for (const match of source.matchAll(
+    /^\s*#\[cfg\(test\)\]\s*\n\s*(?:pub(?:\([^)]*\))? )?mod \w+ \{/gm,
+  )) {
+    const open = match.index + match[0].length - 1;
+    const end = closing(source, open, "{}");
+    out =
+      out.slice(0, match.index) +
+      blank(out.slice(match.index, end)) +
+      out.slice(end);
+  }
+  for (const match of out.matchAll(PANIC)) {
+    const open = match.index + match[0].length - 1;
+    const end = closing(out, open, "()");
+    const call = out.slice(open, end).replace(/"(?:[^"\\]|\\.)*"/g, blank);
+    out = out.slice(0, open) + call + out.slice(end);
+  }
+  return out;
+};
 
 /** The files of the core's code the gate reads, as [path, source], outside its tests. */
 export const coreFiles = (root) =>
@@ -52,10 +103,10 @@ export const generateCore = (texts) =>
 /** The problems of the core's code: stray texts, and core texts no code uses. */
 export const checkCoreCode = (files, texts) =>
   checkCode(
-    files,
+    files.map(([path, source]) => [path, coreReadable(source)]),
     CORE_PATHS.module,
     texts.filter((t) => t.kind === "core"),
-    { strays: coreStrays(), use: cliUse },
+    { strays: CORE_STRAYS, use: cliUse },
   );
 
 /** The gate's part for the core in the repository at `root`: writes the module when `write`, and answers the problems. */
