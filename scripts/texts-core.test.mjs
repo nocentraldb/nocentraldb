@@ -161,3 +161,59 @@ test("the core writes no text in code", () => {
     [],
   );
 });
+
+test("an inline test module is no code the gate reads", () => {
+  const source = [
+    "fn f() -> &str { texts::NAME_KIND_COMPUTED }",
+    "",
+    "#[cfg(test)]",
+    "mod tests {",
+    "    fn g() {",
+    '        let _ = "a text in a test";',
+    "    }",
+    "}",
+    "",
+    'fn h() { let _ = "after the tests"; }',
+  ].join("\n");
+  const problems = checkCoreCode([[REFUSAL, source]], [CORE_CONST]);
+  assert.deepEqual(
+    problems.map((p) => p.split(":")[1]),
+    ["10"],
+    String(problems),
+  );
+});
+
+test("a panic's message is no text: it describes a bug in the core", () => {
+  const source = [
+    'let a = x.expect("the log holds the change");',
+    "let b = y",
+    "    .expect(",
+    '        "32 bytes are far below the limit",',
+    "    );",
+    'unreachable!("a genesis node")',
+    'assert_ne!(number, 0, "the first account key is number 1");',
+    'assert!(ok, "it holds here");',
+    'assert_eq!(a, b, "they are equal");',
+    'panic!("the core broke here")',
+  ].join("\n");
+  assert.deepEqual(checkCoreCode([[REFUSAL, source]], []), []);
+  assert.ok(
+    checkCoreCode([[REFUSAL, 'Err(Problem::new("this is a text"))']], [])
+      .length,
+  );
+});
+
+test("a word in the core's code needs a lower-case letter, so SQL is no text", () => {
+  const source = [
+    '"SELECT frame FROM log WHERE space_id = ?1 ORDER BY local_position"',
+    'format!("({name} IS NOT NULL OR ({name} IS NULL AND {rest}))")',
+    'format!("EXPLAIN QUERY PLAN {sql}")',
+  ].join("\n");
+  assert.deepEqual(checkCoreCode([[REFUSAL, source]], []), []);
+  for (const text of [
+    '"SQLite failed: {error}"',
+    '"OPFS could not be opened"',
+    '"select frame from log"',
+  ])
+    assert.ok(checkCoreCode([[REFUSAL, text]], []).length, text);
+});
