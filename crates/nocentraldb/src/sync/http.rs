@@ -173,14 +173,8 @@ async fn exchange(
 ) -> Result<(u16, Option<u64>, Box<dyn Stream>, Vec<u8>), Failed> {
     let target = split(url)?;
     let mut stream = connect(&target).await?;
-    let head = format!(
-        "{method} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        target.path,
-        target.authority,
-        body.len()
-    );
     stream
-        .write_all(head.as_bytes())
+        .write_all(head(method, &target, body.len()).as_bytes())
         .await
         .map_err(|_| Failed::Network)?;
     stream.write_all(body).await.map_err(|_| Failed::Network)?;
@@ -204,6 +198,14 @@ async fn exchange(
     let head = std::str::from_utf8(&buf[..end]).map_err(|_| Failed::Malformed)?;
     let (status, length) = parse(head)?;
     Ok((status, length, stream, rest))
+}
+
+/// The head of a request for `target` with a body of `length` bytes.
+fn head(method: &str, target: &Target<'_>, length: usize) -> String {
+    format!(
+        "{method} {} HTTP/1.1\r\nHost: {}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n",
+        target.path, target.authority,
+    )
 }
 
 /// The status and the `Content-Length` of a response head.
