@@ -12,6 +12,8 @@ use std::fmt;
 
 use serde_json::{Map, Value};
 
+use crate::texts;
+
 use super::{
     Collection, Deprecation, Direction, Element, FORMAT, Field, Index, IndexField, Kind, ModelId,
     ModelInfo, ModelLock, Named, Person, Plugin, Scope,
@@ -47,13 +49,7 @@ impl ModelLock {
         let top = object(&root, "")?;
         let format = whole(required(top, "", "format")?, "format")?;
         if format != FORMAT {
-            return Err(error(
-                "format",
-                format!(
-                    "format {format} is not known to this version; it reads format {FORMAT}. \
-                     Build the lock with the matching version of ncdb, or upgrade."
-                ),
-            ));
+            return Err(error("format", texts::lock_unknown_format(format, FORMAT)));
         }
         let model = object(required(top, "", "model")?, "model")?;
         let id = model_id(required(model, "model", "id")?, "model.id")?;
@@ -71,7 +67,7 @@ impl ModelLock {
 
 /// Parses JSON text into a value; the error names no path.
 pub(super) fn parse(text: &str) -> Result<Value, LockError> {
-    serde_json::from_str(text).map_err(|e| error("", format!("not valid JSON: {e}")))
+    serde_json::from_str(text).map_err(|e| error("", texts::lock_not_json(e)))
 }
 
 pub(super) fn error(path: &str, message: impl Into<String>) -> LockError {
@@ -95,7 +91,7 @@ pub(super) fn object<'a>(
 ) -> Result<&'a Map<String, Value>, LockError> {
     value
         .as_object()
-        .ok_or_else(|| error(path, "expected an object"))
+        .ok_or_else(|| error(path, texts::LOCK_EXPECTED_OBJECT))
 }
 
 pub(super) fn required<'a>(
@@ -104,26 +100,26 @@ pub(super) fn required<'a>(
     key: &str,
 ) -> Result<&'a Value, LockError> {
     map.get(key)
-        .ok_or_else(|| error(&join(path, key), "missing"))
+        .ok_or_else(|| error(&join(path, key), texts::LOCK_MISSING))
 }
 
 pub(super) fn whole(value: &Value, path: &str) -> Result<u64, LockError> {
     value
         .as_u64()
-        .ok_or_else(|| error(path, "expected a whole number"))
+        .ok_or_else(|| error(path, texts::LOCK_EXPECTED_WHOLE_NUMBER))
 }
 
 pub(super) fn string(value: &Value, path: &str) -> Result<String, LockError> {
     value
         .as_str()
         .map(str::to_owned)
-        .ok_or_else(|| error(path, "expected a string"))
+        .ok_or_else(|| error(path, texts::LOCK_EXPECTED_STRING))
 }
 
 pub(super) fn strings(value: &Value, path: &str) -> Result<Vec<String>, LockError> {
     let items = value
         .as_array()
-        .ok_or_else(|| error(path, "expected an array of strings"))?;
+        .ok_or_else(|| error(path, texts::LOCK_EXPECTED_STRINGS))?;
     items
         .iter()
         .enumerate()
@@ -152,7 +148,7 @@ fn optional<'a>(map: &'a Map<String, Value>, key: &str) -> Option<&'a Value> {
 
 fn model_id(value: &Value, path: &str) -> Result<ModelId, LockError> {
     let text = string(value, path)?;
-    let bad = || error(path, "expected 32 lower-case hex digits");
+    let bad = || error(path, texts::LOCK_EXPECTED_MODEL_ID);
     if text.len() != 32
         || !text
             .bytes()
@@ -287,10 +283,7 @@ fn kind(map: &Map<String, Value>, path: &str) -> Result<Kind, LockError> {
                 }
             }
             _ => {
-                return Err(error(
-                    &type_path,
-                    format!("{other} is no field type: expected ncdb/<type> or <plugin>/<type>"),
-                ));
+                return Err(error(&type_path, texts::lock_no_field_type(other)));
             }
         },
     })
@@ -309,10 +302,7 @@ fn element(map: &Map<String, Value>, path: &str) -> Result<Element, LockError> {
             &join(path, "options"),
         )?),
         other => {
-            return Err(error(
-                &type_path,
-                format!("a set's element is a basic value, not {other}"),
-            ));
+            return Err(error(&type_path, texts::lock_set_element_not_basic(other)));
         }
     })
 }
@@ -321,7 +311,7 @@ fn index(map: &Map<String, Value>, path: &str) -> Result<Index, LockError> {
     let fields_path = join(path, "fields");
     let items = required(map, path, "fields")?
         .as_array()
-        .ok_or_else(|| error(&fields_path, "expected an array"))?;
+        .ok_or_else(|| error(&fields_path, texts::LOCK_EXPECTED_ARRAY))?;
     let fields = items
         .iter()
         .enumerate()
@@ -347,10 +337,7 @@ pub(super) fn scope(map: &Map<String, Value>, path: &str) -> Result<Scope, LockE
     match optional(map, "scope") {
         None => Ok(Scope::Member),
         Some(value) if value.as_str() == Some("space") => Ok(Scope::Space),
-        Some(_) => Err(error(
-            &join(path, "scope"),
-            "expected \"space\" or no scope",
-        )),
+        Some(_) => Err(error(&join(path, "scope"), texts::LOCK_EXPECTED_SCOPE)),
     }
 }
 
@@ -358,6 +345,6 @@ pub(super) fn direction(value: &Value, path: &str) -> Result<Direction, LockErro
     match value.as_str() {
         Some("asc") => Ok(Direction::Asc),
         Some("desc") => Ok(Direction::Desc),
-        _ => Err(error(path, "expected \"asc\" or \"desc\"")),
+        _ => Err(error(path, texts::LOCK_EXPECTED_DIRECTION)),
     }
 }

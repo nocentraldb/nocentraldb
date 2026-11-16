@@ -14,6 +14,7 @@ use crate::field::{FieldType, Outcome};
 use crate::ids::{MemberId, ObjectId, OperationId, SpaceId};
 use crate::object::Object;
 use crate::set::{self, Edit, Element};
+use crate::texts;
 
 /// The object a member links to, with the space it lives in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,7 +31,7 @@ pub struct OtherSpace;
 
 impl core::fmt::Display for OtherSpace {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("a link cannot point into another space")
+        f.write_str(texts::LINK_INTO_OTHER_SPACE)
     }
 }
 

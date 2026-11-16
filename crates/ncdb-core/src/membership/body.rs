@@ -33,6 +33,7 @@ use super::genesis::Genesis;
 use super::key_chain::KeyChainEntry;
 use super::person_key::{ErasureDecision, PersonKeyEntry, ShredEntry};
 use super::statement::AccountKeyStatement;
+use crate::texts;
 
 /// The depth of a control body in its change: inside the header's key 6.
 const BODY_DEPTH: usize = 3;
@@ -199,8 +200,8 @@ impl From<cbor::DecodeError> for BodyError {
 impl fmt::Display for BodyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BodyError::Malformed(error) => write!(f, "malformed control body: {error}"),
-            BodyError::NotUnderstood => f.write_str("a control body this core does not understand"),
+            BodyError::Malformed(error) => f.write_str(&texts::body_malformed(error)),
+            BodyError::NotUnderstood => f.write_str(texts::BODY_NOT_UNDERSTOOD),
         }
     }
 }

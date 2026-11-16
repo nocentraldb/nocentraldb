@@ -15,8 +15,9 @@ use crate::clock::Hlc;
 use crate::ids::{ChangeId, MemberId, OperationId};
 use crate::object::{Create, Object, ObjectOperation};
 use crate::set::{self, Action, Edit};
+use crate::texts;
 
-const CORRUPT: Error = Error::Corrupt("merge state");
+const CORRUPT: Error = Error::Corrupt(texts::UNREADABLE_MERGE_STATE);
 
 /// The items of a state's top-level array.
 fn items(bytes: &[u8]) -> Result<Vec<Value>, Error> {

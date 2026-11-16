@@ -32,6 +32,7 @@ use crate::change::ChangeError;
 use crate::envelope::{self, EnvelopeError};
 use crate::keys::{self, MemberKey, MemberPublicKey};
 use crate::membership::{AccountKeyStatement, Certificate, MemberKind};
+use crate::texts;
 
 /// The HPKE `info` of a sealed account key: this label alone.
 pub const ACCOUNT_KEY_CONTEXT: &[u8] = b"nocentraldb/account-key";
@@ -476,11 +477,9 @@ impl fmt::Debug for Paired {
 impl fmt::Display for BuildError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            BuildError::Kind => f.write_str("a pairing answer is for a device or an agent"),
-            BuildError::Statement => {
-                f.write_str("the account key statement does not name the account key")
-            }
-            BuildError::Seal(_) => f.write_str("the account key could not be sealed to the device"),
+            BuildError::Kind => f.write_str(texts::PAIRING_FOR_DEVICE_OR_AGENT),
+            BuildError::Statement => f.write_str(texts::PAIRING_STATEMENT_NOT_ACCOUNT_KEY),
+            BuildError::Seal(_) => f.write_str(texts::PAIRING_NOT_SEALABLE),
         }
     }
 }
@@ -488,14 +487,14 @@ impl fmt::Display for BuildError {
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            ReadError::Prefix => "it does not start with ncdb-pair-1:",
-            ReadError::Encoding => "it is not unpadded base64url",
-            ReadError::Version => "its version is not one this database knows",
-            ReadError::Kind => "its kind is neither a device nor an agent",
-            ReadError::SealedKey => "its sealed key does not match its kind",
-            ReadError::Number => "its account key number is 0",
-            ReadError::Link => "its link byte is neither 0 nor 1",
-            ReadError::Length => "its length is not the one its bytes give",
+            ReadError::Prefix => texts::PAIRING_READ_PREFIX,
+            ReadError::Encoding => texts::PAIRING_READ_ENCODING,
+            ReadError::Version => texts::PAIRING_READ_VERSION,
+            ReadError::Kind => texts::PAIRING_READ_KIND,
+            ReadError::SealedKey => texts::PAIRING_READ_SEALED_KEY,
+            ReadError::Number => texts::PAIRING_READ_NUMBER,
+            ReadError::Link => texts::PAIRING_READ_LINK,
+            ReadError::Length => texts::PAIRING_READ_LENGTH,
         })
     }
 }
@@ -503,12 +502,10 @@ impl fmt::Display for ReadError {
 impl fmt::Display for CheckError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            CheckError::Statement => "the account key statement does not verify",
-            CheckError::Certificate => {
-                "the certificate is not this member's, or not signed by the account key"
-            }
-            CheckError::AccountKey => "the account key does not open, or is not the account's",
-            CheckError::Link => "the link statement does not hold for this member",
+            CheckError::Statement => texts::PAIRING_CHECK_STATEMENT,
+            CheckError::Certificate => texts::PAIRING_CHECK_CERTIFICATE,
+            CheckError::AccountKey => texts::PAIRING_CHECK_ACCOUNT_KEY,
+            CheckError::Link => texts::PAIRING_CHECK_LINK,
         })
     }
 }

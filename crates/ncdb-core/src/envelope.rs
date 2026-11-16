@@ -27,6 +27,7 @@ use zeroize::Zeroizing;
 use crate::cbor::{Key, Value};
 use crate::ids::{MemberId, SpaceId};
 use crate::keys::{self, MemberKey, MemberPublicKey, SpaceKey};
+use crate::texts;
 
 /// The context string in front of the HPKE info.
 pub const ENVELOPE_CONTEXT: &[u8] = b"nocentraldb/key-envelope";
@@ -79,12 +80,10 @@ pub enum EnvelopeError {
 impl fmt::Display for EnvelopeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            EnvelopeError::RecipientKey => {
-                f.write_str("the recipient's agreement key does not take a key envelope")
-            }
-            EnvelopeError::WrongRecipient => f.write_str("the key envelope is for another member"),
-            EnvelopeError::Malformed(key) => write!(f, "key envelope field {key} is malformed"),
-            EnvelopeError::Open => f.write_str("the key envelope does not open"),
+            EnvelopeError::RecipientKey => f.write_str(texts::ENVELOPE_RECIPIENT_KEY),
+            EnvelopeError::WrongRecipient => f.write_str(texts::ENVELOPE_WRONG_RECIPIENT),
+            EnvelopeError::Malformed(key) => f.write_str(&texts::envelope_malformed(key)),
+            EnvelopeError::Open => f.write_str(texts::ENVELOPE_OPEN),
         }
     }
 }

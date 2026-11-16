@@ -16,6 +16,7 @@ use std::sync::Arc;
 use ncdb_plugin::{ErasedType, Plugin};
 
 use crate::model_lock::ModelLock;
+use crate::texts;
 
 /// The namespace RFC 0005 reserves for the built-in types.
 pub const BUILT_IN: &str = "ncdb";
@@ -42,12 +43,11 @@ impl fmt::Display for RegistryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             RegistryError::DuplicateNamespace(namespace) => {
-                write!(f, "two plugins name the namespace {namespace}")
+                f.write_str(&texts::plugin_namespace_twice(namespace))
             }
-            RegistryError::ReservedNamespace(namespace) => write!(
-                f,
-                "a plugin names the namespace {namespace}, which is reserved for the built-in types"
-            ),
+            RegistryError::ReservedNamespace(namespace) => {
+                f.write_str(&texts::plugin_namespace_reserved(namespace))
+            }
         }
     }
 }
@@ -118,7 +118,7 @@ impl fmt::Debug for Registry {
         let mut list = f.debug_list();
         list.entries(self.types.keys());
         if let Some(lock) = &self.reserved {
-            list.entry(&("reserved model", lock.model.version));
+            list.entry(&("reserved model", lock.model.version)); // notation
         }
         list.finish()
     }

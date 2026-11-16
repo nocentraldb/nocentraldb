@@ -19,6 +19,7 @@ use rusqlite::{OptionalExtension, params};
 
 use super::{Error, View};
 use crate::ids::{ObjectId, SpaceId};
+use crate::texts;
 
 /// One copy in an ad-hoc space, and the object it came from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -104,5 +105,5 @@ impl View {
 fn id(bytes: Vec<u8>) -> Result<[u8; 16], Error> {
     bytes
         .try_into()
-        .map_err(|_| Error::Corrupt("an ad-hoc copy's id"))
+        .map_err(|_| Error::Corrupt(texts::UNREADABLE_AD_HOC_COPY_ID))
 }

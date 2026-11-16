@@ -19,6 +19,7 @@ use rusqlite::Connection;
 use super::Error;
 use super::schema::meta;
 use crate::model_lock::{ModelLock, check::successor};
+use crate::texts;
 
 /// The key of the stored lock in `meta`.
 const KEY: &str = "lock";
@@ -37,7 +38,8 @@ pub(super) fn check(conn: &Connection, lock: &ModelLock, current: bool) -> Resul
             false => Err(Error::Model),
         };
     };
-    let stored = ModelLock::from_json(&text).map_err(|_| Error::Corrupt("meta lock"))?;
+    let stored =
+        ModelLock::from_json(&text).map_err(|_| Error::Corrupt(texts::UNREADABLE_META_LOCK))?;
     if stored == *lock {
         return Ok(());
     }

@@ -517,8 +517,9 @@ pub(crate) const ROTATION_MISSING_PERSON_KEY: &str =
 pub(crate) const SIGN_OFF_DOES_NOT_HOLD: &str =
     "a sign-off does not hold for this erasure in its space; nothing was erased";
 
-/// `spaceClock` (storageFailed): A write, when the space's clock cannot be read
-/// or written; the error follows.
+/// `spaceClock` (storageFailed): A write (Space::write and its shorthands),
+/// when the space's clock has reached its largest value, after it saw a
+/// received clock at the maximum; core.clockExhausted follows.
 pub(crate) fn space_clock(error: impl std::fmt::Display) -> String {
     format!("the space's clock: {error}")
 }

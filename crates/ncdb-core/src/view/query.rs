@@ -23,6 +23,7 @@ use super::schema::{index_columns, index_name, prefix, rows};
 use super::{Error, View};
 use crate::cbor::Value;
 use crate::ids::{ObjectId, SpaceId};
+use crate::texts;
 
 /// Why a lookup was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -322,8 +323,8 @@ impl View {
                 Some(Sql::Blob(bytes)) => <[u8; 16]>::try_from(bytes.as_slice()).ok(),
                 _ => None,
             };
-            let space = id(space_at).ok_or(Error::Corrupt("space id"))?;
-            let object = id(object_at).ok_or(Error::Corrupt("object id"))?;
+            let space = id(space_at).ok_or(Error::Corrupt(texts::UNREADABLE_SPACE_ID))?;
+            let object = id(object_at).ok_or(Error::Corrupt(texts::UNREADABLE_OBJECT_ID))?;
             rows.push((SpaceId(space), ObjectId(object)));
         }
         let next = match keys.last() {

@@ -176,6 +176,192 @@
       "when": "`ncdb model build`, after the lock's name, when it wrote a new model version; a line per change follows, then `cli.additive`."
     },
     {
+      "id": "core.appendWrongSpace",
+      "kind": "core",
+      "text": "the change belongs to another space",
+      "when": "After error.viewFailed's colon, when a change appended to a space's log belongs to another space; a bug in the SDK, not reached in practice."
+    },
+    {
+      "id": "core.bodyMalformed",
+      "kind": "core",
+      "text": "malformed control body: {error}",
+      "when": "The core's reason when a control change's body cannot be read. Not shown to a developer today: the core turns it into a rejection reason, the relay into a wire code. The body is malformed; `error` is a core.change* text."
+    },
+    {
+      "id": "core.bodyNotUnderstood",
+      "kind": "core",
+      "text": "a control body this core does not understand",
+      "when": "The core's reason when a control change's body cannot be read. Not shown to a developer today: the core turns it into a rejection reason, the relay into a wire code. The body is of a kind this core does not know."
+    },
+    {
+      "id": "core.changeFrameShape",
+      "kind": "core",
+      "text": "the frame is not [version, header bytes, signature]",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's frame is not an array of three items."
+    },
+    {
+      "id": "core.changeFrameVersion",
+      "kind": "core",
+      "text": "unknown frame version {version}",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's frame version is not 1."
+    },
+    {
+      "id": "core.changeInvalidValue",
+      "kind": "core",
+      "text": "key {key} holds a value of the wrong type or length",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a key of a change holds a value of the wrong type or length."
+    },
+    {
+      "id": "core.changeMissingKey",
+      "kind": "core",
+      "text": "key {key} is missing",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a map of a change lacks a required key."
+    },
+    {
+      "id": "core.changeNotMap",
+      "kind": "core",
+      "text": "expected a map",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a value of a change that must be a map is something else."
+    },
+    {
+      "id": "core.changeTextKey",
+      "kind": "core",
+      "text": "a text key where only unsigned keys are allowed",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a map of a change has a text key."
+    },
+    {
+      "id": "core.changeUnsortedDependencies",
+      "kind": "core",
+      "text": "the dependencies are not sorted, or repeat an id",
+      "when": "Inside core.receiveDecode or core.openPayload, which no developer sees today (the SDK and the relay replace a change's decode error with their own): a change's dependencies are not sorted by bytes, or repeat an id."
+    },
+    {
+      "id": "core.clockAhead",
+      "kind": "core",
+      "text": "a change by member {author} has a clock {ahead_millis} ms ahead of the local wall clock",
+      "when": "The core's warning when a received change's clock is more than a minute ahead of the local wall clock; `author` is the member id in hex. Not shown to a developer today: the SDK does not ask the core for it."
+    },
+    {
+      "id": "core.clockExhausted",
+      "kind": "core",
+      "text": "the clock has reached its largest value",
+      "when": "After error.spaceClock's colon, from a write (Space::write and its shorthands), when the space's clock has reached its largest value, after it saw a received clock at the maximum."
+    },
+    {
+      "id": "core.envelopeMalformed",
+      "kind": "core",
+      "text": "key envelope field {key} is malformed",
+      "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. A key of the body is missing or does not hold what the envelope needs."
+    },
+    {
+      "id": "core.envelopeOpen",
+      "kind": "core",
+      "text": "the key envelope does not open",
+      "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. HPKE does not open the envelope with this member's key."
+    },
+    {
+      "id": "core.envelopeRecipientKey",
+      "kind": "core",
+      "text": "the recipient's agreement key does not take a key envelope",
+      "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. The recipient's X25519 key is not one HPKE can encapsulate to, such as a point of small order."
+    },
+    {
+      "id": "core.envelopeWrongRecipient",
+      "kind": "core",
+      "text": "the key envelope is for another member",
+      "when": "The core's reason when a key envelope does not open. Not shown to a developer today: the core and the SDK drop it. The envelope is for another member."
+    },
+    {
+      "id": "core.linkIntoOtherSpace",
+      "kind": "core",
+      "text": "a link cannot point into another space",
+      "when": "The core's reason when a link names an object of another space. Not shown to a developer today: the SDK replaces it with error.valueDoesNotFit."
+    },
+    {
+      "id": "core.lockExpectedArray",
+      "kind": "core",
+      "text": "expected an array",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index's fields are not a list."
+    },
+    {
+      "id": "core.lockExpectedDirection",
+      "kind": "core",
+      "text": "expected \"asc\" or \"desc\"",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index field's direction is neither."
+    },
+    {
+      "id": "core.lockExpectedModelId",
+      "kind": "core",
+      "text": "expected 32 lower-case hex digits",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: `model.id` is not 32 lower-case hex digits."
+    },
+    {
+      "id": "core.lockExpectedNames",
+      "kind": "core",
+      "text": "expected an array of names",
+      "when": "After the JSON path of the value at fault, when the schema's description cannot be read (cli.descriptionUnreadable): a collection's list of names, such as its deprecated fields, is not a list."
+    },
+    {
+      "id": "core.lockExpectedObject",
+      "kind": "core",
+      "text": "expected an object",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be an object is something else."
+    },
+    {
+      "id": "core.lockExpectedScope",
+      "kind": "core",
+      "text": "expected \"space\" or no scope",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: an index's scope is something other than \"space\"."
+    },
+    {
+      "id": "core.lockExpectedString",
+      "kind": "core",
+      "text": "expected a string",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a string is something else."
+    },
+    {
+      "id": "core.lockExpectedStrings",
+      "kind": "core",
+      "text": "expected an array of strings",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a list of strings is something else."
+    },
+    {
+      "id": "core.lockExpectedWholeNumber",
+      "kind": "core",
+      "text": "expected a whole number",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a value that must be a whole number is something else."
+    },
+    {
+      "id": "core.lockMissing",
+      "kind": "core",
+      "text": "missing",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a required key is missing."
+    },
+    {
+      "id": "core.lockNoFieldType",
+      "kind": "core",
+      "text": "{type_id} is no field type: expected ncdb/<type> or <plugin>/<type>",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a field's type names no built-in type and no plugin's."
+    },
+    {
+      "id": "core.lockNotJson",
+      "kind": "core",
+      "text": "not valid JSON: {error}",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the text is no JSON; `error` is the JSON parser's reason."
+    },
+    {
+      "id": "core.lockSetElementNotBasic",
+      "kind": "core",
+      "text": "a set's element is a basic value, not {type_id}",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a set's element is not a basic value."
+    },
+    {
+      "id": "core.lockUnknownFormat",
+      "kind": "core",
+      "text": "format {format} is not known to this version; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade.",
+      "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the lock's format is one this version does not read. `known` is the one it reads."
+    },
+    {
       "id": "core.nameKindCollection",
       "kind": "core",
       "text": "collection",
@@ -206,10 +392,178 @@
       "when": "In core.refusalBadName and core.refusalNameClash, as `kind` or `other_kind`, for the name of a view."
     },
     {
+      "id": "core.openAuthorKey",
+      "kind": "core",
+      "text": "the author's public key is not an Ed25519 key",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The author's public key is no valid Ed25519 key."
+    },
+    {
+      "id": "core.openAuthorMismatch",
+      "kind": "core",
+      "text": "the header's author is not the member of these public keys",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The header's author is not the member of the given public keys."
+    },
+    {
+      "id": "core.openDecryption",
+      "kind": "core",
+      "text": "the payload does not decrypt under the key the header names",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The payload does not decrypt under the content key the header names."
+    },
+    {
+      "id": "core.openNotSealed",
+      "kind": "core",
+      "text": "the change is not sealed: kind {kind}",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The change is not sealed, so there is nothing to decrypt."
+    },
+    {
+      "id": "core.openPayload",
+      "kind": "core",
+      "text": "the decrypted payload is invalid: {error}",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The decrypted bytes are no payload; `error` is a core.change* text."
+    },
+    {
+      "id": "core.openSignature",
+      "kind": "core",
+      "text": "the signature does not verify",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The signature does not verify over the header bytes."
+    },
+    {
+      "id": "core.openUnknownSuite",
+      "kind": "core",
+      "text": "unknown suite {suite}",
+      "when": "The core's reason when a change does not verify or open (seal::open). Not shown to a developer today: the core turns it into a park or reject reason, and the relay into BadSignature. The change uses a suite this core does not know."
+    },
+    {
+      "id": "core.pairingCheckAccountKey",
+      "kind": "core",
+      "text": "the account key does not open, or is not the account's",
+      "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the sealed account key does not open for this device, or is not the account's."
+    },
+    {
+      "id": "core.pairingCheckCertificate",
+      "kind": "core",
+      "text": "the certificate is not this member's, or not signed by the account key",
+      "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the answer's certificate is for another member, of another kind, or not signed by the account key."
+    },
+    {
+      "id": "core.pairingCheckLink",
+      "kind": "core",
+      "text": "the link statement does not hold for this member",
+      "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the link signature does not verify for this member's old account key, or the answer carries a link this member does not expect, or lacks one it does."
+    },
+    {
+      "id": "core.pairingCheckStatement",
+      "kind": "core",
+      "text": "the account key statement does not verify",
+      "when": "After error.pairingAnswerDoesNotHold's colon, from Account::complete_pairing (db.account.completePairing): the answer's account key statement does not verify against its recovery key."
+    },
+    {
+      "id": "core.pairingForDeviceOrAgent",
+      "kind": "core",
+      "text": "a pairing answer is for a device or an agent",
+      "when": "The core's reason when a pairing answer is built for another kind of member. Not shown to a developer today: Account::pair rules it out first, and replaces the core's reasons with error.accountKeyNotSealable."
+    },
+    {
+      "id": "core.pairingNotSealable",
+      "kind": "core",
+      "text": "the account key could not be sealed to the device",
+      "when": "The core's reason when the account key cannot be sealed to the new device. Not shown to a developer today: Account::pair replaces it with error.accountKeyNotSealable."
+    },
+    {
+      "id": "core.pairingReadEncoding",
+      "kind": "core",
+      "text": "it is not unpadded base64url",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the text after the prefix is not unpadded base64url. In TypeScript, nc.pairingAnswer refuses such a text first with ts.notAPairingAnswer."
+    },
+    {
+      "id": "core.pairingReadKind",
+      "kind": "core",
+      "text": "its kind is neither a device nor an agent",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's kind is neither 1, a device, nor 2, an agent."
+    },
+    {
+      "id": "core.pairingReadLength",
+      "kind": "core",
+      "text": "its length is not the one its bytes give",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer is longer or shorter than its parts."
+    },
+    {
+      "id": "core.pairingReadLink",
+      "kind": "core",
+      "text": "its link byte is neither 0 nor 1",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's link byte is neither."
+    },
+    {
+      "id": "core.pairingReadNumber",
+      "kind": "core",
+      "text": "its account key number is 0",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's account key number is 0."
+    },
+    {
+      "id": "core.pairingReadPrefix",
+      "kind": "core",
+      "text": "it does not start with ncdb-pair-1:",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the text does not start with ncdb-pair-1:. In TypeScript, nc.pairingAnswer refuses such a text first with ts.notAPairingAnswer."
+    },
+    {
+      "id": "core.pairingReadSealedKey",
+      "kind": "core",
+      "text": "its sealed key does not match its kind",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the sealed key byte does not match the kind: 1 for a device, 0 for an agent."
+    },
+    {
+      "id": "core.pairingReadVersion",
+      "kind": "core",
+      "text": "its version is not one this database knows",
+      "when": "After error.notAPairingAnswer's colon, from parsing a pairing answer (PairingAnswer::from_str; the bridge's account.completePairing): the answer's version is not 1."
+    },
+    {
+      "id": "core.pairingStatementNotAccountKey",
+      "kind": "core",
+      "text": "the account key statement does not name the account key",
+      "when": "The core's reason when a pairing answer's statement names another key. Not shown to a developer today: Account::pair rules it out first."
+    },
+    {
+      "id": "core.pluginNamespaceReserved",
+      "kind": "core",
+      "text": "a plugin names the namespace {namespace}, which is reserved for the built-in types",
+      "when": "The whole error of opening with plugins (OpenOptions::plugin; invalidValue), when a plugin names the built-in types' namespace. Rust only: TypeScript's nc.open takes no plugins."
+    },
+    {
+      "id": "core.pluginNamespaceTwice",
+      "kind": "core",
+      "text": "two plugins name the namespace {namespace}",
+      "when": "The whole error of opening with plugins (OpenOptions::plugin; invalidValue), when two plugins name one namespace. Rust only: TypeScript's nc.open takes no plugins."
+    },
+    {
+      "id": "core.receiveDecode",
+      "kind": "core",
+      "text": "the frame does not decode: {error}",
+      "when": "After error.viewFailed's colon, when a change the view folds again does not decode, as at opening with a log this core cannot read; `error` is a core.change* text. Sync drops it."
+    },
+    {
+      "id": "core.recoveryChecksum",
+      "kind": "core",
+      "text": "the recovery code's checksum does not match: a word is wrong or out of order",
+      "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code, when its words are on the list but their checksum does not match."
+    },
+    {
+      "id": "core.recoveryUnknownWord",
+      "kind": "core",
+      "text": "word {position} of the recovery code is not on the list",
+      "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code, when a word is not on the word list; it names the word's position, never the word."
+    },
+    {
+      "id": "core.recoveryWordCount",
+      "kind": "core",
+      "text": "a recovery code has 12 words, not {count}",
+      "when": "After error.recoveryCodeUnreadable's colon, opening with a recovery code (OpenOptions::recover; nc.open with recover), when it has more or fewer than 12 words."
+    },
+    {
       "id": "core.refusalBadName",
       "kind": "core",
       "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lower-case letter and has at most 63 ASCII letters and digits.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalCollectionRemoved",
@@ -233,7 +587,7 @@
       "id": "core.refusalDuplicateOption",
       "kind": "core",
       "text": "{collection}.{field}: option {option} is listed twice.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a choice lists an option twice."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a choice lists an option twice. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalFieldRemoved",
@@ -245,19 +599,19 @@
       "id": "core.refusalIndexEqualTooLarge",
       "kind": "core",
       "text": "index {collection}.{index}: equal is {equal}, but the index has {fields} fields.\nNo query could fix more fields than the index has.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index's equal is larger than its number of fields."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index's equal is larger than its number of fields. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalIndexNotIndexable",
       "kind": "core",
       "text": "index {collection}.{index}: {collection}.{field} is {type_id}, which cannot be indexed.\nAn index can use basic values and single links (nc.link).",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field of a type that cannot be indexed."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field of a type that cannot be indexed. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalIndexUnknownField",
       "kind": "core",
       "text": "index {collection}.{index}: {collection} has no field {field}.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: an index names a field its collection does not have."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: an index names a field its collection does not have. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalLowerVersion",
@@ -275,7 +629,7 @@
       "id": "core.refusalNameClash",
       "kind": "core",
       "text": "{kind} {name}: the name collides with the {other_kind} {other}.\nNames in one scope must differ in more than case: the local view is SQLite, whose column names ignore case.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: two names in one scope are equal, or differ only in case. `kind` and `other_kind` are core.nameKind texts. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalNoRename",
@@ -305,19 +659,19 @@
       "id": "core.refusalPersonLinkPersonal",
       "kind": "core",
       "text": "{collection}.{field}: personal to {collection}.{person}, which is itself personal.\nThe link that names the person must stay readable, so the SDK can find the person's key.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is a link field that is itself personal."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is a link field that is itself personal. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalPersonNotLink",
       "kind": "core",
       "text": "{collection}.{field}: personal to {person}, which is no link field of {collection}.\nperson is \"self\" or the name of an nc.link field of {collection}.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a personal field's person is no link field of its collection."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is no link field of its collection. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalPersonalNotBasic",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} cannot be personal.\nOnly basic values can be personal: nc.string, nc.int, nc.float, nc.boolean and nc.oneOf.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a field of a type that cannot be personal is marked personal."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a field of a type that cannot be personal is marked personal. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalRuleChanged",
@@ -347,25 +701,205 @@
       "id": "core.refusalUnknownPlugin",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} names no plugin of the model.\nA plugin's field type needs its namespace in plugins.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a plugin field type's namespace is not in the model's plugins."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a plugin field type's namespace is not in the model's plugins. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnknownRule",
       "kind": "core",
       "text": "{collection}.{field}: {type_id} has no rule version {rule}.\nThis version knows rule version {known} of every built-in type.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a built-in field type names a rule version this core does not know. `known` is the one it knows."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a built-in field type names a rule version this core does not know. `known` is the one it knows. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnknownTarget",
       "kind": "core",
       "text": "{collection}.{field}: target {target} is no collection of the model.",
-      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own, and in the error of opening with such a lock: a link's target is no collection of the model."
+      "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a link's target is no collection of the model. Opening with such a lock shows error.lockInvalid, which does not print this text."
     },
     {
       "id": "core.refusalUnmarkedPersonal",
       "kind": "core",
       "text": "{collection}.{field}: no longer personal.\nOld values stay sealed under person keys and new ones would not be: the field would be half erasable.\nKeep .personal({{ person: \"{person}\" }}).",
       "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses the change against the previous lock, and in the error of opening with a lock the database refuses against the one it was last opened with: a personal field is no longer personal."
+    },
+    {
+      "id": "core.unreadableAdHocCopyId",
+      "kind": "core",
+      "text": "an ad-hoc copy's id",
+      "when": "In core.viewCorrupt, as `what`, when the database holds an ad-hoc copy's id it cannot read."
+    },
+    {
+      "id": "core.unreadableConfirmationTime",
+      "kind": "core",
+      "text": "confirmation time",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a confirmation time out of range."
+    },
+    {
+      "id": "core.unreadableField",
+      "kind": "core",
+      "text": "field",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a field value it cannot read."
+    },
+    {
+      "id": "core.unreadableLogFrame",
+      "kind": "core",
+      "text": "log frame",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a change in the log that does not decode."
+    },
+    {
+      "id": "core.unreadableLogReason",
+      "kind": "core",
+      "text": "log reason",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a park or reject reason it does not know."
+    },
+    {
+      "id": "core.unreadableLogSpace",
+      "kind": "core",
+      "text": "log space",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a log entry's space id it cannot read."
+    },
+    {
+      "id": "core.unreadableLogState",
+      "kind": "core",
+      "text": "log state",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a log entry's state it does not know."
+    },
+    {
+      "id": "core.unreadableMergeState",
+      "kind": "core",
+      "text": "merge state",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a field's merge state it cannot read."
+    },
+    {
+      "id": "core.unreadableMetaFormat",
+      "kind": "core",
+      "text": "meta format",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a view format version it cannot read."
+    },
+    {
+      "id": "core.unreadableMetaLock",
+      "kind": "core",
+      "text": "meta lock",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a stored lock it cannot read."
+    },
+    {
+      "id": "core.unreadableObjectId",
+      "kind": "core",
+      "text": "object id",
+      "when": "In core.viewCorrupt, as `what`, when the database holds an object id it cannot read."
+    },
+    {
+      "id": "core.unreadableParkedPosition",
+      "kind": "core",
+      "text": "parked position",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a parked operation's position out of range."
+    },
+    {
+      "id": "core.unreadablePendingLinkChangeId",
+      "kind": "core",
+      "text": "pending link change id",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a pending link whose change id it cannot read."
+    },
+    {
+      "id": "core.unreadablePluginState",
+      "kind": "core",
+      "text": "plugin state",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a plugin field's state the plugin cannot read."
+    },
+    {
+      "id": "core.unreadablePosition",
+      "kind": "core",
+      "text": "position",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a log position out of range."
+    },
+    {
+      "id": "core.unreadableRelayEpoch",
+      "kind": "core",
+      "text": "relay epoch",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a relay epoch it cannot read."
+    },
+    {
+      "id": "core.unreadableRelayPosition",
+      "kind": "core",
+      "text": "relay position",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a relay position out of range."
+    },
+    {
+      "id": "core.unreadableShredTime",
+      "kind": "core",
+      "text": "shred time",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a shred's time out of range."
+    },
+    {
+      "id": "core.unreadableSpaceId",
+      "kind": "core",
+      "text": "space id",
+      "when": "In core.viewCorrupt, as `what`, when the database holds a space id it cannot read."
+    },
+    {
+      "id": "core.valueOutsideSchema",
+      "kind": "core",
+      "text": "the value is outside the field's schema",
+      "when": "The core's reason when a value does not fit its field's kind. Not shown to a developer today: the SDK replaces it with error.valueDoesNotFit."
+    },
+    {
+      "id": "core.viewCorrupt",
+      "kind": "core",
+      "text": "the database holds an unreadable {what}",
+      "when": "After error.viewFailed's colon (storageFailed), from any call that reads the view: the database holds something this core did not write; `what` is a core.unreadable* text."
+    },
+    {
+      "id": "core.viewFormat",
+      "kind": "core",
+      "text": "the view has format version {found}, this core writes {writes}",
+      "when": "After error.viewFailed's colon, from opening (Db::open; nc.open), when the database holds a view of another format version."
+    },
+    {
+      "id": "core.viewInvalid",
+      "kind": "core",
+      "text": "the model cannot be folded: {invalid:?}",
+      "when": "The core's reason when the model cannot be folded into a view; `invalid` is the core's finding in its Debug form. Not shown to a developer today: opening replaces it with error.lockInvalid."
+    },
+    {
+      "id": "core.viewModel",
+      "kind": "core",
+      "text": "the view was folded by another model",
+      "when": "The core's reason when the database's view was folded by another model. Not shown to a developer today: the SDK replaces it with error.foldedByAnotherModel."
+    },
+    {
+      "id": "core.viewNotInWorker",
+      "kind": "core",
+      "text": "the view runs only in a dedicated Web Worker",
+      "when": "The core's reason when the browser view is opened outside a dedicated Web Worker. Not shown to a developer today: the SDK replaces it with error.openOutsideWorker."
+    },
+    {
+      "id": "core.viewOpfs",
+      "kind": "core",
+      "text": "OPFS could not be opened: {error}",
+      "when": "After error.databaseHeld's \"or\", nc.open in a browser worker, when OPFS refuses the database; `error` is the browser's reason."
+    },
+    {
+      "id": "core.viewPlan",
+      "kind": "core",
+      "text": "the lookup of index {index} does not run through it",
+      "when": "After error.viewFailed's colon, from opening (Db::open; nc.open), when a declared index's lookup would not run through it, or would sort in a temporary B-tree; `index` is <collection>.<index>."
+    },
+    {
+      "id": "core.viewQuery",
+      "kind": "core",
+      "text": "the lookup was refused: {error:?}",
+      "when": "The core's reason when a lookup is refused. Not shown to a developer today: Db::find and Space::find replace it with their own errors; only an internal lookup of the account's would show it after error.viewFailed's colon."
+    },
+    {
+      "id": "core.viewRefused",
+      "kind": "core",
+      "text": "the lock is refused against the lock the database was last opened with:",
+      "when": "The whole error of opening (modelRefused) with a lock that is not a successor of the one the database was last opened with; each refusal's lines follow, indented."
+    },
+    {
+      "id": "core.viewSqlite",
+      "kind": "core",
+      "text": "SQLite failed: {error}",
+      "when": "After error.viewFailed's colon (storageFailed), from any call that reads the view: SQLite fails (storageFull when the disk or the quota is full); `error` is SQLite's reason."
     },
     {
       "id": "error.accountKeyNotSealable",
@@ -1205,7 +1739,7 @@
       "kind": "error",
       "code": "storageFailed",
       "text": "the space's clock: {error}",
-      "when": "A write, when the space's clock cannot be read or written; the error follows."
+      "when": "A write (Space::write and its shorthands), when the space's clock has reached its largest value, after it saw a received clock at the maximum; core.clockExhausted follows."
     },
     {
       "id": "error.spaceOfAnotherModel",

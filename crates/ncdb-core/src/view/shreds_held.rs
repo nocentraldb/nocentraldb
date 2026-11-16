@@ -18,6 +18,7 @@ use rusqlite::{OptionalExtension, params};
 
 use super::{Error, View};
 use crate::ids::{ChangeId, SpaceId};
+use crate::texts;
 
 impl View {
     /// Records that this device held the shred `shred` of `space` at `at`,
@@ -29,7 +30,7 @@ impl View {
         shred: ChangeId,
         at: u64,
     ) -> Result<(), Error> {
-        let at = i64::try_from(at).map_err(|_| Error::Corrupt("shred time"))?;
+        let at = i64::try_from(at).map_err(|_| Error::Corrupt(texts::UNREADABLE_SHRED_TIME))?;
         self.conn.execute(
             "INSERT INTO shreds_held (space_id, change_id, held_at) VALUES (?1, ?2, ?3)
              ON CONFLICT (space_id, change_id) DO NOTHING",
@@ -49,7 +50,7 @@ impl View {
                 |row| row.get(0),
             )
             .optional()?;
-        at.map(|at| u64::try_from(at).map_err(|_| Error::Corrupt("shred time")))
+        at.map(|at| u64::try_from(at).map_err(|_| Error::Corrupt(texts::UNREADABLE_SHRED_TIME)))
             .transpose()
     }
 }

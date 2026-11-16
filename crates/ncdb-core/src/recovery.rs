@@ -16,6 +16,7 @@ use zeroize::Zeroizing;
 
 use crate::keys::{RecoveryKey, random};
 use crate::redact::Hidden;
+use crate::texts;
 
 /// The BIP-39 English word list, 2048 words in order, one per line. Its
 /// SHA-256 is checked in tests/recovery_code.rs.
@@ -53,15 +54,11 @@ pub enum CodeError {
 impl fmt::Display for CodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            CodeError::WordCount(count) => {
-                write!(f, "a recovery code has 12 words, not {count}")
-            }
+            CodeError::WordCount(count) => f.write_str(&texts::recovery_word_count(count)),
             CodeError::UnknownWord { position } => {
-                write!(f, "word {position} of the recovery code is not on the list")
+                f.write_str(&texts::recovery_unknown_word(position))
             }
-            CodeError::Checksum => f.write_str(
-                "the recovery code's checksum does not match: a word is wrong or out of order",
-            ),
+            CodeError::Checksum => f.write_str(texts::RECOVERY_CHECKSUM),
         }
     }
 }

@@ -30,6 +30,7 @@ use crate::object::ObjectOperation;
 use crate::personal::{self, Place, Sealed};
 use crate::receive::Fold;
 use crate::reference;
+use crate::texts;
 
 /// The person keys of a space, by person-key id.
 pub(super) type PersonKeys = BTreeMap<[u8; 16], PersonKey>;
@@ -498,7 +499,11 @@ pub(super) fn open_personal(
                 })?
                 .collect::<Result<Vec<_>, _>>()?;
             for (object, bytes) in rows {
-                let object = ObjectId(object.try_into().map_err(|_| Error::Corrupt("object id"))?);
+                let object = ObjectId(
+                    object
+                        .try_into()
+                        .map_err(|_| Error::Corrupt(texts::UNREADABLE_OBJECT_ID))?,
+                );
                 let winner = field_type.read(&state::basic(&bytes)?).value;
                 let place = Place {
                     space,

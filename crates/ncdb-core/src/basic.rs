@@ -9,6 +9,7 @@ use crate::cbor::{self, Value};
 use crate::clock::Hlc;
 use crate::field::{FieldType, Outcome};
 use crate::ids::{MemberId, OperationId};
+use crate::texts;
 
 /// The kind of a basic value field, as the schema declares it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -105,7 +106,7 @@ pub struct OutsideSchema;
 
 impl core::fmt::Display for OutsideSchema {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("the value is outside the field's schema")
+        f.write_str(texts::VALUE_OUTSIDE_SCHEMA)
     }
 }
 
