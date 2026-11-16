@@ -183,6 +183,18 @@ test("staged work that matches no commit is left alone", () => {
   assert.match(out, /git status/);
 });
 
+test("a stale tree left alone is reported loudly, with its size", () => {
+  const { dir } = staleSession();
+  writeFileSync(join(dir, "mine.txt"), "an agent's own work\n");
+  git(dir, "add", "mine.txt");
+  const out = run(dir);
+  assert.match(
+    out,
+    /^session-start-git: WARNING: 4 paths are staged over HEAD/,
+  );
+  assert.match(out, /a commit now would revert/);
+});
+
 test("unstaged edits over the stale tree are left alone", () => {
   const { dir } = staleSession();
   writeFileSync(join(dir, "gone.txt"), "edited\n");
