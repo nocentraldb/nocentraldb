@@ -10,7 +10,7 @@ For a finished page that does the first half of this, see [apps/tasks-ts](../app
 
 - Rust, as `rust-toolchain.toml` pins it, to compile the SDK's core to WebAssembly. `rustup` installs it on the first `cargo` call.
 - Node.js 24 or later and pnpm.
-- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window; Playwright's WebKit is not Safari, and no test is skipped in any of them.
+- A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window, and the owner handover in a private window too; Playwright's WebKit is not Safari, and no test is skipped in any of them.
 - A clone of this repository. Until the SDK is published to npm, you build your app inside it, in a folder under `apps/`, as [apps/tasks-ts](../apps/tasks-ts/README.md) does: the SDK and the schema build come from the clone. Run every command below from the clone's root.
 
 ## 1. Make the app
@@ -133,7 +133,7 @@ The database lives in the origin's private file system (OPFS), under the `name` 
 
 The keys are not in OPFS. A page reaches no platform keystore, so the SDK keeps them in IndexedDB, in a database of the same name, sealed under a non-extractable WebCrypto key: the page can use that key, but no code can read its bytes ([RFC 0003, "The member key"](rfc/0003-keys-and-cryptography.md#the-member-key)).
 
-The browser may evict an origin's data when storage runs low, and Safari deletes a site's data after seven days without a visit unless it was added to the home screen. An eviction takes the database and its keys together, and with them every change the relay has not confirmed yet. `nc.open` asks the browser for persistent storage, unless you open with `persistentStorage` set to `"on-request"` and ask later; `db.durability` reports what is at risk, as step 12 shows ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A private window of Firefox or Safari has no OPFS: the database then lives in memory until the window closes, and `db.durability` says `"temporary"`.
+The browser may evict an origin's data when storage runs low, and Safari deletes a site's data after seven days without a visit unless it was added to the home screen. An eviction takes the database and its keys together, and with them every change the relay has not confirmed yet. `nc.open` asks the browser for persistent storage, unless you open with `persistentStorage` set to `"on-request"` and ask later; `db.durability` reports what is at risk, as step 12 shows ([RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy)). A private window of Firefox or Safari has no OPFS: the database then lives in the memory of the tab that owns it (step 8), and `db.durability` says `"temporary"`. It lives only as long as that tab owns it, not until the window closes: when the owning tab closes, or is hidden and another tab of the window takes the database over, the other tab starts with an empty copy. Every change the relay had not confirmed is lost with it, and the copy syncs the rest from the relay again. Chromium has OPFS in a private window, so its copy outlives the owning tab.
 
 ## 4. Create a space and write
 
