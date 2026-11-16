@@ -116,11 +116,12 @@ function shallowStaleSession() {
   return { dir, old, head };
 }
 
-function run(dir, env = { CLAUDE_CODE_REMOTE: "true" }) {
+function run(dir, env = { CLAUDE_CODE_REMOTE: "true" }, source) {
   const result = spawnSync(process.execPath, [script], {
     cwd: dir,
     encoding: "utf8",
     env: { PATH: process.env.PATH, HOME: process.env.HOME, ...env },
+    input: source === undefined ? "" : JSON.stringify({ source }),
   });
   assert.equal(result.status, 0, result.stderr);
   return result.stdout + result.stderr;
@@ -232,4 +233,39 @@ test("a hidden file missing from disk is left alone, without failing", () => {
   const out = run(dir);
   assert.equal(status(dir), before);
   assert.match(out, /AGENTS\.md/);
+});
+
+/**
+ * The shallow start, but no local branch holds the snapshot's commit either,
+ * so the hook can find no commit with the staged tree (NOC-350, pm's comment
+ * after #371).
+ */
+function unknownStaleSession() {
+  const session = shallowStaleSession();
+  git(session.dir, "branch", "-q", "-D", "main");
+  return session;
+}
+
+test("at startup, a stale tree that matches no commit is stashed and reset to HEAD", () => {
+  const { dir } = unknownStaleSession();
+  const tree = git(dir, "write-tree");
+  const out = run(dir, { CLAUDE_CODE_REMOTE: "true" }, "startup");
+  assert.equal(status(dir), "");
+  assert.equal(existsSync(join(dir, "gone.txt")), false);
+  assert.equal(
+    readFileSync(join(dir, "AGENTS.md"), "utf8"),
+    `new steering\n${CLOUD}`,
+  );
+  assert.equal(git(dir, "ls-files", "-v", "AGENTS.md"), "S AGENTS.md");
+  assert.match(git(dir, "stash", "list"), /session-start-git/);
+  assert.equal(git(dir, "rev-parse", "stash@{0}^2^{tree}"), tree);
+  assert.match(out, /stash/);
+});
+
+test("after startup, a stale tree that matches no commit is left alone", () => {
+  const { dir } = unknownStaleSession();
+  const before = status(dir);
+  const out = run(dir, { CLAUDE_CODE_REMOTE: "true" }, "resume");
+  assert.equal(status(dir), before);
+  assert.match(out, /WARNING/);
 });

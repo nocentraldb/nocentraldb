@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node scripts/session-start-git.mjs",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --input-type=module -e \"$(git show HEAD:scripts/session-start-git.mjs)\"",
             "type": "command"
           }
         ],
@@ -13,7 +13,7 @@
       {
         "hooks": [
           {
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node scripts/session-start-deps.mjs",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && node --input-type=module -e \"$(git show HEAD:scripts/session-start-deps.mjs)\"",
             "timeout": 300,
             "type": "command"
           }
