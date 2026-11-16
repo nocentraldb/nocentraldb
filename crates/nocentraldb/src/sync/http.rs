@@ -340,6 +340,33 @@ mod tests {
         assert_eq!(put(&url, b"abc").await, Err(Failed::Status(404)));
     }
 
+    /// The `Host` header of a request for `url`.
+    fn host(url: &str) -> String {
+        let head = head("PUT", &split(url).unwrap(), 3);
+        let line = head
+            .split("\r\n")
+            .find(|l| l.starts_with("Host: "))
+            .unwrap();
+        line["Host: ".len()..].to_owned()
+    }
+
+    /// A presigned S3 URL signs the `host` header as the URL names it,
+    /// without a port (NOC-348): a `Host` with the scheme's default port
+    /// added fails S3's signature check.
+    #[test]
+    fn the_host_header_names_a_port_only_when_the_url_does() {
+        let s3 = "bucket.s3.eu-central-1.amazonaws.com";
+        assert_eq!(
+            host(&format!("https://{s3}/uploads/ab?X-Amz-Expires=900")),
+            s3
+        );
+        assert_eq!(host("http://relay.example/x"), "relay.example");
+        assert_eq!(host("http://127.0.0.1:7700/x"), "127.0.0.1:7700");
+        assert_eq!(host("https://relay.example:8443/x"), "relay.example:8443");
+        assert_eq!(host("https://[::1]/x"), "[::1]");
+        assert_eq!(host("https://[::1]:8443/x"), "[::1]:8443");
+    }
+
     #[test]
     fn only_http_and_https_urls_with_a_path_are_read() {
         assert_eq!(split("ftp://relay.example/x"), Err(Failed::Unsupported));
