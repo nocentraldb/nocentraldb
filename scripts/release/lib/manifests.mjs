@@ -279,6 +279,57 @@ export function lockVersions(cargoLock) {
   return out;
 }
 
+/**
+ * The Cargo.lock text with the version of every workspace member set to
+ * `version`, and every other byte as it was. A workspace member is a
+ * [[package]] block without a `source`; every crate of this workspace
+ * inherits the workspace version (check-version, R2), so all of them move.
+ * This is what cargo update --workspace writes when only the version
+ * changed, without cargo, its registry index or a network: dependency lists
+ * name a member by its name alone while one package carries that name.
+ * Throws when a member's name also belongs to a package from a registry (the
+ * lock would then name the member with its version), and on a block with no
+ * name or no version.
+ */
+export function writeLockVersions(cargoLock, version) {
+  const lines = cargoLock.split("\n");
+  const blocks = [];
+  let block = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\r$/, "");
+    if (/^\s*\[/.test(line)) {
+      block = line.trim() === "[[package]]" ? { lineNo: i + 1 } : null;
+      if (block) blocks.push(block);
+      continue;
+    }
+    const m = /^(name|version|source)\s*=\s*"([^"]*)"\s*$/.exec(line);
+    if (block && m) {
+      block[m[1]] = m[2];
+      if (m[1] === "version") block.versionLine = i;
+    }
+  }
+  const sourced = new Set();
+  for (const b of blocks) {
+    if (b.name === undefined || b.version === undefined)
+      throw new Error(
+        `the [[package]] block at line ${b.lineNo} has no name or no version`,
+      );
+    if (b.source !== undefined) sourced.add(b.name);
+  }
+  for (const b of blocks) {
+    if (b.source !== undefined) continue;
+    if (sourced.has(b.name))
+      throw new Error(
+        `the workspace crate ${b.name} shares its name with a package from a registry; refresh the lock with cargo update --workspace`,
+      );
+    lines[b.versionLine] = lines[b.versionLine].replace(
+      /"[^"]*"/,
+      JSON.stringify(version),
+    );
+  }
+  return lines.join("\n");
+}
+
 const JSON_STRING = /"(?:[^"\\]|\\.)*"/y;
 const JSON_COLON = /\s*:\s*/y;
 

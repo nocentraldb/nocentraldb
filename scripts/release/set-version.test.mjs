@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -129,29 +128,21 @@ test("a package.json keeps every byte but its version value, and a second run ch
   );
 });
 
-test("a failed lock refresh restores every manifest and Cargo.lock, and says so", (t) => {
+test("a Cargo.lock it cannot read fails with its path and writes nothing", (t) => {
+  const broken = '[[package]]\nname = "a"\n';
   const dir = fixture(t, {
     "Cargo.toml": CARGO,
-    "Cargo.lock": "# the lock as it was\n",
+    "Cargo.lock": broken,
     "packages/p/package.json": PACKAGE,
-    // A cargo that fails the way an offline refresh does.
-    "bin/cargo":
-      "#!/bin/sh\necho 'error: no matching package found (offline)' >&2\nexit 101\n",
   });
-  chmodSync(join(dir, "bin/cargo"), 0o755);
-  const r = spawnSync(process.execPath, [script, "0.2.0"], {
-    cwd: dir,
-    encoding: "utf8",
-    env: { ...process.env, PATH: `${join(dir, "bin")}:${process.env.PATH}` },
-  });
+  const r = run(dir, "0.2.0");
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /no matching package found \(offline\)/);
   assert.match(
     r.stderr,
-    /^set-version: cargo update --workspace --offline failed, so Cargo\.lock could not follow 0\.2\.0; every manifest was restored as it was$/m,
+    /^set-version: Cargo\.lock: the \[\[package\]\] block at line 1 has no name or no version$/m,
   );
   assert.equal(read(dir, "Cargo.toml"), CARGO);
-  assert.equal(read(dir, "Cargo.lock"), "# the lock as it was\n");
+  assert.equal(read(dir, "Cargo.lock"), broken);
   assert.equal(read(dir, "packages/p/package.json"), PACKAGE);
   assert.equal(r.stdout, "");
 });
