@@ -22,8 +22,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { launch } from "./engine.mjs";
 import { startServer } from "./server.mjs";
 
 let server;
@@ -33,7 +33,7 @@ before(async () => {
   if (process.env.SDK_BROWSER_PREBUILT === "1") prebuilt();
   else build();
   server = await startServer({ port: 0 });
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {

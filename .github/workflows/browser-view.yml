@@ -180,13 +180,33 @@ jobs:
           node --test 'scripts/sdk-keys/*.test.mjs'
 
       # The TypeScript SDK as an app uses it, its worker and its database on
-      # OPFS, in Chromium; run even when a step above failed.
+      # OPFS, once in each engine (NOC-344), SDK_BROWSER_ENGINE naming it
+      # (scripts/sdk-browser/engine.mjs); each runs even when a step above
+      # failed, so a failing engine names itself in its step.
       - name: The TypeScript SDK in Chromium
         if: ${{ !cancelled() }}
         run: >-
           docker run --rm --ipc=host
           -v "$PWD:/work" -w /work
-          -e SDK_BROWSER_PREBUILT=1
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=chromium
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/*.test.mjs'
+
+      - name: The TypeScript SDK in Firefox
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=firefox
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/*.test.mjs'
+
+      - name: The TypeScript SDK in WebKit
+        if: ${{ !cancelled() }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=webkit
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/sdk-browser/*.test.mjs'
 

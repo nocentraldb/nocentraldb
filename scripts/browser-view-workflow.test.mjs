@@ -181,10 +181,12 @@ runWorkflowChecks({
         },
         "no TypeScript SDK tests at all": (ctx) => {
           const all = jobSteps(ctx);
-          all.splice(
-            all.findIndex((s) => s.run?.includes(SDK_TESTS)),
-            1,
-          );
+          while (all.some((s) => s.run?.includes(SDK_TESTS))) {
+            all.splice(
+              all.findIndex((s) => s.run?.includes(SDK_TESTS)),
+              1,
+            );
+          }
         },
       },
     },

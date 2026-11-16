@@ -17,8 +17,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { after, before, test } from "node:test";
-import { chromium } from "playwright";
 import { build, LOCK, prebuilt } from "./build.mjs";
+import { launch } from "./engine.mjs";
 import { buildPeer, prebuiltPeer, startPeer, startProxy } from "./peer.mjs";
 import { startRelay } from "./relay.mjs";
 import { startServer } from "./server.mjs";
@@ -35,7 +35,7 @@ before(async () => {
     buildPeer();
   }
   server = await startServer({ port: 0 });
-  browser = await chromium.launch();
+  browser = await launch();
 });
 
 after(async () => {
