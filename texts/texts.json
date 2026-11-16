@@ -1690,6 +1690,12 @@
       "when": "Why a text is not a set of sign-offs: its prefix."
     },
     {
+      "id": "part.uploadFailed",
+      "kind": "part",
+      "text": "upload_failed",
+      "when": "SyncStatus::error (db.sync().current().error) while S3, or the relay's own upload URL, refuses the upload of a large change with an HTTP status. The connection stays up, the change stays unconfirmed and goes up again after a backoff; an upload that goes through clears it. Carsten, 2026-11-16, NOC-349 (option A)."
+    },
+    {
       "id": "part.wrappingKeyUnmakeable",
       "kind": "part",
       "text": "the wrapping key cannot be made",

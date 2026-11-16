@@ -20,10 +20,8 @@ use super::super::time::Instant;
 use super::super::transport::Transport;
 use super::super::{apply, large, wire};
 use super::{End, Session, lost, with};
+use crate::texts::part::UPLOAD_FAILED;
 use wire::Answer;
-
-/// The code `SyncStatus::error` shows while S3 refuses an upload.
-pub(crate) const UPLOAD_FAILED: &str = "upload_failed";
 
 /// The spaces whose upload S3 refused: when each pushes again, if it is
 /// not already due, and the wait that led there.
