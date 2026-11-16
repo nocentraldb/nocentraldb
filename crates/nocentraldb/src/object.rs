@@ -179,6 +179,10 @@ pub(crate) fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
             let entry = link.read(state).value.filter(|entry| entry.known)?;
             Value::from_cbor(&entry.value, true)
         }
+        (Field::Ref(reference), FieldState::Basic(state)) => {
+            let entry = reference.read(state).value.filter(|entry| entry.known)?;
+            Value::from_reference(&entry.value)
+        }
         (Field::Set(set), FieldState::Set(state)) => Some(list(set.read(state), false)),
         (Field::Links(links), FieldState::Set(state)) => Some(list(links.read(state), true)),
         (Field::Plugin(plugin), FieldState::Plugin(state)) => plugin.read(state).map(Value::from),

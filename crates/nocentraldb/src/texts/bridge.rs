@@ -98,6 +98,12 @@ pub(crate) const NOT_AFIELD_VALUE: &str =
 pub(crate) const NOT_AMEMBER_ID: &str =
     "a member id is 64 lowercase hex digits";
 
+/// `bridgeNotAReference` (invalidValue): The bridge, on a request from the
+/// TypeScript SDK: a write into an nc.ref field of a value that is neither a
+/// map of space and id nor null.
+pub(crate) const NOT_AREFERENCE: &str =
+    "a reference is a map of space and id, the target's space id and object id";
+
 /// `bridgeNotARequest` (invalidValue): The bridge, on a request from the
 /// TypeScript SDK: a request that is not a map with a positive id, a call and
 /// its args.

@@ -105,8 +105,9 @@
 //! "spaces": list}` whenever the list `spaces.follow` asked for changed.
 //!
 //! A value is text, an integer, a float, a boolean, an array,
-//! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list, or
-//! `null`, which clears a basic field or a link (`Value::clear`).
+//! `{"$add": [..]}` / `{"$remove": [..]}` for a set or a link list,
+//! `{"space": id, "id": id}` for a reference, or `null`, which clears a
+//! basic field, a link or a reference (`Value::clear`).
 
 mod account;
 mod ad_hoc;

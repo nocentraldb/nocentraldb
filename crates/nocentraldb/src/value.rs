@@ -9,10 +9,11 @@
 use std::fmt;
 
 use ncdb_core::cbor;
+use ncdb_core::reference::Target;
 use ncdb_plugin::Data;
 
 use crate::error::{Error, ErrorCode};
-use crate::id::ObjectId;
+use crate::id::{ObjectId, SpaceId};
 
 /// A value to write into a field, or one read from it.
 #[derive(Clone, PartialEq)]
@@ -25,6 +26,9 @@ pub(crate) enum Repr {
     Float(f64),
     Boolean(bool),
     Id(ObjectId),
+    /// A reference: the target's space id and object id (RFC 0004,
+    /// "References").
+    Ref(SpaceId, ObjectId),
     /// The elements of a set or of many links, as a read gives them.
     List(Vec<Value>),
     /// Elements to add to a set or to many links.
@@ -158,6 +162,10 @@ impl Value {
             Repr::Float(x) => cbor::Value::Float(*x),
             Repr::Boolean(b) => cbor::Value::Bool(*b),
             Repr::Id(id) => ncdb_core::link::value(id.0),
+            Repr::Ref(space, id) => ncdb_core::reference::value(Target {
+                space: space.0,
+                object: id.0,
+            }),
             Repr::List(_) | Repr::Add(_) | Repr::Remove(_) | Repr::Data(_) | Repr::Clear => {
                 return None;
             }
@@ -179,5 +187,21 @@ impl Value {
             _ => return None,
         };
         Some(Value(repr))
+    }
+
+    /// A reference to the object `id` in `space`.
+    pub(crate) fn reference(space: SpaceId, id: ObjectId) -> Value {
+        Value(Repr::Ref(space, id))
+    }
+
+    /// The reference a field of `ncdb/ref` holds, or `None` for a value
+    /// that names no target: the field reads unset (RFC 0004, "The value
+    /// and its encoding").
+    pub(crate) fn from_reference(value: &cbor::Value) -> Option<Value> {
+        let target = ncdb_core::reference::target(value)?;
+        Some(Value::reference(
+            SpaceId(target.space),
+            ObjectId(target.object),
+        ))
     }
 }

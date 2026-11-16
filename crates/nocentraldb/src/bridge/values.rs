@@ -11,7 +11,7 @@ use ncdb_core::set::Set;
 use ncdb_core::view::{Field as ModelField, Model};
 
 use super::{Failed, entries, invalid};
-use crate::id::ObjectId;
+use crate::id::{ObjectId, SpaceId};
 use crate::object::Object;
 use crate::value::{Repr, Value as Field};
 
@@ -19,7 +19,8 @@ use crate::value::{Repr, Value as Field};
 /// the field's type reads them. A whole number for a float field, or for an
 /// element of a set of floats, is that float: canonical CBOR writes 2.0 as
 /// the integer 2. An object id for a link, or for an element of many
-/// links, arrives as its 32 hex digits and is that object id (NOC-353).
+/// links, arrives as its 32 hex digits and is that object id (NOC-353). A
+/// reference arrives as `{ space, id }`, as a read gives it (NOC-354).
 pub(super) fn fields(
     model: &Model,
     collection: &str,
@@ -28,6 +29,9 @@ pub(super) fn fields(
     map.iter()
         .map(|(key, value)| match key {
             Key::Text(name) => {
+                if let Some(ModelField::Ref(_)) = model.field(collection, name) {
+                    return Ok((name.clone(), as_reference(value)?));
+                }
                 let value = field(value)?;
                 let value = match model.field(collection, name) {
                     Some(ModelField::Basic(BasicValue { kind: Kind::Float }))
@@ -73,6 +77,27 @@ fn as_link(value: Field) -> Result<Field, Failed> {
     }))
 }
 
+/// The reference `{ space, id }` names, or the clear `null` asks for; any
+/// other value is `invalidValue`.
+fn as_reference(value: &Value) -> Result<Field, Failed> {
+    let not_one = || invalid(crate::texts::bridge::NOT_AREFERENCE);
+    let (space, id) = match value {
+        Value::Null => return Ok(Field::clear()),
+        Value::Map(map) if map.len() == 2 => (
+            map.get(&Key::Text("space".into())),
+            map.get(&Key::Text("id".into())),
+        ),
+        _ => return Err(not_one()),
+    };
+    match (space, id) {
+        (Some(Value::Text(space)), Some(Value::Text(id))) => Ok(Field::reference(
+            SpaceId::from_str(space).map_err(|_| not_one())?,
+            ObjectId::from_str(id).map_err(|_| not_one())?,
+        )),
+        _ => Err(not_one()),
+    }
+}
+
 /// A value to write, from its protocol form.
 fn field(value: &Value) -> Result<Field, Failed> {
     Ok(match value {
@@ -116,6 +141,10 @@ fn value_of(field: &Field) -> Value {
         Repr::Float(f) => Value::Float(*f),
         Repr::Boolean(b) => Value::Bool(*b),
         Repr::Id(id) => Value::Text(id.to_string()),
+        Repr::Ref(space, id) => entries([
+            ("space", Value::Text(space.to_string())),
+            ("id", Value::Text(id.to_string())),
+        ]),
         Repr::List(items) | Repr::Add(items) | Repr::Remove(items) => {
             Value::Array(items.iter().map(value_of).collect())
         }
