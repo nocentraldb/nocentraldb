@@ -6,6 +6,7 @@
 // open follows NOC-305 A and A (Carsten, 2026-11-13).
 
 import { NcError } from "./error.ts";
+import * as texts from "./texts.ts";
 
 /**
  * A member's invitation: its public identity, which an admin passes to
@@ -85,10 +86,7 @@ export const invitation = (text: string): Invitation => {
     ? trimmed.slice(PREFIX.length)
     : undefined;
   if (body === undefined || !BASE64URL.test(body) || body.length % 4 === 1) {
-    throw new NcError(
-      "invalidValue",
-      "the text is not an invitation: ncdb-invite-1: and unpadded base64url",
-    );
+    throw new NcError("invalidValue", texts.NOT_AN_INVITATION);
   }
   return new InvitationText(trimmed);
 };

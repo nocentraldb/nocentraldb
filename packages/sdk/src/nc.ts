@@ -15,6 +15,7 @@
 
 import type { Query } from "./db.ts";
 import { makeQuery } from "./query.ts";
+import * as texts from "./texts.ts";
 
 /** What every field of the model carries: what it reads as (`T`), and whether it is deprecated (`D`). */
 interface Value<T = unknown, D extends boolean = false> {
@@ -357,9 +358,7 @@ const describeModel = (
   for (const [name, declared] of Object.entries(collections)) {
     const state = collectionStates.get(declared);
     if (state === undefined) {
-      throw new Error(
-        `${name}: not a collection; declare it with nc.collection(...).`,
-      );
+      throw new Error(texts.notACollection(name));
     }
     described[name] = describeCollection(name, state);
   }
@@ -371,10 +370,13 @@ const describeCollection = (name: string, state: CollectionState) => {
   for (const [fieldName, declared] of Object.entries(state.fields)) {
     fields[fieldName] = describeField(`${name}.${fieldName}`, declared);
   }
-  const named = (place: Record<string, Named>, what: string) =>
+  const named = (
+    place: Record<string, Named>,
+    notOne: (collection: string, key: string) => string,
+  ) =>
     Object.entries(place).map(([key, value]) => {
       if (!names.has(value)) {
-        throw new Error(`${name}.${key}: not a ${what}.`);
+        throw new Error(notOne(name, key));
       }
       return key;
     });
@@ -382,20 +384,19 @@ const describeCollection = (name: string, state: CollectionState) => {
   for (const [key, value] of Object.entries(state.indexes)) {
     const declared = indexStates.get(value);
     if (declared === undefined) {
-      throw new Error(
-        `${name}.${key}: not an index; declare it with nc.index(...).`,
-      );
+      throw new Error(texts.notAnIndex(name, key));
     }
     indexes[key] = declared;
   }
   return {
     ...(state.deprecated === undefined ? {} : { deprecated: state.deprecated }),
     fields,
-    computed: named(
-      state.computed,
-      "computed field; declare it with nc.reach(...)",
+    computed: named(state.computed, (collection, key) =>
+      texts.notAComputedField(collection, key),
     ),
-    views: named(state.views, "view; declare it with nc.view(...)"),
+    views: named(state.views, (collection, key) =>
+      texts.notAView(collection, key),
+    ),
     indexes,
   };
 };
@@ -406,9 +407,7 @@ const describeField = (
 ): Record<string, unknown> => {
   const state = fieldStates.get(declared);
   if (state === undefined) {
-    throw new Error(
-      `${path}: not a field; declare it with a field function such as nc.string().`,
-    );
+    throw new Error(texts.notAField(path));
   }
   const { spec } = state;
   const described: Record<string, unknown> = {
@@ -431,24 +430,18 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
     case "link":
       return { type: spec.type, targets: spec.targets };
     case "reserved":
-      throw new Error(
-        `${path}: ${spec.name} is reserved; its field type belongs to a later RFC (RFC 0005).`,
-      );
+      throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {
       const element = fieldStates.get(spec.of);
       if (element === undefined || element.spec.kind !== "basic") {
-        throw new Error(
-          `${path}: a set's element is a basic value: nc.string(), nc.int(), nc.float(), nc.boolean() or nc.oneOf([...]).`,
-        );
+        throw new Error(texts.setElementNotBasic(path));
       }
       if (
         element.person !== undefined ||
         element.description !== undefined ||
         element.deprecated !== undefined
       ) {
-        throw new Error(
-          `${path}: a set's element takes no modifiers; put them on the set.`,
-        );
+        throw new Error(texts.setElementModified(path));
       }
       return { type: "ncdb/set", of: describeType(path, element.spec) };
     }

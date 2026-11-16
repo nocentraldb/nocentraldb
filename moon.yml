@@ -161,15 +161,21 @@ tasks:
     # Every text a developer reads from the SDKs and the ncdb command line
     # lives in texts/texts.json (NOC-329): each entry well-formed, with when
     # it shows, sorted by id and one field per line, so git diff shows each
-    # change; the generated crates/nocentraldb/src/texts/ and
-    # crates/ncdb/src/texts.rs equal to the file; no text written in the
-    # SDK's or the command line's code; and every text used.
+    # change; the generated crates/nocentraldb/src/texts/,
+    # crates/ncdb/src/texts.rs and packages/sdk/src/texts.ts equal to the
+    # file; no text written in the Rust SDK's (its bridge too), the
+    # TypeScript SDK's or the command line's code; and every text used. A
+    # TypeScript text's code is one RFC 0009's error table lists (T3).
     command: "node scripts/texts.mjs --check"
     inputs:
       - "/texts/**/*"
       - "/scripts/texts.mjs"
+      - "/scripts/texts-ts.mjs"
+      - "/scripts/texts-review.mjs"
       - "/crates/nocentraldb/src/**/*"
       - "/crates/ncdb/src/**/*"
+      - "/packages/sdk/src/**/*"
+      - "/docs/rfc/0009-sdk-api.md"
   version:
     # The one version of the project: Cargo.toml [workspace.package] holds a
     # plain X.Y.Z, every crate inherits it, inter-crate dependencies are

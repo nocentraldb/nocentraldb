@@ -246,6 +246,202 @@
       "when": "Members::add (members.add) when the invitation's member is a member of the space already."
     },
     {
+      "id": "error.bridgeAddTakesAnInvitation",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "members.add takes at least one invitation",
+      "when": "The bridge, on a request from the TypeScript SDK: members.add with an empty list of invitations."
+    },
+    {
+      "id": "error.bridgeAddTakesInvitations",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "members.add takes invitations",
+      "when": "The bridge, on a request from the TypeScript SDK: members.add without its invitations."
+    },
+    {
+      "id": "error.bridgeAfterIsACursor",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "after is a cursor",
+      "when": "The bridge, on a request from the TypeScript SDK: find given an after that is not a cursor."
+    },
+    {
+      "id": "error.bridgeArgumentIsText",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "{key} is text",
+      "when": "The bridge, on a request from the TypeScript SDK: a request whose argument, such as space or lock, is missing or not text."
+    },
+    {
+      "id": "error.bridgeDeviceJoinsWithRole",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a device joins with a role",
+      "when": "The bridge, on a request from the TypeScript SDK: members.add of a device without a role."
+    },
+    {
+      "id": "error.bridgeEqualIsAnArray",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "equal is an array",
+      "when": "The bridge, on a request from the TypeScript SDK: find given equal values that are not an array."
+    },
+    {
+      "id": "error.bridgeFieldNameIsText",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a field's name is text",
+      "when": "The bridge, on a request from the TypeScript SDK: a write whose values name a field by something that is not text."
+    },
+    {
+      "id": "error.bridgeFindTakesAQuery",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "find takes a query",
+      "when": "The bridge, on a request from the TypeScript SDK: find (db.find, space.find) without its query."
+    },
+    {
+      "id": "error.bridgeInvitationIsText",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "an invitation is text",
+      "when": "The bridge, on a request from the TypeScript SDK: members.add given an invitation that is not text."
+    },
+    {
+      "id": "error.bridgeKindIsDeviceOrAgent",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a kind is \"device\" or \"agent\"",
+      "when": "The bridge, on a request from the TypeScript SDK: account.pair (db.account.pair) given a kind that is neither."
+    },
+    {
+      "id": "error.bridgeNoSuchCall",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "no call {call}",
+      "when": "The bridge, on a request from the TypeScript SDK: a request whose call the bridge does not have."
+    },
+    {
+      "id": "error.bridgeNoSuchOp",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "no op {op}",
+      "when": "The bridge, on a request from the TypeScript SDK: a write op the bridge does not have."
+    },
+    {
+      "id": "error.bridgeNotAChangeId",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "change is not a change id",
+      "when": "The bridge, on a request from the TypeScript SDK: sync.isConfirmed (db.sync.isConfirmed) given a change that is not a change id."
+    },
+    {
+      "id": "error.bridgeNotAFieldValue",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "not a value a field takes",
+      "when": "The bridge, on a request from the TypeScript SDK: a write of a value no field type takes."
+    },
+    {
+      "id": "error.bridgeNotAMemberId",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a member id is 64 lowercase hex digits",
+      "when": "The bridge, on a request from the TypeScript SDK: a membership or account call given a member id that is not 64 lowercase hex digits."
+    },
+    {
+      "id": "error.bridgeNotARequest",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a request is a map of id, call and args",
+      "when": "The bridge, on a request from the TypeScript SDK: a request that is not a map with a positive id, a call and its args."
+    },
+    {
+      "id": "error.bridgeNotARole",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a role is reader, writer or admin",
+      "when": "The bridge, on a request from the TypeScript SDK: a membership call given a role that is none of them."
+    },
+    {
+      "id": "error.bridgeNotASpaceId",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "not a space id",
+      "when": "The bridge, on a request from the TypeScript SDK: a call given a space that is not a space id."
+    },
+    {
+      "id": "error.bridgeNotAnElementsOp",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a map value is $add or $remove with a list",
+      "when": "The bridge, on a request from the TypeScript SDK: a write of a map value that is not nc.add(...) or nc.remove(...)."
+    },
+    {
+      "id": "error.bridgeNotAnObjectId",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "not an object id",
+      "when": "The bridge, on a request from the TypeScript SDK: a call given an object id that is not one."
+    },
+    {
+      "id": "error.bridgeNumberTooLarge",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "too large",
+      "when": "The bridge, on a request from the TypeScript SDK: a write of an integer above the largest a field holds."
+    },
+    {
+      "id": "error.bridgeNumberTooSmall",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "too small",
+      "when": "The bridge, on a request from the TypeScript SDK: a write of an integer below the smallest a field holds."
+    },
+    {
+      "id": "error.bridgeOpenAlready",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "the database is open already",
+      "when": "The bridge, on a request from the TypeScript SDK: open, on a worker whose database is open."
+    },
+    {
+      "id": "error.bridgeOpenTakesInMemoryOrName",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "open takes inMemory: true, or a name in the browser",
+      "when": "The bridge, on a request from the TypeScript SDK: open (nc.open) given neither."
+    },
+    {
+      "id": "error.bridgeRoleIsText",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a role is text",
+      "when": "The bridge, on a request from the TypeScript SDK: members.add or members.setRole given a role that is not text."
+    },
+    {
+      "id": "error.bridgeTakeIsANumber",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "take is a number",
+      "when": "The bridge, on a request from the TypeScript SDK: find given a take that is not a number."
+    },
+    {
+      "id": "error.bridgeValuesIsAMap",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "values is a map",
+      "when": "The bridge, on a request from the TypeScript SDK: a write op whose values are not a map."
+    },
+    {
+      "id": "error.bridgeWriteTakesOps",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a write takes ops",
+      "when": "The bridge, on a request from the TypeScript SDK: write (space.write and its shorthands) without its ops."
+    },
+    {
       "id": "error.certificateDoesNotHold",
       "kind": "error",
       "code": "invalidCertificate",
@@ -1306,6 +1502,173 @@
       "kind": "part",
       "text": "the wrapping key cannot be made",
       "when": "What failed, in webCryptoFailed: WebCrypto could not make the non-extractable key that wraps the member's keys."
+    },
+    {
+      "id": "ts.anotherLock",
+      "kind": "ts",
+      "code": "modelRefused",
+      "text": "another tab has this database open with another lock",
+      "when": "nc.open in a tab while another tab of the origin has the database open with another lock."
+    },
+    {
+      "id": "ts.cursorOfAnotherDatabase",
+      "kind": "ts",
+      "code": "cursorOfAnotherModel",
+      "text": "the cursor is not of this database; start from the first page",
+      "when": "db.find or space.find, given a page's cursor from another database."
+    },
+    {
+      "id": "ts.databaseClosed",
+      "kind": "ts",
+      "code": "closed",
+      "text": "the database is closed",
+      "when": "Any call after db.close(), and the calls still waiting when it closes."
+    },
+    {
+      "id": "ts.lockFieldDiffers",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: {collection}.{field} differs from the lock in its type or options. Run ncdb model build.",
+      "when": "nc.open, on a model whose field has another type or other options in the lock, as when the lock was not built again after the field changed."
+    },
+    {
+      "id": "ts.lockHasNoCollection",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no collection {collection}. Run ncdb model build.",
+      "when": "nc.open, on a model that names a collection the lock does not have, as when the lock was not built again after the collection was added."
+    },
+    {
+      "id": "ts.lockHasNoField",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no field {collection}.{field}. Run ncdb model build.",
+      "when": "nc.open, on a model that names a field the lock does not have, as when the lock was not built again after the field was added."
+    },
+    {
+      "id": "ts.lockHasNoIndex",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: it has no index {collection}.{index}. Run ncdb model build.",
+      "when": "nc.open, on a model that names an index the lock does not have, as when the lock was not built again after the index was added."
+    },
+    {
+      "id": "ts.lockIndexDiffers",
+      "kind": "ts",
+      "code": "lockOutOfDate",
+      "text": "model.lock.json is out of date: {collection}.{index} differs from the lock in its fields or options. Run ncdb model build.",
+      "when": "nc.open, on a model whose index has other fields, another equality prefix or another scope in the lock."
+    },
+    {
+      "id": "ts.noSuchCollection",
+      "kind": "ts",
+      "code": "notFound",
+      "text": "the model has no such collection; pass a handle such as model.tasks",
+      "when": "A call given a collection that is not a handle of the model nc.open was given."
+    },
+    {
+      "id": "ts.notACollection",
+      "kind": "ts",
+      "text": "{collection}: not a collection; declare it with nc.collection(...).",
+      "when": "ncdb model build, on a model whose collection is not declared with nc.collection."
+    },
+    {
+      "id": "ts.notAComputedField",
+      "kind": "ts",
+      "text": "{collection}.{key}: not a computed field; declare it with nc.reach(...).",
+      "when": "ncdb model build, on a model whose computed field is not declared with nc.reach."
+    },
+    {
+      "id": "ts.notADatabaseName",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "a database name is 1 to 64 characters of a-z, 0-9, - and _",
+      "when": "nc.open, given a name that breaks RFC 0006's rule for a browser database's name."
+    },
+    {
+      "id": "ts.notAField",
+      "kind": "ts",
+      "text": "{path}: not a field; declare it with a field function such as nc.string().",
+      "when": "ncdb model build, on a model whose field is not declared with a field function."
+    },
+    {
+      "id": "ts.notAPairingAnswer",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "the text is not a pairing answer: ncdb-pair-1: and unpadded base64url",
+      "when": "nc.pairingAnswer, given a text that does not start with ncdb-pair-1: or is not unpadded base64url."
+    },
+    {
+      "id": "ts.notAQuery",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "not a query",
+      "when": "A subscription to db.find or space.find, given something that is not a query."
+    },
+    {
+      "id": "ts.notAQueryStartOne",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "not a query; start one from an index, such as model.tasks.indexes.byPriority",
+      "when": "db.find or space.find, given something that is not a query."
+    },
+    {
+      "id": "ts.notASafeInteger",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "{collection}.{field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1",
+      "when": "A write of an nc.int() field given a number that is not a safe integer."
+    },
+    {
+      "id": "ts.notAView",
+      "kind": "ts",
+      "text": "{collection}.{key}: not a view; declare it with nc.view(...).",
+      "when": "ncdb model build, on a model whose view is not declared with nc.view."
+    },
+    {
+      "id": "ts.notAnIndex",
+      "kind": "ts",
+      "text": "{collection}.{key}: not an index; declare it with nc.index(...).",
+      "when": "ncdb model build, on a model whose index is not declared with nc.index."
+    },
+    {
+      "id": "ts.notAnInvitation",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "the text is not an invitation: ncdb-invite-1: and unpadded base64url",
+      "when": "nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url."
+    },
+    {
+      "id": "ts.ownerTabClosed",
+      "kind": "ts",
+      "code": "storageFailed",
+      "text": "the tab that held the database closed before it answered; the call may or may not have run",
+      "when": "A call that changes the database, sent to the tab that owned it, when that tab ended before it answered (NOC-177)."
+    },
+    {
+      "id": "ts.reservedFieldType",
+      "kind": "ts",
+      "text": "{path}: {type} is reserved; its field type belongs to a later RFC (RFC 0005).",
+      "when": "ncdb model build, on a model with nc.richText or nc.stream, whose field types a later RFC designs."
+    },
+    {
+      "id": "ts.setElementModified",
+      "kind": "ts",
+      "text": "{path}: a set's element takes no modifiers; put them on the set.",
+      "when": "ncdb model build, on a model whose nc.set element is personal, described or deprecated."
+    },
+    {
+      "id": "ts.setElementNotBasic",
+      "kind": "ts",
+      "text": "{path}: a set's element is a basic value: nc.string(), nc.int(), nc.float(), nc.boolean() or nc.oneOf([...]).",
+      "when": "ncdb model build, on a model whose nc.set is of something other than a basic value."
+    },
+    {
+      "id": "ts.workerFailed",
+      "kind": "ts",
+      "code": "storageFailed",
+      "text": "the worker failed: {message}",
+      "when": "Every call waiting on the SDK's worker when the worker fails, with the browser's own message."
     }
   ]
 }
