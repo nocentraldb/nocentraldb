@@ -3,7 +3,7 @@
 // "designed" or "not built", every page uses the glossary's terms, and the
 // docs name the limits of 0.1.
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -51,10 +51,14 @@ test("getting started says what 0.1 is and links both guides", () => {
     "Chromium, Firefox and Safari",
     "storageUnavailable",
     "waitingForTab",
-    "getting-started.md",
-    "getting-started-browser.md",
   ])
     assert.ok(words.includes(fact), fact);
+  const html = readFileSync(join(dist, "docs/index.html"), "utf8");
+  for (const guide of [
+    "docs/getting-started.md",
+    "docs/getting-started-browser.md",
+  ])
+    assert.ok(html.includes(`blob/main/${guide}"`), guide);
 });
 
 test("the RFC list holds every RFC in docs/rfc", () => {
