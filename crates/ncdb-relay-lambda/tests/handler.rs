@@ -19,8 +19,13 @@ const CONNECT: &str = include_str!("../src/harness/events/connect.json");
 const MESSAGE: &str = include_str!("../src/harness/events/message.json");
 const DISCONNECT: &str = include_str!("../src/harness/events/disconnect.json");
 
-/// The connection id the recorded events carry.
+/// The connection id the recorded events carry, a fixed stand-in for the
+/// one API Gateway gave (NOC-292).
 const RECORDED: &str = "Q7mXJdJpFiACFbQ=";
+
+/// The body of the recorded message: the base64 of the `hello` the Rust
+/// SDK sent, which API Gateway handed to Lambda as it arrived.
+const HELLO: &str = "owFlaGVsbG8DgQEEbW5jZGItcnMvMC4xLjA=";
 
 /// A connection API that records posts and closes; a post to a connection
 /// in `gone` is `Gone`.
@@ -138,38 +143,56 @@ fn code(value: &Value) -> &str {
 
 #[test]
 fn recorded_events_read_as_their_routes() {
+    // The events were captured from a deployed API on 2026-11-17 (NOC-292).
     let connect = recorded(CONNECT);
     assert_eq!(connect.route, Route::Connect);
     assert_eq!(connect.connection, RECORDED);
     assert_eq!(connect.body, Body::None);
-    assert_eq!(connect.connected_at, 1_793_369_121_000);
-    assert_eq!(connect.at, 1_793_369_121_012);
+    assert_eq!(connect.connected_at, 1_794_875_589_580);
+    assert_eq!(connect.at, 1_794_875_589_580);
 
     let message = recorded(MESSAGE);
     assert_eq!(message.route, Route::Message);
-    // The recorded message is a `hello`, sent as base64 in a text frame,
-    // which API Gateway hands to Lambda as it is (NOC-338).
+    assert_eq!(message.connected_at, 1_794_875_589_580);
+    assert_eq!(message.at, 1_794_875_589_838);
     let Body::Message(bytes) = &message.body else {
         panic!("a message");
     };
-    assert_eq!(kind(&cbor::decode(bytes).unwrap()), "hello");
+    let hello = cbor::decode(bytes).unwrap();
+    assert_eq!(kind(&hello), "hello");
+    assert_eq!(field(&hello, 4), Some(&Value::Text("ncdb-rs/0.1.0".into())));
 
     let disconnect = recorded(DISCONNECT);
     assert_eq!(disconnect.route, Route::Disconnect);
     assert_eq!(disconnect.body, Body::None);
+    assert_eq!(disconnect.at, 1_794_875_619_311);
+}
+
+#[test]
+fn api_gateway_hands_a_text_frame_to_lambda_as_it_arrived() {
+    // The member sent its `hello` as base64 in a text frame (NOC-338). API
+    // Gateway put that text in `body` unchanged and marked it as not
+    // base64-encoded: it does not encode a text frame again.
+    let request: ApiGatewayWebsocketProxyRequest = serde_json::from_str(MESSAGE).unwrap();
+    assert!(!request.is_base64_encoded);
+    assert_eq!(request.body.as_deref(), Some(HELLO));
+    let Body::Message(bytes) = recorded(MESSAGE).body else {
+        panic!("a message");
+    };
+    assert_eq!(Some(bytes), ncdb_relay::wire::from_text(HELLO));
 }
 
 #[test]
 fn a_body_that_is_no_base64_or_marked_binary_keeps_only_its_size() {
-    let text = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "some text");
+    let text = MESSAGE.replace(HELLO, "some text");
     assert_eq!(recorded(&text).body, Body::Unreadable(9));
-    let bad = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "%%%");
+    let bad = MESSAGE.replace(HELLO, "%%%");
     assert_eq!(recorded(&bad).body, Body::Unreadable(3));
     // A binary frame never reaches Lambda: API Gateway closes the
     // connection with 1003. A body marked as base64-encoded binary is no
     // message of RFC 0007.
     let binary = MESSAGE.replace("\"isBase64Encoded\": false", "\"isBase64Encoded\": true");
-    assert_eq!(recorded(&binary).body, Body::Unreadable(32));
+    assert_eq!(recorded(&binary).body, Body::Unreadable(HELLO.len()));
 }
 
 #[test]
@@ -220,7 +243,7 @@ async fn a_message_on_a_connection_without_a_record_is_refused_and_closed() {
 async fn a_message_that_is_no_base64_before_auth_closes_the_connection() {
     let (handler, _dir) = handler();
     handler.handle(live(CONNECT)).await;
-    let text = MESSAGE.replace("owFlaGVsbG8DgQEEa25jZGItcnMvMC4x", "hello");
+    let text = MESSAGE.replace(HELLO, "hello");
     handler.handle(live(&text)).await;
     let posts = posts(handler_api(&handler));
     assert_eq!(code(&posts[0].1), "unauthenticated");
@@ -249,7 +272,7 @@ async fn the_log_line_names_sizes_and_never_the_message() {
     let (handler, _dir) = handler();
     handler.handle(live(CONNECT)).await;
     let line = handler.handle(live(MESSAGE)).await;
-    assert_eq!(line.bytes_in, 24);
+    assert_eq!(line.bytes_in, 26);
     assert_eq!(line.posts, 1);
     let text = line.to_string();
     let json: serde_json::Value = serde_json::from_str(&text).unwrap();
