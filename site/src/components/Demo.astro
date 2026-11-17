@@ -30,7 +30,8 @@
       <p class="demo__hint">
         Open this page in a <a href="/#demo" target="_blank" rel="noopener">second tab</a>: both tabs share one database,
         and a task added in one appears in the other. On a phone, which keeps only one tab running,
-        the other tab catches up when you switch to it.
+        the other tab catches up when you switch to it. In Safari on a phone, a tab you switch to can wait for the
+        hidden one before it saves your task.
       </p>
     </div>
 
@@ -83,6 +84,14 @@
       import("/demo/demo.js")
         .then((demo) => demo.start(root, say))
         .catch((error) => {
+          if (error && error.code === "storageUnavailable") {
+            say(
+              "unsupported",
+              "This is a private window, which keeps no data, so the demo does not start here. " +
+                "Open this page in a normal window to try it.",
+            );
+            return;
+          }
           say(
             "failed",
             `The demo could not load (${error && error.message ? error.message : error}). ` +
