@@ -6,26 +6,34 @@
     "x-restapi": ""
   },
   "multiValueHeaders": {
-    "Host": ["abcdef1234.execute-api.eu-central-1.amazonaws.com"],
-    "x-api-key": [""],
-    "X-Forwarded-For": [""],
-    "x-restapi": [""]
+    "Host": [
+      "abcdef1234.execute-api.eu-central-1.amazonaws.com"
+    ],
+    "x-api-key": [
+      ""
+    ],
+    "X-Forwarded-For": [
+      ""
+    ],
+    "x-restapi": [
+      ""
+    ]
   },
   "requestContext": {
     "routeKey": "$disconnect",
-    "disconnectStatusCode": 1000,
+    "disconnectStatusCode": 1006,
     "eventType": "DISCONNECT",
-    "extendedRequestId": "Q7ndJGq4FiAFfJg=",
-    "requestTime": "29/Oct/2026:14:06:40 +0000",
+    "extendedRequestId": "Q7mXOFpUliAFvdA=",
+    "requestTime": "17/Nov/2026:00:33:39 +0000",
     "messageDirection": "IN",
-    "disconnectReason": "Client-side close frame status code '1000' - description 'closed'",
+    "disconnectReason": "Connection closed abnormally",
     "stage": "prod",
-    "connectedAt": 1793369121000,
-    "requestTimeEpoch": 1793369200563,
+    "connectedAt": 1794875589580,
+    "requestTimeEpoch": 1794875619311,
     "identity": {
       "sourceIp": "192.0.2.10"
     },
-    "requestId": "Q7ndJGq4FiAFfJg=",
+    "requestId": "Q7mXOFpUliAFvdA=",
     "domainName": "abcdef1234.execute-api.eu-central-1.amazonaws.com",
     "connectionId": "Q7mXJdJpFiACFbQ=",
     "apiId": "abcdef1234"
