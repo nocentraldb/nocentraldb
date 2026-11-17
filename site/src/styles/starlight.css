@@ -75,3 +75,15 @@ h4 {
   --sl-color-asides-border: var(--ncdb-surface-2);
   background: var(--ncdb-surface);
 }
+/* Section headings clearly below the page title: Starlight's h2 is 83 % of
+   its h1, and in the heavy display face the two read as equals (D2, NOC-360). */
+:root {
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.25rem;
+}
+@media (min-width: 50rem) {
+  :root {
+    --sl-text-h2: 1.75rem;
+    --sl-text-h3: 1.375rem;
+  }
+}
