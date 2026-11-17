@@ -25,7 +25,7 @@ How to read it:
 
 | Term | Meaning | Avoid |
 | --- | --- | --- |
-| space | The unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. | workspace, room, project, tenant, channel, group (a "project" can be what an app keeps in a space) |
+| space | The unit of sharing, membership and keys. Every object belongs to exactly one space. Fine-grained rights come from many small spaces. | workspace, room, project, tenant, channel (a "project" can be what an app keeps in a space); group, which left the design ([RFC 0008, "Groups"](rfc/0008-membership.md#groups)) |
 | member | Whoever holds a copy of a space and writes to it under its own key: a person's device, an agent or a sub-agent. A member is never a person. | user (a person, who may have several devices), participant, peer, node |
 | role | What a member may do in a space: `reader`, `writer` or `admin`. | permission, right, access level |
 | device | A person's phone, laptop or browser, with its own database and its own key. One database is one member. | client, installation, instance |
@@ -88,7 +88,7 @@ How to read it:
 | --- | --- | --- |
 | key | Written as the kind of key when it matters: member key, space key, account key, person key. The SDK manages every key; an app never handles one. | secret (a secret is what a key protects), password, credential |
 | member key | The key a member signs its changes with, created on first open. In the browser it is sealed in IndexedDB under a non-extractable WebCrypto key. | device key, identity key |
-| space key | The key a space's content is encrypted with. Removing a member rotates it. | group key, room key |
+| space key | The key a space's content is encrypted with. Removing a member rotates it. | room key |
 | person key | One key per person per space, which encrypts that person's personal fields. | user key, PII key |
 | erasure, erase | Making a person's personal fields unreadable by destroying their person keys, in every space of the database where the member may write (`Db::erase`, notice `Erased`). In 0.1, the Rust SDK erases; the browser SDK reads the erasure audit. | delete (deleting an object is something else), forget, wipe, purge, shredding (as the name of the whole act) |
 | shred | Destroying one person key in one space, the step of an erasure in one space (`Erased.shreds`). Used in the RFCs and the API, not as the reader's name for the act. | burn, revoke (revoking is what removing a member does) |
