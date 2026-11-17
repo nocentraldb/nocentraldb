@@ -51,3 +51,19 @@ test("the hint says that on a phone the other tab catches up when shown", () => 
   assert.match(hint, /phone/);
   assert.match(hint, /catches up/);
 });
+
+test("in a private window the demo says why it does not start, and does not suggest a reload", () => {
+  // nc.open refuses a browser without OPFS with storageUnavailable: a
+  // private window of Firefox or Safari (NOC-347). Reloading never helps there.
+  const loader = html.slice(html.indexOf("data-demo-loader"));
+  assert.match(loader, /"storageUnavailable"/);
+  assert.match(loader, /private window/);
+  assert.match(loader, /normal window/);
+});
+
+test("the hint names Safari's limit with a frozen tab", () => {
+  const section = html.slice(html.indexOf('id="demo"'));
+  const hint = section.slice(section.indexOf("demo__hint"), section.indexOf("</p>", section.indexOf("demo__hint")));
+  assert.match(hint, /Safari/);
+  assert.match(hint, /wait/);
+});
