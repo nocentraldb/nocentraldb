@@ -14,6 +14,6 @@ test("below 640px the hero's drawing is not shown", () => {
   const html = readFileSync(join(dist, "index.html"), "utf8");
   assert.match(
     html,
-    /@media\s*\(max-width:\s*639px\)\s*\{\s*\.hero \.hero__media\s*\{\s*display:\s*none\s*\}\s*\}/,
+    /@media\s*\((?:max-width:\s*|width\s*<=\s*)639px\)\s*\{\s*\.hero \.hero__media\s*\{\s*display:\s*none\s*\}/,
   );
 });
