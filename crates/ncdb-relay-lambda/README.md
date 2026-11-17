@@ -51,6 +51,6 @@ With the feature `harness`, `harness::Gateway` stands in for API Gateway on the 
 - Like API Gateway, it closes a connection that sends a binary frame (1003) or a frame above 32 KB (1009), refuses a post above 32 KB, delivers each post as a text frame, closes every connection at its maximum age (2 hours, or shorter in tests), and hands each connection's messages to the handler one at a time.
 - A second port serves the upload and download URLs of large changes, which S3's presigned URLs serve on AWS.
 
-The recorded events follow the shape of real API Gateway events. They are not captured from a deployed API: the AWS Emulator serves no WebSocket data plane (NOC-278), and the relay is not deployed yet.
+The recorded events were captured from a deployed WebSocket API on 2026-11-17, one per route, with the steps in `docs/relay-deploy.md` section 3.1 (NOC-292). Their account, API, connection and request ids, trace id, WebSocket key and source address are fixed stand-ins. The tests in `tests/handler.rs` and `tests/invocation.rs` read the same files.
 
 The Rust SDK's sync suite runs through the harness when `NCDB_TEST_RELAY=lambda` is set. The task `moon run ncdb-relay-lambda:test-sdk-sync` does this, and it is part of `pnpm gates`.

@@ -101,13 +101,13 @@ If a check fails, roll back (below) and tell pm what you saw, with the log lines
 
 ### 3.1 Capture one real event per route, once (NOC-292)
 
-The function's tests read API Gateway's events from fixtures that were written by hand. Capture one real event per route during this first smoke test, so the tests read what API Gateway really sends. The relay itself never logs an event. The capture uses a temporary second function behind a temporary second WebSocket API, and you delete both afterwards.
+The function's tests read API Gateway's events from fixtures captured this way during the first smoke test, on 2026-11-17, so the tests read what API Gateway really sends. Capture them again only when API Gateway's events may have changed. The relay itself never logs an event. The capture uses a temporary second function behind a temporary second WebSocket API, and you delete both afterwards.
 
-You need the AWS CLI, signed in to NoCentralDb-Prod with rights to create a Lambda function, an IAM role and an API. The commands use the profile `nocentraldb` and the variable `ACCOUNT`, the account's 12-digit id:
+You need the AWS CLI, signed in to NoCentralDb-Prod with your own admin profile, which may create a Lambda function, an IAM role and an API. The agents' profile `nocentraldb` is read-only and cannot. The commands use your profile and the variable `ACCOUNT`, the account's 12-digit id. They run in bash and in zsh: every variable that a colon follows is written in braces, as in `${ACCOUNT}:role`, because zsh reads `$ACCOUNT:r` as the modifier `:r`.
 
 ```sh
-export AWS_PROFILE=nocentraldb AWS_REGION=eu-central-1
-aws sso login --use-device-code --no-browser
+export AWS_PROFILE=<your admin profile> AWS_REGION=eu-central-1
+aws sso login
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 ```
 
@@ -129,7 +129,7 @@ ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
    sleep 10   # until IAM hands the new role to Lambda
    FN=$(aws lambda create-function --function-name ncdb-capture --runtime python3.13 \
      --handler capture.handler --zip-file fileb://capture.zip \
-     --role "arn:aws:iam::$ACCOUNT:role/ncdb-capture" --query FunctionArn --output text)
+     --role "arn:aws:iam::${ACCOUNT}:role/ncdb-capture" --query FunctionArn --output text)
    API=$(aws apigatewayv2 create-api --name ncdb-capture --protocol-type WEBSOCKET \
      --route-selection-expression '$request.body.action' --query ApiId --output text)
    INT=$(aws apigatewayv2 create-integration --api-id "$API" --integration-type AWS_PROXY \
@@ -141,22 +141,22 @@ ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
    aws apigatewayv2 create-stage --api-id "$API" --stage-name prod --auto-deploy >/dev/null
    aws lambda add-permission --function-name ncdb-capture --statement-id apigw \
      --action lambda:InvokeFunction --principal apigateway.amazonaws.com \
-     --source-arn "arn:aws:execute-api:eu-central-1:$ACCOUNT:$API/*" >/dev/null
+     --source-arn "arn:aws:execute-api:eu-central-1:${ACCOUNT}:${API}/*" >/dev/null
    ```
 
-2. Point the laptop's database from the smoke test at it once. The app opens a connection and sends its `hello`, which holds the protocol's version and no key. The capture function never answers with a challenge, so the app sends nothing more, `timeout` ends it, and the connection closes. That makes one event per route.
+2. Point the laptop's database from the smoke test at it once. The app opens a connection and sends its `hello`, which holds the protocol's version and no key. The capture function never answers with a challenge, so the app sends nothing more. After 30 seconds `sync` gives up with "not synced after 30s", which is expected here, and the connection closes. That makes one event per route.
 
    ```sh
-   timeout 15 tasks --data /tmp/laptop --key-file /tmp/laptop.keys \
+   tasks --data /tmp/laptop --key-file /tmp/laptop.keys \
      --relay "wss://$API.execute-api.eu-central-1.amazonaws.com/prod" sync
    sleep 20   # until CloudWatch Logs holds the lines
    ```
 
-3. Turn the three log lines into fixtures. The script replaces every id that names your account, the API, the connection, a request or your machine with the fixed values the existing fixtures use. It writes `connect.json`, `message.json` and `disconnect.json`:
+3. Turn the three log lines into fixtures. The filter pattern is quoted twice: CloudWatch Logs reads an unquoted term with a hyphen in it as something else and finds no line. The script replaces every id that names your account, the API, the connection, a request or your machine with the fixed values the existing fixtures use. It writes `connect.json`, `message.json` and `disconnect.json`:
 
    ```sh
    aws logs filter-log-events --log-group-name /aws/lambda/ncdb-capture \
-     --filter-pattern NCDB-CAPTURE --query 'events[].message' --output json > lines.json
+     --filter-pattern '"NCDB-CAPTURE"' --query 'events[].message' --output json > lines.json
    python3 -I - "$ACCOUNT" lines.json <<'EOF'
    import json, re, sys
    account, path = sys.argv[1], sys.argv[2]
