@@ -1,8 +1,6 @@
 # Glossary
 
-One term per concept. This page sets the words that NoCentralDB's texts use: the website first, then the SDK's texts, the documentation and the RFCs (NOC-358). When a text needs one of these concepts, it uses the term in the first column, as the definition uses it, and none of the words in "Avoid".
-
-It is a draft (NOC-360). The owner decides it; until then a text that departs from it is not wrong, only a candidate for the next pass.
+This page sets the words that NoCentralDB's texts use: the website, the SDK's, the documentation and the RFCs. When a text needs one of these concepts, it uses the term in the first column, as the definition uses it. It does not use any of the words in "Avoid".
 
 How to read it:
 
@@ -15,11 +13,11 @@ How to read it:
 | Term | Meaning | Avoid |
 | --- | --- | --- |
 | NoCentralDB | The product, written as one word with three capitals. The packages are `@nocentraldb/sdk` and `nocentraldb`, the command-line tool is `ncdb`. | NoCentralDb, Nocentraldb, NCDB, "No Central DB" |
-| local-first database | What NoCentralDB is, in four words: every member works on its own full copy, and the network is never on the read path. | offline-first database, sync engine, CRDT database (all three are close, and none says what we mean) |
-| SDK | The library an app calls: the TypeScript SDK (`@nocentraldb/sdk`) or the Rust SDK (`nocentraldb`). In 0.1 the TypeScript SDK runs in the browser only. | client library, driver, client (a "client" is any program that talks to the relay) |
+| local-first database | What NoCentralDB is: every member works on its own full copy, and can read even if the network isn't available. | offline-first database, sync engine, CRDT database (all three are close, and none says what we mean) |
+| SDK | An app uses the following libraries (SDKs): the TypeScript SDK (`@nocentraldb/sdk`) or the Rust SDK (`nocentraldb`). In 0.1 the TypeScript SDK runs in the browser only. | client library, driver, client (a "client" is any program that talks to the relay) |
 | core | The Rust code below both SDKs (`ncdb-core`). It runs natively and as WebAssembly in the browser. The same core everywhere: behaviour never forks by platform. | engine (except in "the engine's field types"), runtime, backend |
 | `ncdb` | The command-line tool. In 0.1 it builds and checks the lock (`ncdb model build`, `ncdb model check`). | the CLI, when the name fits ("`ncdb model build`", not "the CLI command") |
-| pre-release | An alpha or a beta. Alphas come after every product change on `main`, betas and releases by tag ([release management](release-management.md)). 0.1 is the first planned release. | preview, early access, launch |
+| pre-release | An alpha or a beta. Alphas come after every product change on `main`, betas and releases by tag ([release management](release-management.md)). | preview, early access, launch |
 
 ## Spaces and members
 
