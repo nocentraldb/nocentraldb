@@ -82,7 +82,7 @@ pub(crate) const ERASURE_TEXT_TOO_SHORT: &str =
 /// `erasureTextVersion`: Why a text is not an erasure request or a set of
 /// sign-offs: its version byte.
 pub(crate) const ERASURE_TEXT_VERSION: &str =
-    "its version is not 1";
+    "its version is not one this database knows";
 
 /// `indexedDbConstraintHint`: The hint of indexedDbRefused when IndexedDB
 /// answers ConstraintError: another tab or worker stored keys for this database
@@ -158,7 +158,7 @@ pub(crate) const INVITATION_TOO_SHORT: &str =
 /// `invitationVersion`: Why, in notAnInvitation: its version byte is one this
 /// SDK does not know.
 pub(crate) const INVITATION_VERSION: &str =
-    "its version is unknown";
+    "its version is not one this database knows";
 
 /// `keyFileUnreadable`: What failed, in ioFailed: the key file could not be
 /// read.

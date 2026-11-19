@@ -25,7 +25,7 @@ pub(crate) const AD_HOC_LOCAL_LATER: &str =
 /// until an erasure reaches a copy in another space (Carsten, 2026-11-15,
 /// NOC-320 Q8).
 pub(crate) const AD_HOC_PERSONAL_LATER: &str =
-    "personal fields are not copied into an ad-hoc space yet, until an erasure reaches the copy";
+    "personal fields are not copied into an ad-hoc space yet, as an erasure would not reach the copy";
 
 /// `adHocSourceDeleted` (invalidValue): Spaces::create_ad_hoc
 /// (db.spaces.createAdHoc) when an object to copy is deleted (Carsten,
@@ -77,7 +77,7 @@ pub(crate) const CERTIFICATE_UNDER_REPLACED_KEY: &str =
 /// `cursorOfAnotherQuery` (cursorOfAnotherModel): A query continued with a
 /// cursor of another model, index or equality prefix.
 pub(crate) const CURSOR_OF_ANOTHER_QUERY: &str =
-    "the cursor belongs to another model, index or equality prefix";
+    "the cursor belongs to another model, index or equality prefix; start from the first page";
 
 /// `databaseHeld` (storageFailed): nc.open in a browser, when OPFS refuses the
 /// database: most often another tab holds it; the reason follows.
@@ -244,12 +244,12 @@ pub(crate) const NEWER_ACCOUNT_KEY_NOT_TAKEN: &str =
 /// `noAccountKeyToSignOff` (notAllowed): Account::sign_off on a database that
 /// holds no account key, an agent's or one waiting to be paired (NOC-325).
 pub(crate) const NO_ACCOUNT_KEY_TO_SIGN_OFF: &str =
-    "this database holds no account key; a device of the account signs off";
+    "this database holds no account key; a device that holds it signs off";
 
 /// `noAccountSpace` (notFound): Renewing the account key, on removing a lost
 /// member, on a device that holds no account space.
 pub(crate) const NO_ACCOUNT_SPACE: &str =
-    "the device holds no account space";
+    "this database holds no account space";
 
 /// `noIndexedDb` (keyStoreUnavailable): nc.open in a browser context without
 /// IndexedDB, where the member's keys live.
@@ -266,7 +266,7 @@ pub(crate) const NO_LONGER_MEMBER: &str =
 /// without OPFS, such as a private window of Safari or Firefox, where the
 /// database could live only in one tab's memory and would be lost with it.
 pub(crate) const NO_PERSISTENT_STORAGE: &str =
-    "this browser window offers no storage that outlives its tabs (no OPFS), as a private window of Safari or Firefox; open the app in a normal window";
+    "this browser window has no OPFS, so the database would not outlive its tab, as in a private window of Firefox or Safari; open the app in a normal window";
 
 /// `noPlugin` (unknownType): A write to a plugin field whose plugin type no
 /// plugin given to OpenOptions::plugin implements.
@@ -347,7 +347,7 @@ pub(crate) fn not_apairing_answer(why: impl std::fmt::Display) -> String {
 /// `notARecoveryCode` (invalidValue): Account::remove_member
 /// (db.account.removeMember) when the words it was given are no recovery code.
 pub(crate) const NOT_ARECOVERY_CODE: &str =
-    "the words are no recovery code";
+    "the words are not a recovery code";
 
 /// `notAnErasureRequest` (invalidValue): Parsing an erasure request from text
 /// (ErasureRequest::from_str) when the text is not one; the reason follows
@@ -383,7 +383,7 @@ pub(crate) const NOT_WAITING_TO_BE_PAIRED: &str =
 /// `objectIsNoPerson` (noPerson): Db::erasure_request with an object that has
 /// no personal field, so it names no person to erase (NOC-325).
 pub(crate) const OBJECT_IS_NO_PERSON: &str =
-    "the object is no person's: it has no personal field";
+    "the object is not a person's: it has no personal field";
 
 /// `onlyAgentAddsSubAgent` (notAllowed): Members::add (members.add) with a
 /// sub-agent's invitation, version 3, on a device's or a sub-agent's database:
@@ -451,7 +451,7 @@ pub(crate) const PAIRING_CREATES_NO_SPACE: &str =
 /// person's key this device does not hold yet: it holds it once it fetched the
 /// key's record.
 pub(crate) const PERSON_KEY_NOT_HELD: &str =
-    "the person's key is not held on this device yet";
+    "this member does not hold the person's key yet; try again once sync has fetched it";
 
 /// `personLinkUnset` (noPerson): A write of a personal field whose person link
 /// is unset, so the SDK cannot tell whose data it is.
@@ -510,13 +510,13 @@ pub(crate) fn role_required(role: impl std::fmt::Display, doing: impl std::fmt::
 /// rotation, when this member lacks a key generation the rotation must chain;
 /// it works once an envelope for it arrives.
 pub(crate) const ROTATION_MISSING_GENERATION: &str =
-    "the member holds no key of a generation the rotation must chain; it rotates once an envelope for it arrives";
+    "the member holds no space key of a generation the rotation must chain; it can rotate once the key envelope for that generation arrives";
 
 /// `rotationMissingPersonKey` (invalidValue): A removal, or an add after a
 /// rotation, when this member lacks a person key of the space that the rotation
 /// must re-wrap; it works once it fetched the key's record.
 pub(crate) const ROTATION_MISSING_PERSON_KEY: &str =
-    "the member does not hold a person key of the space, which the rotation must re-wrap; it rotates once it fetched the key's record";
+    "the member does not hold a person key of the space, which the rotation must re-wrap; it can rotate once it has fetched the key's record";
 
 /// `signOffDoesNotHold` (invalidValue): Db::erase when one of the sign-offs
 /// would not hold in its space by RFC 0008's rules; it writes no shred in any
@@ -567,7 +567,7 @@ pub(crate) const TAKE_BACK_NOT_ALLOWED: &str =
 /// `takeBackNotPending` (invalidValue): Erasures::take_back with a shred that
 /// is final, already finalized or taken back, or not of the space (NOC-325).
 pub(crate) const TAKE_BACK_NOT_PENDING: &str =
-    "the shred is no provisional erasure of this space that is still pending";
+    "the shred is not a provisional erasure of this space that can still be taken back";
 
 /// `unknownAccount` (unknownAccount): Members::add (members.add) without a
 /// fingerprint when the invitation's account is new to this database; the error
