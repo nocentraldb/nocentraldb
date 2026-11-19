@@ -27,7 +27,11 @@ test("nothing under /demo/ is part of the first render", () => {
 });
 
 test("the loader starts after the load event, near the viewport and when the browser is idle", () => {
-  assert.match(html, /<script type="module" data-demo-loader>/, "a module script, which never blocks parsing");
+  assert.match(
+    html,
+    /<script type="module" data-demo-loader>/,
+    "a module script, which never blocks parsing",
+  );
   const loader = html.slice(html.indexOf("data-demo-loader"));
   assert.match(loader, /addEventListener\(\s*"load"/);
   assert.match(loader, /IntersectionObserver/);
@@ -47,7 +51,10 @@ test("the hint says that on a phone the other tab catches up when shown", () => 
   // Phones keep one tab on screen and freeze the others (the owner's
   // report on #333, Arc on iOS), so the hint promises no live update there.
   const section = html.slice(html.indexOf('id="demo"'));
-  const hint = section.slice(section.indexOf("demo__hint"), section.indexOf("</p>", section.indexOf("demo__hint")));
+  const hint = section.slice(
+    section.indexOf("demo__hint"),
+    section.indexOf("</p>", section.indexOf("demo__hint")),
+  );
   assert.match(hint, /phone/);
   assert.match(hint, /catches up/);
 });
@@ -63,7 +70,27 @@ test("in a private window the demo says why it does not start, and does not sugg
 
 test("the hint names Safari's limit with a frozen tab", () => {
   const section = html.slice(html.indexOf('id="demo"'));
-  const hint = section.slice(section.indexOf("demo__hint"), section.indexOf("</p>", section.indexOf("demo__hint")));
+  const hint = section.slice(
+    section.indexOf("demo__hint"),
+    section.indexOf("</p>", section.indexOf("demo__hint")),
+  );
   assert.match(hint, /Safari/);
   assert.match(hint, /wait/);
+});
+
+test("the hint invites the visitor to watch the Network tab, and says why a second window follows", () => {
+  const section = html.slice(html.indexOf('id="demo"'));
+  const hint = section
+    .slice(
+      section.indexOf("demo__hint"),
+      section.indexOf("</p>", section.indexOf("demo__hint")),
+    )
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ");
+  assert.match(hint, /developer tools/);
+  assert.match(hint, /Network tab/);
+  assert.match(hint, /sends no request/);
+  // it is the one database of this browser, not a sync, that the windows share
+  assert.match(hint, /share one database in this browser/);
+  assert.match(hint, /another browser/);
 });
