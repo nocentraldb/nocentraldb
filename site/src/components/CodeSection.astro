@@ -157,7 +157,13 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     <div class="span-5">
       <div class="section-head">
         <h2 id="code-h">Get started</h2>
-        <p>No keys in your code: the SDK is designed to create, store and rotate them.</p>
+        <p>The SDK handles all the encryption. Your code never touches a key.<sup><a href="#code-fn">1</a></sup></p>
+        <p class="footnote" id="code-fn">
+          <sup>1</sup> Your app passes on one secret: the account's recovery code, which the person keeps.
+          <a href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/getting-started-browser.md#16-remove-a-lost-device"
+            >How it works</a
+          >
+        </p>
       </div>
       <div class="lang-switch" role="radiogroup" aria-label="Language">
         <label><input type="radio" name="code-lang" value="ts" checked data-code-lang />TypeScript</label>
@@ -217,6 +223,17 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     --astro-code-token-comment: #a3a299; /* --ncdb-muted, 6.7:1 */
     --astro-code-token-punctuation: #a3a299;
     --astro-code-token-link: #ecebe4;
+  }
+  .footnote {
+    margin-top: var(--s-3);
+    color: var(--muted);
+    font-size: var(--t-small);
+  }
+  .section-head sup a,
+  .footnote a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .note :global(a) {
     color: var(--ink);
