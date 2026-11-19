@@ -5,8 +5,11 @@
 // and names its decision file or ticket. These tests feed the helper small
 // RFCs, so a helper that lets a wrong record through fails here.
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { assertRecord } from "./lib/rfc-record.mjs";
+import { assertRecord, historyLines } from "./lib/rfc-record.mjs";
+import { read, root } from "./lib/rfc-text.mjs";
 
 const PUBLISHED = "2026-11-10 · First published (NOC-165)";
 const FILE =
@@ -139,3 +142,16 @@ test("an entry is dated, names who decided and when, and its source", () => {
     );
   }
 });
+
+// Every RFC's own record holds, RFC 0012 included, which has no test file of
+// its own that checks it.
+for (const file of readdirSync(join(root, "docs/rfc")).filter((f) =>
+  /^\d{4}-.*\.md$/.test(f),
+)) {
+  test(`docs/rfc/${file} keeps its record in the form`, () => {
+    const text = read(`docs/rfc/${file}`);
+    const [first] = historyLines(text);
+    assert.match(first, /^- \d{4}-\d{2}-\d{2} · First published\b/);
+    assertRecord(text, first.slice(2));
+  });
+}

@@ -286,3 +286,4 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 ## History
 
 - 2026-11-16 · First published, decided by the owner (NOC-357, #381)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)

@@ -434,6 +434,28 @@ One point a reader could take further than the design delivers: RFC 0001 says th
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded, and [RFC 0008](0008-membership.md) the control changes that decide who may write. [RFC 0004](0004-merge-rules-basic-types.md) defines how a field merges. [RFC 0005](0005-schema-and-model-lock.md) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
+## Decisions
+
+- **2026-11-12 · A database lives at a name on OPFS, and the SDK reports its durability.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-database-at-a-name-on-opfs-and-its-durability-report.md))
+- **2026-11-12 · The age of a provisional erasure counts from when this device first held the shred.** (pm, 2026-11-12, NOC-234; [decision](../../factory/decisions/2026-11-12-NOC-234-a-decision-on-a-later-shred-of-a-taken-back-key-changes-nothing.md))
+- **2026-11-13 · One tab owns a browser database, and the other tabs reach it.** (pm, 2026-11-13, NOC-177; [decision](../../factory/decisions/2026-11-13-NOC-177-a-tab-with-another-lock-is-refused-and-the-owners-relay-serves-every-tab.md); [decision](../../factory/decisions/2026-11-13-NOC-177-a-write-the-lost-owner-tab-never-answered-fails-and-is-not-sent-again.md))
+- **2026-11-14 · `requestPersistent()` answers the browser's answer.** (Carsten, 2026-11-14, NOC-317; [decision](../../factory/decisions/2026-11-14-NOC-317-request-persistent-answers-the-browsers-answer.md))
+- **2026-11-15 · A hidden owner tab gives the database up.** (Carsten, 2026-11-15, NOC-333; [decision](../../factory/decisions/2026-11-15-NOC-333-a-hidden-owner-tab-gives-the-database-up.md))
+- **2026-11-16 · The owner's worker gives the storage back itself, and the next worker waits for it.** (pm, 2026-11-16, NOC-352; [decision](../../factory/decisions/2026-11-16-NOC-352-the-owners-worker-gives-the-storage-back-and-the-next-waits-for-it.md))
+- **2026-11-16 · A tab that waits for another tab's storage reports `waitingForTab` after 1 s.** (Carsten, 2026-11-16, NOC-355; [decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
+- **2026-11-16 · A browser window without OPFS refuses to open with `storageUnavailable`.** (Carsten, 2026-11-16, NOC-347; [decision](../../factory/decisions/2026-11-16-NOC-347-a-browser-window-without-opfs-refuses-to-open.md))
+- **2026-11-16 · RFC 0012 replaces the owning tab: every tab takes the database per transaction, after 0.1.** (Carsten, 2026-11-16, NOC-357; [decision](../../factory/decisions/2026-11-16-NOC-357-browser-tabs-take-the-database-per-transaction.md); [decision](../../factory/decisions/2026-11-16-NOC-357-the-owner-decides-rfc-0012.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · RFC 0009 and RFC 0006 record the space status names and the confirmed_accounts table; RFC 0003 wording (NOC-195, #179)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-12 · The Rust SDK opens a database at a name on OPFS in the browser (NOC-175, NOC-231, #236)
+- 2026-11-12 · The Rust SDK reports provisional erasures and finalizes them after 7 days (NOC-234, #244)
+- 2026-11-14 · One tab owns a browser database, and the other tabs reach it (NOC-177, #325)
+- 2026-11-15 · db.durability, db.view and nc.open's persistentStorage in the TypeScript SDK (slice 3) (NOC-315, #332)
+- 2026-11-15 · A hidden owner tab gives the database up, and the visible tab takes it over (NOC-332, #344)
+- 2026-11-16 · A browser window without OPFS refuses nc.open with storageUnavailable (Safari and Firefox private windows) (NOC-347, #376)
+- 2026-11-16 · db.durability reports waitingForTab while a tab waits for another tab's storage (Safari, frozen owner) (NOC-355, #380)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)

@@ -583,6 +583,26 @@ It makes them more precise in these points:
 
 [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. [RFC 0010](0010-accounts.md) builds accounts on the account key defined here. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes.
 
+## Decisions
+
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-11 · A space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-230)
+- **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
+- **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · RFC 0009 and RFC 0006 record the space status names and the confirmed_accounts table; RFC 0003 wording (NOC-195, #179)
+- 2026-11-11 · RFC 0003 records the wrapped bytes of a person-key record (NOC-206, NOC-209, #196)
+- 2026-11-11 · The erasure sign-off compares accounts by account key and every recovery key (NOC-196, NOC-201, NOC-205, #200)
+- 2026-11-11 · The Rust SDK puts and fetches person-key records, holds keys in memory (NOC-206, NOC-222, #207)
+- 2026-11-11 · RFC 0003 gives the invitation's text form and byte layout, with test vectors (NOC-180, #211)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-12 · The Rust SDK keeps the member's keys in IndexedDB under a WebCrypto key (NOC-175, #226)
+- 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
+- 2026-11-12 · RFC 0003 and RFC 0010 record the pairing invitation, the key record format 2 and recovery's number (NOC-285, #289)
+- 2026-11-15 · A sub-agent's identity: OpenOptions::sub_agent, the version 3 invitation, and an agent's add (NOC-318, #342)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)

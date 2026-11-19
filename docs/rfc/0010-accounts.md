@@ -272,9 +272,25 @@ Some choices change other texts. Each change is written into that text in its ow
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page); on [RFC 0003](0003-keys-and-cryptography.md), which defines the account key, the [member certificate](0003-keys-and-cryptography.md#member-certificate) and the [account sign-off of a shred](0003-keys-and-cryptography.md#account-sign-off-of-a-shred); on [RFC 0008](0008-membership.md), which places certificates in the genesis and in membership entries; on [RFC 0007](0007-relay.md), whose relay sees certificates; on [RFC 0006](0006-local-view.md), which keeps one database per member; and on [RFC 0009](0009-sdk-api.md), which names the entry points this RFC designs ([Accounts and devices](0009-sdk-api.md#accounts-and-devices)).
 
+## Decisions
+
+- **2026-11-11 · An add or a sign-off under an older account key is refused after an account key statement entry.** (Carsten, 2026-11-11, NOC-187)
+- **2026-11-12 · The pairing answer travels as text, `ncdb-pair-1:`.** (Carsten, 2026-11-12, NOC-273)
+- **2026-11-12 · The number of a recovered account key.** (Carsten, 2026-11-12, NOC-285)
+- **2026-11-13 · A member waiting to be paired shows a fingerprint of its own.** (Carsten, 2026-11-13, NOC-288)
+- **2026-11-13 · The joining device keeps a pending link statement until the relay confirms it.** (Carsten, 2026-11-13, NOC-291; [decision](../../factory/decisions/2026-11-13-NOC-267-a-link-statement-is-kept-before-the-key-record-is-saved.md))
+- **2026-11-13 · Other accounts' members do not learn a link in v1.** (Carsten, 2026-11-13, NOC-307; [decision](../../factory/decisions/2026-11-13-NOC-269-members-list-shows-a-linked-account.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-12 · RFC 0009 and RFC 0010 record the Rust names and formats of accounts (NOC-262, NOC-273, #267)
+- 2026-11-12 · RFC 0003 and RFC 0010 record the pairing invitation, the key record format 2 and recovery's number (NOC-285, #289)
+- 2026-11-13 · RFC 0009 and RFC 0010 record the member fingerprint, recovered() and the pending link statement (NOC-288, NOC-289, NOC-291, #298)
+- 2026-11-13 · Tests that linking deletes the old key, keeps the fold's old account and old memberships, and certifies new spaces with the new key (NOC-269, #316)
+- 2026-11-14 · members.list() shows a linked account's old fingerprint as linked to the person's (MemberInfo::linked_to) (NOC-269, #319)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 
 ## How this RFC is tested
 

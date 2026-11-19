@@ -186,6 +186,15 @@ Groups are not part of the design for now: they were withdrawn by the owner (Car
 
 Two forms were not taken. Groups as members of many spaces, as the first draft of this text had them: a group's membership would live outside the space, and one space's fold would depend on another space's log ([RFC 0008, "Groups"](0008-membership.md#groups)). And groups as lists of members that the SDK expands, which this text followed for part of the same day before the owner withdrew groups altogether.
 
+## Decisions
+
+- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · The erasure sign-off compares accounts by account key and every recovery key (NOC-196, NOC-201, NOC-205, #200)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-11 · RFC 0001 follows RFC 0008, a shred is final when accepted (NOC-224, #229)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)

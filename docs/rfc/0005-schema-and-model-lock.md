@@ -641,6 +641,14 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 
 It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format), [RFC 0003](0003-keys-and-cryptography.md) (keys and cryptography) and [RFC 0004](0004-merge-rules-basic-types.md) (merge rules for basic values, sets and links). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
+## Decisions
+
+- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types.md))
+- **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-12 · RFC 0011, plugin field types, as the owner decided on NOC-232 (NOC-235, NOC-232, #231)
+- 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
