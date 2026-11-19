@@ -10,7 +10,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0007: The relay protocol and its AWS backend](https://github.com/nocentraldb/nocentraldb/discussions/147), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay`; the AWS backend is not built or deployed.
+GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)); it has passed its smoke test. The Postgres backend is not built.
 
 ## What this RFC does not cover
 
@@ -481,7 +481,7 @@ One conformance test suite, run against every backend, holds these rules, so a n
 
 ## The AWS backend
 
-The first backend runs serverless in the AWS account NoCentralDb-Prod (decided by Carsten, see `factory/DECISIONS.md`), in one region, eu-central-1 (Frankfurt): closer to the first users, and the metadata the relay keeps is personal data under the GDPR. It costs about 10 to 20 percent more than us-east-1, N. Virginia, which was not taken.
+The first backend runs serverless in the AWS account NoCentralDb-Prod (decided by Carsten, [the first relay backend runs on AWS](../../factory/decisions/2026-11-07-no-ticket-the-first-relay-backend-runs-on-aws.md)), in one region, eu-central-1 (Frankfurt): closer to the first users, and the metadata the relay keeps is personal data under the GDPR. It costs about 10 to 20 percent more than us-east-1, N. Virginia, which was not taken.
 
 ```text
 member ──WebSocket──▶ API Gateway (WebSocket API)
