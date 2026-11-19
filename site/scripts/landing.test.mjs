@@ -91,9 +91,9 @@ test("the removed sections are gone", () => {
   for (const id of ['id="use-cases"', 'id="live"'])
     assert.ok(!html.includes(id), id);
 });
-test("the code section shows the task model in five tabs", () => {
+test("the code section shows the task model in six tabs", () => {
   const code = html.slice(html.indexOf('id="code"'));
-  assert.equal(code.split('role="tab"').length - 1, 5);
+  assert.equal(code.split('role="tab"').length - 1, 6);
   for (const m of code.matchAll(/role="tab"[^>]*aria-controls="([^"]+)"/g))
     assert.ok(code.includes(`id="${m[1]}"`), m[1]);
   assert.ok(code.includes("byStatusPriority"));
@@ -208,4 +208,27 @@ test("on a phone the header shows only the mark", () => {
 
 test("the code section's heading is the owner's \"Get started\"", () => {
   assert.match(html, /<h2 id="code-h"[^>]*>Get started<\/h2>/);
+});
+
+test("a Read step, a one-off query, comes between Write and Subscribe", () => {
+  const code = html.slice(html.indexOf('id="code"'));
+  const order = [...code.matchAll(/role="tab"[^>]*id="tab-([a-z]+)"/g)].map(
+    (m) => m[1],
+  );
+  assert.deepEqual(order, [
+    "model",
+    "open",
+    "share",
+    "write",
+    "read",
+    "subscribe",
+  ]);
+  const panel = code.slice(code.indexOf('id="panel-read"'));
+  const text = panel
+    .slice(0, panel.indexOf('role="tabpanel"', 10))
+    .replace(/<[^>]*>/g, "");
+  assert.ok(
+    text.includes("await db.find(query)"),
+    "the read panel queries once",
+  );
 });
