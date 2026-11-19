@@ -189,6 +189,7 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 ## Decisions
 
 - **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
+- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
 
 ## History
 
@@ -198,4 +199,5 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-11 · RFC 0001 follows RFC 0008, a shred is final when accepted (NOC-224, #229)
 - 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
