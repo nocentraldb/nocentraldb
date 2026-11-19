@@ -256,3 +256,48 @@ test("Install is the first step, and no install line stands beside the tabs", ()
     "the releases page",
   );
 });
+
+test("a TypeScript and Rust switch is a radio group that changes every step", () => {
+  const code = html.slice(
+    html.indexOf('id="code"'),
+    html.indexOf("</section>", html.indexOf('id="code"')),
+  );
+  assert.match(code, /role="radiogroup"[^>]*aria-label="Language"/);
+  assert.match(
+    code,
+    /<input type="radio" name="code-lang" value="ts"[^>]*checked/,
+  );
+  assert.match(code, /<input type="radio" name="code-lang" value="rust"/);
+  const panels = code.split('role="tabpanel"').slice(1);
+  assert.equal(panels.length, 7);
+  for (const panel of panels) {
+    assert.ok(panel.includes('data-lang="ts"'), "a TypeScript variant");
+    assert.ok(panel.includes('data-lang="rust"'), "a Rust variant");
+  }
+  const text = code.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&");
+  for (const call of [
+    "Db::open(options)",
+    ".members().add(",
+    ".write(|tx|",
+    "db.find(&query)",
+    "db.subscribe(query)",
+  ])
+    assert.ok(text.includes(call), call);
+  assert.ok(!/^# /m.test(text), "a hidden rustdoc line reached the page");
+});
+
+test("the language choice is remembered per viewer, and a blocked storage never breaks the page", () => {
+  const script = html.slice(html.indexOf("data-code-lang-store"));
+  assert.match(script, /localStorage/);
+  assert.match(script, /try\s*\{/);
+});
+
+test("the Rust snippets are compiled by the doc tests of nocentraldb", () => {
+  const lib = readFileSync(
+    join(dist, "..", "..", "crates", "nocentraldb", "src", "lib.rs"),
+    "utf8",
+  );
+  assert.ok(
+    lib.includes('include_str!("../../../site/src/components/code-rust.md")'),
+  );
+});
