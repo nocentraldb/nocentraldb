@@ -110,3 +110,45 @@ test("getting started says what work orders are, that 0.1 runs none, and that er
     "a link to the erasure page",
   );
 });
+
+test("How NoCentralDB works explains the core concepts on one page, with the RFC diagrams", () => {
+  const html = readFileSync(join(dist, "docs/how-it-works/index.html"), "utf8");
+  assert.match(html, /<h1[^>]*>How NoCentralDB works<\/h1>/);
+  const words = text("docs/how-it-works/index.html");
+  for (const concept of [
+    "space",
+    "member",
+    "change",
+    "relay",
+    "view",
+    "model.lock.json",
+    "member key",
+    "recovery code",
+  ])
+    assert.ok(words.includes(concept), concept);
+  for (const page of [
+    "/docs/concepts/spaces/",
+    "/docs/concepts/relay/",
+    "/docs/concepts/convergence/",
+    "/docs/concepts/shredding/",
+  ])
+    assert.ok(html.includes(`href="${page}"`), page);
+  const images = [
+    ...html.matchAll(/<img[^>]*src="\/diagrams\/([^"]+)"[^>]*>/g),
+  ];
+  assert.ok(images.length >= 3, "the diagrams");
+  for (const [img] of images) {
+    const alt = img.match(/alt="([^"]*)"/)?.[1] ?? "";
+    assert.ok(alt.length > 80, `an alt text that tells what it shows: ${img}`);
+  }
+});
+
+test("the sidebar lists Core concepts right after Getting started", () => {
+  const words = text("docs/index.html");
+  const start = words.indexOf("Getting started");
+  assert.ok(start >= 0);
+  assert.match(
+    words.slice(start, start + 60),
+    /^Getting started Core concepts Concepts/,
+  );
+});
