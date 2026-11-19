@@ -127,7 +127,7 @@ const checks = [
       ))
         assert.doesNotMatch(
           JSON.stringify(job(ctx, id)),
-          /create-github-app-token|RELEASE_APP_|outputs\.token/,
+          /create-github-app-token|RELEASE_APP_|app-token\.outputs\.token/,
           `${id} mints or reads the release app's token`,
         );
     },

@@ -4,7 +4,9 @@
 // scripts/release-workflow.test.mjs (the rules for every job),
 // scripts/release-workflow-alpha.test.mjs (the alpha job) and
 // scripts/release-workflow-publish.test.mjs (verify, build, publish and
-// commit-back).
+// commit-back), scripts/release-workflow-npm.test.mjs (alpha-npm) and
+// scripts/release-workflow-registries.test.mjs (publish-crates and
+// publish-npm).
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -33,6 +35,8 @@ export const JOBS = [
   "verify",
   "build",
   "publish",
+  "publish-crates",
+  "publish-npm",
   "commit-back",
   "app-token-check",
 ];
