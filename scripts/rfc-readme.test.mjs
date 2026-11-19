@@ -131,5 +131,8 @@ test("a Decisions entry links its decision, which says why and what was not take
     rule,
     /what changed, who decided it and when, and a link to its entry in the decision log/,
   );
-  assert.match(rule, /the decision log's entry says why, and which options were not taken/);
+  assert.match(
+    rule,
+    /the decision log's entry says why, and which options were not taken/,
+  );
 });
