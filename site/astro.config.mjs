@@ -20,6 +20,7 @@ export default defineConfig({
       components: {
         ThemeProvider: "./src/components/starlight/ThemeProvider.astro",
         ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
+        SiteTitle: "./src/components/starlight/SiteTitle.astro",
       },
       description:
         "A local-first database for apps where people and agents work on the same data.",
