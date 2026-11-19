@@ -301,3 +301,20 @@ test("the Rust snippets are compiled by the doc tests of nocentraldb", () => {
     lib.includes('include_str!("../../../site/src/components/code-rust.md")'),
   );
 });
+
+test("the code section says the SDK handles every key, and names the one secret an app passes on", () => {
+  const code = html.slice(html.indexOf('id="code"'));
+  const head = code.slice(0, code.indexOf('class="lang-switch'));
+  const text = head.replace(/<[^>]*>/g, "");
+  assert.ok(
+    text.includes(
+      "The SDK handles all the encryption. Your code never touches a key.",
+    ),
+  );
+  assert.match(text, /recovery code/);
+  assert.ok(
+    head.includes("docs/getting-started-browser.md#16-remove-a-lost-device"),
+    "the guide's recovery section",
+  );
+  assert.ok(!text.includes("designed to"), "the old hedge is gone");
+});
