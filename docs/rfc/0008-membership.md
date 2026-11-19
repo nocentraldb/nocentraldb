@@ -12,6 +12,8 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built: the genesis, the roles, every control change and the rules that fold them, provisional erasure and the erasure decision, in the core, the relay and the Rust SDK. Not built: the SDK's reports to an admin who removes a member with changes it has not seen, of the members a removed admin added, of a revoked member's fork, of a generation-id collision, and of a wrong key envelope or key chain entry.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0008: Membership, roles and the first change of a space](https://github.com/nocentraldb/nocentraldb/discussions/148), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 Membership rules decide how permissions behave, which GENESIS.md asks us to tell developers plainly, and the control-change bodies are part of the wire format; the owner decided both. Each choice below says why it was made and, where a reader would ask, which options were not taken. The core computes `resolve` in `crates/ncdb-core`, and the relay runs the same code in `crates/ncdb-relay`.

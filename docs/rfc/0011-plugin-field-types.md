@@ -10,6 +10,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 
 **Status.** Decided. The owner decided this RFC's design as it stands (Carsten, 2026-11-12).
 
+**At 0.1.** Partly built. Built: the crate `ncdb-plugin`, registering a plugin with `OpenOptions::plugin` in the Rust SDK, parking a field whose type is not registered and refusing writes to it, and the harness `ncdb-harness`. Not built: `ncdb-harness` on crates.io, which is not published, and `ncdb core build`. TypeScript has no plugins in v1, by this design.
+
 **Out of scope.** Rich text and streams, whose names RFC 0005 reserves and whose RFCs design them as field types of their own. Migrations from one rule version to another, which RFC 0004 leaves to a later RFC. Plugins that are not field types, such as computed fields or views. A registry of published plugins, or any way to find a plugin by name.
 
 ## Summary
@@ -45,7 +47,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 - [RFC 0005](0005-schema-and-model-lock.md#how-a-field-type-is-referenced) names a plugin type `<namespace>/<name>`; the lock's `plugins` entry names the namespace's `crate` and `npm` package; a field reads `{ type, rule, since, config }`; and a client runs the exact rule the lock names. A plugin type cannot be indexed in v1 ([Indexes](0005-schema-and-model-lock.md#indexes)). An old client parks an operation on a type it does not know as "unknown type" ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)).
 - [RFC 0006](0006-local-view.md#where-the-view-lives) keeps each field's merge state in `fs_<collection>` as bytes the field type encodes, which lets a plugin keep any state it needs.
 - [RFC 0009](0009-sdk-api.md#field-operations-per-field-type) writes a plugin field with "what the plugin's write function returns", and runs the core as wasm in the browser and as a native addon over the Rust SDK in Node.js ([Open and close](0009-sdk-api.md#open-and-close)).
-- In the code, `ncdb-core`'s `FieldType` trait matches RFC 0004's contract but has no way to read a state back from its bytes and no write function: the view reads each built-in state by hand, and the Rust SDK builds the built-in operations itself. The view's fields are a closed list of the built-in types. The convergence harness is test code inside `ncdb-core`, which a plugin crate cannot use. A plugin field in a lock is left out of the view today, so its operations park as an unknown field.
+- When this RFC was written, `ncdb-core`'s `FieldType` trait matched RFC 0004's contract but had no way to read a state back from its bytes and no write function: the view read each built-in state by hand, and the Rust SDK built the built-in operations itself. The view's fields were a closed list of the built-in types. The convergence harness was test code inside `ncdb-core`, which a plugin crate could not use. The line under this RFC's status says what 0.1 builds of the design below. A plugin field in a lock is left out of the view today, so its operations park as an unknown field.
 
 ## The field type a plugin implements
 

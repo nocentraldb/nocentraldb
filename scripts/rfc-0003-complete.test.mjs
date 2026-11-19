@@ -86,7 +86,7 @@ test("NOC-106's answers stand where they belong", () => {
   assert.match(member, /key_file/);
   assert.match(member, /file permissions/);
   const account = part("the-account-key");
-  assert.match(account, /each database draws its own account key once/i);
+  assert.match(account, /each database drew its own account key once/i);
   const subkey = part("key-chain-subkey");
   assert.match(
     subkey,

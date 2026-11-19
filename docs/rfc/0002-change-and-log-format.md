@@ -8,6 +8,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Built, except what this RFC leaves to later RFCs: compaction and the archive, and the values of rich text and streams, which are not built.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0002: The change and the log format](https://github.com/nocentraldb/nocentraldb/discussions/125), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 ## What this RFC does not cover

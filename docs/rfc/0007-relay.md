@@ -8,9 +8,11 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. The protocol, the relay core and the SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)). The Postgres backend is not built, nor are changes exchanged directly between members in island mode, nor compaction, whose error is only reserved.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0007: The relay protocol and its AWS backend](https://github.com/nocentraldb/nocentraldb/discussions/147), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)); it has passed its smoke test. The Postgres backend is not built.
+GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken.
 
 ## What this RFC does not cover
 

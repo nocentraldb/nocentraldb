@@ -10,7 +10,9 @@ Everyone works on their own copy, under their own keys. The relay in the middle 
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-NoCentralDB is not released yet. We have started building the core, and this RFC describes the design we are building toward. We want you to challenge it while changes are still cheap. The roadmap shows where we are.
+**At 0.1.** Partly built. Built: spaces, members and roles; the full copy, folded into an SQLite view; the relay, locally on SQLite and on AWS with DynamoDB and S3; island mode; the lock and `ncdb model build`; declared indexes and ordered pages; basic values, sets, links, references and personal fields; plugin field types in the Rust SDK; erasure and its audit; accounts with pairing and a recovery code; synced ad-hoc spaces for sub-agents. Not built: rich text, streams, computed fields and views, work orders with compaction and the archive, the Postgres relay, adapters, the TypeScript SDK outside the browser, and native mobile apps.
+
+NoCentralDB 0.1 is a pre-release: its alphas are out, and names and formats can still change before 1.0. This RFC describes the whole design we are building toward, and each RFC says under its status what 0.1 builds of it. We want you to challenge the design while changes are still cheap.
 
 Agents now read and write the same data as the people they work with, hundreds of objects per task. Today almost every app routes each of those reads through a server, and that server can read everything it stores. NoCentralDB is a local-first database for teams of people and agents. Every member, human or agent, works on a full local copy of the spaces it belongs to, under its own keys. A relay that holds no keys carries the encrypted changes between the members.
 
@@ -136,7 +138,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 ## Example applications
 
-We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above.
+We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above. The first one's task list, without its agent, is built in Rust and in the browser ([apps/tasks-rust](../../apps/tasks-rust/README.md), [apps/tasks-ts](../../apps/tasks-ts/README.md)); the rest are planned.
 
 1. **Agent task board.** A team's tasks with dependencies, and an agent that is a member of the project's space. The agent picks the next task from its own copy and writes its changes under its own key. It shows spaces, membership, declared indexes and ordered pages, and computed fields and views once a later RFC designs them.
 2. **Customer records with erasure.** A small customer database with personal fields. An erasure is a work order that one member performs and a second account signs off, and the audit trail survives it. It shows personal fields, work orders and the audit.
@@ -156,7 +158,7 @@ Which example would show you whether NoCentralDB fits your app? Tell us, or prop
 
 ## Who is behind it
 
-nxsflow started NoCentralDB. Our own products (nexus-flow, nexflow.it and manufakt.io) are meant to be its first users. In them we hit the limits of folding everyone's data on a server. We would rather design the database in the open than build it in private and ask for trust afterwards. The roadmap shows what is designed, what is being built and what is still open.
+nxsflow started NoCentralDB. Our own products (nexus-flow, nexflow.it and manufakt.io) are meant to be its first users. In them we hit the limits of folding everyone's data on a server. We would rather design the database in the open than build it in private and ask for trust afterwards. Each RFC says under its status what release 0.1 builds of it.
 
 ## Where we want your advice
 

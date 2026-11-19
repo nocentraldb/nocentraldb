@@ -10,6 +10,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built: the fold, the rebuild, declared indexes and ordered pages, natively and in the browser on `opfs-sahpool`, with the owning tab and `db.durability`. Not built: the TypeScript SDK's native addon for Node.js, the Derive step of computed fields, and folding or restoring changes received directly from another member.
+
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encrypting the database file on the device, beyond saying why v1 relies on the device ([What the view stores in plaintext](#what-the-view-stores-in-plaintext)). Compaction and snapshots (a later RFC). The sync protocol with the relay ([RFC 0007](0007-relay.md)).
 
 ## Summary

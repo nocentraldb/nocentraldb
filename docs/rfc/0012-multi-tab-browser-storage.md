@@ -12,6 +12,8 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 
 **Status.** Decided by the owner (Carsten, 2026-11-16): option B, every tab takes the database per transaction and no tab owns it, with the answers in [What changes for developers](#what-changes-for-developers). The outbox is deferred until telemetry gathered with the app's consent shows whether it is needed (NOC-364). Nothing is built yet. RFC 0006 and RFC 0009 still describe the owning tab; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
 
+**At 0.1.** Not built. Release 0.1 keeps RFC 0006's owning tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)); this design is built after it.
+
 **Out of scope.** Native apps and Node.js, where the database is a file with WAL and several connections already ([RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers)). Private windows, which do not open a database at all ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). Eviction of the copy.
 
 ## Summary

@@ -8,6 +8,8 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/discussions/144), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 ## What this RFC does not cover

@@ -29,9 +29,9 @@ test("the Rust SDK opens a database at a path, in memory, with a key file, or as
   assert.match(rust, /0003-keys-and-cryptography\.md#the-account-key/);
 });
 
-test("the account key: each database draws its own until the accounts RFC", () => {
+test("the account key: a database neither paired nor recovered creates its own account", () => {
   const accounts = section(read(RFC), "accounts-and-devices");
-  assert.match(accounts, /draws its own account key once/);
+  assert.match(accounts, /neither paired nor recovered creates an account of its own/);
   assert.match(accounts, /unrelated accounts/);
   assert.match(accounts, /`agent\(\)`/);
 });

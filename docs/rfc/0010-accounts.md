@@ -10,6 +10,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **Status.** Decided. The owner decided this RFC as it stands (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built: the account key and its statement, the recovery code, pairing a device or an agent, recovering an account, removing a lost device, the account space, and linking a database's own account. Not built: linking an agent's own account, and the space status that says losing this device loses the space.
+
 **Out of scope.** How a work order is claimed and signed off, beyond naming the account key as the key that signs (a later RFC on work orders). Passkeys and how the browser unlocks its keys (RFC 0003 leaves them out). Accounts shared by several people, such as an organisation with many administrators, beyond what one account with several devices gives. Deleting a space. A directory that finds an account by name or address: there is none, and people compare fingerprints.
 
 ## Summary
@@ -39,7 +41,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 | Agent | A member of kind 2: software that runs for an account. It never holds the account key. |
 | Pairing | Adding a device or an agent to an account: it receives a certificate, and a device also receives the account key. |
 | Account space | An ordinary space whose members are the account's devices, holding the account's own objects. |
-| Per-database account | The account key each database draws for itself on first open today ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). |
+| Per-database account | The account key each database drew for itself on first open before this RFC was built ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). |
 | Linking | Turning a per-database account into a part of another account. |
 | Fingerprint | A short, readable digest of the account's identity, which people compare once. |
 
@@ -49,11 +51,11 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - [RFC 0008](0008-membership.md) carries the creator's certificate in the [genesis](0008-membership.md#genesis) and each new member's in its [membership entry](0008-membership.md#membership-entry). One rule reads the account: an erasure is signed off by another account that holds an admin member in the space ([Roles and rights](0008-membership.md#roles-and-rights)).
 - [RFC 0007](0007-relay.md) lets members of allowlisted accounts create spaces ([What the relay checks](0007-relay.md#what-the-relay-checks)), and states that the relay sees which members share an account across spaces ([What the relay sees](0007-relay.md#what-the-relay-sees)).
 - [RFC 0009](0009-sdk-api.md#accounts-and-devices) names three entry points, `db.account.pair`, `nc.open({ pairing })` and `db.account.removeMember`, and leaves what happens behind them to this RFC.
-- Until this RFC is built, each database draws its own account key once and keeps it next to its member key, in the same keystore or, for a headless agent, the same key file; an `agent()` option marks the member as an agent ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) and ["The account key"](0003-keys-and-cryptography.md#the-account-key); [RFC 0009, "Accounts and devices"](0009-sdk-api.md#accounts-and-devices)). So a person's laptop and phone are two accounts, and an agent is an account of its own. RFC 0003 asks this RFC to accept the members certified this way, for example by letting a later pairing vouch for them. [Linking accounts drawn per database](#linking-accounts-drawn-per-database) does that.
+- Before this RFC was built, each database drew its own account key once and kept it next to its member key, in the same keystore or, for a headless agent, the same key file; an `agent()` option marked the member as an agent ([RFC 0003, "The member key"](0003-keys-and-cryptography.md#the-member-key) and ["The account key"](0003-keys-and-cryptography.md#the-account-key); [RFC 0009, "Accounts and devices"](0009-sdk-api.md#accounts-and-devices)). So a person's laptop and phone were two accounts, and an agent an account of its own. RFC 0003 asks this RFC to accept the members certified this way, for example by letting a later pairing vouch for them. [Linking accounts drawn per database](#linking-accounts-drawn-per-database) does that.
 
 ## The account key and where it lives
 
-The account key is an Ed25519 key pair, as RFC 0003 defines it. It is drawn on the account's first device when the account is created; today, that is every database's first open.
+The account key is an Ed25519 key pair, as RFC 0003 defines it. It is drawn on the account's first device when the account is created: the first open of a database that is neither paired nor recovered.
 
 **Where it lives** was decided in RFC 0003: on every device of the account ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)). The SDK keeps it where it keeps the member key, in the platform keystore, and never hands its bytes to the app ([RFC 0003, "How the SDK hides keys"](0003-keys-and-cryptography.md#how-the-sdk-hides-keys)). In the browser, a non-extractable WebCrypto key wraps it in IndexedDB, and a browser that evicts the origin's data takes the account key with it ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). The recovery code is then the way back, as for a lost phone. RFC 0003 did not take the other two places it weighed: an account key derived from a passkey, and an account key only on designated admin devices, which may come back later as an option for organisations.
 
@@ -82,7 +84,7 @@ What the higher number does, and where it stops, is in [Losing a device](#losing
 
 ### The fingerprint
 
-People compare an account's fingerprint once, the way messaging apps compare safety numbers, when an account is new to their device or when they pair a device. It is SHA-256 over the context string `"nocentraldb/account-fingerprint"` and the recovery key, shown as 60 digits in twelve blocks of five: the 32-byte hash is read as one big-endian number and taken modulo 10^60, and the result is written as 60 decimal digits with leading zeros, in twelve blocks of five separated by one space. Both SDKs show the same digits, so a person comparing them on two devices sees no mismatch. Until this RFC is built, the SDKs compute the fingerprint the same way over the database's own account key in place of the recovery key ([Where things stand today](#where-things-stand-today)), so both hash the same input today. That compares about 199 bits, and the bias of the modulo is negligible, about 10^-17. Signal's form of safety numbers, five bytes per block taken modulo 100000, would need 60 bytes and so a second hash under its own context string: more to specify, for no practical gain. Digits read aloud the same in every language, and messaging apps have taught people to compare them. The first 16 bytes of the hash in hexadecimal would be harder to read aloud, and words from the recovery code's list would invite people to confuse the fingerprint with the code.
+People compare an account's fingerprint once, the way messaging apps compare safety numbers, when an account is new to their device or when they pair a device. It is SHA-256 over the context string `"nocentraldb/account-fingerprint"` and the recovery key, shown as 60 digits in twelve blocks of five: the 32-byte hash is read as one big-endian number and taken modulo 10^60, and the result is written as 60 decimal digits with leading zeros, in twelve blocks of five separated by one space. Both SDKs show the same digits, so a person comparing them on two devices sees no mismatch. For an account whose certificates carry no statement, such as one a database drew before this RFC was built ([Where things stand today](#where-things-stand-today)), both SDKs compute the fingerprint the same way over the account key in place of the recovery key. That compares about 199 bits, and the bias of the modulo is negligible, about 10^-17. Signal's form of safety numbers, five bytes per block taken modulo 100000, would need 60 bytes and so a second hash under its own context string: more to specify, for no practical gain. Digits read aloud the same in every language, and messaging apps have taught people to compare them. The first 16 bytes of the hash in hexadecimal would be harder to read aloud, and words from the recovery code's list would invite people to confuse the fingerprint with the code.
 
 ## What a member certificate means for RFC 0008
 
@@ -186,7 +188,7 @@ Its content never holds the account key or the recovery code in a form its membe
 
 ## Linking accounts drawn per database
 
-Until this RFC is built, each database has an account of its own ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)), and each such account has exactly one member. Linking makes a per-database account part of another account, the one whose recovery code the person keeps.
+Before this RFC was built, each database had an account of its own ([RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key)), and each such account has exactly one member. Linking makes a per-database account part of another account, the one whose recovery code the person keeps.
 
 1. **The database with the old account pairs** with a device of the account it joins, as a new device does, with the same two codes. Its member key and member id stay what they are: the member id covers the public keys, not the certificate ([RFC 0002, "Author and author sequence"](0002-change-and-log-format.md#author-and-author-sequence)).
 2. **Both account keys sign a link statement**, "account X is part of account Y", which the account space keeps. The old key's signature shows that the holder of X agreed; nobody else can link X into their account.
