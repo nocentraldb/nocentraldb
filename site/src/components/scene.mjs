@@ -284,8 +284,8 @@ const tall = (st, id) => `
 // title and text for the step, alt for the drawing's aria-label.
 export const STEPS = [
   {
-    title: "Everyone holds a full copy",
-    text: "The laptop on the train, the desk at home and the agent each keep the whole task list on their own disk. The agent reads its copy as often as it likes, and no read crosses the network.",
+    title: "Everyone has the full task list",
+    text: "The traveller, the person in the home office and the agent in the cloud each keep the whole task list on their own disk. Everyone reads locally; reading needs no network connection.",
     alt: "A laptop on a train, a desk in a home office and an agent each hold the same three tasks. A cloud server sits between them.",
   },
   {
