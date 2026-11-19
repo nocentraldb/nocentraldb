@@ -178,3 +178,14 @@ test("scenario step 3 is the owner's text", () => {
     "body",
   );
 });
+
+test("scenario step 4 is the owner's text", () => {
+  const step = html.split('mo-pc__step"')[4].replaceAll("&#39;", "'");
+  assert.ok(step.includes("<h3>The traveller reconnects</h3>"), "heading");
+  assert.ok(
+    step.includes(
+      "The traveller's changes go out and the others' changes come in. All three copies end up in the same state.",
+    ),
+    "body",
+  );
+});
