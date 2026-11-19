@@ -1,8 +1,8 @@
 // Puts the live demo's assets into site/public/demo (NOC-319), from which
 // `astro build` copies them into dist/demo: the TypeScript SDK's build
 // output (packages/sdk/dist: its JavaScript, its worker and its core in
-// WebAssembly) into sdk/, and the lock of the example task list
-// (apps/tasks-ts/model.lock.json), whose model the demo declares. The demo
+// WebAssembly) into sdk/, and the lock of the demo's model
+// (site/demo/model.lock.json), whose model the demo declares. The demo
 // module itself, site/public/demo/demo.js, is in git; what this script
 // copies is not (site/.gitignore). Build the SDK first:
 // `node packages/sdk/build.mjs`.
@@ -34,7 +34,7 @@ export const copyDemoAssets = () => {
     filter: (source) => !source.endsWith(".d.ts"),
   });
   cpSync(
-    join(ROOT, "apps", "tasks-ts", "model.lock.json"),
+    join(ROOT, "site", "demo", "model.lock.json"),
     join(DEMO, "model.lock.json"),
   );
 };
