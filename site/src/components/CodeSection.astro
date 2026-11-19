@@ -1,31 +1,20 @@
 ---
 // Seven steps: install, then six calls on the task model, from the README's "Code
-// examples" (RFC 0009). On a phone the section is as tall as its content: the words,
-// then the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
-// README's statements, a few dropped for length.
+// examples" (RFC 0009), each in TypeScript and in Rust. On a phone the section is as
+// tall as its content: the words, the language switch, then the tabs and the code. The
+// tabs are the kit's (.tabs, .tab); the TypeScript snippets keep the README's
+// statements, a few dropped for length. The Rust snippets live in code-rust.md, whose
+// blocks the doc tests of nocentraldb compile; rustdoc's hidden lines ("# ") are left
+// out here.
 import { Code } from "astro:components";
+import rustSource from "./code-rust.md?raw";
 
 // Until the crate is on crates.io (from the first beta), a Rust app takes it from a
 // release tag (docs/release-management.md, "Versioning"); this is the newest alpha
 // on 2026-11-19, and the note links the releases page for a newer one.
 const RUST_TAG = "v0.1.0-alpha.70";
 
-const tabs = [
-  {
-    id: "install",
-    label: "Install",
-    lang: "sh",
-    note: 'Add the SDK to your app. The Rust crate comes from a release tag until it is on crates.io: take the newest from the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.',
-    code: `npm install @nocentraldb/sdk
-
-# Rust
-cargo add nocentraldb --git https://github.com/nocentraldb/nocentraldb --tag ${RUST_TAG}`,
-  },
-  {
-    id: "model",
-    label: "Model",
-    note: "Describe the model once. ncdb model build turns it into model.lock.json.",
-    code: `import { nc } from "@nocentraldb/sdk";
+const MODEL = `import { nc } from "@nocentraldb/sdk";
 
 export const model = nc.model({
   people: nc.collection({
@@ -44,58 +33,123 @@ export const model = nc.model({
       },
     },
   ),
-});`,
+});`;
+
+/** The Rust block of each step of code-rust.md, by step id, without its hidden lines. */
+const rust = Object.fromEntries(
+  rustSource
+    .split(/^## /m)
+    .slice(1)
+    .map((part) => {
+      const id = part.slice(0, part.indexOf("\n")).trim();
+      const block = part.match(/```(\w+)[^\n]*\n([\s\S]*?)\n```/);
+      if (!block) throw new Error(`code-rust.md: no code block under ## ${id}`);
+      const code = block[2]
+        .split("\n")
+        .filter((line) => !(block[1] === "rust" && /^#( |$)/.test(line)))
+        .join("\n")
+        .replaceAll("{RUST_TAG}", RUST_TAG);
+      return [id, { lang: block[1], code }];
+    }),
+);
+
+const steps = [
+  {
+    id: "install",
+    label: "Install",
+    ts: {
+      lang: "sh",
+      note: "Add the SDK to your app.",
+      code: "npm install @nocentraldb/sdk",
+    },
+    rust: {
+      note: 'Add the crate to your app. It comes from a release tag until it is on crates.io: take the newest from the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.',
+    },
+  },
+  {
+    id: "model",
+    label: "Model",
+    ts: {
+      note: "Describe the model once. ncdb model build turns it into model.lock.json.",
+      code: MODEL,
+    },
+    rust: {
+      lang: "ts",
+      note: "Both SDKs share one model, written in TypeScript. ncdb model build turns it into model.lock.json, which the Rust SDK reads.",
+      code: MODEL,
+    },
   },
   {
     id: "open",
     label: "Open",
-    note: "The relay is the server from the scenario above. Opening a database needs no relay.",
-    code: `import { nc } from "@nocentraldb/sdk";
+    ts: {
+      note: "The relay is the server from the scenario above. Opening a database needs no relay.",
+      code: `import { nc } from "@nocentraldb/sdk";
 import { model } from "./model";
 import lock from "./model.lock.json";
 
 const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 
 const project = await db.spaces.create();`,
+    },
+    rust: {
+      note: "The relay is the server from the scenario above. Opening a database needs no relay. The app chooses the directory the database lives in.",
+    },
   },
   {
     id: "share",
     label: "Share",
-    note: "The joining member sends an invitation: its public identity, never a key. An admin adds it with a role.",
-    code: `// On the joining member:
+    ts: {
+      note: "The joining member sends an invitation: its public identity, never a key. An admin adds it with a role.",
+      code: `// On the joining member:
 const invitation = await db.invitation();
 send(invitation.toString());
 
 // On an admin of the space:
 await project.members.add(nc.invitation(text), { role: "writer" });`,
+    },
   },
   {
     id: "write",
     label: "Write",
-    note: "One write is one signed, encrypted change. It resolves before the relay has it.",
-    code: `await project.write((tx) => {
+    ts: {
+      note: "One write is one signed, encrypted change. It resolves before the relay has it.",
+      code: `await project.write((tx) => {
   const task = tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
   tx.update(model.tasks, task, { status: "in_progress" });
 });`,
+    },
   },
   {
     id: "read",
     label: "Read",
-    note: "A query reads a declared index and answers a page in index order, from the copy on this device. It never waits for the network.",
-    code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+    ts: {
+      note: "A query reads a declared index and answers a page in index order, from the copy on this device. It never waits for the network.",
+      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
 
 const page = await db.find(query);
 for (const task of page.items) console.log(task.title);`,
+    },
   },
   {
     id: "subscribe",
     label: "Subscribe",
-    note: "The listener runs at once and again after every change that may alter the page. It never waits for the network.",
-    code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+    ts: {
+      note: "The listener runs at once and again after every change that may alter the page. It never waits for the network.",
+      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
 
 const stop = db.subscribe(query, (fresh) => render(fresh));`,
+    },
+    rust: {
+      note: "The stream gives the page at once and again after every change that may alter it. It never waits for the network; drop it to stop.",
+    },
   },
-];
+].map((step) => ({
+  ...step,
+  ts: { lang: "ts", ...step.ts },
+  // a step without a Rust note takes the TypeScript one; its code is code-rust.md's
+  rust: { note: step.ts.note, ...rust[step.id], ...step.rust },
+}));
 ---
 
 <section class="section" id="code" aria-labelledby="code-h">
@@ -105,12 +159,16 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
         <h2 id="code-h">Get started</h2>
         <p>No keys in your code: the SDK is designed to create, store and rotate them.</p>
       </div>
+      <div class="lang-switch" role="radiogroup" aria-label="Language">
+        <label><input type="radio" name="code-lang" value="ts" checked data-code-lang />TypeScript</label>
+        <label><input type="radio" name="code-lang" value="rust" data-code-lang />Rust</label>
+      </div>
     </div>
 
     <div class="span-6 start-7 code-tabs">
       <div class="tabs" role="tablist" aria-label="Code for the task list">
         {
-          tabs.map((t, i) => (
+          steps.map((t, i) => (
             <button
               class="tab"
               role="tab"
@@ -126,10 +184,14 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
         }
       </div>
       {
-        tabs.map((t, i) => (
+        steps.map((t, i) => (
           <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden={i !== 0}>
-            <p class="note" set:html={t.note} />
-            <Code code={t.code} lang={t.lang ?? "ts"} theme="css-variables" />
+            {(["ts", "rust"] as const).map((lang) => (
+              <div data-lang={lang}>
+                <p class="note" set:html={t[lang].note} />
+                <Code code={t[lang].code} lang={t[lang].lang} theme="css-variables" />
+              </div>
+            ))}
           </div>
         ))
       }
@@ -164,6 +226,44 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
   .note {
     margin: var(--s-4) 0;
     color: var(--muted);
+  }
+  /* the language switch: two radios drawn as the kit's pills, the checked one in the
+     ink over a 2px line, as the selected tab. Native radios: arrow keys move the
+     choice, and the section shows the chosen variant of every step by :has(), so it
+     works without script; the script only remembers the choice. */
+  .lang-switch {
+    display: inline-flex;
+    gap: var(--s-1);
+    margin-top: var(--s-6);
+    padding: var(--s-1);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .lang-switch label {
+    position: relative;
+    padding: var(--s-2) var(--s-4);
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .lang-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .lang-switch label:has(input:checked) {
+    background: var(--ncdb-surface-2);
+    color: var(--ink);
+  }
+  .lang-switch label:has(input:focus-visible) {
+    outline: 2px solid var(--ncdb-accent);
+    outline-offset: 2px;
+  }
+  #code:has(input[value="rust"]:checked) [data-lang="ts"],
+  #code:not(:has(input[value="rust"]:checked)) [data-lang="rust"] {
+    display: none;
   }
   /* the selected tab is its word in the ink over a 2px line: the kit's sliding
      indicator (motion.js) drawn as that line, not as one more filled pill */
@@ -248,3 +348,22 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     }
   }
 </style>
+
+<script is:inline data-code-lang-store>
+  // Remembers the chosen language for this viewer (a convenience: the page works
+  // without it, and storage may be blocked or empty).
+  (() => {
+    const KEY = "ncdb-code-lang";
+    const radios = document.querySelectorAll("#code input[data-code-lang]");
+    try {
+      const saved = localStorage.getItem(KEY);
+      for (const radio of radios) if (radio.value === saved) radio.checked = true;
+    } catch {}
+    for (const radio of radios)
+      radio.addEventListener("change", () => {
+        try {
+          localStorage.setItem(KEY, radio.value);
+        } catch {}
+      });
+  })();
+</script>

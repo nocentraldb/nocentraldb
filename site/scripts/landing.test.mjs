@@ -274,7 +274,7 @@ test("a TypeScript and Rust switch is a radio group that changes every step", ()
     assert.ok(panel.includes('data-lang="ts"'), "a TypeScript variant");
     assert.ok(panel.includes('data-lang="rust"'), "a Rust variant");
   }
-  const text = code.replace(/<[^>]*>/g, "").replace(/&amp;/g, "&");
+  const text = code.replace(/<[^>]*>/g, "").replace(/&amp;|&#x26;/g, "&");
   for (const call of [
     "Db::open(options)",
     ".members().add(",

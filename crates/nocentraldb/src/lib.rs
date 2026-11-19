@@ -78,6 +78,12 @@ pub use db::{Db, OpenOptions};
 #[doc = include_str!("../../../docs/getting-started.md")]
 pub struct GettingStarted;
 
+// The Rust code of the landing page's code section, compiled the same way, so
+// the page cannot drift from the SDK either.
+#[cfg(doctest)]
+#[doc = include_str!("../../../site/src/components/code-rust.md")]
+pub struct LandingPage;
+
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
