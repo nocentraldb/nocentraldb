@@ -5,7 +5,12 @@
 // before the first beta the alpha forms, with the newest alpha tag.
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { installLines, newestAlpha, tagsOf } from "../src/install.mjs";
+import {
+  installLines,
+  newestAlpha,
+  publishableCrate,
+  tagsOf,
+} from "../src/install.mjs";
 
 const GIT = "https://github.com/nocentraldb/nocentraldb";
 const beta = {
@@ -42,15 +47,23 @@ test("nothing indexed and no alpha tag found: the crate from the repository's ma
   assert.equal(lines.cargo, `cargo add nocentraldb --git ${GIT}`);
 });
 
-test("a beta indexed: npm's beta tag, and the crate by its exact prerelease version", () => {
-  const lines = installLines({ releases: [beta], tags: ["v0.1.0-alpha.70"] });
+test("a beta indexed and the crate publishable: npm's beta tag, and the crate by its exact prerelease version", () => {
+  const lines = installLines({
+    releases: [beta],
+    tags: ["v0.1.0-alpha.70"],
+    publishable: true,
+  });
   assert.equal(lines.npm, "npm install @nocentraldb/sdk@beta");
   assert.equal(lines.cargo, "cargo add nocentraldb@0.1.0-beta.1");
   assert.equal(lines.stage, "beta");
 });
 
-test("a release indexed last: plain installs", () => {
-  const lines = installLines({ releases: [beta, release], tags: [] });
+test("a release indexed last and the crate publishable: plain installs", () => {
+  const lines = installLines({
+    releases: [beta, release],
+    tags: [],
+    publishable: true,
+  });
   assert.equal(lines.npm, "npm install @nocentraldb/sdk");
   assert.equal(lines.cargo, "cargo add nocentraldb");
   assert.equal(lines.stage, "release");
@@ -79,4 +92,41 @@ test("tags are read from git ls-remote's output, peeled entries once", () => {
     "",
   ].join("\n");
   assert.deepEqual(tagsOf(out), ["v0.1.0-alpha.70", "v0.1.0-alpha.8"]);
+});
+
+test("a beta or release indexed but the crate not publishable: the crate from the indexed tag", () => {
+  const fromBeta = installLines({
+    releases: [beta],
+    tags: ["v0.1.0-alpha.70"],
+    publishable: false,
+  });
+  assert.equal(fromBeta.npm, "npm install @nocentraldb/sdk@beta");
+  assert.equal(
+    fromBeta.cargo,
+    `cargo add nocentraldb --git ${GIT} --tag v0.1.0-beta.1`,
+  );
+  const fromRelease = installLines({
+    releases: [beta, release],
+    tags: [],
+    publishable: false,
+  });
+  assert.equal(fromRelease.npm, "npm install @nocentraldb/sdk");
+  assert.equal(
+    fromRelease.cargo,
+    `cargo add nocentraldb --git ${GIT} --tag v0.1.0`,
+  );
+});
+
+test("the crate is publishable unless its manifest's package says publish = false", () => {
+  assert.equal(
+    publishableCrate('[package]\nname = "nocentraldb"\npublish = false\n'),
+    false,
+  );
+  assert.equal(publishableCrate('[package]\nname = "nocentraldb"\n'), true);
+  assert.equal(
+    publishableCrate(
+      '[package]\nname = "x"\n\n[dependencies]\npublish = false\n',
+    ),
+    true,
+  );
 });
