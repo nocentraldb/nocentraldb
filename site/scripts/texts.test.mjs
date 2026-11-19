@@ -102,7 +102,7 @@ test("getting started says what work orders are, that 0.1 runs none, and that er
   assert.match(words, /0\.1 runs none of them/);
   assert.match(
     words,
-    /Erasing a person, which also needs a second account's sign-off, works in 0\.1 through its own path/,
+    /Erasing a person, which also needs a second account['’]s sign-off, works in 0\.1 through its own path/,
   );
   const html = readFileSync(join(dist, "docs/index.html"), "utf8");
   assert.ok(
