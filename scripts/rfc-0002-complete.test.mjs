@@ -10,8 +10,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
-import { assertRecord } from "./lib/rfc-record.mjs";
 import { fileURLToPath } from "node:url";
+import { assertRecord } from "./lib/rfc-record.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");

@@ -17,8 +17,8 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
-import { assertRecord } from "./lib/rfc-record.mjs";
 import { fileURLToPath } from "node:url";
+import { assertRecord } from "./lib/rfc-record.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0010-accounts.md";
@@ -53,14 +53,6 @@ const relativeLinks = (path) =>
       const resolved = file ? normalize(join(dirname(path), file)) : path;
       return { href, resolved, anchor };
     });
-
-/** The body of the level-2 section `title`, up to the next level-2 heading. */
-const section = (markdown, title) => {
-  const text = prose(markdown);
-  const [, rest] = text.split(`\n## ${title}\n`);
-  assert.ok(rest !== undefined, `${RFC} has no "## ${title}" section`);
-  return rest.split(/^## /m)[0];
-};
 
 /** The first line of `markdown` that starts with `start`. */
 const line = (markdown, start) =>
