@@ -435,7 +435,7 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 | Rejected | Why |
 | --- | --- |
 | An operation id as one byte string, change id followed by the position | Three bytes smaller per id, but a hand-written binary layout inside CBOR, with its own integer encoding: the risk [RFC 0002's encoding](0002-change-and-log-format.md#the-cbor-profile) avoids. |
-| An operation id shortened to a prefix of the change id, or hashed | Two operations could share it, and a member could not check a reference by recomputing it. |
+| An operation id shortened to a prefix of the change id, or hashed | Two operations could share it, and a member could not check an operation id by recomputing it. |
 | Leaving an empty `replaces` out | Two bytes smaller per first write, but two encodings of the same operation if readers accept both, and a "required key" check that fails on the most common write. |
 | Rejecting an unsorted or repeating list | A new failure mode that buys no convergence: the state depends on the set of ids only. |
 
@@ -443,11 +443,11 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 
 **A personal value.** A write to a personal field is a set whose argument 1 is the sealed personal value, `{1: person-key id, 2: sealed value}`, and whose argument 2 is `replaces`, as for any basic value, so the merge rule stays this RFC's and `replaces` stays readable to members, not to the relay (Carsten, 2026-11-12, NOC-244; [RFC 0003, "Personal value"](0003-keys-and-cryptography.md#personal-value)). Clearing the field writes a plain `null` as argument 1: it shows only that the field is empty, never what it held, and needs no person key. The sealed value directly in key 5, with `replaces` inside the ciphertext, was not taken: a member without the key could not merge; nor was a sealed `null`, which would hide that the field was cleared but needs the person key, so a person whose key is gone could not be cleared.
 
-**An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a transaction on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
+**An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a `write` on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
 
-- A transaction that writes a field twice encodes only its last write.
-- A transaction that adds an element and then removes it encodes only the removal of the additions its copy held before, or nothing.
-- A transaction that removes an element and then adds it encodes both: the removal names only earlier tags, so the new addition survives it, as the app expects.
+- A `write` that sets a field twice encodes only its last set.
+- A `write` that adds an element and then removes it encodes only the removal of the additions its copy held before, or nothing.
+- A `write` that removes an element and then adds it encodes both: the removal names only earlier tags, so the new addition survives it, as the app expects.
 
 A reader still accepts a change with several operations on one field and applies each by this RFC's rules. Two sets on one field in one change replace nothing of each other; they have the same stamp and author, so the higher position wins the tie-break and the other one is a conflict. This needs no second form of id and nothing a reader must special-case. A bare position in `replaces` or `observed`, naming an operation of the same change, was not taken: the SDK could then write every step of a transaction, but every decoder would need two forms of id, for a case the SDK avoids by writing a transaction's net effect.
 

@@ -57,7 +57,7 @@ It does not protect against:
 
 ### The member key
 
-A member is one device or one agent: a laptop, a phone, a browser profile, an agent process, a cloud function. Each member creates its own member key the first time it opens a database. The member key is two keys:
+A member is one device or one agent: a laptop, a phone, a database in a browser, an agent process, a cloud function. Each member creates its own member key the first time it opens a database. The member key is two keys:
 
 - an **Ed25519 signing key**, which signs every change and every membership entry the member writes;
 - an **X25519 key-agreement key**, to which other members wrap space keys.

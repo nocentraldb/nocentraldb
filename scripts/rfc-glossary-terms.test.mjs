@@ -3,7 +3,8 @@
 // glossary avoids it. An RFC uses the glossary's term instead: "another
 // member" for a peer, "sign-off" for approval of an erasure, "converge" for
 // copies that agree, "object" for a record of the model, "core" for the
-// engine, and "`write`" for a write transaction of the app. Code blocks and
+// engine, and "`write`" for a write transaction of the app (a SQLite or
+// DynamoDB write transaction keeps its name). Code blocks and
 // the History lines are left out; RFC 0005 explains its own pair of terms,
 // schema and model, where it defines them.
 import assert from "node:assert/strict";
@@ -26,11 +27,11 @@ const AVOIDED = [
   [/\bis a cache\b/i, "the view is computed from the log"],
   [/\bErasure approvers\b|\bapproves none\b|\bperson's approval\b/, "sign-off"],
   [/\bCopies agree\b|\bThe relay agrees\b/, "converge"],
-  [/\bbrowser profile\b/, "a database in a browser"],
+  [/\ba phone, a browser profile\b/, "a database in a browser"],
   [/\brecords per task\b|\baccount's own records\b/, "object"],
   [/\bthe engine turns\b/, "the core"],
-  [/\bwrite transaction\b(?! that reads)(?!; the head)/, "one `write`"],
-  [/\bA transaction that\b/, "a `write`"],
+  [/(?<!small |One )\bwrite transaction\b/, "one `write`"],
+  [/\bA transaction that (writes|adds|removes|sets)\b/, "a `write`"],
 ];
 
 for (const path of rfcs) {

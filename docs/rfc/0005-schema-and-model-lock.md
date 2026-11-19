@@ -31,6 +31,8 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 | Model version | A whole number that `ncdb model build` raises by one each time the model changes. |
 | Old client | An app or agent whose lock has a lower model version than the lock that wrote some of the changes it receives. |
 
+The [glossary](../glossary.md) calls the TypeScript module the app's model in code, and uses "schema" only in general. This RFC keeps the module (the schema) and what it describes (the model) apart, because the lock records the second and not the first.
+
 ## The schema in TypeScript
 
 A developer writes the schema once, as a TypeScript module that exports a model. This is the schema of the agent task board (RFC 0001, [Example applications](0001-nocentraldb.md#example-applications)), at model version 2:

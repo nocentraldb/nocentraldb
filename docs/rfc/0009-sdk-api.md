@@ -2,7 +2,7 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 
-This RFC defines the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how safe it is. It defines the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
+This RFC defines the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how durable it is. It defines the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
 The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0010](0010-accounts.md) designs accounts, and names the calls of pairing and recovery. [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so. GENESIS.md counts public API names among what a user sees first, and RFC 0004, RFC 0005 and RFC 0008 left the names of reads and roles to the SDK, so this RFC is where they are decided.
 
@@ -16,7 +16,7 @@ The decided RFCs define what lies under these calls, and this RFC names the call
 - **Rich text and streams.** `nc.richText` and `nc.stream` are reserved (RFC 0005). Their write and read calls, such as an anchored edit or appending a chunk, belong to their RFCs.
 - **Work orders and erasure.** How an erasure is started, claimed and signed off is the work-order RFC's. RFC 0003's sketch `db.workOrders.erase` stays a sketch. Until that RFC, the Rust SDK erases a person with `Db::erase`, a sign-off the app carries as text, which the work-order RFC may wrap ([The Rust SDK](#the-rust-sdk); Carsten, 2026-11-15, NOC-326).
 - **Accounts.** How a second device or an agent joins a person's account, and recovery, are [RFC 0010](0010-accounts.md)'s. This RFC lists the calls it names ([Accounts and devices](#accounts-and-devices)).
-- **Peers in island mode.** How two members find each other is a later RFC ([RFC 0007, "Island mode"](0007-relay.md#island-mode)), so the SDK has no peer API yet.
+- **Members that reach each other directly in island mode.** How two members find each other is a later RFC ([RFC 0007, "Island mode"](0007-relay.md#island-mode)), so the SDK has no API for it yet.
 - **Bindings for UI frameworks**, such as a React hook. They can wrap `subscribe` later.
 
 ## Terms
@@ -147,8 +147,8 @@ One call maps to one change, so the app sees exactly what is atomic. The forms n
 - **Atomic in its checks, in one space.** The signature, the membership check and the decryption cover the change as a whole, so every member accepts all of it or none ([RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit)). A change never spans two spaces, so neither does a write. An app that writes into two spaces makes two writes, and each may be accepted or rejected on its own.
 - **Not isolated.** The function records; it does not read. It gets no view of the transaction's own writes, and it must not await anything: the SDK collects the records when the function returns. Read first, then write.
 - **No guard against concurrent writes.** Another member may write the same field at the same time, offline. The fields merge by their types, and a write that loses stays identifiable ([RFC 0002, "A late change stays identifiable"](0002-change-and-log-format.md#a-late-change-stays-identifiable)). There is no "write only if unchanged", because no member can know what an offline member does (RFC 0001, [What it is not](0001-nocentraldb.md#what-it-is-not)).
-- **An old client may show part of it.** A transaction that writes a field an old client does not know shows on that client without that field, until it upgrades ([RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit)).
-- **The net effect per field.** A transaction that writes one field twice writes its last value; an element added and then removed in one transaction is written as RFC 0004 says ([RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation)). An operation cannot name another operation of its own change, so the SDK encodes the net effect.
+- **An old client may show part of it.** A `write` that sets a field an old client does not know shows on that client without that field, until it upgrades ([RFC 0002, "The atomic unit"](0002-change-and-log-format.md#the-atomic-unit)).
+- **The net effect per field.** A `write` that sets one field twice writes its last value; an element added and then removed in one `write` is written as RFC 0004 says ([RFC 0004, "The arguments of each operation"](0004-merge-rules-basic-types.md#the-arguments-of-each-operation)). An operation cannot name another operation of its own change, so the SDK encodes the net effect.
 
 ### Field operations per field type
 
@@ -183,7 +183,7 @@ One call maps to one change, so the app sees exactly what is atomic. The forms n
 A personal field is written like any other field. The SDK seals it under the key of the person it is about, which it finds from the schema's `person` ([RFC 0005, "Personal fields"](0005-schema-and-model-lock.md#personal-fields)):
 
 - `person: "self"`: the object itself is the person.
-- `person: "<link field>"`: the target of that link, as the copy holds it after this transaction's own writes. A transaction that sets `assignee` and `notesAboutAssignee` together seals the notes under the new assignee's key.
+- `person: "<link field>"`: the target of that link, as the copy holds it after this `write`'s own sets. A `write` that sets `assignee` and `notesAboutAssignee` together seals the notes under the new assignee's key.
 
 The SDK holds the person keys of a space in memory only, fetched from the relay's person-key store on every connection, and writes none to the device ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)).
 

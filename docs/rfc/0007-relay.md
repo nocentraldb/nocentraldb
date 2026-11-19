@@ -18,10 +18,9 @@ GENESIS.md reserves the wire format for the owner, and anything that writes to A
 - **Cryptography and keys.** [RFC 0003](0003-keys-and-cryptography.md). This RFC uses the member key to authenticate a connection, with its own context string, and invents no primitive. The protection of the person-key store and the key that authenticates a connection are RFC 0003's, in [The person key](0003-keys-and-cryptography.md#the-person-key) and [The member key](0003-keys-and-cryptography.md#the-member-key), because they are key handling.
 - **Membership rules and roles.** Who may add or remove whom is [RFC 0008](0008-membership.md). The relay applies those rules, from the same code the members run; this RFC only says where.
 - **Compaction and the archive.** A later RFC. This RFC reserves the error a member gets when its cursor points before a compacted range.
-- **Peer discovery in island mode.** How two members on one network find each other is a later RFC. This RFC says which messages they exchange once connected.
+- **Finding members in island mode.** How two members on one network find each other is a later RFC. This RFC says which messages they exchange once connected.
 - **Moving a space from one relay to another.** Use case 5 leaves it open, and so does this RFC; [Island mode](#island-mode) says what already works.
 - **Adapters**, such as the EventBridge adapter of use case 7. An adapter is a member of the space, not part of the relay.
-- **Code and infrastructure.** No crate, no template, no AWS resource. The implementation follows in later tickets.
 
 ## Terms
 
@@ -149,7 +148,7 @@ result = {accepted: position}
 
 The relay checks each frame (see [What the relay checks](#what-the-relay-checks)) and appends the accepted ones in the order of the array, at the next free positions. One result per frame, in the same order. The frames of one push are checked one by one: a rejected frame does not stop the frames after it, because the changes are independent and convergence never depends on the relay's order.
 
-A **duplicate** is not an error. A member that pushes a change the relay already holds, for example one it received from a peer in island mode, learns the change's position and records it.
+A **duplicate** is not an error. A member that pushes a change the relay already holds, for example one it received directly from another member in island mode, learns the change's position and records it.
 
 A push is **idempotent**: if the connection drops before `pushed` arrives, the member pushes the same frames again and gets `duplicate` for the ones that made it.
 
@@ -632,20 +631,20 @@ At this scale, a long-running WebSocket server on ECS Fargate behind a load bala
 - Reads never touched the relay; they come from the local view.
 - A write enters the member's local log at once, folded, with no relay position (RFC 0002). The SDK reports how many of the member's changes the relay has not confirmed yet.
 - The member retries the connection with exponential backoff and jitter, up to a few minutes between attempts.
-- Members that can reach each other directly, on one network, exchange changes with the same messages as with the relay: `push`, and `pull` or `subscribe` with the peer's own local positions as the cursor. A peer runs the same checks as the relay, plus decryption. How peers find each other is a later RFC.
+- Members that can reach each other directly, on one network, exchange changes with the same messages as with the relay: `push`, and `pull` or `subscribe` with the other member's own local positions as the cursor. A member that answers runs the same checks as the relay, plus decryption. How members find each other on one network is a later RFC.
 - Membership changes and key rotations made on an island are control changes like any other. RFC 0003 says what happens when two islands rotate at the same time.
 
 **On reconnect**, a member:
 
-1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head (from 0, if the relay epoch changed), folding as it goes. It recognises changes it already holds, for example from a peer, by their ids.
-2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received from peers. Changes the relay already holds come back as `duplicate`, with their position.
+1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head (from 0, if the relay epoch changed), folding as it goes. It recognises changes it already holds, for example from another member directly, by their ids.
+2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received directly from other members. Changes the relay already holds come back as `duplicate`, with their position.
 3. Records the relay position of every change, and **subscribes** from its new cursor.
 
 Pulling first lets the member see a membership entry that removed it before it pushes, and spares the relay the uploads it already holds. Order on the relay does not matter for the result: every member folds the same set of changes to the same state, in any order (principle 2).
 
 **What island mode does not do.**
 
-- Changes made on an island reach the members on other islands only when a path exists again, through the relay or a peer.
+- Changes made on an island reach the members on other islands only when a path exists again, through the relay or directly between members.
 - The relay refuses a revoked author's changes above the revocation's cutoff, also when they were written on an island before the revocation (see [What the relay checks](#what-the-relay-checks)). Members reject them too, so the verdict is the same everywhere; the change stays in the logs of the members that hold it, and the SDK reports it ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
 - Nothing enforces one global truth at write time, on an island or off it (RFC 0001).
 - A relay that comes back after losing data, restored from a backup or empty, draws a new relay epoch, and its members repopulate it by their pushes (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). Members match changes by id (RFC 0002). How a space moves between relays on purpose is a later RFC.
@@ -669,7 +668,7 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 
 - **The relay sees more than RFC 0002's list.** [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show, and what the server sees, with the AWS setting each item depends on; it keeps what the relay learns apart from what the server sees. RFC 0002's list, [What the relay can see, and what it cannot](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot), links this one, and RFC 0001, GENESIS.md, use case 2 and the FAQ link both.
 - **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Use case 4 says "reads at no cost" and what the writes cost.
-- **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Use case 5 says that is missing until the peer RFC exists.
+- **Use case 5, members on the same network.** This RFC defines the messages members exchange directly, but not how they find each other. Use case 5 says that is missing until that later RFC exists.
 - **Who uploads.** The uploader must be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it, and RFC 0002 states it in ["On the relay"](0002-change-and-log-format.md#on-the-relay).
 
 ## Summary of the choices
