@@ -157,3 +157,42 @@ test("the sidebar lists Core concepts right after Getting started", () => {
     "Spaces and members",
   ]);
 });
+
+test("How NoCentralDB works runs one example, projects, tasks and people, through the decisions", () => {
+  const words = text("docs/how-it-works/index.html");
+  for (const decision of [
+    "people",
+    "projects",
+    "tasks",
+    "nc.link",
+    "nc.ref",
+    "Reference",
+    "notFound",
+    "reader",
+    "writer",
+    "admin",
+    ".personal",
+    "unset",
+  ])
+    assert.ok(words.includes(decision), decision);
+  // what 0.1 cannot do yet is said on the page, not hidden
+  assert.match(words, /0\.1 has no call that reports a reference['’]s state/);
+  const md = readFileSync(
+    join(dist, "..", "src", "content", "docs", "docs", "how-it-works.md"),
+    "utf8",
+  );
+  assert.ok(
+    (md.match(/^```rust no_run$/gm) ?? []).length >= 2,
+    "Rust snippets",
+  );
+  const lib = readFileSync(
+    join(dist, "..", "..", "crates", "nocentraldb", "src", "lib.rs"),
+    "utf8",
+  );
+  assert.ok(
+    lib.includes(
+      'include_str!("../../../site/src/content/docs/docs/how-it-works.md")',
+    ),
+    "the doc tests compile the page's Rust snippets",
+  );
+});
