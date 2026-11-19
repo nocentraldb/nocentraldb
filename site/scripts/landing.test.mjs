@@ -207,5 +207,5 @@ test("on a phone the header shows only the mark", () => {
 });
 
 test("the code section's heading is the owner's \"Get started\"", () => {
-  assert.match(html, /<h2 id="code-h">Get started<\/h2>/);
+  assert.match(html, /<h2 id="code-h"[^>]*>Get started<\/h2>/);
 });
