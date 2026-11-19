@@ -37,7 +37,7 @@ import { STEPS } from "../src/components/scene.mjs";
 test("the hero says what it is, in the spec's words", () => {
   assert.match(
     html,
-    /<h1[^>]*>A database that reads like a local file and syncs like a shared doc<\/h1>/,
+    /<h1[^>]*>Reads like local files, syncs like shared docs<\/h1>/,
   );
   for (const line of [
     "A local-first database for people and agents",
