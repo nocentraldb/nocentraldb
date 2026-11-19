@@ -5,8 +5,10 @@
 // and the owning tab of a browser database is RFC 0006's design for 0.1,
 // with its Safari limit, which RFC 0012 replaces after 0.1.
 import assert from "node:assert/strict";
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
-import { read, section } from "./lib/rfc-text.mjs";
+import { read, root, section } from "./lib/rfc-text.mjs";
 
 const RELAY = "docs/rfc/0007-relay.md";
 const VIEW = "docs/rfc/0006-local-view.md";
@@ -46,3 +48,30 @@ test("RFC 0006's owning tab names Safari's limit and RFC 0012", () => {
   assert.match(browser, /NOC-352/);
   assert.match(browser, /NOC-355/);
 });
+
+// Each RFC says, right under its status, what release 0.1 builds of it: in
+// one line that starts "**At 0.1.**" and then says "Built", "Partly built" or
+// "Not built", naming what is not built. The status line itself stays as
+// the owner's decision left it.
+const rfcs = readdirSync(join(root, "docs/rfc"))
+  .filter((file) => /^\d{4}-.*\.md$/.test(file))
+  .map((file) => `docs/rfc/${file}`);
+
+for (const path of rfcs) {
+  test(`${path} says what 0.1 builds, under its status`, () => {
+    const lines = read(path)
+      .split("\n")
+      .filter((l) => l.trim());
+    const status = lines.findIndex((l) => l.startsWith("**Status.**"));
+    assert.ok(status >= 0, "no status line");
+    const next = lines[status + 1];
+    assert.match(
+      next,
+      /^\*\*At 0\.1\.\*\* (Built|Partly built|Not built)\b/,
+      `the line under the status is: ${next.slice(0, 80)}`,
+    );
+    if (!/^\*\*At 0\.1\.\*\* Built\.$/.test(next)) {
+      assert.match(next, /[Nn]ot built/, "it names what is not built");
+    }
+  });
+}
