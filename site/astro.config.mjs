@@ -48,7 +48,7 @@ export default defineConfig({
       ],
       sidebar: [
         { label: "Getting started", slug: "docs" },
-        { label: "Core concepts", slug: "docs/how-it-works" },
+        { label: "Overview", slug: "docs/how-it-works" },
         {
           label: "Concepts",
           items: [{ autogenerate: { directory: "docs/concepts" } }],
