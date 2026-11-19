@@ -1,16 +1,22 @@
 ---
-// Install, then five calls on the task model, from the README's "Code examples"
-// (RFC 0009). On a phone the section is as tall as its content: the words, then
-// the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
-// README's statements, a few dropped for length.
+// Seven steps: install, then six calls on the task model, from the README's "Code
+// examples" (RFC 0009), each in TypeScript and in Rust. On a phone the section is as
+// tall as its content: the words, the language switch, then the tabs and the code. The
+// tabs are the kit's (.tabs, .tab); the TypeScript snippets keep the README's
+// statements, a few dropped for length. The Rust snippets live in code-rust.md, whose
+// blocks the doc tests of nocentraldb compile; rustdoc's hidden lines ("# ") are left
+// out here.
 import { Code } from "astro:components";
+import { pathToFileURL } from "node:url";
+import { currentInstallLines } from "../install.mjs";
+import rustSource from "./code-rust.md?raw";
 
-const tabs = [
-  {
-    id: "model",
-    label: "Model",
-    note: "Describe the model once. ncdb model build turns it into model.lock.json.",
-    code: `import { nc } from "@nocentraldb/sdk";
+// The install lines follow release-notes/index.json and the newest alpha tag,
+// read when the site is built (install.mjs): the site shows the current ones
+// after each deploy. The build runs in site/.
+const install = currentInstallLines(pathToFileURL(`${process.cwd()}/../`));
+
+const MODEL = `import { nc } from "@nocentraldb/sdk";
 
 export const model = nc.model({
   people: nc.collection({
@@ -29,69 +35,154 @@ export const model = nc.model({
       },
     },
   ),
-});`,
+});`;
+
+/** The Rust block of each step of code-rust.md, by step id, without its hidden lines. */
+const rust = Object.fromEntries(
+  rustSource
+    .split(/^## /m)
+    .slice(1)
+    .map((part) => {
+      const id = part.slice(0, part.indexOf("\n")).trim();
+      const block = part.match(/```(\w+)[^\n]*\n([\s\S]*?)\n```/);
+      if (!block) throw new Error(`code-rust.md: no code block under ## ${id}`);
+      const code = block[2]
+        .split("\n")
+        .filter((line) => !(block[1] === "rust" && /^#( |$)/.test(line)))
+        .join("\n")
+        .replaceAll("{CARGO_ADD}", install.cargo);
+      return [id, { lang: block[1], code }];
+    }),
+);
+
+const steps = [
+  {
+    id: "install",
+    label: "Install",
+    ts: {
+      lang: "sh",
+      note:
+        install.stage === "alpha"
+          ? "Add the SDK to your app: the newest alpha, until the first beta."
+          : "Add the SDK to your app.",
+      code: install.npm,
+    },
+    rust: {
+      note:
+        install.stage === "alpha"
+          ? 'Add the crate to your app. Until the first beta it comes from a release tag: the newest is in the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.'
+          : "Add the crate to your app.",
+    },
+  },
+  {
+    id: "model",
+    label: "Model",
+    ts: {
+      note: "Describe the model once. ncdb model build turns it into model.lock.json.",
+      code: MODEL,
+    },
+    rust: {
+      lang: "ts",
+      note: "Both SDKs share one model, written in TypeScript. ncdb model build turns it into model.lock.json, which the Rust SDK reads.",
+      code: MODEL,
+    },
   },
   {
     id: "open",
     label: "Open",
-    note: "The relay is the server from the scenario above. Opening a database needs no relay.",
-    code: `import { nc } from "@nocentraldb/sdk";
+    ts: {
+      note: "The relay is the server from the scenario above. Opening a database needs no relay.",
+      code: `import { nc } from "@nocentraldb/sdk";
 import { model } from "./model";
 import lock from "./model.lock.json";
 
 const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 
 const project = await db.spaces.create();`,
+    },
+    rust: {
+      note: "The relay is the server from the scenario above. Opening a database needs no relay. The app chooses the directory the database lives in.",
+    },
   },
   {
     id: "share",
     label: "Share",
-    note: "The joining member sends an invitation: its public identity, never a key. An admin adds it with a role.",
-    code: `// On the joining member:
+    ts: {
+      note: "The joining member sends an invitation: its public identity, never a key. An admin adds it with a role.",
+      code: `// On the joining member:
 const invitation = await db.invitation();
 send(invitation.toString());
 
 // On an admin of the space:
 await project.members.add(nc.invitation(text), { role: "writer" });`,
+    },
   },
   {
     id: "write",
     label: "Write",
-    note: "One write is one signed, encrypted change. It resolves before the relay has it.",
-    code: `await project.write((tx) => {
+    ts: {
+      note: "One write is one signed, encrypted change. It resolves before the relay has it.",
+      code: `await project.write((tx) => {
   const task = tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
   tx.update(model.tasks, task, { status: "in_progress" });
 });`,
+    },
+  },
+  {
+    id: "read",
+    label: "Read",
+    ts: {
+      note: "A query reads a declared index and answers a page in index order, from the copy on this device. It never waits for the network.",
+      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+
+const page = await db.find(query);
+for (const task of page.items) console.log(task.title);`,
+    },
   },
   {
     id: "subscribe",
     label: "Subscribe",
-    note: "The listener runs at once and again after every change that may alter the page. It never waits for the network.",
-    code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
+    ts: {
+      note: "The listener runs at once and again after every change that may alter the page. It never waits for the network.",
+      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
 
 const stop = db.subscribe(query, (fresh) => render(fresh));`,
+    },
+    rust: {
+      note: "The stream gives the page at once and again after every change that may alter it. It never waits for the network; drop it to stop.",
+    },
   },
-];
+].map((step) => ({
+  ...step,
+  ts: { lang: "ts", ...step.ts },
+  // a step without a Rust note takes the TypeScript one; its code is code-rust.md's
+  rust: { note: step.ts.note, ...rust[step.id], ...step.rust },
+}));
 ---
 
 <section class="section" id="code" aria-labelledby="code-h">
   <div class="wrap grid code-grid">
     <div class="span-5">
       <div class="section-head">
-        <h2 id="code-h">Five calls in the SDK</h2>
-        <p>No keys in your code: the SDK is designed to create, store and rotate them.</p>
+        <h2 id="code-h">Get started</h2>
+        <p>The SDK handles all the encryption. Your code never touches a key.<sup><a href="#code-fn">1</a></sup></p>
+        <p class="footnote" id="code-fn">
+          <sup>1</sup> Your app passes on one secret: the account's recovery code, which the person keeps.
+          <a href="https://github.com/nocentraldb/nocentraldb/blob/main/docs/getting-started-browser.md#16-remove-a-lost-device"
+            >How it works</a
+          >
+        </p>
       </div>
-      <div class="install">
-        <code>npm install @nocentraldb/sdk</code>
-        <button type="button" class="btn btn--secondary" data-copy="npm install @nocentraldb/sdk">Copy</button>
+      <div class="lang-switch" role="radiogroup" aria-label="Language">
+        <label><input type="radio" name="code-lang" value="ts" checked data-code-lang />TypeScript</label>
+        <label><input type="radio" name="code-lang" value="rust" data-code-lang />Rust</label>
       </div>
-      <p class="also">Rust: <code>cargo add nocentraldb</code></p>
     </div>
 
     <div class="span-6 start-7 code-tabs">
       <div class="tabs" role="tablist" aria-label="Code for the task list">
         {
-          tabs.map((t, i) => (
+          steps.map((t, i) => (
             <button
               class="tab"
               role="tab"
@@ -107,10 +198,14 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
         }
       </div>
       {
-        tabs.map((t, i) => (
+        steps.map((t, i) => (
           <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden={i !== 0}>
-            <p class="note">{t.note}</p>
-            <Code code={t.code} lang="ts" theme="css-variables" />
+            {(["ts", "rust"] as const).map((lang) => (
+              <div data-lang={lang}>
+                <p class="note" set:html={t[lang].note} />
+                <Code code={t[lang].code} lang={t[lang].lang} theme="css-variables" />
+              </div>
+            ))}
           </div>
         ))
       }
@@ -121,30 +216,79 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
 <style>
   .code-grid {
     align-content: start;
+    /* highlighted in the brand's dark palette (the owner, 2026-11-19), each colour
+       4.5:1 or more on the surface (code-highlight.test.mjs): keywords in the yellow,
+       strings and constants in a sand of yellow and muted, names in the ink,
+       comments and punctuation muted. Never the drawing's magenta. */
+    --astro-code-background: #1b1b19; /* --ncdb-surface */
+    --astro-code-foreground: #ecebe4; /* --ncdb-ink, 14.4:1 */
+    --astro-code-token-keyword: #f2dc4b; /* --ncdb-accent, 12.4:1 */
+    --astro-code-token-string: #cabf72; /* accent and muted, half and half, 9.2:1 */
+    --astro-code-token-string-expression: #cabf72;
+    --astro-code-token-constant: #cabf72;
+    --astro-code-token-function: #ecebe4;
+    --astro-code-token-parameter: #ecebe4;
+    --astro-code-token-comment: #a3a299; /* --ncdb-muted, 6.7:1 */
+    --astro-code-token-punctuation: #a3a299;
+    --astro-code-token-link: #ecebe4;
   }
-  /* the install line on the column's left line, its Copy button after it */
-  .install {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-3) var(--s-5);
-  }
-  .install code {
-    font-size: var(--t-body);
-  }
-  .install code,
-  .also code {
-    font-family: var(--font-mono);
-    white-space: nowrap;
-  }
-  .also {
-    margin-top: var(--s-4);
+  .footnote {
+    margin-top: var(--s-3);
     color: var(--muted);
     font-size: var(--t-small);
+  }
+  .section-head sup a,
+  .footnote a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .note :global(a) {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .note {
     margin: var(--s-4) 0;
     color: var(--muted);
+  }
+  /* the language switch: two radios drawn as the kit's pills, the checked one in the
+     ink over a 2px line, as the selected tab. Native radios: arrow keys move the
+     choice, and the section shows the chosen variant of every step by :has(), so it
+     works without script; the script only remembers the choice. */
+  .lang-switch {
+    display: inline-flex;
+    gap: var(--s-1);
+    margin-top: var(--s-6);
+    padding: var(--s-1);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .lang-switch label {
+    position: relative;
+    padding: var(--s-2) var(--s-4);
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .lang-switch input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    margin: 0;
+    cursor: pointer;
+  }
+  .lang-switch label:has(input:checked) {
+    background: var(--ncdb-surface-2);
+    color: var(--ink);
+  }
+  .lang-switch label:has(input:focus-visible) {
+    outline: 2px solid var(--ncdb-accent);
+    outline-offset: 2px;
+  }
+  #code:has(input[value="rust"]:checked) [data-lang="ts"],
+  #code:not(:has(input[value="rust"]:checked)) [data-lang="rust"] {
+    display: none;
   }
   /* the selected tab is its word in the ink over a 2px line: the kit's sliding
      indicator (motion.js) drawn as that line, not as one more filled pill */
@@ -181,18 +325,6 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     /* a long line wraps inside the panel rather than run past its edge */
     white-space: pre-wrap;
     overflow-wrap: anywhere;
-    /* code in ink and muted only, never the accent */
-    --astro-code-background: var(--ncdb-surface);
-    --astro-code-foreground: var(--ncdb-ink);
-    --astro-code-token-keyword: var(--ncdb-muted);
-    --astro-code-token-string: var(--ncdb-ink);
-    --astro-code-token-string-expression: var(--ncdb-ink);
-    --astro-code-token-function: var(--ncdb-ink);
-    --astro-code-token-constant: var(--ncdb-ink);
-    --astro-code-token-parameter: var(--ncdb-ink);
-    --astro-code-token-comment: var(--ncdb-muted);
-    --astro-code-token-punctuation: var(--ncdb-muted);
-    --astro-code-token-link: var(--ncdb-ink);
   }
   /* the brand's mono in the code too (the browser gives <code> its own monospace) */
   [role="tabpanel"] :global(pre code) {
@@ -205,7 +337,7 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     text-indent: -4ch;
   }
   @media (max-width: 1023px) {
-    /* stacked: the tabs one heading gap under the install lines */
+    /* stacked: the tabs one heading gap under the words */
     .code-grid {
       row-gap: var(--head-gap);
     }
@@ -226,10 +358,15 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
       padding: var(--s-4);
       font-size: 12px;
     }
-    /* the five tabs in one row at 390, closer together; a narrower phone wraps them */
+    /* the seven tabs in one row that scrolls sideways, closer together */
     .code-tabs .tabs {
-      justify-content: space-between;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
       gap: var(--s-1);
+    }
+    .code-tabs .tab {
+      flex: none;
     }
     .code-tabs .tab {
       padding: 0 var(--s-2);
@@ -237,16 +374,21 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
   }
 </style>
 
-<script is:inline>
+<script is:inline data-code-lang-store>
+  // Remembers the chosen language for this viewer (a convenience: the page works
+  // without it, and storage may be blocked or empty).
   (() => {
-    document.querySelectorAll("[data-copy]").forEach((b) =>
-      b.addEventListener("click", async () => {
+    const KEY = "ncdb-code-lang";
+    const radios = document.querySelectorAll("#code input[data-code-lang]");
+    try {
+      const saved = localStorage.getItem(KEY);
+      for (const radio of radios) if (radio.value === saved) radio.checked = true;
+    } catch {}
+    for (const radio of radios)
+      radio.addEventListener("change", () => {
         try {
-          await navigator.clipboard.writeText(b.dataset.copy);
-          b.textContent = "Copied";
-          setTimeout(() => (b.textContent = "Copy"), 1600);
+          localStorage.setItem(KEY, radio.value);
         } catch {}
-      }),
-    );
+      });
   })();
 </script>

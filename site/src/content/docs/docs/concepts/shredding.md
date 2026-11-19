@@ -1,12 +1,14 @@
 ---
 
-title: Shredding a person
-description: Shredding a person destroys their key.
+title: Erasing a person
+description: Erasing a person destroys the keys of their personal fields.
 sidebar: { order: 4 }
 ---
 
-The schema marks personal fields. Each is designed to be encrypted with one key per person per space. To **shred** a person, a member performs a `work order` and a second account gives its `sign-off`; then the key is destroyed. A person's data can be shredded this way, and the audit trail of who changed what is designed to survive it.
+The schema marks **personal fields**. Each is encrypted with one key per person per space, the person key. To **erase** a person, a member destroys that person's keys in every space of its database where it may write. Erasing needs the **sign-off** of a second account; in a space with only one account, the erasure is provisional for 7 days and can be taken back. The audit trail of who changed what survives it, and every member can read which erasures happened, from `space.erasures`.
 
-**What it does not reach:** devices that never come back online, a modified client that ignores the shred, a relay backup from before the shred that a member obtains, exports and screenshots, and personal data in unmarked free text.
+In 0.1, the Rust SDK erases (`db.erase`). The browser SDK reads the erasure audit, but cannot start an erasure yet.
 
-Whether destroying a key counts as erasure for you is for your data protection officer to decide. This is a design, not legal advice.
+**What it does not reach:** devices that never come back online, a modified client that ignores the erasure, a relay backup from before the erasure that a member obtains, exports and screenshots, and personal data in unmarked free text.
+
+Whether destroying a key counts as erasure for you is for your data protection officer to decide. This page describes what the software does, and it is not legal advice.

@@ -11,10 +11,10 @@ test("four steps with the spec's titles", () => {
   assert.deepEqual(
     STEPS.map((s) => s.title),
     [
-      "Everyone holds a full copy",
-      "A change travels as ciphertext",
-      "The train enters a tunnel",
-      "Out of the tunnel, every copy matches",
+      "Everyone has the full task list",
+      "A change travels encrypted",
+      "The traveller goes offline",
+      "The traveller reconnects",
     ],
   );
 });
@@ -113,4 +113,16 @@ test("the tall drawing's type sizes win over the wide ones", () => {
   );
   for (const part of ["label", "title", "status", "cipher", "cipher-big"])
     assert.match(css, new RegExp(`\\.sc\\.sc--tall \\.sc-${part}[ ,{]`), part);
+});
+
+test("the drawings' alt texts tell the scenario in the owner's words", () => {
+  assert.deepEqual(
+    STEPS.map((s) => s.alt),
+    [
+      "The traveller on a train, a person in a home office and an agent each hold the same three tasks. A server in the cloud sits between them.",
+      "The traveller claims a task. The change travels encrypted through the server to the home office and the agent. A lens on the server shows only encrypted bytes.",
+      "The traveller's train is in a tunnel and offline. The change is stored locally. The home office and the agent keep exchanging changes.",
+      "The traveller is back online. Changes cross in both directions, and all three copies show the same tasks.",
+    ],
+  );
 });

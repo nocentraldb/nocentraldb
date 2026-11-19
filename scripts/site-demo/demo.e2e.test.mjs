@@ -156,6 +156,31 @@ test("the demo keeps tasks in the visitor's browser, and a tick marks one done",
   await page.context().close();
 });
 
+test("adding and ticking a task sends no request once the demo has loaded", async () => {
+  const { page, errors } = await open();
+  await ready(page);
+  const requests = [];
+  page.on("request", (request) => requests.push(request.url()));
+  await add(page, "Seen by no server");
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll("#demo-open li .title")].some(
+      (title) => title.textContent === "Seen by no server",
+    ),
+  );
+  await page
+    .locator("#demo-open li", { hasText: "Seen by no server" })
+    .locator("input[type=checkbox]")
+    .check();
+  await page.waitForFunction(() =>
+    [...document.querySelectorAll("#demo-done li .title")].some(
+      (title) => title.textContent === "Seen by no server",
+    ),
+  );
+  assert.deepEqual(requests, []);
+  assert.deepEqual(errors, []);
+  await page.context().close();
+});
+
 test("a second tab of the page shows the same tasks", async () => {
   const context = await browser.newContext();
   const { page: first, errors } = await open(context);

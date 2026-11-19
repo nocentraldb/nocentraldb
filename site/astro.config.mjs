@@ -20,6 +20,7 @@ export default defineConfig({
       components: {
         ThemeProvider: "./src/components/starlight/ThemeProvider.astro",
         ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
+        SiteTitle: "./src/components/starlight/SiteTitle.astro",
       },
       description:
         "A local-first database for apps where people and agents work on the same data.",
@@ -47,6 +48,7 @@ export default defineConfig({
       ],
       sidebar: [
         { label: "Getting started", slug: "docs" },
+        { label: "Overview", slug: "docs/how-it-works" },
         {
           label: "Concepts",
           items: [{ autogenerate: { directory: "docs/concepts" } }],
@@ -54,6 +56,9 @@ export default defineConfig({
         { label: "API", slug: "docs/api" },
         { label: "RFCs", slug: "docs/rfcs" },
       ],
+      // A shell command sits in a plain frame: the terminal frame's empty
+      // title bar took a third of a one-line command's height (D1, NOC-360).
+      expressiveCode: { defaultProps: { frame: "code" } },
       plugins: [starlightLlmsTxt()],
     }),
   ],

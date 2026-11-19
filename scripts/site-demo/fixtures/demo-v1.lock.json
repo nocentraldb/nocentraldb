@@ -1,0 +1,33 @@
+{
+  "collections": {
+    "tasks": {
+      "fields": {
+        "status": {
+          "options": ["open", "done"],
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/choice"
+        },
+        "title": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byStatus": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "title" }
+          ],
+          "since": 1
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:a44292a5c4850a092f449d0fb0daea67a90017ce5b76b70359b0afe65af11a87",
+    "id": "4f413665727d43520cd4e83c08ab95b4",
+    "version": 1
+  },
+  "plugins": {}
+}

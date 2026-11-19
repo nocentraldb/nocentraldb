@@ -284,24 +284,24 @@ const tall = (st, id) => `
 // title and text for the step, alt for the drawing's aria-label.
 export const STEPS = [
   {
-    title: "Everyone holds a full copy",
-    text: "The laptop on the train, the desk at home and the agent each keep the whole task list on their own disk. The agent reads its copy as often as it likes, and no read crosses the network.",
-    alt: "A laptop on a train, a desk in a home office and an agent each hold the same three tasks. A cloud server sits between them.",
+    title: "Everyone has the full task list",
+    text: "The traveller, the person in the home office and the agent in the cloud each keep the whole task list on their own disk. Everyone reads locally; reading needs no network connection.",
+    alt: "The traveller on a train, a person in a home office and an agent each hold the same three tasks. A server in the cloud sits between them.",
   },
   {
-    title: "A change travels as ciphertext",
-    text: "The train marks a task as in progress. The change goes through a server in the cloud to the other two. Hold a lens over that server and you see bytes it has no key for.",
-    alt: "The train changes one task. The change travels through the cloud server to the home office and the agent. A lens on the server shows only ciphertext.",
+    title: "A change travels encrypted",
+    text: "The traveller claims a task. The change goes through the server to the other two. The server sees only encrypted bytes and has no key to read them.",
+    alt: "The traveller claims a task. The change travels encrypted through the server to the home office and the agent. A lens on the server shows only encrypted bytes.",
   },
   {
-    title: "The train enters a tunnel",
-    text: "The laptop is offline and its owner keeps working; the change is stored locally. At home and with the agent the work goes on too. They don't see the train's change yet.",
-    alt: "The train is in a tunnel and offline. Its change is stored locally. The home office and the agent keep exchanging changes.",
+    title: "The traveller goes offline",
+    text: "The train enters a tunnel, but the traveller keeps working; the changes are stored locally. The other two carry on from the last state they know and don't see the traveller's changes yet.",
+    alt: "The traveller's train is in a tunnel and offline. The change is stored locally. The home office and the agent keep exchanging changes.",
   },
   {
-    title: "Out of the tunnel, every copy matches",
-    text: "The laptop reconnects. Its change goes out, the others' changes come in, and all three copies end in the same state.",
-    alt: "The train has left the tunnel. Changes cross in both directions and all three copies show the same tasks.",
+    title: "The traveller reconnects",
+    text: "The traveller's changes go out and the others' changes come in. All three copies end up in the same state.",
+    alt: "The traveller is back online. Changes cross in both directions, and all three copies show the same tasks.",
   },
 ];
 

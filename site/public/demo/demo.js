@@ -5,10 +5,12 @@
 // it (NOC-177). The page's loader imports this module after the page has
 // rendered; the SDK, its worker and its WebAssembly core load with it.
 //
-// It declares the same model as apps/tasks-ts/model.ts, whose lock
-// scripts/demo-assets.mjs copies next to it, and shows the tasks as that
-// app does: each list a subscription to a query of the index `byStatus`
-// (RFC 0009, "Queries and indexes", "Subscribe").
+// It declares the same model as site/demo/model.ts, whose lock
+// scripts/demo-assets.mjs copies next to it: the model of apps/tasks-ts plus
+// each task's creation time (NOC-360). Each list is a subscription to a query
+// of the index `byStatusNewest`, newest first (RFC 0009, "Queries and
+// indexes", "Subscribe"); a task from before the creation time has none and
+// comes last, by title.
 import { nc } from "./sdk/index.js";
 
 export const model = nc.model({
@@ -16,10 +18,15 @@ export const model = nc.model({
     {
       title: nc.string(),
       status: nc.oneOf(["open", "done"]),
+      createdAt: nc.int(),
     },
     {
       indexes: {
         byStatus: nc.index(["status", "title"], { equal: 1 }),
+        byStatusNewest: nc.index(
+          ["status", { field: "createdAt", direction: "desc" }, "title"],
+          { equal: 1 },
+        ),
       },
     },
   ),
@@ -136,7 +143,7 @@ export const start = async (root, say) => {
 
   for (const status of ["open", "done"]) {
     const list = find(`#demo-${status}`);
-    const query = model.tasks.indexes.byStatus.equal(status).take(PAGE);
+    const query = model.tasks.indexes.byStatusNewest.equal(status).take(PAGE);
     db.subscribe(query, (page) => {
       list.replaceChildren(...rows(page.items).map(line));
     });
@@ -148,7 +155,9 @@ export const start = async (root, say) => {
     const title = input.value.trim();
     if (title === "") return;
     input.value = "";
-    space.create(model.tasks, { title, status: "open" }).catch(report);
+    space
+      .create(model.tasks, { title, status: "open", createdAt: Date.now() })
+      .catch(report);
   });
   find("[data-demo-app]").hidden = false;
   say(

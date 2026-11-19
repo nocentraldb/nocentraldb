@@ -1,0 +1,48 @@
+{
+  "collections": {
+    "tasks": {
+      "fields": {
+        "createdAt": {
+          "description": "Milliseconds since the epoch.",
+          "rule": 1,
+          "since": 2,
+          "type": "ncdb/int"
+        },
+        "status": {
+          "options": ["open", "done"],
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/choice"
+        },
+        "title": { "rule": 1, "since": 1, "type": "ncdb/string" }
+      },
+      "indexes": {
+        "byStatus": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "asc", "field": "title" }
+          ],
+          "since": 1
+        },
+        "byStatusNewest": {
+          "equal": 1,
+          "fields": [
+            { "direction": "asc", "field": "status" },
+            { "direction": "desc", "field": "createdAt" },
+            { "direction": "asc", "field": "title" }
+          ],
+          "since": 2
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:61d3aaa1305784fd8acd1137088bc1259612ef1fb941d2d7c72751b509d6a6bc",
+    "id": "4f413665727d43520cd4e83c08ab95b4",
+    "version": 2
+  },
+  "plugins": {}
+}

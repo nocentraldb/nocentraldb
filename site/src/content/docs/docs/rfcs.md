@@ -4,7 +4,7 @@ title: RFCs
 description: The design, decided in the open.
 ---
 
-NoCentralDB is designed in RFCs. Feedback is most useful while changes are still cheap: [how to give it](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md#giving-feedback).
+NoCentralDB is designed in RFCs. Each RFC says its status at the top. Feedback is most useful while changes are still cheap: [how to give it](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/README.md#giving-feedback).
 
 - [RFC 0001: NoCentralDB](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0001-nocentraldb.md)
 - [RFC 0002: The change and the log format](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0002-change-and-log-format.md)
@@ -16,3 +16,5 @@ NoCentralDB is designed in RFCs. Feedback is most useful while changes are still
 - [RFC 0008: Membership, roles and the first change of a space](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0008-membership.md)
 - [RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md)
 - [RFC 0010: Accounts](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0010-accounts.md)
+- [RFC 0011: Plugin field types](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0011-plugin-field-types.md)
+- [RFC 0012: Several tabs on one browser database, without one owning tab](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0012-multi-tab-browser-storage.md)
