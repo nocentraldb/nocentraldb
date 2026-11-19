@@ -47,7 +47,8 @@ export const decisionEntries = (markdown) => {
   const entries = [];
   for (const line of section(markdown, "decisions").split("\n")) {
     if (line.startsWith("- ")) entries.push(line);
-    else if (line.trim() && entries.length) entries[entries.length - 1] += `\n${line}`;
+    else if (line.trim() && entries.length)
+      entries[entries.length - 1] += `\n${line}`;
   }
   return entries;
 };
@@ -77,7 +78,11 @@ export const assertDecisions = (markdown) => {
   assert.ok(entries.length > 0, "Decisions holds no entry");
   for (const entry of entries) {
     const title = entry.split("\n")[0];
-    assert.match(title, ENTRY, `an entry starts "- **YYYY-MM-DD · …**": ${title}`);
+    assert.match(
+      title,
+      ENTRY,
+      `an entry starts "- **YYYY-MM-DD · …**": ${title}`,
+    );
     assert.match(
       entry,
       /\b(Carsten|pm), \d{4}-\d{2}-\d{2}\b/,

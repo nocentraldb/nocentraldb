@@ -55,7 +55,10 @@ test("later History lines and a Decisions entry hold", () => {
 
 test("History must start with the publication", () => {
   assert.throws(() =>
-    assertRecord(rfc({ history: ["- 2026-11-12 · Something (NOC-1, #2)"] }), PUBLISHED),
+    assertRecord(
+      rfc({ history: ["- 2026-11-12 · Something (NOC-1, #2)"] }),
+      PUBLISHED,
+    ),
   );
 });
 
@@ -92,7 +95,9 @@ test("Decisions needs a later History line", () => {
   assert.throws(() =>
     assertRecord(
       rfc({
-        decisions: ["- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1)."],
+        decisions: [
+          "- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1).",
+        ],
         history: [`- ${PUBLISHED}`],
       }),
       PUBLISHED,
@@ -102,7 +107,9 @@ test("Decisions needs a later History line", () => {
 
 test("Decisions stands directly before History", () => {
   const text = rfc({
-    decisions: ["- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1)."],
+    decisions: [
+      "- **2026-11-12 · A decision.** Text (Carsten, 2026-11-12, NOC-1).",
+    ],
     history: [`- ${PUBLISHED}`, "- 2026-11-12 · A decision (NOC-1, #2)"],
   }).replace("## History", "## Something between\n\nText.\n\n## History");
   assert.throws(() => assertRecord(text, PUBLISHED));
@@ -120,7 +127,10 @@ test("an entry is dated, names who decided and when, and its source", () => {
         assertRecord(
           rfc({
             decisions: [entry],
-            history: [`- ${PUBLISHED}`, "- 2026-11-12 · A decision (NOC-1, #2)"],
+            history: [
+              `- ${PUBLISHED}`,
+              "- 2026-11-12 · A decision (NOC-1, #2)",
+            ],
           }),
           PUBLISHED,
         ),
