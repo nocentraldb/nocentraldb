@@ -8,8 +8,10 @@ hidden lines: they compile, and the page leaves them out.
 
 ## install
 
+The line comes from `site/src/install.mjs` when the site is built.
+
 ```sh
-cargo add nocentraldb --git https://github.com/nocentraldb/nocentraldb --tag {RUST_TAG}
+{CARGO_ADD}
 ```
 
 ## open

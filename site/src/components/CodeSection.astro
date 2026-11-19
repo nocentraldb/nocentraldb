@@ -7,12 +7,14 @@
 // blocks the doc tests of nocentraldb compile; rustdoc's hidden lines ("# ") are left
 // out here.
 import { Code } from "astro:components";
+import { pathToFileURL } from "node:url";
+import { currentInstallLines } from "../install.mjs";
 import rustSource from "./code-rust.md?raw";
 
-// Until the crate is on crates.io (from the first beta), a Rust app takes it from a
-// release tag (docs/release-management.md, "Versioning"); this is the newest alpha
-// on 2026-11-19, and the note links the releases page for a newer one.
-const RUST_TAG = "v0.1.0-alpha.70";
+// The install lines follow release-notes/index.json and the newest alpha tag,
+// read when the site is built (install.mjs): the site shows the current ones
+// after each deploy. The build runs in site/.
+const install = currentInstallLines(pathToFileURL(`${process.cwd()}/../`));
 
 const MODEL = `import { nc } from "@nocentraldb/sdk";
 
@@ -48,7 +50,7 @@ const rust = Object.fromEntries(
         .split("\n")
         .filter((line) => !(block[1] === "rust" && /^#( |$)/.test(line)))
         .join("\n")
-        .replaceAll("{RUST_TAG}", RUST_TAG);
+        .replaceAll("{CARGO_ADD}", install.cargo);
       return [id, { lang: block[1], code }];
     }),
 );
@@ -59,11 +61,17 @@ const steps = [
     label: "Install",
     ts: {
       lang: "sh",
-      note: "Add the SDK to your app.",
-      code: "npm install @nocentraldb/sdk",
+      note:
+        install.stage === "alpha"
+          ? "Add the SDK to your app: the newest alpha, until the first beta."
+          : "Add the SDK to your app.",
+      code: install.npm,
     },
     rust: {
-      note: 'Add the crate to your app. It comes from a release tag until it is on crates.io: take the newest from the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.',
+      note:
+        install.stage === "alpha"
+          ? 'Add the crate to your app. Until the first beta it comes from a release tag: the newest is in the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.'
+          : "Add the crate to your app.",
     },
   },
   {

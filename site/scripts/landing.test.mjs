@@ -46,6 +46,7 @@ test("the title is unchanged and the description is the subline", () => {
 });
 
 import { STEPS } from "../src/components/scene.mjs";
+import { currentInstallLines } from "../src/install.mjs";
 
 test("the hero says what it is, in the spec's words", () => {
   assert.match(
@@ -245,16 +246,15 @@ test("Install is the first step, and no install line stands beside the tabs", ()
     .slice(0, panel.indexOf('role="tabpanel"', 10))
     .replace(/<[^>]*>/g, "")
     .replace(/&#x2F;|&#47;/g, "/");
-  assert.ok(text.includes("npm install @nocentraldb/sdk"), "npm");
-  // not on crates.io before the first beta: from a release tag
-  assert.match(
-    text,
-    /cargo add nocentraldb --git https:\/\/github\.com\/nocentraldb\/nocentraldb --tag v\d+\.\d+\.\d+-alpha\.\d+/,
-  );
-  assert.ok(
-    code.includes("github.com/nocentraldb/nocentraldb/releases"),
-    "the releases page",
-  );
+  // the lines install.mjs picks for this repository; install.test.mjs covers each state
+  const lines = currentInstallLines(new URL("../../", import.meta.url));
+  assert.ok(text.includes(lines.npm), lines.npm);
+  assert.ok(text.includes(lines.cargo), lines.cargo);
+  if (lines.stage === "alpha")
+    assert.ok(
+      code.includes("github.com/nocentraldb/nocentraldb/releases"),
+      "the releases page",
+    );
 });
 
 test("a TypeScript and Rust switch is a radio group that changes every step", () => {
