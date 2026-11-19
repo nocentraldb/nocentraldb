@@ -23,11 +23,15 @@ test("the header shows the wordmark and four links", () => {
 test("the title is unchanged and the description is the subline", () => {
   assert.match(
     html,
+    /<meta name="description" content="The database puts all the data right next to the people and agents who use it\. A server keeps everyone in sync, yet it only ever sees encrypted data\."/,
+  );
+  assert.match(
+    html,
     /<title>NoCentralDB: a local-first database for people and agents<\/title>/,
   );
   assert.ok(
     html.includes(
-      "Each person and each agent reads and writes a full copy on their own machine.",
+      "The database puts all the data right next to the people and agents who use it. A server keeps everyone in sync, yet it only ever sees encrypted data.",
     ),
   );
 });
@@ -41,7 +45,7 @@ test("the hero says what it is, in the spec's words", () => {
   );
   for (const line of [
     "A local-first database for people and agents",
-    "The changes sync encrypted through a server that can't read them.",
+    "A server keeps everyone in sync, yet it only ever sees encrypted data.",
     "NoCentralDB does not exist yet.",
     "SDKs for TypeScript and Rust.",
     "See how it works",
