@@ -4,9 +4,9 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 A local-first database for people and agents.
 
-## For when a central database is the wrong place
+## Reads like local files, syncs like shared docs
 
-Everyone works on their own copy, under their own keys. The relay in the middle cannot read any of it.
+NoCentralDB puts all the data right next to the people and agents who use it. A relay, the server in the middle, keeps everyone in sync, yet it only ever sees encrypted data.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -24,7 +24,7 @@ You are building an app where people and agents work on the same data: tickets, 
 - **The server in the middle can read everything.** Row-level rights protect users from each other. They do not protect users from the server, its operators, its backups or the next breach. You have to explain that to your security review every time.
 - **Erasure is a search.** When someone asks you to delete their data, you search the database, the backups, the logs, the search index and the copies your agents made.
 
-For many apps a central database is still the right choice. If you need queries on the server, analytics across all users' data, or one global truth enforced at write time, keep it. This RFC is for the apps where a central database is the wrong place.
+For many apps a central database is still the right choice. If you need queries on the server, analytics across all users' data, or one global truth enforced at write time, keep it. This RFC is for the apps where the data belongs with the people and agents who use it.
 
 ## Why now
 
