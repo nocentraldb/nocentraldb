@@ -790,3 +790,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-12 · RFC 0011, plugin field types, as the owner decided on NOC-232 (NOC-235, NOC-232, #231)
 - 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)

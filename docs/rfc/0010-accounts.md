@@ -291,6 +291,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-13 · Tests that linking deletes the old key, keeps the fold's old account and old memberships, and certifies new spaces with the new key (NOC-269, #316)
 - 2026-11-14 · members.list() shows a linked account's old fingerprint as linked to the person's (MemberInfo::linked_to) (NOC-269, #319)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 
 ## How this RFC is tested
 

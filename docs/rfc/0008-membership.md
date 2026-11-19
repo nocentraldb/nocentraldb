@@ -732,3 +732,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-12 · RFC 0008 says "concurrent" in step 5 and counts an add's own statement in step 1 (NOC-233, #233)
 - 2026-11-12 · RFC 0008 lets the first shred that is not taken back take effect (NOC-258, #259)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)

@@ -585,3 +585,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-12 · The Rust SDK opens a database at a name on OPFS in the browser (NOC-175, NOC-231, #236)
 - 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)

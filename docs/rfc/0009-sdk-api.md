@@ -859,3 +859,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-16 · Both SDKs write, clear and read an nc.ref reference (NOC-354, #377)
 - 2026-11-16 · db.durability reports waitingForTab while a tab waits for another tab's storage (Safari, frozen owner) (NOC-355, #380)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)

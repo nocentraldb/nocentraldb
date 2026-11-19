@@ -459,3 +459,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - 2026-11-16 · A browser window without OPFS refuses nc.open with storageUnavailable (Safari and Firefox private windows) (NOC-347, #376)
 - 2026-11-16 · db.durability reports waitingForTab while a tab waits for another tab's storage (Safari, frozen owner) (NOC-355, #380)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
