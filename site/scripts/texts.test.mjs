@@ -143,7 +143,7 @@ test("How NoCentralDB works explains the core concepts on one page, with the RFC
   }
 });
 
-test("the sidebar lists Core concepts right after Getting started", () => {
+test("the sidebar lists Overview right after Getting started", () => {
   const html = readFileSync(join(dist, "docs/index.html"), "utf8");
   const sidebar = html.slice(html.indexOf('class="sidebar-content'));
   const links = [
@@ -153,7 +153,7 @@ test("the sidebar lists Core concepts right after Getting started", () => {
   ].map((m) => m[2].trim());
   assert.deepEqual(links.slice(0, 3), [
     "Getting started",
-    "Core concepts",
+    "Overview",
     "Spaces and members",
   ]);
 });
