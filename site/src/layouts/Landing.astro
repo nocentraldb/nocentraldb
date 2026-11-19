@@ -14,11 +14,10 @@ import "../styles/kit-tokens.css";
 import "../styles/scene.css";
 import "../styles/landing-page.css";
 
+// The yellow mark beside the wordmark, and the mark alone on a phone (owner,
+// 2026-11-19). The link carries the name, so both pictures are decoration.
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
-const logo = wordmark.replace(
-  "<svg ",
-  '<svg role="img" aria-label="NoCentralDB" ',
-);
+const logo = wordmark.replace("<svg ", '<svg aria-hidden="true" ');
 const description =
   "The database puts all the data right next to the people and agents who use it. A server keeps everyone in sync, yet it only ever sees encrypted data.";
 const links = [
@@ -63,7 +62,12 @@ const links = [
     <header class="nav">
       <div class="wrap nav__bar">
         <a class="skip-link" href="#top">Skip to content</a>
-        <a class="nav__logo" href="#top" set:html={logo} />
+        <a class="nav__logo" href="#top" aria-label="NoCentralDB"
+          ><img class="nav__mark" src="/brand/ncdb-mark-accent-512.png" alt="" width="32" height="32" /><span
+            class="nav__wordmark"
+            set:html={logo}
+          /></a
+        >
         <!-- the menu button before the links, so Tab goes from it into the open sheet -->
         <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"
