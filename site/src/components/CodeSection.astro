@@ -1,11 +1,26 @@
 ---
-// Install, then six calls on the task model, from the README's "Code examples"
-// (RFC 0009). On a phone the section is as tall as its content: the words, then
-// the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
+// Seven steps: install, then six calls on the task model, from the README's "Code
+// examples" (RFC 0009). On a phone the section is as tall as its content: the words,
+// then the tabs and the code. The tabs are the kit's (.tabs, .tab); the snippets keep the
 // README's statements, a few dropped for length.
 import { Code } from "astro:components";
 
+// Until the crate is on crates.io (from the first beta), a Rust app takes it from a
+// release tag (docs/release-management.md, "Versioning"); this is the newest alpha
+// on 2026-11-19, and the note links the releases page for a newer one.
+const RUST_TAG = "v0.1.0-alpha.70";
+
 const tabs = [
+  {
+    id: "install",
+    label: "Install",
+    lang: "sh",
+    note: 'Add the SDK to your app. The Rust crate comes from a release tag until it is on crates.io: take the newest from the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.',
+    code: `npm install @nocentraldb/sdk
+
+# Rust
+cargo add nocentraldb --git https://github.com/nocentraldb/nocentraldb --tag ${RUST_TAG}`,
+  },
   {
     id: "model",
     label: "Model",
@@ -90,11 +105,6 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
         <h2 id="code-h">Get started</h2>
         <p>No keys in your code: the SDK is designed to create, store and rotate them.</p>
       </div>
-      <div class="install">
-        <Code code="npm install @nocentraldb/sdk" lang="sh" theme="css-variables" inline />
-        <button type="button" class="btn btn--secondary" data-copy="npm install @nocentraldb/sdk">Copy</button>
-      </div>
-      <p class="also">Rust: <code>cargo add nocentraldb</code></p>
     </div>
 
     <div class="span-6 start-7 code-tabs">
@@ -118,8 +128,8 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
       {
         tabs.map((t, i) => (
           <div role="tabpanel" id={`panel-${t.id}`} aria-labelledby={`tab-${t.id}`} hidden={i !== 0}>
-            <p class="note">{t.note}</p>
-            <Code code={t.code} lang="ts" theme="css-variables" />
+            <p class="note" set:html={t.note} />
+            <Code code={t.code} lang={t.lang ?? "ts"} theme="css-variables" />
           </div>
         ))
       }
@@ -146,25 +156,10 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     --astro-code-token-punctuation: #a3a299;
     --astro-code-token-link: #ecebe4;
   }
-  /* the install line on the column's left line, its Copy button after it */
-  .install {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--s-3) var(--s-5);
-  }
-  .install code {
-    font-size: var(--t-body);
-  }
-  .install code,
-  .also code {
-    font-family: var(--font-mono);
-    white-space: nowrap;
-  }
-  .also {
-    margin-top: var(--s-4);
-    color: var(--muted);
-    font-size: var(--t-small);
+  .note :global(a) {
+    color: var(--ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
   .note {
     margin: var(--s-4) 0;
@@ -217,7 +212,7 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
     text-indent: -4ch;
   }
   @media (max-width: 1023px) {
-    /* stacked: the tabs one heading gap under the install lines */
+    /* stacked: the tabs one heading gap under the words */
     .code-grid {
       row-gap: var(--head-gap);
     }
@@ -238,27 +233,18 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
       padding: var(--s-4);
       font-size: 12px;
     }
-    /* the five tabs in one row at 390, closer together; a narrower phone wraps them */
+    /* the seven tabs in one row that scrolls sideways, closer together */
     .code-tabs .tabs {
-      justify-content: space-between;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
       gap: var(--s-1);
+    }
+    .code-tabs .tab {
+      flex: none;
     }
     .code-tabs .tab {
       padding: 0 var(--s-2);
     }
   }
 </style>
-
-<script is:inline>
-  (() => {
-    document.querySelectorAll("[data-copy]").forEach((b) =>
-      b.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(b.dataset.copy);
-          b.textContent = "Copied";
-          setTimeout(() => (b.textContent = "Copy"), 1600);
-        } catch {}
-      }),
-    );
-  })();
-</script>
