@@ -611,6 +611,6 @@ It makes them more precise in these points:
 - 2026-11-15 · A sub-agent's identity: OpenOptions::sub_agent, the version 3 invitation, and an agent's add (NOC-318, #342)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
-- 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #PR3)
+- 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

@@ -861,5 +861,5 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-16 · db.durability reports waitingForTab while a tab waits for another tab's storage (Safari, frozen owner) (NOC-355, #380)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
-- 2026-11-19 · Ad-hoc copies, `Db::erase`, `removeMember`'s recovery code, the member id's text form and the status's member names follow the owner's decisions (NOC-362, #PR3)
+- 2026-11-19 · Ad-hoc copies, `Db::erase`, `removeMember`'s recovery code, the member id's text form and the status's member names follow the owner's decisions (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

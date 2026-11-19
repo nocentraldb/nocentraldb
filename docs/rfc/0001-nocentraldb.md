@@ -202,5 +202,5 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
-- 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #PR3)
+- 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #389)
 - 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)
