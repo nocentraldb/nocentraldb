@@ -11,7 +11,7 @@ test("four steps with the spec's titles", () => {
   assert.deepEqual(
     STEPS.map((s) => s.title),
     [
-      "Everyone holds a full copy",
+      "Everyone has the full task list",
       "A change travels as ciphertext",
       "The train enters a tunnel",
       "Out of the tunnel, every copy matches",

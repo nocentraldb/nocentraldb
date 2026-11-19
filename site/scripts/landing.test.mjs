@@ -142,3 +142,17 @@ test("below a desktop the header opens its links from a menu button", () => {
 test("the code tabs are wired by the kit alone, without a dead data-tabs hook", () => {
   assert.ok(!html.includes("data-tabs"));
 });
+
+test("scenario step 1 is the owner's text", () => {
+  const step = html.split('mo-pc__step"')[1].replaceAll("&#39;", "'");
+  assert.ok(
+    step.includes("<h3>Everyone has the full task list</h3>"),
+    "heading",
+  );
+  assert.ok(
+    step.includes(
+      "The traveller, the person in the home office and the agent in the cloud each keep the whole task list on their own disk. Everyone reads locally; reading needs no network connection.",
+    ),
+    "body",
+  );
+});
