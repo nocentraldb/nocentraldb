@@ -294,8 +294,8 @@ export const STEPS = [
     alt: "The train changes one task. The change travels through the cloud server to the home office and the agent. A lens on the server shows only ciphertext.",
   },
   {
-    title: "The train enters a tunnel",
-    text: "The laptop is offline and its owner keeps working; the change is stored locally. At home and with the agent the work goes on too. They don't see the train's change yet.",
+    title: "The traveller goes offline",
+    text: "The train enters a tunnel, but the traveller keeps working; the changes are stored locally. The other two carry on from the last state they know and don't see the traveller's changes yet.",
     alt: "The train is in a tunnel and offline. Its change is stored locally. The home office and the agent keep exchanging changes.",
   },
   {
