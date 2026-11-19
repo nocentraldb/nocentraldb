@@ -369,7 +369,10 @@ test("the fingerprint hashes the recovery key, or the account key without a stat
   );
   holds(
     part("the-fingerprint", RFC_0010),
-    [/before this RFC was built/, /over the account key in place of the recovery key/],
+    [
+      /before this RFC was built/,
+      /over the account key in place of the recovery key/,
+    ],
     "RFC 0010, The fingerprint",
   );
 });

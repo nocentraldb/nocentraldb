@@ -39,7 +39,10 @@ for (const path of rfcs) {
     const text = prose(path);
     for (const [pattern, instead] of AVOIDED) {
       const hit = text.match(pattern);
-      assert.ok(!hit, `${path} says "${hit?.[0]}"; the glossary says: ${instead}`);
+      assert.ok(
+        !hit,
+        `${path} says "${hit?.[0]}"; the glossary says: ${instead}`,
+      );
     }
   });
 }
