@@ -299,8 +299,8 @@ export const STEPS = [
     alt: "The train is in a tunnel and offline. Its change is stored locally. The home office and the agent keep exchanging changes.",
   },
   {
-    title: "Out of the tunnel, every copy matches",
-    text: "The laptop reconnects. Its change goes out, the others' changes come in, and all three copies end in the same state.",
+    title: "The traveller reconnects",
+    text: "The traveller's changes go out and the others' changes come in. All three copies end up in the same state.",
     alt: "The train has left the tunnel. Changes cross in both directions and all three copies show the same tasks.",
   },
 ];
