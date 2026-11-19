@@ -102,13 +102,12 @@ const checks = [
       const auth = at(ctx, "publish-crates", isAuth);
       assert.equal(steps[auth].id, "crates-io-auth");
       assert.equal(steps[auth].with, undefined, "the token is not crates.io's");
-      steps.forEach((step, i) =>
+      for (const [i, step] of steps.entries())
         assert.equal(
           step.env?.CARGO_REGISTRY_TOKEN,
           i === publish ? gh("steps.crates-io-auth.outputs.token") : undefined,
           `step ${i} of publish-crates`,
-        ),
-      );
+        );
       assert.equal(
         job(ctx, "publish-crates").env?.CARGO_REGISTRY_TOKEN,
         undefined,
