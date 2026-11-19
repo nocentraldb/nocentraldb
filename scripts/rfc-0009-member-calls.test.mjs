@@ -50,7 +50,7 @@ test("the Rust SDK names MemberId, MemberInfo, MemberKind, list, remove and set_
     /`MemberInfo \{ id: MemberId, account: Fingerprint, linked_to: Option<Fingerprint>, kind: MemberKind, role: Option<Role>, is_self: bool \}`/,
     /`MemberInfo` is `#\[non_exhaustive\]`, so that a later field is no breaking change \(Carsten, 2026-11-13, NOC-307 A1\)/,
     /`MemberKind` is `Device`, `Agent` or `SubAgent`, `#\[non_exhaustive\]`/,
-    /`MemberId` is public and opaque: `Copy`, `Eq`, `Ord`, `Hash` and `Debug`, with no text form yet/,
+    /`MemberId` is public and opaque: `Copy`, `Eq`, `Ord`, `Hash` and `Debug`, and it prints and parses as 64 lowercase hex digits/,
     /`Members::remove\(MemberId\) -> Result<Notice, Error>` returns `NoticeCode::MemberRemoved`/,
     /`Members::set_role\(MemberId, Role\) -> Result<Notice, Error>` returns `NoticeCode::RoleSet`/,
     /`&Invitation` as the argument of `remove` and `set_role` was not taken/,

@@ -590,6 +590,10 @@ It makes them more precise in these points:
 - **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
 - **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
+- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** (Carsten, 2026-11-15, NOC-326; [decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
+- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
+- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
+- **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
 
 ## History
 
@@ -607,5 +611,6 @@ It makes them more precise in these points:
 - 2026-11-15 · A sub-agent's identity: OpenOptions::sub_agent, the version 3 invitation, and an agent's add (NOC-318, #342)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #PR3)
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

@@ -443,6 +443,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - **2026-11-13 · One tab owns a browser database, and the other tabs reach it.** (pm, 2026-11-13, NOC-177; [decision](../../factory/decisions/2026-11-13-NOC-177-a-tab-with-another-lock-is-refused-and-the-owners-relay-serves-every-tab.md); [decision](../../factory/decisions/2026-11-13-NOC-177-a-write-the-lost-owner-tab-never-answered-fails-and-is-not-sent-again.md))
 - **2026-11-14 · `requestPersistent()` answers the browser's answer.** (Carsten, 2026-11-14, NOC-317; [decision](../../factory/decisions/2026-11-14-NOC-317-request-persistent-answers-the-browsers-answer.md))
 - **2026-11-15 · A hidden owner tab gives the database up.** (Carsten, 2026-11-15, NOC-333; [decision](../../factory/decisions/2026-11-15-NOC-333-a-hidden-owner-tab-gives-the-database-up.md))
+- **2026-11-15 · Which object each copy came from is a device-local table, `ad_hoc_copies`.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q5-the-copies-are-a-device-local-table.md))
 - **2026-11-16 · The owner's worker gives the storage back itself, and the next worker waits for it.** (pm, 2026-11-16, NOC-352; [decision](../../factory/decisions/2026-11-16-NOC-352-the-owners-worker-gives-the-storage-back-and-the-next-waits-for-it.md))
 - **2026-11-16 · A tab that waits for another tab's storage reports `waitingForTab` after 1 s.** (Carsten, 2026-11-16, NOC-355; [decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
 - **2026-11-16 · A browser window without OPFS refuses to open with `storageUnavailable`.** (Carsten, 2026-11-16, NOC-347; [decision](../../factory/decisions/2026-11-16-NOC-347-a-browser-window-without-opfs-refuses-to-open.md))
@@ -462,4 +463,5 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - 2026-11-16 · db.durability reports waitingForTab while a tab waits for another tab's storage (Safari, frozen owner) (NOC-355, #380)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · The table `ad_hoc_copies`, what a rebuild keeps, and RFC 0012's verdict on `OPFSCoopSyncVFS` (NOC-362, #PR3)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

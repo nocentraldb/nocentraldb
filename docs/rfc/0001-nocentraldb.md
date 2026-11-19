@@ -189,6 +189,7 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 ## Decisions
 
 - **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
 - **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
 
 ## History
@@ -201,4 +202,5 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #PR3)
 - 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)
