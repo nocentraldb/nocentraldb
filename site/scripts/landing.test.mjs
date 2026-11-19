@@ -56,6 +56,12 @@ test("the hero says what it is, in the spec's words", () => {
       line,
     );
 });
+test("the scenario's title is the owner's", () => {
+  assert.match(
+    html,
+    /<h2 id="story-h">Two people, one of them travelling, and an agent work on the same task list<\/h2>/,
+  );
+});
 test("the scenario holds all four steps and their drawings in the HTML", () => {
   assert.match(
     html,
