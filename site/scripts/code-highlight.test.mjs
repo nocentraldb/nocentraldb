@@ -66,9 +66,14 @@ test("every token colour reads on the code's ground at 4.5:1 or more", () => {
   }
 });
 
-test("the install line is highlighted as a shell command", () => {
+test("the install step is highlighted as a shell command", () => {
   const section = html.slice(html.indexOf('id="code"'));
-  const start = section.indexOf('class="install');
-  const install = section.slice(start, section.indexOf("</div>", start));
-  assert.match(install, /astro-code[^>]*>[\s\S]*?var\(--astro-code-token-/);
+  const start = section.indexOf('id="panel-install"');
+  assert.ok(start >= 0, "no install step");
+  const panel = section.slice(
+    start,
+    section.indexOf('role="tabpanel"', start + 10),
+  );
+  assert.match(panel, /data-language="sh"/);
+  assert.match(panel, /var\(--astro-code-token-/);
 });

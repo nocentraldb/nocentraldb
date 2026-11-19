@@ -91,9 +91,9 @@ test("the removed sections are gone", () => {
   for (const id of ['id="use-cases"', 'id="live"'])
     assert.ok(!html.includes(id), id);
 });
-test("the code section shows the task model in six tabs", () => {
+test("the code section shows installing and the task model in seven tabs", () => {
   const code = html.slice(html.indexOf('id="code"'));
-  assert.equal(code.split('role="tab"').length - 1, 6);
+  assert.equal(code.split('role="tab"').length - 1, 7);
   for (const m of code.matchAll(/role="tab"[^>]*aria-controls="([^"]+)"/g))
     assert.ok(code.includes(`id="${m[1]}"`), m[1]);
   assert.ok(code.includes("byStatusPriority"));
@@ -216,6 +216,7 @@ test("a Read step, a one-off query, comes between Write and Subscribe", () => {
     (m) => m[1],
   );
   assert.deepEqual(order, [
+    "install",
     "model",
     "open",
     "share",
@@ -230,5 +231,28 @@ test("a Read step, a one-off query, comes between Write and Subscribe", () => {
   assert.ok(
     text.includes("await db.find(query)"),
     "the read panel queries once",
+  );
+});
+
+test("Install is the first step, and no install line stands beside the tabs", () => {
+  const code = html.slice(html.indexOf('id="code"'));
+  assert.ok(
+    !code.includes('class="install'),
+    "the separate install line is gone",
+  );
+  const panel = code.slice(code.indexOf('id="panel-install"'));
+  const text = panel
+    .slice(0, panel.indexOf('role="tabpanel"', 10))
+    .replace(/<[^>]*>/g, "")
+    .replace(/&#x2F;|&#47;/g, "/");
+  assert.ok(text.includes("npm install @nocentraldb/sdk"), "npm");
+  // not on crates.io before the first beta: from a release tag
+  assert.match(
+    text,
+    /cargo add nocentraldb --git https:\/\/github\.com\/nocentraldb\/nocentraldb --tag v\d+\.\d+\.\d+-alpha\.\d+/,
+  );
+  assert.ok(
+    code.includes("github.com/nocentraldb/nocentraldb/releases"),
+    "the releases page",
   );
 });
