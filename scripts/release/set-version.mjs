@@ -7,7 +7,9 @@
 // - Cargo.toml: the version of [workspace.package] (the crates inherit it),
 //   and the pin version = "=<version>" of every [workspace.dependencies]
 //   entry with a path, inserted where it is missing, so a prerelease version
-//   resolves between workspace crates.
+//   resolves between workspace crates. An entry whose crate manifest says
+//   publish = false keeps its path and gets no pin, so that cargo drops it
+//   from a published crate's dev-dependencies.
 // - every packages/*/package.json and apps/*/package.json: the value of its
 //   top-level "version", and no other byte of the file.
 // - Cargo.lock, unless --no-lock: the version of every workspace member,
@@ -24,6 +26,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import {
   packageJsonFiles,
   pinWorkspaceDependencies,
+  publishes,
   writeLockVersions,
   writePackageVersion,
   writeWorkspaceVersion,
@@ -32,8 +35,8 @@ import { parseVersion } from "./lib/semver.mjs";
 
 const USAGE = `usage: set-version <version> [--no-lock]
 Writes <version> (X.Y.Z, X.Y.Z-alpha.N or X.Y.Z-beta.N) into Cargo.toml
-[workspace.package], pins every [workspace.dependencies] path entry to
-=<version>, sets "version" in every packages/*/package.json and
+[workspace.package], pins every [workspace.dependencies] path entry of a
+published crate to =<version>, sets "version" in every packages/*/package.json and
 apps/*/package.json, and sets the version of every workspace member in
 Cargo.lock (skipped with --no-lock).`;
 
@@ -62,6 +65,18 @@ const parseArgs = (args) => {
   return opts;
 };
 
+/**
+ * Whether a [workspace.dependencies] entry's crate is published. A crate
+ * manifest that is missing counts as published, so the entry keeps its pin;
+ * check-version reports the missing file.
+ */
+const published = ({ path }) => {
+  const file = `${path.replace(/\/$/, "")}/Cargo.toml`;
+  return (
+    !existsSync(file) || at(file, () => publishes(readFileSync(file, "utf8")))
+  );
+};
+
 /** fn(), or throws with the file named. */
 const at = (file, fn) => {
   try {
@@ -85,6 +100,7 @@ const main = () => {
         pinWorkspaceDependencies(
           writeWorkspaceVersion(cargo, version),
           version,
+          published,
         ),
       ),
     ]);

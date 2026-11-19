@@ -4,8 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+homepage.workspace = true
+readme.workspace = true
 description = "The Rust SDK of NoCentralDB (RFC 0009): open a database, write, read, query and subscribe, and sync with a relay (RFC 0007)."
+keywords = ["local-first", "database", "sync", "encryption", "crdt"]
+categories = ["database"]
 
 # The SDK wraps the core: the change, its signature and seal, membership and
 # the local view on SQLite. The view is native only, so is this crate.

@@ -23,6 +23,7 @@ import {
   crateManifest,
   crateManifestFiles,
   packageJsonFiles,
+  publishes,
   publishLine,
 } from "./lib/manifests.mjs";
 
@@ -63,9 +64,9 @@ const npmEntry = (file) => {
 const crateEntry = (file) => {
   const text = readFileSync(file, "utf8");
   const entry = { name: crateManifest(text).name, dir: dirname(file) };
-  const publish = publishLine(text);
-  if (publish === null || publish === "true")
+  if (publishes(text))
     return { ...entry, publishable: true, reason: "publish is not restricted" };
+  const publish = publishLine(text);
   return {
     ...entry,
     publishable: false,

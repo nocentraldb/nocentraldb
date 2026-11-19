@@ -99,6 +99,23 @@ test("--no-lock rewrites the workspace version, the pins and every package.json,
   assert.equal(read(dir, "crates/b/Cargo.toml"), files["crates/b/Cargo.toml"]);
 });
 
+test("an entry for an unpublished crate keeps its path and gets no pin, so cargo drops it from a published crate's dev-dependencies", (t) => {
+  const files = {
+    "Cargo.toml": CARGO,
+    "crates/b/Cargo.toml": crate("b"),
+    "crates/c/Cargo.toml": crate("c", "publish = false\n"),
+  };
+  const dir = fixture(t, files);
+  const r = run(dir, "0.2.0-beta.1", "--no-lock");
+  assert.equal(r.status, 0, r.stderr);
+  const after = read(dir, "Cargo.toml");
+  assert.match(
+    after,
+    /^b = \{ path = "crates\/b", version = "=0\.2\.0-beta\.1" \}$/m,
+  );
+  assert.match(after, /^c = \{ path = "crates\/c" \}$/m);
+});
+
 test("a package.json keeps every byte but its version value, and a second run changes nothing", (t) => {
   const odd = `{
     "name": "@x/odd",
