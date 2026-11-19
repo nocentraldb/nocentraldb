@@ -56,8 +56,8 @@ const FIXTURE = {
 // A stand-in for npm: it logs every call, with its working directory, as a
 // JSON line to $FAKE_NPM_LOG. `view <name>@<version> version` answers the
 // version when $FAKE_NPM_PUBLISHED lists it, an E404 otherwise, or another
-// error when $FAKE_NPM_VIEW is "error". `publish` fails when $FAKE_NPM_PUBLISH
-// is "error".
+// error when $FAKE_NPM_VIEW is "error". `publish` and `stage publish` fail
+// when $FAKE_NPM_PUBLISH is "error".
 const FAKE_NPM = `#!/usr/bin/env node
 import { appendFileSync } from "node:fs";
 const args = process.argv.slice(2);
@@ -75,7 +75,7 @@ if (args[0] === "view") {
   console.error("npm error code E404\\nnpm error 404 Not Found");
   process.exit(1);
 }
-if (args[0] === "publish") {
+if (args[0] === "publish" || (args[0] === "stage" && args[1] === "publish")) {
   if (process.env.FAKE_NPM_PUBLISH === "error") {
     console.error("npm error code E403");
     process.exit(1);
@@ -201,13 +201,17 @@ test("--dry-run reports what it would publish and publishes nothing", (t) => {
   assert.match(r.stdout, /^skip @x\/example: private: true$/m);
 });
 
-test("only an alpha: another version or dist-tag is a usage error, and npm is not called", (t) => {
+test("the dist-tag must match the version's stage: alpha, beta or latest; anything else is a usage error, and npm is not called", (t) => {
   const dir = tree(t, FIXTURE);
   for (const args of [
     ["--version", "0.2.0-beta.1", "--dist-tag", "alpha", "--repo", REPO],
     ["--version", "0.2.0", "--dist-tag", "alpha", "--repo", REPO],
     ["--version", VERSION, "--dist-tag", "latest", "--repo", REPO],
     ["--version", VERSION, "--dist-tag", "beta", "--repo", REPO],
+    ["--version", "0.2.0-beta.1", "--dist-tag", "latest", "--repo", REPO],
+    ["--version", "0.2.0", "--dist-tag", "beta", "--repo", REPO],
+    ["--version", "0.2.0-rc.1", "--dist-tag", "next", "--repo", REPO],
+    ["--version", "0.2.0-rc.1", "--dist-tag", "latest", "--repo", REPO],
     ["--version", VERSION, "--dist-tag", "alpha"],
     ["--dist-tag", "alpha", "--repo", REPO],
     ["--version", VERSION, "--repo", REPO],
@@ -296,4 +300,128 @@ test("a repository.url with or without git+ and .git names the repository", (t) 
     const r = run(t, dir, ALPHA);
     assert.equal(r.status, 0, `${url}: ${r.stderr}`);
   }
+});
+
+const BETA_VERSION = "0.2.0-beta.1";
+const RELEASE_VERSION = "0.2.0";
+/** FIXTURE with every package at `version`. */
+const at = (version) =>
+  Object.fromEntries(
+    Object.entries(FIXTURE).map(([file, text]) => [
+      file,
+      `${JSON.stringify({ ...JSON.parse(text), version }, null, 2)}\n`,
+    ]),
+  );
+const STAGE = (tag) => [
+  "stage",
+  "publish",
+  "--tag",
+  tag,
+  "--provenance",
+  "--access",
+  "public",
+];
+const stages = (calls) =>
+  calls.filter((c) => c.args[0] === "stage" && c.args[1] === "publish");
+
+test("a beta stages each publishable package under the dist-tag beta, with provenance, and publishes none directly", (t) => {
+  const dir = tree(t, at(BETA_VERSION));
+  const r = run(t, dir, [
+    "--version",
+    BETA_VERSION,
+    "--dist-tag",
+    "beta",
+    "--repo",
+    REPO,
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(
+    stages(r.calls).map((c) => ({ args: c.args, cwd: c.cwd })),
+    [
+      { args: STAGE("beta"), cwd: join(dir, "packages/other") },
+      { args: STAGE("beta"), cwd: join(dir, "packages/sdk") },
+    ],
+  );
+  assert.deepEqual(publishes(r.calls), []);
+  assert.match(
+    r.stdout,
+    new RegExp(`^staged @x/sdk@${BETA_VERSION} under beta$`, "m"),
+  );
+  assert.match(r.stdout, /^skip @x\/example: private: true$/m);
+});
+
+test("a release stages each publishable package under the dist-tag latest", (t) => {
+  const dir = tree(t, at(RELEASE_VERSION));
+  const r = run(t, dir, [
+    "--version",
+    RELEASE_VERSION,
+    "--dist-tag",
+    "latest",
+    "--repo",
+    REPO,
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(
+    stages(r.calls).map((c) => c.args),
+    [STAGE("latest"), STAGE("latest")],
+  );
+  assert.deepEqual(publishes(r.calls), []);
+  assert.match(
+    r.stdout,
+    new RegExp(`^staged @x/other@${RELEASE_VERSION} under latest$`, "m"),
+  );
+});
+
+test("a beta re-run skips a version npm already holds and stages only the rest", (t) => {
+  const dir = tree(t, at(BETA_VERSION));
+  const r = run(
+    t,
+    dir,
+    ["--version", BETA_VERSION, "--dist-tag", "beta", "--repo", REPO],
+    { FAKE_NPM_PUBLISHED: `@x/sdk@${BETA_VERSION}` },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(
+    stages(r.calls).map((c) => c.cwd),
+    [join(dir, "packages/other")],
+  );
+  assert.match(
+    r.stdout,
+    new RegExp(`^skip @x/sdk@${BETA_VERSION}: already on npm$`, "m"),
+  );
+});
+
+test("a beta --dry-run reports what it would stage and stages nothing", (t) => {
+  const dir = tree(t, at(BETA_VERSION));
+  const r = run(t, dir, [
+    "--version",
+    BETA_VERSION,
+    "--dist-tag",
+    "beta",
+    "--repo",
+    REPO,
+    "--dry-run",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(stages(r.calls), []);
+  assert.match(
+    r.stdout,
+    new RegExp(`^would stage @x/sdk@${BETA_VERSION} under beta$`, "m"),
+  );
+});
+
+test("a failed stage fails the run and names the package", (t) => {
+  const dir = tree(t, at(BETA_VERSION));
+  const r = run(
+    t,
+    dir,
+    ["--version", BETA_VERSION, "--dist-tag", "beta", "--repo", REPO],
+    { FAKE_NPM_PUBLISH: "error" },
+  );
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    new RegExp(`npm-publish: npm stage publish of @x/other@${BETA_VERSION} failed`),
+  );
+  assert.equal(stages(r.calls).length, 1, "staged on after a failure");
 });
