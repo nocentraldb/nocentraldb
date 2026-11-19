@@ -205,3 +205,7 @@ test("on a phone the header shows only the mark", () => {
     /@media\s*\((?:max-width:\s*|width\s*<=\s*)639px\)\s*\{\s*\.nav__wordmark\s*\{\s*display:\s*none/,
   );
 });
+
+test("the code section's heading is the owner's \"Get started\"", () => {
+  assert.match(html, /<h2 id="code-h">Get started<\/h2>/);
+});
