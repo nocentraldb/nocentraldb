@@ -421,7 +421,9 @@ test("a failed stage fails the run and names the package", (t) => {
   assert.equal(r.status, 1);
   assert.match(
     r.stderr,
-    new RegExp(`npm-publish: npm stage publish of @x/other@${BETA_VERSION} failed`),
+    new RegExp(
+      `npm-publish: npm stage publish of @x/other@${BETA_VERSION} failed`,
+    ),
   );
   assert.equal(stages(r.calls).length, 1, "staged on after a failure");
 });
