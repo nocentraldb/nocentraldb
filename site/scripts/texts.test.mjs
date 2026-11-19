@@ -88,3 +88,25 @@ test("the docs use the glossary's terms", () => {
       assert.ok(!avoid.test(words), `${page}: ${avoid}`);
   }
 });
+
+test("getting started says what work orders are, that 0.1 runs none, and that erasure has its own path", () => {
+  const words = text("docs/index.html");
+  assert.match(
+    words,
+    /Work orders\. Clean-up and maintenance jobs that one member does and another member checks/,
+  );
+  assert.match(
+    words,
+    /compaction, which moves old history into a signed, encrypted archive/,
+  );
+  assert.match(words, /0\.1 runs none of them/);
+  assert.match(
+    words,
+    /Erasing a person, which also needs a second account's sign-off, works in 0\.1 through its own path/,
+  );
+  const html = readFileSync(join(dist, "docs/index.html"), "utf8");
+  assert.ok(
+    html.includes('href="/docs/concepts/shredding/"'),
+    "a link to the erasure page",
+  );
+});
