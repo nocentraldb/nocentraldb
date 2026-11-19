@@ -16,7 +16,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 - **Computed fields and views.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does. Indexes are declared here (see [Indexes](#indexes)); how a query uses them is RFC 0006's.
 - **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types, and so their entries in `model.lock.json`, belong to later RFCs.
-- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and loaded is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004.
+- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and registered is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004: it is Rust compiled into the core, never code loaded at run time (Carsten, 2026-11-12, NOC-232).
 - **The crypto of personal fields.** This RFC says how the schema marks a field as personal and ties it to a person. RFC 0003 encrypts it.
 - **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). That includes moving a field to a new rule version of its type, which RFC 0004 allows only with a migration. Migrations are a later RFC.
 
@@ -368,7 +368,7 @@ Per field:
 A field type is referenced by its **type id** and its **rule version**:
 
 - **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref`. Rule version 1 is RFC 0004's rule for each.
-- **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so every SDK knows what to load:
+- **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so a developer knows which crate to register with the core ([RFC 0011, "Handing plugins to the core"](0011-plugin-field-types.md#handing-plugins-to-the-core)):
 
 ```json
 {
@@ -380,7 +380,7 @@ A field type is referenced by its **type id** and its **rule version**:
 
   A field then reads `{ "type": "acme/counter", "rule": 2, "since": 3 }`. The package version is not in the lock: the type id and the rule version are the contract (RFC 0004: a merge rule never changes under the same type id and rule version), and any package version that implements that rule will do.
 
-A client must run the exact rule version the lock names. Because the build refuses to move an existing field to another rule version (see the next section), an app that loads its own lock always has the rule for every field in it.
+A client must run the exact rule version the lock names. Because the build refuses to move an existing field to another rule version (see the next section), an app that opens with its own lock always has the rule for every built-in field in it, and for every plugin field whose plugin it registers. A field whose plugin it does not register is parked, never folded by a guess ([RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)).
 
 ## The additive-change rule
 
