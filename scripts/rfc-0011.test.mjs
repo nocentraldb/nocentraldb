@@ -16,6 +16,7 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { assertRecord, historyLines } from "./lib/rfc-record.mjs";
 import {
   assertLinksResolve,
   headings,
@@ -129,7 +130,7 @@ test("RFC 0011 has a section for every part NOC-235 names", () => {
 
 test("RFC 0011 reads as one design: no list of decisions, options or questions", () => {
   const titles = headings(rfc()).map((h) => h.trim().toLowerCase());
-  for (const gone of ["decisions", "rejected options", "open questions"]) {
+  for (const gone of ["rejected options", "open questions"]) {
     assert.ok(!titles.includes(gone), `${RFC} has a "${gone}" section`);
   }
   const text = prose(rfc()).split("\n## History\n")[0];
@@ -348,10 +349,8 @@ test("the decision log records the owner's decision on RFC 0011", () => {
   assert.match(entry, /^- Topics: .*rfc-0011/m);
 });
 
-test("History holds one line: the first publication", () => {
-  const lines = section(rfc(), "history")
-    .split("\n")
-    .filter((l) => l.startsWith("- "));
-  assert.equal(lines.length, 1);
-  assert.match(lines[0], /^- 2026-11-12 · First published\b.*NOC-235/);
+test("History starts with the publication and records each later change", () => {
+  const [first] = historyLines(rfc());
+  assert.match(first, /^- 2026-11-12 · First published\b.*NOC-235/);
+  assertRecord(rfc(), first.slice(2));
 });

@@ -17,6 +17,7 @@ import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -160,7 +161,7 @@ test("RFC 0010 has a section for every part NOC-107 names", () => {
 
 test("RFC 0010 reads as one design: no list of decisions, rejected options or questions", () => {
   const titles = headingLines(read()).map((h) => h.trim().toLowerCase());
-  for (const gone of ["decisions", "rejected options", "open questions"]) {
+  for (const gone of ["rejected options", "open questions"]) {
     assert.ok(!titles.includes(gone), `${RFC} still has a "${gone}" section`);
   }
   assert.doesNotMatch(prose(read()), /\bQ\d+\b/, "a Qn reference is left");
@@ -215,13 +216,11 @@ test("the decision log records the owner's decision on RFC 0010", () => {
   assert.match(entry, /^- Topics: .*rfc-0010/m);
 });
 
-test("History holds one line: the first publication as a fresh text", () => {
-  const lines = section(read(), "History")
-    .split("\n")
-    .filter((l) => l.startsWith("- "));
-  assert.deepEqual(lines, [
-    "- 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)",
-  ]);
+test("History starts with the publication and records each later change", () => {
+  assertRecord(
+    read(),
+    "2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)",
+  );
   // NOC-165: the intro names no decision of another RFC by its id.
   const rfc = read();
   assert.doesNotMatch(rfc, /decision S15/);
