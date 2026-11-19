@@ -84,6 +84,12 @@ pub struct GettingStarted;
 #[doc = include_str!("../../../site/src/components/code-rust.md")]
 pub struct LandingPage;
 
+// The Rust snippets of the docs page "How NoCentralDB works", compiled the
+// same way.
+#[cfg(doctest)]
+#[doc = include_str!("../../../site/src/content/docs/docs/how-it-works.md")]
+pub struct HowItWorks;
+
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
