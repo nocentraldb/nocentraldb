@@ -156,3 +156,14 @@ test("scenario step 1 is the owner's text", () => {
     "body",
   );
 });
+
+test("scenario step 2 is the owner's text", () => {
+  const step = html.split('mo-pc__step"')[2].replaceAll("&#39;", "'");
+  assert.ok(step.includes("<h3>A change travels encrypted</h3>"), "heading");
+  assert.ok(
+    step.includes(
+      "The traveller claims a task. The change goes through the server to the other two. The server sees only encrypted bytes and has no key to read them.",
+    ),
+    "body",
+  );
+});

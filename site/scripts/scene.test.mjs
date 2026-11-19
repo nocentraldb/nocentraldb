@@ -12,7 +12,7 @@ test("four steps with the spec's titles", () => {
     STEPS.map((s) => s.title),
     [
       "Everyone has the full task list",
-      "A change travels as ciphertext",
+      "A change travels encrypted",
       "The train enters a tunnel",
       "Out of the tunnel, every copy matches",
     ],
