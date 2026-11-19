@@ -136,6 +136,7 @@ const dependencyEntry = (e) => {
     name: e.key,
     version: field("version"),
     path: field("path"),
+    workspace: /[\s,]workspace\s*=\s*true\b/.test(body),
     inline,
   };
 };
@@ -154,11 +155,23 @@ const dependencies = (text, isTable, rejects) => {
     if (dotted) {
       if (!NAME.test(dotted[1]) || !/^true\s*$/.test(e.value))
         throw unsupported(e.lineNo);
+      out.push({
+        name: dotted[1],
+        version: null,
+        path: null,
+        workspace: true,
+        table: e.table,
+        index: e.index,
+      });
       continue;
     }
     if (!NAME.test(e.key)) throw unsupported(e.lineNo);
     if (e.value.startsWith("{"))
-      out.push({ ...dependencyEntry({ ...e, line }), index: e.index });
+      out.push({
+        ...dependencyEntry({ ...e, line }),
+        table: e.table,
+        index: e.index,
+      });
     else if (!QUOTED.test(e.value)) throw unsupported(e.lineNo);
   }
   return out;
@@ -178,10 +191,20 @@ export function workspaceDependencies(cargoToml) {
   );
 }
 
-/** cargoToml with every path entry of [workspace.dependencies] pinned to `=<version>`. */
-export function pinWorkspaceDependencies(cargoToml, version) {
+/**
+ * cargoToml with every path entry of [workspace.dependencies] pinned to
+ * `=<version>`, except the entries `published({ name, path })` says no to:
+ * a crate with publish = false keeps its path and no version, so that cargo
+ * drops it from a published crate's dev-dependencies.
+ */
+export function pinWorkspaceDependencies(
+  cargoToml,
+  version,
+  published = () => true,
+) {
   const lines = cargoToml.split("\n");
   for (const d of workspaceDependencyEntries(cargoToml)) {
+    if (!published(d)) continue;
     const [, head, body, tail] = d.inline;
     const pin = `version = "=${version}"`;
     const next =
@@ -228,14 +251,37 @@ export function crateManifest(text) {
     } else if (e.key.startsWith("version.")) throw unsupported(e.lineNo);
   }
   if (versions > 1) throw new Error("[package] has more than one version");
-  const pathDependencies = dependencies(
+  const entries = dependencies(
     text,
     (t) => DEPENDENCY_TABLE.test(t),
     (t) => DEPENDENCY_SUBTABLE.test(t),
-  )
+  );
+  const pathDependencies = entries
     .filter((d) => d.path !== null)
     .map((d) => d.name);
-  return { name, inheritsVersion, ownVersion, pathDependencies };
+  // What the crate needs to build for its users: [dependencies] and
+  // [build-dependencies], in every target form. Dev-dependencies only build
+  // its own tests.
+  const runtimeWorkspaceDependencies = entries
+    .filter((d) => d.workspace && !/(?:^|\.)dev-dependencies$/.test(d.table))
+    .map((d) => d.name);
+  return {
+    name,
+    inheritsVersion,
+    ownVersion,
+    pathDependencies,
+    runtimeWorkspaceDependencies,
+    published: publishes(text),
+  };
+}
+
+/**
+ * Whether a crate manifest lets cargo publish the crate to crates.io: its
+ * [package] has no publish key, or publish = true.
+ */
+export function publishes(text) {
+  const publish = publishLine(text);
+  return publish === null || publish === "true";
 }
 
 /**

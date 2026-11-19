@@ -12,11 +12,17 @@
 // R3 no crates/*/Cargo.toml declares a path dependency itself: dependencies
 //    between workspace crates are declared in [workspace.dependencies] and
 //    used as name.workspace = true.
-// R4 every [workspace.dependencies] entry with a path is pinned to
-//    version = "=<workspace version>", so prerelease versions resolve.
+// R4 every [workspace.dependencies] entry with a path to a published crate
+//    (its manifest has no publish = false) is pinned to
+//    version = "=<workspace version>", so prerelease versions resolve; an
+//    entry for an unpublished crate has no version, so cargo drops it from a
+//    published crate's dev-dependencies when it packages the crate.
 // R5 every packages/*/package.json and apps/*/package.json has the workspace
 //    version.
 // R6 Cargo.lock lists every workspace crate at the workspace version.
+// R8 a published crate uses no unpublished workspace crate in
+//    [dependencies] or [build-dependencies] (or their [target.….…] forms):
+//    a crate on crates.io can only depend on crates on crates.io.
 // R7 with --tag: the tag is vX.Y.Z or vX.Y.Z-beta.N (an alpha is never
 //    checked against the manifests), and X.Y.Z is the workspace version.
 //
@@ -28,6 +34,7 @@ import {
   crateManifestFiles,
   lockVersions,
   packageJsonFiles,
+  publishes,
   readWorkspaceVersion,
   workspaceDependencies,
 } from "./lib/manifests.mjs";
@@ -36,7 +43,9 @@ import { classifyTag, PLAIN, plain } from "./lib/semver.mjs";
 const USAGE = `usage: check-version [--tag <vX.Y.Z | vX.Y.Z-beta.N>]
 Checks that Cargo.toml [workspace.package] holds a plain X.Y.Z, that every
 crate inherits it, that dependencies between workspace crates are declared in
-[workspace.dependencies] pinned to =X.Y.Z, that every workspace package.json
+[workspace.dependencies], pinned to =X.Y.Z for a published crate and without
+a version for one with publish = false, that a published crate depends on no
+unpublished one, that every workspace package.json
 and Cargo.lock carry it, and with --tag that the tag is a beta or release tag
 of that version.`;
 
@@ -86,20 +95,40 @@ const checkWorkspace = (cargoToml) => {
     fail(
       `Cargo.toml: [workspace.package] version "${version}" is not X.Y.Z: committed manifests never carry a stage suffix`,
     );
-  const pin = `=${version}`;
-  for (const dep of attempt("Cargo.toml", () =>
-    workspaceDependencies(cargoToml),
-  ) ?? []) {
-    if (dep.version !== pin)
-      fail(
-        `Cargo.toml: [workspace.dependencies] ${dep.name} must be pinned with version = "${pin}" (found ${dep.version === null ? "none" : `"${dep.version}"`})`,
-      );
-  }
   return version;
 };
 
-/** The names of the workspace crates, after checking R2 and R3 for each. */
-const checkCrates = () => {
+/**
+ * R4 for every [workspace.dependencies] path entry; returns name ->
+ * published for the entries whose crate manifest could be read.
+ */
+const checkWorkspaceDependencies = (cargoToml, version) => {
+  const published = new Map();
+  const found = (v) => (v === null ? "none" : `"${v}"`);
+  for (const dep of attempt("Cargo.toml", () =>
+    workspaceDependencies(cargoToml),
+  ) ?? []) {
+    const file = `${dep.path.replace(/\/$/, "")}/Cargo.toml`;
+    const text = read(file);
+    if (text === undefined) continue;
+    const publishable = attempt(file, () => publishes(text));
+    if (publishable === undefined) continue;
+    published.set(dep.name, publishable);
+    if (!publishable) {
+      if (dep.version !== null)
+        fail(
+          `Cargo.toml: [workspace.dependencies] ${dep.name} is not published (publish = false in ${file}) and must have no version, so that cargo drops it from a published crate's dev-dependencies (found ${found(dep.version)})`,
+        );
+    } else if (version !== undefined && dep.version !== `=${version}`)
+      fail(
+        `Cargo.toml: [workspace.dependencies] ${dep.name} must be pinned with version = "=${version}" (found ${found(dep.version)})`,
+      );
+  }
+  return published;
+};
+
+/** The names of the workspace crates, after checking R2, R3 and R8 for each. */
+const checkCrates = (published) => {
   const names = [];
   for (const file of crateManifestFiles(".")) {
     const crate = attempt(file, () =>
@@ -116,6 +145,12 @@ const checkCrates = () => {
       fail(
         `${file}: [package] must inherit the workspace version with version.workspace = true`,
       );
+    if (crate.published)
+      for (const dep of crate.runtimeWorkspaceDependencies)
+        if (published.get(dep) === false)
+          fail(
+            `${file}: ${crate.name} is published, but its dependency ${dep} is not (publish = false); a crate on crates.io can only depend on crates on crates.io`,
+          );
     for (const dep of crate.pathDependencies)
       fail(
         `${file}: dependency ${dep} is declared with path =; declare dependencies between workspace crates in [workspace.dependencies] of Cargo.toml and use ${dep}.workspace = true`,
@@ -173,7 +208,11 @@ const main = () => {
   const cargoToml = read("Cargo.toml");
   const version =
     cargoToml === undefined ? undefined : checkWorkspace(cargoToml);
-  const crates = checkCrates();
+  const published =
+    cargoToml === undefined
+      ? new Map()
+      : checkWorkspaceDependencies(cargoToml, version);
+  const crates = checkCrates(published);
   if (version === undefined) return;
   checkPackages(version);
   checkLock(version, crates);
