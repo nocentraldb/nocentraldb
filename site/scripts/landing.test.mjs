@@ -15,8 +15,17 @@ test("the page declares its kind and loads the kit", () => {
   assert.match(html, /href="\/assets\/system\.css"/);
   assert.match(html, /src="\/assets\/motion\/motion\.js"/);
 });
-test("the header shows the wordmark and four links", () => {
-  assert.match(html, /<svg[^>]*role="img"[^>]*aria-label="NoCentralDB"/);
+test("the header shows the mark, the wordmark and four links", () => {
+  // the yellow mark beside the wordmark (owner, 2026-11-19); the link carries the name
+  assert.match(
+    html,
+    /<a class="nav__logo" href="#top" aria-label="NoCentralDB">/,
+  );
+  assert.match(
+    html,
+    /<img class="nav__mark" src="\/brand\/ncdb-mark-accent-512\.png" alt="" width="32" height="32"/,
+  );
+  assert.match(html, /<span class="nav__wordmark"><svg[^>]*aria-hidden="true"/);
   for (const label of ["How it works", "Code", "Docs", "GitHub"])
     assert.ok(html.includes(`>${label}<`), label);
 });
@@ -187,5 +196,12 @@ test("scenario step 4 is the owner's text", () => {
       "The traveller's changes go out and the others' changes come in. All three copies end up in the same state.",
     ),
     "body",
+  );
+});
+
+test("on a phone the header shows only the mark", () => {
+  assert.match(
+    html,
+    /@media\s*\((?:max-width:\s*|width\s*<=\s*)639px\)\s*\{\s*\.nav__wordmark\s*\{\s*display:\s*none/,
   );
 });
