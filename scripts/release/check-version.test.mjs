@@ -234,7 +234,7 @@ test("R4: a workspace dependency whose crate manifest is missing fails", (t) => 
     fixture(t, {
       "crates/a/Cargo.toml": CRATE_B.replace('"b"', '"a"'),
       "crates/b/Cargo.toml": null,
-      "Cargo.lock": LOCK.replace(/\n\[\[package\]\]\nname = "b"[^]*$/, "\n"),
+      "Cargo.lock": LOCK.replace(/\n\[\[package\]\]\nname = "b"[\s\S]*$/, "\n"),
     }),
   );
   red(r, /^check-version: crates\/b\/Cargo\.toml: missing$/m);

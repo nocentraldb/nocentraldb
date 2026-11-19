@@ -23,8 +23,8 @@ import {
   crateManifest,
   crateManifestFiles,
   packageJsonFiles,
-  publishLine,
   publishes,
+  publishLine,
 } from "./lib/manifests.mjs";
 
 const USAGE = `usage: publishable [--json]

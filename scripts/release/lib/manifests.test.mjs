@@ -134,6 +134,8 @@ test("crateManifest detects version.workspace = true", () => {
       inheritsVersion: true,
       ownVersion: null,
       pathDependencies: [],
+      runtimeWorkspaceDependencies: [],
+      published: true,
     },
   );
 });
@@ -162,7 +164,29 @@ f = { path = "../f" }
     inheritsVersion: false,
     ownVersion: "0.0.0",
     pathDependencies: ["b", "d", "f"],
+    runtimeWorkspaceDependencies: ["c", "e"],
+    published: true,
   });
+});
+
+test("crateManifest leaves dev-dependencies out of the runtime workspace dependencies and reads publish = false", () => {
+  const text = `[package]
+name = "a"
+version.workspace = true
+publish = false
+
+[dev-dependencies]
+b.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+c = { workspace = true, features = ["x"] }
+
+[target.'cfg(unix)'.build-dependencies]
+d.workspace = true
+`;
+  const crate = crateManifest(text);
+  assert.deepEqual(crate.runtimeWorkspaceDependencies, ["d"]);
+  assert.equal(crate.published, false);
 });
 
 test("lockVersions reads every [[package]] block", () => {
