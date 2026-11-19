@@ -289,8 +289,8 @@ export const STEPS = [
     alt: "A laptop on a train, a desk in a home office and an agent each hold the same three tasks. A cloud server sits between them.",
   },
   {
-    title: "A change travels as ciphertext",
-    text: "The train marks a task as in progress. The change goes through a server in the cloud to the other two. Hold a lens over that server and you see bytes it has no key for.",
+    title: "A change travels encrypted",
+    text: "The traveller claims a task. The change goes through the server to the other two. The server sees only encrypted bytes and has no key to read them.",
     alt: "The train changes one task. The change travels through the cloud server to the home office and the agent. A lens on the server shows only ciphertext.",
   },
   {
