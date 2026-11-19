@@ -194,6 +194,86 @@ test("R4: a workspace dependency without a version fails", (t) => {
   );
 });
 
+const UNPUBLISHED_B = CRATE_B.replace(
+  "edition.workspace = true\n",
+  "edition.workspace = true\npublish = false\n",
+);
+const CARGO_B_PATH_ONLY = CARGO.replace(', version = "=0.1.0"', "");
+const A_WITH_B_AS = (table, use = "b.workspace = true") =>
+  CRATE_A.replace(
+    "[dependencies]\nb.workspace = true\n",
+    `[${table}]\n${use}\n`,
+  );
+
+test("R4: a workspace dependency on an unpublished crate has a path and no version, so cargo drops it from a published crate's dev-dependencies", (t) => {
+  const r = run(
+    fixture(t, {
+      "Cargo.toml": CARGO_B_PATH_ONLY,
+      "crates/a/Cargo.toml": A_WITH_B_AS("dev-dependencies"),
+      "crates/b/Cargo.toml": UNPUBLISHED_B,
+    }),
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
+test("R4: a workspace dependency on an unpublished crate with a version fails", (t) => {
+  const r = run(
+    fixture(t, {
+      "crates/a/Cargo.toml": A_WITH_B_AS("dev-dependencies"),
+      "crates/b/Cargo.toml": UNPUBLISHED_B,
+    }),
+  );
+  red(
+    r,
+    /^check-version: Cargo\.toml: \[workspace\.dependencies\] b is not published \(publish = false in crates\/b\/Cargo\.toml\) and must have no version, so that cargo drops it from a published crate's dev-dependencies \(found "=0\.1\.0"\)$/m,
+  );
+});
+
+test("R4: a workspace dependency whose crate manifest is missing fails", (t) => {
+  const r = run(
+    fixture(t, {
+      "crates/a/Cargo.toml": CRATE_B.replace('"b"', '"a"'),
+      "crates/b/Cargo.toml": null,
+      "Cargo.lock": LOCK.replace(/\n\[\[package\]\]\nname = "b"[^]*$/, "\n"),
+    }),
+  );
+  red(r, /^check-version: crates\/b\/Cargo\.toml: missing$/m);
+});
+
+for (const [table, use] of [
+  ["dependencies", "b.workspace = true"],
+  ["build-dependencies", "b.workspace = true"],
+  ["dependencies", 'b = { workspace = true, features = ["x"] }'],
+  ["target.'cfg(unix)'.dependencies", "b.workspace = true"],
+])
+  test(`R8: a published crate whose [${table}] uses an unpublished workspace crate fails (${use})`, (t) => {
+    const r = run(
+      fixture(t, {
+        "Cargo.toml": CARGO_B_PATH_ONLY,
+        "crates/a/Cargo.toml": A_WITH_B_AS(table, use),
+        "crates/b/Cargo.toml": UNPUBLISHED_B,
+      }),
+    );
+    red(
+      r,
+      /^check-version: crates\/a\/Cargo\.toml: a is published, but its dependency b is not \(publish = false\); a crate on crates\.io can only depend on crates on crates\.io$/m,
+    );
+  });
+
+test("R8: an unpublished crate may depend on an unpublished workspace crate", (t) => {
+  const r = run(
+    fixture(t, {
+      "Cargo.toml": CARGO_B_PATH_ONLY,
+      "crates/a/Cargo.toml": CRATE_A.replace(
+        "edition.workspace = true\n",
+        "edition.workspace = true\npublish = false\n",
+      ),
+      "crates/b/Cargo.toml": UNPUBLISHED_B,
+    }),
+  );
+  assert.equal(r.status, 0, r.stderr);
+});
+
 test("R5: a package.json at another version fails", (t) => {
   const r = run(
     fixture(t, {
