@@ -31,11 +31,15 @@ after(async () => {
 
 /** About 750 px of wheel deltas, falling off as inertia does. */
 const FLICK = [120, 120, 120, 100, 80, 60, 45, 35, 25, 18, 12, 8, 5, 3, 2, 1];
+/** About 1750 px: a hard flick, longer than the screen a step holds. */
+const HARD = [
+  200, 200, 200, 200, 180, 160, 140, 120, 100, 80, 60, 45, 30, 20, 10, 5,
+];
 
 /** One flick, down or (direction -1) up, then the time the page takes to come to rest. */
-const flick = async (page, direction = 1) => {
+const flick = async (page, direction = 1, deltas = FLICK) => {
   await page.mouse.move(700, 450);
-  for (const delta of FLICK) {
+  for (const delta of deltas) {
     await page.mouse.wheel(0, direction * delta);
     await page.waitForTimeout(16);
   }
@@ -89,6 +93,17 @@ const where = (page) =>
       bottom: story.bottom + scrollY,
     };
   });
+
+test("each hard flick stops at the next step too", async () => {
+  const page = await above("no-preference");
+  const seen = [];
+  for (let i = 0; i < 4; i += 1) {
+    await flick(page, 1, HARD);
+    seen.push(await openStep(page));
+  }
+  assert.deepEqual(seen, [0, 1, 2, 3]);
+  await page.close();
+});
 
 test("flicks carry the reader past the scenario, down and back up", async () => {
   const page = await above("no-preference");
