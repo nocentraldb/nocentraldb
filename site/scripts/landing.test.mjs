@@ -167,3 +167,14 @@ test("scenario step 2 is the owner's text", () => {
     "body",
   );
 });
+
+test("scenario step 3 is the owner's text", () => {
+  const step = html.split('mo-pc__step"')[3].replaceAll("&#39;", "'");
+  assert.ok(step.includes("<h3>The traveller goes offline</h3>"), "heading");
+  assert.ok(
+    step.includes(
+      "The train enters a tunnel, but the traveller keeps working; the changes are stored locally. The other two carry on from the last state they know and don't see the traveller's changes yet.",
+    ),
+    "body",
+  );
+});

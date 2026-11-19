@@ -13,7 +13,7 @@ test("four steps with the spec's titles", () => {
     [
       "Everyone has the full task list",
       "A change travels encrypted",
-      "The train enters a tunnel",
+      "The traveller goes offline",
       "Out of the tunnel, every copy matches",
     ],
   );
