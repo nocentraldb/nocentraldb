@@ -23,6 +23,7 @@ mod erasures;
 mod fake;
 mod follow;
 mod large;
+mod late_removal;
 mod list;
 mod live;
 mod lost_answer;
