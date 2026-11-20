@@ -39,7 +39,22 @@ pub fn base() -> &'static (SpaceId, u64, Vec<Change>) {
     static BASE: std::sync::OnceLock<(SpaceId, u64, Vec<Change>)> = std::sync::OnceLock::new();
     BASE.get_or_init(|| {
         let mut s = space::Space::with_nonce(1, [9; 16]);
-        let g = s.genesis.clone();
+        // The genesis seals its model id under a fixed nonce rather than a
+        // random one, so that every run, native or wasm32, writes the same
+        // changes with the same ids (M-C3).
+        let mut g = s.genesis.clone();
+        let mut body = ControlBody::decode(&g.header().payload).expect("the genesis body");
+        if let Entry::Genesis(genesis) = &mut body.entry {
+            genesis.model_id = membership::seal_model_id_with_nonce(
+                &space::space_key(),
+                s.space,
+                space::id(1),
+                space::MODEL,
+                [9; 24],
+            );
+        }
+        g = membership::write(&space::key(1), s.space, 1, s.first_generation, &body);
+        s.genesis = g.clone();
         let two = s.add(1, 2, Role::Admin, &[&g]);
         // Member 3's account is a second account, which signs off shreds.
         s.certify_by(3, space::other_account(1));
@@ -391,13 +406,19 @@ impl Generator<Copy> for Members {
             // that reuses a sequence differs from the first one.
             let clock = Hlc((sequence << 16) | u64::from(author.id & 0xffff));
             let payload = Payload::new(clock, BTreeSet::new(), vec![]);
-            return seal::seal(
+            // A nonce from the operation's id, unique in a case, rather
+            // than a random one, so that every run writes the same changes
+            // (M-C3).
+            let mut nonce = [who; 24];
+            nonce[..4].copy_from_slice(&author.id.to_le_bytes());
+            return seal::seal_with_nonce(
                 &space::key(who),
                 &space::space_key(),
                 space,
                 sequence,
                 generation,
                 &payload,
+                nonce,
             );
         }
         let dependencies = match equivocates && raw.bare {

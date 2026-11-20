@@ -106,7 +106,7 @@ const GOLDEN_SEEDS: [u64; 2] = [0, 1];
 /// `GOLDEN_SEEDS`, with the members of M-C1 and then those that
 /// equivocate and shred, committed from a native run. The native and the
 /// wasm32 run of the test below must both give it (NOC-10).
-const GOLDEN_DIGEST: &str = "";
+const GOLDEN_DIGEST: &str = "d13fc9a82a624224217d918ee7b7e9f8d8c1beb8eac94a5b68b28a8372320d64 99d106d4fb544a6916a5cef378e1de91762b483ba881a13d2a30be5ebd1c9a7f";
 
 #[test]
 fn m_c3_the_same_seeds_give_the_same_control_state_natively_and_in_wasm32() {
