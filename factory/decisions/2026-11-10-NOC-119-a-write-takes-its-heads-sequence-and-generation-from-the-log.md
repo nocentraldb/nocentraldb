@@ -1,0 +1,7 @@
+# 2026-11-10 · NOC-119 · A write takes its heads, sequence, generation and clock from the log
+
+- Decided by: coding agent (NOC-119)
+- Why: a space the member joined through sync has no state the SDK wrote itself, and in a space it created, changes pulled since its last write must be among the dependencies of its next one (RFC 0002, "Dependencies"). So the SDK keeps one map of spaces, each with only its checks and its clock, and every write reads the space's log: the current generation from `Resolved::current_generation`, the author sequence as one more than the member's highest in the log, the heads among the folded changes (a control change's dependencies from its body, a sealed change's from its payload, which the checks open), and the highest clock among the folded sealed changes, which the clock observes. A change the log holds but did not fold is no head, since a rejected or parked sealed change cannot be read. To read them, the core's `SealChecks` gives `space_key(generation)` and `model_id()`, and `View` gives `log(space)`.
+- Instead of: keeping the heads, sequence and key per space in the SDK and updating them on every pull and un-fold, which a database on disk (NOC-108) would have to persist and which a missed update would make diverge from the log.
+- What this does not do: each write reads and opens the whole log of its space, which costs time in proportion to the log; keeping the heads in the view as it folds is left to a later ticket.
+- Topics: sdk-rust, rfc-0002, rfc-0008, local-view

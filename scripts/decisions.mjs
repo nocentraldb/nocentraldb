@@ -17,13 +17,15 @@ const DEFAULT_DIR = join(
   "decisions",
 );
 
-const USAGE = `usage: pnpm decisions [--index] [--ticket <id>] [--topic <tag>] [--since <YYYY-MM-DD>]
+const USAGE = `usage: pnpm decisions [--index] [--all] [--ticket <id>] [--topic <tag>] [--since <YYYY-MM-DD>]
        node scripts/decisions.mjs --check
 
-Prints the decision log in factory/decisions/, every decision in full, in date order.
+Prints the decision log in factory/decisions/, every current decision in full, in date order.
+A decision that a later one names in Supersedes: is left out unless --all, --ticket or --topic asks for it.
   --index           one line per decision: date, ticket and title
-  --ticket <id>     only decisions about this ticket, e.g. NOC-22
-  --topic <tag>     only decisions with this topic, e.g. crypto
+  --all             superseded decisions too, each marked with what superseded it
+  --ticket <id>     only decisions about this ticket, e.g. NOC-22, superseded ones marked
+  --topic <tag>     only decisions with this topic, e.g. crypto, superseded ones marked
   --since <date>    only decisions made on or after this date
   --check           check every file in the folder (the gate) and print nothing else
   --dir <path>      read another folder (for tests)`;
@@ -130,15 +132,6 @@ function parse(file, text) {
     );
   }
   const title = heading?.[3] ?? "";
-  if (
-    heading &&
-    (NAMES_NO_DECISION.some((pattern) => pattern.test(title)) ||
-      (ticketsOf(title) ?? []).length > 0)
-  ) {
-    problems.push(
-      `the title names no decision: "${title}"; state what was decided`,
-    );
-  }
   const supersedes = fields.has("Supersedes")
     ? list(fields.get("Supersedes"))
     : [];
@@ -171,47 +164,90 @@ function parse(file, text) {
 export function readDecisions(dir) {
   const files = readdirSync(dir).sort();
   const names = new Set(files);
+  const parsed = files.map((file) => ({
+    file,
+    ...parse(file, readFileSync(join(dir, file), "utf8")),
+  }));
+  const by = supersededBy(parsed.map(({ entry }) => entry));
   const entries = [];
   const problems = [];
-  for (const file of files) {
-    const parsed = parse(file, readFileSync(join(dir, file), "utf8"));
-    for (const old of parsed.entry.supersedes) {
-      if (names.has(old)) {
-        parsed.problems.push(
-          `Supersedes names ${old}, which is still in the folder: a superseded decision is deleted`,
-        );
+  for (const { file, entry, problems: own } of parsed) {
+    for (const old of entry.supersedes) {
+      if (FILE_NAME.test(old) && !names.has(old)) {
+        own.push(`Supersedes names ${old}, which is not in the folder`);
       }
     }
-    entries.push(parsed.entry);
-    problems.push(...parsed.problems.map((problem) => `${file}: ${problem}`));
+    if (!by.has(file) && namesNoDecision(entry)) {
+      own.push(
+        `the title names no decision: "${entry.title}"; state what was decided`,
+      );
+    }
+    entries.push(entry);
+    problems.push(...own.map((problem) => `${file}: ${problem}`));
   }
   return { entries, problems };
 }
+
+/**
+ * Whether a current entry's title names a review's outcome, who decided or
+ * only tickets. A superseded entry keeps the title it was written with.
+ */
+const namesNoDecision = ({ title }) =>
+  title !== "" &&
+  (NAMES_NO_DECISION.some((pattern) => pattern.test(title)) ||
+    (ticketsOf(title) ?? []).length > 0);
 
 /** The gate: every problem of the folder, empty when it is well formed. */
 export function checkDecisions(dir) {
   return readDecisions(dir).problems;
 }
 
+/** For each superseded file, the files that name it in `Supersedes:`. */
+function supersededBy(entries) {
+  const by = new Map();
+  for (const { file, supersedes } of entries) {
+    for (const old of supersedes) by.set(old, [...(by.get(old) ?? []), file]);
+  }
+  return by;
+}
+
 /**
- * The decisions printed in full; with `index`, one line per decision instead.
- * `ticket`, `topic` and `since` (YYYY-MM-DD, inclusive) keep only matching
- * ones. A superseded decision is deleted, so none is left to mark.
+ * The decisions printed in full, or with `index` one line per decision.
+ * Superseded decisions are left out unless `all` asks for them or `ticket`
+ * or `topic` searches for them; then each is marked with what superseded
+ * it. `ticket`, `topic` and `since` (YYYY-MM-DD, inclusive) keep only
+ * matching decisions.
  */
 export function render(entries, options = {}) {
+  const by = supersededBy(entries);
   const ticket = options.ticket?.toUpperCase();
+  const withSuperseded =
+    options.all || ticket !== undefined || options.topic !== undefined;
   const shown = entries.filter(
     (entry) =>
+      (withSuperseded || !by.has(entry.file)) &&
       (ticket === undefined || entry.tickets.includes(ticket)) &&
       (options.topic === undefined || entry.topics.includes(options.topic)) &&
       (options.since === undefined || entry.date >= options.since),
   );
   if (options.index) {
     return shown
-      .map(({ date, ticket, title }) => `${date} · ${ticket} · ${title}`)
+      .map(({ file, date, ticket, title }) => {
+        const line = `${date} · ${ticket} · ${title}`;
+        return by.has(file)
+          ? `${line} · superseded by ${by.get(file).join(", ")}`
+          : line;
+      })
       .join("\n");
   }
-  return shown.map(({ text }) => text.trim()).join("\n\n");
+  return shown
+    .map(({ file, text }) => {
+      const body = text.trim();
+      return by.has(file)
+        ? `${body}\n\n> Superseded by ${by.get(file).join(", ")}`
+        : body;
+    })
+    .join("\n\n");
 }
 
 function main(argv) {
@@ -221,6 +257,7 @@ function main(argv) {
       args: argv,
       options: {
         index: { type: "boolean" },
+        all: { type: "boolean" },
         ticket: { type: "string" },
         topic: { type: "string" },
         since: { type: "string" },

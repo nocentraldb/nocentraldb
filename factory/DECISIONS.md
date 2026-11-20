@@ -5,14 +5,15 @@ The decision log is the folder [`factory/decisions/`](decisions/), one file per 
 ## Reading it
 
 ```sh
-pnpm decisions                      # every decision in full, in date order
+pnpm decisions                      # every current decision in full, in date order
 pnpm decisions --index              # one line each: date, ticket, title
+pnpm decisions --all                # superseded decisions too, each marked with what superseded it
 pnpm decisions --ticket NOC-22      # only this ticket's decisions
 pnpm decisions --topic crypto       # only this topic's decisions
 pnpm decisions --since 2026-11-01   # only decisions made on or after this date
 ```
 
-The filters combine with each other and with `--index`. `ls factory/decisions/` lists them by date too.
+The filters combine with each other and with `--index` and `--all`. `--ticket` and `--topic` are searches, so they show superseded decisions too, marked; the default output, `--index` and `--since` leave them out. `ls factory/decisions/` lists them by date too.
 
 ## Writing one
 
@@ -29,8 +30,8 @@ Add a new file, `factory/decisions/YYYY-MM-DD-<ticket>-<slug>.md`, for example `
 ```
 
 - **Topics** is required: one or more lowercase tags, separated by commas, so a reader can find every decision on a subject.
-- **Supersedes** is optional: the file names of earlier decisions this one replaces, separated by commas. The PR that adds it deletes those files; git history keeps them.
+- **Supersedes** is optional: the file names of earlier decisions this one replaces, separated by commas. Nobody edits or deletes the old entry; it stays, and `pnpm decisions` leaves it out unless asked.
 
 Only decisions that still bind work after their ticket is done belong here; the title states the decision itself, and a choice that matters only for one ticket goes on that ticket (see "The decision log" in FACTORY.md).
 
-`pnpm gates` checks every file (the task `repo:decisions`): the name pattern, the heading's date and first ticket against the file name, the four required fields, a title that names a decision rather than a review's outcome, who decided or an answer to questions, and that each `Supersedes:` names a decision file that is no longer in the folder.
+`pnpm gates` checks every file (the task `repo:decisions`): the name pattern, the heading's date and first ticket against the file name, the four required fields, that a current entry's title names a decision rather than a review's outcome, who decided or an answer to questions, and that each `Supersedes:` file exists.
