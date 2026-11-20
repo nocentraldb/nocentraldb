@@ -714,6 +714,23 @@ It also uses [RFC 0005](0005-schema-and-model-lock.md), above all the `model.id`
 
 It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
 
+## Decisions
+
+- **2026-11-11 · The sign-off compares accounts by account key and every recovery key.** (Carsten, 2026-11-11, NOC-201; [decision](../../factory/decisions/2026-11-11-NOC-196-the-sign-off-reads-every-certificate-for-recovery-keys.md))
+- **2026-11-11 · With one admin account, a writer of another account may sign off an erasure.** (Carsten, 2026-11-11, NOC-228; [decision](../../factory/decisions/2026-11-11-NOC-229-exactly-one-admin-account-is-counted-by-same-account-and-needs-one-admin.md))
+- **2026-11-11 · A shred is final when accepted.** (Carsten, 2026-11-11, NOC-224)
+- **2026-11-11 · The account key statement entry, entry type 7.** (Carsten, 2026-11-11, NOC-187; [decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
+- **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (Carsten, 2026-11-11, NOC-230)
+- **2026-11-12 · The first shred that is not taken back takes effect.** (Carsten, 2026-11-12, NOC-242; [decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · The erasure sign-off compares accounts by account key and every recovery key (NOC-196, NOC-201, NOC-205, #200)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-12 · RFC 0008 says "concurrent" in step 5 and counts an add's own statement in step 1 (NOC-233, #233)
+- 2026-11-12 · RFC 0008 lets the first shred that is not taken back take effect (NOC-258, #259)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

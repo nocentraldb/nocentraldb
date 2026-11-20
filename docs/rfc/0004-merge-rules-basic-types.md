@@ -779,6 +779,17 @@ These rules have limits, stated plainly (principle 4):
 
 It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
+## Decisions
+
+- **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types.md))
+- **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-12 · RFC 0011, plugin field types, as the owner decided on NOC-232 (NOC-235, NOC-232, #231)
+- 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-20 · What the merge rules rely on follows the rules, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

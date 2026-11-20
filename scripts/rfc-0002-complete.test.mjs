@@ -11,6 +11,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { assertRecord } from "./lib/rfc-record.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => readFileSync(join(root, path), "utf8");
@@ -83,7 +84,6 @@ test("RFC 0002 has no amendment section, mark or changelog", () => {
 test("RFC 0002 has no list of decisions and no section of drafting bookkeeping", () => {
   const found = anchors(read(RFC));
   for (const gone of [
-    "decisions",
     "decisions-this-rfc-follows",
     "conflicts-with-genesismd-and-rfc-0001",
   ]) {
@@ -136,11 +136,8 @@ test("the feedback line links the RFC's discussion", () => {
   assert.doesNotMatch(line, /no discussion of its own/);
 });
 
-test("History has one line: the first publication", () => {
-  const lines = section("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+test("History starts with the publication and records each later change", () => {
+  assertRecord(read(RFC), PUBLISHED);
 });
 
 // Each former decision stands in its section: what was chosen, why, and the

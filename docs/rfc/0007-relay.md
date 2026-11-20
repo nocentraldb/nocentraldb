@@ -692,6 +692,29 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
+## Decisions
+
+- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (Carsten, 2026-11-11, NOC-230)
+- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-uploads-and-download-tokens-get-two-tables-of-their-own.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
+- **2026-11-12 · An account the relay does not list may create one space, its account space.** (Carsten, 2026-11-12, NOC-286; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-13 · A guest account's one space is an effect of its genesis append.** (Carsten, 2026-11-13, NOC-283, #288; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** (Carsten, 2026-11-13, NOC-295; [decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
+- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** (Carsten, 2026-11-13, NOC-306; [decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
+- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-12 · The Rust SDK syncs from the browser over its WebSocket and fetch(), and the relay's large-change URLs answer CORS (NOC-175, #251)
+- 2026-11-12 · RFC 0007 records the AWS backend's tables and keys as decided on #275 (NOC-270, #278)
+- 2026-11-12 · A leave whose answer was lost is confirmed, not left unconfirmed forever (NOC-276, #285)
+- 2026-11-12 · RFC 0007 lets a guest account create one space, its account space (NOC-283, NOC-286, #286)
+- 2026-11-13 · The relay lets an account it does not list create one space, its account space (NOC-283, #288)
+- 2026-11-13 · The AWS backend keeps no tokens table; token URLs are a trait of backends that serve them (NOC-303, #312)
+- 2026-11-13 · The relay's orphan sweep runs hourly in bounded runs that resume where the last stopped (NOC-293, #315)
+- 2026-11-16 · Every message travels as base64 in one text frame, at most 23 KiB, so the AWS relay accepts it (NOC-338, #354)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

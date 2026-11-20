@@ -572,6 +572,20 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it: RFC 0004 names the properties of the clock and the ids it relies on in [What the merge rules rely on](0004-merge-rules-basic-types.md#what-the-merge-rules-rely-on), and RFC 0003's suite id, key generation, person-key id and member id sit in the header and payload below. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections above link them where they do.
 
+## Decisions
+
+- **2026-11-11 · The shape of key 64 and the order of step 6.** (Carsten, 2026-11-11, NOC-202; [decision](../../factory/decisions/2026-11-10-NOC-197-key-64-shape-and-step-6-order.md))
+- **2026-11-12 · The log keeps the time a member wrote each of its changes.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-database-at-a-name-on-opfs-and-its-durability-report.md))
+- **2026-11-12 · A personal value is sealed under a subkey of the person key, inside the payload.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · RFC 0009 records UnknownKey, RFC 0002 the key-64 details (NOC-212, NOC-199, NOC-202, #197)
+- 2026-11-12 · The Rust SDK opens a database at a name on OPFS in the browser (NOC-175, NOC-231, #236)
+- 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-20 · A plain introduction to the ideas behind the format, at the owner's request (NOC-362, #387)
+- 2026-11-20 · Each guarantee to RFC 0003 and RFC 0004 stands in its own section, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

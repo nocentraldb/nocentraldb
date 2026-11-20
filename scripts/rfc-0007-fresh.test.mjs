@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import { headings, read, root, section, slug } from "./lib/rfc-text.mjs";
 
 const RFC = "docs/rfc/0007-relay.md";
@@ -48,7 +49,6 @@ const documents = () => [
 test("RFC 0007 has no list of decisions, rejected options, conflicts or open questions", () => {
   const found = headings(read(RFC)).map(slug);
   for (const gone of [
-    "decisions",
     "rejected-options",
     "conflicts-with-genesismd-and-rfc-0001",
     "open-questions",
@@ -91,10 +91,7 @@ test("the status, the discussion and History", () => {
   const feedback = line(read(RFC), "**How to give feedback.**");
   assert.ok(links(feedback, DISCUSSION), "the discussion #147 is not linked");
   assert.ok(links(feedback, "README.md#giving-feedback"));
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+  assertRecord(read(RFC), PUBLISHED);
   assert.match(read(RFC), /crates\/ncdb-relay/);
 });
 
