@@ -1,10 +1,11 @@
 // Asserts .github/workflows/site-pages.yml (NOC-213): the deploy of the site
 // (site/, Astro and Starlight) to GitHub Pages under nocentraldb.io. It runs
 // on a push to main that changes the site, the docs it renders from docs/,
-// the SDK's API report, the release index or the workflow, and when a person
-// starts it, and once a day (NOC-373); it has only the permissions Pages needs; one deploy runs at a
-// time and none is cancelled; it builds the site, checks the built output
-// with site/scripts/output.test.mjs before it uploads it, uploads exactly
+// the SDK's API report, the release index, the crate's manifest or the
+// workflow, once a day (NOC-373), and when a person starts it; it has only
+// the permissions Pages needs; one deploy runs at a time and none is
+// cancelled; it builds the site, checks the built output with
+// site/scripts/output.test.mjs before it uploads it, uploads exactly
 // site/dist, and deploys in the github-pages environment; and every action is
 // pinned by SHA. Each check also rejects its mutants
 // (scripts/lib/workflow-checks.mjs).
