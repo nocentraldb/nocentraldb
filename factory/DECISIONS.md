@@ -33,4 +33,4 @@ Add a new file, `factory/decisions/YYYY-MM-DD-<ticket>-<slug>.md`, for example `
 
 Only decisions that still bind work after their ticket is done belong here; the title states the decision itself, and a choice that matters only for one ticket goes on that ticket (see "The decision log" in FACTORY.md).
 
-`pnpm gates` checks every file (the task `repo:decisions`): the name pattern, the heading's date and first ticket against the file name, the four required fields, a title that names a decision rather than a review's outcome or an answer to questions, and that each `Supersedes:` names a decision file that is no longer in the folder.
+`pnpm gates` checks every file (the task `repo:decisions`): the name pattern, the heading's date and first ticket against the file name, the four required fields, a title that names a decision rather than a review's outcome, who decided or an answer to questions, and that each `Supersedes:` names a decision file that is no longer in the folder.

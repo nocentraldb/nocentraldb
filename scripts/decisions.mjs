@@ -41,14 +41,17 @@ const FIELD = /^- ([A-Z][a-z]*(?: [a-z]+)*): ?(.*)$/;
 const REQUIRED = ["Decided by", "Why", "Instead of", "Topics"];
 
 /**
- * Titles that name a review's outcome or an answer to questions instead of
- * the decision itself (NOC-378): an agent reading only the index learns
- * nothing from them. A heading that names only ticket ids is refused too.
+ * Titles that name a review's outcome, who decided or an answer to questions
+ * instead of the decision itself (NOC-378): an agent reading only the index
+ * learns nothing from them, and who decided belongs in `Decided by:`. A
+ * heading that names only ticket ids is refused too.
  */
 const NAMES_NO_DECISION = [
-  /every recommendation accepted/i,
+  /\b(owner|pm) decides\b/i,
+  /\bas recommended\b/i,
+  /\brecommendations? accepted\b/i,
   /\banswers? to\b/i,
-  /\bas recommended$/i,
+  /\bowner's answers?\b/i,
 ];
 
 const isDate = (text) => {
