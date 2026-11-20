@@ -79,11 +79,11 @@ test("a link to a rendered doc becomes its site link, its anchor kept", () => {
 
 test("a link to another file of the repository becomes its GitHub link", () => {
   const page = entry(
-    "# T\n\n[RFC](rfc/0006-local-view.md#durability) [app](../apps/tasks-ts/README.md) [deploy](relay-deploy.md) [apps](../apps/tasks-ts/)\n",
+    "# T\n\n[RFC](rfc/0006-local-view.md#durability-of-a-browser-copy) [app](../apps/tasks-ts/README.md) [deploy](relay-deploy.md) [apps](../apps/tasks-ts/)\n",
   );
   assert.ok(
     page.body.includes(
-      `(${GIT}/blob/main/docs/rfc/0006-local-view.md#durability)`,
+      `(${GIT}/blob/main/docs/rfc/0006-local-view.md#durability-of-a-browser-copy)`,
     ),
   );
   assert.ok(page.body.includes(`(${GIT}/blob/main/apps/tasks-ts/README.md)`));
