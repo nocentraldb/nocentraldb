@@ -111,6 +111,9 @@ tasks:
     # scripts/page-snippets.test.mjs and how-it-works-snippets.test.mjs
     # type-check the examples of the README, of docs pages under
     # site/src/content and of packages/sdk/README.md (NOC-361).
+    # scripts/landing-snippets.test.mjs type-checks the TypeScript code of
+    # the landing page's "Get started", site/src/components/code-ts.md
+    # (NOC-371).
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -139,6 +142,7 @@ tasks:
       - "/tsconfig.base.json"
       - "/site/src/content/**/*"
       - "/packages/sdk/README.md"
+      - "/site/src/components/code-ts.md"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not

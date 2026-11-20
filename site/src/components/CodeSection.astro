@@ -3,57 +3,41 @@
 // examples" (RFC 0009), each in TypeScript and in Rust. On a phone the section is as
 // tall as its content: the words, the language switch, then the tabs and the code. The
 // tabs are the kit's (.tabs, .tab); the TypeScript snippets keep the README's
-// statements, a few dropped for length. The Rust snippets live in code-rust.md, whose
-// blocks the doc tests of nocentraldb compile; rustdoc's hidden lines ("# ") are left
-// out here.
+// statements, a few dropped for length. The code lives in code-ts.md, whose blocks the
+// gates type-check against the SDK (scripts/landing-snippets.mjs), and code-rust.md,
+// whose blocks the doc tests of nocentraldb compile; both files' hidden lines ("# ")
+// are left out here.
 import { Code } from "astro:components";
 import { pathToFileURL } from "node:url";
 import { currentInstallLines } from "../install.mjs";
 import rustSource from "./code-rust.md?raw";
+import tsSource from "./code-ts.md?raw";
 
 // The install lines follow release-notes/index.json and the newest alpha tag,
 // read when the site is built (install.mjs): the site shows the current ones
 // after each deploy. The build runs in site/.
 const install = currentInstallLines(pathToFileURL(`${process.cwd()}/../`));
 
-const MODEL = `import { nc } from "@nocentraldb/sdk";
-
-export const model = nc.model({
-  people: nc.collection({
-    name: nc.string().personal({ person: "self" }),
-  }),
-  tasks: nc.collection(
-    {
-      title: nc.string().describe("One line; what has to be done."),
-      status: nc.oneOf(["open", "in_progress", "done"]),
-      priority: nc.int(),
-      assignee: nc.link("people"),
-    },
-    {
-      indexes: {
-        byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
-      },
-    },
-  ),
-});`;
-
-/** The Rust block of each step of code-rust.md, by step id, without its hidden lines. */
-const rust = Object.fromEntries(
-  rustSource
-    .split(/^## /m)
-    .slice(1)
-    .map((part) => {
-      const id = part.slice(0, part.indexOf("\n")).trim();
-      const block = part.match(/```(\w+)[^\n]*\n([\s\S]*?)\n```/);
-      if (!block) throw new Error(`code-rust.md: no code block under ## ${id}`);
-      const code = block[2]
-        .split("\n")
-        .filter((line) => !(block[1] === "rust" && /^#( |$)/.test(line)))
-        .join("\n")
-        .replaceAll("{CARGO_ADD}", install.cargo);
-      return [id, { lang: block[1], code }];
-    }),
-);
+/** The block of each step of a code file, by step id, without its hidden lines. */
+const blocks = (source: string, file: string) =>
+  Object.fromEntries(
+    source
+      .split(/^## /m)
+      .slice(1)
+      .map((part) => {
+        const id = part.slice(0, part.indexOf("\n")).trim();
+        const block = part.match(/```(\w+)[^\n]*\n([\s\S]*?)\n```/);
+        if (!block) throw new Error(`${file}: no code block under ## ${id}`);
+        const code = block[2]
+          .split("\n")
+          .filter((line) => !(block[1] !== "sh" && /^#( |$)/.test(line)))
+          .join("\n")
+          .replaceAll("{CARGO_ADD}", install.cargo);
+        return [id, { lang: block[1], code }];
+      }),
+  );
+const rust = blocks(rustSource, "code-rust.md");
+const ts = blocks(tsSource, "code-ts.md");
 
 const steps = [
   {
@@ -79,12 +63,10 @@ const steps = [
     label: "Model",
     ts: {
       note: "Describe the model once. ncdb model build turns it into model.lock.json.",
-      code: MODEL,
     },
     rust: {
-      lang: "ts",
+      ...ts.model,
       note: "Both SDKs share one model, written in TypeScript. ncdb model build turns it into model.lock.json, which the Rust SDK reads.",
-      code: MODEL,
     },
   },
   {
@@ -92,13 +74,6 @@ const steps = [
     label: "Open",
     ts: {
       note: "The relay is the server from the scenario above. Opening a database needs no relay.",
-      code: `import { nc } from "@nocentraldb/sdk";
-import { model } from "./model";
-import lock from "./model.lock.json";
-
-const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
-
-const project = await db.spaces.create();`,
     },
     rust: {
       note: "The relay is the server from the scenario above. Opening a database needs no relay. The app chooses the directory the database lives in.",
@@ -109,12 +84,6 @@ const project = await db.spaces.create();`,
     label: "Share",
     ts: {
       note: "The joining member sends an invitation: its public identity, never a key. An admin adds it with a role.",
-      code: `// On the joining member:
-const invitation = await db.invitation();
-send(invitation.toString());
-
-// On an admin of the space:
-await project.members.add(nc.invitation(text), { role: "writer" });`,
     },
   },
   {
@@ -122,10 +91,6 @@ await project.members.add(nc.invitation(text), { role: "writer" });`,
     label: "Write",
     ts: {
       note: "One write is one signed, encrypted change. It resolves before the relay has it.",
-      code: `await project.write((tx) => {
-  const task = tx.create(model.tasks, { title: "Write the README", status: "open", priority: 1 });
-  tx.update(model.tasks, task, { status: "in_progress" });
-});`,
     },
   },
   {
@@ -133,10 +98,6 @@ await project.members.add(nc.invitation(text), { role: "writer" });`,
     label: "Read",
     ts: {
       note: "A query reads a declared index and answers a page in index order, from the copy on this device. It never waits for the network.",
-      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
-
-const page = await db.find(query);
-for (const task of page.items) console.log(task.title);`,
     },
   },
   {
@@ -144,9 +105,6 @@ for (const task of page.items) console.log(task.title);`,
     label: "Subscribe",
     ts: {
       note: "The listener runs at once and again after every change that may alter the page. It never waits for the network.",
-      code: `const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
-
-const stop = db.subscribe(query, (fresh) => render(fresh));`,
     },
     rust: {
       note: "The stream gives the page at once and again after every change that may alter it. It never waits for the network; drop it to stop.",
@@ -154,7 +112,8 @@ const stop = db.subscribe(query, (fresh) => render(fresh));`,
   },
 ].map((step) => ({
   ...step,
-  ts: { lang: "ts", ...step.ts },
+  // a step's TypeScript code is code-ts.md's; install's line is install.mjs's
+  ts: { ...ts[step.id], ...step.ts },
   // a step without a Rust note takes the TypeScript one; its code is code-rust.md's
   rust: { note: step.ts.note, ...rust[step.id], ...step.rust },
 }));
