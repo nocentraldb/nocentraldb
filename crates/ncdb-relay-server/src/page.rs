@@ -36,3 +36,17 @@ pub(crate) async fn read<S: TokenUrls + 'static>(
     })
     .await
 }
+
+/// The error that refuses `member` a read of `space` with `code`: for a
+/// removed member, with the control change that removed it (RFC 0007,
+/// "The errors"), read by the relay core's [`page::refusal`] on a thread
+/// that may block.
+pub(crate) async fn refusal<S: TokenUrls + 'static>(
+    relay: Arc<Relay<S>>,
+    member: MemberId,
+    req: Option<u64>,
+    space: SpaceId,
+    code: ErrorCode,
+) -> Vec<u8> {
+    blocking(async move { page::refusal(&relay, member, req, space, code).await }).await
+}
