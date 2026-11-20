@@ -29,6 +29,10 @@ on:
     branches: [main]
     paths:
       - "site/**"
+      # The docs the site renders, and the release index its install lines
+      # follow (NOC-361).
+      - "docs/*.md"
+      - "release-notes/index.json"
       - ".github/workflows/site-pages.yml"
   workflow_dispatch:
 

@@ -10,7 +10,6 @@ import {
   installLines,
   newestAlpha,
   publishableCrate,
-  remarkNpmLine,
   tagsOf,
   withNpmLine,
 } from "../src/install.mjs";
@@ -152,31 +151,7 @@ test("an npm line for the SDK becomes the current one, whatever its tag", () => 
   );
 });
 
-test("the remark plugin rewrites the npm line in code, and leaves prose alone", () => {
-  const npm = "npm install @nocentraldb/sdk";
-  const tree = {
-    type: "root",
-    children: [
-      { type: "code", value: "npm install @nocentraldb/sdk@alpha" },
-      {
-        type: "paragraph",
-        children: [
-          { type: "text", value: "npm install @nocentraldb/sdk@alpha" },
-          { type: "inlineCode", value: "npm install @nocentraldb/sdk@alpha" },
-        ],
-      },
-    ],
-  };
-  remarkNpmLine({ npm })(tree);
-  assert.equal(tree.children[0].value, npm);
-  assert.equal(
-    tree.children[1].children[0].value,
-    "npm install @nocentraldb/sdk@alpha",
-  );
-  assert.equal(tree.children[1].children[1].value, npm);
-});
-
-test("the Expressive Code plugin rewrites the npm line in a code block, which remark no longer sees", () => {
+test("the Expressive Code plugin rewrites the npm line in a code block", () => {
   const npm = "npm install @nocentraldb/sdk@beta";
   const lines = [
     "npm install @nocentraldb/sdk@alpha",

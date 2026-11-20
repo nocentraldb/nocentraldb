@@ -2,6 +2,11 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { currentInstallLines, expressiveNpmLine } from "./src/install.mjs";
+import { REPO_DOCS } from "./src/repo-docs.mjs";
+
+// The SDK's npm line in the docs follows release-notes/index.json (NOC-361).
+const { npm } = currentInstallLines(new URL("../", import.meta.url));
 
 export default defineConfig({
   site: "https://nocentraldb.io",
@@ -51,16 +56,22 @@ export default defineConfig({
       sidebar: [
         { label: "Getting started", slug: "docs" },
         { label: "Overview", slug: "docs/how-it-works" },
+        // The docs rendered from docs/, the two guides first (NOC-361).
+        ...REPO_DOCS.slice(0, 2).map(({ label, slug }) => ({ label, slug })),
         {
           label: "Concepts",
           items: [{ autogenerate: { directory: "docs/concepts" } }],
         },
+        ...REPO_DOCS.slice(2).map(({ label, slug }) => ({ label, slug })),
         { label: "API", slug: "docs/api" },
         { label: "RFCs", slug: "docs/rfcs" },
       ],
       // A shell command sits in a plain frame: the terminal frame's empty
       // title bar took a third of a one-line command's height (D1, NOC-360).
-      expressiveCode: { defaultProps: { frame: "code" } },
+      expressiveCode: {
+        defaultProps: { frame: "code" },
+        plugins: [expressiveNpmLine({ npm })],
+      },
       plugins: [starlightLlmsTxt()],
     }),
   ],

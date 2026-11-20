@@ -2,7 +2,8 @@
 // owner's direction of 2026-11-19): one source, no copies in site/. These
 // tests check how a file of docs/ becomes a docs page: its title, its
 // description, and its links, which lead to the site for a rendered doc and
-// to GitHub for every other file of the repository.
+// to GitHub for every other file of the repository. Its npm line follows the
+// release index like every docs page's (install.test.mjs).
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,9 +13,8 @@ import { REPO_DOCS, repoDocEntry } from "../src/repo-docs.mjs";
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const GIT = "https://github.com/nocentraldb/nocentraldb";
-const npm = "npm install @nocentraldb/sdk@beta";
 const entry = (source, file = "getting-started-browser.md") =>
-  repoDocEntry(source, file, { npm });
+  repoDocEntry(source, file);
 
 test("every rendered doc exists in docs/, once, with its own page", () => {
   assert.ok(REPO_DOCS.length > 0);
@@ -51,7 +51,9 @@ test("contributor and operator docs stay in the repository", () => {
 });
 
 test("the first heading is the page's title and leaves the body", () => {
-  const page = entry("# A guide\n\nThe first sentence. The second.\n\n## Next\n");
+  const page = entry(
+    "# A guide\n\nThe first sentence. The second.\n\n## Next\n",
+  );
   assert.equal(page.title, "A guide");
   assert.ok(!page.body.includes("# A guide"));
   assert.ok(page.body.startsWith("The first sentence."));
@@ -80,7 +82,9 @@ test("a link to another file of the repository becomes its GitHub link", () => {
     "# T\n\n[RFC](rfc/0006-local-view.md#durability) [app](../apps/tasks-ts/README.md) [deploy](relay-deploy.md) [apps](../apps/tasks-ts/)\n",
   );
   assert.ok(
-    page.body.includes(`(${GIT}/blob/main/docs/rfc/0006-local-view.md#durability)`),
+    page.body.includes(
+      `(${GIT}/blob/main/docs/rfc/0006-local-view.md#durability)`,
+    ),
   );
   assert.ok(page.body.includes(`(${GIT}/blob/main/apps/tasks-ts/README.md)`));
   assert.ok(page.body.includes(`(${GIT}/blob/main/docs/relay-deploy.md)`));
@@ -88,8 +92,12 @@ test("a link to another file of the repository becomes its GitHub link", () => {
 });
 
 test("a reference definition is rewritten like an inline link", () => {
-  const page = entry("# T\n\nSee [the RFC][rfc].\n\n[rfc]: rfc/0009-sdk-api.md\n");
-  assert.ok(page.body.includes(`[rfc]: ${GIT}/blob/main/docs/rfc/0009-sdk-api.md`));
+  const page = entry(
+    "# T\n\nSee [the RFC][rfc].\n\n[rfc]: rfc/0009-sdk-api.md\n",
+  );
+  assert.ok(
+    page.body.includes(`[rfc]: ${GIT}/blob/main/docs/rfc/0009-sdk-api.md`),
+  );
 });
 
 test("absolute links, anchors on the page and links in code stay as they are", () => {
@@ -104,12 +112,4 @@ test("absolute links, anchors on the page and links in code stay as they are", (
 
 test("a link that leaves the repository is refused", () => {
   assert.throws(() => entry("# T\n\n[x](../../outside.md)\n"), /outside/);
-});
-
-test("the npm install line follows the current pre-release", () => {
-  const page = entry(
-    "# T\n\nRun `npm install @nocentraldb/sdk@alpha`, or:\n\n```sh\nnpm install @nocentraldb/sdk@alpha\n```\n",
-  );
-  assert.ok(!page.body.includes("@nocentraldb/sdk@alpha"));
-  assert.equal(page.body.split(npm).length - 1, 2);
 });
