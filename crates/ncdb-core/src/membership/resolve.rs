@@ -30,7 +30,7 @@ use super::fields;
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
 use super::judge::{Judged, judge};
-use super::person_keys::{self, PersonKey, PersonKeys};
+use super::person_keys::{self, PersonKey, PersonKeys, WaitingShred};
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 use super::statement::AccountKeyStatement;
@@ -54,6 +54,8 @@ pub struct Resolved {
     heads: BTreeSet<u64>,
     current: Option<u64>,
     person_keys: PersonKeys,
+    /// The shreds whose verdict is waiting, by change id.
+    waiting_shreds: BTreeMap<ChangeId, WaitingShred>,
     /// The accepted account key statement entries, by change id.
     statements: BTreeMap<ChangeId, AccountKeyStatement>,
 }
@@ -273,6 +275,12 @@ impl Resolved {
         self.person_keys.0.iter().map(|(id, key)| (*id, key))
     }
 
+    /// The shreds whose verdict is [`Verdict::Waiting`], by change id: the
+    /// holder does not hold their whole causal past yet.
+    pub fn waiting_shreds(&self) -> impl Iterator<Item = (ChangeId, &WaitingShred)> + '_ {
+        self.waiting_shreds.iter().map(|(id, shred)| (*id, shred))
+    }
+
     /// For each accepted grant, the accepted revocations of its subject in
     /// its causal past.
     pub fn seen(&self) -> &BTreeMap<ChangeId, BTreeSet<ChangeId>> {
@@ -317,6 +325,7 @@ fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
         heads: BTreeSet::new(),
         current: None,
         person_keys: PersonKeys::default(),
+        waiting_shreds: BTreeMap::new(),
         statements: BTreeMap::new(),
     };
     let nodes: BTreeMap<ChangeId, &Node> = set.iter().map(|id| (*id, &input.nodes[id])).collect();
@@ -451,6 +460,14 @@ fn apply_order(
             // Its verdict reads its whole causal past, and accepting it
             // cannot be undone, so it waits for the gap to fill (RFC 0008,
             // "A shred is final when accepted").
+            if let Entry::Shred(shred) = &node.body.entry {
+                let waiting = WaitingShred {
+                    person_key: shred.person_key,
+                    performer: node.author,
+                    sign_off: shred.sign_off.account_key,
+                };
+                resolved.waiting_shreds.insert(node.id, waiting);
+            }
             Verdict::Waiting
         } else if !judged.valid(node.id) {
             Verdict::Rejected(Rejection::NotValidWhenWritten)

@@ -89,7 +89,7 @@ export interface Space {
 }
 interface ErasureEntry {
     readonly shred: string;
-    readonly state: "final" | "provisional" | "takenBack";
+    readonly state: "final" | "provisional" | "takenBack" | "waiting";
     readonly performer: {
         readonly id: string;
         readonly account: string;
