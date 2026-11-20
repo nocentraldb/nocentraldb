@@ -6,7 +6,10 @@
 # infrastructure or the crates its function is built from deploys it, once
 # the owner approves the deploy in `aws-prod`. .github/CODEOWNERS owns
 # exactly this workflow's paths, so each such change also needs the owner's
-# review (docs/relay-deploy.md). No long-lived AWS key exists anywhere, and
+# review (docs/relay-deploy.md). The crates' tests/ directories are not part
+# of the deployed build: a change only to them starts no run (Carsten,
+# 2026-11-20, NOC-403). GitHub takes the last pattern that matches, so each
+# `!` exclusion follows the pattern that includes its crate. No long-lived AWS key exists anywhere, and
 # no agent holds AWS credentials.
 #
 # - build: on pull requests and on main. It builds the function's arm64
@@ -35,6 +38,11 @@ on:
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-aws/**"
       - "crates/ncdb-relay-lambda/**"
+      - "!crates/ncdb-core/tests/**"
+      - "!crates/ncdb-plugin/tests/**"
+      - "!crates/ncdb-relay/tests/**"
+      - "!crates/ncdb-relay-aws/tests/**"
+      - "!crates/ncdb-relay-lambda/tests/**"
       - "Cargo.lock"
       - "Cargo.toml"
       - "rust-toolchain.toml"
@@ -49,6 +57,11 @@ on:
       - "crates/ncdb-relay/**"
       - "crates/ncdb-relay-aws/**"
       - "crates/ncdb-relay-lambda/**"
+      - "!crates/ncdb-core/tests/**"
+      - "!crates/ncdb-plugin/tests/**"
+      - "!crates/ncdb-relay/tests/**"
+      - "!crates/ncdb-relay-aws/tests/**"
+      - "!crates/ncdb-relay-lambda/tests/**"
       - "Cargo.lock"
       - "Cargo.toml"
       - "rust-toolchain.toml"

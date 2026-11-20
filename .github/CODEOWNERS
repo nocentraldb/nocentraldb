@@ -4,6 +4,13 @@
 # owner's review on main (docs/relay-deploy.md). scripts/relay-deploy-workflow.test.mjs
 # keeps these paths equal to the workflow's, and the workflow's to every
 # workspace crate the function links.
+#
+# The crates' tests/ directories are not part of the deployed build, so they
+# need no owner review (Carsten, 2026-11-20, NOC-403); src/ stays owned,
+# inline #[cfg(test)] modules included. GitHub takes the last pattern that
+# matches, and a pattern with no owner leaves its path unowned (`!` does not
+# work here). So each test directory is listed again, without an owner, after
+# the line that owns its crate. The workflow excludes the same directories.
 
 /infra/aws/ @cabcookie
 /crates/ncdb-core/ @cabcookie
@@ -17,3 +24,9 @@
 /pnpm-lock.yaml @cabcookie
 /.github/workflows/relay-deploy.yml @cabcookie
 /.github/CODEOWNERS @cabcookie
+
+/crates/ncdb-core/tests/
+/crates/ncdb-plugin/tests/
+/crates/ncdb-relay/tests/
+/crates/ncdb-relay-aws/tests/
+/crates/ncdb-relay-lambda/tests/
