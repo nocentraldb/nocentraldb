@@ -64,7 +64,8 @@ Each private session of Chromium is a new device: its member key is created in t
 The SDK reports how durable this copy is, how many changes would be lost with it, and whether this tab waits for another tab of your app. The names below are decided in [RFC 0006, "What the SDK reports"](rfc/0006-local-view.md#what-the-sdk-reports).
 
 ```ts
-const db = await nc.open({ model });
+const lock: unknown = await (await fetch("/model.lock.json")).json();
+const db = await nc.open({ model, lock });
 
 const now = db.durability.current();
 // { storage: "best-effort", unconfirmed: 3, oldestUnconfirmedAt: 1763000000000, atRisk: true, waitingForTab: false }

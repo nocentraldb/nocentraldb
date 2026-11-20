@@ -131,13 +131,16 @@ const IMPLIED = [
  * module that imports `nc` and `model`. Imports are hoisted and each kept
  * once; `./model` is the model, and a JSON import, such as the lock, is
  * declared `unknown`. `declare` names what the page leaves to the reader,
- * such as `declare function render(page: unknown): void;`. Errors are given
+ * such as `declare function render(page: unknown): void;`, and `model` the
+ * model's code for a page that uses one without showing it. Errors are given
  * as `<page>:<line>:<column>`.
  */
-export const checkPage = (path, { declare = [] } = {}) => {
+export const checkPage = (path, { declare = [], model: given } = {}) => {
   const blocks = snippets(readFileSync(path, "utf8"));
   const shown = relative(process.cwd(), path) || path;
-  const model = blocks.find((b) => b.code.includes("nc.model("));
+  const model =
+    blocks.find((b) => b.code.includes("nc.model(")) ??
+    (given === undefined ? undefined : { code: given, line: undefined });
   if (!model) {
     return { ok: false, output: `${shown}: no ts block with the model` };
   }
@@ -167,7 +170,9 @@ export const checkPage = (path, { declare = [] } = {}) => {
     },
     (file, line, column) => {
       if (file === "model.ts")
-        return `${shown}:${model.line + line - 1}:${column}`;
+        return model.line === undefined
+          ? `the given model:${line}:${column}`
+          : `${shown}:${model.line + line - 1}:${column}`;
       const at = body[line - prelude.length - 1];
       return at && `${shown}:${at.line}:${column}`;
     },
