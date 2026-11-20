@@ -9,13 +9,13 @@ It shows, in about five minutes:
 - tasks created, updated and deleted in a space;
 - two lists, each a subscription to a query of a declared index, a page at a time.
 
-It runs on one device. The TypeScript SDK cannot sync yet; the Rust example, `apps/tasks-rust`, shows two devices syncing through a relay.
+It runs on one device, without a relay. The TypeScript SDK syncs too: [Getting started in the browser](../../docs/getting-started-browser.md) adds a relay and a second member, and the Rust example, `apps/tasks-rust`, shows two devices syncing through a relay from the command line.
 
 ## What you need
 
 - Rust, as `rust-toolchain.toml` pins it, to compile the core to WebAssembly. `rustup` installs it on the first `cargo` call.
 - Node.js 24 or later and pnpm.
-- A browser with OPFS. The app is tested in Chromium.
+- A browser with OPFS: current Chromium, Firefox and Safari have it. The app's end-to-end test drives it in Chromium.
 - A clone of this repository. Run every command below from its root.
 
 ## 1. The schema and its lock

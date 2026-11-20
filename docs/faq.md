@@ -1,6 +1,6 @@
 # NoCentralDB FAQ
 
-This page answers the questions that [RFC 0001](rfc/0001-nocentraldb.md) and the [use cases](use-cases.md) raise most often. NoCentralDB is not released yet. Where the design does not have an answer yet, this page says so and names the open question in the RFC that will decide it. If your question is missing, ask it in the RFC discussions on GitHub.
+This page answers the questions that [RFC 0001](rfc/0001-nocentraldb.md) and the [use cases](use-cases.md) raise most often. NoCentralDB 0.1 is a pre-release, and the answers say what 0.1 does and what comes after it. Where the design does not have an answer yet, this page says so and names the open question in the RFC that will decide it. If your question is missing, ask it in the RFC discussions on GitHub.
 
 **Status and use**
 
@@ -48,7 +48,7 @@ This page answers the questions that [RFC 0001](rfc/0001-nocentraldb.md) and the
 
 ### Can I use NoCentralDB today?
 
-Not yet. We have started building the core, and the RFC describes the design we are building toward. The code in the RFC and the use cases is an API we propose, and it may change. Watch the repository's releases to hear when the first versions come out. Early versions appear as alpha and beta releases before a final release.
+Yes, as a pre-release. NoCentralDB 0.1 ships the Rust SDK, the TypeScript SDK in the browser, the relay (locally on SQLite, or serverless on AWS with DynamoDB and S3) and `ncdb model build`. Its pre-releases are out, the TypeScript SDK's on npm, and names and formats can still change before 1.0. [Getting started](https://nocentraldb.io/docs/) lists what 0.1 does not do yet, and the two guides build a first app. Watch the repository's releases for the betas and the release.
 
 ### Under which licence is it published?
 
@@ -56,7 +56,7 @@ The code is dual-licensed under the MIT licence and the Apache licence 2.0, at y
 
 ### Which platforms and languages does it support?
 
-The core is written in Rust. It runs natively and, compiled to WebAssembly, in the browser. The design has two SDKs, one for Rust and one for TypeScript. You describe the schema once in TypeScript, and both SDKs read the same generated `model.lock.json`. The RFC does not yet specify native mobile SDKs.
+The core is written in Rust. It runs natively and, compiled to WebAssembly, in the browser. There are two SDKs: the Rust SDK, for native apps, servers and agents, and the TypeScript SDK, which in 0.1 runs in the browser only, in Chromium, Firefox and Safari. You describe the schema once in TypeScript, and both SDKs read the same generated `model.lock.json`. The TypeScript SDK in Node.js and native mobile apps come after 0.1.
 
 ## Choosing it
 
@@ -70,7 +70,7 @@ Many sync engines keep a trusted server. That server can read the data, enforces
 
 ### Why not use a CRDT library such as Yjs or Automerge directly?
 
-A CRDT library merges concurrent edits, and NoCentralDB uses Yjs for long text. A database for teams needs more around the merge: spaces with membership and keys, encryption, a relay, declared indexes and views, computed fields, ordered pages, work orders such as compaction and erasure, and a schema shared by two SDKs. NoCentralDB provides these parts as one system, so your app does not have to build them around a library.
+A CRDT library merges concurrent edits, and NoCentralDB's rich text, which comes after 0.1, is designed on Yjs. A database for teams needs more around the merge: spaces with membership and keys, encryption, a relay, declared indexes and ordered pages, erasure, and a schema shared by two SDKs. NoCentralDB provides these parts as one system, so your app does not have to build them around a library. Computed fields, views and work orders such as compaction are designed and come after 0.1.
 
 ### Can I move an existing app to NoCentralDB?
 
@@ -80,11 +80,11 @@ The design does not include a migration tool yet. Moving an app means modelling 
 
 ### Is it a SQL database?
 
-Not from the app's point of view. Each member folds its encrypted log into a local SQLite database, but your app queries through the SDK. You declare indexes, views and computed fields in the schema, and queries run only through those declarations. Every read is therefore predictable. A page of results is one range lookup.
+Not from the app's point of view. Each member folds its encrypted log into a local SQLite database, but your app queries through the SDK. You declare indexes in the schema, and queries run only through them. Every read is therefore predictable. A page of results is one range lookup. Views and computed fields, declared the same way, come after 0.1.
 
 ### What happens when two members change the same data at the same time?
 
-Both changes are kept, and every copy converges to the same result, whatever order the changes arrive in. Each field's type declares how it merges. For basic values the last writer wins, sets and links combine, and rich text merges the edits of both members. A field type you add yourself brings its own merge rules. Computed fields follow from the merged values, so they converge too.
+Both changes are kept, and every copy converges to the same result, whatever order the changes arrive in. Each field's type declares how it merges. For basic values the last writer wins, and sets and links combine. A field type you add yourself as a plugin, in the Rust SDK, brings its own merge rules. Rich text, which merges the edits of both members, and computed fields, which follow from the merged values, come after 0.1.
 
 ### Can I enforce unique values, such as usernames?
 
@@ -92,17 +92,17 @@ No. Enforcing a unique value needs one place that sees every write before it is 
 
 ### Does every device have to store all the data?
 
-Every member stores the full, encrypted log of each space it belongs to, not of the whole database. A device that belongs to few or small spaces stores little. Compaction keeps the log short: it moves old history, encrypted and signed, into an archive, so a member does not replay a long history. The RFC assumes that a phone can store a team's complete working set. If one space grows too large for your devices, split it into several spaces.
+Every member stores the full, encrypted log of each space it belongs to, not of the whole database. A device that belongs to few or small spaces stores little. Compaction, which comes after 0.1, will keep the log short: it moves old history, encrypted and signed, into an archive, so a member does not replay a long history. The RFC assumes that a phone can store a team's complete working set. If one space grows too large for your devices, split it into several spaces.
 
 A browser keeps its copy only as long as the browser allows. It may delete a web app's storage when storage runs low, and Safari deletes a site's script-writable storage after seven days of use without the user interacting with the site ([RFC 0006, "The browser"](rfc/0006-local-view.md#the-browser)). The member key goes with it, so the browser has to be set up again as a new device, and the changes it wrote that the relay had not confirmed are lost ([RFC 0001, "What it is not"](rfc/0001-nocentraldb.md#what-it-is-not)). The SDK asks the browser for persistent storage and tells your app whether it was granted and how many unconfirmed changes the copy holds ([RFC 0006, "What the SDK reports"](rfc/0006-local-view.md#what-the-sdk-reports)). [Browser apps and durability](browser-durability.md) says per browser what is measured, what is documented and what is unknown, and [How long a browser keeps a web app's copy](browser-storage.md) has the measurements.
 
 ### How do I change the schema?
 
-You change the TypeScript model and run `ncdb model build`, which writes a new version of `model.lock.json`. Schema changes are additive, and old clients keep data they do not understand yet, so members with different app versions can work on the same space. The RFC does not yet describe how to remove or rename a field.
+You change the TypeScript model and run `ncdb model build`, which writes a new version of `model.lock.json`. Schema changes are additive, and old clients keep data they do not understand yet, so members with different app versions can work on the same space. A model removes nothing: it marks a collection or field `.deprecated(…)` and stops writing it, and `ncdb model build` refuses a change old clients could not read, such as removing, renaming or retyping a field.
 
 ### How fast is it?
 
-We have no published measurements yet. By design, reads never leave the device, and a page of results from a declared view is one range lookup in a local SQLite database, with no network round-trip. Writes are local first and reach other members as fast as the relay forwards them. We will publish measurements when the core runs.
+We have not published measurements yet. Reads never leave the device: a page of results from a declared index is one range lookup in a local SQLite database, with no network round-trip. Writes are local first and reach other members as fast as the relay forwards them.
 
 ## Keys, rights and the relay
 
@@ -114,7 +114,7 @@ The relay applies the membership rules itself, so it reads the control changes t
 
 ### Who runs the relay?
 
-That is open, and the RFC asks for your view in question 6, "Hosting the relay". The options are running it yourself on Postgres, running it serverless in your own cloud account, or using a hosted relay that can only ever see ciphertext. We design the relay to run on SQLite, Postgres, or DynamoDB with S3. Because the relay holds no keys, a hosted relay can read no more than one you run yourself. Whether we will offer hosting ourselves is open. We welcome companies that offer it, and we ask them to take an active part in developing NoCentralDB.
+In 0.1 you run it yourself: `ncdb-relay` on SQLite, for local runs, or serverless in your own AWS account, with DynamoDB and S3. A Postgres backend comes later. Because the relay holds no keys, a hosted relay can read no more than one you run yourself. Whether we will offer hosting ourselves is open, and the RFC asks for your view in question 6, "Hosting the relay". We welcome companies that offer it, and we ask them to take an active part in developing NoCentralDB.
 
 ### What happens if I lose my device?
 
@@ -140,11 +140,11 @@ Some features need a server that reads content, for example rendering a page on 
 
 ### Does destroying a key satisfy a GDPR erasure request?
 
-Your data protection officer decides that for your case; this is a design, not legal advice. In the design, the SDK encrypts each person's marked personal fields with that person's own key, and an erasure destroys that key. Without the key, those fields are unreadable in every archive and old snapshot and on every device that has deleted the key. The erasure does not reach devices that never come back online, a modified client that ignores the erasure and keeps the key, a member of the space who obtains a relay backup taken before the erasure, copies made outside the database such as exports and screenshots, or personal data in unmarked free text ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Keeping names out of free text is your app's job: it stores a reference to the person instead of the name and resolves the reference when it displays the text, so that after an erasure the text shows a placeholder; a name typed or pasted as plain text stays ([RFC 0005, "Personal data in free text"](rfc/0005-schema-and-model-lock.md#personal-data-in-free-text)). Removing a member is not erasure: it blocks the member's access from then on, while the data the member wrote and the personal fields about them stay ([RFC 0005, "About whom, not by whom"](rfc/0005-schema-and-model-lock.md#about-whom-not-by-whom)). Each member destroys the key as soon as it accepts the erasure, and the relay deletes its record then; no later change undoes an accepted erasure. A device that is offline keeps the key until it comes back and syncs, and every view shows the person's fields as erased at once ([RFC 0008, "A shred is final when accepted"](rfc/0008-membership.md#a-shred-is-final-when-accepted)). What evidence your officer would need is question 3 in the RFC, "Erasure evidence".
+Your data protection officer decides that for your case; this page is not legal advice. The SDK encrypts each person's marked personal fields with that person's own key, and an erasure destroys that key. Without the key, those fields are unreadable in every archive and old snapshot and on every device that has deleted the key. The erasure does not reach devices that never come back online, a modified client that ignores the erasure and keeps the key, a member of the space who obtains a relay backup taken before the erasure, copies made outside the database such as exports and screenshots, or personal data in unmarked free text ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Keeping names out of free text is your app's job: it stores a reference to the person instead of the name and resolves the reference when it displays the text, so that after an erasure the text shows a placeholder; a name typed or pasted as plain text stays ([RFC 0005, "Personal data in free text"](rfc/0005-schema-and-model-lock.md#personal-data-in-free-text)). Removing a member is not erasure: it blocks the member's access from then on, while the data the member wrote and the personal fields about them stay ([RFC 0005, "About whom, not by whom"](rfc/0005-schema-and-model-lock.md#about-whom-not-by-whom)). Each member destroys the key as soon as it accepts the erasure, and the relay deletes its record then; no later change undoes an accepted erasure. A device that is offline keeps the key until it comes back and syncs, and every view shows the person's fields as erased at once ([RFC 0008, "A shred is final when accepted"](rfc/0008-membership.md#a-shred-is-final-when-accepted)). What evidence your officer would need is question 3 in the RFC, "Erasure evidence".
 
 ### What happens to the audit trail after an erasure?
 
-It stays intact. An erasure is a work order: one member performs it, and a second account signs it off. In a space with one account, that account signs it off itself, and the erasure stays provisional for 7 days, during which the account can take it back. Destroying the person's key makes their fields unreadable but leaves the signatures valid. The audit trail therefore still shows who changed what and when, and who signed off the erasure. If no eligible member comes online before a deadline, the RFC has not decided yet how to escalate. That is question 5, "Nobody online".
+It stays intact. One member performs an erasure, in 0.1 through the Rust SDK, and a second account signs it off. In a space with one account, that account signs it off itself, and the erasure stays provisional for 7 days, during which the account can take it back. Destroying the person's key makes their fields unreadable but leaves the signatures valid. The audit trail therefore still shows who changed what and when, and who signed off the erasure. Every member can read each erasure's state in the erasure audit, `space.erasures.list()`. If no eligible member comes online before a deadline, the RFC has not decided yet how to escalate. That is question 5, "Nobody online".
 
 ## Taking part
 

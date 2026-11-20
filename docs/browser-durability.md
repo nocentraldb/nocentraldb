@@ -2,7 +2,7 @@
 
 A NoCentralDB app keeps a full copy of its spaces on the device. In a native app on a desktop or a phone, that copy is the app's own files. In a web app, it lives in the browser's storage for your site, and the browser may delete it. This page says when that happens, what is lost with it, how you reduce the risk, and what you can tell your users.
 
-**Status.** The SDK interface this page describes and the text for your users are decided in [RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy) (Carsten, 2026-11-09), and the interface is not built yet. The facts about browsers come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
+**Status.** The SDK interface this page describes and the text for your users are decided in [RFC 0006, "Durability of a browser copy"](rfc/0006-local-view.md#durability-of-a-browser-copy) (Carsten, 2026-11-09), and release 0.1 ships the interface as `db.durability`. The facts about browsers come from [How long a browser keeps a web app's copy](browser-storage.md) (NOC-33).
 
 **Where each statement comes from.** Every row below names, in its Source column, the rows of [the findings table](browser-storage.md#findings) it rests on, as `kind: Browser · Behaviour`:
 
@@ -77,7 +77,7 @@ await db.durability.requestPersistent(); // asks the browser; Firefox asks the u
 | --- | --- | --- |
 | `persistent` | A native app, or a browser that granted persistent storage. | That the copy survives the user clearing site data, a lost device, or, in Safari, the seven-day deletion (unknown). |
 | `best-effort` | The browser may delete the copy when storage runs low, and Safari after seven days without interaction. Most browser copies start here. | Anything about when: the browser decides. A Chromium private window also reports `best-effort`. |
-| `temporary` | A database opened in memory for tests, in Node.js with `inMemory`. A browser never reports it: where OPFS is missing, `nc.open` fails with `storageUnavailable`. | That it survives closing the database. |
+| `temporary` | A database opened in memory, as the Rust SDK's `in_memory()` opens one for tests; the TypeScript SDK in Node.js, which comes after 0.1, reports it for `inMemory`. A browser never reports it: where OPFS is missing, `nc.open` fails with `storageUnavailable`. | That it survives closing the database. |
 
 `unconfirmed` counts this member's changes that the relay has not confirmed; they exist only on this device. `atRisk` is true while `unconfirmed` is above zero and `storage` is not `persistent`. `waitingForTab` is true while this tab has waited 1 s or longer for the database's storage, which another tab of your app still holds: in Safari, a tab that was hidden and frozen right after it gave the database up ([Getting started in the browser, "A frozen tab in Safari"](getting-started-browser.md#a-frozen-tab-in-safari)). This tab's writes wait and run once that tab runs again; they are not counted in `unconfirmed`, and they are lost if the user closes this tab first. In development, the SDK logs one warning per page load when `storage` is not `persistent`.
 
