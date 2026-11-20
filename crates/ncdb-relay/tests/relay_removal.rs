@@ -66,10 +66,21 @@ fn a_current_member_or_a_stranger_has_no_removal() {
 #[test]
 fn a_member_removed_twice_gets_the_removal_that_holds() {
     let (relay, _dir, mut space, changes) = removed();
-    let again = space.add(0, 1, Role::Writer, &[&changes[3]]);
+    // A re-grant names a fresh generation (RFC 0008, "Validity in the
+    // causal past").
+    let first = space.first_generation;
+    let (rotation, next) = space.rotate(0, &[first], &[&changes[3]]);
+    let again = space.add_at(0, 1, Role::Writer, next, &[&rotation]);
     let remove = space.remove(0, 1, 0, &[&again]);
-    let pushed = push(&relay, 0, space.space, &[&again, &remove]);
-    assert_eq!(pushed, [Pushed::Accepted(5), Pushed::Accepted(6)]);
+    let pushed = push(&relay, 0, space.space, &[&rotation, &again, &remove]);
+    assert_eq!(
+        pushed,
+        [
+            Pushed::Accepted(5),
+            Pushed::Accepted(6),
+            Pushed::Accepted(7)
+        ]
+    );
     let removal = block_on(relay.removal(id(1), space.space)).unwrap();
     assert_eq!(removal.expect("removed").change, remove.id());
 }
@@ -89,7 +100,10 @@ fn the_error_to_a_removed_member_carries_its_removal_and_nothing_else() {
         };
         assert_eq!(at(entry, 1), Some(&Value::Unsigned(4)));
         assert_eq!(at(entry, 2), Some(&Value::Unsigned(1_700_000_000_000)));
-        assert_eq!(at(entry, 3), Some(&Value::Bytes(changes[3].bytes().to_vec())));
+        assert_eq!(
+            at(entry, 3),
+            Some(&Value::Bytes(changes[3].bytes().to_vec()))
+        );
         assert_eq!(entry.len(), 3);
         assert_eq!(map.len(), 4);
     }
@@ -105,7 +119,10 @@ fn the_error_to_a_stranger_or_of_another_code_carries_no_removal() {
         space.space,
         ErrorCode::NotMember,
     ));
-    assert_eq!(stranger, ncdb_relay::wire::error(Some(1), ErrorCode::NotMember));
+    assert_eq!(
+        stranger,
+        ncdb_relay::wire::error(Some(1), ErrorCode::NotMember)
+    );
     let other = block_on(page::refusal(
         &relay,
         id(1),
@@ -113,5 +130,8 @@ fn the_error_to_a_stranger_or_of_another_code_carries_no_removal() {
         space.space,
         ErrorCode::EpochChanged,
     ));
-    assert_eq!(other, ncdb_relay::wire::error(Some(2), ErrorCode::EpochChanged));
+    assert_eq!(
+        other,
+        ncdb_relay::wire::error(Some(2), ErrorCode::EpochChanged)
+    );
 }

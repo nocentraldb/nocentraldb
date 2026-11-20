@@ -592,3 +592,18 @@ pub fn pong(req: u64) -> Vec<u8> {
 pub fn error(req: Option<u64>, code: ErrorCode) -> Vec<u8> {
     message("error", req, vec![(3, Value::Text(code.code().to_owned()))])
 }
+
+/// `error {req, code, removal}`, the error that ends a removed member's
+/// pull or subscription: it carries the entry of the control change that
+/// removed the member, `{1: position, 2: accepted at, 3: frame}`, at key 5,
+/// and nothing else of the space (RFC 0007, "The errors").
+pub fn removed(req: Option<u64>, code: ErrorCode, removal: &Entry) -> Vec<u8> {
+    message(
+        "error",
+        req,
+        vec![
+            (3, Value::Text(code.code().to_owned())),
+            (5, entry(removal)),
+        ],
+    )
+}
