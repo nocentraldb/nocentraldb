@@ -223,6 +223,26 @@ test("the AI policy says when pm may merge without a person's review", () => {
   assert.match(policy, /notes of a stable release/);
 });
 
+test("the first exception covers tests and RFC-following fixes, but not what stays with the owner (NOC-403)", () => {
+  const policy = read(".github/AI_POLICY.md");
+  assert.match(policy, /only adds or changes tests/);
+  assert.match(policy, /fails without it/);
+  for (const reserved of [
+    "key handling and cryptography",
+    "the wire format and the on-disk format",
+    "public API names and types in the SDKs",
+    "erasure",
+    "labelled security",
+    "gates, CI and release workflows",
+  ]) {
+    assert.ok(policy.includes(reserved), `the owner keeps ${reserved}`);
+  }
+  const config = read("factory/CONFIG.md");
+  assert.match(config, /only adds or changes tests/);
+  assert.match(config, /NOC-403/);
+  assert.match(read("factory/roles/pm.md"), /at most twice a day/);
+});
+
 test("CONFIG.md and the release runbook let pm merge a beta's notes without the owner", () => {
   assert.match(read("factory/CONFIG.md"), /beta's release notes/);
   const runbook = read("docs/release-management.md");
