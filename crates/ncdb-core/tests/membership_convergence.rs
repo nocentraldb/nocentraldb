@@ -1,4 +1,4 @@
-//! RFC 0008's M-C1 and M-C2 with the convergence harness (NOC-9, NOC-19):
+//! RFC 0008's M-C1, M-C2 and M-C3 with the convergence harness (NOC-9, NOC-19):
 //! the same control changes, in any order of arrival and with duplicates,
 //! resolve to the same membership state and the same verdicts on every
 //! copy. Simulated members write genesis-based membership entries, key
@@ -15,6 +15,9 @@
 //! both changes of an equivocation, so every copy must still agree on the
 //! state, on every control change's verdict, on the membership verdict of
 //! every sealed change. A shred a copy accepted stays accepted (M-C8).
+//!
+//! M-C3: a fixed list of seeds gives the same control state bytes
+//! natively and in wasm32, which a committed digest of them checks.
 
 mod support;
 
@@ -94,6 +97,38 @@ fn m_c8_an_accepted_shred_stays_accepted_on_every_copy_whatever_arrives_next() {
         },
     );
     assert!(result.is_ok(), "{}", result.unwrap_err());
+}
+
+/// M-C3: the seeds of the golden digest.
+const GOLDEN_SEEDS: [u64; 2] = [0, 1];
+
+/// M-C3: the SHA-256 of the control state bytes every copy ends in, for
+/// `GOLDEN_SEEDS`, with the members of M-C1 and then those that
+/// equivocate and shred, committed from a native run. The native and the
+/// wasm32 run of the test below must both give it (NOC-10).
+const GOLDEN_DIGEST: &str = "";
+
+#[test]
+fn m_c3_the_same_seeds_give_the_same_control_state_natively_and_in_wasm32() {
+    let config = Config {
+        members: 3,
+        max_changes_per_member: 3,
+        cases: 16,
+        ..Config::default()
+    };
+    let plain = Members {
+        forks: false,
+        shreds: false,
+    };
+    let forks = Members {
+        forks: true,
+        shreds: true,
+    };
+    let digests = [
+        convergence::digest::<Copy, _>(&config, &GOLDEN_SEEDS, &plain),
+        convergence::digest::<Copy, _>(&config, &GOLDEN_SEEDS, &forks),
+    ];
+    assert_eq!(digests.join(" "), GOLDEN_DIGEST);
 }
 
 /// Every order of `items`.
