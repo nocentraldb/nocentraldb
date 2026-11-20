@@ -197,6 +197,13 @@ pub fn open(
     author: &MemberPublicKey,
     space_key: &SpaceKey,
 ) -> Result<Payload, OpenError> {
+    check(change, author)?;
+    decrypt(change, space_key)
+}
+
+/// The part of [`open`] that needs no space key: the change is sealed,
+/// under a suite this core knows, and its signature verifies.
+pub(crate) fn check(change: &Change, author: &MemberPublicKey) -> Result<(), OpenError> {
     let header = change.header();
     if header.kind != Kind::SEALED {
         return Err(OpenError::NotSealed(header.kind.0));
@@ -204,7 +211,15 @@ pub fn open(
     if header.suite != SUITE {
         return Err(OpenError::UnknownSuite(header.suite));
     }
-    verify(change, author)?;
+    verify(change, author)
+}
+
+/// Decrypts the payload of a sealed change that [`open`] checked up to its
+/// signature, under one space key: the part of [`open`] that depends on
+/// the key, so that a member that holds several keys for a generation
+/// verifies the change once.
+pub(crate) fn decrypt(change: &Change, space_key: &SpaceKey) -> Result<Payload, OpenError> {
+    let header = change.header();
     let Some((nonce, ciphertext)) = header.payload.split_at_checked(NONCE_LEN) else {
         return Err(OpenError::Decryption);
     };
