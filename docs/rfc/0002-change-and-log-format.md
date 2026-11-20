@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-6
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it: RFC 0004 names the properties of the clock and the ids it relies on in [What the merge rules rely on](0004-merge-rules-basic-types.md#what-the-merge-rules-rely-on), and RFC 0003's suite id, key generation, person-key id and member id sit in the header and payload below. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections below link them where they do.
+It builds on [RFC 0001](0001-nocentraldb.md) and on the principles in [GENESIS.md](../../factory/GENESIS.md); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says which RFCs build on it.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -567,6 +567,10 @@ aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa0481a5015011111111111111111111
 | How does a member store its log? | Append-only, in the SQLite database of the local view, as exact frames. |
 | What does the relay hand out? | Changes after a cursor: a dense position per space. |
 | What does the relay see? | Membership, who writes when and how much, sizes and rhythm, who reads what, and what the control changes say: roles, cutoffs, control dependencies and accounts. No content, and no ordering metadata of sealed changes. |
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it: RFC 0004 names the properties of the clock and the ids it relies on in [What the merge rules rely on](0004-merge-rules-basic-types.md#what-the-merge-rules-rely-on), and RFC 0003's suite id, key generation, person-key id and member id sit in the header and payload below. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections above link them where they do.
 
 ## History
 

@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-12
 
 This RFC defines how the core turns a space's log into the local view an app reads: how changes are folded into SQLite tables as they arrive, how the view is rebuilt from the log, how a query runs only through declared indexes and pages with a cursor, and how the same Rust code does all of this natively and in a web browser with the data stored in the browser.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded, and [RFC 0008](0008-membership.md) the control changes that decide who may write. [RFC 0004](0004-merge-rules-basic-types.md) defines how a field merges. [RFC 0005](0005-schema-and-model-lock.md) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member folds its log into a local SQLite view and that reads never leave the device, and on the log of [RFC 0002](0002-change-and-log-format.md); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0006: The local view on SQLite](https://github.com/nocentraldb/nocentraldb/discussions/146), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -429,6 +429,10 @@ What it did not show, and what has been shown since:
 | "Runs on any device [...] web apps in a browser (Chromium-based, Firefox, and Safari)."      | The design uses only APIs those browsers offer. The Rust spike ran in Chromium only; the official build's `opfs-sahpool` works in Firefox and Safari ([Durability of a browser copy](#durability-of-a-browser-copy)). The Rust port in Firefox and Safari is an open check, not a claim. |
 
 One point a reader could take further than the design delivers: RFC 0001 says that "a phone can store a team's complete working set". In a browser, the copy can be evicted (Safari's seven-day rule above), so the "full copy" in a browser is a copy the browser may delete, unlike on a native device. This RFC states that limit, and that the member key goes with the copy; RFC 0001's [What it is not](0001-nocentraldb.md#what-it-is-not) says the same.
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "folds [the log] locally into an SQLite view" and that "reads never leave the device". [RFC 0002](0002-change-and-log-format.md) defines the log and keeps it in the same SQLite database as the view. [RFC 0003](0003-keys-and-cryptography.md) defines the keys that decrypt a change before it is folded, and [RFC 0008](0008-membership.md) the control changes that decide who may write. [RFC 0004](0004-merge-rules-basic-types.md) defines how a field merges. [RFC 0005](0005-schema-and-model-lock.md) defines the schema and `model.lock.json`, which declares the collections, fields and indexes this RFC turns into tables; where and how the lock declares an index is RFC 0005's to define. This RFC uses those documents only through the properties it names.
 
 ## History
 

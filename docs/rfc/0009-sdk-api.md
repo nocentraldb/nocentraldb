@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-64
 
 This RFC defines the API an app or an agent uses to work with NoCentralDB: how it opens a database, writes and reads objects, follows them live, creates spaces and adds members, and learns how far its copy is synced and how durable it is. It defines the API in TypeScript (`@nocentraldb/sdk`) and in Rust (`nocentraldb`), the two SDKs [GENESIS.md](../../factory/GENESIS.md) names.
 
-The decided RFCs define what lies under these calls, and this RFC names the calls in between. [RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0010](0010-accounts.md) designs accounts, and names the calls of pairing and recovery. [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so. GENESIS.md counts public API names among what a user sees first, and RFC 0004, RFC 0005 and RFC 0008 left the names of reads and roles to the SDK, so this RFC is where they are decided.
+The decided RFCs define what lies under these calls, and this RFC names the calls in between. [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says which RFC defines what. Every name below links the RFC it builds on, and where an RFC is silent, this RFC says so. GENESIS.md counts public API names among what a user sees first, and RFC 0004, RFC 0005 and RFC 0008 left the names of reads and roles to the SDK, so this RFC is where they are decided.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -779,6 +779,10 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 ## How this RFC is tested
 
 `scripts/rfc-0009.test.mjs` and `scripts/rfc-0009-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file exists, links to RFC 0001 to 0008 and GENESIS.md, that every relative link and its anchor resolve, links from other files included, that it has a section for every part NOC-64 names, that it reads as a fresh text whose choices each name why and the options not taken (`scripts/rfc-0009-fresh.test.mjs`), that every SDK name its TypeScript examples use is listed under [Public names](#public-names) and every row there links the RFC it builds on, that it shows the Rust SDK, and that the [RFC index](README.md) lists it. The design itself is tested where it is built: the Rust SDK's calls in `crates/nocentraldb`, and each call against the convergence harness and the view, natively and in the browser, as it is built.
+
+## How this RFC relates to the others
+
+[RFC 0005](0005-schema-and-model-lock.md) names the schema functions and `model.lock.json`. [RFC 0006](0006-local-view.md) names `db.durability` and the options of `nc.open` ([RFC 0006, "Durability of a browser copy"](0006-local-view.md#durability-of-a-browser-copy)). [RFC 0010](0010-accounts.md) designs accounts, and names the calls of pairing and recovery. [RFC 0001](0001-nocentraldb.md#the-design-in-one-page) shows `db.find` with `take` and `after`. [RFC 0002](0002-change-and-log-format.md) defines the change a write becomes, [RFC 0004](0004-merge-rules-basic-types.md) how each field merges and what a read can show, [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) the keys, roles and members, and [RFC 0007](0007-relay.md) the relay.
 
 ## History
 

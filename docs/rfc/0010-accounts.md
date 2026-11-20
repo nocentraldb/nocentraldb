@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-107
 
 This RFC defines accounts: the account key and where it lives, the recovery key that is the account's identity, the recovery code, how a device or an agent joins an account, how the accounts that each database draws today are linked into one, what happens when a device is lost, and what a member certificate signed by an account means for membership. It turns the sketch in [RFC 0003, "The account key"](0003-keys-and-cryptography.md#the-account-key) into a design, so that a person's devices can be linked before the first release, as the owner asked when deciding that each database draws its own account key for now (NOC-95, Carsten, 2026-11-10).
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page); on [RFC 0003](0003-keys-and-cryptography.md), which defines the account key, the [member certificate](0003-keys-and-cryptography.md#member-certificate) and the [account sign-off of a shred](0003-keys-and-cryptography.md#account-sign-off-of-a-shred); on [RFC 0008](0008-membership.md), which places certificates in the genesis and in membership entries; on [RFC 0007](0007-relay.md), whose relay sees certificates; on [RFC 0006](0006-local-view.md), which keeps one database per member; and on [RFC 0009](0009-sdk-api.md), which names the entry points this RFC designs ([Accounts and devices](0009-sdk-api.md#accounts-and-devices)).
+It builds on [RFC 0003](0003-keys-and-cryptography.md), which defines the account key, and on [RFC 0008](0008-membership.md), which places certificates in membership entries; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0010: Accounts](https://github.com/nocentraldb/nocentraldb/discussions/154), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -267,6 +267,10 @@ Some choices change other texts. Each change is written into that text in its ow
 - **RFC 0008**, from the account's identity: a member checks the chain from the recovery key through the statement to the certificate; accounts are compared by the recovery key, also for the sign-off of an erasure; and a control entry that carries a newer statement into a space, so that the fold refuses certificates and sign-offs by an older account key.
 - **RFC 0009**, from the names of pairing, linking and recovery and the recovery code object: `nc.open({ pairing: "request" })`, `db.account.pair({ kind, invitation })`, `db.account.completePairing(answer)`, `nc.open({ recover })` and the recovery code object with `confirm()` join "Accounts and devices" and "Public names".
 - **The FAQ**: its answer that the recovery code "restores your account key" becomes that it makes a new account key under the same account.
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page); on [RFC 0003](0003-keys-and-cryptography.md), which defines the account key, the [member certificate](0003-keys-and-cryptography.md#member-certificate) and the [account sign-off of a shred](0003-keys-and-cryptography.md#account-sign-off-of-a-shred); on [RFC 0008](0008-membership.md), which places certificates in the genesis and in membership entries; on [RFC 0007](0007-relay.md), whose relay sees certificates; on [RFC 0006](0006-local-view.md), which keeps one database per member; and on [RFC 0009](0009-sdk-api.md), which names the entry points this RFC designs ([Accounts and devices](0009-sdk-api.md#accounts-and-devices)).
 
 ## History
 

@@ -10,7 +10,7 @@ Which keys NoCentralDB uses, who holds them, and which audited primitives use th
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0003: Keys and cryptography](https://github.com/nocentraldb/nocentraldb/discussions/126), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-GENESIS.md reserves crypto, key handling and formats for the owner, and the owner decided everything this RFC says. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. [RFC 0010](0010-accounts.md) builds accounts on the account key defined here. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Each choice below says why it was made and, where a reader would ask, which options were not taken.
+GENESIS.md reserves crypto, key handling and formats for the owner, and the owner decided everything this RFC says. It builds on the change of [RFC 0002](0002-change-and-log-format.md) and uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Each choice below says why it was made and, where a reader would ask, which options were not taken.
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
 
@@ -578,6 +578,10 @@ It makes them more precise in these points:
 - The `hpke` crate's README, on its audit status.
 - SRLabs, audit of OpenMLS, sponsored by the Sovereign Tech Agency.
 - RustSec advisories RUSTSEC-2022-0093 and RUSTSEC-2024-0344.
+
+## How this RFC relates to the others
+
+[RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. [RFC 0010](0010-accounts.md) builds accounts on the account key defined here. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes.
 
 ## History
 

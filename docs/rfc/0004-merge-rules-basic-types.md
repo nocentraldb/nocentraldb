@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-8
 
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every copy of a space reaches the same state in any order of arrival; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says more.
 
 Merge rules are hard to change once a type ships: a changed rule makes old and new clients diverge. So each rule below says why it was chosen and which rules were not.
 
@@ -774,6 +774,10 @@ These rules have limits, stated plainly (principle 4):
 ## How this RFC is tested
 
 `scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001 and RFC 0002, has the sections its ticket requires, and that its relative links resolve. `scripts/rfc-0004-complete.test.mjs` checks the rules of this text where they stand, with the reason and the options not taken for each, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples). The rules themselves are tested when they are built: NOC-16 (basic values) and NOC-17 (sets and links) implement them test first against the convergence harness of NOC-9, with the contract above.
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
 ## History
 

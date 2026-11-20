@@ -4,11 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-23
 
 This RFC defines who belongs to a space and what each member may do. It covers the first change of a space, the roles and their rights, and the bodies of the control changes. It also defines the rules by which every member and the relay fold those control changes into one membership state, the same on every copy, in any order of arrival.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind), with its log state [*rejected*](0002-change-and-log-format.md#rejected-changes) and its rule for changes the relay refuses, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
-
-It also uses [RFC 0005](0005-schema-and-model-lock.md), above all the `model.id` in a space's first control entry ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)) and the person id ([Identifying the person](0005-schema-and-model-lock.md#identifying-the-person)).
-
-It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
+It builds on [RFC 0001](0001-nocentraldb.md) and on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind); [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -709,6 +705,14 @@ This RFC agrees with GENESIS.md and RFC 0001: the relay checks membership withou
 | What happens after a lost device? | A member carries the account's newer account key statement into the space; the fold then refuses adds and sign-offs under the superseded account key. |
 | How does the relay apply the rules? | The same code over the control changes it holds; where it holds less, the members decide. |
 | Groups? | None: withdrawn by the owner (Carsten, 2026-11-09); a later RFC may bring them back. |
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page) and [what it is not](0001-nocentraldb.md#what-it-is-not). It also builds on [RFC 0002](0002-change-and-log-format.md), which reserves control changes as [kind 1](0002-change-and-log-format.md#key-generation-suite-and-kind), with its log state [*rejected*](0002-change-and-log-format.md#rejected-changes) and its rule for changes the relay refuses, on [RFC 0003](0003-keys-and-cryptography.md), which names the control changes and their purpose, on [RFC 0004](0004-merge-rules-basic-types.md), whose style it follows, on [RFC 0006](0006-local-view.md), which keeps a per-space control state that this RFC defines, and on the principles in [GENESIS.md](../../factory/GENESIS.md).
+
+It also uses [RFC 0005](0005-schema-and-model-lock.md), above all the `model.id` in a space's first control entry ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)) and the person id ([Identifying the person](0005-schema-and-model-lock.md#identifying-the-person)).
+
+It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership rules with the data it can see, and by [RFC 0009](0009-sdk-api.md), the SDK's API, which names the calls that write control changes.
 
 ## History
 

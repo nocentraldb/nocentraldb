@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-13
 
 This RFC defines the relay: the protocol members use to push and pull a space's changes and to follow them live, the checks the relay runs before it appends a change, the interface every relay backend implements, and the first backend, serverless on AWS with DynamoDB and S3.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) without redefining them; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -687,6 +687,10 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 | What if the relay is down? | Members keep working; on reconnect they pull, then push what the relay has not confirmed. |
 | What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
 | Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, "The person key"); only a signed-off shred entry deletes one, or, for a provisional shred, the erasure decision that finalizes it, which the relay accepts no sooner than 7 days after the shred. |
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
 
 ## History
 
