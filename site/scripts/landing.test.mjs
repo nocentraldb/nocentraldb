@@ -57,7 +57,7 @@ test("the hero says what it is, in the spec's words", () => {
     "A local-first database for people and agents",
     "A server keeps everyone in sync, yet it only ever sees encrypted data.",
     "NoCentralDB does not exist yet.",
-    "SDKs for TypeScript and Rust.",
+    "A Rust SDK, and a TypeScript SDK for the browser: Chromium, Firefox and Safari. One Rust core, natively and as WebAssembly. Open source under MIT or Apache-2.0.",
     "See how it works",
     "Review the RFCs",
   ])
@@ -315,4 +315,12 @@ test("the code section says the SDK handles every key, and names the one secret 
     "the guide's recovery section",
   );
   assert.ok(!text.includes("designed to"), "the old hedge is gone");
+});
+
+test("the fact line promises no mobile SDK, which 0.1 does not ship", () => {
+  const hero = html.slice(
+    html.indexOf('<section class="hero'),
+    html.indexOf("</section>"),
+  );
+  assert.ok(!/mobile/i.test(hero), "the hero names mobile");
 });
