@@ -1,6 +1,0 @@
-# 2026-11-20 · NOC-384 · The scenario's drawings animate again, each in place, without scroll-driven behaviour
-
-- Decided by: Carsten, 2026-11-20, to pm (NOC-384)
-- Why: since NOC-380 the four drawings of the scenario stood still, and they should move again as they did before: the change travelling through the server, the agent's reads, the home office and the agent exchanging changes while the train is in the tunnel, the changes crossing at the reconnect. Each step's drawing starts when it comes into view and loops by itself; scrolling only decides whether it is visible, never how far it has played. The steps stay stacked and nothing pins, snaps or takes over the wheel or a gesture (2026-11-20-NOC-380-the-landing-page-s-story-is-stacked-steps-without-scroll-behaviour.md stands). The phone's text-free schematics stay as they are. Under reduced motion every drawing shows its still picture, and the page offers a way to pause the motion. This replaces the still drawings of 2026-11-20-NOC-380-the-scenario-s-drawings-stand-still-and-the-phone-schematic-is-drawn-from-the-wide-one-s-parts.md; that file stays current for the phone schematic and the removed scroll code, so it is not marked superseded as a whole.
-- Instead of: the still drawings of NOC-380, and the pinned, scroll-driven scenario before it.
-- Topics: site, design
