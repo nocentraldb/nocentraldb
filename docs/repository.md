@@ -5,7 +5,7 @@ How this repository is laid out, how to set up its tools, and the gates every ch
 ## Layout
 
 ```
-crates/ncdb-core/     Rust core (placeholder)
+crates/ncdb-core/     the Rust core: changes, keys, the fold into the SQLite view and the merge rules, natively and as WebAssembly
 crates/ncdb-plugin/   what a plugin field type implements and depends on (RFC 0011): the FieldType trait, Data, the ids of an operation, Plugin
 crates/ncdb-harness/  the convergence harness (RFC 0011): RFC 0004's checks C1 to C7 for a field type, built in or plugin
 crates/ncdb-test-counter/  a plugin for the tests, test/counter (RFC 0011); not published
@@ -15,15 +15,16 @@ crates/ncdb-relay-server/  the relay server: RFC 0007's WebSocket protocol over 
 crates/ncdb-relay-aws/     the relay's AWS backend on DynamoDB and S3, and the check of what the AWS Emulator covers (docs/aws-emulator.md)
 crates/ncdb-relay-lambda/  the relay as one Lambda function behind API Gateway's WebSocket API, on the AWS backend, and a local stand-in for API Gateway to test it
 infra/aws/            the relay's AWS infrastructure as a CDK app in TypeScript (RFC 0007, "The AWS backend"); its tests synthesize it with no AWS credentials
-crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, locally
-packages/sdk/         @nocentraldb/sdk, the TypeScript SDK (placeholder); etc/api-report.d.ts is its committed API report
+crates/nocentraldb/   the Rust SDK (RFC 0009): open a database, write, read, query and subscribe, sync through a relay, accounts and erasure
+packages/sdk/         @nocentraldb/sdk, the TypeScript SDK in the browser (RFC 0009), its core in a worker as WebAssembly; etc/api-report.d.ts is its committed API report
 apps/tasks-rust/       the example app on the Rust SDK: a task list on two devices, synced through a local relay
-apps/tasks-ts/         the example app on the TypeScript SDK: a task list in the browser, its lists live queries; its Chromium test runs in browser-view.yml
+apps/tasks-ts/         the example app on the TypeScript SDK: a task list in the browser, its lists subscriptions; its Chromium test runs in browser-view.yml
 docs/rfc/             design documents; README.md lists them and says where feedback goes
 docs/repository.md          this page: the layout, the tools and the gates
 docs/getting-started.md     the getting-started guide for the Rust SDK; the doc tests of `nocentraldb` compile its Rust snippets
 docs/getting-started-browser.md  the getting-started guide for the TypeScript SDK in the browser; scripts/doc-snippets.test.mjs type-checks its snippets
 docs/browser-durability.md  browser apps and durability: what a browser copy keeps, what is lost when, and what to tell users
+docs/use-cases.md, faq.md, glossary.md, browser-storage.md  more developer docs; the site renders these and the guides (site/src/repo-docs.mjs)
 docs/release-management.md  how releases are made
 docs/release-flow.svg       the release flow diagram
 factory/              the software factory: GENESIS.md (the product), FACTORY.md (how agents build it), CONFIG.md, decisions/ (the decision log, read with pnpm decisions)
