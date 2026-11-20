@@ -177,13 +177,13 @@ export interface Space {
 interface ErasureEntry {
   /** The change id of the erasure's shred entry. */
   readonly shred: string;
-  /** `"final"` for a shred, or a provisional one a decision finalized; `"provisional"` while it waits; `"takenBack"` when its account took it back. */
-  readonly state: "final" | "provisional" | "takenBack";
+  /** `"final"` for a shred, or a provisional one a decision finalized; `"provisional"` until a decision ends it; `"takenBack"` when its account took it back; `"waiting"` while this copy lacks part of the shred's causal past, with no members until the gap fills (Carsten, 2026-11-20, NOC-392). */
+  readonly state: "final" | "provisional" | "takenBack" | "waiting";
   /** The member that performed it, and its account's fingerprint. */
   readonly performer: { readonly id: string; readonly account: string };
   /** The fingerprint of the account that signed it off. */
   readonly signOff: string;
-  /** Every member that could have held the person key. */
+  /** Every member that could have held the person key; none while the erasure is waiting. */
   readonly members: readonly {
     readonly id: string;
     readonly account: string;
