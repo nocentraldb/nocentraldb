@@ -182,9 +182,41 @@ fn a_lone_wrong_key_envelope_is_reported_and_reads_nothing() {
 
     assert_eq!(
         log.state(f.sealed.id()),
-        Some(&State::Rejected(RejectReason::Undecryptable))
+        Some(&State::Rejected(RejectReason::NoKey))
     );
     assert_eq!(checks.wrong_envelopes().len(), 1);
+}
+
+#[test]
+fn a_change_sealed_under_the_wrong_key_is_undecryptable_as_on_a_member_without_it() {
+    let mut f = first_generation();
+    let first = f.space.first_generation;
+    let payload = Payload::new(Hlc(9 << 16), BTreeSet::new(), vec![set_title(2)]);
+    let sequence = f.space.sequence(ALICE) + 1;
+    let under_wrong = seal::seal(
+        &key(ALICE),
+        &wrong_key(),
+        f.space.space,
+        sequence,
+        first,
+        &payload,
+    );
+    f.space.skip(ALICE, 1);
+
+    let only_right: Vec<&Change> = f.before.iter().chain([&f.right, &under_wrong]).collect();
+    let (log, _) = receive(&f.space, &only_right);
+    assert_eq!(
+        log.state(under_wrong.id()),
+        Some(&State::Rejected(RejectReason::Undecryptable))
+    );
+    for order in [[&f.right, &f.wrong], [&f.wrong, &f.right]] {
+        let order: Vec<&Change> = f.before.iter().chain(order).chain([&under_wrong]).collect();
+        let (log, _) = receive(&f.space, &order);
+        assert_eq!(
+            log.state(under_wrong.id()),
+            Some(&State::Rejected(RejectReason::Undecryptable))
+        );
+    }
 }
 
 /// Alice's space rotated by Alice to a second generation, whose key chain
