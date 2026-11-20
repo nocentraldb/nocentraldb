@@ -9,8 +9,8 @@
 # review (docs/relay-deploy.md). The crates' tests/ directories are not part
 # of the deployed build: a change only to them starts no run (Carsten,
 # 2026-11-20, NOC-403). GitHub takes the last pattern that matches, so each
-# `!` exclusion follows the pattern that includes its crate. No long-lived AWS key exists anywhere, and
-# no agent holds AWS credentials.
+# `!` exclusion follows the pattern that includes its crate. No long-lived
+# AWS key exists anywhere, and no agent holds AWS credentials.
 #
 # - build: on pull requests and on main. It builds the function's arm64
 #   package with cargo-lambda, pinned by version and hash, and has no AWS
