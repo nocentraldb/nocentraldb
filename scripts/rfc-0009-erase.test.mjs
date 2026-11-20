@@ -54,15 +54,13 @@ test("The Rust SDK has the erase calls, their texts and their results", () => {
 });
 
 test("The Rust SDK gives the texts of Erased and TakenBack", () => {
+  // The texts are texts.json's (NOC-329); the bullet quotes them as they are.
+  const texts = JSON.parse(read("texts/texts.json")).texts;
+  const textOf = (id) => texts.find((t) => t.id === id).text;
   const bullet = rustBullet("- **Erasing a person.**");
-  assert.match(
-    bullet,
-    /"The person's personal fields are erased in these spaces\. Devices that never come back online, copies made outside the database and unmarked free text keep them; other devices and agents of this account erase only when they run the erasure too\."/,
-  );
-  assert.match(
-    bullet,
-    /"The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased\."/,
-  );
+  for (const id of ["notice.erased", "notice.takenBack"]) {
+    assert.ok(bullet.includes(`"${textOf(id)}"`), `the bullet quotes ${id}`);
+  }
 });
 
 test("Public names lists the erase calls and their types", () => {

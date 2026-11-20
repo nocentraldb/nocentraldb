@@ -106,7 +106,7 @@ test("getting started says what work orders are, that 0.1 runs none, and that er
   );
   const html = readFileSync(join(dist, "docs/index.html"), "utf8");
   assert.ok(
-    html.includes('href="/docs/concepts/shredding/"'),
+    html.includes('href="/docs/concepts/erasure/"'),
     "a link to the erasure page",
   );
 });
@@ -130,7 +130,7 @@ test("How NoCentralDB works explains the core concepts on one page, with the RFC
     "/docs/concepts/spaces/",
     "/docs/concepts/relay/",
     "/docs/concepts/convergence/",
-    "/docs/concepts/shredding/",
+    "/docs/concepts/erasure/",
   ])
     assert.ok(html.includes(`href="${page}"`), page);
   const images = [
@@ -195,4 +195,28 @@ test("How NoCentralDB works runs one example, projects, tasks and people, throug
     ),
     "the doc tests compile the page's Rust snippets",
   );
+});
+
+test("the erasure page is at /docs/concepts/erasure/, and the old address redirects to it", () => {
+  const page = readFileSync(
+    join(dist, "docs/concepts/erasure/index.html"),
+    "utf8",
+  );
+  assert.match(page, /<h1[^>]*>Erasing a person<\/h1>/);
+  const old = readFileSync(
+    join(dist, "docs/concepts/shredding/index.html"),
+    "utf8",
+  );
+  assert.match(
+    old,
+    /http-equiv="refresh"[^>]*url=\/docs\/concepts\/erasure\//i,
+  );
+  for (const p of docsPages())
+    if (!p.includes("shredding"))
+      assert.ok(
+        !readFileSync(join(dist, p), "utf8").includes(
+          "/docs/concepts/shredding/",
+        ),
+        `${p} links the old address`,
+      );
 });
