@@ -78,7 +78,7 @@ How to read it:
 | metadata | What the relay sees: which key is in which space, when and how much each key writes, the key generations and when they change, the rhythm of work, and who reads which space from where. | traffic data, telemetry |
 | sync | The background exchange of changes between a member and the relay. `db.sync` reports the connection and the unconfirmed changes. | replication, push and pull, upload |
 
-**Exception: "server" on the landing page.** The landing page's hero and its scroll scenario explain the mechanism in plain words, and there the relay is "a server in the cloud", drawn as "Cloud server" (Carsten, 2026-11-12, "The landing page leads with speed, in two colours"; `site/scripts/landing.test.mjs` holds it). From the code section on, the page says "relay", and so does every other text.
+**Exception: "server" on the landing page.** The landing page's hero and its scenario explain the mechanism in plain words, and there the relay is "a server in the cloud", drawn as "Cloud server" (Carsten, 2026-11-12, "The landing page leads with speed, in two colours"; `site/scripts/landing.test.mjs` holds it). From the code section on, the page says "relay", and so does every other text.
 
 ## Keys and erasure
 
