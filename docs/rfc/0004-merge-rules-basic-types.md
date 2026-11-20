@@ -781,7 +781,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 
 ## Decisions
 
-- **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types.md))
+- **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types-a-typed-fieldtype-trait.md))
 - **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 
 ## History
