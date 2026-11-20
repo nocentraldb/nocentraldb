@@ -3,11 +3,11 @@
 // nocentraldb. A step's block is a module of its own, model.ts or <step>.ts,
 // and lines that start with "# " compile but stay off the page.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { check, sections } from "./landing-snippets.mjs";
+import { check, PAGE, sections } from "./landing-snippets.mjs";
 
 const MODEL = [
   "## model",
@@ -77,4 +77,33 @@ test("the shown code of a step leaves out its hidden lines", () => {
     found[1].shown,
     "const db = await nc.open({ model, lock });\ndb.close();",
   );
+});
+
+// The lines each step shows on the page when NOC-371 began: setup the snippets
+// need stays hidden, so none grows longer than it was.
+const SHOWN = {
+  model: 20,
+  open: 7,
+  share: 6,
+  write: 4,
+  read: 4,
+  subscribe: 3,
+};
+
+test("the landing page's TypeScript snippets type-check against the SDK", () => {
+  const { ok, output, count } = check();
+  assert.ok(ok, output);
+  assert.equal(count, Object.keys(SHOWN).length);
+});
+
+test("each landing page step shows no more lines than it did", () => {
+  const found = sections(readFileSync(PAGE, "utf8"));
+  assert.deepEqual(
+    found.map((s) => s.id),
+    Object.keys(SHOWN),
+  );
+  for (const s of found) {
+    const lines = s.shown.split("\n").length;
+    assert.ok(lines <= SHOWN[s.id], `${s.id} shows ${lines} lines`);
+  }
 });
