@@ -56,10 +56,10 @@ test("the hero says what it is, in the spec's words", () => {
   for (const line of [
     "A local-first database for people and agents",
     "A server keeps everyone in sync, yet it only ever sees encrypted data.",
-    "NoCentralDB does not exist yet.",
-    "SDKs for TypeScript and Rust.",
+    "NoCentralDB 0.1 is a pre-release: the Rust SDK, the TypeScript SDK in the browser and the server in the middle work today. Names and formats can still change before 1.0.",
+    "A Rust SDK, and a TypeScript SDK for the browser: Chromium, Firefox and Safari. One Rust core, natively and as WebAssembly. Open source under MIT or Apache-2.0.",
     "See how it works",
-    "Review the RFCs",
+    "Get started",
   ])
     assert.ok(
       html.includes(line.replace("'", "&#39;")) || html.includes(line),
@@ -105,7 +105,7 @@ test("the code section shows installing and the task model in seven tabs", () =>
 });
 test("the close sits on the yellow ground and links to the docs and the use cases", () => {
   assert.match(html, /<footer[^>]*class="[^"]*closing/);
-  assert.ok(html.includes("Read the design, then tell us where it breaks"));
+  assert.ok(html.includes("Build with 0.1, then tell us where it breaks"));
   for (const href of [
     'href="/docs/"',
     'href="/docs/api/"',
@@ -315,4 +315,48 @@ test("the code section says the SDK handles every key, and names the one secret 
     "the guide's recovery section",
   );
   assert.ok(!text.includes("designed to"), "the old hedge is gone");
+});
+
+test("the fact line promises no mobile SDK, which 0.1 does not ship", () => {
+  const hero = html.slice(
+    html.indexOf('<section class="hero'),
+    html.indexOf("</section>"),
+  );
+  assert.ok(!/mobile/i.test(hero), "the hero names mobile");
+});
+
+test("the hero's second button leads to the docs, not the RFCs", () => {
+  const hero = html.slice(
+    html.indexOf('<section class="hero'),
+    html.indexOf("</section>"),
+  );
+  assert.match(
+    hero,
+    /<a class="btn btn--secondary" href="\/docs\/"\s*>Get started<\/a/,
+  );
+  assert.ok(!hero.includes("Review the RFCs"));
+});
+
+test("the close invites the visitor to contribute, beside the feedback", () => {
+  const close = html.slice(html.indexOf("<footer"));
+  for (const href of [
+    "https://github.com/nocentraldb/nocentraldb/discussions",
+    "https://github.com/nocentraldb/nocentraldb/blob/main/CONTRIBUTING.md",
+    "https://github.com/nocentraldb/nocentraldb/labels/good%20first%20issue",
+  ])
+    assert.ok(close.includes(`href="${href}"`), href);
+  assert.match(close, />Contribute</);
+  assert.match(close, />Good first issues</);
+});
+
+test("the close's API card describes the calls 0.1 ships, not a design", () => {
+  const close = html.slice(html.indexOf("<footer"));
+  assert.ok(!close.includes("designs them"));
+  assert.ok(
+    close.replaceAll("&#39;", "'").includes("The SDK's main calls in 0.1."),
+  );
+});
+
+test("no landing text says NoCentralDB does not exist yet", () => {
+  assert.ok(!html.includes("does not exist yet"));
 });

@@ -202,7 +202,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 **The decision: which fields are about a person.** A field marked `.personal({ person })` is encrypted with the key of the person it is about: the object itself, `"self"`, or the person a link of the same collection names. In the example, a person's `name` and `email` are about that person. A task holds nothing about Anna but the reference: a reference cannot be the person of a personal field, because a person in another space has no key in this one that an erasure could destroy.
 
-Erasing Anna destroys her person key in the people space. Her `name` and `email` then read as unset on every member that accepts the erasure; the Rust SDK lists them in `object.erased()`. The tasks that name her keep their reference, and the audit trail of who changed what survives. In 0.1 the Rust SDK erases; the browser SDK reads the erasure audit. More in [Erasing a person](/docs/concepts/shredding/).
+Erasing Anna destroys her person key in the people space. Her `name` and `email` then read as unset on every member that accepts the erasure; the Rust SDK lists them in `object.erased()`. The tasks that name her keep their reference, and the audit trail of who changed what survives. In 0.1 the Rust SDK erases; the browser SDK reads the erasure audit. More in [Erasing a person](/docs/concepts/erasure/).
 
 ## Roles: who may do what, per space
 

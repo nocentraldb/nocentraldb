@@ -19,7 +19,7 @@ NoCentralDB 0.1 is the first planned release. Its alphas are out, and names and 
 
 - **Node.js and native mobile apps.** The TypeScript SDK runs in a browser only; on a server or in an agent, use the Rust SDK.
 - **Rich text and streams.** Their field types are reserved in the schema and wait for their RFC.
-- **Work orders.** Clean-up and maintenance jobs that one member does and another member checks: a second device for a job that can be undone, a second account for one that cannot. The main one is compaction, which moves old history into a signed, encrypted archive so a space's log stays small. 0.1 runs none of them. Erasing a person, which also needs a second account's sign-off, works in 0.1 through its own path, in the Rust SDK ([Erasing a person](/docs/concepts/shredding/)).
+- **Work orders.** Clean-up and maintenance jobs that one member does and another member checks: a second device for a job that can be undone, a second account for one that cannot. The main one is compaction, which moves old history into a signed, encrypted archive so a space's log stays small. 0.1 runs none of them. Erasing a person, which also needs a second account's sign-off, works in 0.1 through its own path, in the Rust SDK ([Erasing a person](/docs/concepts/erasure/)).
 - **Private windows.** A private window of Firefox or Safari has no origin private file system (OPFS), so `nc.open` refuses with `storageUnavailable`. In Chromium's private window the database is deleted when the window closes.
 - **A frozen tab in Safari.** On a phone, Safari can freeze a hidden tab before it gives the database's storage back. The visible tab's writes then wait until that tab runs again, and `db.durability` reports `waitingForTab`.
 
