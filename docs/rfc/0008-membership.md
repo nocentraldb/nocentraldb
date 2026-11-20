@@ -18,9 +18,9 @@ Membership rules decide how permissions behave, which GENESIS.md asks us to tell
 
 These ideas carry this RFC:
 
-- **Membership is written in the log.** Who belongs to a space, and in which role, is not a table on a server. It is a series of control changes in the space's log: adding a member, changing a role, removing a member, handing out keys. Each is signed by the admin who made it.
+- **Membership is written in the log.** Who belongs to a space, and in which role, is not a table on a server. It is a series of control changes in the space's log: adding a member, changing a role, removing a member, handing out keys. Each is signed by the member who made it, and the rules say which role may make which.
 - **Three roles.** A reader holds the keys and reads everything. A writer also writes content. An admin also changes membership and rotates the space key. Rights apply to the whole space.
-- **Rights are checked after the fact.** Members write offline, so no one can check a right at the moment of writing. Every member, and the relay, works out from the control changes it holds whether each change was allowed, and folds only those that were.
+- **Rights are checked after the fact.** Members write offline, so no one can check a right at the moment of writing. Every member, and the relay, works out from the control changes it holds whether each change was allowed; members fold only those that were, and the relay refuses the others.
 - **Everyone reaches the same verdict.** The check reads only the control changes and the parts of each change that are not encrypted. The order of arrival never matters, so every copy that holds the same changes reaches the same verdict, and the relay runs the same code.
 - **A removal draws a line, the cutoff.** An admin who removes a member names the last change of that member it had received. Changes up to that line count; changes after it do not, on any copy. The line is a number in the change, not a time, because a removed member could write any time it likes.
 - **A verdict can change when a late change arrives.** A member that has not yet received a removal accepts the removed member's changes. When the removal arrives, it takes them out again, and the app is told. The one exception is an erasure: once accepted, it is final.

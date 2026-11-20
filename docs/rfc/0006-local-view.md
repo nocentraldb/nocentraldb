@@ -18,7 +18,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member f
 
 These ideas carry this RFC:
 
-- **The log is the truth; the view is computed from it.** Each member keeps the log of every space it belongs to. The data an app reads lives in the local view, an SQLite database the core computes from the log. If the view is lost or damaged, or the model changes, the core rebuilds it from the log.
+- **The log is the truth; the view is computed from it.** Each member keeps the log of every space it belongs to. The data an app reads lives in the local view, an SQLite database the core computes from the log. If the view is lost or damaged, or the model changes in a way the view cannot follow in place, the core rebuilds it from the log.
 - **The fold.** When a change arrives, the core checks it, decrypts it in memory, applies each edit through its field type's merge rule and writes the result into a table row, all in one transaction.
 - **Reads never wait for the network.** An app reads only from the view on its own device. The read path has no network code in it, so a read is as fast as a local database and works offline.
 - **Queries only through declared indexes.** The model declares the indexes an app may query by. The core generates the SQL, so every query uses its index and costs only its result. Apps write no SQL.
