@@ -59,7 +59,7 @@ test("the hero says what it is, in the spec's words", () => {
     "NoCentralDB does not exist yet.",
     "A Rust SDK, and a TypeScript SDK for the browser: Chromium, Firefox and Safari. One Rust core, natively and as WebAssembly. Open source under MIT or Apache-2.0.",
     "See how it works",
-    "Review the RFCs",
+    "Get started",
   ])
     assert.ok(
       html.includes(line.replace("'", "&#39;")) || html.includes(line),
@@ -105,7 +105,7 @@ test("the code section shows installing and the task model in seven tabs", () =>
 });
 test("the close sits on the yellow ground and links to the docs and the use cases", () => {
   assert.match(html, /<footer[^>]*class="[^"]*closing/);
-  assert.ok(html.includes("Read the design, then tell us where it breaks"));
+  assert.ok(html.includes("Build with 0.1, then tell us where it breaks"));
   for (const href of [
     'href="/docs/"',
     'href="/docs/api/"',
@@ -323,4 +323,28 @@ test("the fact line promises no mobile SDK, which 0.1 does not ship", () => {
     html.indexOf("</section>"),
   );
   assert.ok(!/mobile/i.test(hero), "the hero names mobile");
+});
+
+test("the hero's second button leads to the docs, not the RFCs", () => {
+  const hero = html.slice(
+    html.indexOf('<section class="hero'),
+    html.indexOf("</section>"),
+  );
+  assert.match(
+    hero,
+    /<a class="btn btn--secondary" href="\/docs\/"\s*>Get started<\/a/,
+  );
+  assert.ok(!hero.includes("Review the RFCs"));
+});
+
+test("the close invites the visitor to contribute, beside the feedback", () => {
+  const close = html.slice(html.indexOf("<footer"));
+  for (const href of [
+    "https://github.com/nocentraldb/nocentraldb/discussions",
+    "https://github.com/nocentraldb/nocentraldb/blob/main/CONTRIBUTING.md",
+    "https://github.com/nocentraldb/nocentraldb/labels/good%20first%20issue",
+  ])
+    assert.ok(close.includes(`href="${href}"`), href);
+  assert.match(close, />Contribute</);
+  assert.match(close, />Good first issues</);
 });
