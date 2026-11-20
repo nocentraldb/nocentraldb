@@ -215,7 +215,7 @@ Linking needs the old database. A per-database account whose database is gone ca
 
 ## Losing a device
 
-`db.account.removeMember(memberId)`, run on another device of the account ([RFC 0009, "Accounts and devices"](0009-sdk-api.md#accounts-and-devices)):
+`db.account.removeMember(memberId, { recover })`, with the recovery code, run on another device of the account ([RFC 0009, "Accounts and devices"](0009-sdk-api.md#accounts-and-devices)):
 
 1. Removes the lost member from every space where a device of the account is an admin, which rotates each space key ([RFC 0003, "Removing a member and rotating the space key"](0003-keys-and-cryptography.md#removing-a-member-and-rotating-the-space-key)), and from the account space. The account space says which spaces those are, including ones the running device is not in, which it lists for the app.
 2. Lists the spaces where the lost member is a member and no device of the account is an admin, so the app can ask their admins to remove it.
@@ -292,6 +292,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-14 · members.list() shows a linked account's old fingerprint as linked to the person's (MemberInfo::linked_to) (NOC-269, #319)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · `removeMember` takes the recovery code (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 
 ## How this RFC is tested

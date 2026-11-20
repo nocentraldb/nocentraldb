@@ -95,7 +95,7 @@ Where no keystore is reachable and no key file is named, the SDK does not open t
 | 16 | 1 | format | `2` |
 | 17 | 32 | member signing secret | the member key's Ed25519 secret |
 | 49 | 32 | member agreement secret | the member key's X25519 secret |
-| 81 | 1 | account | `0`: no account yet, a database opened for pairing that has not completed it; `1`: the database holds the account key; `2`: an agent, which holds only its certificate |
+| 81 | 1 | account | `0`: no account yet, a database opened for pairing that has not completed it, or none ever, a sub-agent's database (Carsten, 2026-11-15, NOC-320); `1`: the database holds the account key; `2`: an agent, which holds only its certificate |
 | then | 136 | with account `1` | the account secret (32), the recovery key (32), the account key statement's number (8, big-endian) and its signature (64) |
 | then | 200 | with account `2` | the account key (32), the certificate signature (64), the recovery key (32), the statement's number (8, big-endian) and its signature (64) |
 | then | 1 | code | `0`, or `1` and the recovery code's 16 bytes, which the record keeps until the person confirmed they stored the code |
@@ -134,7 +134,7 @@ Each member receives the current generation in a **key envelope**: the generatio
 
 The schema marks personal fields and ties each one to a person (RFC 0001, "Personal fields"). The person need not be a member; it is usually a customer, a patient or an employee the data is about. A person is identified across spaces by its **person id**, as [RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person) defines it: 128 random bits, kept on the person's objects inside the encrypted payload. Members map a person id to that person's person-key id in each space. The relay never sees the person id. Its person-key store is keyed by the person-key id, which is random per space, so the relay cannot link one person across spaces. Where RFC 0005 says the person-key store works by person id, this RFC reads it as the members' mapping, not the relay's key.
 
-For each person and each space that holds that person's data, the SDK creates a **person key**: 32 random bytes. There is one key per person id per space, because a space's members never need a key that also opens the person's data in other spaces; an erasure work order finds the person's keys by person id and shreds them in every space the performing account can reach. One key per person across all spaces, distributed into each space, was not taken.
+For each person and each space that holds that person's data, the SDK creates a **person key**: 32 random bytes. There is one key per person id per space, because a space's members never need a key that also opens the person's data in other spaces; an erasure finds the person's keys by person id and shreds them in every space of the performing member's database where that member may write (Carsten, 2026-11-15, NOC-326). One key per person across all spaces, distributed into each space, was not taken.
 
 The person key encrypts the person's personal fields inside the change, before the change as a whole is encrypted with the space key. Unlike everything else in a space, the person key does not live in the append-only log, because a log entry cannot be destroyed. It lives in the space's **person-key store**: one record per person, wrapped under the current space key generation ([Person-key record](#person-key-record)), held by the relay as an opaque record that can be deleted. A member holds the person keys of its spaces in memory only: its SDK fetches the space's records from the relay again on every connection and writes no person key to the device, so an erasure has no copy on a member's disk to reach. Keeping them in the platform keystore was not taken: it would leave a copy on every device that a shred must reach, for a fetch the member needs on every connection anyway; the owner decided this on NOC-222 (Carsten, 2026-11-11). Destroying the key is the erasure; see [Shredding a person's key](#shredding-a-persons-key).
 
@@ -233,9 +233,9 @@ An agent that hands part of its task to a sub-agent does not share its own membe
 4. The sub-agent works in the ad-hoc space. The parent, also a member, reads the results and writes what it accepts back into the original space under its own member key.
 5. When the task ends, the parent deletes the ad-hoc space and its key, and the sub-agent's member key is discarded. For a local ad-hoc space this is a local deletion and needs no format. Deleting a space that reached the relay, for every member and at the relay, is not defined yet (see [Not defined here](#not-defined-here)).
 
-When the parent and the sub-agent run on the same machine, the ad-hoc space can stay local and never reach the relay; when the sub-agent runs elsewhere, the space syncs through the relay like any other.
+An ad-hoc space syncs through the relay like any other. One that stays local, never reaching the relay, when the parent and the sub-agent run on the same machine comes later: no RFC says yet how changes travel between two databases on one machine (Carsten, 2026-11-15, NOC-320).
 
-**Personal fields** are not copied unless the parent asks explicitly, because a sub-agent gets the least it needs. When the parent does ask, the person key is shared into the ad-hoc space, so that an erasure still reaches the copy. A person key that is always shared into the ad-hoc space was not taken.
+**Personal fields** are not copied unless the parent asks explicitly, because a sub-agent gets the least it needs. When the parent does ask, the ad-hoc space gets a person key of its own for the person, and the copy keeps the person id, so that an erasure, which finds a person's keys by person id, still reaches the copy (Carsten, 2026-11-15, NOC-320). Two options were not taken: the same person key, or the same person-key id, in both spaces, since one key per person per space, with an id random per space, keeps the relay from linking a person across spaces; and a person key always shared into the ad-hoc space, even when the parent did not ask. Personal copies are not built in 0.1, so the parent cannot ask for them yet.
 
 **What it does not do.** The ad-hoc space limits what the sub-agent can decrypt. It does not stop a sub-agent that runs as the same operating-system user from reading the parent's keystore on disk. For a real boundary, the sub-agent must run in a sandbox, container or separate user that cannot reach the parent's keystore. The SDK says so where it creates the space.
 
@@ -516,7 +516,7 @@ The names are [RFC 0009](0009-sdk-api.md)'s, except `db.workOrders.erase`, which
 
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
 - **Stores** private keys in the platform's keystore, or in the key file a headless agent names, and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB ([The member key](#the-member-key) gives its layout). Only the file's permissions protect a key file.
-- **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. The one way a private key leaves a device is the account recovery flow, which a person runs, not an app.
+- **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. A private key leaves a device only when a person pairs a new device of the account: the account key travels to it sealed to the new device's member key ([Pairing answer](#pairing-answer)). Recovery derives the recovery key on the device where the person enters the code, so nothing leaves a device for it.
 - **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
 `members.add` takes an invitation and `members.remove` a member id, and every call that changes who can read what (`members.add`, `members.remove`, `workOrders.erase`, invitations) returns a notice. A developer then never handles key material, and a change of who can read what is never silent. Public keys passed to `members.add` were not taken: a public key is not secret, but passing an invitation or a member id keeps developers away from key material altogether. [Use case 3](../use-cases.md#3-an-outside-agent-limited-to-one-space) shows `members.add(invitation)` and `members.remove(memberId)`.
@@ -590,6 +590,10 @@ It makes them more precise in these points:
 - **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
 - **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
+- **2026-11-15 · An erasure reaches every space of the member's database where it may write.** (Carsten, 2026-11-15, NOC-326; [decision](../../factory/decisions/2026-11-15-NOC-326-q5-a-every-space-of-this-database.md))
+- **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
+- **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
+- **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
 
 ## History
 
@@ -607,5 +611,6 @@ It makes them more precise in these points:
 - 2026-11-15 · A sub-agent's identity: OpenOptions::sub_agent, the version 3 invitation, and an agent's add (NOC-318, #342)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)

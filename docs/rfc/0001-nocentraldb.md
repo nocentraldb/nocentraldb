@@ -28,7 +28,7 @@ For many apps a central database is still the right choice. If you need queries 
 
 ## Why now
 
-Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use. But agents read text, search data and process it far faster than people do, so the network becomes the bottleneck. Coding agents are fast and capable because everything they need is right next to them, on the same disk. MCP servers work well for occasional searches or changes. Data that an agent searches and processes often, though, has to be there at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold a non-exportable key that a passkey unlocks. A phone can store a team's complete working set.
+Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use. But agents read text, search data and process it far faster than people do, so the network becomes the bottleneck. Coding agents are fast and capable because everything they need is right next to them, on the same disk. MCP servers work well for occasional searches or changes. Data that an agent searches and processes often, though, has to be there at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold keys its page cannot read, sealed under a non-extractable WebCrypto key. A phone can store a team's complete working set.
 
 So "trust the server" no longer has to be the default security model. Many apps need neither SQL on a server nor a central database. Your data can live where the work happens, on every device and with every agent you trust, under your own keys. Cloud services carry the encrypted changes but never hold the keys.
 
@@ -189,6 +189,7 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 ## Decisions
 
 - **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
 - **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
 
 ## History
@@ -201,4 +202,5 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #389)
 - 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)

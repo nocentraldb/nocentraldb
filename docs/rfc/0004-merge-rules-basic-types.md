@@ -14,7 +14,7 @@ Merge rules are hard to change once a type ships: a changed rule makes old and n
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/discussions/127), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata ([RFC 0002](0002-change-and-log-format.md)); how this RFC's operations sit inside RFC 0002's operation map is [How field operations travel in a change](#how-field-operations-travel-in-a-change). Object deletion, except how a deletion travels ([Creating and deleting an object](#creating-and-deleting-an-object)); [Links](#links) says what this RFC assumes about it. Of object creation, this RFC defines only what two creates of one object id mean.
+**Out of scope.** Rich text and streams (later RFCs). A personal field merges as a basic value; how its value is sealed is [RFC 0003's](0003-keys-and-cryptography.md#personal-value), and how it travels is in [The arguments of each operation](#the-arguments-of-each-operation). Computed fields and views. The encoding of changes and of the ordering metadata ([RFC 0002](0002-change-and-log-format.md)); how this RFC's operations sit inside RFC 0002's operation map is [How field operations travel in a change](#how-field-operations-travel-in-a-change). Object deletion, except how a deletion travels ([Creating and deleting an object](#creating-and-deleting-an-object)); [Links](#links) says what this RFC assumes about it. Of object creation, this RFC defines only what two creates of one object id mean.
 
 ## The ideas behind this RFC
 
@@ -327,7 +327,7 @@ RFC 0002 confirms that causal delivery is not guaranteed, and this RFC does **no
 
 ## The plugin contract
 
-RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
+RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so every field type, built in or plugin, must meet this contract. The core cannot prove it of a plugin: it runs what the app registers, and the plugin's author checks the contract in the plugin's CI ([RFC 0011, "Checking a plugin: ncdb-harness"](0011-plugin-field-types.md#checking-a-plugin-ncdb-harness); Carsten, 2026-11-12, NOC-232). The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
 
 ### What a field type defines
 
@@ -353,13 +353,13 @@ RFC 0001 lets developers add field types as plugins, and the core runs them next
 | C6  | **The checks fire.** The type's broken fixtures fail C1 to C5.                                                                                                                                                                                                                     | Runs every broken fixture and expects a failure; a fixture that passes fails the gate.                                                                      |
 | C7  | **Tested reads.** read and outcome are the only way the app sees the state, so they are checked as part of the state: two copies with equal state bytes give equal reads.                                                                                                        | Compares read values and outcomes, not only state bytes.                                                                                                     |
 
-The harness runs in `pnpm gates` and is deterministic for a seed, which it prints on failure. A field type that does not pass it does not ship in the core and is not accepted as a plugin.
+The harness runs in `pnpm gates` and is deterministic for a seed, which it prints on failure. A built-in field type that does not pass it does not ship in the core; a plugin's author runs it in the plugin's CI.
 
 What the contract does not check: whether the merge does what users expect, how large the state grows, and whether the type is fast. Those are reviewed by people. The contract only guarantees that every copy agrees and that every change is accounted for.
 
 ## How field operations travel in a change
 
-[RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This section fills them in for the types of this RFC, and for an object's deletion, a boolean basic value of the object ([Creating and deleting an object](#creating-and-deleting-an-object)). It changes no merge rule: state, apply, read and outcome above stay as they are. Rich text, streams and personal fields are not covered; their RFCs take numbers from the same table.
+[RFC 0002](0002-change-and-log-format.md) defines the operation map of a change (keys 1 to 5) and leaves the operation number (key 4) and the value (key 5) to the field type. This section fills them in for the types of this RFC, and for an object's deletion, a boolean basic value of the object ([Creating and deleting an object](#creating-and-deleting-an-object)). It changes no merge rule: state, apply, read and outcome above stay as they are. Rich text and streams are not covered; their RFCs take numbers from the same table.
 
 ### Where field operations sit in a change
 
@@ -407,7 +407,7 @@ The arguments sit in key 5 as a map with small integer keys, because RFC 0002's 
 | 2         | **add**                       | set, links (many targets)                                        | `{1: element, 2: replaces}`           |
 | 3         | **remove**                    | set, links (many targets)                                        | `{1: element, 3: observed}`           |
 | 4         | **delete**                    | none: it writes whether the object is deleted                    | `{1: true or false, 2: replaces}`; key 3 absent |
-| 5 to 63   | reserved                      | later built-in types: rich text, streams, personal fields        | defined by their RFCs                 |
+| 5 to 63   | reserved                      | later built-in types: rich text, streams                         | defined by their RFCs                 |
 | 64 and up | reserved for plugin types     | each plugin type numbers its own operations                      | defined by the plugin                 |
 
 The rules for the numbers:
@@ -791,5 +791,6 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · Personal fields are no later field type, and the core cannot prove a plugin converges (NOC-362, #389)
 - 2026-11-20 · What the merge rules rely on follows the rules, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
