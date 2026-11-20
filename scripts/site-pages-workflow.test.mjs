@@ -1,7 +1,7 @@
 // Asserts .github/workflows/site-pages.yml (NOC-213): the deploy of the site
 // (site/, Astro and Starlight) to GitHub Pages under nocentraldb.io. It runs
 // on a push to main that changes the site, the docs it renders from docs/,
-// the release index or the workflow, and when a person
+// the SDK's API report, the release index or the workflow, and when a person
 // starts it; it has only the permissions Pages needs; one deploy runs at a
 // time and none is cancelled; it builds the site, checks the built output
 // with site/scripts/output.test.mjs before it uploads it, uploads exactly
@@ -60,11 +60,13 @@ runWorkflowChecks({
         const on = workflow(ctx).on ?? {};
         assert.deepEqual(Object.keys(on).sort(), ["push", "workflow_dispatch"]);
         assert.deepEqual(on.push.branches, ["main"]);
-        // The docs the site renders from docs/, and the release index its
-        // install lines follow, change the site too (NOC-361).
+        // The docs the site renders from docs/ and from the SDK's API
+        // report, and the release index its install lines follow, change
+        // the site too (NOC-361).
         assert.deepEqual(on.push.paths, [
           "site/**",
           "docs/*.md",
+          "packages/sdk/etc/api-report.d.ts",
           "release-notes/index.json",
           WORKFLOW,
         ]);
