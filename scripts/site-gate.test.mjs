@@ -20,6 +20,13 @@ test("repo:site installs the site from its lockfile, builds it and checks the ou
     "pnpm --dir site install --frozen-lockfile && pnpm --dir site build && node --test 'site/scripts/*.test.mjs'",
   );
   assert.ok(site.inputs?.includes("/site/**/*"), "the site is an input");
+  // NOC-361: the site renders docs from docs/, and its install lines follow
+  // the release index.
+  assert.ok(site.inputs?.includes("/docs/*.md"), "the docs are an input");
+  assert.ok(
+    site.inputs?.includes("/release-notes/index.json"),
+    "the release index is an input",
+  );
 });
 
 test("pnpm gates runs repo:site", () => {
