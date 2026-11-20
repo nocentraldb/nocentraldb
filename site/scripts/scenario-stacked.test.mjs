@@ -1,7 +1,7 @@
 // NOC-380 (owner, 2026-11-20): the scenario tells its story in steps stacked one
 // under the other at every width, with no scroll behaviour: nothing pins, snaps,
-// takes over the wheel or moves with the scroll. On a phone no text in a drawing
-// is larger than the step's text. Reads the built page in site/dist and the
+// takes over the wheel or moves with the scroll. On a phone each step's drawing is
+// a small schematic without any text. Reads the built page in site/dist and the
 // stylesheets; scripts/site-demo/scenario-stacked.e2e.test.mjs measures the same
 // in Chromium.
 import assert from "node:assert/strict";
@@ -40,7 +40,7 @@ test("its four steps stand in one list, each with its title, text and drawing", 
     assert.match(step, /<h3>/);
     assert.match(step, /<p>/);
     assert.match(step, /<figure[^>]*>\s*<svg class="sc sc--wide"/);
-    assert.match(step, /<svg class="sc sc--tall"/);
+    assert.match(step, /<svg class="sc sc--phone"/);
   }
 });
 test("its drawings stand still", () => {
@@ -64,23 +64,20 @@ test("the page loads no moment and no wheel or snap handling", () => {
     assert.ok(!css.includes(needle), needle);
 });
 
-// The phone rule. A drawing's text is drawn at its font size times the drawing's
-// width over its viewBox width. The tall drawing (viewBox 400 wide) is at most 400 px
-// wide on a phone, and none of its type is set above the step's 16 px body text.
-const BODY = 16;
-test("on a phone no text in a drawing is set larger than the step's text", () => {
-  const scene = readFileSync(join(site, "src/styles/scene.css"), "utf8");
-  const sizes = [
-    ...scene.matchAll(
-      /\.sc\.sc--tall \.sc-[\w-]+\s*\{\s*font-size:\s*([\d.]+)px/g,
-    ),
-  ].map((m) => Number(m[1]));
-  assert.equal(sizes.length, 5, "the tall drawing's five type sizes");
-  for (const size of sizes) assert.ok(size <= BODY, `${size}px`);
+// The phone rule (owner, 2026-11-20): below 640px each step shows its phone drawing,
+// a schematic that holds no text; the words are the step's own.
+test("each step's phone drawing holds no text", () => {
+  const drawings = [
+    ...story.matchAll(/<svg class="sc sc--phone"[\s\S]*?<\/svg>/g),
+  ];
+  assert.equal(drawings.length, 4);
+  for (const [svg] of drawings)
+    assert.ok(!svg.includes("<text"), svg.slice(0, 80));
 });
-test("on a phone a drawing is never wider than its viewBox", () => {
+test("below 640px a step shows its phone drawing, from 640px its wide one", () => {
   assert.match(
     css,
-    /@media\s*\((?:max-width:\s*|width\s*<=\s*)639px\)\s*\{[^}]*#story figure\{[^}]*max-width:400px/,
+    /@media\s*\((?:max-width:\s*|width\s*<=\s*)639px\)\s*\{[^}]*#story figure \.sc--wide\{display:none\}/,
   );
+  assert.match(css, /\.sc--phone\{display:none\}/);
 });

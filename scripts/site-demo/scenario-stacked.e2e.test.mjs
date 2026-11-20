@@ -1,7 +1,7 @@
 // The landing page's scenario in Chromium (NOC-380, owner, 2026-11-20): at a
 // phone's, a tablet's and a desktop's width its four steps stand one under the
-// other, nothing pins it or holds the wheel, and on a phone no text in a drawing
-// is drawn larger than the step's text. Through Playwright; not part of
+// other, nothing pins it or holds the wheel, and a phone shows each step's
+// drawing as a small schematic without text. Through Playwright; not part of
 // `pnpm gates`, as the other files here (site/scripts/scenario-stacked.test.mjs
 // checks the built page in the gate).
 import assert from "node:assert/strict";
@@ -100,28 +100,32 @@ for (const width of [375, 768, 1280]) {
 }
 
 for (const width of [375, 639]) {
-  test(`at ${width}px no text in a drawing is larger than the step's text`, async () => {
+  test(`at ${width}px each step's drawing is the phone schematic and shows no text`, async () => {
     const page = await open(width);
-    const { body, largest } = await page.evaluate(() => {
-      const body = parseFloat(
-        getComputedStyle(document.querySelector("#story li p")).fontSize,
-      );
-      let largest = { size: 0, text: "" };
-      for (const text of document.querySelectorAll("#story svg.sc text")) {
-        const svg = text.ownerSVGElement;
-        if (!svg.getBoundingClientRect().width) continue; // the layout not shown
-        const scale =
-          svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
-        const size = parseFloat(getComputedStyle(text).fontSize) * scale;
-        if (size > largest.size) largest = { size, text: text.textContent };
-      }
-      return { body, largest };
-    });
-    assert.ok(largest.size > 0, "a drawing is shown");
-    assert.ok(
-      largest.size <= body,
-      `"${largest.text}" is drawn at ${largest.size.toFixed(1)}px, the step's text at ${body}px`,
+    const shown = await page.evaluate(() =>
+      [...document.querySelectorAll("#story figure")].map((figure) =>
+        [...figure.querySelectorAll("svg.sc")]
+          .filter((svg) => svg.getBoundingClientRect().width > 0)
+          .map((svg) => ({
+            layout: svg.classList.contains("sc--phone") ? "phone" : "wide",
+            texts: svg.querySelectorAll("text").length,
+          })),
+      ),
     );
+    assert.equal(shown.length, 4);
+    for (const drawings of shown)
+      assert.deepEqual(drawings, [{ layout: "phone", texts: 0 }]);
     await page.close();
   });
 }
+
+test("at 768px each step's drawing is the wide one", async () => {
+  const page = await open(768);
+  const layouts = await page.evaluate(() =>
+    [...document.querySelectorAll("#story svg.sc")]
+      .filter((svg) => svg.getBoundingClientRect().width > 0)
+      .map((svg) => svg.classList.contains("sc--wide")),
+  );
+  assert.deepEqual(layouts, [true, true, true, true]);
+  await page.close();
+});
