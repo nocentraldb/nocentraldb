@@ -248,7 +248,8 @@ test("Install is the first step, and no install line stands beside the tabs", ()
   const lines = currentInstallLines(new URL("../../", import.meta.url));
   assert.ok(text.includes(lines.npm), lines.npm);
   assert.ok(text.includes(lines.cargo), lines.cargo);
-  if (lines.stage === "alpha")
+  // the Rust note links the releases while the crate comes from an alpha tag
+  if (lines.cargoStage === "alpha")
     assert.ok(
       code.includes("github.com/nocentraldb/nocentraldb/releases"),
       "the releases page",

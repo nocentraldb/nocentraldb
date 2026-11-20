@@ -13,9 +13,11 @@ import { currentInstallLines } from "../install.mjs";
 import rustSource from "./code-rust.md?raw";
 import tsSource from "./code-ts.md?raw";
 
-// The install lines follow release-notes/index.json and the newest alpha tag,
-// read when the site is built (install.mjs): the site shows the current ones
-// after each deploy. The build runs in site/.
+// The install lines follow release-notes/index.json, what npm and crates.io
+// serve, and the newest alpha tag, read when the site is built (install.mjs):
+// the site shows the current ones after each deploy. Each line has its own
+// stage, since npm serves a beta only once the owner approves it. The build
+// runs in site/.
 const install = currentInstallLines(pathToFileURL(`${process.cwd()}/../`));
 
 /** The block of each step of a code file, by step id, without its hidden lines. */
@@ -53,7 +55,7 @@ const steps = [
     },
     rust: {
       note:
-        install.stage === "alpha"
+        install.cargoStage === "alpha"
           ? 'Add the crate to your app. Until the first beta it comes from a release tag: the newest is in the <a href="https://github.com/nocentraldb/nocentraldb/releases">releases</a>.'
           : "Add the crate to your app.",
     },
