@@ -24,7 +24,8 @@ mod space;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use ncdb_core::membership::{self, Role, Verdict, resolve};
+use ncdb_core::change::Change;
+use ncdb_core::membership::{self, Entry, ErasureDecision, Role, Verdict, resolve};
 
 use space::Space;
 
@@ -63,4 +64,53 @@ fn m_c8_a_shred_accepted_over_a_gap_in_its_causal_past_is_not_rejected_when_the_
         before != Some(&Verdict::Accepted) || after == Some(&Verdict::Accepted),
         "the shred was {before:?} while its causal past had a gap, and {after:?} once the gap filled"
     );
+}
+
+/// The same for the erasure decision that finalizes a provisional shred,
+/// which destroys the person key as an accepted shred does. Erin, an admin
+/// of the space's only account, finalizes Bob's provisional shred. Alice
+/// had demoted Erin to a reader before, and the finalize depends on that
+/// demotion through Alice's add of Frank, which saw it: in the finalize's
+/// whole causal past, Erin is no admin. A holder that has the add and the
+/// finalize but not yet the demotion must not accept the finalize.
+#[test]
+fn m_c8_a_finalize_accepted_over_a_gap_in_its_causal_past_is_not_rejected_when_the_gap_fills() {
+    const ERIN: u8 = 5;
+    const FRANK: u8 = 6;
+    let mut s = Space::new(ALICE);
+    let genesis = s.genesis.clone();
+    let bob = s.add(ALICE, BOB, Role::Writer, &[&genesis]);
+    let erin = s.add(ALICE, ERIN, Role::Admin, &[&bob]);
+    let person = s.person_key(BOB, 1, 0xc1, &[&erin]);
+    let shred = s.shred(BOB, 1, &space::account(), &[&person]);
+    let demote_erin = s.set_role(ALICE, ERIN, Role::Reader, s.sequence(ERIN), &[&shred]);
+    let frank = s.add(ALICE, FRANK, Role::Reader, &[&demote_erin, &shred]);
+    let finalize = decide(&mut s, ERIN, &shred, &[&frank]);
+    let base = [genesis, bob, erin, person, shred];
+
+    let with_gap = resolve(s.space, base.iter().chain([&frank, &finalize]));
+    let whole = resolve(
+        s.space,
+        base.iter().chain([&frank, &finalize, &demote_erin]),
+    );
+    let before = with_gap.verdict(finalize.id());
+    let after = whole.verdict(finalize.id());
+    assert!(
+        before != Some(&Verdict::Accepted) || after == Some(&Verdict::Accepted),
+        "the finalize was {before:?} while its causal past had a gap, and {after:?} once the gap filled"
+    );
+    let destroyed = |state: &membership::Resolved| {
+        state
+            .person_key(space::person(1))
+            .is_some_and(|key| key.destroyed())
+    };
+    assert!(!destroyed(&with_gap) || destroyed(&whole));
+}
+
+fn decide(s: &mut Space, author: u8, shred: &Change, deps: &[&Change]) -> Change {
+    let entry = Entry::ErasureDecision(ErasureDecision {
+        shred: shred.id(),
+        finalize: true,
+    });
+    s.write(author, entry, deps)
 }
