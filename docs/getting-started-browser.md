@@ -279,7 +279,7 @@ const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, name: "tasks" });
 
 const otherTab = document.createElement("p");
-otherTab.textContent = "Another tab of this app is open. Until it is back, nothing is saved here.";
+otherTab.textContent = "Another tab of this app is open in this browser, and this app can't save here until that tab runs again. Your changes here wait and are saved then.";
 document.body.append(otherTab);
 
 db.durability.subscribe((durability) => {

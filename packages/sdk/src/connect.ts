@@ -397,7 +397,7 @@ export const connect = async (
   const collectionOf = (query: object): string => {
     const state = queryState(query);
     if (state === undefined) {
-      throw new NcError("invalidValue", texts.NOT_AQUERY);
+      throw new NcError("invalidValue", texts.NOT_AQUERY_START_ONE);
     }
     return nameOf(state.collection);
   };

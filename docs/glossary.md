@@ -31,9 +31,12 @@ How to read it:
 | sub-agent | An agent that another agent starts for one task. It gets an ad-hoc space with only what the task needs, never its parent's keys. | subagent, child agent, worker (a "worker" is the browser's Web Worker) |
 | ad-hoc space | A space an agent creates for a sub-agent, holding copies of only the objects the task needs. | temporary space, scratch space, sandbox |
 | account | One person's identity across their devices and agents, with an account key and a fingerprint. Devices of one account pair with each other; a second account signs off an erasure. | user, profile, identity, login |
+| account space | The space that records an account's devices and agents, its account key statements and the spaces each device belongs to. Its members are the account's devices, each an admin. Its records are sealed content the relay cannot read. | account database, profile |
+| certificate | The account key's signature that a member belongs to an account, as a device or as an agent. An invitation carries it. A sub-agent's certificate is signed by its parent agent instead. | credential, attestation |
 | invitation | The text a joining member gives an admin: its public keys and its account's fingerprint, never a secret (`ncdb-invite-1:…`). The joining member creates it; an admin adds it. | invite (as a noun), invite link, join code, token |
 | fingerprint | A short value that identifies an account. A person compares it, as messaging apps compare safety numbers, before an admin adds the account's first member. | safety number, key ID, hash |
 | pairing | Adding a second device to one's own account. | linking (as a noun), syncing devices, device login |
+| pairing answer | The text a device that holds the account key gives the device it pairs (`ncdb-pair-1:…`). It carries the account key sealed to that device, so only that device opens it. | pairing code, pairing token |
 | recovery code | Twelve words that let a person open a new device of their account when every device is lost. | recovery phrase, seed phrase, backup code, mnemonic |
 | notice | The plain-language text, with a code, that every call changing who can read returns, saying what the change does not do (`{ code, text }`). | warning, disclaimer, message |
 
@@ -44,6 +47,8 @@ How to read it:
 | model | The schema of an app's data, written once in TypeScript with `nc.model`. | data model (fine in prose where "model" alone is ambiguous), entity model |
 | schema | The description of collections, fields and indexes, in general. "The model" is an app's schema in code. | DDL, table definition |
 | lock | `model.lock.json`, which `ncdb model build` writes from the model and which the core and both SDKs read. Write "the lock" or `model.lock.json`. | lockfile (that is the package manager's), schema file, compiled schema |
+| model version | The number the lock carries. `ncdb model build` raises it when the model changes, except in its descriptions. | schema version |
+| deprecated | A collection or field marked `.deprecated(…)`: it stays in the model, and the app stops writing it. A model removes nothing; it deprecates. | obsolete, retired (removing is something else, and the lock refuses it) |
 | collection | A kind of object in the model, such as `tasks`. | table (the local view has tables; the model has collections), type, entity |
 | object | One item of a collection, with an id, in one space. | record, row (a row is in the local view's tables), document (a document is rich text), entity, item |
 | field | One named value of an object, with a field type. | column, property, attribute |
@@ -86,11 +91,14 @@ How to read it:
 | --- | --- | --- |
 | key | Written as the kind of key when it matters: member key, space key, account key, person key. The SDK manages every key; an app never handles one. | secret (a secret is what a key protects), password, credential |
 | member key | The key a member signs its changes with, created on first open. In the browser it is sealed in IndexedDB under a non-extractable WebCrypto key. | device key, identity key |
+| keystore, key file | Where the Rust SDK keeps a member's keys: the platform's keystore, or a key file the app names with `key_file`. The browser keeps them in IndexedDB. | keychain (except macOS's own), secret store |
 | space key | The key a space's content is encrypted with. Removing a member rotates it. | room key |
+| rotation, rotate | Replacing a space key with a new generation, chained to the earlier ones, so that a member that left or was removed cannot read what is written after. | rekey, key rollover |
 | person key | One key per person per space, which encrypts that person's personal fields. | user key, PII key |
 | erasure, erase | Making a person's personal fields unreadable by destroying their person keys, in every space of the database where the member may write (`Db::erase`, notice `Erased`). In 0.1, the Rust SDK erases; the browser SDK reads the erasure audit. | delete (deleting an object is something else), forget, wipe, purge, shredding (as the name of the whole act) |
 | shred | Destroying one person key in one space, the step of an erasure in one space (`Erased.shreds`). Used in the RFCs and the API, not as the reader's name for the act. | burn, revoke (revoking is what removing a member does) |
 | sign-off | The approval of a second account that an erasure needs, carried as text between the apps (`ncdb-erase-1:…` request, `sign_off`). With only one account in a space, the erasure is provisional for 7 days and can be taken back. | approval, co-sign, countersignature |
+| erasure request | The text (`ncdb-erase-1:…`) a device that performed an erasure gives a second account to sign off. | erase request, deletion request |
 | erasure audit | `space.erasures.list()`: for each erasure in a space, whether it is final, provisional or taken back, who performed it and who signed it off, and which members confirmed that they destroyed the key. Every member may read it. | erasure log, deletion record |
 | work order | A clean-up job that one member claims and another validates. | **0.1:** not in 0.1; never described as working |
 | compaction, archive | Moving history into a signed, encrypted archive. | **0.1:** not in 0.1; never described as working |

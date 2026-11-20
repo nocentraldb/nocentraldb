@@ -6,7 +6,7 @@
 /// `unreadableAdHocCopyId`: In core.viewCorrupt, as `what`, when the database
 /// holds an ad-hoc copy's id it cannot read.
 pub(crate) const UNREADABLE_AD_HOC_COPY_ID: &str =
-    "an ad-hoc copy's id";
+    "ad-hoc copy id";
 
 /// `unreadableConfirmationTime`: In core.viewCorrupt, as `what`, when the
 /// database holds a confirmation time out of range.
@@ -176,7 +176,7 @@ pub(crate) fn view_opfs(error: impl std::fmt::Display) -> String {
 /// when a declared index's lookup would not run through it, or would sort in a
 /// temporary B-tree; `index` is <collection>.<index>.
 pub(crate) fn view_plan(index: impl std::fmt::Display) -> String {
-    format!("the lookup of index {index} does not run through it")
+    format!("a query of index {index} does not run through it")
 }
 
 /// `viewQuery`: The core's reason when a lookup is refused. Not shown to a
@@ -184,7 +184,7 @@ pub(crate) fn view_plan(index: impl std::fmt::Display) -> String {
 /// only an internal lookup of the account's would show it after
 /// error.viewFailed's colon.
 pub(crate) fn view_query(error: impl std::fmt::Debug) -> String {
-    format!("the lookup was refused: {error:?}")
+    format!("the query was refused: {error:?}")
 }
 
 /// `viewRefused`: The whole error of opening (modelRefused) with a lock that is
