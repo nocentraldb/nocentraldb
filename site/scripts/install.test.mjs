@@ -29,6 +29,8 @@ const release = {
   date: "2026-12-01",
   path: "release-notes/0.1.0.md",
 };
+// Both registries serve the newest indexed version (NOC-373).
+const SERVED = { npm: true, crate: true };
 
 test("nothing indexed: npm's alpha tag, and the crate from the newest alpha tag", () => {
   const lines = installLines({
@@ -54,6 +56,7 @@ test("a beta indexed and the crate publishable: npm's beta tag, and the crate by
     releases: [beta],
     tags: ["v0.1.0-alpha.70"],
     publishable: true,
+    served: SERVED,
   });
   assert.equal(lines.npm, "npm install @nocentraldb/sdk@beta");
   assert.equal(lines.cargo, "cargo add nocentraldb@0.1.0-beta.1");
@@ -65,6 +68,7 @@ test("a release indexed last and the crate publishable: plain installs", () => {
     releases: [beta, release],
     tags: [],
     publishable: true,
+    served: SERVED,
   });
   assert.equal(lines.npm, "npm install @nocentraldb/sdk");
   assert.equal(lines.cargo, "cargo add nocentraldb");
@@ -101,6 +105,7 @@ test("a beta or release indexed but the crate not publishable: the crate from th
     releases: [beta],
     tags: ["v0.1.0-alpha.70"],
     publishable: false,
+    served: SERVED,
   });
   assert.equal(fromBeta.npm, "npm install @nocentraldb/sdk@beta");
   assert.equal(
@@ -111,6 +116,7 @@ test("a beta or release indexed but the crate not publishable: the crate from th
     releases: [beta, release],
     tags: [],
     publishable: false,
+    served: SERVED,
   });
   assert.equal(fromRelease.npm, "npm install @nocentraldb/sdk");
   assert.equal(

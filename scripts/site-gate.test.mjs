@@ -31,6 +31,11 @@ test("repo:site installs the site from its lockfile, builds it and checks the ou
     site.inputs?.includes("/release-notes/index.json"),
     "the release index is an input",
   );
+  // NOC-373: whether the crate may reach crates.io changes its install line.
+  assert.ok(
+    site.inputs?.includes("/crates/nocentraldb/Cargo.toml"),
+    "the crate's manifest is an input",
+  );
 });
 
 test("pnpm gates runs repo:site", () => {

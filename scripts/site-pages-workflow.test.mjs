@@ -2,7 +2,7 @@
 // (site/, Astro and Starlight) to GitHub Pages under nocentraldb.io. It runs
 // on a push to main that changes the site, the docs it renders from docs/,
 // the SDK's API report, the release index or the workflow, and when a person
-// starts it; it has only the permissions Pages needs; one deploy runs at a
+// starts it, and once a day (NOC-373); it has only the permissions Pages needs; one deploy runs at a
 // time and none is cancelled; it builds the site, checks the built output
 // with site/scripts/output.test.mjs before it uploads it, uploads exactly
 // site/dist, and deploys in the github-pages environment; and every action is
@@ -55,10 +55,18 @@ runWorkflowChecks({
   clone: (files) => structuredClone(files),
   checks: [
     {
-      name: "the site deploys on a push to main that changes it, and by hand",
+      name: "the site deploys on a push to main that changes it, once a day, and by hand",
       check: (ctx) => {
         const on = workflow(ctx).on ?? {};
-        assert.deepEqual(Object.keys(on).sort(), ["push", "workflow_dispatch"]);
+        assert.deepEqual(Object.keys(on).sort(), [
+          "push",
+          "schedule",
+          "workflow_dispatch",
+        ]);
+        // NOC-373: npm serves a beta or release only once the owner approves
+        // it, and no event follows the approval; the daily build picks it up.
+        assert.equal(on.schedule.length, 1);
+        assert.match(on.schedule[0].cron, /^\d+ \d+ \* \* \*$/);
         assert.deepEqual(on.push.branches, ["main"]);
         // The docs the site renders from docs/ and from the SDK's API
         // report, and the release index its install lines follow, change
@@ -68,6 +76,8 @@ runWorkflowChecks({
           "docs/*.md",
           "packages/sdk/etc/api-report.d.ts",
           "release-notes/index.json",
+          // NOC-373: whether the crate may reach crates.io.
+          "crates/nocentraldb/Cargo.toml",
           WORKFLOW,
         ]);
       },
@@ -80,6 +90,12 @@ runWorkflowChecks({
         },
         "on every path": (ctx) => {
           delete ctx.workflow.on.push.paths;
+        },
+        "never on a schedule": (ctx) => {
+          delete ctx.workflow.on.schedule;
+        },
+        "every hour": (ctx) => {
+          ctx.workflow.on.schedule = [{ cron: "17 * * * *" }];
         },
       },
     },
