@@ -1,7 +1,7 @@
 /* The landing page's own rules on top of the vendored kit (public/assets): the
    hero's two small lines, the drawing's 4:3 frame, the header's links on the right
-   line, the drawings at rest, a short desktop window and the drawings' pause
-   control. The drawing's look follows the prototype the owner accepted on
+   line, the scenario's stacked steps, a short desktop window and the hero drawing's
+   pause control. The drawing's look follows the prototype the owner accepted on
    2026-11-12. */
 
 .hero .status-line,
@@ -25,15 +25,12 @@
   }
 }
 
-/* The drawing's frame: 4:3 on the surface tone, in the hero and in the scenario. */
+/* The hero drawing's frame: 4:3 on the surface tone. */
 .scene-frame {
   position: relative;
   aspect-ratio: 4 / 3;
   border-radius: var(--r-lg);
   overflow: hidden;
-  background: var(--ncdb-surface);
-}
-[data-moment="pinned-chapters"] .mo-pc__visual {
   background: var(--ncdb-surface);
 }
 /* In the hero the frame fills the kit's .hero__media: beside the words as tall as
@@ -44,7 +41,7 @@
   height: 100%;
 }
 /* A phone: the words a little closer and the headline a step smaller, so the
-   drawing keeps a strip of the first screen (at rest there, scene-pause.mjs). */
+   drawing keeps a strip of the first screen. */
 @media (max-width: 639px) {
   .hero h1 {
     font-size: 32px;
@@ -71,40 +68,84 @@
   }
 }
 
-/* The scenario at rest (tablets, phones, short screens): each step's drawing whole in
-   a frame the kit's rows allow (at most 30svh from 640px, 16:9 at 26svh on a phone),
-   and the section exactly the two screens its --h names. */
-[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
+/* The scenario (owner, 2026-11-20, NOC-380): its steps stacked one under the other at
+   every width, nothing pinned, snapped or moved by the scroll. A step is its title,
+   its text and its drawing on the surface tone, behind a rule at the left; from 640px
+   it is a row, the words at the left and the drawing at the right, with a hairline
+   between the steps. The section is as tall as its steps. */
+/* beats system.css's main > :is(section, .section) (one screen) and its phone rule (--hm screens) */
+html main > section#story {
+  height: auto;
+  min-height: 0;
+}
+#story .story {
+  display: grid;
+  gap: var(--s-6);
+}
+#story .story__steps {
+  display: grid;
+  gap: var(--s-5);
+}
+#story .story__step {
+  display: grid;
+  gap: var(--s-2);
+  padding-left: var(--s-5);
+  border-left: 2px solid var(--line);
+}
+#story .story__step h3 {
+  font-family: var(--font-text);
+  font-weight: 500;
+  font-size: var(--t-lead);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+#story .story__step p {
+  color: var(--ink);
+  max-width: 46ch;
+}
+#story figure {
+  margin: var(--s-4) 0 0;
   aspect-ratio: 4 / 3;
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--ncdb-surface);
 }
 @media (min-width: 640px) {
-  [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
-    max-height: 30svh;
+  #story .story__steps {
+    gap: var(--s-6);
+  }
+  #story .story__step {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: var(--gutter);
+    align-items: center;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: var(--s-6) 0 0;
+  }
+  #story .story__step h3 {
+    grid-column: 1;
+    align-self: end;
+  }
+  #story .story__step p {
+    grid-column: 1;
+    align-self: start;
+  }
+  #story figure {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    margin: 0;
   }
 }
-/* A phone shows the tall drawing (scene.mjs) whole: its labels are readable there,
-   and each step is about one screen of words and picture. */
+/* A phone shows the tall drawing (scene.mjs) whole, out over the step's indent and
+   rule. It is never wider than its viewBox (400), so none of its text, set at 16px
+   or less in scene.css, is drawn larger than the step's 16px text. */
 @media (max-width: 639px) {
-  [data-moment="pinned-chapters"]:not(.is-live) .mo-pc__visual {
+  #story figure {
     aspect-ratio: 400 / 704;
-    max-height: none;
-    /* out over the step's indent and rule, so the drawing gets the wrap's full width */
+    max-width: 400px;
     margin-left: calc(-1 * var(--s-5) - 2px);
   }
-}
-/* beats moment.css's main > [data-moment="pinned-chapters"][data-moment]:not(.is-live) (min-height: 100svh) */
-main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
-  min-height: calc(var(--h, 1) * 100svh);
-}
-/* what the two screens leave goes between the steps, not under the last one */
-#story[data-moment="pinned-chapters"]:not(.is-live) > .mo-pc__grid {
-  align-content: stretch;
-}
-#story[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__text {
-  grid-template-rows: auto 1fr;
-}
-#story[data-moment="pinned-chapters"]:not(.is-live) .mo-pc__steps {
-  align-content: space-between;
 }
 
 /* A short desktop window (1440x670): the headline follows the window height. */
@@ -145,7 +186,7 @@ main > section#story[data-moment="pinned-chapters"][data-moment]:not(.is-live) {
   }
 }
 
-/* Pause, at the bottom right of each drawing's frame, above the figures: filled
+/* Pause, at the bottom right of the hero drawing's frame, above the figures: filled
    in the ink while it holds the drawing (aria-pressed). */
 /* beats system.css's .frame > :not(canvas, .stage, ...) (position: relative) */
 button.scene-pause[data-scene-pause] {
@@ -167,13 +208,6 @@ button.scene-pause[data-scene-pause][aria-pressed="true"] {
   color: var(--bg);
 }
 button.scene-pause[data-scene-pause][hidden] {
-  display: none;
-}
-
-/* Without script the moment's stylesheet never loads (moments.js adds it), so the
-   scenario's shared frame would stand empty under the steps: it shows only with
-   script (the head's inline script sets .mo-js). */
-html:not(.mo-js) #story .mo-pc__visuals {
   display: none;
 }
 
@@ -217,49 +251,4 @@ html:not(.mo-js) #story .mo-pc__visuals {
   .nav__wordmark {
     display: none;
   }
-}
-
-/* The pinned scenario under momentum scrolling (owner, 2026-11-19, option b):
-   while it is live, each of its four steps holds for one full screen of scroll,
-   not a quarter of one, so one trackpad flick (about 750 px) moves to the next
-   step at most. Each step has a snap point at the middle of its screen, and the
-   page stops at every one (scroll-snap-stop: always) where the browser honours
-   it for the gesture. The snapping is proximity, and only while the scenario is
-   live: the rest of the page, a phone, a short window and reduced motion scroll
-   freely. A very hard flick can still pass a step. */
-/* beats moment.css's [data-moment="pinned-chapters"].is-live (two screens) */
-main > section#story[data-moment="pinned-chapters"].is-live {
-  height: 500svh;
-}
-html:has(#story.is-live) {
-  scroll-snap-type: y proximity;
-}
-#story > .story-snap {
-  display: none;
-}
-#story.is-live > .story-snap {
-  display: block;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-#story.is-live > .story-snap > i {
-  position: absolute;
-  left: 0;
-  width: 1px;
-  height: 1px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
-}
-#story.is-live > .story-snap > i:nth-child(1) {
-  top: 50svh;
-}
-#story.is-live > .story-snap > i:nth-child(2) {
-  top: 150svh;
-}
-#story.is-live > .story-snap > i:nth-child(3) {
-  top: 250svh;
-}
-#story.is-live > .story-snap > i:nth-child(4) {
-  top: 350svh;
 }
