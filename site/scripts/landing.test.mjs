@@ -352,5 +352,7 @@ test("the close invites the visitor to contribute, beside the feedback", () => {
 test("the close's API card describes the calls 0.1 ships, not a design", () => {
   const close = html.slice(html.indexOf("<footer"));
   assert.ok(!close.includes("designs them"));
-  assert.ok(close.includes("The SDK's main calls in 0.1."));
+  assert.ok(
+    close.replaceAll("&#39;", "'").includes("The SDK's main calls in 0.1."),
+  );
 });
