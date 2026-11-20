@@ -317,7 +317,10 @@ test("the TypeScript snippets come from code-ts.md, which the gates type-check",
     "db.subscribe(query,",
   ])
     assert.ok(text.includes(call), call);
-  assert.ok(!text.includes("declare function"), "a hidden line reached the page");
+  assert.ok(
+    !text.includes("declare function"),
+    "a hidden line reached the page",
+  );
 });
 
 test("the code section says the SDK handles every key, and names the one secret an app passes on", () => {
