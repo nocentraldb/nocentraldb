@@ -2,7 +2,8 @@
 // the proposed names) as RFC 0009 records it: the erasure audit is a list
 // call per space, `space.erasures.list()` and `space.erasures().list()`,
 // shaped like `members.list()`. Each erasure gives its shred, its state
-// (final, provisional, taken back), its performer and the account that
+// (final, provisional, taken back, or waiting for a gap in its causal past:
+// Carsten, 2026-11-20, NOC-392), its performer and the account that
 // signed it off, and every member that could have held the key, whether it
 // is still a member and what it acknowledged (deleted, seen, missing). The
 // options not taken stand beside it. Whether the wording is right is the
@@ -30,6 +31,9 @@ test("Spaces and members has Erasures, the audit as a list call per space", () =
     /`"final"`/,
     /`"provisional"`/,
     /`"takenBack"`/,
+    /`"waiting"`/,
+    /no timeout/,
+    /Carsten, 2026-11-20, NOC-392/,
     /`performer`/,
     /`signOff`/,
     /`current`/,
@@ -66,7 +70,7 @@ test("The Rust SDK names the erasure audit and its types", () => {
     /`space\.erasures\(\)` returns `Erasures`/,
     /`list\(\)` returns `Vec<Erasure>`/,
     /`Erasure \{ shred: ChangeId, state: ErasureState, performer: MemberId, performer_account: Fingerprint, sign_off: Fingerprint, members: Vec<ErasureMember> \}`/,
-    /`ErasureState::\{Final, Provisional, TakenBack\}`/,
+    /`ErasureState::\{Final, Provisional, TakenBack, Waiting\}`/,
     /`ErasureMember \{ id: MemberId, account: Fingerprint, current: bool, acknowledged: Acknowledged \}`/,
     /`Acknowledged::\{Deleted, Seen, Missing\}`/,
     /`#\[non_exhaustive\]`/,
@@ -79,7 +83,7 @@ test("Public names lists the erasure audit in both SDKs", () => {
   const names = part("public-names");
   for (const name of [
     "`space.erasures.list`",
-    '`"final"`, `"provisional"`, `"takenBack"`',
+    '`"final"`, `"provisional"`, `"takenBack"`, `"waiting"`',
     '`"deleted"`, `"seen"`, `"missing"`',
     "`Space::erasures`",
     "`Erasure`",

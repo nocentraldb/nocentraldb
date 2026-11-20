@@ -15,6 +15,20 @@ use super::input::Node;
 use super::person_key::PersonKeyEntry;
 use super::state::{Rejection, Verdict};
 
+/// A shred that waits for its verdict because the holder does not hold
+/// its whole causal past yet (RFC 0008, "A shred is final when accepted";
+/// NOC-391): it changes no person key, and the audit of erasures lists it
+/// as waiting (Carsten, 2026-11-20, NOC-392).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WaitingShred {
+    /// The person-key id it shreds.
+    pub person_key: [u8; 16],
+    /// The member that performed it.
+    pub performer: MemberId,
+    /// The account key that signed it off.
+    pub sign_off: [u8; 32],
+}
+
 /// One person key of a space: created by its first accepted person-key
 /// entry, or named by an accepted shred alone.
 #[derive(Clone, Debug, PartialEq, Eq)]

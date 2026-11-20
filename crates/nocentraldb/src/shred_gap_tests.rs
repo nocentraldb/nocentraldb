@@ -18,7 +18,7 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 // second copy of the module is refused, so this uses theirs.
 #[cfg(target_arch = "wasm32")]
 #[path = "../../ncdb-core/tests/support/space.rs"]
-mod space;
+pub(crate) mod space;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::sync::tests::relay_support::space;
 

@@ -495,6 +495,7 @@ The view can always be recomputed, so un-folding a change costs nothing but work
 
 - **A shred is accepted when it is valid when written** (step 1): in the state of its causal past, its author holds the right to perform an erasure, the person key exists, and the sign-off is valid. No revocation excludes a shred (step 3), and step 5 does not ask whether its author still holds the right in the state so far. The two rules for the whole set still apply: a shred wins over a person-key entry it did not see, and of two shreds of one person-key id the first in the order that is not taken back takes effect (Carsten, 2026-11-12, NOC-242). Both are accepted; a shred that is not provisional cannot be taken back, so of two such shreds the earlier one in the order takes effect and both destroy the same key.
 - **Every holder reaches that verdict as soon as it holds the shred and its causal past**, whatever else it holds, members and the relay alike. A late equivocated genesis does not change it either, since step 1 reads only the shred's causal past and the genesis in it.
+- **Until then the shred is waiting.** A holder that lacks part of the shred's causal past gives it no verdict: the shred has no effect, members keep the person key and the relay keeps its record. An erasure decision that finalizes waits the same way. Sync asks for the missing changes, and once they arrive the shred gets its verdict and moves on to final, provisional or taken back, or is rejected. There is no timeout, since a timeout would need a verdict this rule does not give. The SDK's audit of erasures lists a waiting shred with the state `waiting`, its performer and its sign-off, and no members, since the members that could have held the key are those of the causal past it lacks ([RFC 0009, "Erasures"](0009-sdk-api.md#erasures); Carsten, 2026-11-20, NOC-392).
 
 | Control change | Its effects, all at once |
 | --- | --- |
@@ -723,6 +724,7 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (Carsten, 2026-11-11, NOC-230)
 - **2026-11-12 · The first shred that is not taken back takes effect.** (Carsten, 2026-11-12, NOC-242; [decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
 - **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
+- **2026-11-20 · A shred over a gap in its causal past is waiting, and the SDK lists it with the state `waiting`.** (Carsten, 2026-11-20, NOC-392)
 
 ## History
 
@@ -736,3 +738,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A member keeps every key the envelopes of a generation unwrap to, and reads and writes with the one the generation's control change confirms (NOC-389)
+- 2026-11-20 · A shred over a gap in its causal past is waiting until the gap fills, and the SDK lists it as `waiting` (NOC-401)
