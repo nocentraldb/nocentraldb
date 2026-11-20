@@ -110,7 +110,7 @@ test("the close sits on the yellow ground and links to the docs and the use case
     'href="/docs/"',
     'href="/docs/api/"',
     'href="/docs/rfcs/"',
-    "docs/use-cases.md",
+    'href="/docs/use-cases/"',
     "/discussions",
   ])
     assert.ok(html.includes(href), href);
@@ -311,7 +311,7 @@ test("the code section says the SDK handles every key, and names the one secret 
   );
   assert.match(text, /recovery code/);
   assert.ok(
-    head.includes("docs/getting-started-browser.md#16-remove-a-lost-device"),
+    head.includes('href="/docs/guides/browser/#16-remove-a-lost-device"'),
     "the guide's recovery section",
   );
   assert.ok(!text.includes("designed to"), "the old hedge is gone");

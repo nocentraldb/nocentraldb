@@ -2,8 +2,7 @@
 // of the site, rendered from docs/, so a link to one stays on the site; no
 // link of the site breaks, its anchor included; and a link to a file of the
 // repository on GitHub names a file or folder that exists on this commit.
-// The sidebar lists the two guides right after "Getting started" and
-// "Overview" (the owner's direction of 2026-11-19).
+// The sidebar lists every rendered doc.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
@@ -99,18 +98,13 @@ test("every rendered doc is a page with its Markdown copy", () => {
   }
 });
 
-test("the sidebar lists the two guides right after Getting started and Overview", () => {
+// texts.test.mjs checks the order of the sidebar's first entries.
+test("the sidebar lists every rendered doc, the two guides first", () => {
   const text = html.get("docs/index.html");
   const nav = text.slice(text.indexOf('id="starlight__sidebar"'));
   const order = [...nav.matchAll(/<a href="(\/docs\/[^"]*)"/g)].map(
     (m) => m[1],
   );
-  assert.deepEqual(order.slice(0, 4), [
-    "/docs/",
-    "/docs/how-it-works/",
-    `/${REPO_DOCS[0].slug}/`,
-    `/${REPO_DOCS[1].slug}/`,
-  ]);
   for (const doc of REPO_DOCS)
     assert.ok(order.includes(`/${doc.slug}/`), doc.slug);
   assert.deepEqual(
