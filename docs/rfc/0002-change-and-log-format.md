@@ -592,4 +592,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · A plain introduction to the ideas behind the format, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Each guarantee to RFC 0003 and RFC 0004 stands in its own section, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-20 · Key 0 is "must understand", and a former member's own change pushed again is answered `duplicate`, as the owner answered (NOC-362)
+- 2026-11-20 · Key 0 is "must understand", and a former member's own change pushed again is answered `duplicate`, as the owner answered (NOC-362, #396)

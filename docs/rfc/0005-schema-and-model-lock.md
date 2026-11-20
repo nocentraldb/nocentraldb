@@ -658,4 +658,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · A plugin is registered with the core, never loaded (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-20 · A plugin field is Rust only in v1, as the owner answered (NOC-362)
+- 2026-11-20 · A plugin field is Rust only in v1, as the owner answered (NOC-362, #396)

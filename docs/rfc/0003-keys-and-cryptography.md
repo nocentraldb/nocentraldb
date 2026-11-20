@@ -616,4 +616,4 @@ It makes them more precise in these points:
 - 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362)
+- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362, #396)

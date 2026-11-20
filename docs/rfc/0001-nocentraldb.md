@@ -205,4 +205,4 @@ Two forms were not taken. Groups as members of many spaces, as the first draft o
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #389)
 - 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)
-- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, as the owner answered (NOC-362)
+- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, as the owner answered (NOC-362, #396)
