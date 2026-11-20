@@ -28,7 +28,7 @@ For many apps a central database is still the right choice. If you need queries 
 
 ## Why now
 
-Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use, at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold a non-exportable key that a passkey unlocks. A phone can store a team's complete working set. One core written in Rust runs natively and as WebAssembly in the browser.
+Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use. However, agents are much faster than humans in processing texts, search through data, and process it. The network becomes a bottleneck. Coding agents are very fast and capable because everything they need is right next to them, on the same disk. MCPs are good for rare searches or data changes. But for data that an agent needs to frequently search and process in it needs the data at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold a non-exportable key that a passkey unlocks. A phone can store a team's complete working set.
 
 So "trust the server" no longer has to be the default security model. Many apps need neither SQL on a server nor a central database. Your data can live where the work happens, on every device and with every agent you trust, under your own keys. Cloud services carry the encrypted changes but never hold the keys.
 
