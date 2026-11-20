@@ -184,6 +184,10 @@ test("check rejects a title that names a review's outcome instead of the decisio
     "RFC 0004: every recommendation accepted",
     "The owner's answers to Q1–Q6 for the website",
     "The owner decides RFC 0009 as recommended",
+    "The owner decides RFC 0010, accounts: a recovery key is the identity",
+    "pm decides that the relay binds only a loopback address",
+    "The owner's answer on the landing page",
+    "RFC 0005: D16 and D17 decided as recommended",
     "NOC-12",
     "NOC-9, NOC-10",
   ]) {
@@ -196,8 +200,8 @@ test("check rejects a title that names a review's outcome instead of the decisio
 
 test("check accepts a title that states the decision", (t) => {
   for (const title of [
-    "RFC 0002: the owner decides D1 to D9 as recommended, from the clock to parked changes",
-    "The owner decides RFC 0010, accounts: a recovery key is the identity",
+    "Every change carries a 64-bit hybrid logical clock",
+    "The owner approves every deployed change",
     "The landing page names the relay 'the server in the middle'",
   ]) {
     const dir = folder(t, { [GOOD]: entry({ title }) });
