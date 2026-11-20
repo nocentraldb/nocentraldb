@@ -797,7 +797,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-12 · How a personal field is written and read.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-12 · The erasure audit, `space.erasures.list()`.** (Carsten, 2026-11-12, NOC-246)
 - **2026-11-12 · A write without the held person key is refused with `personKeyNotHeld`.** (Carsten, 2026-11-12, NOC-255; [decision](../../factory/decisions/2026-11-12-NOC-255-a-write-without-the-held-person-key-is-refused-with-personkeynotheld.md))
-- **2026-11-12 · A write to an unregistered plugin type is refused with `unknownType`.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types-a-typed-fieldtype-trait.md))
+- **2026-11-12 · A write to an unregistered plugin type is refused with `unknownType`.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-type-that-is-not-registered-still-opens-it.md))
 - **2026-11-12 · The Rust names and formats of accounts.** (Carsten, 2026-11-12, NOC-273)
 - **2026-11-12 · The TypeScript SDK in the browser: its names and its package.** (Carsten, 2026-11-12, NOC-274; [decision](../../factory/decisions/2026-11-12-NOC-274-the-typescript-sdk-ships-its-worker-and-wasm-bridge-in.md))
 - **2026-11-12 · `Value::clear` clears a field.** (Carsten, 2026-11-12, NOC-277; [decision](../../factory/decisions/2026-11-12-NOC-277-a-create-with-a-clear-leaves-the-field-unset.md))

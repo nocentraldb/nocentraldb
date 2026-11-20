@@ -343,8 +343,11 @@ test("the decision log records the owner's decision on RFC 0011", () => {
   const entry = readdirSync(join(root, "factory/decisions"))
     .filter((f) => /^2026-11-12-NOC-232-/.test(f))
     .map((f) => read(`factory/decisions/${f}`))
-    .find((t) => /^# [^\n]*· The owner decides RFC 0011, /m.test(t));
-  assert.ok(entry, "no NOC-232 decision file names RFC 0011 as decided");
+    .find((t) => /^- Decided by: Carsten, 2026-11-12, on NOC-232/m.test(t));
+  assert.ok(
+    entry,
+    "no NOC-232 decision file records the owner's decision on RFC 0011",
+  );
   assert.match(entry, /^- Decided by: Carsten, 2026-11-12, on NOC-232/m);
   assert.match(entry, /^- Topics: .*rfc-0011/m);
 });
