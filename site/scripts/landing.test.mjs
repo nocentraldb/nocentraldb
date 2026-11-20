@@ -348,3 +348,9 @@ test("the close invites the visitor to contribute, beside the feedback", () => {
   assert.match(close, />Contribute</);
   assert.match(close, />Good first issues</);
 });
+
+test("the close's API card describes the calls 0.1 ships, not a design", () => {
+  const close = html.slice(html.indexOf("<footer"));
+  assert.ok(!close.includes("designs them"));
+  assert.ok(close.includes("The SDK's main calls in 0.1."));
+});
