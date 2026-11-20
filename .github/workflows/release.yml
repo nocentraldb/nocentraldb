@@ -415,9 +415,12 @@ jobs:
     # it fetches the token, so a crate that does not package stops the job
     # before any crate is published. crates-publish skips a version
     # crates.io already holds, so "Re-run failed jobs" publishes only what is
-    # missing.
+    # missing. It runs in the environment registry-publish, which crates.io's
+    # trusted publisher of each crate names, so no other job can mint a
+    # crates.io token (NOC-376).
     needs: [verify, publish]
     if: needs.verify.outputs.dry_run != 'true'
+    environment: registry-publish
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
@@ -472,9 +475,11 @@ jobs:
     # owner approves it with 2FA; no token this job can hold approves it. npm
     # authenticates through Trusted Publishing, with this job's OIDC token;
     # no npm token exists. This job holds id-token: write and no contents:
-    # write. npm-publish skips a version npm already holds.
+    # write. npm-publish skips a version npm already holds. It runs in the
+    # environment registry-publish, as publish-crates does (NOC-376).
     needs: [verify, publish]
     if: needs.verify.outputs.dry_run != 'true'
+    environment: registry-publish
     runs-on: ubuntu-latest
     timeout-minutes: 45
     concurrency:
