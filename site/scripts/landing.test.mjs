@@ -131,7 +131,7 @@ test("the close's yellow is the footer's own ground, edge to edge", () => {
   assert.ok(!html.includes("100vmax"), "no spread-shadow band");
 });
 test("the hero's pause control keeps one name and says its state with aria-pressed", () => {
-  // the scenario's drawings stand still and need none (NOC-380)
+  // the scenario's drawings have their own (data-story-pause, NOC-384)
   const buttons = [...html.matchAll(/<button[^>]*data-scene-pause[^>]*>/g)].map(
     (m) => m[0],
   );
