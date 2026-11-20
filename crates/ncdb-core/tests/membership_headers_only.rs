@@ -9,6 +9,14 @@
 //! for every sealed change it holds must be the membership verdict of
 //! that change's header (RFC 0008, "Sealed changes"), whatever keys and
 //! sealed changes the holder has.
+//!
+//! M-C5, "Local checks never split the state", runs on the same holders:
+//! members also write key envelopes and key chain entries that hold wrong
+//! keys. The control state must stay equal on every holder, the harness
+//! compares each holder's verdicts and reports across orders of arrival,
+//! and only the holder a wrong envelope is addressed to reports it
+//! (`SealChecks::wrong_envelopes`). Person-key records are checked in the
+//! SDK, not in the core's log and checks, so they are not mixed in here.
 
 mod support;
 
@@ -24,14 +32,16 @@ mod space;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
-use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::checks::SealChecks;
 use ncdb_core::envelope;
 use ncdb_core::ids::ChangeId;
+use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::{Log, Position, RejectReason, State};
-use ncdb_core::membership::{self, ControlBody, Entry};
+use ncdb_core::membership::{self, ControlBody, Entry, KeyChainEntry, PreviousKey};
 use proptest::prelude::*;
 use support::convergence::{self, Author, Config, Generator, Mergeable, Op, OpId, Outcome};
 
@@ -42,6 +52,12 @@ use member::Recorder;
 /// holder is a member id that no change names, so it never holds a key.
 const KEYED: [u8; 2] = [2, 3];
 const KEYLESS: u8 = 0x70;
+
+thread_local! {
+    /// The envelopes with a wrong key the generator wrote (M-C5), with
+    /// their recipient and generation.
+    static WRONG: RefCell<BTreeMap<ChangeId, (u8, u64)>> = const { RefCell::new(BTreeMap::new()) };
+}
 
 /// The envelopes that give the two keyed holders the first generation's
 /// key, by the creator after the base. Every copy holds them, so the
@@ -195,7 +211,46 @@ impl Holders {
                     change.id()
                 );
             }
+            self.check_reports(i, holder);
         }
+    }
+
+    /// M-C5: only the local reports differ, and only on the holders that
+    /// can tell. A holder reports a wrong envelope only when it is addressed
+    /// to it and holds a wrong key, and it reports every such envelope of
+    /// the first generation it holds, which the genesis confirms. The keyless
+    /// holder, which no envelope is addressed to, reports none. Later
+    /// generations are left out: the simulated key chain entries carry
+    /// stand-in previous keys, which refute every key of their generation.
+    fn check_reports(&self, i: usize, holder: &Holder) {
+        let (_, first, _) = base();
+        let who = [KEYED[0], KEYED[1], KEYLESS][i];
+        let reported: BTreeSet<ChangeId> = holder
+            .checks
+            .wrong_envelopes()
+            .into_iter()
+            .filter(|w| w.generation == *first)
+            .map(|w| w.change)
+            .collect();
+        let held: BTreeSet<ChangeId> = holder
+            .log
+            .after(Position::START)
+            .map(|(_, c)| c.id())
+            .collect();
+        let wrong: BTreeSet<ChangeId> = WRONG.with(|wrong| {
+            wrong
+                .borrow()
+                .iter()
+                .filter(|(id, (to, generation))| {
+                    *to == who && generation == first && held.contains(id)
+                })
+                .map(|(id, _)| *id)
+                .collect()
+        });
+        assert_eq!(
+            reported, wrong,
+            "M-C5: holder {i} reports other wrong envelopes than those addressed to it"
+        );
     }
 }
 
@@ -227,6 +282,9 @@ impl Mergeable for Holders {
         for holder in &self.holders {
             bytes.extend(holder.checks.resolved().encode());
             bytes.extend(format!("{:?}", holder.states()).into_bytes());
+            let mut reports = holder.checks.wrong_envelopes();
+            reports.sort_by_key(|w| (w.generation, w.change));
+            bytes.extend(format!("{reports:?}").into_bytes());
         }
         bytes
     }
@@ -263,6 +321,110 @@ impl Generator<Holders> for Spread {
     }
 }
 
+/// The members of `Spread` that also write envelopes to the keyed holders,
+/// with the right key or a wrong one, and key chain entries whose previous
+/// keys open to a wrong key (M-C5).
+struct Tamper(Members);
+
+impl Generator<Holders> for Tamper {
+    type Raw = (control::Raw, u8, u8, u8);
+
+    fn raw(&self, member: u8) -> BoxedStrategy<(control::Raw, u8, u8, u8)> {
+        let members = Generator::<Copy>::raw(&self.0, member);
+        (members, 0..8u8, 0..8u8, any::<u8>()).boxed()
+    }
+
+    fn make(&self, author: &Author<'_, Holders>, raw: &(control::Raw, u8, u8, u8)) -> (Change, u8) {
+        let (members, mask, tamper, pick) = raw;
+        let copy = &author.copy.full;
+        let who = author.member + 1;
+        let change = match tamper {
+            5 => envelope_to_holder(copy, who, author.id, *pick, true),
+            6 => envelope_to_holder(copy, who, author.id, *pick, false),
+            7 => wrong_chain(copy, who, *pick),
+            _ => {
+                let inner = Author {
+                    member: author.member,
+                    id: author.id,
+                    copy,
+                    seen: &[],
+                };
+                self.0.make(&inner, members)
+            }
+        };
+        (change, *mask)
+    }
+}
+
+/// A key that is not the space key: what a wrong envelope or key chain
+/// entry holds.
+fn wrong_key(pick: u8) -> SpaceKey {
+    SpaceKey::from_bytes([0xe0 | (pick & 0x0f); 32])
+}
+
+/// An envelope by `who` to a keyed holder, for a generation of its copy,
+/// that wraps the space key when `right`, else a wrong key. A right one
+/// can arrive before or after a wrong one of the same generation.
+fn envelope_to_holder(copy: &Copy, who: u8, id: OpId, pick: u8, right: bool) -> Change {
+    let (space, first, _) = base();
+    let to = KEYED[usize::from(pick % 2)];
+    let generations: Vec<u64> = copy.resolved().generations().map(|(g, _)| g).collect();
+    let generation = match pick & 2 {
+        0 => *first,
+        _ => generations[usize::from(pick >> 2) % generations.len()],
+    };
+    let mut ephemeral = [who ^ 0x2a; 32];
+    ephemeral[..4].copy_from_slice(&id.to_le_bytes());
+    let key = match right {
+        true => space::space_key(),
+        false => wrong_key(pick),
+    };
+    let sealed = envelope::seal_with_ephemeral(
+        &key,
+        *space,
+        generation,
+        &space::key(to).public(),
+        ephemeral,
+    )
+    .expect("a simulated member's key takes an envelope");
+    let body = ControlBody::new(copy.heads(), Entry::KeyEnvelope(sealed));
+    let sequence = copy.highest(space::id(who)) + 1;
+    let change = membership::write(&space::key(who), *space, sequence, *first, &body);
+    if !right {
+        WRONG.with(|wrong| wrong.borrow_mut().insert(change.id(), (to, generation)));
+    }
+    change
+}
+
+/// A rotation by `who` after the heads of its copy whose previous keys,
+/// sealed under the space key, open to a wrong key.
+fn wrong_chain(copy: &Copy, who: u8, pick: u8) -> Change {
+    let (space, first, _) = base();
+    let previous: Vec<u64> = copy.resolved().heads().into_iter().collect();
+    let generation = membership::generation_id(*space, space::id(who), &previous);
+    let entry = KeyChainEntry {
+        generation,
+        previous: previous
+            .into_iter()
+            .map(|p| PreviousKey {
+                generation: p,
+                key: membership::seal_previous_key_with_nonce(
+                    &space::space_key(),
+                    *space,
+                    generation,
+                    p,
+                    &wrong_key(pick),
+                    [pick; 24],
+                ),
+            })
+            .collect(),
+        answers: BTreeSet::new(),
+    };
+    let body = ControlBody::new(copy.heads(), Entry::KeyChain(entry));
+    let sequence = copy.highest(space::id(who)) + 1;
+    membership::write(&space::key(who), *space, sequence, *first, &body)
+}
+
 fn config() -> Config {
     Config {
         members: 3,
@@ -291,5 +453,19 @@ fn m_c4_equivocated_sealed_changes_held_by_some_holders_only_change_no_control_s
         shreds: false,
     };
     let result = convergence::check::<Holders, _>(&config(), &Spread(members));
+    assert!(result.is_ok(), "{}", result.unwrap_err());
+}
+
+/// M-C5: envelopes and key chain entries that hold wrong keys, mixed into
+/// the members' changes. The control state stays equal on every holder,
+/// each holder's verdicts are the same in every order, and only the holder
+/// a wrong envelope is addressed to reports it.
+#[test]
+fn m_c5_wrong_keys_split_no_state_and_only_their_recipient_reports_them() {
+    let members = Members {
+        forks: false,
+        shreds: false,
+    };
+    let result = convergence::check::<Holders, _>(&config(), &Tamper(members));
     assert!(result.is_ok(), "{}", result.unwrap_err());
 }
