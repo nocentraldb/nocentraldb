@@ -594,8 +594,8 @@ It makes them more precise in these points:
 - **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
 - **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
 - **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
-- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
-- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (Carsten, 2026-11-20, NOC-362)
 
 ## History
 

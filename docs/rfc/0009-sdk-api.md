@@ -818,7 +818,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-16 · A refused upload keeps the connection and shows `upload_failed`.** (Carsten, 2026-11-16, NOC-349; [decision](../../factory/decisions/2026-11-16-NOC-349-a-refused-upload-keeps-the-connection-and-shows-upload-failed.md))
 - **2026-11-16 · A reference in Rust is `Reference { space, id }`.** (Carsten, 2026-11-16, NOC-354; [decision](../../factory/decisions/2026-11-16-NOC-354-a-reference-in-rust-is-reference-space-id.md))
 - **2026-11-16 · `db.durability` reports `waitingForTab` in TypeScript.** (Carsten, 2026-11-16, NOC-355; [decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
-- **2026-11-20 · `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
+- **2026-11-20 · `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
 
 ## History
 

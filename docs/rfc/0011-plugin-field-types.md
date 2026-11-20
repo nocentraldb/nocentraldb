@@ -197,7 +197,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 
 ## Decisions
 
-- **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
+- **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-ncdb-harness-stays-unpublished-until-after-0-1.md))
 
 ## History
 
