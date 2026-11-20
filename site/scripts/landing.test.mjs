@@ -56,7 +56,7 @@ test("the hero says what it is, in the spec's words", () => {
   for (const line of [
     "A local-first database for people and agents",
     "A server keeps everyone in sync, yet it only ever sees encrypted data.",
-    "NoCentralDB does not exist yet.",
+    "NoCentralDB 0.1 is a pre-release: the Rust SDK, the TypeScript SDK in the browser and the server in the middle work today. Names and formats can still change before 1.0.",
     "A Rust SDK, and a TypeScript SDK for the browser: Chromium, Firefox and Safari. One Rust core, natively and as WebAssembly. Open source under MIT or Apache-2.0.",
     "See how it works",
     "Get started",
@@ -355,4 +355,8 @@ test("the close's API card describes the calls 0.1 ships, not a design", () => {
   assert.ok(
     close.replaceAll("&#39;", "'").includes("The SDK's main calls in 0.1."),
   );
+});
+
+test("no landing text says NoCentralDB does not exist yet", () => {
+  assert.ok(!html.includes("does not exist yet"));
 });
