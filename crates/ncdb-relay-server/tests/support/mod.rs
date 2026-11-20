@@ -508,3 +508,26 @@ fn result(k: u64, value: Value) -> Value {
 pub fn error(req: Option<u64>, code: &str) -> Value {
     message("error", req, &[(3, Value::Text(code.to_owned()))])
 }
+
+/// Checks that `answer` is the error `code` for `req` that carries
+/// `removal` at `position`, and nothing else.
+pub fn assert_removal(
+    answer: &Value,
+    req: u64,
+    code: &str,
+    position: u64,
+    removal: &ncdb_core::change::Change,
+) {
+    assert_eq!(kind(answer), "error", "{answer:?}");
+    assert_eq!(get(answer, 2), Some(&Value::Unsigned(req)));
+    assert_eq!(get(answer, 3), Some(&Value::Text(code.to_owned())));
+    assert_eq!(get(answer, 4), None);
+    let entry = field(answer, 5);
+    assert_eq!(uint(field(entry, 1)), position);
+    assert!(matches!(field(entry, 2), Value::Unsigned(_)));
+    assert_eq!(bytes(field(entry, 3)), removal.bytes());
+    let Value::Map(map) = answer else {
+        unreachable!()
+    };
+    assert_eq!(map.len(), 4, "{answer:?}");
+}
