@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-6
 
 This RFC defines what a change is, how it is encoded byte for byte, and how a space's log stores it, on a member's device and on the relay. Every other part of the core builds on it: the merge rules, the signatures, the relay and the fold into the local view.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it; [What RFC 0003 and RFC 0004 need from this RFC](#what-rfc-0003-and-rfc-0004-need-from-this-rfc) lists what they rely on. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections below link them where they do.
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and on the principles in [GENESIS.md](../../factory/GENESIS.md). RFC 0003 (keys) and RFC 0004 (merge rules) build on it: RFC 0004 names the properties of the clock and the ids it relies on in [What the merge rules rely on](0004-merge-rules-basic-types.md#what-the-merge-rules-rely-on), and RFC 0003's suite id, key generation, person-key id and member id sit in the header and payload below. RFC 0007 (the relay) and RFC 0008 (membership) define parts this RFC only places, and the sections below link them where they do.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
@@ -281,7 +281,7 @@ The classic late change is a laptop that edits a field while offline for weeks. 
 
 "Concurrent loser" depends only on the changes, never on when they arrived, so every member computes the same set, and convergence (principle 2) holds for it too. How long a change took to arrive is still visible as a diagnostic: its clock against the time the relay received it. That diagnostic depends on the relay and is not part of the converged state.
 
-**What the clock does not do.** A member whose wall clock runs ahead writes changes with later clocks, so for "the last writer wins" its writes win until the other clocks catch up, and every member's clock follows it forward. Convergence holds, but "last" then means "latest by that member's clock". The core warns when a received clock is more than a minute ahead of the local wall clock. It does not reject the change, because rejecting it on some members and not on others would break convergence. Nor does the writing core refuse to create a change: it cannot tell that its own clock is wrong, only that it disagrees with another member's. This answers RFC 0004's question whether far-future stamps are refused: they are not, and the limit is stated here and there.
+**What the clock does not do.** A member whose wall clock runs ahead writes changes with later clocks, so for "the last writer wins" its writes win until the other clocks catch up, and every member's clock follows it forward. Convergence holds, but "last" then means "latest by that member's clock". The core warns when a received clock is more than a minute ahead of the local wall clock. It does not reject the change, because rejecting it on some members and not on others would break convergence. Nor does the writing core refuse to create a change: it cannot tell that its own clock is wrong, only that it disagrees with another member's. So stamps far in the future are not refused, neither by the writing member, nor by a receiving member, nor by the relay, which cannot see the clock; RFC 0004's merge rules do not need them to be, and RFC 0004 states the same limit.
 
 | Rejected | Why |
 | --- | --- |
@@ -301,7 +301,7 @@ Changes are encoded as CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949))
 - **Lengths are definite and minimal.** No indefinite-length items. Every integer and every length uses its shortest form.
 - **Maps have unsigned integer keys only**, sorted by the bytes of their encoding, each key at most once. Values of a field type may use text keys, sorted the same way.
 - **Allowed major types:** unsigned and negative integers, byte strings, text strings, arrays, maps, and the simple values `false`, `true` and `null`.
-- **Floating-point numbers** use the shortest of the 16-, 32- and 64-bit forms that keeps the value exactly, as §4.2.1 says. Every NaN is encoded as the single quiet NaN `0xf97e00`. Negative zero stays negative zero. The header and the ordering metadata never contain a float.
+- **Floating-point numbers** use the shortest of the 16-, 32- and 64-bit forms that keeps the value exactly, as §4.2.1 says. Every NaN is encoded as the single quiet NaN `0xf97e00`. Negative zero stays negative zero, and positive zero positive zero, each in its one shortest form; RFC 0004 compares set elements by these bytes, so a set may hold both 0.0 and −0.0. The header and the ordering metadata never contain a float.
 - **Text strings** are valid UTF-8, stored as given. The format does not normalise Unicode. A field type or the SDK may normalise before writing (RFC 0004 has the SDK normalise strings to NFC), but the encoding never changes the bytes it is given.
 - **No tags**, and no simple values other than the three above. Future versions may allow specific tags.
 - **Integers** stay within 64 bits.
@@ -509,33 +509,6 @@ What the relay **can do** despite holding no keys, and what limits it:
 - **It can withhold changes.** A member notices a withheld change when a later change depends on it, or when an author's sequence numbers have a gap. A member does not notice a withheld change that nothing depends on and that is its author's last.
 - **It can show different members different subsets** of the log. Members notice it only when they exchange changes directly, as in island mode.
 - **It can delete its log or refuse service.** Every member still holds its full copy, and the members can repopulate a new relay.
-
-## What RFC 0003 and RFC 0004 need from this RFC
-
-RFC 0003 (keys and cryptography) and RFC 0004 (merge rules) build on this RFC. This section answers what each of them needs from it; O1 to O5 are the requests as [RFC 0004, "What this RFC needs from RFC 0002"](0004-merge-rules-basic-types.md#what-this-rfc-needs-from-rfc-0002) numbers them.
-
-### RFC 0004: merge rules
-
-| Request | Answer in this RFC |
-| --- | --- |
-| **O1.** Every change has an id that no two changes share, and every member computes the same id for the same change. | Met. The change id is the hash of the frame version and the signed header bytes ([Change ids](#change-ids)). An operation id is the change id plus the operation's position ([Operation ids](#operation-ids)). |
-| **O2.** The stamp is computed from the change alone and compares the same way on every member and platform. | Met. The stamp is the hybrid logical clock in the payload, an unsigned 64-bit integer compared as a number. The author member id and the operation id for the tie-breaks are in the same change. No float and no platform-dependent value is involved. |
-| **O3.** If the author of change b had seen change a, a's stamp is lower than b's. | Met. A member's clock is always higher than the clock of every change it has seen ([The clock](#the-clock)). |
-| **O4.** The stamp carries wall-clock time. | Met. The upper 48 bits are milliseconds since the Unix epoch. |
-| **O5.** One canonical encoding per value, NaN and negative zero included. | Met. Every NaN is `0xf97e00`; negative zero is encoded as negative zero, positive zero as positive zero, each in its one shortest form ([The CBOR profile](#the-cbor-profile)). RFC 0004 asks for one encoding each, not for the two to be equal, so a set may hold both 0.0 and −0.0. |
-| Are stamps far in the future refused? | No. Neither the writing member nor a receiving member nor the relay refuses them; members warn. Refusing on some members and not on others would break convergence, and the relay cannot see the clock ([What the change does not carry](#what-the-change-does-not-carry)). |
-| Causal delivery is not guaranteed, and no field type of RFC 0004 assumes it. | Confirmed. Members fold changes as they arrive, in any order, and report missing dependencies as gaps ([Dependencies](#dependencies)). The dependencies give the causal order for diagnostics and for field types that want it; no field type may rely on them having arrived. |
-
-### RFC 0003: keys and cryptography
-
-| Request | Answer in this RFC |
-| --- | --- |
-| Room for the suite id. | Header key 8, signed, readable by the relay, covered by the associated data. |
-| Room for the space key generation. | Header key 4, the key generation. |
-| The person-key id on each personal field. | A personal field's value is a sealed personal value: the person-key id and the ciphertext ([Operations](#operations-object-field-and-value)). |
-| The author's member id, a hash of its public keys. | Header key 2. |
-| Encrypt-then-sign: the signature covers header and ciphertext, so the relay verifies without decrypting and signatures survive a shred. | Met. The signature covers the signed header bytes, which contain the ciphertext. The change id is computed from the same bytes, so a shred changes neither the id nor the signature. |
-| Key envelopes, membership entries and shred entries are log entries too. | Met. They are control changes (kind 1), with the same frame, signature, id and log as every other change. RFC 0003 defines their bodies. |
 
 ## Byte-exact examples
 
