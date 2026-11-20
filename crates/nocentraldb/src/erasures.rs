@@ -118,14 +118,18 @@ impl Erasures<'_> {
                 crate::texts::error::no_such_space(space),
             )
         })?;
-        let resolved = state.checks.resolved();
-        let mut erasures: Vec<Erasure> = resolved
-            .person_keys()
-            .flat_map(|(_, key)| erasures(resolved, key))
-            .collect();
-        erasures.sort_by_key(|erasure| erasure.shred);
-        Ok(erasures)
+        Ok(list(state.checks.resolved()))
     }
+}
+
+/// The erasures of `resolved`'s space, in shred-id order.
+pub(crate) fn list(resolved: &Resolved) -> Vec<Erasure> {
+    let mut erasures: Vec<Erasure> = resolved
+        .person_keys()
+        .flat_map(|(_, key)| erasures(resolved, key))
+        .collect();
+    erasures.sort_by_key(|erasure| erasure.shred);
+    erasures
 }
 
 /// The erasures of a person key: each earlier shred, which was taken back,
