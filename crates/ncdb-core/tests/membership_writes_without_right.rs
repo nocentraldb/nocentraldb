@@ -448,7 +448,7 @@ fn config() -> Config {
     Config {
         members: 4,
         max_changes_per_member: 5,
-        max_learned: 6,
+        max_learned: 16,
         cases: 48,
         ..Config::default()
     }
