@@ -19,13 +19,14 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 
 use ncdb_core::ids::ChangeId as CoreChangeId;
-use ncdb_core::log::{Position, State};
+use ncdb_core::log::{Position, RejectReason, State};
 use ncdb_core::view::Row;
 
 use super::support::*;
 use crate::db::{Db, lock};
 use crate::id::{MemberId, ObjectId};
 use crate::members::{AddMember, Role};
+use crate::status::RejectReason as PublicReject;
 use crate::space::Space;
 use crate::value::Value;
 
@@ -218,31 +219,27 @@ pub(super) fn same_fold(six: &Six, reference: Who, others: &[Who], objects: &[Ob
     }
 }
 
-/// Checks what member 1's copy holds against member `reference`'s.
-/// Member 1 never receives its own removal: the relay serves no change of
-/// the space to a removed member, and ends its subscription with
-/// `removed_member` or answers `not_member` (RFC 0007, "Subscribe" and
-/// "The errors"). Its copy therefore keeps its own changes `written`
-/// folded, as local information only (GENESIS.md, principle 3), and its
-/// view keeps the objects `own` they touched. On every other change both
-/// hold, the verdict is the same, and so is the view of every object
-/// outside `own`. RFC 0008 ("A member removed while offline who keeps
-/// writing", "On the laptop itself") says the removed member folds its own
-/// removal; NOC-381 reported the gap to pm.
+/// Checks what member 1's copy holds against member `reference`'s. The
+/// relay hands member 1 its own removal in the error that ends its pull or
+/// subscription (RFC 0007, "The errors"; Carsten, 2026-11-20, NOC-383), so
+/// member 1 folds it like any member: its own changes `written` above the
+/// cutoff become rejected on its own copy, and the SDK reports them as
+/// `rejected` with `notMember` (RFC 0008, "A member removed while offline
+/// who keeps writing", "On the laptop itself"). On every change both hold,
+/// the verdict is the same, and so is the view of every object.
 pub(super) fn removed_agrees(
     six: &Six,
     reference: Who,
     written: &[CoreChangeId],
     objects: &[ObjectId],
-    own: &[ObjectId],
 ) {
     let theirs = verdicts(six, reference);
     let ours = verdicts(six, REMOVED);
     for id in written {
-        assert!(
-            matches!(ours[id], State::Folded { .. }),
-            "member 1 keeps {id:?} folded: {:?}",
-            ours[id]
+        assert_eq!(
+            ours[id],
+            State::Rejected(RejectReason::NotMember),
+            "member 1 rejects its own {id:?}"
         );
     }
     for (id, state) in ours.iter().filter(|(id, _)| !written.contains(id)) {
@@ -250,10 +247,11 @@ pub(super) fn removed_agrees(
             assert_eq!(state, other, "member 1's verdict on {id:?}");
         }
     }
-    let shared: Vec<ObjectId> = objects
-        .iter()
-        .filter(|id| !own.contains(id))
-        .copied()
-        .collect();
-    assert_eq!(view(six, REMOVED, &shared), view(six, reference, &shared));
+    assert_eq!(view(six, REMOVED, objects), view(six, reference, objects));
+    let status = six.space(REMOVED).status().current();
+    assert_eq!(
+        status.rejected.get(&PublicReject::NotMember),
+        Some(&3),
+        "member 1 is told which of its writes no member accepts"
+    );
 }
