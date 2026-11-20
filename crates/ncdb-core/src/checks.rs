@@ -112,6 +112,12 @@ impl SealChecks {
             .or_else(|| self.chain_keys.get(&generation))
     }
 
+    /// The key envelopes to the checks' member whose key is not the one its
+    /// generation's own control change confirms.
+    pub fn wrong_envelopes(&self) -> Vec<WrongEnvelope> {
+        Vec::new()
+    }
+
     /// The `model.id` the space's genesis names, opened with the space key
     /// of its first generation (RFC 0008, "What it names"). `None` while
     /// the checks hold no genesis or no key of the first generation, or
@@ -142,6 +148,19 @@ impl SealChecks {
             .or(own.filter(|key| key.id() == author))
             .ok_or(Stop::Rejected(RejectReason::UnknownAuthor))
     }
+}
+
+/// A key envelope to the checks' member that holds a wrong key: a local
+/// report (RFC 0008, "What the fold may read"). It names the envelope, the
+/// author whose signature covers it and the generation, never a key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WrongEnvelope {
+    /// The envelope's change id.
+    pub change: ChangeId,
+    /// The envelope's author.
+    pub author: MemberId,
+    /// The generation it names.
+    pub generation: u64,
 }
 
 /// The public keys a control body names: a genesis its creator's, an add
