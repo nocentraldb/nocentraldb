@@ -58,12 +58,12 @@ export const snippets = (markdown) => {
   return found;
 };
 
-/** Type-checks the snippets of the guide at `path`: { ok, output }, errors given as `<guide>:<line>:<column>`. */
-export const check = (path = GUIDE) => {
-  const blocks = snippets(readFileSync(path, "utf8"));
-  if (blocks.length === 0) {
-    return { ok: false, output: `${path}: no ts snippet to check` };
-  }
+/**
+ * Type-checks `files` ({ path: code }) as one app against the SDK's source:
+ * { ok, output }, each error's `file(line,column)` handed to `place`, which
+ * answers where it is in the page, or undefined to keep it.
+ */
+const typeCheck = (files, place) => {
   const dir = mkdtempSync(join(tmpdir(), "doc-snippets-"));
   try {
     writeFileSync(join(dir, "package.json"), '{ "type": "module" }\n');
@@ -81,29 +81,103 @@ export const check = (path = GUIDE) => {
         include: ["**/*.ts"],
       }),
     );
-    for (const block of blocks) {
-      mkdirSync(dirname(join(dir, block.file)), { recursive: true });
-      writeFileSync(join(dir, block.file), `${block.code}\n`);
+    for (const [file, code] of Object.entries(files)) {
+      mkdirSync(dirname(join(dir, file)), { recursive: true });
+      writeFileSync(join(dir, file), `${code}\n`);
     }
     const result = spawnSync(TSC, ["-p", dir, "--pretty", "false"], {
       cwd: dir,
       encoding: "utf8",
     });
-    const shown = relative(process.cwd(), path) || path;
+    if (result.error) return { ok: false, output: String(result.error) };
     // tsc names a file and a position: `src/snippet-2.ts(3,5): error TS...`.
     const output = `${result.stdout}${result.stderr}`.replace(
       /^([a-z0-9/-]+\.ts)\((\d+),(\d+)\)/gm,
-      (whole, file, line, column) => {
-        const block = blocks.find((b) => b.file === file);
-        if (!block) return whole;
-        return `${shown}:${block.line + Number(line) - 1}:${column}`;
-      },
+      (whole, file, line, column) => place(file, Number(line), column) ?? whole,
     );
-    if (result.error) return { ok: false, output: String(result.error) };
-    return { ok: result.status === 0, output, count: blocks.length };
+    return { ok: result.status === 0, output };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+};
+
+/** Type-checks the snippets of the guide at `path`: { ok, output }, errors given as `<guide>:<line>:<column>`. */
+export const check = (path = GUIDE) => {
+  const blocks = snippets(readFileSync(path, "utf8"));
+  if (blocks.length === 0) {
+    return { ok: false, output: `${path}: no ts snippet to check` };
+  }
+  const shown = relative(process.cwd(), path) || path;
+  const result = typeCheck(
+    Object.fromEntries(blocks.map((b) => [b.file, b.code])),
+    (file, line, column) => {
+      const block = blocks.find((b) => b.file === file);
+      return block && `${shown}:${block.line + line - 1}:${column}`;
+    },
+  );
+  return { ...result, count: blocks.length };
+};
+
+const IMPORT = /^import\s.*\sfrom\s+"([^"]+)";$/;
+const IMPLIED = [
+  'import { nc } from "@nocentraldb/sdk";',
+  'import { model } from "../model.ts";',
+];
+
+/**
+ * Type-checks the examples of a page whose ts blocks read as one app, as the
+ * README's and Getting started's do (NOC-361): the block with `nc.model(` is
+ * model.ts, and every other block continues the one before it, in one
+ * module that imports `nc` and `model`. Imports are hoisted and each kept
+ * once; `./model` is the model, and a JSON import, such as the lock, is
+ * declared `unknown`. `declare` names what the page leaves to the reader,
+ * such as `declare function render(page: unknown): void;`, and `model` the
+ * model's code for a page that uses one without showing it. Errors are given
+ * as `<page>:<line>:<column>`.
+ */
+export const checkPage = (path, { declare = [], model: given } = {}) => {
+  const blocks = snippets(readFileSync(path, "utf8"));
+  const shown = relative(process.cwd(), path) || path;
+  const model =
+    blocks.find((b) => b.code.includes("nc.model(")) ??
+    (given === undefined ? undefined : { code: given, line: undefined });
+  if (!model) {
+    return { ok: false, output: `${shown}: no ts block with the model` };
+  }
+  const head = new Set(IMPLIED);
+  const declared = [];
+  const body = [];
+  for (const block of blocks.filter((b) => b !== model)) {
+    for (const [i, text] of block.code.split("\n").entries()) {
+      const from = text.match(IMPORT)?.[1];
+      if (from?.endsWith(".json")) {
+        const name = text.match(/^import\s+(\w+)\s/)?.[1];
+        declared.push(`declare const ${name}: unknown;`);
+        body.push({ text: "", line: block.line + i });
+      } else if (from !== undefined) {
+        head.add(from === "./model" ? IMPLIED[1] : text);
+        body.push({ text: "", line: block.line + i });
+      } else {
+        body.push({ text, line: block.line + i });
+      }
+    }
+  }
+  const prelude = [...head, ...new Set(declared), ...declare];
+  const result = typeCheck(
+    {
+      "model.ts": model.code,
+      "src/page.ts": [...prelude, ...body.map((b) => b.text)].join("\n"),
+    },
+    (file, line, column) => {
+      if (file === "model.ts")
+        return model.line === undefined
+          ? `the given model:${line}:${column}`
+          : `${shown}:${model.line + line - 1}:${column}`;
+      const at = body[line - prelude.length - 1];
+      return at && `${shown}:${at.line}:${column}`;
+    },
+  );
+  return { ...result, count: blocks.length };
 };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
