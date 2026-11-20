@@ -127,7 +127,12 @@ impl Input {
         let pasts = pasts(&nodes);
         let missing: BTreeSet<ChangeId> = nodes
             .values()
-            .filter(|node| node.body.dependencies.iter().any(|d| !changes.contains_key(d)))
+            .filter(|node| {
+                node.body
+                    .dependencies
+                    .iter()
+                    .any(|d| !changes.contains_key(d))
+            })
             .map(|node| node.id)
             .collect();
         for (id, past) in pasts {

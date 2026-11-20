@@ -8,7 +8,7 @@
 //! `reopen` writes them into a key file of the SDK's format first.
 
 #[path = "../../../../ncdb-relay-server/tests/support/mod.rs"]
-mod relay_support;
+pub(crate) mod relay_support;
 
 mod account_space;
 mod added;

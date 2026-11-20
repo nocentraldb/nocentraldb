@@ -14,8 +14,13 @@
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
+// Natively the sync tests already load the core's simulated space; a
+// second copy of the module is refused, so this uses theirs.
+#[cfg(target_arch = "wasm32")]
 #[path = "../../ncdb-core/tests/support/space.rs"]
 mod space;
+#[cfg(not(target_arch = "wasm32"))]
+use crate::sync::tests::relay_support::space;
 
 use ncdb_core::change::Change;
 use ncdb_core::keys::PersonKey;
