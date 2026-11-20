@@ -9,6 +9,9 @@
 //   `cdk diff` before `cdk deploy`; the deployment's values reach the shell
 //   as variables, never spliced into a command.
 // - Every action is pinned by SHA.
+// - A change only to the test directories of the deployed crates neither
+//   starts a deploy run nor needs the owner's review: they are not part of
+//   the deployed build (Carsten, 2026-11-20, NOC-403).
 //
 // Each check also rejects its mutants (scripts/lib/workflow-checks.mjs).
 import assert from "node:assert/strict";
@@ -44,9 +47,18 @@ const owned = (text) =>
       return [pattern, owners];
     });
 
-/** A workflow path filter as CODEOWNERS spells it: `a/**` is `/a/`. */
-const asOwned = (path) =>
-  path.endsWith("/**") ? `/${path.slice(0, -2)}` : `/${path}`;
+/**
+ * A workflow path filter as CODEOWNERS spells it: `a/**` is `/a/`, and a
+ * negated `!a/**` is `/a/` too (CODEOWNERS leaves it without an owner).
+ */
+const asOwned = (path) => {
+  const plain = path.replace(/^!/, "");
+  return plain.endsWith("/**") ? `/${plain.slice(0, -2)}` : `/${plain}`;
+};
+
+/** The negated path filters, which exclude a path from the deploy. */
+const negated = (paths) => paths.filter((p) => p.startsWith("!"));
+const positive = (paths) => paths.filter((p) => !p.startsWith("!"));
 
 /**
  * The workspace crates the function links in its deployed build: the
@@ -98,14 +110,19 @@ const INSTALL_TOOLS =
   'pip install --require-hashes --only-binary ":all:" -r infra/aws/cargo-lambda.txt';
 const BUILD =
   "cargo lambda build --locked --release --arm64 -p ncdb-relay-lambda --features aws --bin ncdb-relay-lambda";
+const DEPLOYED_CRATES = [
+  "crates/ncdb-core",
+  "crates/ncdb-plugin",
+  "crates/ncdb-relay",
+  "crates/ncdb-relay-aws",
+  "crates/ncdb-relay-lambda",
+];
 const RELAY_PATHS = [
   "infra/aws/**",
-  "crates/ncdb-core/**",
-  "crates/ncdb-plugin/**",
-  "crates/ncdb-relay/**",
-  "crates/ncdb-relay-aws/**",
-  "crates/ncdb-relay-lambda/**",
+  ...DEPLOYED_CRATES.map((dir) => `${dir}/**`),
 ];
+/** The deployed crates' test directories, which no deploy is built from. */
+const TEST_DIRS = DEPLOYED_CRATES.map((dir) => `!${dir}/tests/**`);
 
 runWorkflowChecks({
   files: { workflow: text === null ? null : parse(text), text, codeowners },
@@ -159,6 +176,56 @@ runWorkflowChecks({
       },
     },
     {
+      name: "a change only to the deployed crates' tests starts no deploy run",
+      check: (ctx) => {
+        const on = workflow(ctx).on ?? {};
+        for (const trigger of [on.push, on.pull_request]) {
+          const paths = trigger.paths ?? [];
+          assert.deepEqual(
+            negated(paths).sort(),
+            [...TEST_DIRS].sort(),
+            "the excluded paths are the deployed crates' tests",
+          );
+          // GitHub takes the last pattern that matches: a negated path
+          // excludes only what a positive pattern before it included.
+          for (const exclusion of TEST_DIRS) {
+            const crate = `${exclusion.slice(1, -"/tests/**".length)}/**`;
+            assert.ok(
+              paths.indexOf(exclusion) > paths.indexOf(crate) &&
+                paths.indexOf(crate) >= 0,
+              `${exclusion} does not follow ${crate}`,
+            );
+          }
+        }
+      },
+      mutants: {
+        "pull requests on test-only changes": (ctx) => {
+          ctx.workflow.on.pull_request.paths =
+            ctx.workflow.on.pull_request.paths.filter(
+              (p) => p !== "!crates/ncdb-relay-aws/tests/**",
+            );
+        },
+        "a deploy on test-only changes": (ctx) => {
+          ctx.workflow.on.push.paths = ctx.workflow.on.push.paths.filter(
+            (p) => p !== "!crates/ncdb-core/tests/**",
+          );
+        },
+        "the exclusion before its crate": (ctx) => {
+          const paths = ctx.workflow.on.push.paths.filter(
+            (p) => p !== "!crates/ncdb-relay-lambda/tests/**",
+          );
+          ctx.workflow.on.push.paths = [
+            "!crates/ncdb-relay-lambda/tests/**",
+            ...paths,
+          ];
+        },
+        "a deployed source excluded": (ctx) => {
+          ctx.workflow.on.push.paths.push("!crates/ncdb-core/src/**");
+          ctx.workflow.on.pull_request.paths.push("!crates/ncdb-core/src/**");
+        },
+      },
+    },
+    {
       name: "the owner must approve every change that is deployed: CODEOWNERS owns exactly the deploy's paths",
       check: (ctx) => {
         assert.ok(ctx.codeowners, `${CODEOWNERS} is missing`);
@@ -169,7 +236,8 @@ runWorkflowChecks({
           "the push and pull request paths differ",
         );
         const entries = owned(ctx.codeowners);
-        for (const [pattern, owners] of entries) {
+        const ownedEntries = entries.filter(([, owners]) => owners.length > 0);
+        for (const [pattern, owners] of ownedEntries) {
           assert.deepEqual(
             owners,
             [OWNER],
@@ -177,9 +245,28 @@ runWorkflowChecks({
           );
         }
         assert.deepEqual(
-          entries.map(([pattern]) => pattern).sort(),
-          [...on.push.paths.map(asOwned), `/${CODEOWNERS}`].sort(),
+          ownedEntries.map(([pattern]) => pattern).sort(),
+          [...positive(on.push.paths).map(asOwned), `/${CODEOWNERS}`].sort(),
         );
+        // CODEOWNERS takes the last pattern that matches, and a pattern
+        // without an owner leaves its path unowned: each excluded path is
+        // unowned by a line after the line that owns its parent.
+        const unowned = entries
+          .map(([pattern, owners], line) => ({ pattern, owners, line }))
+          .filter(({ owners }) => owners.length === 0);
+        assert.deepEqual(
+          unowned.map(({ pattern }) => pattern).sort(),
+          negated(on.push.paths).map(asOwned).sort(),
+          "CODEOWNERS leaves unowned exactly what the deploy excludes",
+        );
+        for (const { pattern, line } of unowned) {
+          const parent = entries.findIndex(
+            ([p, owners]) =>
+              owners.length > 0 && p !== pattern && pattern.startsWith(p),
+          );
+          assert.ok(parent >= 0, `${pattern} lies in no owned path`);
+          assert.ok(line > parent, `${pattern} comes before ${entries[parent][0]}`);
+        }
       },
       mutants: {
         "a deployed path without an owner": (ctx) => {
@@ -206,6 +293,31 @@ runWorkflowChecks({
         },
         "pull requests watch other paths": (ctx) => {
           ctx.workflow.on.pull_request.paths.pop();
+        },
+        "a test directory still owned": (ctx) => {
+          ctx.codeowners = ctx.codeowners
+            .split("\n")
+            .filter((l) => l.trim() !== "/crates/ncdb-core/tests/")
+            .join("\n");
+        },
+        "a test directory unowned before its crate is owned": (ctx) => {
+          const lines = ctx.codeowners.split("\n");
+          const test = lines.findIndex(
+            (l) => l.trim() === "/crates/ncdb-relay/tests/",
+          );
+          const [line] = lines.splice(test, 1);
+          lines.unshift(line);
+          ctx.codeowners = lines.join("\n");
+        },
+        "a deployed source directory unowned": (ctx) => {
+          ctx.codeowners += "\n/crates/ncdb-core/src/\n";
+        },
+        "a test directory unowned that the deploy still watches": (ctx) => {
+          for (const trigger of ["push", "pull_request"]) {
+            ctx.workflow.on[trigger].paths = ctx.workflow.on[
+              trigger
+            ].paths.filter((p) => p !== "!crates/ncdb-plugin/tests/**");
+          }
         },
       },
     },
