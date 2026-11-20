@@ -135,3 +135,25 @@ fn the_error_to_a_stranger_or_of_another_code_carries_no_removal() {
         ncdb_relay::wire::error(Some(2), ErrorCode::EpochChanged)
     );
 }
+
+#[test]
+fn a_removal_too_large_for_one_message_is_left_out() {
+    let (_relay, _dir, space, changes) = removed();
+    let entry = |frame: Vec<u8>| ncdb_relay::store::Entry {
+        position: 4,
+        change: changes[3].id(),
+        accepted_at: 1,
+        author: id(0),
+        kind: changes[3].header().kind,
+        frame,
+    };
+    let code = ErrorCode::RemovedMember;
+    let fits = ncdb_relay::wire::removed(Some(1), code, &entry(changes[3].bytes().to_vec()));
+    assert!(fits.is_some_and(|bytes| bytes.len() <= ncdb_relay::wire::MAX_MESSAGE));
+    let large = vec![0; ncdb_relay::wire::MAX_INLINE + 1];
+    assert_eq!(
+        ncdb_relay::wire::removed(Some(1), code, &entry(large)),
+        None
+    );
+    let _ = space;
+}
