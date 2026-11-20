@@ -97,6 +97,8 @@ mod clear_tests;
 #[cfg(test)]
 mod durability_tests;
 #[cfg(test)]
+mod erasure_waiting_tests;
+#[cfg(test)]
 mod fold_feed_tests;
 #[cfg(test)]
 mod page_limit_tests;
