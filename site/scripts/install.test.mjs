@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  expressiveNpmLine,
   installLines,
   newestAlpha,
   publishableCrate,
@@ -173,4 +174,23 @@ test("the remark plugin rewrites the npm line in code, and leaves prose alone", 
     "npm install @nocentraldb/sdk@alpha",
   );
   assert.equal(tree.children[1].children[1].value, npm);
+});
+
+test("the Expressive Code plugin rewrites the npm line in a code block, which remark no longer sees", () => {
+  const npm = "npm install @nocentraldb/sdk@beta";
+  const lines = [
+    "npm install @nocentraldb/sdk@alpha",
+    "npx ncdb model build",
+  ].map((text) => ({
+    text,
+    editText(from, to, value) {
+      this.text = this.text.slice(0, from) + value + this.text.slice(to);
+    },
+  }));
+  const plugin = expressiveNpmLine({ npm });
+  plugin.hooks.preprocessCode({ codeBlock: { getLines: () => lines } });
+  assert.deepEqual(
+    lines.map((line) => line.text),
+    [npm, "npx ncdb model build"],
+  );
 });
