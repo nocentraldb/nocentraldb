@@ -84,3 +84,18 @@ fn an_erasure_carries_rfc_0009s_names() {
     assert_eq!(field(&members[1], "current"), Some(&Value::Bool(false)));
     assert_eq!(field(&members[1], "acknowledged"), Some(&text("missing")));
 }
+
+#[test]
+fn a_waiting_erasure_carries_the_state_waiting_and_no_members() {
+    let erasure = Erasure {
+        shred: ChangeId(ncdb_core::ids::ChangeId([5; 32])),
+        state: ErasureState::Waiting,
+        performer: MemberId(ncdb_core::ids::MemberId([1; 32])),
+        performer_account: Fingerprint::account([3; 32]),
+        sign_off: Fingerprint::account([4; 32]),
+        members: Vec::new(),
+    };
+    let value = crate::bridge::erasures::erasure(&erasure);
+    assert_eq!(field(&value, "state"), Some(&text("waiting")));
+    assert_eq!(field(&value, "members"), Some(&Value::Array(Vec::new())));
+}
