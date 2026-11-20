@@ -4,7 +4,7 @@
 // is the model, and the others continue one another, so checkPage joins them
 // into one module, with the names the page leaves to the reader declared.
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -104,4 +104,13 @@ test("the Getting started page's TypeScript examples type-check against the SDK"
   );
   assert.ok(ok, output);
   assert.ok(count >= 2, `only ${count} snippets`);
+});
+
+test("browser durability's example type-checks against the SDK, with the example app's model", () => {
+  const { ok, output, count } = checkPage("docs/browser-durability.md", {
+    model: readFileSync("apps/tasks-ts/model.ts", "utf8"),
+    declare: ["declare function showBanner(durability: unknown): void;"],
+  });
+  assert.ok(ok, output);
+  assert.equal(count, 1);
 });
