@@ -29,7 +29,7 @@ test("The errors says which error carries a removal, and what the member does wi
     .filter((l) => /^\| `(not_member|removed_member)` \|/.test(l));
   assert.equal(rows.length, 2, "rows for not_member and removed_member");
   for (const row of rows) {
-    assert.match(row, /folds/, `the member folds its removal: ${row}`);
+    assert.match(row, /fold/i, `the member folds its removal: ${row}`);
   }
 });
 
