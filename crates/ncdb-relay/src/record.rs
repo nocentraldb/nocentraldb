@@ -35,9 +35,7 @@ pub struct RecordError;
 
 /// The rows of every member, current or former, of a resolved space.
 pub fn records(resolved: &Resolved) -> Vec<MemberRecord> {
-    let mut members: BTreeSet<MemberId> = resolved.seniority().iter().copied().collect();
-    members.extend(resolved.members().map(|(member, _)| member));
-    members
+    known(resolved)
         .into_iter()
         .filter_map(|member| {
             let state = resolved.member(member)?;
@@ -63,6 +61,42 @@ pub fn records(resolved: &Resolved) -> Vec<MemberRecord> {
             })
         })
         .collect()
+}
+
+/// The rows of the members `before` knew and `after` does not: members
+/// whose every add a later removal excluded. Such a row keeps the member's
+/// keys and certificate and holds no role, grant or revocation, so it names
+/// no current member and admits none of its changes, as `resolve` of the
+/// log, which names the member not at all, says (RFC 0008, "How the relay
+/// applies the rules").
+pub fn dropped(before: &Resolved, after: &Resolved) -> Vec<MemberRecord> {
+    let after = known(after);
+    known(before)
+        .into_iter()
+        .filter(|member| !after.contains(member))
+        .filter_map(|member| {
+            let state = before.member(member)?;
+            let state = MemberState {
+                role: None,
+                grants: Vec::new(),
+                revocations: Vec::new(),
+                ..state.clone()
+            };
+            Some(MemberRecord {
+                member,
+                current: false,
+                state: encode(&state, &BTreeMap::new(), &BTreeMap::new()),
+            })
+        })
+        .collect()
+}
+
+/// Every member, current or former, a resolved space holds a state for.
+fn known(resolved: &Resolved) -> BTreeSet<MemberId> {
+    let mut members: BTreeSet<MemberId> = resolved.seniority().iter().copied().collect();
+    members.extend(resolved.members().map(|(member, _)| member));
+    members.retain(|member| resolved.member(*member).is_some());
+    members
 }
 
 /// Decodes a stored row.
