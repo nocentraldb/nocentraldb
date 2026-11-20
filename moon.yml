@@ -108,6 +108,9 @@ tasks:
     # scripts/doc-snippets.test.mjs type-checks the snippets of
     # docs/getting-started-browser.md against packages/sdk/src with tsc
     # (NOC-322), hence the SDK's source among the inputs.
+    # scripts/page-snippets.test.mjs and how-it-works-snippets.test.mjs
+    # type-check the examples of the README and of docs pages under
+    # site/src/content (NOC-361).
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -134,6 +137,7 @@ tasks:
       - "/crates/ncdb-core/tests/**/*"
       - "/packages/sdk/src/**/*"
       - "/tsconfig.base.json"
+      - "/site/src/content/**/*"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not

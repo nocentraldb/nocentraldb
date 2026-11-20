@@ -62,6 +62,7 @@ export const model = nc.model({
 `ncdb model build` turns it into `model.lock.json`, which the core and both SDKs read. Then you open a database and write:
 
 ```ts
+const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 const project = await db.spaces.create();
 
