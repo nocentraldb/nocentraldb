@@ -26,8 +26,8 @@ use super::support::*;
 use crate::db::{Db, lock};
 use crate::id::{MemberId, ObjectId};
 use crate::members::{AddMember, Role};
-use crate::status::RejectReason as PublicReject;
 use crate::space::Space;
+use crate::status::RejectReason as PublicReject;
 use crate::value::Value;
 
 /// The member that is removed.

@@ -544,9 +544,19 @@ impl<T: Transport> Session<'_, T> {
                 Ok(())
             }
             Answer::Error {
-                code, retry_after, ..
+                code,
+                retry_after,
+                removal,
+                ..
             } => match code.as_str() {
                 "not_member" | "removed_member" => {
+                    // The member folds its own removal, as every member
+                    // does, before it stops syncing the space (RFC 0008, "A
+                    // member removed while offline who keeps writing").
+                    if let Some(removal) = removal {
+                        with(self.db, |inner| apply::removal(inner, space, removal))?
+                            .map_err(|_| lost())?;
+                    }
                     with(self.db, |inner| apply::stop(inner, space, code))?;
                     Ok(())
                 }
