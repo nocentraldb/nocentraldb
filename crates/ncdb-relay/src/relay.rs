@@ -391,12 +391,17 @@ impl<S: RelayStore> Relay<S> {
             return Err(ErrorCode::SpaceExists);
         }
         let mut controls = self.controls(space).await?;
-        let before = current(&membership::resolve(space, &controls));
+        let before = membership::resolve(space, &controls);
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
         self.not_too_early(space, change, &resolved).await?;
-        Ok(Checked::new(&resolved, &before))
+        let mut checked = Checked::new(&resolved, &current(&before));
+        let dropped = record::dropped(&before, &resolved);
+        checked
+            .effects
+            .extend(dropped.into_iter().map(Effect::Member));
+        Ok(checked)
     }
 
     /// Refuses with `too_early` an erasure decision that finalizes a
