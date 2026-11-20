@@ -7,7 +7,7 @@
 //! The ciphertext counts only when exactly one key opens it. The core's
 //! AEADs do not commit to their key, so an author who knows two of the
 //! keys could build a ciphertext that opens under both, to two different
-//! plaintexts (RFC 0003, "How a member signs and encrypts a change"); a
+//! plaintexts (RFC 0003, "Primitives"); a
 //! member that took either would read what others do not. Such a
 //! ciphertext opens under none.
 

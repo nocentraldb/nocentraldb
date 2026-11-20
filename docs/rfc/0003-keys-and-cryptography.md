@@ -173,7 +173,7 @@ Why each, and what was not taken:
 - **Two member keys, not one.** Converting Ed25519 keys to X25519 instead of keeping two keys was not taken: one secret in two protocols, see [The member key](#the-member-key).
 - **The platform's own crypto** (WebCrypto, CryptoKit, Android Keystore) for the core's operations was not taken: the behaviour would then fork by platform, which principle 7 forbids. The platform keystores still protect our keys at rest (see [How the SDK hides keys](#how-the-sdk-hides-keys)).
 
-Every ciphertext names exactly one key: the space, the generation, or the person key by id. A member never tries several keys on one ciphertext. ChaCha20-Poly1305 does not commit to its key, so a malicious member could build a ciphertext that decrypts under two different keys; because the key is named and covered by the signature, every member uses the same key and reads the same plaintext.
+Every ciphertext names exactly one key: the space, the generation, or the person key by id. ChaCha20-Poly1305 does not commit to its key, so a malicious member could build a ciphertext that decrypts under two different keys; because the key is named and covered by the signature, every member that holds the right key uses it and reads the same plaintext. A member can still hold more than one key for one generation, when a key envelope to it holds a wrong key ([RFC 0008, "What the fold may read"](0008-membership.md#what-the-fold-may-read)). It keeps each and tries each, so whether it reads a change does not depend on which envelope arrived last (Carsten, 2026-11-20, NOC-389). A ciphertext counts only when exactly one of those keys opens it. One that opens under two is undecryptable, so a member never reads a plaintext that only a wrong key gives. Keeping only the envelope with the lowest change id was not taken: it is order-independent too, but a wrong envelope with a lower id would still keep a member from reading the generation.
 
 Each space records a **suite id** that names this set of primitives. RFC 0002 carries it in every change's header. A future suite, for example a post-quantum one, is then a new suite id for new spaces or new generations, not a format break.
 
@@ -587,6 +587,7 @@ It makes them more precise in these points:
 
 - **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
 - **2026-11-11 · A space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-230)
+- **2026-11-20 · A member tries every key the envelopes of a generation unwrap to.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-tries-every-key-the-envelopes-of-a-generation-unwrap-to.md))
 - **2026-11-12 · The key record's format 2, the pairing invitation and a recovered key's number.** (Carsten, 2026-11-12, NOC-285)
 - **2026-11-12 · A personal value is sealed under a subkey of the person key.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-15 · A sub-agent's invitation is version 3, and its parent signs its certificate.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q1-a-sub-agent-invitation-is-version-3-of-the-invitation.md))
@@ -617,3 +618,4 @@ It makes them more precise in these points:
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362, #396)
+- 2026-11-20 · A member that holds several keys for a generation tries each, and a ciphertext counts when exactly one opens it (NOC-389)
