@@ -122,13 +122,15 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 
 `nc.link` and `nc.links` take one collection name, or a list of them when a link may point into several collections: `nc.links(["tasks", "milestones"])`. A link always points into the object's own space (RFC 0004).
 
-A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones.
+A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones. In v1 a plugin field is Rust only: only the Rust SDK registers plugins, and the TypeScript SDK has none ([RFC 0011, "TypeScript"](0011-plugin-field-types.md#typescript); Carsten, 2026-11-20, NOC-362).
 
 ```ts
 import { counter } from "@acme/ncdb-counter";
 
 export const model = nc.model({
-  tasks: nc.collection({ votes: counter() }),
+  tasks: nc.collection({
+    votes: counter(), // Rust only in v1
+  }),
 });
 ```
 
@@ -645,6 +647,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 - **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types.md))
 - **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-20 · A plugin field is Rust only in v1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
 
 ## History
 
@@ -655,3 +658,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · A plugin is registered with the core, never loaded (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · A plugin field is Rust only in v1, as the owner answered (NOC-362)

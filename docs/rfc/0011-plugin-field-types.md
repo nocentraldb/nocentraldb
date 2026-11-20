@@ -25,7 +25,7 @@ It builds on RFC 0004 and RFC 0005, above, and on [RFC 0001](0001-nocentraldb.md
 | How does an app hand plugins over? | `OpenOptions::plugin(acme_ncdb_counter::plugin())` in the Rust SDK, once per plugin. |
 | And in TypeScript? | Not in v1: a TypeScript member parks plugin fields. `ncdb core build` comes next and builds an app's own wasm core with its plugins. |
 | What if a type is not registered? | The database opens anyway. The field's operations park as `UnknownType`, the field reads as unset, and a write to it is refused with `unknownType`. |
-| How is a plugin checked? | With `ncdb-harness`, a public crate that runs RFC 0004's checks C1 to C7 in the plugin's own CI. |
+| How is a plugin checked? | With `ncdb-harness`, a crate that runs RFC 0004's checks C1 to C7 in the plugin's own CI, published after 0.1. |
 
 ## Terms
 
@@ -129,7 +129,7 @@ This keeps what a member does not understand, as principle 3 asks and as an unkn
 
 ## Checking a plugin: ncdb-harness
 
-The convergence harness becomes a public crate, **`ncdb-harness`** (Carsten, 2026-11-12, NOC-232). It is taken out of `ncdb-core`'s test code, and the core's built-in types move onto it, so there is one harness for both. A plugin crate uses it as a dev-dependency, with its own generators and its broken fixtures as RFC 0004 requires them, and runs it natively and on wasm32 (C3) in its own CI. The harness checks C1 to C7 and that `decode_state` round-trips.
+The convergence harness becomes a public crate, **`ncdb-harness`** (Carsten, 2026-11-12, NOC-232). It is taken out of `ncdb-core`'s test code, and the core's built-in types move onto it, so there is one harness for both. A plugin crate uses it as a dev-dependency, with its own generators and its broken fixtures as RFC 0004 requires them, and runs it natively and on wasm32 (C3) in its own CI. The harness checks C1 to C7 and that `decode_state` round-trips. It is published to crates.io after 0.1: for 0.1 it is not published, and its name is reserved there as a placeholder, since plugin authors do not need it before then (Carsten, 2026-11-20, NOC-362).
 
 **The limit, stated plainly (principle 4).** The core cannot prove that a third party's plugin converges. It runs what the app registers. The contract is checked in the plugin's CI, by the plugin's author, not on the device; an app that registers a plugin trusts its author for convergence as it trusts any dependency for correctness.
 
@@ -195,12 +195,17 @@ Each change is written into that text in this pull request, where it belongs, wi
 
 It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field types as plugins ([The design in one page](0001-nocentraldb.md#the-design-in-one-page)); on [RFC 0002](0002-change-and-log-format.md), whose operation map carries a plugin's operations; on RFC 0004 and RFC 0005, above; on [RFC 0006](0006-local-view.md), which keeps each field's merge state as bytes the field type encodes ([Where the view lives](0006-local-view.md#where-the-view-lives)); and on [RFC 0009](0009-sdk-api.md), whose writes to a plugin field are "what the plugin's write function returns" ([Field operations per field type](0009-sdk-api.md#field-operations-per-field-type)).
 
+## Decisions
+
+- **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-owner-answers-the-rfc-coherence-questions.md))
+
 ## History
 
 - 2026-11-12 · First published, with the design the owner decided on NOC-232 (NOC-235)
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · `ncdb-harness` is published after 0.1, as the owner answered (NOC-362)
 
 ## How this RFC is tested
 

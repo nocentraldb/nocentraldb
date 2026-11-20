@@ -75,6 +75,6 @@ test("6: key 0 is must understand", () => {
 test("7: RFC 0002 names a former member's own push as the exception", () => {
   assert.match(
     rfc("0002"),
-    /its own author[^.]*`duplicate`[^.]*even after it left the space/,
+    /`duplicate` to its own author[^.]*even after it left the space/,
   );
 });
