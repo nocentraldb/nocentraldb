@@ -33,6 +33,11 @@ pub(crate) fn only_one<'k, T>(
 
 #[cfg(test)]
 mod tests {
+    // On wasm32, wasm-bindgen-test runs only #[wasm_bindgen_test] functions;
+    // this routes #[test] there, so every test runs on both targets (NOC-10).
+    #[cfg(target_arch = "wasm32")]
+    use wasm_bindgen_test::wasm_bindgen_test as test;
+
     use super::only_one;
     use crate::keys::SpaceKey;
 
