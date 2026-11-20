@@ -14,6 +14,21 @@ GENESIS.md reserves crypto, key handling and formats for the owner, and the owne
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
 
+## The ideas behind this RFC
+
+You do not need to know cryptography to follow this RFC. These ideas carry it:
+
+- **A key pair: one half to keep, one half to share.** A key pair has a private key, which stays with its owner and never leaves the device, and a public key, which anyone may have. Each member has two such pairs. With the first it signs: anyone can check the signature with the public key. The second lets others encrypt something that only this member can open.
+- **One shared key for a space.** Encrypting every change once for each member would not scale. So each space has one symmetric key, the space key: the same key locks and unlocks, and every member of the space holds it. It encrypts the content of every change in the space.
+- **Handing a key to a new member.** The space key never travels in the clear. An admin encrypts it to the new member's public key, which this RFC calls wrapping, and the result, a key envelope, is stored on the relay. Only that member can open it; the relay stores envelopes it cannot open.
+- **Rotating instead of taking back.** A key a member once had cannot be taken out of its memory. When a member leaves, the space therefore gets a new space key, a new generation, wrapped only for the members who stay. The removed member keeps what it could read before and cannot read anything written under the new key.
+- **Devices and the person behind them.** Each device and each agent has its own member key. A person's account key vouches for which member keys belong to that person, so a new device needs no new identity. A recovery code the person keeps restores the account when every device is lost.
+- **Deriving keys instead of storing more.** Where the design needs a key for one narrow purpose, it derives it from an existing key with a fixed recipe (HKDF), so that purposes never mix and nothing extra has to be stored.
+- **Erasing by destroying a key.** Personal fields are encrypted with a key of their own per person and space, the person key. Encrypted copies may sit on many devices and in backups. Once every member destroys that one small key, all those copies become unreadable, except where someone kept the key ([Shredding a person's key](#shredding-a-persons-key)). This is how erasure works.
+- **Proven building blocks only.** Every primitive here is published and widely used, and [Primitives](#primitives) names each one, with the audits it has had and the ones it lacks.
+
+The sections below define each key, who holds it and what it protects.
+
 ## Summary
 
 - Every **member**, a device or an agent, has its own **member key**: a signing key and a key-agreement key. It is created on the member and never leaves it.
