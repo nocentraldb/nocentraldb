@@ -76,8 +76,8 @@ test("the scenario holds all four steps and their drawings in the HTML", () => {
   assert.match(html, /<section[^>]*id="story"/);
   for (const s of STEPS) assert.ok(html.includes(s.title), s.title);
   assert.equal(html.split('class="sc sc--wide"').length - 1, 5);
-  // each of the scenario's four steps also carries the tall drawing a phone shows
-  assert.equal(html.split('class="sc sc--tall"').length - 1, 4);
+  // each of the scenario's four steps also carries the schematic a phone shows
+  assert.equal(html.split('class="sc sc--phone"').length - 1, 4);
   assert.equal(html.split('story__step"').length - 1, 4);
 });
 test("hero and scenario never say relay, and the hero's drawing can be paused", () => {

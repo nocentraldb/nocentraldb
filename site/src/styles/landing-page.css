@@ -137,12 +137,11 @@ html main > section#story {
     margin: 0;
   }
 }
-/* A phone shows the tall drawing (scene.mjs) whole, out over the step's indent and
-   rule. It is never wider than its viewBox (400), so none of its text, set at 16px
-   or less in scene.css, is drawn larger than the step's 16px text. */
+/* A phone shows the step's schematic (scene.mjs, no text: the step's words carry the
+   story), out over the step's indent and rule, and at most as wide as its viewBox. */
 @media (max-width: 639px) {
   #story figure {
-    aspect-ratio: 400 / 704;
+    aspect-ratio: 400 / 260;
     max-width: 400px;
     margin-left: calc(-1 * var(--s-5) - 2px);
   }

@@ -2,8 +2,9 @@
 // The scenario: four steps stacked one under the other at every width, each with
 // its title, its text and its drawing, standing still (owner, 2026-11-20, NOC-380).
 // From 640px a step is a row, the words at the left and the drawing at the right; a
-// phone stacks the drawing under the words. Each figure carries the drawing twice:
-// wide for screens from 640px, tall for a phone (scene.css shows one of them).
+// phone stacks the drawing under the words. Each figure carries two drawings: the
+// wide one for screens from 640px, and for a phone a small schematic without text
+// (owner, 2026-11-20); scene.css shows one of them.
 import { STEPS, scene } from "./scene.mjs";
 
 const still = { still: true };
@@ -20,7 +21,7 @@ const still = { still: true };
             <p>{step.text}</p>
             <figure
               class="story__visual"
-              set:html={scene(i, `s${i}`, "wide", still) + scene(i, `s${i}`, "tall", still)}
+              set:html={scene(i, `s${i}`, "wide", still) + scene(i, `s${i}`, "phone")}
             />
           </li>
         ))
