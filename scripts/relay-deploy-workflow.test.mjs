@@ -265,7 +265,10 @@ runWorkflowChecks({
               owners.length > 0 && p !== pattern && pattern.startsWith(p),
           );
           assert.ok(parent >= 0, `${pattern} lies in no owned path`);
-          assert.ok(line > parent, `${pattern} comes before ${entries[parent][0]}`);
+          assert.ok(
+            line > parent,
+            `${pattern} comes before ${entries[parent][0]}`,
+          );
         }
       },
       mutants: {
