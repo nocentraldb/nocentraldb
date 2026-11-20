@@ -43,6 +43,12 @@ test("no docs page says that 0.1's parts are only designed", () => {
       "None of it is released yet",
       "is designed to",
       "are designed to",
+      // NOC-361: the rendered docs say what 0.1 ships.
+      "is not released yet",
+      "Until the SDK is published to npm",
+      "the interface is not built yet",
+      "We have started building the core",
+      "We will publish measurements when the core runs",
     ])
       assert.ok(!words.includes(stale), `${page}: "${stale}"`);
   }
