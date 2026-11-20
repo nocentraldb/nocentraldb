@@ -26,8 +26,8 @@ use wasm_bindgen_test::wasm_bindgen_test as test;
 use std::collections::BTreeSet;
 
 use ncdb_core::change::{Change, Payload};
-use ncdb_core::clock::Hlc;
 use ncdb_core::checks::{SealChecks, WrongEnvelope};
+use ncdb_core::clock::Hlc;
 use ncdb_core::envelope;
 use ncdb_core::keys::SpaceKey;
 use ncdb_core::log::{Log, RejectReason, State};
@@ -225,7 +225,14 @@ fn second_generation() -> SecondGeneration {
     });
     let rotation = space.write(ALICE, chain, &[&to_bob]);
     let add_carol = space.add_at(ALICE, CAROL, Role::Reader, second, &[&rotation]);
-    let right = envelope_to_carol(&mut space, ALICE, second, &second_key(), 0x3c, &[&add_carol]);
+    let right = envelope_to_carol(
+        &mut space,
+        ALICE,
+        second,
+        &second_key(),
+        0x3c,
+        &[&add_carol],
+    );
     let wrong = envelope_to_carol(&mut space, ALICE, second, &wrong_key(), 0x77, &[&add_carol]);
     SecondGeneration {
         space,
@@ -257,7 +264,10 @@ fn the_key_chain_opens_the_first_generation_in_every_order_of_a_wrong_envelope()
             "order {n}"
         );
         let key = checks.space_key(s.second).expect("the confirmed key");
-        assert!(same_key(&s.space, s.second, key, &second_key()), "order {n}");
+        assert!(
+            same_key(&s.space, s.second, key, &second_key()),
+            "order {n}"
+        );
         assert_eq!(checks.wrong_envelopes().len(), 1, "order {n}");
     }
 }
