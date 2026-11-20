@@ -1,5 +1,6 @@
-// Asserts the shape of the README (NOC-61): it opens with a disclaimer that
-// says NoCentralDB is not yet a product and links the RFCs, then has the
+// Asserts the shape of the README (NOC-61): it opens with a status that says
+// NoCentralDB 0.1 is a pre-release (NOC-361) and links Getting started and
+// the RFCs, then has the
 // sections "What it is for", "Install", "Code examples" and "Contributing", in
 // that order; and every code identifier in its examples appears in the code of
 // an RFC, so the README shows no API name the RFCs do not define. The owner
@@ -68,7 +69,7 @@ const rfcCode = globSync("docs/rfc/*.md", { cwd: root })
   .join("\n");
 const rfcWords = new Set(rfcCode.match(IDENTIFIER));
 
-test("the README opens with a disclaimer that links the RFCs", () => {
+test("the README opens with 0.1's status, linking Getting started and the RFCs", () => {
   const readme = read("README.md");
   const top = readme.slice(0, readme.indexOf("\n## "));
   const disclaimer = top
@@ -79,7 +80,9 @@ test("the README opens with a disclaimer that links the RFCs", () => {
     disclaimer,
     "the README has no disclaimer block before its first section",
   );
-  assert.match(disclaimer, /not (yet )?(released|a product)/i);
+  assert.match(disclaimer, /0\.1 is a pre-release/);
+  assert.doesNotMatch(disclaimer, /not (yet )?(released|a product)/i);
+  assert.match(disclaimer, /\]\(https:\/\/nocentraldb\.io\/docs\/\)/);
   assert.match(disclaimer, /\]\(docs\/rfc\/README\.md\)/);
 });
 
@@ -98,11 +101,12 @@ test("the README has its sections in order", () => {
   );
 });
 
-test("the examples are marked as planned API", () => {
+test("the examples say they use the API of 0.1", () => {
   const body = section(read("README.md"), "Code examples");
   assert.ok(body, "the README has no section Code examples");
   const intro = body.slice(0, body.indexOf("```"));
-  assert.match(intro, /planned/i);
+  assert.match(intro, /0\.1/);
+  assert.doesNotMatch(intro, /planned/i);
 });
 
 test("every code identifier in the README's examples appears in an RFC", () => {
