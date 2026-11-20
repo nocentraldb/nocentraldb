@@ -1,7 +1,10 @@
 // Starlight's docs collection, plus the developer docs rendered from their
-// files in docs/ (NOC-361; which files and how: repo-docs.mjs).
+// files in docs/ (NOC-361; which files and how: repo-docs.mjs) and the
+// TypeScript API reference, rendered from the SDK's API report
+// (api-reference.mjs).
 import { readFileSync } from "node:fs";
 import { docsLoader } from "@astrojs/starlight/loaders";
+import { API_REFERENCE, apiReferenceEntry } from "./api-reference.mjs";
 import { currentInstallLines } from "./install.mjs";
 import { REPO_DOCS, repoDocEntry } from "./repo-docs.mjs";
 
@@ -28,9 +31,10 @@ export const docsWithRepoLoader = ({
     await starlight.load(context);
     await addRepoDocs(context, root);
     // In `astro dev`, an edit of a rendered doc renders it again.
-    const files = REPO_DOCS.map(
-      (doc) => new URL(`docs/${doc.file}`, root).pathname,
-    );
+    const files = [
+      ...REPO_DOCS.map((doc) => `docs/${doc.file}`),
+      API_REFERENCE.file,
+    ].map((file) => new URL(file, root).pathname);
     context.watcher?.add(files);
     context.watcher?.on("change", (path) => {
       if (files.includes(path)) addRepoDocs(context, root);
@@ -38,25 +42,36 @@ export const docsWithRepoLoader = ({
   },
 });
 
-/** Adds every rendered doc of the repository at `root` to the store. */
+/** Adds every page rendered from a file of the repository at `root`. */
 const addRepoDocs = async (context, root) => {
-  for (const doc of REPO_DOCS) {
-    const url = new URL(`docs/${doc.file}`, root);
-    const source = readFileSync(url, "utf8");
-    const { title, description, body } = repoDocEntry(source, doc.file);
-    const data = await context.parseData({
-      id: doc.slug,
-      data: { title, description },
-    });
-    context.store.set({
-      id: doc.slug,
-      data,
-      body,
-      // Starlight places a page in the sidebar by its path in the collection;
-      // the page's source is docs/<file>, which no Starlight feature reads.
-      filePath: `src/content/docs/${doc.slug}.md`,
-      rendered: await context.renderMarkdown(body),
-      digest: context.generateDigest(body),
-    });
-  }
+  const read = (file) => readFileSync(new URL(file, root), "utf8");
+  for (const doc of REPO_DOCS)
+    await add(
+      context,
+      doc.slug,
+      repoDocEntry(read(`docs/${doc.file}`), doc.file),
+    );
+  await add(
+    context,
+    API_REFERENCE.slug,
+    apiReferenceEntry(read(API_REFERENCE.file)),
+  );
+};
+
+/** Adds the page `slug` to the store. */
+const add = async (context, slug, { title, description, body }) => {
+  const data = await context.parseData({
+    id: slug,
+    data: { title, description },
+  });
+  context.store.set({
+    id: slug,
+    data,
+    body,
+    // Starlight places a page in the sidebar by its path in the collection;
+    // the page's source is a file elsewhere, which no Starlight feature reads.
+    filePath: `src/content/docs/${slug}.md`,
+    rendered: await context.renderMarkdown(body),
+    digest: context.generateDigest(body),
+  });
 };

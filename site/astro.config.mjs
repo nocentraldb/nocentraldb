@@ -2,6 +2,7 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { API_REFERENCE } from "./src/api-reference.mjs";
 import { currentInstallLines, expressiveNpmLine } from "./src/install.mjs";
 import { REPO_DOCS } from "./src/repo-docs.mjs";
 
@@ -64,6 +65,7 @@ export default defineConfig({
         },
         ...REPO_DOCS.slice(2).map(({ label, slug }) => ({ label, slug })),
         { label: "API", slug: "docs/api" },
+        { label: API_REFERENCE.label, slug: API_REFERENCE.slug },
         { label: "RFCs", slug: "docs/rfcs" },
       ],
       // A shell command sits in a plain frame: the terminal frame's empty
