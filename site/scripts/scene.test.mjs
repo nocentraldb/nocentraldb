@@ -1,7 +1,6 @@
 // The landing page's drawing (scene.mjs): the four states say what the spec's
 // table "The scenario picture" says. Needs no build.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { STEPS, scene } from "../src/components/scene.mjs";
 
@@ -56,63 +55,96 @@ test("ids carry the prefix, so two drawings can share a page", () => {
   }
 });
 
-// The phone drawing: the same four states in a tall layout whose labels stay readable.
+// The phone drawing (owner, 2026-11-20, NOC-380): a small schematic per step with no
+// text at all. The three places as icons, the server as a cloud, each copy as a small
+// list of three bars, and one cue for what the step does. The step's title and text
+// carry the words.
+const phone = (step) => scene(step, "a", "phone");
 for (const step of [0, 1, 2, 3]) {
-  test(`state ${step}: the tall drawing shows what the wide one shows`, () => {
-    const wide = scene(step, "a");
-    const tall = scene(step, "a", "tall");
-    assert.match(wide, /<svg class="sc sc--wide" viewBox="0 0 800 600"/);
-    assert.match(tall, /<svg class="sc sc--tall" viewBox="0 0 400 704"/);
-    for (const needle of [
-      ">open<",
-      ">in progress<",
-      ">done<",
-      ">assigned to agent<",
-      "stored locally",
-      "sc-row-origin",
-      "sc-row-got",
-      "sc-dot-on",
-      "sc-dot-off",
-      "sc-link-cut",
-      'class="sc-lens"',
-      "<animateMotion",
-      ">Cloud server<",
-      ">On the train<",
-      ">Home office<",
-      ">Agent<",
-    ])
-      assert.equal(count(tall, needle), count(wide, needle), needle);
-    assert.ok(!/relay/i.test(tall));
+  test(`state ${step}: the phone drawing holds no text and does not move`, () => {
+    const s = phone(step);
+    assert.match(s, /<svg class="sc sc--phone" viewBox="0 0 400 260"/);
+    assert.equal(count(s, "<text"), 0, "text");
+    assert.ok(!s.includes("<animate"), "motion");
+    // three copies of three bars each, and the cloud
+    assert.equal(count(s, 'class="sc-card"'), 3);
+    assert.equal(count(s, 'class="sc-row'), 9);
+    assert.equal(count(s, 'class="sc-cloud"'), 1);
+    assert.match(
+      s,
+      new RegExp(`aria-label="${STEPS[step].alt.replaceAll("'", "\\'")}"`),
+    );
   });
 }
-test("a wide and a tall drawing with one prefix share no id", () => {
+const flows = (s) => count(s, 'class="sc-flow"');
+test("phone state 0: all three hold the same copy and nothing travels", () => {
+  const s = phone(0);
+  assert.equal(count(s, "sc-row-origin") + count(s, "sc-row-got"), 0);
+  assert.equal(count(s, "sc-dot-on"), 3);
+  assert.equal(flows(s), 0);
+  assert.equal(count(s, 'class="sc-lock'), 0);
+});
+test("phone state 1: the traveller's change goes through the locked cloud to the other two", () => {
+  const s = phone(1);
+  assert.equal(count(s, "sc-row-origin"), 1);
+  assert.equal(count(s, "sc-row-got"), 2);
+  assert.equal(
+    flows(s),
+    3,
+    "up from the train, down to the house and the server",
+  );
+  assert.ok(count(s, 'class="sc-lock') > 0, "the lock on the cloud");
+});
+test("phone state 2: the train is in the tunnel, its link cut, its change kept locally", () => {
+  const s = phone(2);
+  assert.equal(count(s, "sc-dot-off"), 1);
+  assert.equal(count(s, "sc-link-cut"), 1);
+  assert.equal(
+    count(s, "sc-row-origin"),
+    2,
+    "the train's and the home office's change",
+  );
+  assert.equal(
+    count(s, "sc-row-got"),
+    1,
+    "the home office's change at the agent",
+  );
+  assert.equal(
+    flows(s),
+    2,
+    "the home office's change through the cloud to the agent",
+  );
+});
+test("phone state 3: the link is back and all three copies show the same marks", () => {
+  const s = phone(3);
+  assert.equal(count(s, "sc-dot-off") + count(s, "sc-link-cut"), 0);
+  const cards = s
+    .split('class="sc-card"')
+    .slice(1)
+    .map((c) =>
+      [...c.matchAll(/class="sc-row( sc-row-\w+)?"/g)]
+        .slice(0, 3)
+        .map((m) => m[1] ?? ""),
+    );
+  assert.equal(cards.length, 3);
+  assert.deepEqual(cards[0], cards[1]);
+  assert.deepEqual(cards[1], cards[2]);
+  assert.ok(
+    cards[0].some((mark) => mark),
+    "the changes are marked",
+  );
+  assert.equal(flows(s), 1, "the train's link carries changes both ways");
+});
+test("a wide and a phone drawing with one prefix share no id", () => {
   const ids = (s) => [...s.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
   for (const i of [0, 1, 2, 3]) {
-    const tall = ids(scene(i, "a", "tall"));
-    assert.ok(tall.every((id) => id.startsWith("a-tall")));
+    const small = ids(scene(i, "a", "phone"));
+    assert.ok(small.every((id) => id.startsWith("a-phone")));
     assert.equal(
-      ids(scene(i, "a")).filter((id) => tall.includes(id)).length,
+      ids(scene(i, "a")).filter((id) => small.includes(id)).length,
       0,
     );
   }
-  assert.ok(ids(scene(1, "a", "tall")).length > 0, "state 1 has the lens clip");
-  assert.ok(
-    ids(scene(2, "a", "tall")).length > 0,
-    "state 2 has the train clip",
-  );
-});
-
-test("the tall drawing's type sizes win over the wide ones", () => {
-  const css = readFileSync(
-    new URL("../src/styles/scene.css", import.meta.url),
-    "utf8",
-  );
-  // .sc--tall .sc-x has the specificity of .sc .sc-x, which comes later and would win
-  assert.ok(
-    !/(^|[^.\w])\.sc--tall \.sc-/m.test(css.replace(/\.sc\.sc--tall/g, "")),
-  );
-  for (const part of ["label", "title", "status", "cipher", "cipher-big"])
-    assert.match(css, new RegExp(`\\.sc\\.sc--tall \\.sc-${part}[ ,{]`), part);
 });
 
 test("the drawings' alt texts tell the scenario in the owner's words", () => {
@@ -125,4 +157,44 @@ test("the drawings' alt texts tell the scenario in the owner's words", () => {
       "The traveller is back online. Changes cross in both directions, and all three copies show the same tasks.",
     ],
   );
+});
+
+// NOC-380: the scenario's drawings stand still at every width (the phone's has no
+// motion at all, above). A still drawing shows
+// the picture the moving one shows 0.72 s into its loop (as the scenario held it at
+// rest before), with no animation that runs on.
+for (const layout of ["wide"]) {
+  for (const step of [0, 1, 2, 3]) {
+    test(`state ${step}: the still ${layout} drawing does not move`, () => {
+      const s = scene(step, "a", layout, { still: true });
+      assert.ok(!s.includes("repeatCount"), "no loop");
+      assert.ok(!s.includes("<animate "), "no fading");
+      // every point it draws stands where the moving drawing has it at 0.72 s
+      for (const m of s.matchAll(/<animateMotion([^>]*)\/>/g)) {
+        assert.match(m[1], /fill="freeze"/);
+        assert.match(m[1], /keyPoints="([\d.]+);\1"/);
+      }
+    });
+  }
+}
+test("a still drawing shows the points that are on their way at 0.72 s", () => {
+  const points = (s) => count(s, "<animateMotion");
+  // state 0: the agent's reads circle; 1: the traveller's change goes up;
+  // 2: the home office's change goes up, the agent's reads circle; 3: the traveller's change goes up
+  assert.deepEqual(
+    [0, 1, 2, 3].map((i) => points(scene(i, "a", "wide", { still: true }))),
+    [1, 1, 2, 1],
+  );
+});
+test("a still drawing keeps the moving one's picture apart from the motion", () => {
+  const strip = (s) =>
+    s
+      .replace(/<circle r="\d+" class="sc-pulse"[\s\S]*?<\/circle>/g, "")
+      .replace(/\s+/g, " ");
+  for (const layout of ["wide"])
+    for (const i of [0, 1, 2, 3])
+      assert.equal(
+        strip(scene(i, "a", layout, { still: true })),
+        strip(scene(i, "a", layout)),
+      );
 });

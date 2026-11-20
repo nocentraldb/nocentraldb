@@ -73,17 +73,14 @@ test("the scenario's title is the owner's", () => {
   );
 });
 test("the scenario holds all four steps and their drawings in the HTML", () => {
-  assert.match(
-    html,
-    /<section[^>]*id="story"[^>]*data-moment="pinned-chapters"/,
-  );
+  assert.match(html, /<section[^>]*id="story"/);
   for (const s of STEPS) assert.ok(html.includes(s.title), s.title);
   assert.equal(html.split('class="sc sc--wide"').length - 1, 5);
-  // each of the scenario's four steps also carries the tall drawing a phone shows
-  assert.equal(html.split('class="sc sc--tall"').length - 1, 4);
-  assert.equal(html.split('mo-pc__step"').length - 1, 4);
+  // each of the scenario's four steps also carries the schematic a phone shows
+  assert.equal(html.split('class="sc sc--phone"').length - 1, 4);
+  assert.equal(html.split('story__step"').length - 1, 4);
 });
-test("hero and scenario never say relay, and the drawings can be paused", () => {
+test("hero and scenario never say relay, and the hero's drawing can be paused", () => {
   const upTo = html.indexOf('id="code"');
   assert.ok(!/relay/i.test(html.slice(html.indexOf("<main"), upTo)));
   assert.ok(html.includes("data-scene-pause"));
@@ -133,11 +130,12 @@ test("the close's yellow is the footer's own ground, edge to edge", () => {
   assert.match(html, /<footer[^>]*class="[^"]*closing[^"]*ground-brand/);
   assert.ok(!html.includes("100vmax"), "no spread-shadow band");
 });
-test("each pause control keeps one name and says its state with aria-pressed", () => {
+test("the hero's pause control keeps one name and says its state with aria-pressed", () => {
+  // the scenario's drawings stand still and need none (NOC-380)
   const buttons = [...html.matchAll(/<button[^>]*data-scene-pause[^>]*>/g)].map(
     (m) => m[0],
   );
-  assert.equal(buttons.length, 2);
+  assert.equal(buttons.length, 1);
   for (const b of buttons) {
     assert.match(b, /aria-label="Pause the animation"/);
     assert.match(b, /aria-pressed="false"/);
@@ -154,7 +152,7 @@ test("the code tabs are wired by the kit alone, without a dead data-tabs hook", 
 });
 
 test("scenario step 1 is the owner's text", () => {
-  const step = html.split('mo-pc__step"')[1].replaceAll("&#39;", "'");
+  const step = html.split('story__step"')[1].replaceAll("&#39;", "'");
   assert.ok(
     step.includes("<h3>Everyone has the full task list</h3>"),
     "heading",
@@ -168,7 +166,7 @@ test("scenario step 1 is the owner's text", () => {
 });
 
 test("scenario step 2 is the owner's text", () => {
-  const step = html.split('mo-pc__step"')[2].replaceAll("&#39;", "'");
+  const step = html.split('story__step"')[2].replaceAll("&#39;", "'");
   assert.ok(step.includes("<h3>A change travels encrypted</h3>"), "heading");
   assert.ok(
     step.includes(
@@ -179,7 +177,7 @@ test("scenario step 2 is the owner's text", () => {
 });
 
 test("scenario step 3 is the owner's text", () => {
-  const step = html.split('mo-pc__step"')[3].replaceAll("&#39;", "'");
+  const step = html.split('story__step"')[3].replaceAll("&#39;", "'");
   assert.ok(step.includes("<h3>The traveller goes offline</h3>"), "heading");
   assert.ok(
     step.includes(
@@ -190,7 +188,7 @@ test("scenario step 3 is the owner's text", () => {
 });
 
 test("scenario step 4 is the owner's text", () => {
-  const step = html.split('mo-pc__step"')[4].replaceAll("&#39;", "'");
+  const step = html.split('story__step"')[4].replaceAll("&#39;", "'");
   assert.ok(step.includes("<h3>The traveller reconnects</h3>"), "heading");
   assert.ok(
     step.includes(
