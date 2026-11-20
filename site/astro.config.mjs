@@ -6,6 +6,8 @@ import starlightLlmsTxt from "starlight-llms-txt";
 export default defineConfig({
   site: "https://nocentraldb.io",
   output: "static",
+  // The erasure page moved from /shredding/ (owner, 2026-11-20, Q5); old links still arrive.
+  redirects: { "/docs/concepts/shredding/": "/docs/concepts/erasure/" },
   // Inline every stylesheet, so a built page also renders where only the
   // HTML file is served, such as a phone preview of the draft.
   build: { inlineStylesheets: "always" },
