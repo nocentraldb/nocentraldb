@@ -12,12 +12,10 @@
 //! create has not arrived, and RFC 0006 makes the view equal that of a
 //! copy that never folded #2. The test pins how every copy reads it.
 
-use ncdb_core::log::RejectReason;
 use ncdb_core::object::Object as CoreObject;
 
 use super::*;
 use crate::error::ErrorCode;
-use crate::status::RejectReason as PublicReject;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_every_copy() {
@@ -124,5 +122,5 @@ async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_ever
         .update("tasks", b, [("title", Value::from("again"))]))
     .unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotFound);
-    removed_agrees(&six, ADMIN, &written, &objects, &[a, b]);
+    removed_agrees(&six, ADMIN, &written, &objects);
 }

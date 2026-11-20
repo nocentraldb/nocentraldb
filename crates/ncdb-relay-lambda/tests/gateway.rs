@@ -161,6 +161,54 @@ async fn a_member_added_while_connected_hears_added() {
     assert_eq!(bytes(field(&added, 3)), space.space.0);
 }
 
+/// RFC 0007, "Subscribe" and "The errors": the error that ends a removed
+/// member's subscription carries the control change that removed it, as
+/// the WebSocket server's does (NOC-383).
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_member_s_subscription_ends_with_its_removal() {
+    let local = gateway(None).await;
+    let (mut zero, welcome) = Client::member(local.addr, 0).await;
+    let mut space = Space::new(0);
+    let genesis = space.genesis.clone();
+    let add = space.add(0, 1, Role::Reader, &[&genesis]);
+    zero.push(1, space.space, &[&genesis, &add]).await;
+    let (mut one, _) = Client::member(local.addr, 1).await;
+    one.ask(&subscribe(3, space.space, &welcome.epoch, 2)).await;
+
+    let remove = space.remove(0, 1, 0, &[&add]);
+    assert_eq!(zero.push(4, space.space, &[&remove]).await, [accepted(3)]);
+    assert_removal(&one.recv().await, 3, "removed_member", 3, &remove);
+    let change = space.sealed(0, Vec::new());
+    assert_eq!(zero.push(5, space.space, &[&change]).await, [accepted(4)]);
+    one.quiet(300).await;
+}
+
+/// A former member's pull and subscribe are refused with its removal.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_former_member_s_pull_and_subscribe_get_its_removal() {
+    let local = gateway(None).await;
+    let (mut zero, welcome) = Client::member(local.addr, 0).await;
+    let mut space = Space::new(0);
+    let genesis = space.genesis.clone();
+    let add = space.add(0, 1, Role::Reader, &[&genesis]);
+    let remove = space.remove(0, 1, 0, &[&add]);
+    zero.push(1, space.space, &[&genesis, &add, &remove]).await;
+    let (mut one, _) = Client::member(local.addr, 1).await;
+    let pull = message(
+        "pull",
+        Some(1),
+        &[
+            (3, Value::Bytes(space.space.0.to_vec())),
+            (4, Value::Bytes(welcome.epoch.clone())),
+            (5, Value::Unsigned(2)),
+            (6, Value::Unsigned(100)),
+        ],
+    );
+    assert_removal(&one.ask(&pull).await, 1, "not_member", 3, &remove);
+    let answer = one.ask(&subscribe(2, space.space, &welcome.epoch, 2)).await;
+    assert_removal(&answer, 2, "not_member", 3, &remove);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn a_binary_frame_closes_the_connection_with_1003() {
     let local = gateway(None).await;

@@ -2,7 +2,8 @@
 //! request id, as for a pull, until the head; then, each time the space's
 //! head moves, the new entries without a request id. Every read goes
 //! through the relay core's pull, so a member that is no longer a current
-//! member reads nothing: its subscription ends with `removed_member`. Each
+//! member reads nothing but its removal: its subscription ends with
+//! `removed_member`, which carries the control change that removed it. Each
 //! page waits for room in the connection's bounded queue before the next
 //! is read, so a subscription reads only as fast as its member takes.
 
@@ -15,7 +16,7 @@ use tokio::task::JoinHandle;
 
 use crate::connection::{Out, PAGE};
 use crate::page;
-use crate::wire::{self, Cursor};
+use crate::wire::Cursor;
 
 /// Starts a subscription of `member` from `cursor`; `head` must be watched
 /// before the first read, so no append between the two is missed.
@@ -46,8 +47,8 @@ async fn run<S: TokenUrls + 'static>(
     loop {
         loop {
             let tag = catching_up.then_some(req);
-            let (relay, base_url) = (relay.clone(), base_url.clone());
-            let pulled = page::read(relay, base_url, member, tag, space, epoch, after, PAGE).await;
+            let (reader, base_url) = (relay.clone(), base_url.clone());
+            let pulled = page::read(reader, base_url, member, tag, space, epoch, after, PAGE).await;
             let page = match pulled {
                 Ok(page) => page,
                 Err(code) => {
@@ -55,7 +56,9 @@ async fn run<S: TokenUrls + 'static>(
                         ErrorCode::NotMember if !catching_up => ErrorCode::RemovedMember,
                         code => code,
                     };
-                    let _ = out.send(Out::Message(wire::error(Some(req), code))).await;
+                    let refused =
+                        page::refusal(relay.clone(), member, Some(req), space, code).await;
+                    let _ = out.send(Out::Message(refused)).await;
                     return;
                 }
             };

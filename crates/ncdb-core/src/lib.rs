@@ -52,6 +52,7 @@ pub mod log;
 pub mod membership;
 pub mod model_lock;
 pub mod object;
+mod one_key;
 pub mod pairing;
 pub mod personal;
 pub mod plugins;

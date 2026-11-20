@@ -99,14 +99,14 @@ One rule a reader derives from the RFC gives compact CBOR, in the same shape as 
 | `upload` | relay → member | 2 req, 3 id, 4 url |
 | `ping` | member → relay | 2 req |
 | `pong` | relay → member | 2 req |
-| `error` | relay → member | 2 req, 3 code, 4 retry after |
+| `error` | relay → member | 2 req, 3 code, 4 retry after, 5 removal |
 
 | Map | Keys | Where |
 | --- | --- | --- |
 | `limits` | 1 largest message, 2 changes per push, 3 largest frame | `challenge`, key 6 |
 | `upload reference` | 1 upload id | An element of `push`'s frames, in place of a frame's bytes |
 | `result` | 1 accepted position, 2 duplicate position, 3 rejected code | An element of `pushed`'s results; it holds exactly one of the three keys |
-| `entry` | 1 position, 2 accepted at, 3 frame or download | An element of `entries`' entries, and of `keys`' envelopes and chain |
+| `entry` | 1 position, 2 accepted at, 3 frame or download | An element of `entries`' entries, and of `keys`' envelopes and chain; `error`'s removal, always with its frame |
 | `download` | 1 url, 2 size | An entry's key 3, in place of a frame's bytes |
 | `record` | 1 person-key id, 2 generation, 3 writer member id, 4 wrapped, 5 signature | An element of `person-keys`' and `put-person-keys`' records |
 
@@ -179,7 +179,7 @@ member → relay   unsubscribe  {req, space}
 
 A subscription first catches the member up from its cursor, like a pull, and then sends every newly appended entry as it is appended. Live entries carry the frame when it fits in one message and a download link otherwise. Each live message carries the space's head, so a member that missed a message, for example because the relay dropped it, sees the gap and pulls the missing range. Nothing polls (use case 7).
 
-A subscription lives as long as its connection. When the relay appends a membership entry that removes a member, it ends that member's subscriptions to the space with `removed_member`.
+A subscription lives as long as its connection. When the relay appends a membership entry that removes a member, it ends that member's subscriptions to the space with `removed_member`, which carries the control change that removes it and nothing else of the space (see [The errors](#the-errors)). The member folds it like any member, so its own changes above the cutoff become rejected on its own copy too, and the SDK tells the app which of its writes no member accepts ([RFC 0008, "A member removed while offline who keeps writing"](0008-membership.md#a-member-removed-while-offline-who-keeps-writing); Carsten, 2026-11-20, NOC-383). Serving a removed member nothing was not taken: its copy would keep those changes folded, unlike every other copy, and the app could not show the person what was lost.
 
 **A member added while it is connected.** When the relay accepts a control change that makes a member current in a space, such as a membership entry that adds it, it sends `added {space}` to each of that member's open connections. The member then pulls the space and subscribes to it, as it does for a space named in `welcome`; a member that already follows the space has nothing to do. Delivery is best-effort, like live entries: a lost `added` is recovered at the next reconnect, when `welcome` names the space. An invitation then takes effect at once in a live app, for one new message and one index on `connections`; the relay already resolves the membership on each control change, so it knows who was added. A `spaces` request that the SDK sends on a timer, such as every 5 minutes, was not taken: a delay of up to the timer, and every idle member pays the requests. Nor was leaving it to the next reconnect, within 2 hours, unless the app forces one.
 
@@ -232,14 +232,14 @@ The member sends `ping {req}` when its connection has been idle for 5 minutes, a
 
 ### The errors
 
-Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds, optional)}`, or a `rejected` result inside `pushed`. An error never carries a frame, a payload or any content; it names the code, and for a rejected frame its position in the push.
+Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds, optional), 5: removal (optional)}`, or a `rejected` result inside `pushed`. An error names the code, and for a rejected frame its position in the push. It carries a frame in one case only: when the relay answers a pull or a subscription with `not_member` or `removed_member`, and the member asking was a member whom an accepted control change removed, key 5 holds that change's entry, `{1: position, 2: accepted at, 3: frame}`. It is the member's latest accepted removal, as `resolve` of the space's control changes gives it. The relay reveals nothing else of the space to a former member, and a member id the space never held gets the error alone. A removal is a small control change; one whose frame would not fit into the message is left out, and the error goes without it. A pull and a subscription carry the removal each time they are refused, so a member removed while offline receives it on reconnect, when it pulls first (see [Island mode](#island-mode)), as one connected when it was removed receives it at the end of its subscription.
 
 | Code | When | What the member does |
 | --- | --- | --- |
 | `unsupported_version` | The relay speaks none of the member's protocol versions. | Upgrade. Keep working in island mode. |
 | `unauthenticated` | A request arrived before a valid `auth`, or the signature was wrong. | Reconnect and authenticate. |
-| `not_member` | The connection's member id is not a current member of the space. | Stop syncing the space; the SDK reports it. |
-| `removed_member` | The member was removed from the space; sent once, then the subscription ends. | As `not_member`. The member keeps its local copy (RFC 0003). |
+| `not_member` | The connection's member id is not a current member of the space. | Fold the removal at key 5, if the error carries one, record its position and leave the cursor where it is; then stop syncing the space. The SDK reports it, and the member's own changes above the cutoff as rejected. |
+| `removed_member` | The member was removed from the space while it followed it; sent once, with the removal at key 5, then the subscription ends. | As `not_member`: the member folds its removal and keeps its local copy (RFC 0003). |
 | `unknown_space` | The relay holds no log for this space id. | Create the space, or check the id. |
 | `space_exists` | A space-creating change names a space the relay already holds. | Choose a new space id. |
 | `not_allowed` | The member may not create spaces on this relay (see [What the relay checks](#what-the-relay-checks)). | The SDK reports it. |
@@ -642,7 +642,7 @@ At this scale, a long-running WebSocket server on ECS Fargate behind a load bala
 2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received directly from other members. Changes the relay already holds come back as `duplicate`, with their position.
 3. Records the relay position of every change, and **subscribes** from its new cursor.
 
-Pulling first lets the member see a membership entry that removed it before it pushes, and spares the relay the uploads it already holds. Order on the relay does not matter for the result: every member folds the same set of changes to the same state, in any order (principle 2).
+Pulling first lets the member fold a membership entry that removed it, which the relay's `not_member` carries, before it pushes, and spares the relay the uploads it already holds. Order on the relay does not matter for the result: every member folds the same set of changes to the same state, in any order (principle 2).
 
 **What island mode does not do.**
 
@@ -702,6 +702,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** (Carsten, 2026-11-13, NOC-295; [decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
 - **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** (Carsten, 2026-11-13, NOC-306; [decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
 - **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
+- **2026-11-20 · The relay hands a removed member the control change that removes it.** (Carsten, 2026-11-20, NOC-383; [decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
 
 ## History
 
@@ -720,3 +721,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · The member index is read eventually consistent (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · The error that ends a removed member's pull or subscription carries the control change that removes it, so its own copy folds the removal (NOC-383)

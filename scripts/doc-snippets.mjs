@@ -63,7 +63,7 @@ export const snippets = (markdown) => {
  * { ok, output }, each error's `file(line,column)` handed to `place`, which
  * answers where it is in the page, or undefined to keep it.
  */
-const typeCheck = (files, place) => {
+export const typeCheck = (files, place) => {
   const dir = mkdtempSync(join(tmpdir(), "doc-snippets-"));
   try {
     writeFileSync(join(dir, "package.json"), '{ "type": "module" }\n');

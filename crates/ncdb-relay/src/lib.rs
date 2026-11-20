@@ -39,6 +39,7 @@ mod large;
 pub mod page;
 pub mod record;
 mod relay;
+mod removal;
 mod shred;
 pub mod sqlite;
 pub mod store;

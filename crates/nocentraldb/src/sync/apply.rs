@@ -162,29 +162,7 @@ pub(super) fn entries(
             gap = true;
             break;
         }
-        let Inner {
-            view,
-            spaces,
-            member,
-            ..
-        } = &mut *inner;
-        let state = spaces
-            .entry(space)
-            .or_insert_with(|| SpaceState::new(space, member.key()));
-        match view.receive(&entry.frame, &mut state.checks) {
-            Ok(Appended::New(_)) => {
-                folded = true;
-                state.drop_shredded();
-                crate::personal::refresh(view, space, state)?;
-                crate::status::note_shreds(view, space, state.checks.resolved())?;
-                sync(inner).folds += 1;
-                if again::check(inner, space)? {
-                    sync(inner).wake.send_replace(());
-                }
-            }
-            Ok(Appended::Duplicate(_)) | Err(ViewError::Receive(_)) => {}
-            Err(error) => return Err(error),
-        }
+        folded |= fold(inner, space, &entry.frame)?;
         if let Ok(change) = Change::decode(&entry.frame) {
             inner.view.confirm(space, change.id(), entry.position)?;
         }
@@ -192,27 +170,80 @@ pub(super) fn entries(
     }
     sync(inner).cursors.insert(space, cursor);
     if folded {
-        // The acknowledgements are written again by the next fold if this
-        // fails, since the log then holds none of them.
-        let _ = super::acknowledge::acknowledge(inner, space);
-        let collections = inner.model.collections.keys().cloned().collect();
-        let objects = inner.view.take_touched(space);
-        touched(
-            &mut inner.watchers,
-            &Folded {
-                space,
-                collections: &collections,
-                touched: &objects,
-                origin: Origin::Remote,
-            },
-        );
-        // What the fold changed of the device's spaces or roles, or the
-        // account space it now holds, reaches its records there (RFC
-        // 0010, "The account space"). A failed write is made again by the
-        // next fold, so it does not stop this one.
-        let _ = crate::account::reconcile(inner);
+        folded_remote(inner, space);
     }
     Ok(gap)
+}
+
+/// Folds the control change that removed this member from `space`, which
+/// the relay's error carried (RFC 0007, "The errors"), and records its
+/// relay position. The cursor stays where it is: the member holds no entry
+/// between it and the removal, and never pulls the space again unless it
+/// is added again. Its own changes above the cutoff become rejected, as on
+/// every other copy (RFC 0008, "A member removed while offline who keeps
+/// writing").
+pub(super) fn removal(inner: &mut Inner, space: SpaceId, removal: Entry) -> Result<(), ViewError> {
+    inner.view.take_touched(space);
+    let folded = fold(inner, space, &removal.frame)?;
+    if let Ok(change) = Change::decode(&removal.frame) {
+        inner.view.confirm(space, change.id(), removal.position)?;
+    }
+    if folded {
+        folded_remote(inner, space);
+    }
+    Ok(())
+}
+
+/// Folds one frame of `space` that the relay served. Returns whether it
+/// was new to the log.
+fn fold(inner: &mut Inner, space: SpaceId, frame: &[u8]) -> Result<bool, ViewError> {
+    let Inner {
+        view,
+        spaces,
+        member,
+        ..
+    } = &mut *inner;
+    let state = spaces
+        .entry(space)
+        .or_insert_with(|| SpaceState::new(space, member.key()));
+    match view.receive(frame, &mut state.checks) {
+        Ok(Appended::New(_)) => {
+            state.drop_shredded();
+            crate::personal::refresh(view, space, state)?;
+            crate::status::note_shreds(view, space, state.checks.resolved())?;
+            sync(inner).folds += 1;
+            if again::check(inner, space)? {
+                sync(inner).wake.send_replace(());
+            }
+            Ok(true)
+        }
+        Ok(Appended::Duplicate(_)) | Err(ViewError::Receive(_)) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
+/// What follows a fold of changes the relay served: acknowledgements, the
+/// watchers of the touched objects, and the device's account records.
+fn folded_remote(inner: &mut Inner, space: SpaceId) {
+    // The acknowledgements are written again by the next fold if this
+    // fails, since the log then holds none of them.
+    let _ = super::acknowledge::acknowledge(inner, space);
+    let collections = inner.model.collections.keys().cloned().collect();
+    let objects = inner.view.take_touched(space);
+    touched(
+        &mut inner.watchers,
+        &Folded {
+            space,
+            collections: &collections,
+            touched: &objects,
+            origin: Origin::Remote,
+        },
+    );
+    // What the fold changed of the device's spaces or roles, or the
+    // account space it now holds, reaches its records there (RFC
+    // 0010, "The account space"). A failed write is made again by the
+    // next fold, so it does not stop this one.
+    let _ = crate::account::reconcile(inner);
 }
 
 /// The changes of `space` the relay has neither confirmed nor refused, in

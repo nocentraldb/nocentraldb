@@ -188,6 +188,22 @@ where
         self.send(call, wire::error(req, code)).await;
     }
 
+    /// Sends the error that refuses `member` a read of `space`, and keeps
+    /// the connection open: for a removed member, it carries the control
+    /// change that removed it (RFC 0007, "The errors").
+    async fn refuse_read(
+        &self,
+        call: &mut Call<'_>,
+        member: MemberId,
+        req: Option<u64>,
+        space: SpaceId,
+        code: ErrorCode,
+    ) {
+        call.line.codes.push(code);
+        let refused = page::refusal(&self.relay, member, req, space, code).await;
+        self.send(call, refused).await;
+    }
+
     /// Sends an error and closes the connection.
     async fn refuse(&self, call: &mut Call<'_>, req: Option<u64>, code: ErrorCode) {
         self.fail(call, req, code).await;
@@ -330,7 +346,7 @@ where
                 let limit = limit.min(PAGE);
                 match page::read(relay, &url, member, Some(req), space, epoch, after, limit).await {
                     Ok(page) => self.send(call, page.bytes).await,
-                    Err(code) => self.fail(call, Some(req), code).await,
+                    Err(code) => self.refuse_read(call, member, Some(req), space, code).await,
                 }
             }
             Request::Subscribe(cursor) => self.subscribe(call, member, cursor).await,
@@ -426,8 +442,9 @@ where
 
     /// Posts the entries of `space` after `after`, up to `last`, to each of
     /// its subscribers, read as each subscriber's member, so a member that
-    /// is no longer current reads nothing: its subscription ends with
-    /// `removed_member`, as in the WebSocket server.
+    /// is no longer current reads nothing but its removal: its subscription
+    /// ends with `removed_member`, which carries the control change that
+    /// removed it, as in the WebSocket server.
     async fn deliver(&self, call: &mut Call<'_>, space: SpaceId, after: u64, last: u64) {
         let Ok(subscribers) = self.connections.subscribers(space).await else {
             return;
@@ -461,8 +478,15 @@ where
                             code => code,
                         };
                         call.line.codes.push(code);
-                        self.post_to(call, &id, wire::error(Some(subscription.req), code))
-                            .await;
+                        let refused = page::refusal(
+                            &self.relay,
+                            subscription.member,
+                            Some(subscription.req),
+                            space,
+                            code,
+                        )
+                        .await;
+                        self.post_to(call, &id, refused).await;
                         let _ = self.connections.unsubscribe(&id, space).await;
                         break;
                     }
@@ -516,7 +540,7 @@ where
                 }
                 Err(code) => {
                     let _ = self.connections.unsubscribe(call.id, space).await;
-                    return self.fail(call, Some(req), code).await;
+                    return self.refuse_read(call, member, Some(req), space, code).await;
                 }
             }
         }
