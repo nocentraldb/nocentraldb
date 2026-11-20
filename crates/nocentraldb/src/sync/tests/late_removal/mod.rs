@@ -145,8 +145,7 @@ pub(super) async fn six(relay: &LocalRelay) -> Six {
         let mut held = None;
         eventually("each member holds the space and the seed", || {
             held = now(db.spaces().get(space)).ok();
-            held
-                .as_ref()
+            held.as_ref()
                 .is_some_and(|s| now(s.get("tasks", seed)).unwrap().is_some())
         })
         .await;

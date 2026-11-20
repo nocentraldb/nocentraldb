@@ -46,10 +46,12 @@ async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_ever
     }
 
     // Member 3 edits task B, which #2 created.
-    let edit = now(six.space(3).update("tasks", b, [("title", Value::from("B by member 3"))]))
-        .unwrap()
-        .change
-        .0;
+    let edit = now(six
+        .space(3)
+        .update("tasks", b, [("title", Value::from("B by member 3"))]))
+    .unwrap()
+    .change
+    .0;
     synced(six.db(3)).await;
     six.hold_the_relay_log(&relay, &[4]).await;
 
@@ -64,12 +66,20 @@ async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_ever
     for who in [2, 3, 4] {
         let held = verdicts(&six, who);
         for id in &written {
-            assert_eq!(held[id], State::Rejected(RejectReason::NotMember), "member {who}");
+            assert_eq!(
+                held[id],
+                State::Rejected(RejectReason::NotMember),
+                "member {who}"
+            );
         }
         assert!(matches!(held[&edit], State::Folded { .. }), "member {who}");
         // The SDK reports each change that moved.
         let status = six.space(who).status().current();
-        assert_eq!(status.rejected.get(&PublicReject::NotMember), Some(&3), "member {who}");
+        assert_eq!(
+            status.rejected.get(&PublicReject::NotMember),
+            Some(&3),
+            "member {who}"
+        );
     }
 
     // Member 1 learns of its removal.
@@ -90,7 +100,11 @@ async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_ever
     same_fold(&six, ADMIN, &[3, 4, 5, 6], &objects);
     for who in 2..=6 {
         let status = six.space(who).status().current();
-        assert_eq!(status.rejected.get(&PublicReject::NotMember), Some(&3), "member {who}");
+        assert_eq!(
+            status.rejected.get(&PublicReject::NotMember),
+            Some(&3),
+            "member {who}"
+        );
         // Task A is gone. Task B keeps member 3's write to its title and
         // holds no create, so the view keeps the write and the SDK reads
         // no object.
@@ -105,8 +119,10 @@ async fn a_removal_that_reaches_the_relay_last_un_folds_the_late_changes_on_ever
     }
     // An app on member 3 that writes to task B again is told it is gone
     // (RFC 0009, "Writing": `notFound`).
-    let refused = now(six.space(3).update("tasks", b, [("title", Value::from("again"))]))
-        .unwrap_err();
+    let refused = now(six
+        .space(3)
+        .update("tasks", b, [("title", Value::from("again"))]))
+    .unwrap_err();
     assert_eq!(refused.code(), ErrorCode::NotFound);
     removed_agrees(&six, ADMIN, &written, &objects, &[a, b]);
 }

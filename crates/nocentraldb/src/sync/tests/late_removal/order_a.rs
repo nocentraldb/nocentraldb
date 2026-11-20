@@ -60,7 +60,10 @@ async fn a_removal_that_reaches_the_relay_first_keeps_the_late_changes_off_every
     same_fold(&six, ADMIN, &[3, 4, 5, 6], &objects);
     for who in 2..=6 {
         let held = verdicts(&six, who);
-        assert!(written.iter().all(|id| !held.contains_key(id)), "member {who}");
+        assert!(
+            written.iter().all(|id| !held.contains_key(id)),
+            "member {who}"
+        );
         assert_eq!(view(&six, who, &[a, b]), vec![(None, None), (None, None)]);
         let status = six.space(who).status().current();
         assert!(status.rejected.is_empty(), "member {who}: {status:?}");

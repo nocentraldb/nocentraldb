@@ -1,0 +1,6 @@
+# 2026-11-20 · NOC-381 · An edit of an object whose create was un-folded stays accepted, and the object reads as missing
+
+- Decided by: coding agent, NOC-381 (for pm's review)
+- Why: RFC 0008 judges each change by its own header, so member 3's edit of task B, which member 1 created in a change a late removal then rejected, stays accepted: member 3 is a member. RFC 0006's un-folding makes the view equal that of a copy that never folded the create, and RFC 0004 ("Two creates of one object id", "Creating and deleting an object") keeps a field write to an object whose create has not arrived, which exists only once a create arrives. So the RFCs already decide the case, and no owner question is needed: on every copy the view keeps member 3's write to B's title with no create, `space.get` reads no object, and a further write to B is refused with `notFound` (RFC 0009, "Writing"). The SDK reports the three un-folded changes as `rejected` with `notMember` in the space status. `crates/nocentraldb/src/sync/tests/late_removal/order_b.rs` pins it.
+- Instead of: treating the edit as dependent on the rejected create and rejecting it too, which no RFC says and which would drop an honest member's write; showing the object with only member 3's field, which RFC 0004 does not allow without a create.
+- Topics: membership, fold, convergence
