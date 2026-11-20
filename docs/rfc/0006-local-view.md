@@ -14,6 +14,20 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 
 **Out of scope.** Computed fields and views (a later RFC); this RFC only names where they plug into the fold. Encrypting the database file on the device, beyond saying why v1 relies on the device ([What the view stores in plaintext](#what-the-view-stores-in-plaintext)). Compaction and snapshots (a later RFC). The sync protocol with the relay ([RFC 0007](0007-relay.md)).
 
+## The ideas behind this RFC
+
+These ideas carry this RFC:
+
+- **The log is the truth; the view is computed from it.** Each member keeps the log of every space it belongs to. The data an app reads lives in the local view, an SQLite database the core computes from the log. If the view is lost or damaged, or the model changes, the core rebuilds it from the log.
+- **The fold.** When a change arrives, the core checks it, decrypts it in memory, applies each edit through its field type's merge rule and writes the result into a table row, all in one transaction.
+- **Reads never wait for the network.** An app reads only from the view on its own device. The read path has no network code in it, so a read is as fast as a local database and works offline.
+- **Queries only through declared indexes.** The model declares the indexes an app may query by. The core generates the SQL, so every query uses its index and costs only its result. Apps write no SQL.
+- **Pages from a cursor.** Results come in index order. A cursor marks the last row of a page, and the next page starts after it.
+- **One code base, natively and in the browser.** The same Rust code runs with SQLite on desktop and mobile, and in the browser as WebAssembly, with the database in the browser's private file system (OPFS).
+- **Plaintext on the device.** The view holds the decrypted data, so a member's device holds the content of its spaces in readable form. This RFC says what that means for a lost device.
+
+The sections below define each part.
+
 ## Summary
 
 | Question                                   | Answer                                                                                                                                                                      |

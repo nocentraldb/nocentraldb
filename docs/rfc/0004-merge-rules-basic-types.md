@@ -16,6 +16,20 @@ Merge rules are hard to change once a type ships: a changed rule makes old and n
 
 **Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata ([RFC 0002](0002-change-and-log-format.md)); how this RFC's operations sit inside RFC 0002's operation map is [How field operations travel in a change](#how-field-operations-travel-in-a-change). Object deletion, except how a deletion travels ([Creating and deleting an object](#creating-and-deleting-an-object)); [Links](#links) says what this RFC assumes about it. Of object creation, this RFC defines only what two creates of one object id mean.
 
+## The ideas behind this RFC
+
+You do not need to know the theory of replicated data to follow this RFC. These ideas carry it:
+
+- **Everyone edits their own copy.** Members write to their own copy, often offline, and their changes meet later. Two members can change the same field before either has seen the other's change. These are concurrent changes, and no server picks a winner at the moment of writing.
+- **Every copy must agree without asking.** Two members that hold the same changes must show the same data, whatever order the changes arrived in. So the rules look only at the changes themselves, never at when or where they arrived.
+- **Each field type brings its own rule.** A title, a set of tags and a link to another task need different answers when two edits meet. Each field type therefore defines how its concurrent changes merge.
+- **The last writer wins, and the loser stays readable.** For a basic value such as a title, the write with the latest stamp wins; the stamp is RFC 0002's clock, which every member reads the same way. The losing write is kept, and the app can show it as a conflict, with its value and its author.
+- **An addition wins over a removal it did not see.** If one member removes the tag "urgent" from a task while another adds it offline, "urgent" stays. A lost removal is easy to repeat; a lost addition would be data that is gone.
+- **A link keeps what was written.** A link stores the id of the object it points to. If that object is deleted or has not arrived yet, the link stays and reports the status when the app reads it.
+- **Nothing disappears silently.** A change is either replaced by a later write whose author had seen it, or the app can read that it lost.
+
+The sections below define each rule and say why it was chosen.
+
 ## Summary
 
 | Type                                                      | State                                                         | Read value                                         | Concurrent writes                                                 | What stays visible to the app                                    |
