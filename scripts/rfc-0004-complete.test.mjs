@@ -220,9 +220,9 @@ test("a link to a target not received stays, and the options not taken", () => {
 test("no field type assumes causal delivery, and what it costs", () => {
   // 6; rejected: requiring causal delivery
   holds(
-    part("what-this-rfc-needs-from-rfc-0002"),
+    part("what-the-merge-rules-rely-on"),
     [/grow until compaction/, /reorders/],
-    "What this RFC needs from RFC 0002",
+    "What the merge rules rely on",
   );
 });
 

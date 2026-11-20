@@ -6,11 +6,28 @@ Which keys NoCentralDB uses, who holds them, and which audited primitives use th
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built: the member key and its key record, in the keystores of macOS, Windows and Linux, in a key file and in the browser's IndexedDB; key envelopes, the key chain and rotation; person keys, shreds and the account sign-off; accounts, the recovery key and pairing; invitations; the relay's authentication. Not built: the keystores of iOS and Android; local ad-hoc spaces and personal fields in ad-hoc copies; `db.workOrders.erase`, since the Rust SDK erases with `Db::erase` until work orders exist; the notices for moving data between spaces and for invitations; and the hybrid post-quantum suite, which this RFC only reserves.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0003: Keys and cryptography](https://github.com/nocentraldb/nocentraldb/discussions/126), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-GENESIS.md reserves crypto, key handling and formats for the owner, and the owner decided everything this RFC says. Signing and sealing a change are built in `ncdb-core`, and the key record in the SDK; the rest is not built yet. [RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. [RFC 0010](0010-accounts.md) builds accounts on the account key defined here. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Each choice below says why it was made and, where a reader would ask, which options were not taken.
+GENESIS.md reserves crypto, key handling and formats for the owner, and the owner decided everything this RFC says. It builds on the change of [RFC 0002](0002-change-and-log-format.md) and uses its terms without defining the bytes: a change's **header** is the part the relay can read, its **payload** the part only members can read, and a **control change** (kind 1) is a signed change whose body the relay reads because it needs it to check membership, serve key envelopes or delete a person-key record. Each choice below says why it was made and, where a reader would ask, which options were not taken.
 
 We do not design a new protocol or a new primitive. Every construction here is published, widely deployed and implemented by a maintained Rust crate. Our work is to combine them correctly and to say plainly where the combination stops protecting you.
+
+## The ideas behind this RFC
+
+You do not need to know cryptography to follow this RFC. These ideas carry it:
+
+- **A key pair: one half to keep, one half to share.** A key pair has a private key, which stays with its owner and never leaves the device, and a public key, which anyone may have. Each member has two such pairs. With the first it signs: anyone can check the signature with the public key. The second lets others encrypt something that only this member can open.
+- **One shared key for a space.** Encrypting every change once for each member would not scale. So each space has one symmetric key, the space key: the same key locks and unlocks, and every member of the space holds it. It encrypts the content of every change in the space.
+- **Handing a key to a new member.** The space key never travels in the clear. An admin encrypts it to the new member's public key, which this RFC calls wrapping, and the result, a key envelope, is stored on the relay. Only that member can open it; the relay stores envelopes it cannot open.
+- **Rotating instead of taking back.** A key a member once had cannot be taken out of its memory. When a member leaves, the space therefore gets a new space key, a new generation, wrapped only for the members who stay. The removed member keeps what it could read before and cannot read anything written under the new key.
+- **Devices and the person behind them.** Each device and each agent has its own member key. A person's account key vouches for which member keys belong to that person, so a new device needs no new identity. A recovery code the person keeps restores the account when every device is lost.
+- **Deriving keys instead of storing more.** Where the design needs a key for one narrow purpose, it derives it from an existing key with a fixed recipe (HKDF), so that purposes never mix and nothing extra has to be stored.
+- **Erasing by destroying a key.** Personal fields are encrypted with a key of their own per person and space, the person key. Encrypted copies may sit on many devices and in backups. Once every member destroys that one small key, all those copies become unreadable, except where someone kept the key ([Shredding a person's key](#shredding-a-persons-key)). This is how erasure works.
+- **Proven building blocks only.** Every primitive here is published and widely used, and [Primitives](#primitives) names each one, with the audits it has had and the ones it lacks.
+
+The sections below define each key, who holds it and what it protects.
 
 ## Summary
 
@@ -57,7 +74,7 @@ It does not protect against:
 
 ### The member key
 
-A member is one device or one agent: a laptop, a phone, a browser profile, an agent process, a cloud function. Each member creates its own member key the first time it opens a database. The member key is two keys:
+A member is one device or one agent: a laptop, a phone, a database in a browser, an agent process, a cloud function. Each member creates its own member key the first time it opens a database. The member key is two keys:
 
 - an **Ed25519 signing key**, which signs every change and every membership entry the member writes;
 - an **X25519 key-agreement key**, to which other members wrap space keys.
@@ -101,7 +118,7 @@ The account key also signs what must come from a person rather than a device, ab
 
 **The recovery key and the recovery code.** The account's identity is not the account key but a **recovery key**, which no device keeps ([RFC 0010, "The account's identity"](0010-accounts.md#the-accounts-identity)). It derives from the **recovery code**, twelve words the person writes down when the account is created ([RFC 0010, "The recovery code"](0010-accounts.md#the-recovery-code)), and it signs an **account key statement** that names the current account key and a number. Every member certificate carries that statement. A lost device carries the account key away, so the person answers it with the recovery code: the SDK derives the recovery key, draws a new account key and signs a statement with the next number, and the account's fingerprint, which is the recovery key's, stays the same. The bytes are in [Recovery key](#recovery-key), [Account key statement](#account-key-statement) and [Account fingerprint](#account-fingerprint).
 
-**Until RFC 0010 is built,** each database draws its own account key once, on its first open, and keeps it next to the member key, in the same keystore or key file. It certifies its own member as a device, or as an agent when the app opens the database with the Rust SDK's `agent()` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). A person's devices are then unrelated accounts: an admin who adds a second device of the same person compares its fingerprint, as for any account new to it. A genesis carries its creator's certificate for good, so accounts must accept the members certified this way; [RFC 0010, "Linking accounts drawn per database"](0010-accounts.md#linking-accounts-drawn-per-database) does it. Two other ways were not taken: the app passes the account key, which puts a key in the app's hands and which principle 5 rules out; and no space can be created until accounts are built, which blocks every space.
+**Before RFC 0010 was built,** each database drew its own account key once, on its first open, and kept it next to the member key, in the same keystore or key file. It certified its own member as a device, or as an agent when the app opened the database with the Rust SDK's `agent()` option ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk)). A person's devices were then unrelated accounts: an admin who adds a second device of the same person compares its fingerprint, as for any account new to it. A genesis carries its creator's certificate for good, so accounts must accept the members certified this way; [RFC 0010, "Linking accounts drawn per database"](0010-accounts.md#linking-accounts-drawn-per-database) does it. Two other ways were not taken: the app passes the account key, which puts a key in the app's hands and which principle 5 rules out; and no space can be created until accounts are built, which blocks every space.
 
 An organisation that runs agents does so under an account, so every agent traces back to an account that answers for it.
 
@@ -315,7 +332,7 @@ When a device joins an account, the answer carries the account key sealed with H
 account fingerprint = SHA-256("nocentraldb/account-fingerprint" || recovery key (32 bytes))
 ```
 
-People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes. Until RFC 0010 is built, the SDKs compute it the same way over the database's own account key in place of the recovery key, so both SDKs hash the same input today.
+People compare it as 60 digits in twelve blocks of five: the 32-byte hash read as one big-endian number, taken modulo 10^60 ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). It is the recovery key's, so it stays the same when the account key changes. For an account whose certificates carry no statement yet, such as one a database drew before RFC 0010 was built, both SDKs compute it the same way over the account key in place of the recovery key.
 
 ### Invitation
 
@@ -561,6 +578,10 @@ It makes them more precise in these points:
 - The `hpke` crate's README, on its audit status.
 - SRLabs, audit of OpenMLS, sponsored by the Sovereign Tech Agency.
 - RustSec advisories RUSTSEC-2022-0093 and RUSTSEC-2024-0344.
+
+## How this RFC relates to the others
+
+[RFC 0001](0001-nocentraldb.md) describes the whole design; this RFC fills in the part about keys. [RFC 0010](0010-accounts.md) builds accounts on the account key defined here. The byte layout of a change and of the log belongs to [RFC 0002](0002-change-and-log-format.md), and this RFC uses its terms without defining the bytes.
 
 ## History
 

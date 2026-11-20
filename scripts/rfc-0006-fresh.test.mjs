@@ -213,7 +213,7 @@ test("the durability of a browser copy: asking, reporting, falling back and tell
 test("the agreement states the browser's limit plainly, without a Conflicts heading", () => {
   holds(
     part("agreement-with-genesismd-and-rfc-0001"),
-    [/complete working set/, /cache the browser may drop/],
+    [/complete working set/, /copy the browser may delete/],
     "Agreement with GENESIS.md and RFC 0001",
   );
 });

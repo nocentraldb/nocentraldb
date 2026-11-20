@@ -4,9 +4,11 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
-It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format), [RFC 0003](0003-keys-and-cryptography.md) (keys and cryptography) and [RFC 0004](0004-merge-rules-basic-types.md) (merge rules for basic values, sets and links). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
+It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) and builds on the change, the keys and the merge rules of RFC 0002, RFC 0003 and RFC 0004; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) links each.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
+
+**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/discussions/144), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -30,6 +32,8 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 | Field type | How a field stores its value and merges concurrent changes (RFC 0004), identified by a type id and a rule version. |
 | Model version | A whole number that `ncdb model build` raises by one each time the model changes. |
 | Old client | An app or agent whose lock has a lower model version than the lock that wrote some of the changes it receives. |
+
+The [glossary](../glossary.md) calls the TypeScript module the app's model in code, and uses "schema" only in general. This RFC keeps the module (the schema) and what it describes (the model) apart, because the lock records the second and not the first.
 
 ## The schema in TypeScript
 
@@ -632,6 +636,10 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 ## How this RFC is tested
 
 `scripts/rfc-0005.test.mjs` and `scripts/rfc-0005-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file links to RFC 0001's "The design in one page", that every link and its anchor resolve, links from other files included, that the sections it needs are present, that every `nc.*` function, modifier and `ncdb model` command used in an example is listed under [Public names](#public-names), that every JSON example parses, that the example lock is byte for byte the file `ncdb model build` writes (`crates/ncdb-core/tests/model_lock/rfc-0005-v2.lock.json`), that each rule of the design stands where it belongs, and that it reads as a fresh text whose choices each name why and the options not taken (`scripts/rfc-0005-fresh.test.mjs`). The design itself is tested where it is built: the Rust tests of `ncdb model build` and `ncdb model check` with a fixture for each accepted and each refused change.
+
+## How this RFC relates to the others
+
+It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format), [RFC 0003](0003-keys-and-cryptography.md) (keys and cryptography) and [RFC 0004](0004-merge-rules-basic-types.md) (merge rules for basic values, sets and links). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
 
 ## History
 

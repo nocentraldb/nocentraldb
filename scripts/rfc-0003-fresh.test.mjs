@@ -135,7 +135,7 @@ test("the account key: on every device, the recovery key, and the per-database a
       /derived from a passkey/,
       /recovery code/,
       /recovery key/,
-      /each database draws its own account key once/i,
+      /each database drew its own account key once/i,
       /[Tt]he app passes the account key/,
       /blocks every space/,
     ],
@@ -311,8 +311,8 @@ test("the formats of RFC 0010 join the formats: statement, recovery key, pairing
     [
       /"nocentraldb\/account-fingerprint"/,
       /60 digits/,
-      /[Uu]ntil RFC 0010 is built/,
-      /own account key/,
+      /before RFC 0010 was built/,
+      /over the account key in place of the recovery key/,
     ],
     "Account fingerprint",
   );

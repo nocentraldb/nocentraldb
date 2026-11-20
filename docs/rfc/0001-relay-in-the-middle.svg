@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 356" width="880" height="356" role="img" aria-labelledby="rfc-0001-relay-title rfc-0001-relay-desc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif">
   <title id="rfc-0001-relay-title">The relay stores and forwards encrypted changes</title>
-  <desc id="rfc-0001-relay-desc">Members, such as a person's device, an agent, a cloud function that reads content and an adapter, push encrypted changes to a relay and pull or subscribe to receive them; the relay holds no keys, checks signatures, membership and the right to write, appends to each space's log and hands changes out from a cursor.</desc>
+  <desc id="rfc-0001-relay-desc">Members, such as a person's device, an agent, a cloud function that reads content and, after 0.1, an adapter, push encrypted changes to a relay and pull or subscribe to receive them; the relay holds no keys, checks signatures, membership and the right to write, appends to each space's log and hands changes out from a cursor. In 0.1 the relay stores on SQLite locally or on DynamoDB with S3 on AWS; Postgres comes later.</desc>
   <style>
     .bg { fill: #ffffff; }
     .t { fill: #1f2328; }
@@ -68,14 +68,15 @@
   <text x="338" y="170" class="m" font-size="12.5">appends to each space's log</text>
   <text x="338" y="188" class="m" font-size="12.5">hands changes out from a cursor</text>
   <text x="338" y="206" class="m" font-size="12.5"></text>
-  <text x="338" y="224" class="m" font-size="12.5">SQLite, Postgres, or</text>
-  <text x="338" y="242" class="m" font-size="12.5">DynamoDB with S3</text>
+  <text x="338" y="224" class="m" font-size="12.5">SQLite locally, or</text>
+  <text x="338" y="242" class="m" font-size="12.5">DynamoDB with S3 on AWS</text>
+  <text x="338" y="260" class="m" font-size="12.5">Postgres comes after 0.1</text>
   <rect class="plain" x="652" y="56" width="204" height="80" rx="6"/>
   <text x="666" y="78" class="t" font-size="14" font-weight="600">A cloud function</text>
   <text x="666" y="98" class="m" font-size="12.5">reads content, so it joins</text>
   <text x="666" y="116" class="m" font-size="12.5">as a member with its own key</text>
   <rect class="plain" x="652" y="196" width="204" height="80" rx="6"/>
-  <text x="666" y="218" class="t" font-size="14" font-weight="600">An adapter</text>
+  <text x="666" y="218" class="t" font-size="14" font-weight="600">An adapter, after 0.1</text>
   <text x="666" y="238" class="m" font-size="12.5">a member of the space,</text>
   <text x="666" y="256" class="m" font-size="12.5">not part of the relay</text>
   <text x="440" y="324" class="m" font-size="12.5" text-anchor="middle">Every member runs the same core with a full copy of its spaces.</text>

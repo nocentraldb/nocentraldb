@@ -4,11 +4,13 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-235
 
 This RFC defines how a developer writes a field type of their own, how the core finds the code of a type that `model.lock.json` names, and what a member does with a type it has no code for. [RFC 0004](0004-merge-rules-basic-types.md) fixes what every field type must meet, [the plugin contract](0004-merge-rules-basic-types.md#the-plugin-contract), and [RFC 0005](0005-schema-and-model-lock.md) fixes how a lock names a plugin's type, [`<namespace>/<name>` with a `plugins` entry](0005-schema-and-model-lock.md#how-a-field-type-is-referenced). Until now nothing said how such a type id reaches the Rust code that implements it. This RFC does.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field types as plugins ([The design in one page](0001-nocentraldb.md#the-design-in-one-page)); on [RFC 0002](0002-change-and-log-format.md), whose operation map carries a plugin's operations; on RFC 0004 and RFC 0005, above; on [RFC 0006](0006-local-view.md), which keeps each field's merge state as bytes the field type encodes ([Where the view lives](0006-local-view.md#where-the-view-lives)); and on [RFC 0009](0009-sdk-api.md), whose writes to a plugin field are "what the plugin's write function returns" ([Field operations per field type](0009-sdk-api.md#field-operations-per-field-type)).
+It builds on RFC 0004 and RFC 0005, above, and on [RFC 0001](0001-nocentraldb.md), which lets developers add field types as plugins; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0011 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 **Status.** Decided. The owner decided this RFC's design as it stands (Carsten, 2026-11-12).
+
+**At 0.1.** Partly built. Built: the crate `ncdb-plugin`, registering a plugin with `OpenOptions::plugin` in the Rust SDK, parking a field whose type is not registered and refusing writes to it, and the harness `ncdb-harness`. Not built: `ncdb-harness` on crates.io, which is not published, and `ncdb core build`. TypeScript has no plugins in v1, by this design.
 
 **Out of scope.** Rich text and streams, whose names RFC 0005 reserves and whose RFCs design them as field types of their own. Migrations from one rule version to another, which RFC 0004 leaves to a later RFC. Plugins that are not field types, such as computed fields or views. A registry of published plugins, or any way to find a plugin by name.
 
@@ -45,7 +47,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 - [RFC 0005](0005-schema-and-model-lock.md#how-a-field-type-is-referenced) names a plugin type `<namespace>/<name>`; the lock's `plugins` entry names the namespace's `crate` and `npm` package; a field reads `{ type, rule, since, config }`; and a client runs the exact rule the lock names. A plugin type cannot be indexed in v1 ([Indexes](0005-schema-and-model-lock.md#indexes)). An old client parks an operation on a type it does not know as "unknown type" ([Data from a newer model](0005-schema-and-model-lock.md#data-from-a-newer-model)).
 - [RFC 0006](0006-local-view.md#where-the-view-lives) keeps each field's merge state in `fs_<collection>` as bytes the field type encodes, which lets a plugin keep any state it needs.
 - [RFC 0009](0009-sdk-api.md#field-operations-per-field-type) writes a plugin field with "what the plugin's write function returns", and runs the core as wasm in the browser and as a native addon over the Rust SDK in Node.js ([Open and close](0009-sdk-api.md#open-and-close)).
-- In the code, `ncdb-core`'s `FieldType` trait matches RFC 0004's contract but has no way to read a state back from its bytes and no write function: the view reads each built-in state by hand, and the Rust SDK builds the built-in operations itself. The view's fields are a closed list of the built-in types. The convergence harness is test code inside `ncdb-core`, which a plugin crate cannot use. A plugin field in a lock is left out of the view today, so its operations park as an unknown field.
+- When this RFC was written, `ncdb-core`'s `FieldType` trait matched RFC 0004's contract but had no way to read a state back from its bytes and no write function: the view read each built-in state by hand, and the Rust SDK built the built-in operations itself. The view's fields were a closed list of the built-in types. The convergence harness was test code inside `ncdb-core`, which a plugin crate could not use. The line under this RFC's status says what 0.1 builds of the design below. A plugin field in a lock is left out of the view today, so its operations park as an unknown field.
 
 ## The field type a plugin implements
 
@@ -188,6 +190,10 @@ Each change is written into that text in this pull request, where it belongs, wi
 - **RFC 0004**, "The plugin contract": a plugin is Rust compiled into the app's core, as this RFC defines it, in place of "until a plugin RFC says otherwise".
 - **RFC 0005**, "What this RFC does not cover" points to this RFC for writing and loading a plugin; "Refused" gains a change of a plugin field's `config`.
 - **RFC 0009**: `ParkReason::UnknownType` joins the park reasons of the Rust SDK, in place of the sentence that no core reason produces it; the error `unknownType` joins "Errors"; and `OpenOptions::plugin` and `unknownType` join "Public names".
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field types as plugins ([The design in one page](0001-nocentraldb.md#the-design-in-one-page)); on [RFC 0002](0002-change-and-log-format.md), whose operation map carries a plugin's operations; on RFC 0004 and RFC 0005, above; on [RFC 0006](0006-local-view.md), which keeps each field's merge state as bytes the field type encodes ([Where the view lives](0006-local-view.md#where-the-view-lives)); and on [RFC 0009](0009-sdk-api.md), whose writes to a plugin field are "what the plugin's write function returns" ([Field operations per field type](0009-sdk-api.md#field-operations-per-field-type)).
 
 ## History
 

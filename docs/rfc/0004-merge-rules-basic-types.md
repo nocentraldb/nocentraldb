@@ -4,15 +4,31 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-8
 
 This RFC defines how the first field types of NoCentralDB merge concurrent changes, so that every copy of a space reaches the same state: basic values, sets and links. It also defines the contract every other field type, built in or plugin, must meet before the core accepts it.
 
-It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that every copy of a space reaches the same state in any order of arrival; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) says more.
 
 Merge rules are hard to change once a type ships: a changed rule makes old and new clients diverge. So each rule below says why it was chosen and which rules were not.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/discussions/127), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 **Out of scope.** Rich text, streams and personal fields (later RFCs). Computed fields and views. The encoding of changes and of the ordering metadata ([RFC 0002](0002-change-and-log-format.md)); how this RFC's operations sit inside RFC 0002's operation map is [How field operations travel in a change](#how-field-operations-travel-in-a-change). Object deletion, except how a deletion travels ([Creating and deleting an object](#creating-and-deleting-an-object)); [Links](#links) says what this RFC assumes about it. Of object creation, this RFC defines only what two creates of one object id mean.
+
+## The ideas behind this RFC
+
+You do not need to know the theory of replicated data to follow this RFC. These ideas carry it:
+
+- **Everyone edits their own copy.** Members write to their own copy, often offline, and their changes meet later. Two members can change the same field before either has seen the other's change. These are concurrent changes, and no server picks a winner at the moment of writing.
+- **Every copy must agree without asking.** Two members that hold the same changes must show the same data, whatever order the changes arrived in. So the rules look only at the changes themselves, never at when or where they arrived.
+- **Each field type brings its own rule.** A title, a set of tags and a link to another task need different answers when two edits meet. Each field type therefore defines how its concurrent changes merge.
+- **The last writer wins, and the loser stays readable.** For a basic value such as a title, the write with the latest stamp wins; the stamp is RFC 0002's clock, which every member reads the same way. The losing write is kept, and the app can show it as a conflict, with its value and its author.
+- **An addition wins over a removal it did not see.** If one member removes the tag "urgent" from a task while another adds it offline, "urgent" stays. A lost removal is easy to repeat; a lost addition would be data that is gone.
+- **A link keeps what was written.** A link stores the id of the object it points to. If that object is deleted or has not arrived yet, the link stays and reports the status when the app reads it.
+- **Nothing disappears silently.** A change is either replaced by a later write whose author had seen it, or the app can read that it lost.
+
+The sections below define each rule and say why it was chosen.
 
 ## Summary
 
@@ -31,26 +47,12 @@ In one sentence: every field's state is a pure function of the set of changes a 
 - **Change.** One signed, encrypted entry in a space's log, as RFC 0002 defines it. A change carries one or more operations; this RFC looks only at the operations on one field of one object.
 - **Operation.** What a change does to one field: for example "set the title to X" or "add the tag Y". The change around it belongs to RFC 0002; its meaning belongs to this RFC, and its encoding to [How field operations travel in a change](#how-field-operations-travel-in-a-change).
 - **Change id.** The id RFC 0002 gives each change. An operation is identified by its change id plus its position in the change; this RFC writes "the operation's id" for that pair.
-- **Stamp.** The ordering metadata of RFC 0002, attached to every change: its 64-bit hybrid logical clock, with 48 bits of milliseconds since the Unix epoch and a 16-bit counter, compared as an unsigned number. The rules below rely only on the properties listed in [What this RFC needs from RFC 0002](#what-this-rfc-needs-from-rfc-0002).
+- **Stamp.** The ordering metadata of RFC 0002, attached to every change: its 64-bit hybrid logical clock, with 48 bits of milliseconds since the Unix epoch and a 16-bit counter, compared as an unsigned number. The rules below rely only on the properties listed in [What the merge rules rely on](#what-the-merge-rules-rely-on).
 - **Author member id.** RFC 0003's id of the member that signed a change, a hash of its public keys. RFC 0002 carries it in every change's header.
 - **Stamp order.** The total order on operations that every member computes the same way: by stamp first, then by author member id, then by operation id. It is the only tie-break in this RFC.
 - **Seen.** A member has seen an operation when it applied it to its copy before it made a new change. A later operation can only replace what its author had seen.
 - **Concurrent.** Two operations are concurrent when neither author had seen the other's operation.
 - **Copy.** One member's folded state of a space.
-
-## What this RFC needs from RFC 0002
-
-RFC 0002 defines the clock: a 64-bit hybrid logical clock in every change's payload, 48 bits of milliseconds and a 16-bit counter. The rules in this RFC depend on that clock only through the properties below, so that a later clock that keeps them needs no change here. RFC 0002 meets each of them; its section "What RFC 0003 and RFC 0004 need from this RFC" says how.
-
-| #   | Property                                                                                                                                                                         | Why this RFC needs it                                                                           | RFC 0002 |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | -------- |
-| O1  | Every change has an id that no two changes share, and every member computes the same id for the same change.                                                                     | Duplicates are recognised by id (idempotence). Set additions use it as their tag.               | Met: the change id is a hash of the signed header; an operation id is the change id plus its position. |
-| O2  | The stamp is computed from the change alone, and comparing two stamps gives the same answer on every member and platform, native and WebAssembly.                                | Stamp order must be the same everywhere, or two copies pick different winners.                 | Met: the clock is an unsigned 64-bit integer; the author member id and the operation id are in the same change. |
-| O3  | If the author of change b had seen change a before making b, then a's stamp is lower than b's.                                                                                   | A write must win over the writes its author replaced. Without O3 a correction can lose to the value it corrected. | Met: a member's clock is always higher than every clock it has seen. |
-| O4  | The stamp carries the author's wall-clock time (as a hybrid logical clock does), so that among concurrent writes the one made later in real time usually wins. Wanted, not required for convergence. | "Last writer wins" should mean roughly what a user expects. A pure counter would let the busiest member win instead. | Met: the upper 48 bits are milliseconds since the Unix epoch. |
-| O5  | Every value has exactly one canonical encoding: equal values encode to equal bytes, different values to different bytes.                                                         | Set elements are compared by their canonical bytes.                                              | Met: one encoding per value; NaN has one encoding, and negative and positive zero have one each. |
-
-RFC 0002 confirms that causal delivery is not guaranteed, and this RFC does **not** need it: no field type may assume that a change arrives after the changes its author had seen. The relay hands out changes in log order, but members exchange changes in island mode, logs are compacted, and the convergence harness (NOC-9) delivers in random order with duplicates. Every rule below converges under any order of arrival. No field type may assume causal delivery: a guarantee that field types could rely on would give smaller state, but one relay or sync bug that reorders changes would then make copies diverge. The cost is that each field keeps the ids that were replaced (R and T below), which grow until compaction.
 
 ## Basic values
 
@@ -307,6 +309,22 @@ Stated plainly (principle 4):
 - **Nothing computed follows it.** "All open orders of customers in Berlin" is no query: the app reads the orders through the index on the reference ([RFC 0005](0005-schema-and-model-lock.md#references-into-another-space)), and the customers in their own space. That is the price of principle 2.
 - **A hostile member can write any reference,** including one to a space id and object id it guessed or learned elsewhere. It reads **not accessible** or **missing** for members who cannot read that target, and gives nobody access.
 
+## What the merge rules rely on
+
+The rules in this RFC depend on RFC 0002's clock and ids only through the properties below, so that a later clock that keeps them needs no change here. RFC 0002 defines the clock: a 64-bit hybrid logical clock in every change's payload, 48 bits of milliseconds and a 16-bit counter.
+
+| #   | Property                                                                                                                                                                         | Why this RFC needs it                                                                           |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| O1  | Every change has an id that no two changes share, and every member computes the same id for the same change.                                                                     | Duplicates are recognised by id (idempotence). Set additions use it as their tag.               |
+| O2  | The stamp is computed from the change alone, and comparing two stamps gives the same answer on every member and platform, native and WebAssembly.                                | Stamp order must be the same everywhere, or two copies pick different winners.                 |
+| O3  | If the author of change b had seen change a before making b, then a's stamp is lower than b's.                                                                                   | A write must win over the writes its author replaced. Without O3 a correction can lose to the value it corrected. |
+| O4  | The stamp carries the author's wall-clock time (as a hybrid logical clock does), so that among concurrent writes the one made later in real time usually wins. Wanted, not required for convergence. | "Last writer wins" should mean roughly what a user expects. A pure counter would let the busiest member win instead. |
+| O5  | Every value has exactly one canonical encoding: equal values encode to equal bytes, different values to different bytes.                                                         | Set elements are compared by their canonical bytes.                                              |
+
+[RFC 0002](0002-change-and-log-format.md) guarantees all five.
+
+RFC 0002 confirms that causal delivery is not guaranteed, and this RFC does **not** need it: no field type may assume that a change arrives after the changes its author had seen. The relay hands out changes in log order, but members exchange changes in island mode, logs are compacted, and the convergence harness (NOC-9) delivers in random order with duplicates. Every rule below converges under any order of arrival. No field type may assume causal delivery: a guarantee that field types could rely on would give smaller state, but one relay or sync bug that reorders changes would then make copies diverge. The cost is that each field keeps the ids that were replaced (R and T below), which grow until compaction.
+
 ## The plugin contract
 
 RFC 0001 lets developers add field types as plugins, and the core runs them next to the built-in ones. A field type that breaks convergence breaks every promise built on it, so the core accepts a field type, built in or plugin, only when it meets this contract. The types above are the first to meet it. A plugin is Rust compiled into the core, through the registry [RFC 0011](0011-plugin-field-types.md) defines (Carsten, 2026-11-12, NOC-232): plugins as code loaded at run time, in any language, were not taken, because every member must run the identical rule natively and in WebAssembly.
@@ -435,7 +453,7 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 | Rejected | Why |
 | --- | --- |
 | An operation id as one byte string, change id followed by the position | Three bytes smaller per id, but a hand-written binary layout inside CBOR, with its own integer encoding: the risk [RFC 0002's encoding](0002-change-and-log-format.md#the-cbor-profile) avoids. |
-| An operation id shortened to a prefix of the change id, or hashed | Two operations could share it, and a member could not check a reference by recomputing it. |
+| An operation id shortened to a prefix of the change id, or hashed | Two operations could share it, and a member could not check an operation id by recomputing it. |
 | Leaving an empty `replaces` out | Two bytes smaller per first write, but two encodings of the same operation if readers accept both, and a "required key" check that fails on the most common write. |
 | Rejecting an unsorted or repeating list | A new failure mode that buys no convergence: the state depends on the set of ids only. |
 
@@ -443,11 +461,11 @@ This form is plain CBOR with one encoding per operation, and its sort order is t
 
 **A personal value.** A write to a personal field is a set whose argument 1 is the sealed personal value, `{1: person-key id, 2: sealed value}`, and whose argument 2 is `replaces`, as for any basic value, so the merge rule stays this RFC's and `replaces` stays readable to members, not to the relay (Carsten, 2026-11-12, NOC-244; [RFC 0003, "Personal value"](0003-keys-and-cryptography.md#personal-value)). Clearing the field writes a plain `null` as argument 1: it shows only that the field is empty, never what it held, and needs no person key. The sealed value directly in key 5, with `replaces` inside the ciphertext, was not taken: a member without the key could not merge; nor was a sealed `null`, which would hide that the field was cleared but needs the person key, so a person whose key is gone could not be cleared.
 
-**An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a transaction on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
+**An operation names only operations of other changes.** The change id is the hash of the signed header, which holds the encrypted payload, so it does not exist yet while the payload is written. An operation therefore cannot name an operation of its own change. The SDK writes the net effect of a `write` on each field instead: at most one set per field, and at most one add or one remove per element of a set field.
 
-- A transaction that writes a field twice encodes only its last write.
-- A transaction that adds an element and then removes it encodes only the removal of the additions its copy held before, or nothing.
-- A transaction that removes an element and then adds it encodes both: the removal names only earlier tags, so the new addition survives it, as the app expects.
+- A `write` that sets a field twice encodes only its last set.
+- A `write` that adds an element and then removes it encodes only the removal of the additions its copy held before, or nothing.
+- A `write` that removes an element and then adds it encodes both: the removal names only earlier tags, so the new addition survives it, as the app expects.
 
 A reader still accepts a change with several operations on one field and applies each by this RFC's rules. Two sets on one field in one change replace nothing of each other; they have the same stamp and author, so the higher position wins the tie-break and the other one is a conflict. This needs no second form of id and nothing a reader must special-case. A bare position in `replaces` or `observed`, naming an operation of the same change, was not taken: the SDK could then write every step of a transaction, but every decoder would need two forms of id, for a case the SDK avoids by writing a transaction's net effect.
 
@@ -756,6 +774,10 @@ These rules have limits, stated plainly (principle 4):
 ## How this RFC is tested
 
 `scripts/rfc-0004.test.mjs` checks that this file exists, links to RFC 0001 and RFC 0002, has the sections its ticket requires, and that its relative links resolve. `scripts/rfc-0004-complete.test.mjs` checks the rules of this text where they stand, with the reason and the options not taken for each, and `scripts/rfc-0004-examples.test.mjs` checks the bytes of every example, see [Byte-exact examples](#byte-exact-examples). The rules themselves are tested when they are built: NOC-16 (basic values) and NOC-17 (sets and links) implement them test first against the convergence harness of NOC-9, with the contract above.
+
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set of changes produces the same state on every device, in any order of arrival", and that each field merges by the rules of its type. RFC 0001 says what the shipped types do in one line each. This RFC makes those lines exact.
 
 ## History
 

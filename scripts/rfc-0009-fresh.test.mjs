@@ -357,19 +357,22 @@ test("RFC 0010's fingerprint says how its 60 digits are computed", () => {
   );
 });
 
-test("the fingerprint hashes today's account key until accounts are built", () => {
-  // NOC-154 point 4: both SDKs hash the same input today
+test("the fingerprint hashes the recovery key, or the account key without a statement", () => {
+  // NOC-154 point 4: both SDKs hash the same input; NOC-267 at 0.1
   holds(
     part("invitations-and-members"),
     [
-      /over the database's own account key/,
-      /once RFC 0010 is built, over the recovery key/,
+      /over the account's recovery key/,
+      /over its account key while its certificates carry no statement/,
     ],
     "Invitations and members",
   );
   holds(
     part("the-fingerprint", RFC_0010),
-    [/[Uu]ntil this RFC is built/, /own account key/],
+    [
+      /before this RFC was built/,
+      /over the account key in place of the recovery key/,
+    ],
     "RFC 0010, The fingerprint",
   );
 });
