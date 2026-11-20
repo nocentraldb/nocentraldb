@@ -8,3 +8,4 @@
   - **The gate.** It reads packages/sdk/src, outside texts.ts and the tests. An nc.Error's or an Error's message, or a tab's answer error (`failure`), given a string or a template literal, is a text written in code. Every `ts` text must be used, as `texts.NAME` or `texts.name(`. A value passed on, such as the worker's own error, stays a value, as T2 keeps the system's errors.
 - Instead of: one entry for both SDKs under the kinds `error` and `part`. The Rust module would then carry the TypeScript-only texts and the TypeScript module the Rust SDK's 130, and "every text is used" would need both codebases to answer for one entry.
 - Topics: texts, sdk-ts, gates
+- Supersedes: 2026-11-16-NOC-323-typescript-texts-stay-in-one-place-until-t3.md

@@ -73,7 +73,7 @@ pm never:
 - **Rewrite, don't append a correction.** When a change makes existing text wrong or incomplete, rewrite the passage so that it reads as one consistent statement, as if it had been written that way from the start. Never leave the old sentence and add one that takes it back ("it sees more than that", "that is not all").
 - **Green before ready.** Run the gate command from CONFIG.md until it passes. Never weaken a gate to get there.
 - **Promises become tickets.** Anything you would do "later" goes into a ticket or the PR, never only into your session: the session ends, the ticket stays.
-- **Record your calls.** A decision a reviewer could question goes into the decision log with the ticket id.
+- **Record your calls.** A decision a reviewer could question and that binds work after your ticket is done goes into the decision log with the ticket id. A choice that matters only inside your ticket goes on the ticket as a comment.
 - **Stop when the ticket needs the owner.** If the work hits something GENESIS.md reserves for the owner, stop, say so on the ticket, and tell pm.
 - **Answer your PR.** Fix failing CI and review comments on your PR until pm marks it done.
 
@@ -88,7 +88,20 @@ Each question to the owner becomes its own ticket, assigned to the owner, with t
 
 ## The decision log
 
-The decision log records every call that shapes the product or the code and is not obvious from the diff. It is a folder (path in CONFIG.md) with one file per decision, so two PRs never edit the same file and never conflict over it. Agents add files; nobody edits an old one. A decision that is reversed gets a new file that names the old one in `Supersedes:`; the old one is then superseded, without being touched.
+The decision log holds the decisions that still bind work after their ticket is done. It is a folder (path in CONFIG.md) with one file per decision, so two PRs never edit the same file and never conflict over it.
+
+A decision belongs in the log when it is one of these:
+
+- a design or product decision, including the why behind an RFC's Decisions entries;
+- a rule for how the factory works;
+- a convention that code or texts across the repository follow;
+- an owner decision that an RFC, the glossary or another doc relies on.
+
+What matters only for one ticket belongs on that ticket as a comment, not in the log: an implementation choice inside the ticket, the outcome of a review whose result now stands in the text itself, a one-off tooling detail.
+
+Agents read the log's index before anything else, so each title states the decision itself and nothing else: "The landing page names the relay 'the server in the middle'", not "The owner's answers to Q1–Q6" or "RFC 0004: every recommendation accepted". Who decided goes only in `Decided by:`, and whether it followed a recommendation does not matter to a reader, so a title never says "the owner decides", "pm decides", "as recommended" or "the owner's answer". A batch of decisions, such as an RFC's review, becomes one file per decision.
+
+Agents add files and leave the others alone. A decision that is reversed gets a new file that names the old one in `Supersedes:`; the old file stays as it was, and the reading command leaves it out unless asked for it. pm cleans up the log from time to time: it retitles entries whose title does not state their decision, merges entries that say the same, and moves entries that no longer bind work to their tickets.
 
 Each file is named `YYYY-MM-DD-<ticket>-<slug>.md`, with `no-ticket` when there is none (for example `2026-11-07-NOC-12-relay-writes-one-table-per-space.md`), and holds one entry:
 
@@ -102,7 +115,7 @@ Each file is named `YYYY-MM-DD-<ticket>-<slug>.md`, with `no-ticket` when there 
 - Supersedes: 2026-11-06-NOC-9-an-older-decision.md   (optional)
 ```
 
-`Topics:` is required: lowercase tags, so a reader finds every decision on a subject. The gate checks every file's name, heading and fields. No generated overview is committed, since it would change in every PR; the reading command in CONFIG.md prints the whole log in date order, an index, only the current decisions, or the decisions of one ticket, topic or period.
+`Topics:` is required: lowercase tags, so a reader finds every decision on a subject. The gate checks every file's name, heading and fields, refuses a current entry's title that names only a review's outcome, who decided or an answer to questions, and refuses a `Supersedes:` that names no file in the folder. No generated overview is committed, since it would change in every PR; the reading command in CONFIG.md prints the current decisions in date order or as an index, the decisions of one ticket, topic or period, and the superseded ones only when asked.
 
 A decision the owner made carries the owner's name and the date. Agents read the log's index before they start (`pnpm decisions --index`), and in full the decisions of their ticket, the tickets it depends on and the topics it touches (`--ticket`, `--topic`), so they do not reopen settled questions without reading the whole log every time.
 

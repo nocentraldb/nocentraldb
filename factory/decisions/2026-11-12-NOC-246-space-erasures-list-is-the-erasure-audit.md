@@ -1,0 +1,6 @@
+# 2026-11-12 · NOC-246 · `space.erasures.list()` is the erasure audit, listing per erasure the members of the shred's causal past and later acknowledgers
+
+- Decided by: Carsten (2026-11-12, on NOC-246, 1A, 2A, 3A)
+- Why: RFC 0008's audit had no SDK call. The call lives per space, read on demand, shaped like `members.list()`: `space.erasures.list()` in TypeScript, `space.erasures().list()` in Rust, returning `Erasure { shred, state, performer, performer_account, sign_off, members }`, with `ErasureState::{Final, Provisional, TakenBack}`, `ErasureMember { id, account, current, acknowledged }` and `Acknowledged::{Deleted, Seen, Missing}`, both enums `#[non_exhaustive]`. Members listed are those of the shred's causal past plus any later acknowledger, each with `current`, so a removed device that kept the key shows. The app tells whose erasure it is by `shred` alone for now. Readers may call it, since RFC 0008 names auditors as readers. RFC 0009 text first as a docs PR, then core and Rust SDK.
+- Instead of: a field of `space.status` (1B) or a database-wide call by person (1C, later work on top of A); current members only (2B), which hides a removed device, or every member the space ever had (2C), which is noisy; person object ids in the result now (3B, later, once personal fields exist).
+- Topics: erasure, rfc-0008, rfc-0009, public-names, sdk-rust, sdk-ts

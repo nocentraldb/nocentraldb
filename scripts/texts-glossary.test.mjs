@@ -86,3 +86,9 @@ test("a text that means a member says member, not device", () => {
   assert.doesNotMatch(text("error.personKeyNotHeld"), /\bdevice\b/);
   assert.doesNotMatch(text("error.noAccountSpace"), /\bdevice\b/);
 });
+
+test("an erasure's notices say personal fields, and finalize is no noun", () => {
+  // erasure: "making a person's personal fields unreadable".
+  assert.deepEqual(matching(/\bpersonal data\b/i), []);
+  assert.deepEqual(matching(/\ba finalize\b/), []);
+});

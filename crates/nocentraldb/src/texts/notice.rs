@@ -58,7 +58,7 @@ pub(crate) const ERASED: &str =
 /// device of the account, while an erasure in a space with one account waits
 /// out its 7 days. pm's text, NOC-234.
 pub(crate) const ERASURE_PENDING: &str =
-    "Personal data was erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.";
+    "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.";
 
 /// `memberAdded`: Members::add (members.add in TypeScript) returns it once the
 /// member is added to the space: the new member reads every change written
@@ -88,4 +88,4 @@ pub(crate) const SPACE_LEFT: &str =
 /// the performer's account took a provisional erasure back within its 7 days.
 /// pm, NOC-326, on the coding agent's proposal (Q7).
 pub(crate) const TAKEN_BACK: &str =
-    "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.";
+    "The erasure is taken back in this space, and the person's fields read again; an erasure that another device of the account made final before it saw this take-back still wins, and the person stays erased.";

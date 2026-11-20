@@ -1,0 +1,8 @@
+# 2026-11-08 · NOC-7 · Person keys are one per person per space, held at the relay in a signed store, and shredding has stated limits
+
+- Decided by: Carsten (RFC 0003 decisions 7, 10 and 14, and readings 1, 2 and 5)
+- Why: a space's members never need a key that also opens the person's data in other spaces, and an erasure finds the person's keys by person id in every space the performing account can reach, so GENESIS.md's "one key per person" is one key per person per space. The relay holds each person key wrapped under the space key, so a new member, a cloud agent included, can open personal fields while no other member is online; it adds no reader the design does not already have. The store's integrity: a person-key entry with a commitment in the log, signed records the relay accepts only from current members, and deletion only through a shred with a second account's sign-off. Because a key once held cannot be taken back, the RFC names every limit of erasure, including a modified client that ignores the shred, a member that obtains a relay backup taken before it, and a device that never comes back.
+- Instead of: one person key across all spaces; person keys that never reach the relay, handed between members; unsigned records any member may overwrite or delete (one member could swap or erase a key without a sign-off); person keys only in control changes in the log, where a shred can no longer destroy them.
+- Topics: rfc-0003, keys, person-keys, erasure, shred, relay
+
+The rules are in `docs/rfc/0003-keys-and-cryptography.md`, "The person key", "Shredding a person's key" and "Person-key record".
