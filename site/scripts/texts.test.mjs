@@ -10,10 +10,14 @@ import { fileURLToPath } from "node:url";
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist");
 
-/** The visible text of a built page: tags, scripts and styles removed. */
-const text = (path) =>
+/**
+ * The visible text of a built page: tags, scripts and styles removed, and
+ * with `prose` also its code, whose names follow the API, not the glossary.
+ */
+const text = (path, { prose = false } = {}) =>
   readFileSync(join(dist, path), "utf8")
     .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/g, " ")
+    .replace(prose ? /<(pre|code)\b[^>]*>[\s\S]*?<\/\1>/g : /(?!)/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
@@ -78,7 +82,7 @@ test("the docs use the glossary's terms", () => {
   for (const page of docsPages().filter(
     (p) => !p.startsWith("docs/glossary/"),
   )) {
-    const words = text(page);
+    const words = text(page, { prose: true });
     for (const avoid of [
       /\breplicas?\b/i,
       /\bsync server\b/i,
