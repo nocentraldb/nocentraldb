@@ -160,7 +160,7 @@ test("a still drawing shows the points that are on their way at 0.72 s", () => {
 test("a still drawing keeps the moving one's picture apart from the motion", () => {
   const strip = (s) =>
     s
-      .replace(/<circle r="\d+" class="sc-pulse"[^]*?<\/circle>/g, "")
+      .replace(/<circle r="\d+" class="sc-pulse"[\s\S]*?<\/circle>/g, "")
       .replace(/\s+/g, " ");
   for (const layout of ["wide", "tall"])
     for (const i of [0, 1, 2, 3])
