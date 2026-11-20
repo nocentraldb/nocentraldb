@@ -29,3 +29,12 @@ test("The problem ends with the apps where the data belongs with its users", () 
     /For many apps a central database is still the right choice\./,
   );
 });
+
+test("Why now says why agents need their data at the speed of local memory", () => {
+  // Carsten, 2026-11-20, NOC-362: the owner's corrected paragraph.
+  const why = section(read(RFC), "why-now");
+  assert.match(
+    why,
+    /But agents read text, search data and process it far faster than people do, so the network becomes the bottleneck\. Coding agents are fast and capable because everything they need is right next to them, on the same disk\. MCP servers work well for occasional searches or changes\. Data that an agent searches and processes often, though, has to be there at the speed of local memory\./,
+  );
+});
