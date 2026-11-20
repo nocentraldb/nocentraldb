@@ -4,7 +4,7 @@ title: API
 description: The main calls of the TypeScript SDK in 0.1, as RFC 0009 defines them.
 ---
 
-[RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines the API, and both SDKs follow it. The calls below are the main ones of the TypeScript SDK in 0.1; the Rust SDK has the same calls in Rust's style, such as `db.sync().current()`. The SDK's complete public API is its [API report](https://github.com/nocentraldb/nocentraldb/blob/main/packages/sdk/etc/api-report.d.ts).
+[RFC 0009: The SDK API for apps](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines the API, and both SDKs follow it. The calls below are the main ones of the TypeScript SDK in 0.1; the Rust SDK has the same calls in Rust's style, such as `db.sync().current()`. The SDK's complete public API is in the [API reference](/docs/api/reference/).
 
 | Call                                      | What it does                                                                                    |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------- |

@@ -118,3 +118,28 @@ export const currentInstallLines = (root) => {
   );
   return installLines({ releases, tags, publishable });
 };
+
+// The docs' npm lines (NOC-361): a page of the docs, or a file of docs/ that
+// the site renders, writes the SDK's npm line by hand; the site shows the
+// current one instead, as the landing page's code section does.
+const NPM_LINE = /npm install @nocentraldb\/sdk(?:@[\w.-]+)?/g;
+
+/** `text` with every npm line for the SDK replaced by `npm`. */
+export const withNpmLine = (text, npm) => text.replace(NPM_LINE, npm);
+
+/**
+ * An Expressive Code plugin that writes `npm` for the SDK's npm line in the
+ * docs' code blocks. Astro's Markdown processor runs no remark plugins, and
+ * Starlight renders every code block through Expressive Code.
+ */
+export const expressiveNpmLine = ({ npm }) => ({
+  name: "ncdb-npm-line",
+  hooks: {
+    preprocessCode: ({ codeBlock }) => {
+      for (const line of codeBlock.getLines()) {
+        const text = withNpmLine(line.text, npm);
+        if (text !== line.text) line.editText(0, line.text.length, text);
+      }
+    },
+  },
+});

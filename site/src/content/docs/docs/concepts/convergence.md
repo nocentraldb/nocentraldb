@@ -11,4 +11,4 @@ Writes **converge**: the same set of changes yields the same state on every memb
 
 In **island mode**, with no relay at all, members keep working. When the network is gone, your writes are stored locally, and they sync when the relay is back.
 
-In the browser, the copy lives in the origin private file system (OPFS), and the browser may delete it when storage runs low. `db.durability` reports what is at risk: [Browser apps and durability](https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md) says what each browser keeps.
+In the browser, the copy lives in the origin private file system (OPFS), and the browser may delete it when storage runs low. `db.durability` reports what is at risk: [Browser apps and durability](/docs/browser-durability/) says what each browser keeps.

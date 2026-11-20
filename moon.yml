@@ -236,8 +236,13 @@ tasks:
     # site-pages.yml runs the same steps before it deploys. The install needs
     # the network on a cold pnpm store.
     script: "pnpm --dir site install --frozen-lockfile && pnpm --dir site build && node --test 'site/scripts/*.test.mjs'"
+    # NOC-361: the site renders developer docs from docs/ and the SDK's API
+    # report, and its install lines follow the release index.
     inputs:
       - "/site/**/*"
+      - "/docs/*.md"
+      - "/packages/sdk/etc/api-report.d.ts"
+      - "/release-notes/index.json"
       - "!/site/dist/**/*"
       - "!/site/node_modules/**/*"
   browser-storage:

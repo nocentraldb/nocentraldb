@@ -6,10 +6,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  expressiveNpmLine,
   installLines,
   newestAlpha,
   publishableCrate,
   tagsOf,
+  withNpmLine,
 } from "../src/install.mjs";
 
 const GIT = "https://github.com/nocentraldb/nocentraldb";
@@ -128,5 +130,42 @@ test("the crate is publishable unless its manifest's package says publish = fals
       '[package]\nname = "x"\n\n[dependencies]\npublish = false\n',
     ),
     true,
+  );
+});
+
+// The docs' install lines follow the same index (NOC-361): an npm line for
+// the SDK, written by hand in a docs page or in a file of docs/, is replaced
+// by the current one, in the rendered page and in its Markdown copy.
+test("an npm line for the SDK becomes the current one, whatever its tag", () => {
+  const npm = "npm install @nocentraldb/sdk@beta";
+  assert.equal(
+    withNpmLine(
+      "npm install @nocentraldb/sdk@alpha\nnpm install @nocentraldb/sdk\nnpm install @nocentraldb/sdk@0.1.0-beta.1 && x",
+      npm,
+    ),
+    `${npm}\n${npm}\n${npm} && x`,
+  );
+  assert.equal(
+    withNpmLine("npm install left-pad", npm),
+    "npm install left-pad",
+  );
+});
+
+test("the Expressive Code plugin rewrites the npm line in a code block", () => {
+  const npm = "npm install @nocentraldb/sdk@beta";
+  const lines = [
+    "npm install @nocentraldb/sdk@alpha",
+    "npx ncdb model build",
+  ].map((text) => ({
+    text,
+    editText(from, to, value) {
+      this.text = this.text.slice(0, from) + value + this.text.slice(to);
+    },
+  }));
+  const plugin = expressiveNpmLine({ npm });
+  plugin.hooks.preprocessCode({ codeBlock: { getLines: () => lines } });
+  assert.deepEqual(
+    lines.map((line) => line.text),
+    [npm, "npx ncdb model build"],
   );
 });

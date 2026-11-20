@@ -27,8 +27,8 @@ NoCentralDB 0.1 is the first planned release. Its alphas are out, and names and 
 
 In 0.1 you build your first app inside a clone of the repository: `ncdb`, which builds the lock, comes from the clone, and so does the Rust SDK until it is on crates.io. Each guide starts with one database and ends with members syncing through a relay:
 
-- [Getting started with the Rust SDK](https://github.com/nocentraldb/nocentraldb/blob/main/docs/getting-started.md), with [apps/tasks-rust](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-rust/README.md) as the finished app.
-- [Getting started in the browser](https://github.com/nocentraldb/nocentraldb/blob/main/docs/getting-started-browser.md), with [apps/tasks-ts](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-ts/README.md) as the finished page.
+- [Getting started with the Rust SDK](/docs/guides/rust/), with [apps/tasks-rust](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-rust/README.md) as the finished app.
+- [Getting started in the browser](/docs/guides/browser/), with [apps/tasks-ts](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-ts/README.md) as the finished page.
 
 The alphas of the TypeScript SDK are on npm:
 
@@ -74,4 +74,4 @@ await project.write((tx) => {
 });
 ```
 
-A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/), and see [Browser apps and durability](https://github.com/nocentraldb/nocentraldb/blob/main/docs/browser-durability.md) for what a browser copy keeps.
+A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/), and see [Browser apps and durability](/docs/browser-durability/) for what a browser copy keeps.
