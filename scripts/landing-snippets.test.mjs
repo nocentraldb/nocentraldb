@@ -60,8 +60,8 @@ test("each step's block type-checks as a module, its hidden setup included", () 
 test("a wrong call fails at its line in the page", () => {
   const result = checked([...MODEL, "", ...step("db.noSuchCall();")]);
   assert.equal(result.ok, false);
-  // the page's line 20 is the wrong call
-  assert.match(result.output, /code-ts\.md:20:\d+/);
+  // the page's line 21 is the wrong call
+  assert.match(result.output, /code-ts\.md:21:\d+/);
   assert.match(result.output, /noSuchCall/);
 });
 
