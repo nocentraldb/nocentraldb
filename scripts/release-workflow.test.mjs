@@ -1,13 +1,16 @@
 // Asserts the rules of .github/workflows/release.yml (epic mt08.q8rt §11,
 // docs/release-management.md "Alpha", "Beta" and "Release") that hold for the
 // workflow as a whole and for every job: the triggers; read-only by default,
-// contents: write on the jobs alpha, publish and commit-back only, verify and
-// build inheriting read; every step of every job runs in bash with pipefail;
+// contents: write on the jobs alpha and publish only, id-token: write with
+// contents: read on alpha-npm, publish-crates and publish-npm, the other jobs
+// inheriting read; every step of every job runs in bash with pipefail;
 // every action is SHA-pinned; every job is bounded in time; a step that
 // derives the basic-auth header from the token masks it before git sees it.
 // The alpha job's own rules are in scripts/release-workflow-alpha.test.mjs,
 // those of alpha-npm in scripts/release-workflow-npm.test.mjs,
-// those of the publish side in scripts/release-workflow-publish.test.mjs.
+// those of the publish side in scripts/release-workflow-publish.test.mjs,
+// and those of its registry jobs in
+// scripts/release-workflow-registries.test.mjs.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -37,6 +40,8 @@ const TIMEOUTS = {
   verify: 45,
   build: 45,
   publish: 20,
+  "publish-crates": 45,
+  "publish-npm": 45,
   "commit-back": 15,
   "app-token-check": 5,
 };
@@ -103,9 +108,15 @@ const checks = [
       // verify and build inherit contents: read from the workflow.
       assert.equal(wf.jobs.verify.permissions, undefined);
       assert.equal(wf.jobs.build.permissions, undefined);
-      // Exactly contents: write; id-token and attestations come with the
-      // registry publishing, which changes this check.
+      // Exactly contents: write: the GitHub release. The registries are
+      // published by jobs that hold the OIDC token and no write (NOC-374).
       assert.deepEqual(wf.jobs.publish.permissions, WRITE);
+      for (const id of ["publish-crates", "publish-npm"])
+        assert.deepEqual(
+          wf.jobs[id].permissions,
+          { contents: "read", "id-token": "write" },
+          id,
+        );
       // commit-back pushes with the release app's token, not github.token,
       // so it inherits contents: read (scripts/release-ruleset.test.mjs).
       assert.equal(wf.jobs["commit-back"].permissions, undefined);
@@ -135,6 +146,13 @@ const checks = [
         ctx.doc.setIn(["jobs", "commit-back", "permissions"], WRITE),
       "drops the publish permissions": (ctx) =>
         ctx.doc.deleteIn(["jobs", "publish", "permissions"]),
+      "grants publish-crates contents: write": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "publish-crates", "permissions", "contents"],
+          "write",
+        ),
+      "drops the id-token of publish-npm": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-npm", "permissions", "id-token"]),
       "adds a job": (ctx) =>
         ctx.doc.setIn(["jobs", "extra"], { "runs-on": "ubuntu-latest" }),
     },
@@ -157,6 +175,8 @@ const checks = [
         ctx.doc.deleteIn(["jobs", "publish", "defaults"]),
       "drops the defaults of commit-back": (ctx) =>
         ctx.doc.deleteIn(["jobs", "commit-back", "defaults"]),
+      "drops the defaults of publish-crates": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-crates", "defaults"]),
     },
   },
   {

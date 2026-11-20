@@ -5,8 +5,10 @@
 // commit-back; verify fetches the release branches, runs verify-tag on the
 // commit and then the full gate, before build starts; build writes the tag's
 // version into its own checkout before it builds; publish makes an idempotent
-// GitHub release (a prerelease for a beta, latest for a release) and only
-// reports on the registries; commit-back checks out main and leaves the
+// GitHub release (a prerelease for a beta, latest for a release) and leaves
+// the registries to publish-crates and publish-npm
+// (scripts/release-workflow-registries.test.mjs), which commit-back waits
+// for; commit-back checks out main and leaves the
 // commit to commit-back.mjs; no job that holds contents: write leaves its
 // token in the checkout; the jobs of the publish side share one concurrency
 // group per ref that never cancels a running job.
@@ -40,7 +42,14 @@ const PUBLISH_CONCURRENCY = {
   group: `release-publish-${gh("github.ref")}`,
   "cancel-in-progress": false,
 };
-const PUBLISH_SIDE = ["verify", "build", "publish", "commit-back"];
+const PUBLISH_SIDE = [
+  "verify",
+  "build",
+  "publish",
+  "publish-crates",
+  "publish-npm",
+  "commit-back",
+];
 
 const checks = [
   {
@@ -48,7 +57,13 @@ const checks = [
     check: (ctx) => {
       assert.equal(normalise(job(ctx, "verify").if), PUBLISH_IF);
       // Every other job of the publish side follows verify.
-      for (const id of ["build", "publish", "commit-back"])
+      for (const id of [
+        "build",
+        "publish",
+        "publish-crates",
+        "publish-npm",
+        "commit-back",
+      ])
         assert.ok(
           [job(ctx, id).needs].flat().includes("verify"),
           `${id} does not need verify`,
@@ -309,44 +324,45 @@ const checks = [
     },
   },
   {
-    name: "the registry steps only report what publishable says, and publish nothing yet",
+    name: "publish, which holds contents: write, publishes to no registry: publish-crates and publish-npm do",
     check: (ctx) => {
-      for (const registry of ["npm", "crates.io"]) {
-        const step = stepsOf(ctx, "publish")[
-          stepAt(ctx, "publish", (s) => s.name === registry)
-        ];
-        assert.match(
-          step.run,
-          /node scripts\/release\/publishable\.mjs --json/,
-        );
-        assert.match(step.run, /skip \\\(\.name\): \\\(\.reason\)/);
-      }
-      for (const step of stepsOf(ctx, "publish"))
+      for (const step of stepsOf(ctx, "publish")) {
         assert.doesNotMatch(
           String(step.run ?? ""),
-          /\b(?:npm|pnpm|cargo) publish\b/,
-          "a registry is published to",
+          /\b(?:npm|pnpm|cargo) (?:stage )?publish\b|crates-publish|npm-publish/,
+          "publish sends a package to a registry",
+        );
+        assert.doesNotMatch(
+          String(step.uses ?? ""),
+          /crates-io-auth-action/,
+          "publish fetches a crates.io token",
+        );
+      }
+      for (const id of ["publish-crates", "publish-npm"])
+        assert.ok(
+          [job(ctx, "commit-back").needs].flat().includes(id),
+          `commit-back does not wait for ${id}`,
         );
     },
     mutants: {
-      "publishes to npm": (ctx) =>
+      "stages on npm from publish": (ctx) =>
+        ctx.doc.addIn(["jobs", "publish", "steps"], {
+          run: "pnpm -r exec npm stage publish --tag beta",
+        }),
+      "publishes the crates from publish": (ctx) =>
+        ctx.doc.addIn(["jobs", "publish", "steps"], {
+          run: "cargo publish --workspace",
+        }),
+      "commit-back does not wait for the crates": (ctx) =>
         ctx.doc.setIn(
-          [
-            "jobs",
-            "publish",
-            "steps",
-            stepAt(ctx, "publish", (s) => s.name === "npm"),
-            "run",
-          ],
-          "pnpm -r publish --tag beta",
+          ["jobs", "commit-back", "needs"],
+          ["verify", "publish", "publish-npm"],
         ),
-      "drops the crates.io step": (ctx) =>
-        ctx.doc.deleteIn([
-          "jobs",
-          "publish",
-          "steps",
-          stepAt(ctx, "publish", (s) => s.name === "crates.io"),
-        ]),
+      "commit-back does not wait for npm": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "commit-back", "needs"],
+          ["verify", "publish", "publish-crates"],
+        ),
     },
   },
   {
@@ -496,6 +512,10 @@ const checks = [
         ctx.doc.deleteIn(["jobs", "publish", "concurrency"]),
       "commit-back outside the group": (ctx) =>
         ctx.doc.deleteIn(["jobs", "commit-back", "concurrency"]),
+      "publish-crates outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-crates", "concurrency"]),
+      "publish-npm outside the group": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-npm", "concurrency"]),
       "commit-back in a group of its own": (ctx) =>
         ctx.doc.setIn(
           ["jobs", "commit-back", "concurrency", "group"],

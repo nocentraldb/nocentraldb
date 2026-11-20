@@ -227,7 +227,8 @@ const DEPENDENCY_SUBTABLE =
  * What a crate manifest says about its version and its path dependencies:
  * [package] name, `version.workspace = true` or an own `version = "…"`, and
  * the names of every `path =` entry in [dependencies], [dev-dependencies],
- * [build-dependencies] and their [target.*.…] forms.
+ * [build-dependencies] and their [target.*.…] forms, and the names of its
+ * `workspace = true` entries: those it needs at runtime, and all of them.
  */
 export function crateManifest(text) {
   let name = null;
@@ -265,12 +266,19 @@ export function crateManifest(text) {
   const runtimeWorkspaceDependencies = entries
     .filter((d) => d.workspace && !/(?:^|\.)dev-dependencies$/.test(d.table))
     .map((d) => d.name);
+  // Every workspace dependency, dev-dependencies included: crates.io must
+  // resolve a dev-dependency that keeps its version (a published crate's),
+  // so the crates publish orders by these (crates-publish.mjs).
+  const workspaceDependencies = entries
+    .filter((d) => d.workspace)
+    .map((d) => d.name);
   return {
     name,
     inheritsVersion,
     ownVersion,
     pathDependencies,
     runtimeWorkspaceDependencies,
+    workspaceDependencies,
     published: publishes(text),
   };
 }
