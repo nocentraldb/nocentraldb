@@ -6,3 +6,4 @@
 - What this does not do: the browser's tab ownership, `db.close()` in the browser, and the TypeScript SDK, which name the browser database publicly (NOC-176). The AWS backend's bucket CORS rule is written in RFC 0007 but built with that backend.
 - Tests: `ncdb-relay-server/tests/cors.rs` (preflight and headers); `wasm_tests` in Node (a database with a relay opens and goes offline); `browser::tests::sync` in Chromium against the local relay, which the `sdk-keys` harness builds and starts (two databases share a space; a 300 KiB change through `fetch()` from another origin).
 - Topics: sdk-rust, sync, wasm, browser, relay
+- Supersedes: 2026-11-11-NOC-175-the-sdk-on-wasm32-in-memory-first.md

@@ -1,6 +1,0 @@
-# 2026-11-16 · NOC-352 · The owner's worker gives the storage back itself, and the next worker waits for it
-
-- Decided by: pm, NOC-352, on the coding agent's proposal
-- Why: the browser frees a worker's OPFS handles only some time after the page ends the worker. WebKit does it only once the worker's page runs again. So the visible tab's open failed with `storageFailed` after a takeover. Now, when asked to stop, the worker closes the database itself and pauses the `opfs-sahpool` pool (`ncdb_core::view::browser::release`). It then releases the Web Lock `nocentraldb/<name>/worker`, which it held from its open on, and ends itself. The next worker waits for that lock before it opens. For a worker whose tab closed before it could stop, an open that finds the storage held is tried again every 100 ms for up to 3 s. The page never ends the worker itself, not even after a timeout: a late end would free the handles after the lock and bring the failure back. A genuine `storageFailed` open, such as another database name holding the origin's pool, now fails about 3 s later.
-- Instead of: ending the worker from the page and retrying the open until the handles are free, which never succeeds while a WebKit owner is frozen; or a timeout that ends a worker that has not stopped, which raced the lock in the WebKit test.
-- Topics: sdk-ts, browser, tabs

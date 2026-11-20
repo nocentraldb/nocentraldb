@@ -1,0 +1,6 @@
+# 2026-11-13 · NOC-307 · Invitations carry no link statements in v1, so only the person's own devices show a member as linked
+
+- Decided by: Carsten (2026-11-13, on NOC-307, option B3)
+- Why: RFC 0010 says an invitation carries the link statements of its account, but RFC 0003's invitation layout has no field for them, and a link statement is about 320 bytes. In v1 only the person's own devices show "linked"; other members see the old fingerprint as a separate account, which RFC 0010 already calls no weaker than a second account. RFC 0010's sentence about invitations becomes later work, in a ticket of its own, with B2 as the intended design: the person's admin devices write their link statements into the app spaces they administer, as a reserved collection every member reads. The ticket's question 1 (A1, `MemberInfo.linked_to`) is recorded in 2026-11-13-NOC-269-members-list-shows-a-linked-account.md.
+- Instead of: invitation version 3 with a count and each link statement (B1), which makes an invitation 1–1.5 KB with two or three links, its QR code dense, and is hard to undo once readers exist; or B2 now, which needs a new reserved collection in app spaces.
+- Topics: accounts, linking, invitations, rfc-0010

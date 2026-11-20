@@ -1,0 +1,7 @@
+# 2026-11-16 · NOC-350 · The session start resets a stale tree that matches a commit on HEAD or a local branch, and stashes one that matches none
+
+- Decided by: coding agent (NOC-350)
+- Why: the cloud clones with depth 50, and the environment's snapshot (2026-11-09, at 98ffb45) is now more than 50 commits behind main, so HEAD's history ends before the snapshot's commit and `scripts/session-start-git.mjs` left the stale tree staged in every session. The snapshot's local `main` still points at that commit. The script now resets when the index holds exactly the tree of a commit on HEAD or on a local branch; the old tree stays in that commit, so still nothing is lost. The other conditions of the NOC-52 decision stay as they were. At startup (the hook's source `startup`) a tree that matches no commit is still the snapshot's, so it is stashed with untracked files under `session-start-git: tree <id> staged over <HEAD> at session start`, keeping the cloud block on top of AGENTS.md; on resume, clear or compact the agent may have staged its own work, so the hook leaves it and warns.
+- Instead of: `git fetch --unshallow` or `--deepen` at every session start, which costs network time on each start and grows with the history; or rebuilding the snapshot, which only postpones the next time main outruns the depth.
+- Topics: factory, cloud, git
+- Supersedes: 2026-11-08-NOC-52-the-session-start-resets-the-stale-tree-only-when-nothing-is-lost.md

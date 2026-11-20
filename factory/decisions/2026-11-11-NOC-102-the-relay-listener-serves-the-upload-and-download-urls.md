@@ -5,3 +5,4 @@
 - Instead of: a second listener for HTTP, which a TLS proxy would need a second route for; signed URLs without stored tokens, which need a server secret and give no single use.
 - What this does not do: an HTTP request holds one of the 64 handshake places while it lasts; anyone holding a download URL reads the (encrypted) frame until it expires; the SDK side is NOC-121.
 - Topics: relay, protocol, rfc-0007
+- Supersedes: 2026-11-10-NOC-89-the-relay-server-leaves-out-large-changes-keys-and-person-keys.md, 2026-11-10-NOC-96-the-relay-server-leaves-out-large-changes-and-tls.md
