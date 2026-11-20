@@ -21,43 +21,18 @@ const REVERSE = {
   agent: "M440 150 C440 200 665 186 665 236",
 };
 
-// The moment a still drawing shows: 0.72 s, 0.2 of the 3.6 s loop. In each state with
-// travelling points one of them is half-way along its line (the pulse windows below),
-// and the agent's circling point is visible at any time.
-const STILL_AT = 0.72;
-const LOOP = 3.6;
-// A point frozen at the fraction p of path d: an animateMotion that holds one place.
-const frozen = (r, d, p) =>
-  `<circle r="${r}" class="sc-pulse"><animateMotion dur="0.001s" fill="freeze" calcMode="linear" keyPoints="${p.toFixed(4)};${p.toFixed(4)}" keyTimes="0;1" path="${d}"/></circle>`;
-
 // A point travelling along path d between the fractions t0 and t1 of a 3.6 s loop.
-// Still, it stands where the moving one is at STILL_AT, or is left out when that one
-// is hidden then.
-const pulse = (d, t0, t1, still) => {
-  if (still) {
-    const f = STILL_AT / LOOP;
-    if (f < t0 + 0.01 || f > t1 - 0.01) return "";
-    return frozen(6, d, (f - t0) / (t1 - t0));
-  }
-  return `
+const pulse = (d, t0, t1) => `
   <circle r="6" class="sc-pulse" opacity="0">
     <animateMotion dur="3.6s" repeatCount="indefinite" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0;${t0};${t1};1" path="${d}"/>
     <animate attributeName="opacity" dur="3.6s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;${t0};${(t0 + 0.01).toFixed(2)};${(t1 - 0.01).toFixed(2)};${t1};1"/>
   </circle>`;
-};
 // The agent's reads: a point circling its card's edge once every 1.4 s.
-const circling = (perimeter, still) =>
-  still
-    ? frozen(5, perimeter, (STILL_AT % 1.4) / 1.4)
-    : `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>`;
+const circling = (perimeter) =>
+  `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>`;
 
 // One copy of the task list. rows: [title, status, kind]; kind is "origin" (changed here) or "got" (arrived here).
-const card = (
-  who,
-  label,
-  rows,
-  { offline = false, loop = false, still = false } = {},
-) => {
+const card = (who, label, rows, { offline = false, loop = false } = {}) => {
   const x = X[who];
   const y = CARD_Y;
   const h = 44 + rows.length * 50 + 8;
@@ -76,7 +51,7 @@ const card = (
     <text x="${x + 22}" y="${ry + 36}" class="sc-status ${kind === "origin" ? "sc-on-accent" : ""}">${status}</text>`;
       })
       .join("")}
-    ${loop ? circling(perimeter, still) : ""}
+    ${loop ? circling(perimeter) : ""}
   </g>`;
 };
 
@@ -229,11 +204,11 @@ const STATES = [
 const LABEL = { train: "On the train", home: "Home office", agent: "Agent" };
 const WHO = ["train", "home", "agent"];
 
-const wide = (st, id, still) => `${links(st.offline)}${cloud(st.lens, id)}
-  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? LINK : REVERSE)[who], t0, t1, still)).join("")}
+const wide = (st, id) => `${links(st.offline)}${cloud(st.lens, id)}
+  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? LINK : REVERSE)[who], t0, t1)).join("")}
   ${card("train", LABEL.train, st.cards.train, { offline: st.offline })}
   ${card("home", LABEL.home, st.cards.home)}
-  ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop, still })}
+  ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop })}
   ${trainPlace(st.tunnel, id)}${housePlace()}${rackPlace()}`;
 
 // The phone layout (owner, 2026-11-20, NOC-380): one small schematic per step and no
@@ -360,12 +335,11 @@ export const STEPS = [
 // The drawing for step 0..3 as an SVG string, in the "wide" or the "phone" layout.
 // idPrefix starts every id inside it, so several drawings can share one page; the
 // phone layout adds "-phone", so a wide and a phone drawing may share a prefix.
-// still: the wide picture at STILL_AT, with nothing that moves (the scenario,
-// NOC-380); the phone layout never moves.
-export function scene(step, idPrefix, layout = "wide", { still = false } = {}) {
+// The wide layout loops; the phone layout never moves.
+export function scene(step, idPrefix, layout = "wide") {
   const [box, body] =
     layout === "phone"
       ? ["0 0 400 260", small(step, `${idPrefix}-phone`)]
-      : ["0 0 800 600", wide(STATES[step], idPrefix, still)];
+      : ["0 0 800 600", wide(STATES[step], idPrefix)];
   return `<svg class="sc sc--${layout}" viewBox="${box}" role="img" aria-label="${STEPS[step].alt}">${body}</svg>`;
 }

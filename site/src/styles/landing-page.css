@@ -105,6 +105,7 @@ html main > section#story {
   max-width: 46ch;
 }
 #story figure {
+  position: relative;
   margin: var(--s-4) 0 0;
   aspect-ratio: 4 / 3;
   border-radius: var(--r-md);
@@ -144,6 +145,10 @@ html main > section#story {
     aspect-ratio: 400 / 260;
     max-width: 400px;
     margin-left: calc(-1 * var(--s-5) - 2px);
+  }
+  /* the schematic stands still, so it has nothing to pause (NOC-384) */
+  #story button.scene-pause[data-story-pause] {
+    display: none;
   }
 }
 
@@ -185,10 +190,11 @@ html main > section#story {
   }
 }
 
-/* Pause, at the bottom right of the hero drawing's frame, above the figures: filled
-   in the ink while it holds the drawing (aria-pressed). */
+/* Pause, at the bottom right of the hero drawing's frame and of each scenario
+   drawing (NOC-384), above the figures: filled in the ink while it holds the
+   drawings (aria-pressed). */
 /* beats system.css's .frame > :not(canvas, .stage, ...) (position: relative) */
-button.scene-pause[data-scene-pause] {
+button.scene-pause:is([data-scene-pause], [data-story-pause]) {
   position: absolute;
   right: 12px;
   bottom: 12px;
@@ -202,11 +208,14 @@ button.scene-pause[data-scene-pause] {
   font: var(--ncdb-weight-emphasis) var(--t-small) var(--font-text);
   cursor: pointer;
 }
-button.scene-pause[data-scene-pause][aria-pressed="true"] {
+button.scene-pause:is(
+  [data-scene-pause],
+  [data-story-pause]
+)[aria-pressed="true"] {
   background: var(--ink);
   color: var(--bg);
 }
-button.scene-pause[data-scene-pause][hidden] {
+button.scene-pause:is([data-scene-pause], [data-story-pause])[hidden] {
   display: none;
 }
 
