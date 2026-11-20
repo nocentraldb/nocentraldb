@@ -12,8 +12,14 @@
 //   - nothing indexed: npm's dist-tag `alpha`, and the crate from the
 //     repository at the newest alpha tag, or at its main branch when no tag
 //     can be read.
+// A line that names a registry's version waits until that registry serves it
+// (NOC-373, registry.mjs): npm stages a beta or release until the owner
+// approves it, and the index lists it at once. Until then the line stays the
+// one of the version indexed before, or the alpha's.
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { cachedProbe } from "./registry.mjs";
 
 const GIT = "https://github.com/nocentraldb/nocentraldb";
 const ALPHA = /^v(\d+)\.(\d+)\.(\d+)-alpha\.(\d+)$/;
@@ -53,35 +59,58 @@ export const publishableCrate = (manifest) => {
   return !/^publish\s*=\s*false\s*$/m.test(section);
 };
 
-/**
- * The npm and cargo lines for `releases` (index.json's), the repository's
- * `tags`, and whether the Rust crate is `publishable` on crates.io; a crate
- * that is not takes the indexed tag, or the newest alpha tag, from git.
- */
-export const installLines = ({ releases, tags, publishable = false }) => {
-  const last = releases.at(-1);
-  if (last?.stage === "release")
+/** The npm line for an indexed `entry`, or for the alpha before any. */
+const npmLine = (entry) => {
+  if (entry?.stage === "release")
+    return { stage: "release", npm: "npm install @nocentraldb/sdk" };
+  if (entry?.stage === "beta")
+    return { stage: "beta", npm: "npm install @nocentraldb/sdk@beta" };
+  return { stage: "alpha", npm: "npm install @nocentraldb/sdk@alpha" };
+};
+
+/** The crates.io line for an indexed `entry`, or the alpha's from git. */
+const cargoLine = (entry, alphaTag) => {
+  if (entry?.stage === "release")
+    return { cargoStage: "release", cargo: "cargo add nocentraldb" };
+  if (entry?.stage === "beta")
     return {
-      stage: "release",
-      npm: "npm install @nocentraldb/sdk",
-      cargo: publishable
-        ? "cargo add nocentraldb"
-        : `cargo add nocentraldb --git ${GIT} --tag ${last.tag}`,
+      cargoStage: "beta",
+      cargo: `cargo add nocentraldb@${entry.tag.slice(1)}`,
     };
-  if (last?.stage === "beta")
-    return {
-      stage: "beta",
-      npm: "npm install @nocentraldb/sdk@beta",
-      cargo: publishable
-        ? `cargo add nocentraldb@${last.tag.slice(1)}`
-        : `cargo add nocentraldb --git ${GIT} --tag ${last.tag}`,
-    };
-  const tag = newestAlpha(tags);
+  const tag = alphaTag();
   return {
-    stage: "alpha",
-    npm: "npm install @nocentraldb/sdk@alpha",
+    cargoStage: "alpha",
     cargo: `cargo add nocentraldb --git ${GIT}${tag ? ` --tag ${tag}` : ""}`,
   };
+};
+
+/**
+ * The npm and cargo lines for `releases` (index.json's), the repository's
+ * `tags` (or a function that reads them, called only for an alpha line),
+ * whether the Rust crate is `publishable` on crates.io, and whether npm and
+ * crates.io serve the newest indexed version (`served`, NOC-373). A line
+ * names the newest indexed version only once its registry serves it, and is
+ * the previous line until then: the version indexed before, or the alpha's.
+ * A crate that is not publishable takes the newest indexed tag from git.
+ * `stage` is the npm line's, `cargoStage` the cargo line's.
+ */
+export const installLines = ({
+  releases,
+  tags,
+  publishable = false,
+  served = {},
+}) => {
+  const last = releases.at(-1);
+  const previous = releases.at(-2);
+  const alphaTag = () => newestAlpha(typeof tags === "function" ? tags() : tags);
+  const cargo =
+    last && !publishable
+      ? {
+          cargoStage: last.stage,
+          cargo: `cargo add nocentraldb --git ${GIT} --tag ${last.tag}`,
+        }
+      : cargoLine(served.crate ? last : previous, alphaTag);
+  return { ...npmLine(served.npm ? last : previous), ...cargo };
 };
 
 /** The repository's tags: the remote's, else the checkout's, else none. */
@@ -105,18 +134,46 @@ const repositoryTags = (root) => {
   return [];
 };
 
-/** The install lines for the repository at `root`, as the site is built. */
-export const currentInstallLines = (root) => {
+/** What the newest indexed `entry` asks the registries (registry.mjs). */
+const registryQuery = (entry, publishable) => ({
+  npm: {
+    distTag: entry.stage === "release" ? "latest" : "beta",
+    version: entry.tag.slice(1),
+  },
+  crate: publishable ? entry.tag.slice(1) : null,
+});
+
+/**
+ * The install lines for the repository at `root`, as the site is built.
+ * `probe` answers whether the registries serve the newest indexed version;
+ * it is asked only when something is indexed, and a probe that fails leaves
+ * the previous lines. `tags` reads the repository's tags for an alpha line.
+ */
+export const currentInstallLines = (
+  root,
+  {
+    probe = cachedProbe({
+      file: fileURLToPath(
+        new URL("site/node_modules/.cache/ncdb-registry.json", root),
+      ),
+      script: fileURLToPath(new URL("site/src/registry.mjs", root)),
+    }),
+    tags = () => repositoryTags(root),
+  } = {},
+) => {
   const { releases } = JSON.parse(
     readFileSync(new URL("release-notes/index.json", root), "utf8"),
   );
-  const last = releases.at(-1);
-  // A beta or a release needs no tags; only the alpha forms read them.
-  const tags = last ? [] : repositoryTags(root);
   const publishable = publishableCrate(
     readFileSync(new URL("crates/nocentraldb/Cargo.toml", root), "utf8"),
   );
-  return installLines({ releases, tags, publishable });
+  const last = releases.at(-1);
+  let served = {};
+  if (last)
+    try {
+      served = probe(registryQuery(last, publishable));
+    } catch {}
+  return installLines({ releases, tags, publishable, served });
 };
 
 // The docs' npm lines (NOC-361): a page of the docs, or a file of docs/ that
