@@ -863,4 +863,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · Ad-hoc copies, `Db::erase`, `removeMember`'s recovery code, the member id's text form and the status's member names follow the owner's decisions (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-20 · The notices erasurePending and takenBack follow the glossary's wording (NOC-359, #PR)
+- 2026-11-20 · The notices erasurePending and takenBack follow the glossary's wording (NOC-359, #393)
