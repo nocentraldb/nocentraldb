@@ -439,6 +439,16 @@ impl<S: RelayStore> Relay<S> {
     /// The space's control changes, in position order. It loads no sealed
     /// change's frame.
     pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
+        let entries = self.control_entries(space).await?;
+        Ok(entries.into_iter().map(|(_, change)| change).collect())
+    }
+
+    /// The space's control changes with their log entries, in position
+    /// order. It loads no sealed change's frame.
+    pub(crate) async fn control_entries(
+        &self,
+        space: SpaceId,
+    ) -> Result<Vec<(LogEntry, Change)>, ErrorCode> {
         let mut controls = Vec::new();
         let mut after = 0;
         loop {
@@ -447,10 +457,10 @@ impl<S: RelayStore> Relay<S> {
                 return Ok(controls);
             };
             after = last.position;
-            for entry in &page {
+            for entry in page {
                 // The relay appended only frames that decode.
                 let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
-                controls.push(change);
+                controls.push((entry, change));
             }
         }
     }

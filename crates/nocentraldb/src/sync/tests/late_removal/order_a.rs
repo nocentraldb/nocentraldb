@@ -68,5 +68,5 @@ async fn a_removal_that_reaches_the_relay_first_keeps_the_late_changes_off_every
         let status = six.space(who).status().current();
         assert!(status.rejected.is_empty(), "member {who}: {status:?}");
     }
-    removed_agrees(&six, ADMIN, &written, &objects, &[a, b]);
+    removed_agrees(&six, ADMIN, &written, &objects);
 }

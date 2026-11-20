@@ -341,6 +341,10 @@ pub(crate) enum Answer {
         code: String,
         /// How many seconds to wait before retrying, for `rate_limited`.
         retry_after: Option<u64>,
+        /// The control change that removed this member, which the error
+        /// that ends a removed member's pull or subscription carries (RFC
+        /// 0007, "The errors").
+        removal: Option<Entry>,
     },
     /// The person-key records of a space (RFC 0007, `person-keys`).
     PersonKeys {
@@ -471,6 +475,18 @@ pub(crate) fn decode(message: &[u8]) -> Result<Answer, Unreadable> {
                 Some(seconds) => Some(uint(seconds)?),
                 None => None,
             },
+            // A removal the SDK cannot read leaves the error as it is: the
+            // member stops syncing the space either way.
+            removal: m
+                .get(&Key::Unsigned(5))
+                .and_then(|value| entry(value).ok())
+                .and_then(|listed| match listed.carried {
+                    Carried::Frame(frame) => Some(Entry {
+                        position: listed.position,
+                        frame,
+                    }),
+                    Carried::Download { .. } => None,
+                }),
         },
         _ => Answer::Other { req },
     })

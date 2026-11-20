@@ -1,6 +1,7 @@
 //! RFC 0007, "Subscribe", over a real socket: catch-up pages as for a pull,
 //! then every appended entry as it is appended, until the member
-//! unsubscribes, the connection ends or the member is removed.
+//! unsubscribes or the connection ends; `removed.rs` holds the end of a
+//! removed member's subscription.
 
 mod support;
 
@@ -119,25 +120,6 @@ async fn an_unsubscribed_member_sees_no_more_entries() {
 
     let change = space.sealed(0, Vec::new());
     assert_eq!(zero.push(6, space.space, &[&change]).await, [accepted(3)]);
-    one.quiet(300).await;
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn a_removed_member_gets_removed_member_once_and_then_nothing() {
-    let (addr, _dir) = server().await;
-    let (mut zero, welcome) = Client::member(addr, 0).await;
-    let mut space = Space::new(0);
-    let genesis = space.genesis.clone();
-    let add = space.add(0, 1, Role::Reader, &[&genesis]);
-    zero.push(1, space.space, &[&genesis, &add]).await;
-    let (mut one, _) = Client::member(addr, 1).await;
-    one.ask(&subscribe(3, space.space, &welcome.epoch, 2)).await;
-
-    let remove = space.remove(0, 1, 0, &[&add]);
-    assert_eq!(zero.push(4, space.space, &[&remove]).await, [accepted(3)]);
-    assert_eq!(one.recv().await, error(Some(3), "removed_member"));
-    let change = space.sealed(0, Vec::new());
-    assert_eq!(zero.push(5, space.space, &[&change]).await, [accepted(4)]);
     one.quiet(300).await;
 }
 

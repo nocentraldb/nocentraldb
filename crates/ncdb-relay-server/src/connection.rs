@@ -330,7 +330,18 @@ impl<S: TokenUrls + 'static> Connection<S> {
                         self.send(page.bytes).await;
                         true
                     }
-                    Err(code) => self.fail(Some(req), code).await,
+                    Err(code) => {
+                        let refused = page::refusal(
+                            self.shared.relay.clone(),
+                            member,
+                            Some(req),
+                            space,
+                            code,
+                        )
+                        .await;
+                        self.send(refused).await;
+                        true
+                    }
                 }
             }
             Request::Subscribe(cursor) => {

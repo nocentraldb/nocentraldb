@@ -53,7 +53,7 @@ const MESSAGES = [
   ["upload", "relay → member", "2 req, 3 id, 4 url"],
   ["ping", "member → relay", "2 req"],
   ["pong", "relay → member", "2 req"],
-  ["error", "relay → member", "2 req, 3 code, 4 retry after"],
+  ["error", "relay → member", "2 req, 3 code, 4 retry after, 5 removal"],
 ];
 
 /** Every nested map, with its keys from 1 in the RFC's order. */
