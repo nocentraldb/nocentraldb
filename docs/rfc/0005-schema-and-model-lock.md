@@ -645,7 +645,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 ## Decisions
 
-- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-the-owner-decides-rfc-0011-plugin-field-types.md))
+- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-field-s-config-is-part-of-its-merge.md))
 - **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-20 · A plugin field is Rust only in v1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-plugin-field-types-are-rust-only-in-v1.md))
 

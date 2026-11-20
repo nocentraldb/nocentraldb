@@ -5,3 +5,4 @@
 - Instead of: keeping them in the SDK, which sees neither the changes sync pulls nor the un-folds a control change causes inside the core; or a table of dependencies in the view, a new on-disk format that would have to be proven equal to the log.
 - What this does not do: the first write after the database opens still opens each folded sealed change of its space once. The log's frames stay in memory as before (NOC-69).
 - Topics: sdk-rust, local-view, rfc-0002
+- Supersedes: 2026-11-10-NOC-119-a-write-takes-its-heads-sequence-and-generation-from-the-log.md

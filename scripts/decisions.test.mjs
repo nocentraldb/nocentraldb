@@ -170,6 +170,58 @@ test("check rejects a Supersedes: that names no file in the folder", (t) => {
   );
 });
 
+test("check rejects a Supersedes: that is not a decision file name", (t) => {
+  const dir = folder(t, {
+    [GOOD]: entry({ supersedes: "the old one" }),
+  });
+  const problems = checkDecisions(dir);
+  assert.equal(problems.length, 1, problems.join("; "));
+  assert.match(problems[0], /Supersedes.*the old one/);
+});
+
+test("check rejects a title that names a review's outcome instead of the decision", (t) => {
+  for (const title of [
+    "RFC 0004: every recommendation accepted",
+    "The owner's answers to Q1–Q6 for the website",
+    "The owner decides RFC 0009 as recommended",
+    "The owner decides RFC 0010, accounts: a recovery key is the identity",
+    "pm decides that the relay binds only a loopback address",
+    "The owner's answer on the landing page",
+    "RFC 0005: D16 and D17 decided as recommended",
+    "NOC-12",
+    "NOC-9, NOC-10",
+  ]) {
+    const dir = folder(t, { [GOOD]: entry({ title }) });
+    const problems = checkDecisions(dir);
+    assert.equal(problems.length, 1, `${title}: ${problems.join("; ")}`);
+    assert.match(problems[0], /title/, title);
+  }
+});
+
+test("check leaves a superseded entry's title as it was written", (t) => {
+  const dir = folder(t, {
+    [GOOD]: entry({ title: "RFC 0004: every recommendation accepted" }),
+    "2026-11-09-NOC-30-later.md": entry({
+      date: "2026-11-09",
+      ticket: "NOC-30",
+      title: "Every change carries a 64-bit hybrid logical clock",
+      supersedes: GOOD,
+    }),
+  });
+  assert.deepEqual(checkDecisions(dir), []);
+});
+
+test("check accepts a title that states the decision", (t) => {
+  for (const title of [
+    "Every change carries a 64-bit hybrid logical clock",
+    "The owner approves every deployed change",
+    "The landing page names the relay 'the server in the middle'",
+  ]) {
+    const dir = folder(t, { [GOOD]: entry({ title }) });
+    assert.deepEqual(checkDecisions(dir), [], title);
+  }
+});
+
 test("check reports every problem of every file, sorted by file name", (t) => {
   const dir = folder(t, {
     "b.md": entry(),
@@ -252,34 +304,46 @@ const ORDER = [
 const titles = (stdout) =>
   [...stdout.matchAll(/^# \S+ · .+? · (.+)$/gm)].map(([, title]) => title);
 
-test("without arguments it prints every decision in full, in date order", (t) => {
+test("without arguments it prints every current decision in full, in date order", (t) => {
   const dir = folder(t, LOG);
   const result = run("--dir", dir);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(titles(result.stdout), [
+    "A same day",
+    "B same day",
+    "Later",
+  ]);
+  for (const name of ORDER.slice(1)) {
+    assert.ok(result.stdout.includes(LOG[name].trim()), `${name} in full`);
+  }
+  assert.doesNotMatch(result.stdout, /Superseded by/);
+});
+
+test("--all prints superseded decisions too, each with what superseded it", (t) => {
+  const dir = folder(t, LOG);
+  const { stdout } = run("--all", "--dir", dir);
+  assert.deepEqual(titles(stdout), [
     "First",
     "A same day",
     "B same day",
     "Later",
   ]);
-  for (const name of ORDER) {
-    assert.ok(result.stdout.includes(LOG[name].trim()), `${name} in full`);
-  }
-});
-
-test("the full log says which decision superseded an entry", (t) => {
-  const dir = folder(t, LOG);
-  const { stdout } = run("--dir", dir);
   const first = stdout.slice(0, stdout.indexOf("# 2026-11-08"));
   assert.match(first, /Superseded by 2026-11-09-NOC-30-later\.md/);
   assert.equal(stdout.match(/Superseded by/g).length, 1);
 });
 
-test("--index prints one line per decision, with what superseded it", (t) => {
+test("--index prints one line per current decision, and with --all marks what was superseded", (t) => {
   const dir = folder(t, LOG);
   const result = run("--index", "--dir", dir);
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(result.stdout.trimEnd().split("\n"), [
+    "2026-11-08 · NOC-22 · A same day",
+    "2026-11-08 · NOC-22 · B same day",
+    "2026-11-09 · NOC-30 · Later",
+  ]);
+  const all = run("--index", "--all", "--dir", dir);
+  assert.deepEqual(all.stdout.trimEnd().split("\n"), [
     "2026-11-07 · no ticket · First · superseded by 2026-11-09-NOC-30-later.md",
     "2026-11-08 · NOC-22 · A same day",
     "2026-11-08 · NOC-22 · B same day",
@@ -296,17 +360,6 @@ const indexTitles = (dir, ...args) => {
     .filter(Boolean)
     .map((line) => line.split(" · ")[2]);
 };
-
-test("--current leaves out superseded decisions", (t) => {
-  const dir = folder(t, LOG);
-  assert.deepEqual(indexTitles(dir, "--current"), [
-    "A same day",
-    "B same day",
-    "Later",
-  ]);
-  const { stdout } = run("--current", "--dir", dir);
-  assert.deepEqual(titles(stdout), ["A same day", "B same day", "Later"]);
-});
 
 test("--ticket keeps the decisions whose heading names the ticket", (t) => {
   const dir = folder(t, {
@@ -331,18 +384,23 @@ test("--ticket keeps the decisions whose heading names the ticket", (t) => {
   assert.deepEqual(indexTitles(dir, "--ticket", "NOC-2"), []);
 });
 
-test("--topic keeps the decisions with that topic", (t) => {
+test("--topic keeps the decisions with that topic, superseded ones marked", (t) => {
   const dir = folder(t, LOG);
   assert.deepEqual(indexTitles(dir, "--topic", "crypto"), [
     "A same day",
     "Later",
   ]);
+  const { stdout } = run("--index", "--topic", "factory", "--dir", dir);
+  assert.equal(
+    stdout.trimEnd(),
+    "2026-11-07 · no ticket · First · superseded by 2026-11-09-NOC-30-later.md",
+  );
   assert.deepEqual(indexTitles(dir, "--topic", "crypt"), []);
 });
 
-test("--since keeps the decisions made on or after the date", (t) => {
+test("--since keeps the current decisions made on or after the date", (t) => {
   const dir = folder(t, LOG);
-  assert.deepEqual(indexTitles(dir, "--since", "2026-11-08"), [
+  assert.deepEqual(indexTitles(dir, "--since", "2026-11-07"), [
     "A same day",
     "B same day",
     "Later",
@@ -352,7 +410,7 @@ test("--since keeps the decisions made on or after the date", (t) => {
   assert.match(result.stderr, /--since/);
 });
 
-test("the filters combine with each other and with --current and --index", (t) => {
+test("the filters combine with each other and with --index", (t) => {
   const dir = folder(t, LOG);
   assert.deepEqual(
     indexTitles(
@@ -366,7 +424,6 @@ test("the filters combine with each other and with --current and --index", (t) =
     ),
     ["A same day", "B same day"],
   );
-  assert.deepEqual(indexTitles(dir, "--topic", "factory", "--current"), []);
   assert.deepEqual(indexTitles(dir, "--topic", "factory"), ["First"]);
   const { stdout } = run(
     "--dir",

@@ -575,7 +575,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 ## Decisions
 
 - **2026-11-11 · The shape of key 64 and the order of step 6.** (Carsten, 2026-11-11, NOC-202; [decision](../../factory/decisions/2026-11-10-NOC-197-key-64-shape-and-step-6-order.md))
-- **2026-11-12 · The log keeps the time a member wrote each of its changes.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-database-at-a-name-on-opfs-and-its-durability-report.md))
+- **2026-11-12 · The log keeps the time a member wrote each of its changes.** (Carsten, 2026-11-12, NOC-231; [decision](../../factory/decisions/2026-11-12-NOC-175-a-browser-database-opens-at-a-name-on-opfs-and-durability.md))
 - **2026-11-12 · A personal value is sealed under a subkey of the person key, inside the payload.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-20 · Key 0 is "must understand".** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-header-and-payload-keys-0-to-63-are-must-understand.md))
 - **2026-11-20 · A change the relay holds is answered `duplicate` to its own author, even after it left the space.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-the-relay-answers-duplicate-when-a-former-member-re-sends-its-own-change.md))

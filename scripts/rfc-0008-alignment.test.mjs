@@ -251,15 +251,11 @@ test("RFC 0006's control table holds what RFC 0008 lists, and the shred row dele
   );
 });
 
-test("the decision log records NOC-44's routing and the owner's D13", () => {
+test("the decision log records the owner's D13", () => {
   const files = readdirSync(join(root, DECISIONS)).filter((f) =>
     f.includes("-NOC-44-"),
   );
   const texts = files.map((f) => read(join(DECISIONS, f)));
-  assert.ok(
-    texts.some((t) => /- Decided by: pm/.test(t) && /RFC 0008/.test(t)),
-    "no decision by pm routing RFC 0008's decisions",
-  );
   assert.ok(
     texts.some((t) => /- Decided by: Carsten/.test(t) && /D13/.test(t)),
     "no decision by Carsten on D13",
