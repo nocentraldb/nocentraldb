@@ -21,15 +21,43 @@ const REVERSE = {
   agent: "M440 150 C440 200 665 186 665 236",
 };
 
+// The moment a still drawing shows: 0.72 s, 0.2 of the 3.6 s loop. In each state with
+// travelling points one of them is half-way along its line (the pulse windows below),
+// and the agent's circling point is visible at any time.
+const STILL_AT = 0.72;
+const LOOP = 3.6;
+// A point frozen at the fraction p of path d: an animateMotion that holds one place.
+const frozen = (r, d, p) =>
+  `<circle r="${r}" class="sc-pulse"><animateMotion dur="0.001s" fill="freeze" calcMode="linear" keyPoints="${p.toFixed(4)};${p.toFixed(4)}" keyTimes="0;1" path="${d}"/></circle>`;
+
 // A point travelling along path d between the fractions t0 and t1 of a 3.6 s loop.
-const pulse = (d, t0, t1) => `
+// Still, it stands where the moving one is at STILL_AT, or is left out when that one
+// is hidden then.
+const pulse = (d, t0, t1, still) => {
+  if (still) {
+    const f = STILL_AT / LOOP;
+    if (f < t0 + 0.01 || f > t1 - 0.01) return "";
+    return frozen(6, d, (f - t0) / (t1 - t0));
+  }
+  return `
   <circle r="6" class="sc-pulse" opacity="0">
     <animateMotion dur="3.6s" repeatCount="indefinite" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0;${t0};${t1};1" path="${d}"/>
     <animate attributeName="opacity" dur="3.6s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;${t0};${(t0 + 0.01).toFixed(2)};${(t1 - 0.01).toFixed(2)};${t1};1"/>
   </circle>`;
+};
+// The agent's reads: a point circling its card's edge once every 1.4 s.
+const circling = (perimeter, still) =>
+  still
+    ? frozen(5, perimeter, (STILL_AT % 1.4) / 1.4)
+    : `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>`;
 
 // One copy of the task list. rows: [title, status, kind]; kind is "origin" (changed here) or "got" (arrived here).
-const card = (who, label, rows, { offline = false, loop = false } = {}) => {
+const card = (
+  who,
+  label,
+  rows,
+  { offline = false, loop = false, still = false } = {},
+) => {
   const x = X[who];
   const y = CARD_Y;
   const h = 44 + rows.length * 50 + 8;
@@ -48,7 +76,7 @@ const card = (who, label, rows, { offline = false, loop = false } = {}) => {
     <text x="${x + 22}" y="${ry + 36}" class="sc-status ${kind === "origin" ? "sc-on-accent" : ""}">${status}</text>`;
       })
       .join("")}
-    ${loop ? `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>` : ""}
+    ${loop ? circling(perimeter, still) : ""}
   </g>`;
 };
 
@@ -201,11 +229,11 @@ const STATES = [
 const LABEL = { train: "On the train", home: "Home office", agent: "Agent" };
 const WHO = ["train", "home", "agent"];
 
-const wide = (st, id) => `${links(st.offline)}${cloud(st.lens, id)}
-  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? LINK : REVERSE)[who], t0, t1)).join("")}
+const wide = (st, id, still) => `${links(st.offline)}${cloud(st.lens, id)}
+  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? LINK : REVERSE)[who], t0, t1, still)).join("")}
   ${card("train", LABEL.train, st.cards.train, { offline: st.offline })}
   ${card("home", LABEL.home, st.cards.home)}
-  ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop })}
+  ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop, still })}
   ${trainPlace(st.tunnel, id)}${housePlace()}${rackPlace()}`;
 
 // The tall layout: the cloud on top, the three copies stacked under it, each with its
@@ -233,7 +261,7 @@ const tallPlace = (who, tunnel, id, right, ground) => {
   const [x1, draw] = PLACE[who];
   return `<g transform="translate(${right - x1 * 0.45} ${ground - 566 * 0.45}) scale(0.45)">${draw(tunnel, id)}</g>`;
 };
-const tallCard = (who, rows, st, id) => {
+const tallCard = (who, rows, st, id, still) => {
   const { x, w, h, head } = T;
   const y = tallY(who);
   const offline = who === "train" && st.offline;
@@ -254,7 +282,7 @@ const tallCard = (who, rows, st, id) => {
     <text x="${x + w - 20}" y="${ry + 21}" text-anchor="end" class="sc-status${on}">${status}</text>`;
       })
       .join("")}
-    ${who === "agent" && st.loop ? `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>` : ""}
+    ${who === "agent" && st.loop ? circling(perimeter, still) : ""}
   </g>`;
 };
 const tallCloud = (lens, id) => `
@@ -275,11 +303,11 @@ const tallCloud = (lens, id) => `
   </g>`
       : ""
   }`;
-const tall = (st, id) => `
+const tall = (st, id, still) => `
   ${WHO.map((who) => `<path d="${tallUp(who)}" class="sc-link ${who === "train" && st.offline ? "sc-link-cut" : ""}"/>`).join("")}
   ${tallCloud(st.lens, id)}
-  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? tallUp : tallDown)(who), t0, t1)).join("")}
-  ${WHO.map((who) => tallCard(who, st.cards[who], st, id)).join("")}`;
+  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? tallUp : tallDown)(who), t0, t1, still)).join("")}
+  ${WHO.map((who) => tallCard(who, st.cards[who], st, id, still)).join("")}`;
 
 // title and text for the step, alt for the drawing's aria-label.
 export const STEPS = [
@@ -308,10 +336,11 @@ export const STEPS = [
 // The drawing for step 0..3 as an SVG string, in the "wide" or the "tall" layout.
 // idPrefix starts every id inside it, so several drawings can share one page; the
 // tall layout adds "-tall", so a wide and a tall drawing may share a prefix.
-export function scene(step, idPrefix, layout = "wide") {
+// still: the picture at STILL_AT, with nothing that moves (the scenario, NOC-380).
+export function scene(step, idPrefix, layout = "wide", { still = false } = {}) {
   const [box, body] =
     layout === "tall"
-      ? ["0 0 400 704", tall(STATES[step], `${idPrefix}-tall`)]
-      : ["0 0 800 600", wide(STATES[step], idPrefix)];
+      ? ["0 0 400 704", tall(STATES[step], `${idPrefix}-tall`, still)]
+      : ["0 0 800 600", wide(STATES[step], idPrefix, still)];
   return `<svg class="sc sc--${layout}" viewBox="${box}" role="img" aria-label="${STEPS[step].alt}">${body}</svg>`;
 }
