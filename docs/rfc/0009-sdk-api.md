@@ -16,7 +16,7 @@ The decided RFCs define what lies under these calls, and this RFC names the call
 
 - **Computed fields and views.** RFC 0005 reserves `computed`, `views`, `nc.reach` and `nc.view`; a later RFC designs them. This RFC lets a view be queried like an index, with `take` and `after`, as RFC 0001 shows, and designs nothing else about it.
 - **Rich text and streams.** `nc.richText` and `nc.stream` are reserved (RFC 0005). Their write and read calls, such as an anchored edit or appending a chunk, belong to their RFCs.
-- **Work orders and erasure.** How an erasure is started, claimed and signed off is the work-order RFC's. RFC 0003's sketch `db.workOrders.erase` stays a sketch. Until that RFC, the Rust SDK erases a person with `Db::erase`, a sign-off the app carries as text, which the work-order RFC may wrap ([The Rust SDK](#the-rust-sdk); Carsten, 2026-11-15, NOC-326).
+- **Work orders and erasure.** How an erasure is started, claimed and signed off is the work-order RFC's. RFC 0003's sketch `db.workOrders.erase` stays a sketch. Until that RFC, the Rust SDK erases a person with `Db::erase` and a sign-off the app carries as text: `Db::erase` is an interim call that the work-order RFC will replace ([The Rust SDK](#the-rust-sdk); Carsten, 2026-11-15, NOC-326; Carsten, 2026-11-20, NOC-362).
 - **Accounts.** How a second device or an agent joins a person's account, and recovery, are [RFC 0010](0010-accounts.md)'s. This RFC lists the calls it names ([Accounts and devices](#accounts-and-devices)).
 - **Members that reach each other directly in island mode.** How two members find each other is a later RFC ([RFC 0007, "Island mode"](0007-relay.md#island-mode)), so the SDK has no API for it yet.
 - **Bindings for UI frameworks**, such as a React hook. They can wrap `subscribe` later.
@@ -818,6 +818,7 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - **2026-11-16 · A refused upload keeps the connection and shows `upload_failed`.** (Carsten, 2026-11-16, NOC-349; [decision](../../factory/decisions/2026-11-16-NOC-349-a-refused-upload-keeps-the-connection-and-shows-upload-failed.md))
 - **2026-11-16 · A reference in Rust is `Reference { space, id }`.** (Carsten, 2026-11-16, NOC-354; [decision](../../factory/decisions/2026-11-16-NOC-354-a-reference-in-rust-is-reference-space-id.md))
 - **2026-11-16 · `db.durability` reports `waitingForTab` in TypeScript.** (Carsten, 2026-11-16, NOC-355; [decision](../../factory/decisions/2026-11-16-NOC-355-a-tab-that-waits-for-another-tabs-storage-reports-waitingfortab-after-1-s.md))
+- **2026-11-20 · `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
 
 ## History
 
@@ -864,3 +865,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-19 · Ad-hoc copies, `Db::erase`, `removeMember`'s recovery code, the member id's text form and the status's member names follow the owner's decisions (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · The notices erasurePending and takenBack follow the glossary's wording (NOC-359, #393)
+- 2026-11-20 · `Db::erase` is an interim call the work-order RFC will replace, as the owner answered (NOC-362, #396)
