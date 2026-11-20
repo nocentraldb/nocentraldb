@@ -15,7 +15,8 @@
 //!    written, its author holds the right, and no accepted revocation
 //!    before it excludes it. A shred needs only to be valid when written,
 //!    and no revocation excludes it (RFC 0008, "A shred is final when
-//!    accepted").
+//!    accepted"). It waits, unapplied, while the holder does not hold its
+//!    whole causal past.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -446,7 +447,12 @@ fn apply_order(
         .filter(|id| Some(**id) != genesis)
     {
         let node = folded[id];
-        let verdict = if !judged.valid(node.id) {
+        let verdict = if final_when_valid(node) && node.gap {
+            // Its verdict reads its whole causal past, and accepting it
+            // cannot be undone, so it waits for the gap to fill (RFC 0008,
+            // "A shred is final when accepted").
+            Verdict::Waiting
+        } else if !judged.valid(node.id) {
             Verdict::Rejected(Rejection::NotValidWhenWritten)
         } else if let Some(entry) = superseded.get(&node.id) {
             Verdict::Rejected(Rejection::Superseded(*entry))

@@ -23,6 +23,10 @@ pub(crate) struct Node {
     pub(crate) deps: BTreeSet<ChangeId>,
     /// Its causal past: every node its dependencies reach.
     pub(crate) past: BTreeSet<ChangeId>,
+    /// Whether it or a node of its causal past names a dependency the
+    /// holder does not hold: the holder does not hold its whole causal
+    /// past yet.
+    pub(crate) gap: bool,
 }
 
 impl Node {
@@ -106,6 +110,7 @@ impl Input {
                 sequence: header.sequence,
                 deps: BTreeSet::new(),
                 past: BTreeSet::new(),
+                gap: false,
                 body,
             };
             nodes.insert(id, node);
@@ -120,8 +125,15 @@ impl Input {
                 .collect();
         }
         let pasts = pasts(&nodes);
+        let missing: BTreeSet<ChangeId> = nodes
+            .values()
+            .filter(|node| node.body.dependencies.iter().any(|d| !changes.contains_key(d)))
+            .map(|node| node.id)
+            .collect();
         for (id, past) in pasts {
-            nodes.get_mut(&id).expect("a node").past = past;
+            let node = nodes.get_mut(&id).expect("a node");
+            node.gap = missing.contains(&id) || past.iter().any(|p| missing.contains(p));
+            node.past = past;
         }
         Input {
             space,
