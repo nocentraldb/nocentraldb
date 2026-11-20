@@ -300,6 +300,26 @@ test("the Rust snippets are compiled by the doc tests of nocentraldb", () => {
   );
 });
 
+test("the TypeScript snippets come from code-ts.md, which the gates type-check", () => {
+  const section = readFileSync(
+    join(dist, "..", "src", "components", "CodeSection.astro"),
+    "utf8",
+  );
+  assert.ok(section.includes('from "./code-ts.md?raw"'), "reads code-ts.md");
+  for (const call of ["nc.model(", "db.spaces.create()", "project.write("])
+    assert.ok(!section.includes(call), `${call} is written in the component`);
+  const code = html.slice(html.indexOf('id="code"'));
+  const text = code.replace(/<[^>]*>/g, "").replace(/&amp;|&#x26;/g, "&");
+  for (const call of [
+    "nc.open({ model, lock, relay:",
+    "project.members.add(nc.invitation(text)",
+    "await db.find(query)",
+    "db.subscribe(query,",
+  ])
+    assert.ok(text.includes(call), call);
+  assert.ok(!text.includes("declare function"), "a hidden line reached the page");
+});
+
 test("the code section says the SDK handles every key, and names the one secret an app passes on", () => {
   const code = html.slice(html.indexOf('id="code"'));
   const head = code.slice(0, code.indexOf('class="lang-switch'));
