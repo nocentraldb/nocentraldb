@@ -1,15 +1,13 @@
-//! Which of the keys a member holds for one generation opens a ciphertext
-//! (Carsten, 2026-11-20, NOC-389). A member can hold several keys for a
-//! generation when a key envelope to it holds a wrong key, and it tries
-//! each, so the outcome depends on the set of keys it holds, never on the
-//! order in which their envelopes arrived.
+//! Which of the keys a member holds for one generation the generation's
+//! own control change opens under (Carsten, 2026-11-20, NOC-389). A member
+//! can hold several keys for a generation when a key envelope to it holds
+//! a wrong key; the one this finds is the only one it then opens sealed
+//! changes with.
 //!
-//! The ciphertext counts only when exactly one key opens it. The core's
-//! AEADs do not commit to their key, so an author who knows two of the
-//! keys could build a ciphertext that opens under both, to two different
-//! plaintexts (RFC 0003, "Primitives"); a
-//! member that took either would read what others do not. Such a
-//! ciphertext opens under none.
+//! A key counts only when it is the one key that opens the change. The
+//! core's AEADs do not commit to their key, so the change's author could
+//! build it to open under two keys (RFC 0003, "Primitives"); it then
+//! confirms none.
 
 use crate::keys::SpaceKey;
 

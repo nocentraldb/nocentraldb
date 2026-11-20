@@ -182,7 +182,7 @@ fn a_lone_wrong_key_envelope_is_reported_and_reads_nothing() {
 
     assert_eq!(
         log.state(f.sealed.id()),
-        Some(&State::Rejected(RejectReason::NoKey))
+        Some(&State::Rejected(RejectReason::Undecryptable))
     );
     assert_eq!(checks.wrong_envelopes().len(), 1);
 }

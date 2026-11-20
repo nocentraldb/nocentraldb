@@ -55,15 +55,17 @@ use crate::seal::{self, OpenError};
 /// admin that holds the new key could write, so leave every copy with the
 /// same key, in whichever order they arrived.
 ///
-/// **Several keys for a generation.** A sealed change, a key chain entry
-/// and the genesis's sealed `model.id` count as opened only when exactly
-/// one of the generation's keys opens them ([`crate::one_key`]), so the
-/// verdict depends on the set of keys held, never on the order in which
-/// their envelopes arrived. The key a member writes under,
-/// [`SealChecks::space_key`], is the one that the generation's own control
-/// change opens under: the genesis for the first generation, its key chain
-/// entry for a later one. An envelope whose key that change does not open
-/// under is a local report, [`SealChecks::wrong_envelopes`].
+/// **Several keys for a generation.** Each generation has one key the
+/// checks open and seal with, [`SealChecks::space_key`], and they never
+/// try another on a sealed change. When envelopes gave several, it is the
+/// one under which the generation's own control change opens: the
+/// genesis's sealed `model.id` for the first generation, its key chain
+/// entry for a later one. Until that change arrives, the generation has
+/// no key, and its sealed changes wait as "no key". The key therefore
+/// depends on the set of changes held, never on the order in which the
+/// envelopes arrived, and a member reads under it what every member that
+/// holds only the right key reads. An envelope whose key that change does
+/// not open under is a local report, [`SealChecks::wrong_envelopes`].
 ///
 /// **Replaced keys.** A key chain key can therefore be replaced by a later
 /// control change: by an entry with a lower change id, or by an envelope's
@@ -122,11 +124,12 @@ impl SealChecks {
         &self.resolved
     }
 
-    /// The space key of `generation` that a writer seals under: the one
-    /// key the checks hold for it, from an envelope to the checks' member
-    /// or from the key chain. When they hold several, the one under which
-    /// the generation's own control change opens, and `None` while that
-    /// change is missing or opens under none or several of them.
+    /// The space key of `generation`: the key a writer seals under, and the
+    /// only one a reader opens with. It is the one key the checks hold for
+    /// it, from an envelope to the checks' member or from the key chain.
+    /// When envelopes gave several, it is the one under which the
+    /// generation's own control change opens, and `None` while the checks
+    /// do not hold that change, or it opens under none or several of them.
     pub fn space_key(&self, generation: u64) -> Option<&SpaceKey> {
         match self.keys_of(generation).as_slice() {
             [] => None,
@@ -219,14 +222,11 @@ impl SealChecks {
     /// The `model.id` the space's genesis names, opened with the space key
     /// of its first generation (RFC 0008, "What it names"). `None` while
     /// the checks hold no genesis or no key of the first generation, or
-    /// when the sealed id opens under none or several of its keys.
+    /// when the sealed id does not open under that key.
     pub fn model_id(&self) -> Option<[u8; 16]> {
         let genesis = self.genesis()?;
-        let creator = genesis.creator.id();
-        one_key::only_one(&self.keys_of(genesis.first_generation), |key| {
-            membership::open_model_id(key, self.space, creator, &genesis.model_id)
-        })
-        .map(|(_, model_id)| model_id)
+        let key = self.space_key(genesis.first_generation)?;
+        membership::open_model_id(key, self.space, genesis.creator.id(), &genesis.model_id)
     }
 
     /// The author's public keys; without them, the change stops at step 3
@@ -292,23 +292,14 @@ impl Checks for SealChecks {
         change.header().kind == Kind::CONTROL || self.resolved.admits(change.header())
     }
 
-    /// With each key held now for the change's generation: the change
-    /// opens when exactly one of them decrypts it.
+    /// With the generation's [`SealChecks::space_key`] only, never with
+    /// another key the checks hold for it.
     fn open(&self, change: &Change) -> Result<Payload, Stop> {
         let author = self.author(change)?;
-        let keys = self.keys_of(change.header().key_generation);
-        if keys.is_empty() {
-            return Err(Stop::Rejected(RejectReason::NoKey));
-        }
-        seal::check(change, &author)?;
-        let opened = one_key::only_one(&keys, |key| match seal::decrypt(change, key) {
-            Err(OpenError::Decryption) => None,
-            decrypted => Some(decrypted),
-        });
-        match opened {
-            Some((_, decrypted)) => Ok(decrypted?),
-            None => Err(Stop::Rejected(RejectReason::Undecryptable)),
-        }
+        let key = self
+            .space_key(change.header().key_generation)
+            .ok_or(Stop::Rejected(RejectReason::NoKey))?;
+        Ok(seal::open(change, &author, key)?)
     }
 
     /// Without opening the change while its generation has had one key
@@ -319,7 +310,7 @@ impl Checks for SealChecks {
             .held
             .get(&generation)
             .is_some_and(|keys| keys.len() > 1);
-        if !replaced && !self.keys_of(generation).is_empty() {
+        if !replaced && self.space_key(generation).is_some() {
             return Ok(());
         }
         self.open(change).map(drop)
@@ -371,9 +362,8 @@ impl SealChecks {
     /// Derives the key chain keys again from scratch: opens the previous
     /// keys of every key chain entry the generation graph holds whose own
     /// generation's key is known, in passes over the entries in change id
-    /// order, until a pass gives no new key. A previous key counts when
-    /// exactly one key of the entry's generation opens it. A previous
-    /// generation that an envelope gave a key for, or that an earlier entry
+    /// order, until a pass gives no new key. An entry opens under its
+    /// generation's [`SealChecks::space_key`] only. A previous generation that an envelope gave a key for, or that an earlier entry
     /// or pass filled, keeps that key. The result depends only on the
     /// envelope keys and the set of entries, never on the order in which
     /// they arrived.
@@ -394,24 +384,26 @@ impl SealChecks {
                     .is_some_and(|generation| generation.entries.contains_key(id))
             })
             .collect();
+        // The walk confirms each generation's key against its entries.
+        self.chains = chains.clone();
         loop {
             let mut opened = false;
             for (_, chain) in &chains {
-                let new_keys = self.keys_of(chain.generation);
+                let Some(new_key) = self.space_key(chain.generation) else {
+                    continue;
+                };
                 let found: Vec<(u64, SpaceKey)> = chain
                     .previous
                     .iter()
                     .filter(|previous| self.keys_of(previous.generation).is_empty())
                     .filter_map(|previous| {
-                        let (_, key) = one_key::only_one(&new_keys, |new_key| {
-                            membership::open_previous_key(
-                                new_key,
-                                self.space,
-                                chain.generation,
-                                previous.generation,
-                                &previous.key,
-                            )
-                        })?;
+                        let key = membership::open_previous_key(
+                            new_key,
+                            self.space,
+                            chain.generation,
+                            previous.generation,
+                            &previous.key,
+                        )?;
                         Some((previous.generation, key))
                     })
                     .collect();
@@ -419,7 +411,6 @@ impl SealChecks {
                 self.chain_keys.extend(found);
             }
             if !opened {
-                self.chains = chains;
                 return;
             }
         }

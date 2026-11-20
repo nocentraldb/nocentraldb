@@ -250,7 +250,7 @@ The author must be an admin, and every listed previous generation must exist in 
 
 ### Generation ids
 
-RFC 0002's header key 4 is a uint that names the key generation. RFC 0003 numbers generations, and admits that two islands can rotate at the same time. If both rotations produced "generation 5", every change under generation 5 would be ambiguous: a member could not tell which key to use, and every change under it would have to be tried with the keys of both rotations. This RFC therefore gives the number a structure, derived so that no member can choose it:
+RFC 0002's header key 4 is a uint that names the key generation. RFC 0003 numbers generations, and admits that two islands can rotate at the same time. If both rotations produced "generation 5", every change under generation 5 would be ambiguous: a member could not tell which key to use, and RFC 0003 opens each change with one key only. This RFC therefore gives the number a structure, derived so that no member can choose it:
 
 ```text
 generation id (uint, 64 bits)
@@ -390,7 +390,7 @@ The fold reads only what every member and the relay can read: the control bodies
 - whether a person-key record matches its commitment;
 - whether a sealed change decrypts.
 
-They are **local checks**. A member that finds a wrong key reports it, with the author whose signature covers it, and the SDK shows it. The control state does not change. A member that holds two envelopes for one generation keeps both keys and tries each ([RFC 0003, "Primitives"](0003-keys-and-cryptography.md#primitives)), so a wrong envelope that arrives last does not keep it from reading the generation (Carsten, 2026-11-20, NOC-389). It writes under the key that the generation's own control change opens under: the genesis's sealed `model.id` for the first generation, the key chain entry for a later one. Each envelope whose key that change does not open under is the wrong one it reports. RFC 0002 rejects a sealed change that does not decrypt ([Rejected changes](0002-change-and-log-format.md#rejected-changes)). Every member that holds the generation's key reaches the same verdict, because AEAD decryption is deterministic. A member that holds no key for it rejects it with the reason "no key" until an envelope arrives. Fold rules that check wrapped keys or decryption were not taken: only some members can check them, so the control state would split.
+They are **local checks**. A member that finds a wrong key reports it, with the author whose signature covers it, and the SDK shows it. The control state does not change. A member that holds two envelopes for one generation keeps both keys, so a wrong envelope that arrives last does not keep it from reading the generation (Carsten, 2026-11-20, NOC-389). It reads and writes with the key that the generation's own control change opens under: the genesis's sealed `model.id` for the first generation, the key chain entry for a later one ([RFC 0003, "Primitives"](0003-keys-and-cryptography.md#primitives)). Each envelope whose key that change does not open under is the wrong one it reports. RFC 0002 rejects a sealed change that does not decrypt ([Rejected changes](0002-change-and-log-format.md#rejected-changes)). Every member that holds the generation's key reaches the same verdict, because AEAD decryption is deterministic. A member that holds no key for it rejects it with the reason "no key" until an envelope arrives. Fold rules that check wrapped keys or decryption were not taken: only some members can check them, so the control state would split.
 
 ### The function
 
@@ -722,7 +722,7 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - **2026-11-11 · The account key statement entry, entry type 7.** (Carsten, 2026-11-11, NOC-187; [decision](../../factory/decisions/2026-11-12-NOC-233-a-statement-entry-rejects-only-concurrent-adds-and-counts-the-adds-own-statement.md))
 - **2026-11-11 · A provisional erasure in a space with one account, and the erasure decision, entry type 8.** (Carsten, 2026-11-11, NOC-230)
 - **2026-11-12 · The first shred that is not taken back takes effect.** (Carsten, 2026-11-12, NOC-242; [decision](../../factory/decisions/2026-11-12-NOC-258-the-first-shred-not-taken-back-takes-effect.md))
-- **2026-11-20 · A member tries every key the envelopes of a generation unwrap to.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-tries-every-key-the-envelopes-of-a-generation-unwrap-to.md))
+- **2026-11-20 · A member reads a generation with the key its control change confirms.** (Carsten, 2026-11-20, NOC-389; [decision](../../factory/decisions/2026-11-20-NOC-389-a-member-reads-a-generation-with-the-key-its-control-change-confirms.md))
 
 ## History
 
@@ -735,4 +735,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-20 · A member keeps and tries every key the envelopes of a generation unwrap to, and writes under the one the generation's control change confirms (NOC-389)
+- 2026-11-20 · A member keeps every key the envelopes of a generation unwrap to, and reads and writes with the one the generation's control change confirms (NOC-389)

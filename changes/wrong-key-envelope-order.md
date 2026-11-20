@@ -14,4 +14,4 @@ An admin, or a removed admin within its cutoff, writes a second envelope for the
 The core kept one key per generation, the last envelope's, and opened changes only with that key.
 
 ## Fix
-The core keeps every key the envelopes of a generation unwrap to and tries each. A change counts when exactly one of them opens it, in any order of arrival. The member writes under the key the generation's genesis or key chain entry confirms, and the core lists each wrong envelope with its author.
+The core keeps every key the envelopes of a generation unwrap to. When it holds several, it reads and writes with the one the generation's genesis or key chain entry confirms, in any order of arrival. Until that entry arrives, the generation's changes wait as "no key". The core lists each wrong envelope with its author.
