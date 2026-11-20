@@ -492,7 +492,9 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
         Some(Verdict::Rejected(Rejection::Malformed)) => Err(ErrorCode::Malformed),
         Some(Verdict::Rejected(Rejection::BadSignature)) => Err(ErrorCode::BadSignature),
         Some(Verdict::Rejected(Rejection::UnknownAuthor)) => Err(ErrorCode::AuthorNotMember),
-        Some(Verdict::Rejected(_)) | None => Err(ErrorCode::MembershipRule),
+        // A shred over a gap in its causal past waits for its verdict, so
+        // the relay does not accept it yet (NOC-391).
+        Some(Verdict::Rejected(_) | Verdict::Waiting) | None => Err(ErrorCode::MembershipRule),
     }
 }
 

@@ -28,6 +28,11 @@ pub enum Verdict {
     /// Kept but not folded: an entry type or a key this core does not
     /// understand, a newer header format or another suite.
     Parked,
+    /// A shred, or an erasure decision that finalizes, whose causal past
+    /// the holder does not hold whole yet: it gets its verdict once the
+    /// holder does, and changes nothing until then (RFC 0008, "A shred is
+    /// final when accepted"; NOC-391).
+    Waiting,
 }
 
 /// Why `resolve` rejects a control change.
@@ -271,6 +276,7 @@ pub(crate) fn fields(
             Verdict::Accepted => (0, None),
             Verdict::Lost => (1, None),
             Verdict::Parked => (2, None),
+            Verdict::Waiting => (4, None),
             Verdict::Rejected(rejection) => (3, Some(*rejection)),
         };
         let cause = match cause {
