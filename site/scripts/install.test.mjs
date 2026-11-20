@@ -9,7 +9,9 @@ import {
   installLines,
   newestAlpha,
   publishableCrate,
+  remarkNpmLine,
   tagsOf,
+  withNpmLine,
 } from "../src/install.mjs";
 
 const GIT = "https://github.com/nocentraldb/nocentraldb";
@@ -129,4 +131,46 @@ test("the crate is publishable unless its manifest's package says publish = fals
     ),
     true,
   );
+});
+
+// The docs' install lines follow the same index (NOC-361): an npm line for
+// the SDK, written by hand in a docs page or in a file of docs/, is replaced
+// by the current one, in the rendered page and in its Markdown copy.
+test("an npm line for the SDK becomes the current one, whatever its tag", () => {
+  const npm = "npm install @nocentraldb/sdk@beta";
+  assert.equal(
+    withNpmLine(
+      "npm install @nocentraldb/sdk@alpha\nnpm install @nocentraldb/sdk\nnpm install @nocentraldb/sdk@0.1.0-beta.1 && x",
+      npm,
+    ),
+    `${npm}\n${npm}\n${npm} && x`,
+  );
+  assert.equal(
+    withNpmLine("npm install left-pad", npm),
+    "npm install left-pad",
+  );
+});
+
+test("the remark plugin rewrites the npm line in code, and leaves prose alone", () => {
+  const npm = "npm install @nocentraldb/sdk";
+  const tree = {
+    type: "root",
+    children: [
+      { type: "code", value: "npm install @nocentraldb/sdk@alpha" },
+      {
+        type: "paragraph",
+        children: [
+          { type: "text", value: "npm install @nocentraldb/sdk@alpha" },
+          { type: "inlineCode", value: "npm install @nocentraldb/sdk@alpha" },
+        ],
+      },
+    ],
+  };
+  remarkNpmLine({ npm })(tree);
+  assert.equal(tree.children[0].value, npm);
+  assert.equal(
+    tree.children[1].children[0].value,
+    "npm install @nocentraldb/sdk@alpha",
+  );
+  assert.equal(tree.children[1].children[1].value, npm);
 });

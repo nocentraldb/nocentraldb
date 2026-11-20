@@ -8,6 +8,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { currentInstallLines } from "../src/install.mjs";
 import { REPO_DOCS } from "../src/repo-docs.mjs";
 
 const site = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -111,4 +112,22 @@ test("the sidebar lists every rendered doc, the two guides first", () => {
     REPO_DOCS.slice(0, 2).map((doc) => doc.file),
     ["getting-started.md", "getting-started-browser.md"],
   );
+});
+
+test("every docs page and its Markdown copy install the current npm line", () => {
+  const { npm } = currentInstallLines(new URL(`file://${repo}/`));
+  const stale = [];
+  for (const [page, text] of html) {
+    if (!page.startsWith("docs/")) continue;
+    const copy = join(dist, `${dirname(page)}.md`);
+    for (const [where, words] of [
+      [page, text],
+      [copy, existsSync(copy) ? readFileSync(copy, "utf8") : ""],
+    ])
+      for (const m of words.matchAll(
+        /npm install @nocentraldb\/sdk(@[\w.-]+)?/g,
+      ))
+        if (m[0] !== npm) stale.push(`${where}: ${m[0]}`);
+  }
+  assert.deepEqual(stale, []);
 });
