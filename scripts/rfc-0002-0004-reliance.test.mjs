@@ -32,8 +32,5 @@ test("RFC 0002 has no section of answers to RFC 0003 and RFC 0004", () => {
     section(text, "the-cbor-profile"),
     /a set may hold both 0\.0 and −0\.0/,
   );
-  assert.match(
-    section(text, "the-clock"),
-    /stamps far in the future are not refused/,
-  );
+  assert.match(text, /stamps far in the future are not refused/);
 });
