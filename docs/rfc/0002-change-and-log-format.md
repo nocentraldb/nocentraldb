@@ -12,6 +12,21 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0002: The change and the log format](https://github.com/nocentraldb/nocentraldb/discussions/125), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
+## The ideas behind this RFC
+
+You do not need to know cryptography to follow this RFC. These ideas carry it:
+
+- **A log instead of a table.** Each space keeps an append-only list of changes, like a ledger. Nothing in it is ever edited or removed; new entries only go at the end. A member's data is what it gets by applying the log from the first change to the last, which this RFC calls the fold. Two members that hold the same changes end up with the same data.
+- **A change is one write.** When a member writes, it bundles all its edits into one change and appends it to its log. The relay then passes it on to the other members.
+- **A signature says who wrote a change.** Every member has a private key that only it holds, and signs each change with it. Anyone with the matching public key can check that the change comes from that member and that not one byte of it was altered. The relay checks signatures too, so it can refuse forgeries without being able to read what they say.
+- **Encryption hides what was written.** The content of a change is encrypted with the space key, which only the members of the space hold. The kind of encryption used (AEAD) also detects tampering: content that was changed on the way does not decrypt at all.
+- **A label and sealed contents.** Like a parcel, a change has a label the relay may read and contents it cannot. The label, the header, names the space, the author and the author's running number: enough for the relay to store and forward the change. The contents, the payload, are encrypted.
+- **A hash is a fingerprint.** A hash turns any bytes into a short value that changes completely when a single byte changes. A change's id is the hash of the change, so the id itself proves which change it names, and no one hands out ids.
+- **Order without a trusted clock.** Device clocks drift, and no member's time can be trusted. Each change therefore carries a hybrid logical clock, a timestamp that never runs backwards and moves forward whenever a member sees a later one, and it names the changes its author had already seen. With these, every member puts the changes in the same order, which the merge rules of RFC 0004 need.
+- **The same bytes everywhere.** A signature covers exact bytes. So every change is written in one fixed binary form (canonical CBOR), and every implementation, natively or in the browser, produces and checks the very same bytes.
+
+The sections below define each of these precisely.
+
 ## What this RFC does not cover
 
 - **Cryptography and keys.** The signature scheme, the AEAD, the hash function, member ids, person-key ids, space key generations, the suite id and key rotation belong to RFC 0003 (NOC-7). This RFC says only where a "signature", an "AEAD ciphertext" and a "hash" sit in the format, and what each must cover.
