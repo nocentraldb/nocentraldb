@@ -1,0 +1,8 @@
+# 2026-11-08 · NOC-11 · Personal fields: basic values tied to a person, one person id across spaces, names in free text left to the app
+
+- Decided by: Carsten (RFC 0005 decisions D9, D14 and D15)
+- Why: `.personal({ person })` takes `"self"` or a link field, on basic values only and only when the field is added, since sets and links would break set identity and link resolution, and a person derived from a field's value ties the key to a value that changes and is itself personal (D9). A person id of 128 random bits, separate from object ids and carried over when the app records the same person in another space, lets one erasure reach every space the member can map, while the relay sees only per-space person-key ids and cannot link a person across spaces (D14). NoCentralDB cannot find a name in free text, so the app stores a reference to the person and resolves it at display time, and NoCentralDB says plainly that it does not detect names; a scan would miss names and give a false belief that erasure reached them (D15, principle 4).
+- Instead of: personal sets and links, or the person as any field's value such as an email address (D9); per-space persons only, or a person id derived from an external identifier (D14); a core that scans free text for names of known persons, or saying nothing beyond "erasure does not reach unmarked text" (D15).
+- Topics: rfc-0005, rfc-0003, personal-fields, erasure, schema
+
+`docs/rfc/0005-schema-and-model-lock.md`, "Personal fields", states the rules; how a personal value is sealed and where the person id is kept is `2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md`.

@@ -17,14 +17,15 @@ const DEFAULT_DIR = join(
   "decisions",
 );
 
-const USAGE = `usage: pnpm decisions [--index] [--current] [--ticket <id>] [--topic <tag>] [--since <YYYY-MM-DD>]
+const USAGE = `usage: pnpm decisions [--index] [--all] [--ticket <id>] [--topic <tag>] [--since <YYYY-MM-DD>]
        node scripts/decisions.mjs --check
 
-Prints the decision log in factory/decisions/, every decision in full, in date order.
-  --index           one line per decision: date, ticket, title, and what superseded it
-  --current         leave out superseded decisions
-  --ticket <id>     only decisions about this ticket, e.g. NOC-22
-  --topic <tag>     only decisions with this topic, e.g. crypto
+Prints the decision log in factory/decisions/, every current decision in full, in date order.
+A decision that a later one names in Supersedes: is left out unless --all, --ticket or --topic asks for it.
+  --index           one line per decision: date, ticket and title
+  --all             superseded decisions too, each marked with what superseded it
+  --ticket <id>     only decisions about this ticket, e.g. NOC-22, superseded ones marked
+  --topic <tag>     only decisions with this topic, e.g. crypto, superseded ones marked
   --since <date>    only decisions made on or after this date
   --check           check every file in the folder (the gate) and print nothing else
   --dir <path>      read another folder (for tests)`;
@@ -40,6 +41,20 @@ const TOPIC = /^[a-z0-9][a-z0-9-]*$/;
 const FIELD = /^- ([A-Z][a-z]*(?: [a-z]+)*): ?(.*)$/;
 
 const REQUIRED = ["Decided by", "Why", "Instead of", "Topics"];
+
+/**
+ * Titles that name a review's outcome, who decided or an answer to questions
+ * instead of the decision itself (NOC-378): an agent reading only the index
+ * learns nothing from them, and who decided belongs in `Decided by:`. A
+ * heading that names only ticket ids is refused too.
+ */
+const NAMES_NO_DECISION = [
+  /\b(owner|pm) decides\b/i,
+  /\bas recommended\b/i,
+  /\brecommendations? accepted\b/i,
+  /\banswers? to\b/i,
+  /\bowner's answers?\b/i,
+];
 
 const isDate = (text) => {
   const date = new Date(`${text}T00:00:00Z`);
@@ -116,16 +131,24 @@ function parse(file, text) {
       "Topics must be lowercase tags (letters, digits, -) separated by commas",
     );
   }
+  const title = heading?.[3] ?? "";
   const supersedes = fields.has("Supersedes")
     ? list(fields.get("Supersedes"))
     : [];
+  for (const old of supersedes) {
+    if (!FILE_NAME.test(old)) {
+      problems.push(
+        `Supersedes names ${old}, which is not a decision file name`,
+      );
+    }
+  }
   return {
     entry: {
       file,
       date: heading?.[1] ?? name?.[1] ?? "",
       ticket: heading?.[2] ?? "",
       tickets: tickets ?? [],
-      title: heading?.[3] ?? "",
+      title,
       topics,
       supersedes,
       text,
@@ -141,22 +164,38 @@ function parse(file, text) {
 export function readDecisions(dir) {
   const files = readdirSync(dir).sort();
   const names = new Set(files);
+  const parsed = files.map((file) => ({
+    file,
+    ...parse(file, readFileSync(join(dir, file), "utf8")),
+  }));
+  const by = supersededBy(parsed.map(({ entry }) => entry));
   const entries = [];
   const problems = [];
-  for (const file of files) {
-    const parsed = parse(file, readFileSync(join(dir, file), "utf8"));
-    for (const old of parsed.entry.supersedes) {
-      if (!names.has(old)) {
-        parsed.problems.push(
-          `Supersedes names ${old}, which is not in the folder`,
-        );
+  for (const { file, entry, problems: own } of parsed) {
+    for (const old of entry.supersedes) {
+      if (FILE_NAME.test(old) && !names.has(old)) {
+        own.push(`Supersedes names ${old}, which is not in the folder`);
       }
     }
-    entries.push(parsed.entry);
-    problems.push(...parsed.problems.map((problem) => `${file}: ${problem}`));
+    if (!by.has(file) && namesNoDecision(entry)) {
+      own.push(
+        `the title names no decision: "${entry.title}"; state what was decided`,
+      );
+    }
+    entries.push(entry);
+    problems.push(...own.map((problem) => `${file}: ${problem}`));
   }
   return { entries, problems };
 }
+
+/**
+ * Whether a current entry's title names a review's outcome, who decided or
+ * only tickets. A superseded entry keeps the title it was written with.
+ */
+const namesNoDecision = ({ title }) =>
+  title !== "" &&
+  (NAMES_NO_DECISION.some((pattern) => pattern.test(title)) ||
+    (ticketsOf(title) ?? []).length > 0);
 
 /** The gate: every problem of the folder, empty when it is well formed. */
 export function checkDecisions(dir) {
@@ -173,18 +212,20 @@ function supersededBy(entries) {
 }
 
 /**
- * The decisions printed in full, each with what superseded it; with `index`,
- * one line per decision instead. `current` leaves out superseded decisions;
- * `ticket`, `topic` and `since` (YYYY-MM-DD, inclusive) keep only matching
- * ones. What superseded a decision is looked up in all `entries`, filtered
- * or not.
+ * The decisions printed in full, or with `index` one line per decision.
+ * Superseded decisions are left out unless `all` asks for them or `ticket`
+ * or `topic` searches for them; then each is marked with what superseded
+ * it. `ticket`, `topic` and `since` (YYYY-MM-DD, inclusive) keep only
+ * matching decisions.
  */
 export function render(entries, options = {}) {
   const by = supersededBy(entries);
   const ticket = options.ticket?.toUpperCase();
+  const withSuperseded =
+    options.all || ticket !== undefined || options.topic !== undefined;
   const shown = entries.filter(
     (entry) =>
-      !(options.current && by.has(entry.file)) &&
+      (withSuperseded || !by.has(entry.file)) &&
       (ticket === undefined || entry.tickets.includes(ticket)) &&
       (options.topic === undefined || entry.topics.includes(options.topic)) &&
       (options.since === undefined || entry.date >= options.since),
@@ -216,7 +257,7 @@ function main(argv) {
       args: argv,
       options: {
         index: { type: "boolean" },
-        current: { type: "boolean" },
+        all: { type: "boolean" },
         ticket: { type: "string" },
         topic: { type: "string" },
         since: { type: "string" },

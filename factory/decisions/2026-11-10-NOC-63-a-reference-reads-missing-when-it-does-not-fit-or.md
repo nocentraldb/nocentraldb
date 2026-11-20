@@ -1,0 +1,6 @@
+# 2026-11-10 · NOC-63 · A reference reads missing when it does not fit or names an unlisted collection, and notAccessible without a copy
+
+- Decided by: Carsten, 2026-11-10, on PR #92 (RFC 0004 decisions 17 to 20)
+- Why: A value that does not fit is kept as written, names no object and reads missing, so a link and a reference report the same mistake the same way (17). A target in a collection the field does not list reads missing, keeping NOC-29's three states, and an old client reads a later-added collection as missing until it upgrades (18). A reference into its own space is allowed and resolves as any other, since the schema cannot know where a target will live (19). A target is notAccessible exactly when the member's database holds no copy of its space, so a reference never shows more or less than `space.get` would (20).
+- Instead of: a value that does not fit reading `undefined` with `$raw` (17); a fourth state `wrongCollection` as for links (18); refusing a reference into its own space with `invalidValue` (19); notAccessible whenever the member is not a current member by its copy's control state, which would hide what the app can still read (20).
+- Topics: rfc-0004, references, merge-rule

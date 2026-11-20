@@ -695,7 +695,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 ## Decisions
 
 - **2026-11-11 · The relay refuses an erasure decision that comes too early.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-uploads-and-download-tokens-get-two-tables-of-their-own.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
+- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
 - **2026-11-12 · An account the relay does not list may create one space, its account space.** (Carsten, 2026-11-12, NOC-286; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
 - **2026-11-12 · The member index is read eventually consistent.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
 - **2026-11-13 · A guest account's one space is an effect of its genesis append.** (Carsten, 2026-11-13, NOC-283, #288; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))

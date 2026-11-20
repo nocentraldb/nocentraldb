@@ -202,8 +202,11 @@ test("the decision log records the owner's decision on RFC 0010", () => {
   );
   const entry = files
     .map((f) => read(`factory/decisions/${f}`))
-    .find((t) => /^# [^\n]*· The owner decides RFC 0010, /m.test(t));
-  assert.ok(entry, "no NOC-107 decision file names RFC 0010 as decided");
+    .find((t) => /^- Decided by: Carsten, 2026-11-10, on NOC-115/m.test(t));
+  assert.ok(
+    entry,
+    "no NOC-107 decision file records the owner's decision on RFC 0010",
+  );
   assert.match(entry, /^- Decided by: Carsten, 2026-11-10, on NOC-115/m);
   assert.match(entry, /^- Topics: .*rfc-0010/m);
 });

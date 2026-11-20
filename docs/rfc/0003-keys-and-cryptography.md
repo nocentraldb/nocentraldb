@@ -512,12 +512,12 @@ removal.notice; // "The removed member keeps its copy of everything it received 
 await db.workOrders.erase({ person: customerId });   // shreds the person key after a second account signs off
 ```
 
-The names are [RFC 0009](0009-sdk-api.md)'s, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). What the SDK does underneath:
+The names are [RFC 0009](0009-sdk-api.md)'s, except `db.workOrders.erase`, which stays a sketch until the work-order RFC. In 0.1 an erasure runs through `Db::erase` of the Rust SDK, an interim call that the work-order RFC will replace (Carsten, 2026-11-20, NOC-362). A space has no name in the SDK: the app keeps a name in its own model ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces)). What the SDK does underneath:
 
 - **Creates** the member key on first open, the space key with the space, a person key on the first personal field for a person in a space, and the next generation on every removal.
 - **Stores** private keys in the platform's keystore, or in the key file a headless agent names, and never hands their bytes to the app: the Keychain on macOS and iOS, the Android Keystore, the Windows credential store, the Secret Service on Linux, and in the browser a non-extractable WebCrypto key that wraps the core's keys in IndexedDB ([The member key](#the-member-key) gives its layout). Only the file's permissions protect a key file.
 - **Offers no API that returns key bytes.** The developer handles member ids, invitations and fingerprints, which are public. A private key leaves a device only when a person pairs a new device of the account: the account key travels to it sealed to the new device's member key ([Pairing answer](#pairing-answer)). Recovery derives the recovery key on the device where the person enters the code, so nothing leaves a device for it.
-- **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
+- **Says what a permission change means.** Removing a member, moving data between spaces, creating an ad-hoc space and running an erasure return a notice that states the limits above in plain words, so the developer can pass them on. The notices of moving data between spaces and of invitations come later, with the calls that return them (Carsten, 2026-11-20, NOC-362). A change of how permissions behave is never silent (GENESIS.md, "What it must never do").
 
 `members.add` takes an invitation and `members.remove` a member id, and every call that changes who can read what (`members.add`, `members.remove`, `workOrders.erase`, invitations) returns a notice. A developer then never handles key material, and a change of who can read what is never silent. Public keys passed to `members.add` were not taken: a public key is not secret, but passing an invitation or a member id keeps developers away from key material altogether. [Use case 3](../use-cases.md#3-an-outside-agent-limited-to-one-space) shows `members.add(invitation)` and `members.remove(memberId)`.
 
@@ -594,6 +594,8 @@ It makes them more precise in these points:
 - **2026-11-15 · Local ad-hoc spaces come later; synced ones first.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q3-c-local-ad-hoc-spaces-come-later.md))
 - **2026-11-15 · Personal fields in copies get a person key of the ad-hoc space.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q8-b-personal-copies-get-their-own-person-key.md))
 - **2026-11-15 · A sub-agent's database has no account.** (Carsten, 2026-11-15, NOC-320; [decision](../../factory/decisions/2026-11-15-NOC-320-q11-a-sub-agent-s-database-has-no-account.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+- **2026-11-20 · The notices of moving data between spaces and of invitations come later.** (Carsten, 2026-11-20, NOC-362)
 
 ## History
 
@@ -614,3 +616,4 @@ It makes them more precise in these points:
 - 2026-11-19 · An erasure, ad-hoc spaces and a sub-agent's key record follow the owner's decisions on NOC-320 and NOC-326; pairing is how a private key leaves a device (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind the keys, at the owner's request (NOC-362, #387)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, and two notices come later, as the owner answered (NOC-362, #396)

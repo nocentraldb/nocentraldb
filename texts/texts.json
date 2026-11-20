@@ -1943,7 +1943,7 @@
       "id": "notice.erasurePending",
       "kind": "notice",
       "code": "erasurePending",
-      "text": "Personal data was erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
+      "text": "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
       "when": "No call returns it: the space status gives it with each provisional erasure (provisional_erasures, provisionalErasures), on every device of the account, while an erasure in a space with one account waits out its 7 days. pm's text, NOC-234."
     },
     {
@@ -1978,7 +1978,7 @@
       "id": "notice.takenBack",
       "kind": "notice",
       "code": "takenBack",
-      "text": "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.",
+      "text": "The erasure is taken back in this space, and the person's fields read again; an erasure that another device of the account made final before it saw this take-back still wins, and the person stays erased.",
       "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     },
     {

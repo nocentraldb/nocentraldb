@@ -52,9 +52,10 @@ How to read it:
 | collection | A kind of object in the model, such as `tasks`. | table (the local view has tables; the model has collections), type, entity |
 | object | One item of a collection, with an id, in one space. | record, row (a row is in the local view's tables), document (a document is rich text), entity, item |
 | field | One named value of an object, with a field type. | column, property, attribute |
-| field type | What a field holds and how concurrent changes to it merge: basic values, sets, links and personal fields in 0.1. Plugin field types ([RFC 0011](rfc/0011-plugin-field-types.md)) let a developer add their own. | data type, kind |
+| field type | What a field holds and how concurrent changes to it merge: basic values, sets, links, references and personal fields in 0.1. Plugin field types ([RFC 0011](rfc/0011-plugin-field-types.md)) let a developer add their own. | data type, kind |
 | personal field | A field marked `.personal(…)`, encrypted with the person key of the person it is about, so that erasing that person makes it unreadable. | PII field, private field, sensitive field |
-| link | A field that points to another object (`nc.link`, `nc.links`), possibly in another space. | reference (the Rust value of a link is `Reference`), relation, foreign key, pointer |
+| link | A field that points to another object in the same space (`nc.link`, `nc.links`). | reference (a reference is the field that may point into another space), relation, foreign key, pointer |
+| reference | A field that points to one object, possibly in another space (`nc.ref`); its Rust value is `Reference { space, id }`. It gives no access to the target's space. | link (a link stays in its space), pointer |
 | rich text, stream | Field types that are reserved in the schema and come after 0.1. | **0.1:** never described as working |
 | index | An order the model declares over a collection's fields. Every query runs through one. | view (a view is the local copy's computed result) |
 | query | A read through one declared index, with its leading fields fixed, answering one page. | filter, search, lookup |

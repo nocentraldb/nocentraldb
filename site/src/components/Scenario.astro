@@ -1,13 +1,14 @@
 ---
 // The scenario: four steps stacked one under the other at every width, each with
-// its title, its text and its drawing, standing still (owner, 2026-11-20, NOC-380).
-// From 640px a step is a row, the words at the left and the drawing at the right; a
-// phone stacks the drawing under the words. Each figure carries two drawings: the
-// wide one for screens from 640px, and for a phone a small schematic without text
-// (owner, 2026-11-20); scene.css shows one of them.
+// its title, its text and its drawing; nothing on it is driven by the scroll (owner,
+// 2026-11-20, NOC-380). From 640px a step is a row, the words at the left and the
+// drawing at the right; a phone stacks the drawing under the words. Each figure
+// carries two drawings: the wide one for screens from 640px, which plays its loop
+// when it comes into view (owner, 2026-11-20, NOC-384; story-motion.mjs), and for a
+// phone a small schematic without text that stands still (owner, 2026-11-20);
+// scene.css shows one of them. The pause control in each figure holds all four
+// drawings; the markup carries it hidden, so without script none stands dead.
 import { STEPS, scene } from "./scene.mjs";
-
-const still = { still: true };
 ---
 
 <section class="section" id="story" aria-labelledby="story-h">
@@ -19,13 +20,25 @@ const still = { still: true };
           <li class="story__step">
             <h3>{step.title}</h3>
             <p>{step.text}</p>
-            <figure
-              class="story__visual"
-              set:html={scene(i, `s${i}`, "wide", still) + scene(i, `s${i}`, "phone")}
-            />
+            <figure class="story__visual">
+              <Fragment set:html={scene(i, `s${i}`, "wide") + scene(i, `s${i}`, "phone")} />
+              <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-story-pause hidden>
+                Pause
+              </button>
+            </figure>
           </li>
         ))
       }
     </ol>
   </div>
 </section>
+
+<script>
+  import { wire } from "./story-motion.mjs";
+
+  wire(document.getElementById("story"), {
+    reduced:
+      matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.shot !== undefined,
+    Observer: IntersectionObserver,
+  });
+</script>

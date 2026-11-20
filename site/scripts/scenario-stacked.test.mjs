@@ -26,11 +26,10 @@ const read = (ext) =>
 const css = `${html}\n${read(".css")}`;
 const js = `${html}\n${read(".js")}`;
 
-test("the scenario is a plain section: no moment, no snap points, no pause control", () => {
+test("the scenario is a plain section: no moment, no snap points", () => {
   const open = html.match(/<section[^>]*id="story"[^>]*>/)[0];
   assert.ok(!open.includes("data-moment"), open);
   assert.ok(!story.includes("story-snap"), "snap points");
-  assert.ok(!story.includes("data-scene-pause"), "pause control");
   assert.ok(!story.includes("mo-pc__"), "the moment's classes");
 });
 test("its four steps stand in one list, each with its title, text and drawing", () => {
@@ -43,9 +42,42 @@ test("its four steps stand in one list, each with its title, text and drawing", 
     assert.match(step, /<svg class="sc sc--phone"/);
   }
 });
-test("its drawings stand still", () => {
-  assert.ok(!story.includes("repeatCount"), "a looping animation");
-  assert.ok(!story.includes("<animate "), "a fading point");
+// NOC-384 (owner, 2026-11-20): each step's wide drawing loops on its own again, as it
+// did before NOC-380; site/scripts/story-motion.test.mjs pins when it plays.
+test("each step's wide drawing loops on its own, with its pause control", () => {
+  const figures = [...story.matchAll(/<figure[\s\S]*?<\/figure>/g)];
+  assert.equal(figures.length, 4);
+  for (const [figure] of figures) {
+    const wide = figure.match(/<svg class="sc sc--wide"[\s\S]*?<\/svg>/)[0];
+    assert.match(wide, /<animateMotion[^>]*repeatCount="indefinite"/);
+    assert.match(
+      figure,
+      /<button[^>]*class="scene-pause"[^>]*aria-pressed="false"[^>]*data-story-pause[^>]*hidden/,
+    );
+  }
+  // the hero's control (scene-pause.mjs) does not reach into the scenario
+  assert.ok(!story.includes("data-scene-pause"), "the hero's pause control");
+  assert.ok(!story.includes("data-scene-scope"), "the hero's scope");
+});
+test("the scenario's drawings start when they come into view, not by the scroll", () => {
+  // the script that wires the scenario's pause control (story-motion.mjs)
+  const own = assets
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => readFileSync(join(dist, "_astro", f), "utf8"))
+    .concat(
+      [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]),
+    )
+    .filter((src) => src.includes("data-story-pause"));
+  assert.equal(own.length, 1, "the scenario's script");
+  assert.ok(own[0].includes("IntersectionObserver"), "an IntersectionObserver");
+  for (const needle of [
+    'addEventListener("scroll"',
+    "onscroll",
+    "scrollTimeline",
+    "animation-timeline",
+  ])
+    assert.ok(!js.includes(needle), needle);
+  assert.ok(!css.includes("animation-timeline"), "a scroll-driven animation");
 });
 test("the page loads no moment and no wheel or snap handling", () => {
   assert.ok(!html.includes("/assets/moments/"), "a moment script");
