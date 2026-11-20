@@ -138,7 +138,7 @@ fn the_error_to_a_stranger_or_of_another_code_carries_no_removal() {
 
 #[test]
 fn a_removal_too_large_for_one_message_is_left_out() {
-    let (_relay, _dir, space, changes) = removed();
+    let (_relay, _dir, _, changes) = removed();
     let entry = |frame: Vec<u8>| ncdb_relay::store::Entry {
         position: 4,
         change: changes[3].id(),
@@ -155,5 +155,4 @@ fn a_removal_too_large_for_one_message_is_left_out() {
         ncdb_relay::wire::removed(Some(1), code, &entry(large)),
         None
     );
-    let _ = space;
 }

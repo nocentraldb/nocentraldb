@@ -127,7 +127,8 @@ pub async fn read<S: RelayStore, D: Downloads>(
 /// member and the space's log holds the control change that removed it,
 /// the error carries that change's entry, so the removed member folds its
 /// own removal (RFC 0007, "The errors"; Carsten, 2026-11-20, NOC-383). A
-/// removal that cannot be read leaves the error without it.
+/// removal that cannot be read, or does not fit into one message, leaves
+/// the error without it.
 pub async fn refusal<S: RelayStore>(
     relay: &Relay<S>,
     member: MemberId,
@@ -137,8 +138,9 @@ pub async fn refusal<S: RelayStore>(
 ) -> Vec<u8> {
     if matches!(code, ErrorCode::NotMember | ErrorCode::RemovedMember)
         && let Ok(Some(removal)) = relay.removal(member, space).await
+        && let Some(bytes) = wire::removed(req, code, &removal)
     {
-        return wire::removed(req, code, &removal);
+        return bytes;
     }
     wire::error(req, code)
 }

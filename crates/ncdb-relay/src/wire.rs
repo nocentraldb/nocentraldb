@@ -596,14 +596,19 @@ pub fn error(req: Option<u64>, code: ErrorCode) -> Vec<u8> {
 /// `error {req, code, removal}`, the error that ends a removed member's
 /// pull or subscription: it carries the entry of the control change that
 /// removed the member, `{1: position, 2: accepted at, 3: frame}`, at key 5,
-/// and nothing else of the space (RFC 0007, "The errors").
-pub fn removed(req: Option<u64>, code: ErrorCode, removal: &Entry) -> Vec<u8> {
-    message(
+/// and nothing else of the space (RFC 0007, "The errors"). None when the
+/// removal's frame is larger than [`MAX_INLINE`], so the message would not
+/// fit into one: the error then goes without it.
+pub fn removed(req: Option<u64>, code: ErrorCode, removal: &Entry) -> Option<Vec<u8>> {
+    if removal.frame.len() > MAX_INLINE {
+        return None;
+    }
+    Some(message(
         "error",
         req,
         vec![
             (3, Value::Text(code.code().to_owned())),
             (5, entry(removal)),
         ],
-    )
+    ))
 }
