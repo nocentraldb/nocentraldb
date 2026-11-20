@@ -27,6 +27,7 @@ pub(super) fn erasure(erasure: &Erasure) -> Value {
         ErasureState::Final => "final",
         ErasureState::Provisional => "provisional",
         ErasureState::TakenBack => "takenBack",
+        ErasureState::Waiting => "waiting",
     };
     let members = erasure
         .members

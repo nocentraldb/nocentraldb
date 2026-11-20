@@ -1,14 +1,15 @@
 //! The audit of a space's erasures (RFC 0009, "Erasures"; the shapes the
 //! owner decided on NOC-246, Carsten, 2026-11-12): for each shred of the
-//! space, whether it is final, provisional or taken back, who performed it
-//! and which account signed it off, and every member that could have held
-//! the person key, with whether it is still a member and whether it
-//! acknowledged "deleted", only "seen", or nothing yet (RFC 0008,
-//! "Acknowledgement").
+//! space, whether it is final, provisional, taken back or waiting, who
+//! performed it and which account signed it off, and every member that
+//! could have held the person key, with whether it is still a member and
+//! whether it acknowledged "deleted", only "seen", or nothing yet (RFC
+//! 0008, "Acknowledgement").
 //!
 //! The members listed are those of the state of the shred's causal past,
-//! and any member that acknowledged it later. Every member may list the
-//! erasures, a reader too.
+//! and any member that acknowledged it later; a waiting shred lists none
+//! until it has its verdict (Carsten, 2026-11-20, NOC-392). Every member
+//! may list the erasures, a reader too.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -27,7 +28,8 @@ pub struct Erasures<'a> {
 }
 
 /// Where an erasure stands (RFC 0008, "A shred is final when accepted"
-/// and "A provisional erasure in a space with one account").
+/// and "A provisional erasure in a space with one account"; `Waiting`:
+/// Carsten, 2026-11-20, NOC-392).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum ErasureState {
@@ -39,6 +41,12 @@ pub enum ErasureState {
     Provisional,
     /// A provisional shred its account took back: nothing was destroyed.
     TakenBack,
+    /// A shred whose causal past this copy does not hold whole yet: it
+    /// has no verdict and no effect until the missing changes arrive, and
+    /// then moves on to one of the other states, or leaves the list when
+    /// it is rejected (RFC 0008, "A shred is final when accepted";
+    /// Carsten, 2026-11-20, NOC-392).
+    Waiting,
 }
 
 /// What a member acknowledged of an erasure.
@@ -73,7 +81,7 @@ pub struct ErasureMember {
 pub struct Erasure {
     /// The change id of its shred entry.
     pub shred: ChangeId,
-    /// Whether it is final, provisional or taken back.
+    /// Whether it is final, provisional, taken back or waiting.
     pub state: ErasureState,
     /// The member that performed it.
     pub performer: MemberId,
@@ -81,7 +89,8 @@ pub struct Erasure {
     pub performer_account: Fingerprint,
     /// The fingerprint of the account that signed it off.
     pub sign_off: Fingerprint,
-    /// The members that could have held the key, in member-id order.
+    /// The members that could have held the key, in member-id order; none
+    /// while it is waiting.
     pub members: Vec<ErasureMember>,
 }
 
@@ -122,11 +131,26 @@ impl Erasures<'_> {
     }
 }
 
-/// The erasures of `resolved`'s space, in shred-id order.
+/// The erasures of `resolved`'s space, in shred-id order: those of its
+/// person keys, and each shred that waits for its verdict, which lists no
+/// members until it has one (Carsten, 2026-11-20, NOC-392).
 pub(crate) fn list(resolved: &Resolved) -> Vec<Erasure> {
     let mut erasures: Vec<Erasure> = resolved
         .person_keys()
         .flat_map(|(_, key)| erasures(resolved, key))
+        .chain(resolved.waiting_shreds().filter_map(|(id, shred)| {
+            erasure(
+                resolved,
+                Shred {
+                    id,
+                    state: ErasureState::Waiting,
+                    performer: shred.performer,
+                    sign_off: shred.sign_off,
+                    past_members: &BTreeSet::new(),
+                    acknowledged: &BTreeMap::new(),
+                },
+            )
+        }))
         .collect();
     erasures.sort_by_key(|erasure| erasure.shred);
     erasures
