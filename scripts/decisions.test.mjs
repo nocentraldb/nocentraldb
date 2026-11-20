@@ -62,7 +62,7 @@ test("check accepts well-formed files, with and without a ticket", (t) => {
     "2026-11-07-no-ticket-tickets-live-in-linear.md": entry({
       date: "2026-11-07",
       ticket: "no ticket",
-      supersedes: GOOD,
+      supersedes: "2026-11-06-NOC-1-gone.md",
     }),
     "2026-11-07-NOC-6-a-range.md": entry({
       date: "2026-11-07",
@@ -153,7 +153,7 @@ test("check rejects a heading whose date or ticket differs from its file name", 
   }
 });
 
-test("check rejects a Supersedes: that names no file in the folder", (t) => {
+test("check rejects a Supersedes: that names a file still in the folder", (t) => {
   const dir = folder(t, {
     [GOOD]: entry(),
     "2026-11-09-NOC-30-later.md": entry({
@@ -166,8 +166,43 @@ test("check rejects a Supersedes: that names no file in the folder", (t) => {
   assert.equal(problems.length, 1, problems.join("; "));
   assert.match(
     problems[0],
-    /^2026-11-09-NOC-30-later\.md: .*Supersedes.*2026-11-01-NOC-1-gone\.md/,
+    /^2026-11-09-NOC-30-later\.md: .*Supersedes.*2026-11-08-NOC-22-a-decision\.md.*still in the folder/,
   );
+});
+
+test("check rejects a Supersedes: that is not a decision file name", (t) => {
+  const dir = folder(t, {
+    [GOOD]: entry({ supersedes: "the old one" }),
+  });
+  const problems = checkDecisions(dir);
+  assert.equal(problems.length, 1, problems.join("; "));
+  assert.match(problems[0], /Supersedes.*the old one/);
+});
+
+test("check rejects a title that names a review's outcome instead of the decision", (t) => {
+  for (const title of [
+    "RFC 0004: every recommendation accepted",
+    "The owner's answers to Q1–Q6 for the website",
+    "The owner decides RFC 0009 as recommended",
+    "NOC-12",
+    "NOC-9, NOC-10",
+  ]) {
+    const dir = folder(t, { [GOOD]: entry({ title }) });
+    const problems = checkDecisions(dir);
+    assert.equal(problems.length, 1, `${title}: ${problems.join("; ")}`);
+    assert.match(problems[0], /title/, title);
+  }
+});
+
+test("check accepts a title that states the decision", (t) => {
+  for (const title of [
+    "RFC 0002: the owner decides D1 to D9 as recommended, from the clock to parked changes",
+    "The owner decides RFC 0010, accounts: a recovery key is the identity",
+    "The landing page names the relay 'the server in the middle'",
+  ]) {
+    const dir = folder(t, { [GOOD]: entry({ title }) });
+    assert.deepEqual(checkDecisions(dir), [], title);
+  }
 });
 
 test("check reports every problem of every file, sorted by file name", (t) => {
