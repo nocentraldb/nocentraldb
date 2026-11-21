@@ -16,11 +16,7 @@ use crate::object::Object;
 use crate::value::{Reference, Repr, Value as Field};
 
 /// The values of a create or an update of `collection`, by field name, as
-/// the field's type reads them. A whole number for a float field, or for an
-/// element of a set of floats, is that float: canonical CBOR writes 2.0 as
-/// the integer 2. An object id for a link, or for an element of many
-/// links, arrives as its 32 hex digits and is that object id (NOC-353). A
-/// reference arrives as `{ space, id }`, as a read gives it (NOC-354).
+/// the field's type reads them ([`typed`]).
 pub(super) fn fields(
     model: &Model,
     collection: &str,
@@ -28,22 +24,54 @@ pub(super) fn fields(
 ) -> Result<Vec<(String, Field)>, Failed> {
     map.iter()
         .map(|(key, value)| match key {
-            Key::Text(name) => {
-                if let Some(ModelField::Ref(_)) = model.field(collection, name) {
-                    return Ok((name.clone(), as_reference(value)?));
-                }
-                let value = field(value)?;
-                let value = match model.field(collection, name) {
-                    Some(ModelField::Basic(BasicValue { kind: Kind::Float }))
-                    | Some(ModelField::Set(Set { kind: Kind::Float })) => as_float(value),
-                    Some(ModelField::Link(_) | ModelField::Links(_)) => as_link(value)?,
-                    _ => value,
-                };
-                Ok((name.clone(), value))
-            }
+            Key::Text(name) => Ok((name.clone(), typed(model, collection, name, value)?)),
             Key::Unsigned(_) => Err(invalid(crate::texts::bridge::FIELD_NAME_IS_TEXT)),
         })
         .collect()
+}
+
+/// The values of a query's equality prefix on the index `index` of
+/// `collection`, each as its index field's type reads it ([`typed`]), as a
+/// write reads them (NOC-423). A value past the index's fields, or of an
+/// index the model does not declare, is read by its form alone; the query
+/// refuses it.
+pub(super) fn equal(
+    model: &Model,
+    collection: &str,
+    index: &str,
+    items: &[Value],
+) -> Result<Vec<Field>, Failed> {
+    let keys = model
+        .index(collection, index)
+        .map_or(&[][..], |index| &index.keys[..]);
+    items
+        .iter()
+        .enumerate()
+        .map(|(at, value)| match keys.get(at) {
+            Some((name, _)) => typed(model, collection, name, value),
+            None => field(value),
+        })
+        .collect()
+}
+
+/// A value of the field `name` of `collection`, as the field's type reads
+/// it. A whole number for a float field, or for an element of a set of
+/// floats, is that float: canonical CBOR writes 2.0 as the integer 2. An
+/// object id for a link, or for an element of many links, arrives as its
+/// 32 hex digits and is that object id (NOC-353). A reference arrives as
+/// `{ space, id }`, as a read gives it (NOC-354).
+fn typed(model: &Model, collection: &str, name: &str, value: &Value) -> Result<Field, Failed> {
+    let kind = model.field(collection, name);
+    if let Some(ModelField::Ref(_)) = kind {
+        return as_reference(value);
+    }
+    let value = field(value)?;
+    Ok(match kind {
+        Some(ModelField::Basic(BasicValue { kind: Kind::Float }))
+        | Some(ModelField::Set(Set { kind: Kind::Float })) => as_float(value),
+        Some(ModelField::Link(_) | ModelField::Links(_)) => as_link(value)?,
+        _ => value,
+    })
 }
 
 /// `value` with each integer in it as a float.
@@ -128,7 +156,7 @@ fn field(value: &Value) -> Result<Field, Failed> {
     })
 }
 
-pub(super) fn elements(items: &[Value]) -> Result<Vec<Field>, Failed> {
+fn elements(items: &[Value]) -> Result<Vec<Field>, Failed> {
     items.iter().map(field).collect()
 }
 

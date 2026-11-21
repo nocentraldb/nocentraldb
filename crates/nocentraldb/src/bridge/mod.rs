@@ -132,7 +132,7 @@ mod values;
 
 pub use events::Events;
 use events::{space_list, space_status, sync_status};
-use values::{elements, fields, read};
+use values::{equal, fields, read};
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -398,9 +398,13 @@ impl Bridge {
         let Some(query) = get(args, "query") else {
             return Err(invalid(crate::texts::bridge::FIND_TAKES_AQUERY));
         };
-        let mut built = db.index(text(query, "collection")?, text(query, "index")?)?;
+        let (collection, index) = (text(query, "collection")?, text(query, "index")?);
+        let mut built = db.index(collection, index)?;
         match get(query, "equal") {
-            Some(Value::Array(values)) => built = built.equal(elements(values)?),
+            Some(Value::Array(values)) => {
+                let values = equal(&db.lock().model, collection, index, values)?;
+                built = built.equal(values);
+            }
             None => {}
             Some(_) => return Err(invalid(crate::texts::bridge::EQUAL_IS_AN_ARRAY)),
         }
