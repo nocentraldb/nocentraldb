@@ -2,7 +2,7 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-411
 
-This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with anchored edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
+This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
 
 It checks Yjs's behaviour against the decided design with a spike on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spike found](#what-the-spike-found)). Where the two pull apart, it lists the options and recommends one ([Decisions for the owner](#decisions-for-the-owner)), and [Follow-up tickets](#follow-up-tickets) lists the work it leads to.
 
@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft, for the owner to decide. Eight choices wait for the owner, each with options and a recommendation, in [Decisions for the owner](#decisions-for-the-owner); the rest of the text assumes the recommendations. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
+**Status.** Draft. The owner has answered five of its eight choices (Carsten, 2026-11-21, NOC-430): D1, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces. D2 waits for the owner, explained again. D4 and D5 are open: D5, how an agent edits, goes to a research note first (NOC-436), and D4 is decided with it. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
@@ -25,10 +25,10 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 | How does it fold? | The core applies the update to the field's Yrs document, in any order of arrival. Yjs keeps content whose dependencies have not arrived as pending, so a gap delays content and never reorders it. |
 | What can lose? | Text typed into a block that a concurrent change deleted, and a block attribute, such as a heading's level, set at the same time by two members. Both stay identifiable: the outcome is `lost`, and `space.inspect` gives what was lost and who wrote it. |
 | How does TipTap bind? | `space.richText(collection, id, field)` returns a binding with a `Y.Doc`; the app passes it to TipTap's `Collaboration` extension. The SDK collects the editor's updates, writes one change per pause in typing, and applies what other members write. |
-| What does an agent do? | It reads the field as Markdown and changes it with anchored edits: it quotes the Markdown it changes and gives the new Markdown, and the core writes the smallest update that turns one into the other. |
-| What does the Rust SDK read? | `get::<RichText>`, with the document as Markdown, as plain text and as a tree, and the references its mentions hold. |
+| What does an agent do? | It reads the field as Markdown. How it edits is open ([D5](#d5-anchored-edits)): a research note (NOC-436) looks at how an agent and a person edit one document at the same time, before the owner decides. |
+| What does the Rust SDK read? | `get::<RichText>`, with the document as plain text, as a tree and as the references its mentions hold, and as Markdown unless [D4](#d4-the-document-vocabulary) leaves the vocabulary to the app. |
 | What does the relay see? | Nothing new: the update sits inside the sealed payload. It sees one change per pause in typing, not one per keystroke. |
-| Does erasure reach rich text? | No, as for every unmarked text. A mention stores a reference to the person, never the name, so an erased person's name never was in the text. Deleted text stays in the log. |
+| Does erasure reach rich text? | No, as for every unmarked text. The recommendation is that a mention stores only a reference to the person object, never the name, so an erased person's name never was in the text; the core does not enforce it. Deleted text stays in the log. |
 
 ## Terms
 
@@ -135,7 +135,7 @@ The update's argument 2 lists, for every client id whose items it adds, the nonc
 
 **The same id twice.** A member restored from a backup can write again under a client id and clocks it used before, as it can reuse an author sequence (RFC 0002). Two changes then give one item id different content, which F6 shows diverging. The fold settles it by the changes themselves: of two changes whose updates give one item id different content, the earlier in the total order of [RFC 0004](0004-merge-rules-basic-types.md#tie-break) keeps the id, and the other's operation is parked as "malformed arguments", on every member. A member that folded the later one first un-folds it when the earlier arrives, as RFC 0006 un-folds a change that a control change rejects. Items with the same id and the same content, such as an update merged twice, are no conflict: Yjs applies them once.
 
-**Reusing a client id.** Each new client id adds an entry to the document's state vector and to the id of every item its writer adds, so a client id per editor session would let a document edited for a year collect thousands. The core therefore keeps, per field, the client ids this member used, the nonce of each and the clock it reached, in a device-local table that is no part of the view, like `confirmed_accounts` ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)). A binding or an anchored edit leases one of them for as long as it writes. Two bindings on one device, in two tabs ([RFC 0012](0012-multi-tab-browser-storage.md)), lease two different ids. An id is never leased twice at once, so a member never writes one item id twice, except after a restore, which the rule above settles.
+**Reusing a client id.** Each new client id adds an entry to the document's state vector and to the id of every item its writer adds, so a client id per editor session would let a document edited for a year collect thousands. The core therefore keeps, per field, the client ids this member used, the nonce of each and the clock it reached, in a device-local table that is no part of the view, like `confirmed_accounts` ([RFC 0006, "Where the view lives"](0006-local-view.md#where-the-view-lives)). A binding, or a write by an agent, leases one of them for as long as it writes. Two bindings on one device, in two tabs ([RFC 0012](0012-multi-tab-browser-storage.md)), lease two different ids. An id is never leased twice at once, so a member never writes one item id twice, except after a restore, which the rule above settles.
 
 ## Folding
 
@@ -163,7 +163,12 @@ Every operation gets one outcome of [the plugin contract](0004-merge-rules-basic
 
 ### Un-folding a rejected change
 
-A control change that arrives late can reject a change the member already folded, and the fields it touched are then recomputed from their remaining operations ([RFC 0008, "What a new change can change"](0008-membership.md#what-a-new-change-can-change)). For a rich-text field, recomputing without the rejected update leaves every later edit that was placed next to its text pending for good (F5): an honest member's edit would vanish because of another member's removal.
+A change can be rejected after the member has folded it, for example when a removal of its author arrives late and the change lies above the removal's cutoff ([RFC 0008, "What a new change can change"](0008-membership.md#what-a-new-change-can-change)). Its edits must then come out of the document, and the document must read as if the change had never been written.
+
+An example. Carol's laptop, removed from the space while offline, writes " Carol." after "Base." in a note. Bob receives Carol's change before the removal and types " Bob after Carol." right after Carol's last character: Yjs records Bob's text as "placed after Carol's full stop". Then Alice's removal of Carol arrives, and Carol's change is rejected.
+
+- **Leaving Carol's update out** is what every other field type does: recompute without it. Bob's text then has nothing to be placed after. Yjs keeps it waiting for Carol's characters, which never come, so Bob's text disappears for good, although Bob did nothing wrong (F5).
+- **Keeping Carol's characters as invisible placeholders** keeps Bob's text in place: the note reads "Base. Bob after Carol." Carol's " Carol." is gone, and any text Carol's change had deleted is back.
 
 So the core recomputes the document from the remaining operations plus the rejected change's items, each deleted, and without the rejected change's delete set. The rejected change's text is gone and the text it deleted is back, while the items it added stay as deleted placeholders that later edits can still be placed next to. Text that another member typed inside a block the rejected change added goes with that block; its operation's outcome is `lost`, and `space.inspect` gives the text back. The result is a function of the set of changes, as RFC 0002 requires. The rejected change stays in the log, rejected, as every rejected change does. [D2](#d2-un-folding-a-rejected-change) compares the options.
 
@@ -173,12 +178,12 @@ So the core recomputes the document from the remaining operations plus the rejec
 
 A rich-text field's read value is its document. The core renders it on read, from the state, so every member renders the same state the same way (C7):
 
-- **As Markdown**, CommonMark with GitHub's tables, strikethrough and task lists. This is what agents read, what `space.get` returns in TypeScript ([D6](#d6-the-read-value-in-typescript)), and what an anchored edit quotes.
+- **As Markdown**, CommonMark with GitHub's tables, strikethrough and task lists. This is what agents read and what `space.get` returns in TypeScript ([D6](#d6-the-read-value-in-typescript), (Carsten, 2026-11-21, NOC-430)).
 - **As plain text**, the text of each block, one block per line, for previews.
 - **As a tree**, the ProseMirror JSON of the document (`{ type, attrs, content, marks, text }`), as `Data` in Rust and as a plain object in TypeScript, for apps that render the document themselves.
 - **Its mentions**, the references the mention nodes hold, for an app that resolves names.
 
-The Markdown rendering knows one vocabulary, the names TipTap's StarterKit and its task lists use ([D4](#d4-the-document-vocabulary)):
+Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. Which vocabulary that is, or whether the app owns it, is open ([D4](#d4-the-document-vocabulary)). With D4's option A, the Markdown rendering knows the names TipTap's StarterKit and its task lists use:
 
 | Node or mark | Markdown |
 | --- | --- |
@@ -190,7 +195,7 @@ The Markdown rendering knows one vocabulary, the names TipTap's StarterKit and i
 
 ### Mentions
 
-A mention is an inline node named `mention` with two attributes, `space` and `id`, the target's space id and object id as RFC 0009 writes them. It holds no name. An editor shows the name by reading the target from the member's copy when it renders, and the SDK's TipTap extension does that. After an erasure, the person's personal fields are erased and the mention shows a placeholder, and no name was ever stored in the text: this is [RFC 0005's pattern for free text](0005-schema-and-model-lock.md#personal-data-in-free-text), made concrete. TipTap's own Mention extension stores a `label`, the name as typed, in the document; an app that uses it puts the name into the text, where erasure does not reach it, and the SDK's documentation says so.
+The recommendation for an app is that a mention of a person stores only a reference to the person's object, never the name (Carsten, 2026-11-21, NOC-430). It is a recommendation, in this RFC and in the docs, not a rule the core enforces: the core cannot tell a name from other text. The SDK's mention is an inline node named `mention` with two attributes, `space` and `id`, the target's space id and object id as RFC 0009 writes them. It holds no name. An editor shows the name by reading the target from the member's copy when it renders, and the SDK's TipTap extension does that. After an erasure, the person's personal fields are erased and the mention shows a placeholder, and no name was ever stored in the text: this is [RFC 0005's pattern for free text](0005-schema-and-model-lock.md#personal-data-in-free-text), made concrete. TipTap's own Mention extension stores a `label`, the name as typed, in the document; an app that uses it puts the name into the text, where erasure does not reach it, and the SDK's documentation says so.
 
 ## Writing
 
@@ -237,6 +242,8 @@ An editor whose schema lacks a node in the document, such as an older version of
 
 ### An agent: anchored edits
 
+**Open.** How an agent edits rich text is not decided ([D5](#d5-anchored-edits)). The owner asked whether quoting Markdown is reliable enough, and a research note (NOC-436) compares it with addressing positions, Yjs relative positions and node ids, and with how an agent's edit shows to a person typing at the same time. This section shows the draft's first proposal, which the note may replace.
+
 ```ts
 await notes.update(model.notes, noteId, {
   body: nc.richText.edit({
@@ -269,7 +276,7 @@ Anchored edits are core code, so both SDKs have them, and a TypeScript app can u
 
 ### The Rust SDK
 
-The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It writes with `RichTextEdit::replace`, `RichTextEdit::append`, `RichTextEdit::insert_after` and `RichText::from_markdown`. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
+The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It writes a first document with `RichText::from_markdown`; its calls for an agent's edits wait for D5. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
 
 ## What the relay and the other RFCs see
 
@@ -277,7 +284,7 @@ The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `mar
 
 - **The update is content.** It sits in the operation, inside the sealed payload, under the space key ([RFC 0003, "How a member signs and encrypts a change"](0003-keys-and-cryptography.md#how-a-member-signs-and-encrypts-a-change)). The client ids and nonces sit there too; the relay sees none of them.
 - **What the relay sees** is what it sees for every change: its size after padding and when it arrives. Writing at each pause in typing shows the relay the rhythm of a writing session, which GENESIS.md already lists among what the relay sees, and not the rhythm of keystrokes, which one change per keystroke would show ([D3](#d3-when-the-editor-writes)).
-- **No content in logs or errors.** The read value, the state and the operations print `[redacted]` in `Debug`, as every content does, and anchored-edit errors name no text.
+- **No content in logs or errors.** The read value, the state and the operations print `[redacted]` in `Debug`, as every content does, and no error names text of the document.
 
 ### RFC 0008 and RFC 0005: erasure
 
@@ -305,18 +312,22 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 
 ## Decisions for the owner
 
-| # | Choice | Recommendation |
-| --- | --- | --- |
-| D1 | How Yjs client ids are drawn | Derived from the member and a nonce, checked on fold, reused through a lease |
-| D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone |
-| D3 | When the editor writes a change | At each pause: 500 ms idle, at most 2 s, and on close or hide |
-| D4 | Which nodes the core knows | A fixed vocabulary in rule 1, TipTap's names; any other node kept and shown as text |
-| D5 | What an anchored edit quotes | Markdown, replaced by Markdown |
-| D6 | What `space.get` returns for the field | The Markdown, as a string |
-| D7 | Personal rich text | Not in rule 1; mentions keep names out of the text |
-| D8 | Presence and live cursors | Not in this RFC; a later RFC with an encrypted channel for messages that are not changes |
+| # | Choice | Recommendation | State |
+| --- | --- | --- | --- |
+| D1 | How Yjs client ids are drawn | Derived from the member and a nonce, checked on fold, reused through a lease | Accepted (Carsten, 2026-11-21) |
+| D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone | Waits for the owner, explained again |
+| D3 | When the editor writes a change | At each pause: 500 ms idle, at most 2 s, and on close or hide | Accepted (Carsten, 2026-11-21) |
+| D4 | Which nodes the core knows | Open until D5 is settled | Open, decided with D5 |
+| D5 | How an agent edits | Open until the research note | Open, research note NOC-436 |
+| D6 | What `space.get` returns for the field | The Markdown, as a string | Accepted (Carsten, 2026-11-21) |
+| D7 | Personal rich text | Not in rule 1; mentions store only a reference to the person | Accepted, the mention as a recommendation (Carsten, 2026-11-21) |
+| D8 | Presence and live cursors | Not in this RFC; a later RFC with an encrypted channel for messages that are not changes | Accepted (Carsten, 2026-11-21) |
+
+The owner answered on NOC-430.
 
 ### D1. Yjs client ids
+
+**Accepted: A** (Carsten, 2026-11-21, NOC-430).
 
 - **A. Derived from the member and a nonce, checked on fold, reused through a lease (recommended).** No member can add items under another's id, every item names its writer, and a document collects one id per device and parallel editor, not one per session. The cost: 9 bytes of argument per client id in an update, a device-local table, and a rule for the same id twice after a restore. A member that searches about 2^53 hashes could find a nonce that gives another member's client id; it gains nothing it cannot do as a writer already, except hiding which of its items are its own, and the same-id rule keeps copies equal.
 - **B. Random, as Yjs draws them, unchecked.** No argument and no table. But any member can write under another's client id, which F6 shows can make copies diverge, and a random collision does the same. Principle 2 rules it out.
@@ -324,10 +335,14 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 
 ### D2. Un-folding a rejected change
 
-- **A. Keep its items as deleted placeholders and undo its deletions (recommended).** Later edits of honest members stay visible (F5), except text typed inside a block the rejected change added, which is `lost` and readable. The rejected change's attribute values leave the attribute unset rather than restoring the older value.
-- **B. Recompute without it.** The plainest rule, the same as for other types. Every later edit placed next to its text is pending for good, and the SDK can only report it.
+**Waits for the owner.** A change can be rejected after the fact: for example, its author was removed from the space, and the removal arrives after the change. Its edits must then come out of the document. With most field types that is easy: recompute the field without the change. With Yjs it is not, because other people's later edits are tied to the characters it inserted. [Un-folding a rejected change](#un-folding-a-rejected-change) walks through an example: Bob typed right after a character Carol's rejected change inserted.
+
+- **A. Keep its characters as invisible placeholders, and bring back what it deleted (recommended).** The document reads as if the rejected change had never happened, and everything others wrote after it stays. Two limits: text someone typed inside a paragraph the rejected change added goes with that paragraph, and is shown as `lost` and readable; and an attribute the rejected change set, such as a heading's level, ends up unset instead of going back to its old value.
+- **B. Leave the rejected change out, as other field types do.** The simplest rule. But every later edit placed next to its text, like Bob's, disappears for good, although its author did nothing wrong. The SDK could only report it.
 
 ### D3. When the editor writes
+
+**Accepted: A** (Carsten, 2026-11-21, NOC-430).
 
 - **A. At each pause: 500 ms without an edit, at most every 2 s, and on close or hide (recommended).** Collaborators see text within about half a second of a pause, and the relay and the log see writing sessions, not keystrokes. If the tab is killed before a pause, up to 2 s of typing is lost, which the SDK's guide says.
 - **B. One change per keystroke batch of the editor.** Collaborators see every keystroke at once. Each keystroke costs at least a 256-byte payload, a header and a signature, and the relay sees the typing rhythm.
@@ -335,25 +350,36 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 
 ### D4. The document vocabulary
 
-- **A. A fixed vocabulary in rule 1, TipTap's StarterKit, task lists, tables and `mention`; any other node kept in the document, shown in Markdown as its text (recommended).** No configuration, and apps that use TipTap's defaults need nothing. A custom node reads as its text in Markdown until a later rule knows it.
+**Open, decided together with D5.** The owner asked whether the app should decide this, since NoCentralDB only stores and syncs Yjs updates. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. How much rendering the core does depends on how agents edit, so D4 waits for D5.
+
+- **A. A fixed vocabulary in rule 1, TipTap's StarterKit, task lists, tables and `mention`; any other node kept in the document, shown in Markdown as its text.** No configuration, and apps that use TipTap's defaults need nothing. A custom node reads as its text in Markdown until a later rule knows it.
 - **B. The vocabulary declared in the lock,** as the field's configuration, with a Markdown form per node. Custom nodes render properly, but every addition is a change of the field's configuration, which [RFC 0011](0011-plugin-field-types.md#a-type-that-is-not-registered) refuses for a field that exists.
+- **C. The app owns the vocabulary; the core renders only plain text.** The core knows no node names. Agents and the Rust SDK read the document as plain text and as its tree, and the app renders Markdown or HTML itself. Nothing in the core changes when an app adds a node. But `space.get` could no longer return Markdown (D6 would read plain text), and an agent would see no headings, lists or marks unless the app renders them for it.
 
 ### D5. Anchored edits
 
-- **A. Markdown quoted, Markdown replaced (recommended).** What an agent reads is what it quotes, and the edit may restructure blocks within the quote. The core needs a Markdown parser and a diff that maps Markdown back to the document.
+**Open: a research note first (NOC-436).** The owner doubts that quoting Markdown is reliable and stable, and asked how an agent and a person can edit one Yjs, TipTap or ProseMirror document at the same time without getting in each other's way: by positions, Yjs relative positions, anchored quotes or node ids, and how the agent's edit shows to the person. The note ends with options for D5. The two options below are the draft's first ones.
+
+- **A. Markdown quoted, Markdown replaced.** What an agent reads is what it quotes, and the edit may restructure blocks within the quote. The core needs a Markdown parser and a diff that maps Markdown back to the document.
 - **B. Plain text within one block, plus calls that insert and delete whole blocks.** Simpler and exact, but an agent must translate what it read as Markdown into positions and calls, and cannot change a mark by quoting it.
 
 ### D6. The read value in TypeScript
+
+**Accepted: A** (Carsten, 2026-11-21, NOC-430), as far as D4 keeps Markdown in the core.
 
 - **A. The Markdown, as a string (recommended).** A list of notes shows a preview without another call, `nc.Infer` types the field as `string`, and the binding is the way to edit.
 - **B. An object with `markdown()`, `text()` and `tree()`.** Each form on demand, but a read object is no longer plain data, unlike every other field.
 
 ### D7. Personal rich text
 
+**Accepted: A** (Carsten, 2026-11-21, NOC-430). A mention of a person stores only the person's id, a reference to the person object, which personal fields protect. This is a recommendation in this RFC and in the docs, not a rule the core enforces.
+
 - **A. Not in rule 1; mentions keep names out of the text (recommended).** RFC 0005 stays as it is, and an app stores names as references.
 - **B. A personal rich-text field, `nc.richText().personal({ person })`, whose every update is sealed with a subkey of the person key.** A shred makes the whole document unreadable, history included. It needs an RFC 0003 subkey and a change of RFC 0005's rule that only basic values can be personal, and a member without the person key cannot fold the field at all.
 
 ### D8. Presence and live cursors
+
+**Accepted: A** (Carsten, 2026-11-21, NOC-430).
 
 - **A. Not in this RFC (recommended).** Cursors need messages that are not changes: not signed into the log, not kept, encrypted for the space, and relayed at once. That is a relay feature of its own, with metadata of its own, for a later RFC.
 - **B. In this RFC.** nexflow.it would show who is typing where from the start, at the cost of designing the relay's ephemeral channel here.
@@ -362,8 +388,8 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 
 - `nc.richText()` builds, and a rich-text field reads as Markdown in `space.get` and queries.
 - `space.richText(collection, id, field)` opens a binding for an editor; `@nocentraldb/tiptap` gives `NcMention`.
-- `nc.richText.edit(...)`, `nc.richText.fromMarkdown(...)` and their Rust forms write without an editor.
-- Three new errors: `anchorNotFound`, `anchorAmbiguous` and `richTextNotEmpty`.
+- `nc.richText.fromMarkdown(...)` and its Rust form write a first document without an editor. How an agent edits, and the calls and errors for it, wait for D5.
+- A new error: `richTextNotEmpty`.
 - `space.inspect` lists a rich-text field's lost operations, and `$conflicts` names the field while it has any.
 
 ## Changes to the decided RFCs
@@ -375,7 +401,7 @@ Once the owner decides this RFC, the pull request that publishes it writes these
 - **RFC 0004**, "Operation numbers": number 5 is "rich-text update", for `ncdb/richText`.
 - **RFC 0005**, "Field types": `nc.richText()` maps to `ncdb/richText` rule 1; "Personal data in free text" points to this RFC's mentions; "Public names" gains the new names.
 - **RFC 0006**, "Where the view lives": the device-local table of client ids.
-- **RFC 0009**: the binding, the anchored edits, the three errors and the public names.
+- **RFC 0009**: the binding, the calls for an agent's edits once D5 is decided, the errors and the public names.
 
 ## What this does not do
 
@@ -384,7 +410,7 @@ Once the owner decides this RFC, the pull request that publishes it writes these
 - **No protection against a writer.** A member that may write can delete a whole document, as it can clear any field; the deletion is a change in the log, and an app can bring the text back from history.
 - **Typing in the last 2 s can be lost** if the tab dies before the pause ([D3](#d3-when-the-editor-writes)).
 - **An app that turns off `enableContentCheck`** can delete nodes it does not know ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
-- **Custom nodes read as their text** in Markdown ([D4](#d4-the-document-vocabulary)).
+- **Custom nodes read as their text** in Markdown under D4's option A ([D4](#d4-the-document-vocabulary)).
 - **A rejected change's attribute value** leaves the attribute unset, not restored ([Un-folding a rejected change](#un-folding-a-rejected-change)).
 - **No embeds**, such as images or files, and no comments or suggestions.
 - **No Yjs 14.** Rule 1 is Yjs 13's integration; a later Yjs whose integration differs is a new rule.
@@ -398,17 +424,17 @@ Each becomes a ticket once the owner decides; the ones marked "spike" can start 
 3. **Core: the field type `ncdb/richText` rule 1.** State, operation 5, client ids and their check, the same id twice, outcomes, generators and broken fixtures for C1 to C7, and the Yjs and Yrs agreement vectors.
 4. **Core: un-folding rich text**, as D2 decides.
 5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides.
-6. **Core: anchored edits**, as D5 decides, with `anchorNotFound` and `anchorAmbiguous`.
+6. **Core: how an agent edits**, as D5 decides after the research note (NOC-436).
 7. **Schema and lock: `nc.richText()`** in `ncdb model build` and the check on the device.
 8. **TypeScript SDK: the binding and `@nocentraldb/tiptap`**, with the lease of client ids and the write at each pause.
 9. **Rust SDK: `RichText` reads and writes.**
 10. **Docs: a rich-text guide**, mentions included, and the FAQ on deleted text and erasure.
 11. **RFC texts:** the changes to RFC 0001, 0002, 0004, 0005, 0006 and 0009 listed above.
-12. **Later RFCs:** presence and cursors (D8), personal rich text if D7 stays at A, and the compaction of a document's history.
+12. **Later RFCs:** presence and cursors (D8), personal rich text if it is ever wanted (D7), and the compaction of a document's history.
 
 ## How it is tested
 
-This draft decides nothing yet, and no code changes with it. The spike in the appendix backs its findings. Once decided, the design is tested where it is built: the harness checks C1 to C7 for `ncdb/richText` (ticket 3), each SDK's binding and calls have their own tests, and the agreement vectors pin Yjs and Yrs together.
+No code changes with this draft. The spike in the appendix backs its findings. Once decided, the design is tested where it is built: the harness checks C1 to C7 for `ncdb/richText` (ticket 3), each SDK's binding and calls have their own tests, and the agreement vectors pin Yjs and Yrs together.
 
 ## Agreement with GENESIS.md
 
@@ -419,9 +445,9 @@ This draft decides nothing yet, and no code changes with it. The spike in the ap
 | Principle 3, "Nothing is lost silently." | Text lost to a concurrent deletion and attributes lost to a concurrent write are `lost` and readable; an editor that cannot show a node does not delete it. |
 | Principle 4, "Say plainly what it does not do." | [What this does not do](#what-this-does-not-do), and erasure stated plainly. |
 | Principle 6, "The apps only read from a result that is computed." | The binding's `Y.Doc` is loaded from the core's folded state and fed by its folds. |
-| Principle 7, "One core lets you build apps for almost any environment." | The fold, Markdown and anchored edits are core code, the same natively and in wasm. Only the binding is TypeScript, since the editor is. |
-| "Never overwrite more than you change. Rich text takes focused edits, never a whole rewrite." | Edits are Yjs updates or minimal anchored edits; a whole document is written only into an empty field. |
-| "Never write content … into logs." | Reads and states print `[redacted]`; anchored-edit errors name no text. |
+| Principle 7, "One core lets you build apps for almost any environment." | The fold and the reads are core code, the same natively and in wasm. Only the binding is TypeScript, since the editor is. |
+| "Never overwrite more than you change. Rich text takes focused edits, never a whole rewrite." | Edits are Yjs updates; a whole document is written only into an empty field. How an agent makes focused edits is D5's research note (NOC-436). |
+| "Never write content … into logs." | Reads and states print `[redacted]`, and no error names text of the document. |
 
 ## Appendix: the spike
 
@@ -455,3 +481,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 ## History
 
 - 2026-11-21 · First published, as a draft for the owner's decision (NOC-411)
+- 2026-11-21 · The owner's answers to D1, D3, D6, D7 and D8; D2 explained again; D4 gains option C and waits for D5, which goes to a research note (NOC-430, NOC-436, #422)
