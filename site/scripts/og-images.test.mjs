@@ -81,6 +81,23 @@ test("the landing page keeps its title and description", () => {
   );
 });
 
+test("the landing page names its title, description, URL and type for link cards", () => {
+  const html = readFileSync(join(dist, "index.html"), "utf8");
+  const title = html.match(/<title>([^<]*)<\/title>/)?.[1];
+  assert.equal(meta(html, "og:title"), title);
+  assert.equal(meta(html, "og:description"), meta(html, "description"));
+  assert.equal(meta(html, "og:url"), "https://nocentraldb.io/");
+  assert.equal(meta(html, "og:type"), "website");
+});
+
+test("every docs page names its title and description for link cards", () => {
+  for (const page of pages().filter((page) => page !== "index.html")) {
+    const html = readFileSync(join(dist, page), "utf8");
+    assert.ok(meta(html, "og:title"), `${page}: og:title`);
+    assert.ok(meta(html, "og:description"), `${page}: og:description`);
+  }
+});
+
 test("the landing page and the docs have separate images", () => {
   assert.notEqual(OG_IMAGES.landing.file, OG_IMAGES.docs.file);
   assert.match(
