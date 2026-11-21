@@ -6,15 +6,13 @@
 // (crates/nocentraldb/src/bridge/erase.rs). The request and the
 // sign-offs are their texts, which the app carries between devices, as a
 // pairing answer is (NOC-321): `nc.erasureRequest` and `nc.signOffs` read
-// them back.
+// them back. What makes them is in eraseCalls.ts.
 
-import type { readObjects } from "./adHoc.ts";
 import { NcError } from "./error.ts";
 import type { Notice } from "./members.ts";
 import * as texts from "./texts.ts";
 
 type Id = string;
-type Ask = (call: string, args: Record<string, unknown>) => Promise<unknown>;
 
 /** The request to erase a person (RFC 0009, "Erasing a person"): for each space where this member may write and the person has a key, the space, the person-key id and the performer, and nothing personal. Its text, `ncdb-erase-1:` and unpadded base64url, goes to a device of another account to sign off. */
 export interface ErasureRequest {
@@ -87,45 +85,3 @@ export const signOffs = (text: string): SignOffs => {
   }
   return new Text(read);
 };
-
-/** `db.erasureRequest` and `db.erase` for the core `ask` speaks to; an object the SDK of this database did not read is refused before the core is asked. */
-export const erasureCallsOf = (
-  ask: Ask,
-  read: ReturnType<typeof readObjects>,
-) => ({
-  erasureRequest: async (object: object): Promise<ErasureRequest> => {
-    const source = read.sourceOf(object, texts.ERASURE_REQUEST_NOT_READ);
-    return erasureRequest(
-      (await ask("erasureRequest", { ...source })) as string,
-    );
-  },
-  erase: async (request: ErasureRequest, given: SignOffs): Promise<Erased> =>
-    (await ask("erase", {
-      request: String(request),
-      signOffs: String(given),
-    })) as Erased,
-});
-
-/** `db.account.signOff` for the core `ask` speaks to. */
-export const signOffOf =
-  (ask: Ask) =>
-  async (
-    request: ErasureRequest,
-  ): Promise<{
-    readonly signOffs: SignOffs;
-    readonly notSigned: readonly Id[];
-  }> => {
-    const signed = (await ask("account.signOff", {
-      request: String(request),
-    })) as { signOffs: string; notSigned?: Id[] };
-    return {
-      signOffs: signOffs(signed.signOffs),
-      notSigned: signed.notSigned ?? [],
-    };
-  };
-
-/** `space.erasures.takeBack` of the space `space`. */
-export const takeBackOf =
-  (ask: Ask, space: Id) =>
-  async (shred: string): Promise<Notice> =>
-    (await ask("erasures.takeBack", { space, shred })) as Notice;

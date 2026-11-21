@@ -19,7 +19,7 @@ import {
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
-import { erasureCallsOf, signOffOf, takeBackOf } from "./erase.ts";
+import { erasureCallsOf, signOffOf, takeBackOf } from "./eraseCalls.ts";
 import { NcError } from "./error.ts";
 import { lockOutOfDate } from "./lockCheck.ts";
 import type { Notice } from "./members.ts";
