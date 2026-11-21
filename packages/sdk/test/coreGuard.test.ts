@@ -66,3 +66,36 @@ test("after the core traps, a close succeeds, so the app can open the database a
     ok: null,
   });
 });
+
+// The trap CI saw (NOC-426): the core traps in a step it runs after the
+// call returned, so the call's promise never settles and the error reaches
+// the worker as an uncaught one, which worker.ts hands to `failed`.
+test("a trap outside the call answers the waiting request with storageFailed, and every later one too", async () => {
+  const guard = guardCore(
+    Promise.resolve<Handle>(() => new Promise<Uint8Array>(() => {})),
+  );
+  const waiting = guard.answer(request(1));
+  await Promise.resolve();
+  guard.failed(new Error("RuntimeError: unreachable"));
+  expect(await answered(waiting)).toEqual({
+    id: 1,
+    error: {
+      code: "storageFailed",
+      message: texts.coreFailed("Error: RuntimeError: unreachable"),
+    },
+  });
+  expect(await answered(guard.answer(request(2)))).toEqual({
+    id: 2,
+    error: { code: "storageFailed", message: texts.CORE_STOPPED },
+  });
+});
+
+test("a trap while no request waits breaks the core for the next one", async () => {
+  const { handle } = core();
+  const guard = guardCore(Promise.resolve(handle));
+  guard.failed(new Error("RuntimeError: unreachable"));
+  expect(await answered(guard.answer(request(1)))).toEqual({
+    id: 1,
+    error: { code: "storageFailed", message: texts.CORE_STOPPED },
+  });
+});
