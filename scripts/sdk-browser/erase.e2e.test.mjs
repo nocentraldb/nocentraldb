@@ -104,7 +104,12 @@ test("a second account signs off, and the person is erased for good on both data
     const { space, anna } = await performer.evaluate(
       async ({ lock, url, signerInvitation }) => {
         const { nc, model } = window;
-        window.db = await nc.open({ model, lock, name: "performer", relay: url });
+        window.db = await nc.open({
+          model,
+          lock,
+          name: "performer",
+          relay: url,
+        });
         const space = await window.db.spaces.create();
         const invitation = nc.invitation(signerInvitation);
         const fingerprint = await space.members
@@ -181,12 +186,16 @@ test("a second account signs off, and the person is erased for good on both data
     assert.equal(erased.notice, "erased");
     assert.equal(erased.name, null, "Anna's name reads unset");
 
+    // The signer holds the shred once sync brings it, and then reads
+    // Anna's name unset, as the performer does.
     const nameOnSigner = await signer.evaluate(
       async ({ space, anna }) => {
         const project = await window.db.spaces.get(space);
         return window.until("the signer reads Anna erased", async () => {
+          const audit = await project.erasures.list();
+          if (!audit.some((erasure) => erasure.state === "final")) return null;
           const read = await project.get(window.model.people, anna);
-          return read !== undefined && read.name === undefined && "unset";
+          return read !== undefined && read.name == null && "unset";
         });
       },
       { space, anna },
