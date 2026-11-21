@@ -65,9 +65,9 @@ type Indexes = Record<string, Index>;
 
 /** The fields of `F` that are not deprecated, each optional, as the app reads them. */
 type Readable<F extends Fields> = {
-  [K in keyof F as F[K] extends Value<unknown, true>
-    ? never
-    : K]?: F[K]["nc.reads"];
+  [
+    K in keyof F as F[K] extends Value<unknown, true> ? never : K
+  ]?: F[K]["nc.reads"];
 };
 
 /** An object of a collection with the fields `F`, as a read gives it: its fields and its ids (RFC 0009, "Get by id"). */
@@ -112,16 +112,17 @@ export type Unknown = { unknown: string };
 /**
  * An object of the collection `C` as the app reads it (RFC 0005, "Types for
  * the app"): every field optional, without the deprecated ones. A choice
- * reads as its options or `Unknown`, an `nc.int` as a `number`, a set as
+ * reads as its options or `Unknown`, an `nc.int` as a `number`, an
+ * `nc.date` as a `"YYYY-MM-DD"` string, an `nc.timestamp` as a `Date`, a set as
  * an array, a link as an object id, a reference as `{ space, id }`
  * (RFC 0009, "Get by id").
  */
 export type Infer<C extends Collection<Fields, boolean>> =
   C extends Collection<infer F, false>
     ? {
-        [K in keyof F as F[K] extends Value<unknown, true>
-          ? never
-          : K]?: F[K]["nc.reads"];
+        [
+          K in keyof F as F[K] extends Value<unknown, true> ? never : K
+        ]?: F[K]["nc.reads"];
       }
     : never;
 
@@ -290,7 +291,11 @@ export const boolean = (): Field<boolean> => basic("ncdb/boolean");
 export const oneOf = <const O extends readonly string[]>(
   options: O,
 ): Field<O[number] | Unknown> => basic("ncdb/choice", options);
-/** A set of basic values. */
+/** A calendar day, basic value, read and written as a `"YYYY-MM-DD"` string, never converted to a time zone (RFC 0005, "Days and points in time"). */
+export const date = (): Field<string> => basic("ncdb/date");
+/** A point in time to the millisecond, in UTC, basic value, read and written as a `Date` (RFC 0005, "Days and points in time"). */
+export const timestamp = (): Field<Date> => basic("ncdb/timestamp");
+/** A set of basic values, other than days and points in time. */
 export const set = <T>(element: Field<T>): Field<T[]> =>
   field({ spec: { kind: "set", of: element } });
 /** A link to one object, in one collection or in one of several. */
@@ -329,8 +334,7 @@ export const view = (..._args: unknown[]): Named => name();
 /** Declares an index: fields in index order, each ascending unless it says otherwise, how many leading fields a query fixes with equality (`equal`, 0 by default), and with `scope: "space"` an index that runs in one space at a time instead of across every space of the member. */
 export const index = <
   const K extends readonly (
-    | string
-    | { field: string; direction: "asc" | "desc" }
+    string | { field: string; direction: "asc" | "desc" }
   )[],
   const N extends number = 0,
 >(
@@ -433,7 +437,12 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
       throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {
       const element = fieldStates.get(spec.of);
-      if (element === undefined || element.spec.kind !== "basic") {
+      if (
+        element === undefined ||
+        element.spec.kind !== "basic" ||
+        element.spec.type === "ncdb/date" ||
+        element.spec.type === "ncdb/timestamp"
+      ) {
         throw new Error(texts.setElementNotBasic(path));
       }
       if (
