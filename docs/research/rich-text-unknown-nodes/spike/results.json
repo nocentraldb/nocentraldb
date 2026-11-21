@@ -1,0 +1,626 @@
+{
+  "scenario": {
+    "y-prosemirror 1.3.7": {
+      "beforeEditor": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "afterOpen": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "shownAfterOpen": [
+        "Intro.",
+        "Centered.",
+        "",
+        "See  here."
+      ],
+      "typeKnown": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeKnown": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "typedTextInYjs": true,
+      "typeAttr": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeAttr": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "writerAfterSync": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "deletes": [
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "callout"
+            },
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 8
+            },
+            {
+              "kind": "attribute",
+              "key": "tone"
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 5
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "chip"
+            },
+            {
+              "kind": "attribute",
+              "key": "ref"
+            }
+          ]
+        },
+        {
+          "step": "type in the paragraph with an unknown attribute",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "attribute",
+              "key": "align"
+            }
+          ]
+        }
+      ],
+      "errors": [],
+      "readerXml": "<paragraph>Hi. Intro.</paragraph><paragraph>Now Centered.</paragraph><paragraph></paragraph><paragraph>See  here.</paragraph>"
+    },
+    "y-tiptap 3.3.1, no onInvalidContent": {
+      "beforeEditor": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "afterOpen": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "shownAfterOpen": [
+        "Intro.",
+        "Centered.",
+        "",
+        "See  here."
+      ],
+      "typeKnown": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeKnown": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "typedTextInYjs": true,
+      "typeAttr": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeAttr": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "writerAfterSync": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "deletes": [
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "callout"
+            },
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 8
+            },
+            {
+              "kind": "attribute",
+              "key": "tone"
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 5
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "chip"
+            },
+            {
+              "kind": "attribute",
+              "key": "ref"
+            }
+          ]
+        },
+        {
+          "step": "type in the paragraph with an unknown attribute",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "attribute",
+              "key": "align"
+            }
+          ]
+        }
+      ],
+      "errors": [],
+      "readerXml": "<paragraph>Hi. Intro.</paragraph><paragraph>Now Centered.</paragraph><paragraph></paragraph><paragraph>See  here.</paragraph>"
+    },
+    "y-tiptap 3.3.1, onInvalidContent": {
+      "beforeEditor": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "afterOpen": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "shownAfterOpen": [
+        "Intro.",
+        "Centered.",
+        "",
+        "See  here."
+      ],
+      "typeKnown": {
+        "typed": false,
+        "reason": "transaction filtered"
+      },
+      "afterTypeKnown": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "typedTextInYjs": false,
+      "typeAttr": {
+        "typed": false,
+        "reason": "transaction filtered"
+      },
+      "afterTypeAttr": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "writerAfterSync": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "deletes": [],
+      "errors": [
+        "Unknown node type: callout"
+      ],
+      "readerXml": "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+    },
+    "TipTap 3.35.0, enableContentCheck false": {
+      "beforeEditor": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "afterOpen": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "shownAfterOpen": [
+        "Intro.",
+        "Centered.",
+        "",
+        "See  here."
+      ],
+      "typeKnown": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeKnown": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": true,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "typedTextInYjs": true,
+      "typeAttr": {
+        "typed": true,
+        "reason": null
+      },
+      "afterTypeAttr": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "writerAfterSync": {
+        "callout": false,
+        "calloutAttr": false,
+        "alignAttr": false,
+        "highlightMark": false,
+        "highlightText": false,
+        "chip": false,
+        "chipParagraphText": true
+      },
+      "deletes": [
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "callout"
+            },
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 8
+            },
+            {
+              "kind": "attribute",
+              "key": "tone"
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "YXmlText"
+            },
+            {
+              "kind": "text",
+              "length": 5
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            },
+            {
+              "kind": "format",
+              "key": "highlight"
+            },
+            {
+              "kind": "text",
+              "length": 6
+            }
+          ]
+        },
+        {
+          "step": "open",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "element",
+              "name": "chip"
+            },
+            {
+              "kind": "attribute",
+              "key": "ref"
+            }
+          ]
+        },
+        {
+          "step": "type in the paragraph with an unknown attribute",
+          "origin": true,
+          "deleted": [
+            {
+              "kind": "attribute",
+              "key": "align"
+            }
+          ]
+        }
+      ],
+      "errors": [],
+      "readerXml": "<paragraph>Hi. Intro.</paragraph><paragraph>Now Centered.</paragraph><paragraph></paragraph><paragraph>See  here.</paragraph>"
+    },
+    "TipTap 3.35.0, enableContentCheck true": {
+      "beforeEditor": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "afterOpen": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "shownAfterOpen": [
+        "Intro.",
+        "Centered.",
+        "",
+        "See  here."
+      ],
+      "typeKnown": {
+        "typed": false,
+        "reason": "transaction filtered"
+      },
+      "afterTypeKnown": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "typedTextInYjs": false,
+      "typeAttr": {
+        "typed": false,
+        "reason": "transaction filtered"
+      },
+      "afterTypeAttr": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "writerAfterSync": {
+        "callout": true,
+        "calloutAttr": true,
+        "alignAttr": true,
+        "highlightMark": true,
+        "highlightText": true,
+        "chip": true,
+        "chipParagraphText": true
+      },
+      "deletes": [],
+      "errors": [
+        "Unknown node type: callout"
+      ],
+      "readerXml": "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+    }
+  },
+  "remedies": {
+    "read-only y-prosemirror with the old schema": {
+      "readerLost": [
+        "callout",
+        "calloutAttr",
+        "highlightMark",
+        "highlightText",
+        "chip"
+      ]
+    },
+    "attribute only, TipTap with enableContentCheck": {
+      "document": "<paragraph>Intro.</paragraph><paragraph>Now Centered.</paragraph>",
+      "errors": 0,
+      "typed": true,
+      "alignKeptInWriter": false
+    },
+    "widened schema, y-prosemirror": {
+      "widenedWith": [
+        "callout",
+        "chip"
+      ],
+      "typed": [
+        true,
+        true
+      ],
+      "readerLost": [],
+      "writerLost": []
+    },
+    "widened schema, TipTap with enableContentCheck": {
+      "typed": [
+        true,
+        true
+      ],
+      "errors": 0,
+      "readerLost": [],
+      "writerLost": []
+    },
+    "late arrival, widened y-prosemirror": {
+      "figureKeptInReader": false
+    },
+    "late arrival, TipTap with enableContentCheck, rebuilt on contentError": {
+      "errorsOnArrival": 1,
+      "typedWhileStale": false,
+      "typedAfterRebuild": true,
+      "figureKeptInWriter": true,
+      "writerLost": []
+    },
+    "guard, plain y-prosemirror with the old schema": {
+      "flagged": [
+        "node callout",
+        "attribute tone",
+        "mark highlight",
+        "mark highlight",
+        "node chip",
+        "attribute ref",
+        "attribute align"
+      ]
+    },
+    "guard, ordinary edits with the full schema": {
+      "flagged": []
+    }
+  }
+}

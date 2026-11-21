@@ -1,0 +1,22 @@
+{
+  "name": "spike-rich-text-unknown-nodes",
+  "private": true,
+  "type": "module",
+  "description": "NOC-437 spike: what y-prosemirror and y-tiptap do with nodes the editor's schema lacks. Not part of the workspace or the gates.",
+  "scripts": {
+    "spike": "node run.mjs"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-collaboration": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/starter-kit": "3.35.0",
+    "@tiptap/y-tiptap": "3.3.1",
+    "jsdom": "26.1.0",
+    "prosemirror-model": "1.25.13",
+    "prosemirror-state": "1.4.4",
+    "prosemirror-view": "1.43.0",
+    "y-prosemirror": "1.3.7",
+    "yjs": "13.6.33"
+  }
+}

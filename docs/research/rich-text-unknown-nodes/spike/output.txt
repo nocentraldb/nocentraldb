@@ -1,0 +1,106 @@
+
+## y-prosemirror 1.3.7
+  Yjs before any editor lost: nothing
+  after opening, the reader's Yjs lost: callout, calloutAttr, highlightMark, highlightText, chip
+  editor shows: ["Intro.","Centered.","","See  here."]
+  typing in a known paragraph: {"typed":true,"reason":null}, in Yjs: true
+  after that, lost: callout, calloutAttr, highlightMark, highlightText, chip
+  typing in the aligned paragraph: {"typed":true,"reason":null}
+  after that, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  the newer app, after sync, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  errors reported: 0
+  deleted on "open": [{"kind":"element","name":"callout"},{"kind":"element","name":"YXmlText"},{"kind":"text","length":8},{"kind":"attribute","key":"tone"}]
+  deleted on "open": [{"kind":"element","name":"YXmlText"},{"kind":"text","length":5},{"kind":"format","key":"highlight"},{"kind":"text","length":6},{"kind":"format","key":"highlight"},{"kind":"text","length":6}]
+  deleted on "open": [{"kind":"element","name":"chip"},{"kind":"attribute","key":"ref"}]
+  deleted on "type in the paragraph with an unknown attribute": [{"kind":"attribute","key":"align"}]
+
+## y-tiptap 3.3.1, no onInvalidContent
+  Yjs before any editor lost: nothing
+  after opening, the reader's Yjs lost: callout, calloutAttr, highlightMark, highlightText, chip
+  editor shows: ["Intro.","Centered.","","See  here."]
+  typing in a known paragraph: {"typed":true,"reason":null}, in Yjs: true
+  after that, lost: callout, calloutAttr, highlightMark, highlightText, chip
+  typing in the aligned paragraph: {"typed":true,"reason":null}
+  after that, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  the newer app, after sync, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  errors reported: 0
+  deleted on "open": [{"kind":"element","name":"callout"},{"kind":"element","name":"YXmlText"},{"kind":"text","length":8},{"kind":"attribute","key":"tone"}]
+  deleted on "open": [{"kind":"element","name":"YXmlText"},{"kind":"text","length":5},{"kind":"format","key":"highlight"},{"kind":"text","length":6},{"kind":"format","key":"highlight"},{"kind":"text","length":6}]
+  deleted on "open": [{"kind":"element","name":"chip"},{"kind":"attribute","key":"ref"}]
+  deleted on "type in the paragraph with an unknown attribute": [{"kind":"attribute","key":"align"}]
+
+## y-tiptap 3.3.1, onInvalidContent
+  Yjs before any editor lost: nothing
+  after opening, the reader's Yjs lost: nothing
+  editor shows: ["Intro.","Centered.","","See  here."]
+  typing in a known paragraph: {"typed":false,"reason":"transaction filtered"}, in Yjs: false
+  after that, lost: nothing
+  typing in the aligned paragraph: {"typed":false,"reason":"transaction filtered"}
+  after that, lost: nothing
+  the newer app, after sync, lost: nothing
+  errors reported: 1
+
+## TipTap 3.35.0, enableContentCheck false
+  Yjs before any editor lost: nothing
+  after opening, the reader's Yjs lost: callout, calloutAttr, highlightMark, highlightText, chip
+  editor shows: ["Intro.","Centered.","","See  here."]
+  typing in a known paragraph: {"typed":true,"reason":null}, in Yjs: true
+  after that, lost: callout, calloutAttr, highlightMark, highlightText, chip
+  typing in the aligned paragraph: {"typed":true,"reason":null}
+  after that, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  the newer app, after sync, lost: callout, calloutAttr, alignAttr, highlightMark, highlightText, chip
+  errors reported: 0
+  deleted on "open": [{"kind":"element","name":"callout"},{"kind":"element","name":"YXmlText"},{"kind":"text","length":8},{"kind":"attribute","key":"tone"}]
+  deleted on "open": [{"kind":"element","name":"YXmlText"},{"kind":"text","length":5},{"kind":"format","key":"highlight"},{"kind":"text","length":6},{"kind":"format","key":"highlight"},{"kind":"text","length":6}]
+  deleted on "open": [{"kind":"element","name":"chip"},{"kind":"attribute","key":"ref"}]
+  deleted on "type in the paragraph with an unknown attribute": [{"kind":"attribute","key":"align"}]
+
+## TipTap 3.35.0, enableContentCheck true
+  Yjs before any editor lost: nothing
+  after opening, the reader's Yjs lost: nothing
+  editor shows: ["Intro.","Centered.","","See  here."]
+  typing in a known paragraph: {"typed":false,"reason":"transaction filtered"}, in Yjs: false
+  after that, lost: nothing
+  typing in the aligned paragraph: {"typed":false,"reason":"transaction filtered"}
+  after that, lost: nothing
+  the newer app, after sync, lost: nothing
+  errors reported: 1
+
+## Remedies
+
+### read-only y-prosemirror with the old schema
+  readerLost: ["callout","calloutAttr","highlightMark","highlightText","chip"]
+
+### attribute only, TipTap with enableContentCheck
+  document: <paragraph>Intro.</paragraph><paragraph>Now Centered.</paragraph>
+  errors: 0
+  typed: true
+  alignKeptInWriter: false
+
+### widened schema, y-prosemirror
+  widenedWith: ["callout","chip"]
+  typed: [true,true]
+  readerLost: []
+  writerLost: []
+
+### widened schema, TipTap with enableContentCheck
+  typed: [true,true]
+  errors: 0
+  readerLost: []
+  writerLost: []
+
+### late arrival, widened y-prosemirror
+  figureKeptInReader: false
+
+### late arrival, TipTap with enableContentCheck, rebuilt on contentError
+  errorsOnArrival: 1
+  typedWhileStale: false
+  typedAfterRebuild: true
+  figureKeptInWriter: true
+  writerLost: []
+
+### guard, plain y-prosemirror with the old schema
+  flagged: ["node callout","attribute tone","mark highlight","mark highlight","node chip","attribute ref","attribute align"]
+
+### guard, ordinary edits with the full schema
+  flagged: []
