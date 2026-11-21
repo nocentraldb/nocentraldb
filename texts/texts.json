@@ -2314,6 +2314,20 @@
       "when": "nc.open in a tab while another tab of the origin has the database open with another lock."
     },
     {
+      "id": "ts.coreFailed",
+      "kind": "ts",
+      "code": "storageFailed",
+      "text": "the database's core failed: {message}",
+      "when": "The call the SDK's worker was answering when its core failed, such as a write too large for the core's memory, with the browser's own message."
+    },
+    {
+      "id": "ts.coreStopped",
+      "kind": "ts",
+      "code": "storageFailed",
+      "text": "the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again",
+      "when": "Every call after the SDK's worker's core failed in this tab, until the app closes the database and opens it again."
+    },
+    {
       "id": "ts.cursorOfAnotherDatabase",
       "kind": "ts",
       "code": "cursorOfAnotherModel",
