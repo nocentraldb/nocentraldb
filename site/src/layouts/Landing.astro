@@ -9,6 +9,7 @@ import CodeSection from "../components/CodeSection.astro";
 import Demo from "../components/Demo.astro";
 import Hero from "../components/Hero.astro";
 import Scenario from "../components/Scenario.astro";
+import { OG_IMAGES, ogTags, SITE } from "../og.mjs";
 import "../styles/tokens.css";
 import "../styles/kit-tokens.css";
 import "../styles/scene.css";
@@ -18,6 +19,7 @@ import "../styles/landing-page.css";
 // 2026-11-19). The link carries the name, so both pictures are decoration.
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
 const logo = wordmark.replace("<svg ", '<svg aria-hidden="true" ');
+const title = "NoCentralDB: a local-first database for people and agents";
 const description =
   "The database puts all the data right next to the people and agents who use it. A server keeps everyone in sync, yet it only ever sees encrypted data.";
 const links = [
@@ -33,11 +35,17 @@ const links = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>NoCentralDB: a local-first database for people and agents</title>
+    <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="site-kind" content="software" />
     <meta name="page-type" content="software" />
     <meta name="theme-color" content="#111110" />
+    <!-- the link card: the page's own title, description and Open Graph image (NOC-410) -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`${SITE}/`} />
+    <meta property="og:type" content="website" />
+    {ogTags(OG_IMAGES.landing).map(([key, name, content]) => <meta {...{ [key]: name }} content={content} />)}
     <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />
