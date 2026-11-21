@@ -73,3 +73,41 @@ test("space.write takes a value of more than 1 MiB, and a get reads it back", as
   });
   assert.deepEqual(errors, []);
 });
+
+// A value too large for the core's memory: Chromium's core runs out of
+// WebAssembly memory from about 200 MiB and the write fails with
+// `storageFailed`. Where an engine's core holds 256 MiB, the write goes
+// through. Either way it never fails with anything but an nc.Error.
+test("a write too large for the core fails with an nc.Error that has a code", async () => {
+  const opened = await (await browser.newContext()).newPage();
+  const errors = [];
+  opened.on("pageerror", (error) => errors.push(error));
+  await opened.goto(`${server.url}/`);
+  await opened.waitForFunction(() => window.ready === true);
+
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const db = await nc.open({ model, lock, name: "too-large" });
+      const project = await db.spaces.create();
+      const title = "x".repeat(256 * 1024 * 1024);
+      const outcome = await project
+        .write((tx) => {
+          tx.create(model.tasks, { title, priority: 1 });
+        })
+        .then(
+          () => "written",
+          (e) =>
+            e instanceof nc.Error && typeof e.code === "string" && e.code
+              ? "nc.Error"
+              : `${e.name}: ${e.message}`,
+        );
+      await db.close().catch(() => {});
+      return outcome;
+    },
+    { lock, MODEL },
+  );
+  assert.ok(["written", "nc.Error"].includes(result), result);
+  assert.deepEqual(errors, []);
+});
