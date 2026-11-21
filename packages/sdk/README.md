@@ -7,7 +7,7 @@ NoCentralDB 0.1 is a pre-release: names and formats can still change before 1.0.
 ## Install
 
 ```sh
-npm install @nocentraldb/sdk@alpha
+npm install @nocentraldb/sdk@beta
 ```
 
 `ncdb model build`, which turns your model into `model.lock.json`, runs from a clone of [the repository](https://github.com/nocentraldb/nocentraldb) in 0.1, as [the browser guide](https://nocentraldb.io/docs/guides/browser/) shows.

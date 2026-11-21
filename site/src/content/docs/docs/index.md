@@ -25,15 +25,17 @@ NoCentralDB 0.1 is the first planned release. Its alphas are out, and names and 
 
 ## Start with a guide
 
-In 0.1 you build your first app inside a clone of the repository: `ncdb`, which builds the lock, comes from the clone, and so does the Rust SDK until it is on crates.io. Each guide starts with one database and ends with members syncing through a relay:
+In 0.1 the guides build your first app inside a clone of the repository, with `ncdb` and the Rust SDK from the clone. Each guide starts with one database and ends with members syncing through a relay:
 
 - [Getting started with the Rust SDK](/docs/guides/rust/), with [apps/tasks-rust](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-rust/README.md) as the finished app.
 - [Getting started in the browser](/docs/guides/browser/), with [apps/tasks-ts](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-ts/README.md) as the finished page.
 
-The alphas of the TypeScript SDK are on npm:
+The beta of the TypeScript SDK is on npm, and the Rust SDK and `ncdb` are on crates.io:
 
 ```sh
-npm install @nocentraldb/sdk@alpha
+npm install @nocentraldb/sdk@beta
+cargo add nocentraldb@0.1.0-beta.1
+cargo install ncdb --version 0.1.0-beta.1
 ```
 
 ## A first look at the code
