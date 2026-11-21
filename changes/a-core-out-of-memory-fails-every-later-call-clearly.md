@@ -1,7 +1,7 @@
 ---
 type: fix
 tickets: [NOC-426]
-introduced: 0.1.0
+introduced: cycle
 components: [sdk-ts]
 ---
 ## Symptom

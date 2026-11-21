@@ -1,7 +1,7 @@
 ---
 type: fix
 tickets: [NOC-427]
-introduced: 0.1.0
+introduced: cycle
 components: [relay]
 ---
 ## Symptom
