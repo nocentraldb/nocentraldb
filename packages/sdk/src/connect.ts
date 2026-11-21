@@ -19,6 +19,7 @@ import {
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
 import { SetElements } from "./elements.ts";
+import { erasureCallsOf, signOffOf, takeBackOf } from "./erase.ts";
 import { NcError } from "./error.ts";
 import { lockOutOfDate } from "./lockCheck.ts";
 import type { Notice } from "./members.ts";
@@ -519,6 +520,7 @@ export const connect = async (
           (await ask("erasures.list", { space: id })) as unknown as Awaited<
             ReturnType<Space["erasures"]["list"]>
           >,
+        takeBack: takeBackOf(ask, id),
       },
       status: {
         current: () => (statuses.get(id) as { status: SpaceStatus }).status,
@@ -631,7 +633,8 @@ export const connect = async (
         }
       },
     },
-    account: accountOf(ask),
+    account: { ...accountOf(ask), signOff: signOffOf(ask) },
+    ...erasureCallsOf(ask, read),
     durability: reports.durability,
     view: reports.view,
     close: async () => {

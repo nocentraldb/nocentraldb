@@ -106,7 +106,12 @@ test("db.erasureRequest refuses an object the SDK did not read, before it asks t
 test("nc.erasureRequest and nc.signOffs read the texts, and refuse anything else with invalidValue", () => {
   expect(String(nc.erasureRequest(` ${REQUEST}\n`))).toBe(REQUEST);
   expect(String(nc.signOffs(SIGN_OFFS))).toBe(SIGN_OFFS);
-  for (const text of ["", "ncdb-pair-1:AQID", "ncdb-erase-1:", "ncdb-erase-1:a"]) {
+  for (const text of [
+    "",
+    "ncdb-pair-1:AQID",
+    "ncdb-erase-1:",
+    "ncdb-erase-1:a",
+  ]) {
     expect(() => nc.erasureRequest(text)).toThrow(
       expect.objectContaining({ code: "invalidValue" }),
     );
