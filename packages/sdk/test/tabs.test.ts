@@ -41,15 +41,19 @@ const fakeLocks = (): Platform["locks"] => {
   };
 };
 
-/** A worker that answers like the bridge, logs each call, and never answers the calls in `hold`. */
+/** A worker that answers like the bridge, logs each call, and answers the calls in `hold` only when `release` is called. */
 const fakeWorker = (log: string[], hold: Set<string>) => {
   let listener: ((event: Uint8Array) => void) | undefined;
   let stopped = false;
+  const held: (() => void)[] = [];
   const core: Core = {
     call: async (bytes) => {
       const { id, call } = decode(bytes) as { id: number; call: string };
       log.push(call);
-      if (hold.has(call)) return new Promise(() => {});
+      if (hold.has(call))
+        return new Promise((resolve) => {
+          held.push(() => resolve(encode({ id, ok: null })));
+        });
       switch (call) {
         case "open":
           return encode({ id, ok: { sync: { connection: "none" } } });
@@ -71,6 +75,9 @@ const fakeWorker = (log: string[], hold: Set<string>) => {
   return {
     core,
     stopped: () => stopped,
+    release: () => {
+      for (const answer of held.splice(0)) answer();
+    },
     emit: (event: Record<string, unknown>) => listener?.(encode(event)),
   };
 };
@@ -304,6 +311,32 @@ test("a hidden owner first answers the calls it already took", async () => {
   first.hide();
   expect((await write).ok).toEqual({ change: "c", ids: [] });
   expect(second.log.filter((call) => call === "write")).toEqual([]);
+});
+
+// NOC-425: a closed BroadcastChannel throws on postMessage, which the page
+// saw as an error after `db.close()`.
+test("an owner that closes while its worker still answers or reports posts nothing more", async () => {
+  const { tab } = origin();
+  const first = await tab(new Set(["write"]));
+  await ask(first.core, "open", { lock: LOCK });
+  const second = await tab();
+  await ask(second.core, "open", { lock: LOCK });
+  const unhandled: unknown[] = [];
+  const note = (reason: unknown) => unhandled.push(reason);
+  process.on("unhandledRejection", note);
+  try {
+    void ask(second.core, "write", { space: "s", ops: [] }).catch(() => {});
+    await until(() => first.log.includes("write"));
+    first.core.terminate();
+    first.worker()?.release();
+    expect(() =>
+      first.worker()?.emit({ event: "folded", folds: [] }),
+    ).not.toThrow();
+    await settle();
+    expect(unhandled).toEqual([]);
+  } finally {
+    process.off("unhandledRejection", note);
+  }
 });
 
 test("a hidden tab does not take the database over; a visible one does", async () => {
