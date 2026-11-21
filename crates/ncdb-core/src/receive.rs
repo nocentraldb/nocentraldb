@@ -115,6 +115,14 @@ pub trait Checks {
     /// [`Log::receive`] can hand them every folded control change of the
     /// log first.
     fn add_control(&mut self, change: &Change);
+    /// Adds every control change of `changes`, as [`Checks::add_control`]
+    /// adds each. Checks that resolve the set once for all of them, rather
+    /// than once per change, say so here (NOC-438).
+    fn add_controls(&mut self, changes: &[Change]) {
+        for change in changes {
+            self.add_control(change);
+        }
+    }
 }
 
 /// Boxed checks are checks, so that a holder can keep checks of a type it
@@ -143,6 +151,9 @@ impl<C: Checks + ?Sized> Checks for Box<C> {
     }
     fn add_control(&mut self, change: &Change) {
         (**self).add_control(change)
+    }
+    fn add_controls(&mut self, changes: &[Change]) {
+        (**self).add_controls(changes)
     }
 }
 
