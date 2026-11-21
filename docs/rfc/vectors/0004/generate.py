@@ -1,6 +1,6 @@
-"""Writes the byte-exact examples E1 to E17 of RFC 0004
+"""Writes the byte-exact examples E1 to E20 of RFC 0004
 (docs/rfc/0004-merge-rules-basic-types.md, "Byte-exact examples"; E15 to E17
-are the reference's) in this directory, from their descriptions in the RFC and independently of the Rust
+are the reference's, E18 to E20 the day's and the point in time's) in this directory, from their descriptions in the RFC and independently of the Rust
 core and of the tooling tests' reader: with cbor2 (6.2.1, canonical mode).
 The gates do not run this script; scripts/rfc-0004-examples.test.mjs checks
 that the RFC's hex equals the committed files.
@@ -69,6 +69,11 @@ def set_ref(value, replaces=()):
     return operation("customer", SET, {1: value, 2: ids(*replaces)}, "orders")
 
 
+def set_event(field, value, replaces=()):
+    """A set of a day or a point in time of events (E18 to E20)."""
+    return operation(field, SET, {1: value, 2: ids(*replaces)}, "events")
+
+
 def add(field, element, replaces=()):
     return operation(field, ADD, {1: element, 2: ids(*replaces)})
 
@@ -112,6 +117,12 @@ EXAMPLES = {
     "E16": set_ref(ref(S, C2), replaces=[(B, 1), (A, 0)]),
     # E17. set, clearing a reference.
     "E17": set_ref(None, replaces=[(A, 4)]),
+    # E18. set, a day: 2026-11-21 is day 20778 since 1970-01-01.
+    "E18": set_event("doneOn", 20778),
+    # E19. set, a day before 1970: 1969-12-31 is day -1, replacing [A, 0].
+    "E19": set_event("doneOn", -1, replaces=[(A, 0)]),
+    # E20. set, a point in time: 2026-11-21T19:08:44.636Z in milliseconds.
+    "E20": set_event("occurredAt", 1795288124636),
 }
 
 

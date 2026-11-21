@@ -775,6 +775,42 @@ a501501111111111111111111111111111111102666f72646572730368637573
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa04
 ```
 
+**Days and points in time.** E18 to E20 use the ids above. The object `T1` is an event in the collection `events`, whose field `doneOn` is `nc.date()` and whose field `occurredAt` is `nc.timestamp()`. The same generator writes them into `vectors/0004/E18.hex` to `E20.hex`, and the same test checks them. They follow [Days and points in time](#days-and-points-in-time): the types `ncdb/date` and `ncdb/timestamp`, written by set, and their values, plain CBOR integers.
+
+**E18. set, a day.** `doneOn` of `events` is set to 2026-11-21, day 20778 since 1970-01-01, written `19 512a` ([Days and points in time](#days-and-points-in-time)); nothing is replaced.
+
+```text
+{1: h'1111…11', 2: "events", 3: "doneOn", 4: 1, 5: {1: 20778, 2: []}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e74730366646f6e
+654f6e040105a20119512a0280
+```
+
+**E19. set, a day before 1970.** `doneOn` is set to 1969-12-31, day −1, a negative integer written `20`, replacing `[A, 0]`.
+
+```text
+{1: h'1111…11', 2: "events", 3: "doneOn", 4: 1, 5: {1: -1, 2: [[h'aaaa…aa', 0]]}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e74730366646f6e
+654f6e040105a201200281825820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaa00
+```
+
+**E20. set, a point in time.** `occurredAt` of `events` is set to 2026-11-21T19:08:44.636Z, 1795288124636 milliseconds since 1970-01-01T00:00:00.000Z, written in nine bytes; nothing is replaced.
+
+```text
+{1: h'1111…11', 2: "events", 3: "occurredAt", 4: 1, 5: {1: 1795288124636, 2: []}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e7473036a6f6363
+75727265644174040105a2011b000001a1ff82ccdc0280
+```
+
 ### What the relay sees
 
 Nothing changes for the relay. Field operations, their numbers, values, `replaces` and `observed` live only inside the payload, which is AEAD ciphertext (RFC 0002, The payload). The header, the frame and control changes are untouched, and the relay still sees exactly what [RFC 0002 lists](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot).

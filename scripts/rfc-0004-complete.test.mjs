@@ -5,7 +5,7 @@
 // reference such as "decision 7" or "D12", and no History of the drafts. The
 // tests below pin the content of every former decision and rejected option
 // where it now stands, and the rules of the field operations and references;
-// rfc-0004-examples.test.mjs keeps checking the bytes of E1 to E17. Whether
+// rfc-0004-examples.test.mjs keeps checking the bytes of E1 to E20. Whether
 // the wording is right is the review of the PR.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
