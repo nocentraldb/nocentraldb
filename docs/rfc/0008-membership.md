@@ -8,7 +8,7 @@ It builds on [RFC 0001](0001-nocentraldb.md) and on [RFC 0002](0002-change-and-l
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**At 0.1.** Partly built. Built: the genesis, the roles, every control change and the rules that fold them, provisional erasure and the erasure decision, in the core, the relay and the Rust SDK. Not built: the SDK's reports to an admin who removes a member with changes it has not seen, of the members a removed admin added, of a revoked member's fork, of a generation-id collision, and of a wrong key envelope or key chain entry. The core finds a wrong key envelope; the SDK does not show it yet.
+**At 0.1.** Partly built. Built: the genesis, the roles, every control change and the rules that fold them, provisional erasure and the erasure decision, in the core, the relay and both SDKs. Not built: the SDK's reports to an admin who removes a member with changes it has not seen, of the members a removed admin added, of a revoked member's fork, of a generation-id collision, and of a wrong key envelope or key chain entry. The core finds a wrong key envelope; the SDK does not show it yet.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0008: Membership, roles and the first change of a space](https://github.com/nocentraldb/nocentraldb/discussions/148), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -739,3 +739,4 @@ It is used by [RFC 0007](0007-relay.md), the relay, which applies the membership
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A member keeps every key the envelopes of a generation unwrap to, and reads and writes with the one the generation's control change confirms (NOC-389)
 - 2026-11-20 · A shred over a gap in its causal past is waiting until the gap fills, and the SDK lists it as `waiting` (NOC-401)
+- 2026-11-21 · The TypeScript SDK erases a person and takes a provisional erasure back, so the status line names both SDKs (NOC-406)
