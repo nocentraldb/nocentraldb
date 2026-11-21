@@ -21,12 +21,42 @@ const utf8 = new TextDecoder("utf-8", { fatal: true });
 
 /** The canonical bytes of `value`. A key whose value is `undefined` is left out. */
 export const encode = (value: unknown): Uint8Array => {
-  const out: number[] = [];
+  const out = new Out();
   write(out, value);
-  return Uint8Array.from(out);
+  return out.bytes();
 };
 
-const head = (out: number[], major: number, n: number | bigint) => {
+/** The bytes written so far, in a buffer that doubles as it fills. Bytes are copied in with `set`, never spread as arguments, which overflows the stack from about 125 KiB (NOC-425). */
+class Out {
+  private buffer = new Uint8Array(64);
+  private length = 0;
+
+  private room(n: number) {
+    if (this.length + n <= this.buffer.length) return;
+    let size = this.buffer.length * 2;
+    while (size < this.length + n) size *= 2;
+    const grown = new Uint8Array(size);
+    grown.set(this.buffer.subarray(0, this.length));
+    this.buffer = grown;
+  }
+
+  push(...values: number[]) {
+    this.room(values.length);
+    for (const v of values) this.buffer[this.length++] = v;
+  }
+
+  append(bytes: Uint8Array) {
+    this.room(bytes.length);
+    this.buffer.set(bytes, this.length);
+    this.length += bytes.length;
+  }
+
+  bytes(): Uint8Array {
+    return this.buffer.slice(0, this.length);
+  }
+}
+
+const head = (out: Out, major: number, n: number | bigint) => {
   const m = major << 5;
   const v = BigInt(n);
   if (v < 24n) out.push(m | Number(v));
@@ -43,7 +73,7 @@ const head = (out: number[], major: number, n: number | bigint) => {
   }
 };
 
-const write = (out: number[], value: unknown): void => {
+const write = (out: Out, value: unknown): void => {
   if (value === null) {
     out.push(0xf6);
   } else if (value === true || value === false) {
@@ -53,10 +83,10 @@ const write = (out: number[], value: unknown): void => {
   } else if (typeof value === "string") {
     const bytes = text.encode(value);
     head(out, 3, bytes.length);
-    out.push(...bytes);
+    out.append(bytes);
   } else if (value instanceof Uint8Array) {
     head(out, 2, value.length);
-    out.push(...value);
+    out.append(value);
   } else if (Array.isArray(value)) {
     head(out, 4, value.length);
     for (const item of value) write(out, item);
@@ -70,7 +100,7 @@ const write = (out: number[], value: unknown): void => {
       .sort(([a], [b]) => compare(a, b));
     head(out, 5, entries.length);
     for (const [key, v] of entries) {
-      out.push(...key);
+      out.append(key);
       write(out, v);
     }
   } else {
@@ -87,7 +117,7 @@ const compare = (a: Uint8Array, b: Uint8Array): number => {
   return a.length - b.length;
 };
 
-const number = (out: number[], n: number) => {
+const number = (out: Out, n: number) => {
   if (Number.isSafeInteger(n) && !Object.is(n, -0)) {
     if (n >= 0) head(out, 0, n);
     else head(out, 1, -1n - BigInt(n));
@@ -105,11 +135,13 @@ const number = (out: number[], n: number) => {
   const view = new DataView(new ArrayBuffer(8));
   view.setFloat32(0, n);
   if (view.getFloat32(0) === n) {
-    out.push(0xfa, ...new Uint8Array(view.buffer, 0, 4));
+    out.push(0xfa);
+    out.append(new Uint8Array(view.buffer, 0, 4));
     return;
   }
   view.setFloat64(0, n);
-  out.push(0xfb, ...new Uint8Array(view.buffer));
+  out.push(0xfb);
+  out.append(new Uint8Array(view.buffer));
 };
 
 /** The 16-bit form of `n`, when it keeps `n` exactly. */
