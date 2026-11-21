@@ -22,6 +22,7 @@ It builds on [RFC 0007](0007-relay.md), which defines the relay and its costs, a
 | What should the relay key admission by? | The account's identity: the recovery key that the certificate's account key statement names, and the account key only for an account whose certificates carry no statement. The relay already receives the statement in every genesis, and can verify it. |
 | How does a new account get admitted without a redeploy? | Recommended: an **admission token**, signed by the app's backend with an admission key whose public half the operator configures on the relay. The member presents it once; the relay records the identity at runtime. |
 | What does that cost? | One small item per admitted account, and one read on each genesis: below a cent a month for thousands of accounts. |
+| What does it mean for an app? | [A user's journey](#a-users-journey) follows a user from signup to inviting others, with and without an account, and [How to cut spaces](#how-to-cut-spaces) derives where an app puts its objects: a personal space, a space per project, a space per note shared on its own. |
 | What does it not solve? | How much an admitted account writes. Today nothing limits that on any relay. Open signup makes the gap larger, so quotas and a hard ceiling on spend are follow-ups whatever the owner chooses. |
 
 ## The recovery bug
@@ -110,6 +111,119 @@ Admission decides **who** may create spaces, not **how much** anybody writes. To
 
 Both are follow-ups with their own design; a write to AWS and a larger bill wait for the owner.
 
+## A user's journey
+
+This section follows one user of an app with open signup, a notes and projects app, from signup to working with others. It assumes option C. It uses invitations as [RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members) decided them and accounts as [RFC 0010](0010-accounts.md) decided them. Where those RFCs leave a step open, the step says so and [Questions to the owner](#questions-to-the-owner) asks it. Two things set the shape of every step:
+
+- **An invitation flows from the joining member to an admin, not the other way.** It is the joining member's public identity: its member id, public keys and certificate. An admin adds a member only with that member's invitation. So "Alice invites Bob" means that Bob's devices must have sent their invitations somewhere Alice's device can fetch them, and that a device of Alice's, an admin of the space, writes the add.
+- **The app's backend already knows its users.** Under option C, it is also where an account's identity meets the app's user: the backend signs the admission for that identity. The same step can record the user's identity and their devices' invitations in the backend's **directory**, which maps an app user, such as an e-mail address, to an identity and its invitations. Nothing in the directory is secret: identities and invitations are public, and the relay already sees them.
+
+### Becoming a user
+
+Ana signs up in the app, with whatever the app uses: an e-mail address and a password, a passkey, a login with another service. NoCentralDB plays no part in this. Then the app opens a database on her device. The first open of a database that is neither paired nor recovered creates an account ([RFC 0010, "The account key and where it lives"](0010-accounts.md#the-account-key-and-where-it-lives)): it draws the account key and the recovery code, and the app shows the twelve words once. The first space the SDK pushes is the account space ([RFC 0010, "The account space"](0010-accounts.md#the-account-space)). The relay does not know Ana's identity yet and answers `not_allowed`. The SDK calls the app's `admission` function with Ana's identity. The app's backend checks that the caller is Ana, signs the admission, and stores Ana's identity and her device's invitation in its directory. The SDK presents the admission with `admit` and pushes the account space again.
+
+```mermaid
+sequenceDiagram
+    participant D as Ana's device (SDK)
+    participant B as App backend
+    participant R as Relay
+    D->>B: sign up (the app's own login)
+    Note over D: first open: account key, recovery code, account space
+    D->>R: push genesis (account space)
+    R-->>D: not_allowed
+    D->>B: admission(identity), with the device's invitation
+    Note over B: checks the session is Ana's, records identity and invitation in the directory
+    B-->>D: ncdb-admit-1:... (relay id, identity, until, spaces)
+    D->>R: admit
+    R-->>D: ok (identity recorded)
+    D->>R: push genesis again
+    R-->>D: accepted
+```
+
+Ana's later devices join her account by pairing ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)). They need no admission of their own, because the relay admits the identity, not the device. Each new device's invitation goes to the directory as well, so that others can add it.
+
+An app that calls the admission function only on `not_allowed` learns the identity late; it can call it right after the first open instead, so that the directory holds Ana before anyone looks for her. The SDK can offer both. A user whose device is offline at signup works on: spaces are created locally, and admission and the first pushes happen at the next connection.
+
+### Her first notes and her first project
+
+The app creates a **personal space** for Ana on her first device: `db.spaces.create()`, and in it an object of the app's own model, for example a `notebooks` object that says this is Ana's personal space ([RFC 0009, "Spaces"](0009-sdk-api.md#spaces): a space has no name in the SDK; names live in the app's model). Her private notes go there. Each of her devices is a member, because pairing adds a new device to every space where a device of the account is an admin.
+
+When Ana creates a project, the app creates a **project space** and writes the project's object into it, with its name. The project's tasks and notes go into the same space, so the whole project shares one membership.
+
+The personal space is not the account space. The account space holds what the SDK needs, in the SDK's own model, and an app cannot write into it.
+
+### Inviting someone
+
+Ana invites Ben by his e-mail address, to the project or to a single note.
+
+- **To a project.** Ana's device asks the directory for Ben's invitations, one per device of his account, and calls `project.members.add(invitations, { role })`. The relay tells each of Ben's connected devices with `added` ([RFC 0007, "Subscribe: follow a space live"](0007-relay.md#subscribe-follow-a-space-live)), and his app shows the project through `db.spaces.subscribe`. Ben's agents are not in the list: an agent gets the spaces its task needs, and Ben adds it himself.
+- **To a single note.** A note lives in exactly one space, and membership is per space. If the note sits in Ana's personal space or in a project, Ben cannot be given that note alone. The app must put the note in a space of its own first. No RFC defines moving an object between spaces yet (RFC 0003 names its notice as one that comes later), so today the app creates a new space, copies the note into it, and deletes the original. The copy has a new id and starts a new history, and other members' links to the old note break. An app that expects notes to be shared alone does better to create each such note in its own space from the start. The project can keep a reference to it with `nc.ref` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)); a project member who is not a member of the note's space reads that reference as `notAccessible`.
+
+**Ana's device confirms Ben's account once.** Ben's account is new to her device, so `members.add` fails with `unknownAccount` until the app passes the fingerprint a person compared ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members)). In a messaging app, two people compare safety numbers. In an app with a directory, the app could pass the fingerprint the directory reports, without a person comparing it. Then the app's backend decides who Ben is: a backend that swaps Ben's invitation for one of its own adds a reader nobody chose, which is the hidden reader GENESIS.md forbids. The SDK cannot tell the two apart. Whether the RFCs allow an app to trust its directory here, and what such an app must then say to its users, is a question for the owner.
+
+### How Ben learns of it, and what happens next
+
+**Ben already has an account.** His invitations are in the directory, so Ana's device adds him at once. If one of his devices is connected, the relay's `added` reaches it within a second, and the app shows the shared project. A device that is offline learns it at its next connection, when the relay names the space in `welcome`. The app's backend can also send Ben an e-mail or a push notification; the backend knows of the invitation because Ana's app asked it for Ben's invitations, and it learns no content.
+
+```mermaid
+sequenceDiagram
+    participant A as Ana's device (admin)
+    participant B as App backend
+    participant R as Relay
+    participant D as Ben's device
+    A->>B: invite ben@example.com to project P
+    B-->>A: Ben's invitations (one per device)
+    Note over A: members.add(invitations, { role: "writer" }), fingerprint confirmed once
+    A->>R: push membership entry and key envelopes
+    R-->>D: added {space P}
+    B-->>D: push notification or e-mail (optional)
+    D->>R: pull and subscribe to P
+```
+
+**Ben has no account yet.** Nobody can add him: a member is a key pair on his device, and it does not exist yet. The invitation is a promise the app keeps, not a change in any space:
+
+1. Ana invites ben@example.com. The app's backend stores a pending invitation, project P with role writer, and sends Ben an e-mail with a link to the app.
+2. Ben signs up and opens the app. His device creates his account, and his admission puts his identity and invitation in the directory, as in [Becoming a user](#becoming-a-user).
+3. The backend tells Ana's devices that the pending invitation can now be carried out, by a push notification or on their next connection to the backend.
+4. A device of Ana's, or of any admin of P, fetches Ben's invitation and adds him. Ben's device learns it through `added`.
+
+```mermaid
+sequenceDiagram
+    participant A as Ana's device (admin)
+    participant B as App backend
+    participant D as Ben's new device
+    participant R as Relay
+    A->>B: invite ben@example.com to project P
+    Note over B: no account for Ben: pending invitation, e-mail to Ben
+    D->>B: sign up, first open, admission (as Ana did)
+    B-->>A: Ben is ready to be added to P
+    A->>B: fetch Ben's invitations
+    A->>R: push membership entry and key envelopes
+    R-->>D: added {space P}
+```
+
+Between steps 2 and 4, Ben has signed up but sees nothing of P, until a device of an admin of P is running. That gap is the price of an invitation that flows from the joining member: no server may write an add, because it would hold the space key. An admin's agent that runs in the cloud and is a visible member of P could carry out pending invitations while Ana's devices are off, and it is one of the owner's questions. Meanwhile the pending invitation tells the backend who was invited to which project, which the relay never learns ([RFC 0009, "Invitations and members"](0009-sdk-api.md#invitations-and-members) turned down a mailbox at the relay for that reason). The backend learns it already as the app's own data; an app that must not know it would need another way to reach the invitee.
+
+**Ben's next device.** When Ben pairs a second device, his SDK adds it to the spaces where his account holds an admin. In P he is a writer, so his SDK lists P among the spaces whose admins the app asks, and the app asks Ana's device, through the backend, to add the new invitation; her SDK accepts it without a fingerprint, because Ben's account is known to it ([RFC 0010, "Adding a device or an agent to an account"](0010-accounts.md#adding-a-device-or-an-agent-to-an-account)).
+
+## How to cut spaces
+
+The journey gives the rule: **a space is a group of objects that the same members read**. Cut by who reads, not by object type.
+
+| Space | Members | Holds | When |
+| --- | --- | --- | --- |
+| Personal space | The user's own devices | The user's private notes, settings and drafts | One per user, made at the first open |
+| Project space | The project's members, with roles | The project's object and name, its tasks and notes | One per project |
+| Shared-note space | The people the note is shared with | One note, or a small set shared with the same people | Once a note is shared on its own, or from its creation if the app expects that |
+| Account space | The user's devices, all admins | What the SDK needs; the app does not write here | Made by the SDK |
+| Ad-hoc space | An agent and its sub-agent | What one task needs ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces)) | Per task |
+
+- **Not too coarse.** One space for all of an app's data gives every member every object; a space for a whole team makes every team member a reader of every project. Fine-grained rights come only from small spaces (GENESIS.md).
+- **Not too fine.** Each space costs work on every change of membership: adding a person writes an entry and an envelope in each space, and removing one rotates the key of each space, on the admin's device. A space per task in a project of 300 tasks makes adding a member 300 adds. Split a space when the readers differ, not when the objects do.
+- **Across spaces, use references.** A link points only into its own space; `nc.ref` points into another, and reads as `notAccessible` for a member who is not in the target's space ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). A project lists its shared notes by reference.
+- **Plan for sharing.** Moving an object between spaces is not defined yet, so an object that will be shared with other people than its neighbours should start in its own space.
+- **Count spaces for admission.** The `spaces` an admission grants must cover the personal space, the account space and every project and shared note the user will create. The relay cannot tell them apart.
+
 ## Recommendation
 
 1. **Fix the recovery bug now, by option A** (NOC-420): the relay reads the account's identity from the certificate's statement, keys the static list and the guest's one space by it, and refuses a genesis whose statement is older than one it has seen. The operator's tooling prints the recovery key of an invitation instead of its account key. A list entry that holds an account key keeps matching that key, so no relay that is deployed today breaks.
@@ -125,6 +239,9 @@ Option B was not taken: the same trust as C, bought with a privileged endpoint o
 3. Does an admission lapse at a time the app chooses, with the SDK fetching a new one through the app's function? Recommended: yes, so an app withdraws an account by no longer issuing admissions.
 4. Are the names `admit`, `NCDB_ADMISSION_KEYS`, `ncdb-admit-1:`, the `admission` option of `nc.open` and `db.account.identity` right?
 5. Which monthly ceiling should the throttling of the project's own relay hold? 20 USD is today's budget.
+6. May an app pass the fingerprint its directory reports for a new account, without a person comparing it? Then the app's backend decides who a person is, and a backend that swaps an invitation adds a reader nobody chose. Recommended: allow it as the app's choice, with a notice from `members.add` that says the directory vouched for the account, and a screen where people can compare fingerprints later.
+7. Should the SDK offer a way to carry out pending invitations while the inviting admin's devices are off, such as an admin agent of the inviter's account that runs in the cloud as a visible member? Recommended: not in the SDK for now; the app's backend notifies the admin's devices, and an app may run such an agent on its own.
+8. Should moving an object between spaces be designed now, since sharing a single note depends on it? Recommended: yes, as its own RFC, with the notice RFC 0003 says comes later.
 
 ## Follow-up tickets
 
@@ -133,12 +250,14 @@ Once the owner decides, these tickets carry it out:
 - **NOC-420, the relay admits by the account's identity** (recommendation 1, already a ticket): `check_genesis` and the guest's one space key by the recovery key, with the highest statement number kept per identity; RFC 0007's "Who may create a space" and its AWS table rewritten; `docs/relay-deploy.md` prints the recovery key; a relay test shows that a listed account still creates spaces after recovering.
 - **Admission tokens** (if C): the format and its test vectors in RFC 0003's style; the `admit` request and its errors in RFC 0007; `NCDB_ADMISSION_KEYS` in the Lambda settings and the CDK stack; the store item on all backends with its conformance tests; the `admission` option and `db.account.identity` in both SDKs and RFC 0009; an example backend in `apps/`.
 - **A ceiling on spend**: throttling and reserved concurrency in `infra/aws`, sized by the owner's answer to question 5.
+- **A guide for developers**: how to cut spaces and how invitations flow through an app's backend, from [A user's journey](#a-users-journey) and [How to cut spaces](#how-to-cut-spaces), with an example backend in `apps/` that issues admissions and keeps a directory.
 - **Quotas**: a short design for stored bytes and changes per minute per member, answered with `rate_limited`, then its build.
 
 ## How this RFC relates to the others
 
-It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-checks), reads the account's identity as [RFC 0010](0010-accounts.md#the-accounts-identity) defines it and the certificate and its statement as [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) define them, and would add an option and a name to [RFC 0009](0009-sdk-api.md). It follows the principles in [GENESIS.md](../../factory/GENESIS.md): the relay still holds no key that reads content, and the developer handles a string, never a key.
+It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-checks), reads the account's identity as [RFC 0010](0010-accounts.md#the-accounts-identity) defines it and the certificate and its statement as [RFC 0003](0003-keys-and-cryptography.md) and [RFC 0008](0008-membership.md) define them, would add an option and a name to [RFC 0009](0009-sdk-api.md), and follows RFC 0009's invitations and [RFC 0004](0004-merge-rules-basic-types.md)'s references in its user journey. It follows the principles in [GENESIS.md](../../factory/GENESIS.md): the relay still holds no key that reads content, and the developer handles a string, never a key.
 
 ## History
 
 - 2026-11-21 · First published as a draft (NOC-413)
+- 2026-11-21 · A user's journey and how to cut spaces, at the owner's request (NOC-413)
