@@ -92,6 +92,7 @@ The owner's doubt is fair, and S7 shows where it bites:
 - **Escapes.** Markdown escapes characters that mean something in it. An agent that copies what it read quotes `5 \* 3` and is found. An agent that quotes from the user's words or from memory writes `5 * 3` and is not.
 - **Marks inside words.** `**Fri**day` does not contain "Friday". An agent that wants to change the word has to quote the markup.
 - **Marks Markdown cannot show.** Underline and highlight render as plain text (RFC 0013, D4). The agent cannot see them, and a replacement cannot say whether they stay. The diff keeps the marks of characters it does not change, so they survive an edit around them, but an agent cannot add or remove them.
+- **What the Markdown cannot say must survive the edit.** The parallel research for D4 (NOC-437, `docs/research/rich-text-unknown-nodes/`) found that Yjs keeps every element, attribute and format it does not know, but whatever passes through a ProseMirror schema loses it: an unknown node is deleted, an unknown mark takes its paragraph's whole text with it, and an undeclared attribute is removed when the node is written again. A Markdown round trip has the same risk. So the edit must change only the quoted range, and inside it keep the inline nodes, marks and attributes that the Markdown did not show. The core should diff at the Yrs level, not by rebuilding nodes from a schema. This spike's ProseMirror path stands in for that diff only because it is shorter to write in Node.
 - **Where a quote ends.** A quote that starts or ends inside markup, such as `on **Fri`, has no clean place in the document. The core needs a rule: map Markdown offsets to document positions while rendering, and refuse a quote whose ends fall inside markup.
 
 And where Markdown is strong:
@@ -149,7 +150,7 @@ The core, in the member's copy:
 
 1. takes the document as it was at `version`, plus this lease's own edits since;
 2. renders it as Markdown and finds each quote there, once; otherwise `anchorNotFound` or `anchorAmbiguous`, which now depend only on what the agent read, never on what the person typed since;
-3. parses the replacement with the same vocabulary and writes the smallest change, text by characters, marks by ranges, blocks by type, under the leased client id;
+3. parses the replacement with the same vocabulary and writes the smallest change, text by characters, marks by ranges, blocks by type, under the leased client id, directly on the Yrs document, so that nodes, marks and attributes outside the vocabulary stay untouched;
 4. folds that update into the live document, where Yjs merges it with everything written since the read.
 
 The version is the document's state at the read. The core keeps it for an agent's open reads in a device-local, time-limited cache, no part of the view or the log, at about the size of the document's state (2.5 KB for the 2,000-insertion document of RFC 0013's F7). A read the core no longer holds is refused with an error such as `versionExpired`, and the agent reads again. Errors name no text, as the draft says.
