@@ -358,6 +358,21 @@ impl View {
         Ok(())
     }
 
+    /// Gives the view one more person key of `space`, one the member has
+    /// just drawn (NOC-424). Nothing the view holds is sealed under a key
+    /// drawn this moment, so unlike [`View::set_person_keys`] it opens no
+    /// field again; a value folded after it opens with it. The key stays in
+    /// memory, never in the database.
+    pub fn add_person_key(
+        &mut self,
+        space: SpaceId,
+        id: [u8; 16],
+        key: PersonKey,
+    ) -> Result<(), Error> {
+        self.person_keys.entry(space).or_default().insert(id, key);
+        Ok(())
+    }
+
     /// Receives a frame: appends it to the log of its space, takes it
     /// through the steps and folds it, and, when it is a control change
     /// that passes, checks rejected changes again (RFC 0002, "Rejected

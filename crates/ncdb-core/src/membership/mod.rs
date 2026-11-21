@@ -5,7 +5,8 @@
 //! first admin, and its membership comes from membership entries
 //! ([`MembershipEntry`]) in control changes ([`ControlBody`]). Members and
 //! the relay fold the control changes of a space they hold into one control
-//! state with [`resolve`], the same on every copy, in any order of arrival.
+//! state with [`resolve`], the same on every copy, in any order of arrival;
+//! a [`Resolver`] computes it with a memory of its earlier calls.
 //! The fold reads only control bodies and headers, so the relay runs the
 //! same function (RFC 0007, "What the relay checks").
 //!
@@ -25,6 +26,7 @@ mod person_key;
 mod person_key_wrap;
 mod person_keys;
 mod resolve;
+mod resolver;
 mod rights;
 mod state;
 mod statement;
@@ -54,6 +56,7 @@ pub use person_key_wrap::{
 };
 pub use person_keys::{EarlierShred, PersonKey, WaitingShred};
 pub use resolve::{Resolved, resolve};
+pub use resolver::Resolver;
 pub use rights::SignedOff;
 pub use state::{Grant, MemberState, Rejection, Revocation, Verdict};
 pub use statement::AccountKeyStatement;
