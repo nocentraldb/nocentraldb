@@ -63,18 +63,7 @@ Each private session of Chromium is a new device: its member key is created in t
 
 The database runs in a Web Worker of the tab that owns it, in WebAssembly, and its memory is limited. In Playwright's Chromium on Linux, a write of one value from about 200 MiB runs out of that memory and fails with `nc.Error` `storageFailed`, as the browser tests of NOC-425 and NOC-426 measured with a value of 256 MiB. Firefox and WebKit run the same tests. Whether such a value fits there has not been measured: a write either goes through or fails the same way. Values that large are not what the database is made for. Keep a large file elsewhere and store its address.
 
-After such a failure, the database in that tab stops for good: every later call fails with `storageFailed` and a message that says to close the database and open it again. Nothing written before is lost; only the failed write is missing. `db.close()` succeeds, and `nc.open` starts the database afresh:
-
-```ts
-try {
-  await space.write((tx) => tx.create(model.files, { content }));
-} catch (error) {
-  if (error instanceof nc.Error && error.code === "storageFailed") {
-    await db.close();
-    db = await nc.open({ model, lock });
-  }
-}
-```
+After such a failure, the database in that tab stops for good: every later call fails with `storageFailed` and a message that says to close the database and open it again. Nothing written before is lost; only the failed write is missing. So when a call fails with `storageFailed`, call `db.close()`, which succeeds, and `nc.open` again, which starts the database afresh.
 
 ## What the SDK tells you
 
