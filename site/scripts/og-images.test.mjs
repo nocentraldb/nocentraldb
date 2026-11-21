@@ -1,9 +1,10 @@
-// Checks the Open Graph images in the built site (NOC-410): every page names
-// its image with an absolute URL, its size and its alt text, and asks for a
-// large card on X; the landing page has its own image and every other page
-// shares the docs' image; each image is in site/dist, a 1200x630 PNG well
-// under 1 MB, and was rendered from the source as it is now
-// (scripts/og-images.mjs writes the hash of its HTML into the PNG).
+// Checks the built site's link cards (NOC-410): every page names its title,
+// its description and its Open Graph image with an absolute URL, its size and
+// its alt text, and asks for a large card on X; the landing page also names
+// its URL and the type "website"; the landing page has its own image and
+// every other page shares the docs' image; each image is in site/dist, a
+// 1200x630 PNG well under 1 MB, and was rendered from the source as it is
+// now (scripts/og-images.mjs writes the hash of its HTML into the PNG).
 import assert from "node:assert/strict";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
