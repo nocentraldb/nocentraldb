@@ -40,6 +40,10 @@ use crate::store::{Entry as LogEntry, Epoch, RelayStore};
 /// The most spaces the relay remembers at once.
 pub const SPACES: usize = 16;
 
+/// The most weight the memory holds: the sum over its spaces of the square
+/// of their control changes.
+pub const WEIGHT: usize = 1_200 * 1_200;
+
 /// A space's control changes as the relay last read them, and their
 /// resolve.
 pub(crate) struct Known {
@@ -85,6 +89,10 @@ impl Memory {
         while spaces.len() > SPACES {
             spaces.pop_front();
         }
+    }
+
+    fn keep_weighed(&self, space: SpaceId, known: Known, _weight: usize) {
+        self.keep(space, known);
     }
 
     /// How many spaces it holds.
@@ -189,6 +197,28 @@ mod tests {
             memory.take(space(SPACES)).is_some(),
             "the last space is held"
         );
+    }
+
+    #[test]
+    fn the_memory_forgets_spaces_used_least_recently_until_their_weight_fits() {
+        let memory = Memory::default();
+        let epoch = Epoch([1; 16]);
+        let third = WEIGHT / 3 + 1;
+        for n in 0..3 {
+            memory.keep_weighed(space(n), Known::new(space(n), epoch), third);
+        }
+        assert_eq!(memory.len(), 2, "three thirds and more do not fit");
+        assert!(memory.take(space(0)).is_none(), "the first space is forgotten");
+    }
+
+    #[test]
+    fn a_space_heavier_than_the_whole_weight_is_not_kept() {
+        let memory = Memory::default();
+        let epoch = Epoch([1; 16]);
+        memory.keep_weighed(space(0), Known::new(space(0), epoch), 1);
+        memory.keep_weighed(space(1), Known::new(space(1), epoch), WEIGHT + 1);
+        assert!(memory.take(space(1)).is_none(), "the heavy space is not kept");
+        assert!(memory.take(space(0)).is_some(), "the others stay");
     }
 
     #[test]
