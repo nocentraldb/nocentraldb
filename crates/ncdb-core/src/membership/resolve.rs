@@ -69,15 +69,14 @@ pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>
     Resolver::new(space).resolve(changes)
 }
 
-/// Steps 2 to 5 over every node, once step 1 judged each: the control
-/// state of the space.
-pub(super) fn settle(input: Input, judged: &Judged) -> Resolved {
-    let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
-    let mut resolved = fold(&input, judged, &all);
-    resolved.seen = seen(&input, &resolved.members);
-    resolved.verdicts.extend(input.verdicts);
-    resolved.gaps = input.gaps;
-    resolved
+/// The control state of the space from `folded`, steps 2 to 5 over every
+/// node of `input` once step 1 judged each: with the revocations each
+/// grant saw, the verdicts of the changes that are no nodes, and the gaps.
+pub(super) fn finish(input: Input, mut folded: Resolved) -> Resolved {
+    folded.seen = seen(&input, &folded.members);
+    folded.verdicts.extend(input.verdicts);
+    folded.gaps = input.gaps;
+    folded
 }
 
 /// For each accepted grant, the accepted revocations of its subject that it

@@ -90,6 +90,9 @@ pub struct SealChecks {
     /// to, by the envelope's change id, with its author.
     envelope_keys: BTreeMap<u64, BTreeMap<ChangeId, (MemberId, SpaceKey)>>,
     chain_keys: BTreeMap<u64, SpaceKey>,
+    /// Every key chain entry among the control changes added, by change
+    /// id, decoded once.
+    key_chain_entries: BTreeMap<ChangeId, KeyChainEntry>,
     /// The key chain entries the generation graph holds, in change id
     /// order, as the last walk found them.
     chains: Vec<(ChangeId, KeyChainEntry)>,
@@ -115,6 +118,7 @@ impl SealChecks {
             keys: BTreeMap::new(),
             envelope_keys: BTreeMap::new(),
             chain_keys: BTreeMap::new(),
+            key_chain_entries: BTreeMap::new(),
             chains: Vec::new(),
             held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
@@ -345,6 +349,9 @@ impl Checks for SealChecks {
             }
             // An envelope to another member, or one that does not open,
             // gives no key.
+            if let Entry::KeyChain(chain) = &body.entry {
+                self.key_chain_entries.insert(change.id(), chain.clone());
+            }
             if let Entry::KeyEnvelope(sealed) = &body.entry
                 && let Ok(key) = envelope::open(sealed, self.space, &self.member)
             {
@@ -374,14 +381,9 @@ impl SealChecks {
     fn walk_key_chain(&mut self) {
         self.chain_keys.clear();
         let chains: Vec<(ChangeId, KeyChainEntry)> = self
-            .controls
+            .key_chain_entries
             .iter()
-            .filter_map(|(&id, change)| {
-                match ControlBody::decode(&change.header().payload).ok()?.entry {
-                    Entry::KeyChain(chain) => Some((id, chain)),
-                    _ => None,
-                }
-            })
+            .map(|(&id, chain)| (id, chain.clone()))
             .filter(|(id, chain)| {
                 self.resolved
                     .generation(chain.generation)

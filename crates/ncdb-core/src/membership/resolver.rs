@@ -13,7 +13,7 @@
 //! change after a gap-free past costs the judgement of that change and one
 //! pass over the nodes, instead of a fold of every node's past.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use crate::change::Change;
@@ -22,7 +22,7 @@ use crate::ids::{ChangeId, MemberId, SpaceId};
 use super::body::Entry;
 use super::input::{self, Input};
 use super::judge::{Judged, Judgement, judge};
-use super::resolve::{Resolved, fold, settle};
+use super::resolve::{Resolved, finish, fold};
 
 /// RFC 0008's `resolve` for one space, with a memory of its earlier calls.
 /// Each call takes the whole set of control changes, as [`super::resolve`]
@@ -34,15 +34,25 @@ pub struct Resolver {
     /// The judgement of each node judged without a gap in its causal past,
     /// with that past: a function of the past alone (RFC 0008, step 1).
     judgements: BTreeMap<ChangeId, Remembered>,
+    /// The nodes of the last call and their fold, when none had a gap: the
+    /// fold of the past of a node whose past is exactly those nodes, as a
+    /// change written after all of them has.
+    last: Option<Last>,
     judged: usize,
+}
+
+/// The nodes of a call without a gap, and their fold (steps 2 to 5).
+struct Last {
+    nodes: BTreeSet<ChangeId>,
+    folded: Resolved,
 }
 
 /// A node's judgement, the past it was judged from, and for a valid shred
 /// the members of that past's state.
 struct Remembered {
-    past: Arc<std::collections::BTreeSet<ChangeId>>,
+    past: Arc<BTreeSet<ChangeId>>,
     judgement: Judgement,
-    shred_past_members: Option<std::collections::BTreeSet<MemberId>>,
+    shred_past_members: Option<BTreeSet<MemberId>>,
 }
 
 impl Resolver {
@@ -52,6 +62,7 @@ impl Resolver {
             space,
             inputs: input::Memo::default(),
             judgements: BTreeMap::new(),
+            last: None,
             judged: 0,
         }
     }
@@ -82,11 +93,18 @@ impl Resolver {
                 continue;
             }
             self.judged += 1;
-            let past = fold(&input, &judged, &node.past);
-            let judgement = judge(&input, &judged, node, &past);
+            let folded;
+            let past = match &self.last {
+                Some(last) if !node.gap && *node.past == last.nodes => &last.folded,
+                _ => {
+                    folded = fold(&input, &judged, &node.past);
+                    &folded
+                }
+            };
+            let judgement = judge(&input, &judged, node, past);
             let mut shred_past_members = None;
             if judgement.valid && matches!(node.body.entry, Entry::Shred(_)) {
-                let members: std::collections::BTreeSet<MemberId> =
+                let members: BTreeSet<MemberId> =
                     past.members().map(|(member, _)| member).collect();
                 judged.shred_past_members.insert(node.id, members.clone());
                 shred_past_members = Some(members);
@@ -101,7 +119,13 @@ impl Resolver {
                 self.judgements.insert(node.id, remembered);
             }
         }
-        settle(input, &judged)
+        let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
+        let folded = fold(&input, &judged, &all);
+        self.last = input.nodes.values().all(|node| !node.gap).then(|| Last {
+            nodes: all,
+            folded: folded.clone(),
+        });
+        finish(input, folded)
     }
 
     /// How many control changes the last call judged from the fold of
