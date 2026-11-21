@@ -2328,6 +2328,13 @@
       "when": "Any call after db.close(), and the calls still waiting when it closes."
     },
     {
+      "id": "ts.erasureRequestNotRead",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "erasureRequest takes an object this database read, as space.get, find or subscribe gives it, not a copy of one",
+      "when": "db.erasureRequest, given an object the SDK of this database did not read, such as a spread of one or an object of another database."
+    },
+    {
       "id": "ts.lockFieldDiffers",
       "kind": "ts",
       "code": "lockOutOfDate",
@@ -2422,6 +2429,13 @@
       "when": "ncdb model build, on a model whose view is not declared with nc.view."
     },
     {
+      "id": "ts.notAnErasureRequest",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "the text is not an erasure request, which is ncdb-erase-1: followed by unpadded base64url",
+      "when": "nc.erasureRequest, given a text that does not start with ncdb-erase-1: or is not unpadded base64url."
+    },
+    {
       "id": "ts.notAnIndex",
       "kind": "ts",
       "text": "{collection}.{key}: not an index; declare it with nc.index(...).",
@@ -2433,6 +2447,13 @@
       "code": "invalidValue",
       "text": "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url",
       "when": "nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url."
+    },
+    {
+      "id": "ts.notSignOffs",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "the text is not a sign-off, which is ncdb-sign-off-1: followed by unpadded base64url",
+      "when": "nc.signOffs, given a text that does not start with ncdb-sign-off-1: or is not unpadded base64url."
     },
     {
       "id": "ts.ownerTabClosed",
