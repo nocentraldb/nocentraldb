@@ -103,7 +103,20 @@ impl<S: RelayStore> Relay<S> {
         space: SpaceId,
         records: &[PersonKeyRecord],
     ) -> Result<Vec<PersonKeyPut>, ErrorCode> {
-        let resolved = membership::resolve(space, &self.controls(space).await?);
+        let known = self.known(space).await?;
+        let puts = self.puts(space, &known.resolved, records).await;
+        self.keep(space, known);
+        puts
+    }
+
+    /// The records as puts on the stored records they replace, judged by
+    /// the space's control state `resolved`.
+    async fn puts(
+        &self,
+        space: SpaceId,
+        resolved: &Resolved,
+        records: &[PersonKeyRecord],
+    ) -> Result<Vec<PersonKeyPut>, ErrorCode> {
         let mut current: BTreeMap<[u8; 16], u64> = self
             .store()
             .person_keys(space)
@@ -114,7 +127,7 @@ impl<S: RelayStore> Relay<S> {
         let mut puts = Vec::with_capacity(records.len());
         for record in records {
             let replaces = current.insert(record.id.0, record.generation);
-            if !acceptable(&resolved, space, record, replaces) {
+            if !acceptable(resolved, space, record, replaces) {
                 return Err(ErrorCode::BadRecord);
             }
             puts.push(PersonKeyPut {

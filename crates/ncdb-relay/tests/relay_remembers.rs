@@ -42,8 +42,13 @@ fn entry(space: &mut Space, n: u8, deps: &[&Change]) -> Change {
 
 fn record(space: &Space, n: u8) -> PersonKeyRecord {
     let generation = space.first_generation;
-    let signature =
-        membership::sign_record(&key(WRITER), space.space, person(n), generation, &wrapped(n));
+    let signature = membership::sign_record(
+        &key(WRITER),
+        space.space,
+        person(n),
+        generation,
+        &wrapped(n),
+    );
     PersonKeyRecord {
         id: PersonKeyId(person(n)),
         generation,
@@ -80,10 +85,10 @@ fn a_warm_relay_reads_only_the_control_changes_it_has_not_read() {
         .expect("the relay stores the record");
     let (bytes, _) = relay.store().take_bytes();
     // The push reads the last entry it holds, to see that it is still
-    // there, and the put the same of the new one: two frames, not the 22
-    // control changes of the log twice over.
+    // there; the put reads that entry again and the new one: three frames,
+    // not the 22 control changes of the log twice over.
     assert!(
-        bytes <= 2 * frame + 64,
+        bytes <= 3 * frame + 64,
         "the push and the put read {bytes} frame bytes, for a new frame of {frame}"
     );
 }

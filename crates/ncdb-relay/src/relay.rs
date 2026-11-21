@@ -10,6 +10,7 @@ use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verd
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
+use crate::known::Memory;
 use crate::large::PushFrame;
 use crate::record;
 use crate::store::{
@@ -111,17 +112,27 @@ pub struct Pulled {
 pub struct Relay<S> {
     store: S,
     config: Config,
+    memory: Memory,
 }
 
 impl<S: RelayStore> Relay<S> {
     /// The relay core over `store`.
     pub fn new(store: S, config: Config) -> Relay<S> {
-        Relay { store, config }
+        Relay {
+            store,
+            config,
+            memory: Memory::default(),
+        }
     }
 
     /// The backend.
     pub fn store(&self) -> &S {
         &self.store
+    }
+
+    /// What the relay remembers of the spaces between requests.
+    pub(crate) fn memory(&self) -> &Memory {
+        &self.memory
     }
 
     /// The deployment's configuration.
@@ -390,18 +401,29 @@ impl<S: RelayStore> Relay<S> {
         if let Entry::Genesis(_) = control_body(change)?.entry {
             return Err(ErrorCode::SpaceExists);
         }
-        let mut controls = self.controls(space).await?;
-        let before = membership::resolve(space, &controls);
-        controls.push(change.clone());
-        let resolved = membership::resolve(space, &controls);
-        verdict(resolved.verdict(change.id()))?;
-        self.not_too_early(space, change, &resolved).await?;
-        let mut checked = Checked::new(&resolved, &current(&before));
-        let dropped = record::dropped(&before, &resolved);
+        let mut known = self.known(space).await?;
+        let mut controls: Vec<&Change> = known.entries.iter().map(|(_, c)| c).collect();
+        controls.push(change);
+        let resolved = known.resolver.resolve(controls);
+        let before = &known.resolved;
+        let checked = match verdict(resolved.verdict(change.id())) {
+            Ok(()) => self.not_too_early(space, change, &resolved).await,
+            Err(code) => Err(code),
+        };
+        let checked = checked.map(|()| {
+            let mut checked = Checked::new(&resolved, &current(before));
+            let dropped = record::dropped(before, &resolved);
+            checked
+                .effects
+                .extend(dropped.into_iter().map(Effect::Member));
+            checked
+        });
+        // The resolver remembers a refused change's judgement too; it is
+        // forgotten with the space rather than kept.
+        if checked.is_ok() {
+            self.keep(space, known);
+        }
         checked
-            .effects
-            .extend(dropped.into_iter().map(Effect::Member));
-        Ok(checked)
     }
 
     /// Refuses with `too_early` an erasure decision that finalizes a
@@ -438,35 +460,6 @@ impl<S: RelayStore> Relay<S> {
         match now.saturating_sub(shred.accepted_at) < FINALIZE_AFTER {
             true => Err(ErrorCode::TooEarly),
             false => Ok(()),
-        }
-    }
-
-    /// The space's control changes, in position order. It loads no sealed
-    /// change's frame.
-    pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
-        let entries = self.control_entries(space).await?;
-        Ok(entries.into_iter().map(|(_, change)| change).collect())
-    }
-
-    /// The space's control changes with their log entries, in position
-    /// order. It loads no sealed change's frame.
-    pub(crate) async fn control_entries(
-        &self,
-        space: SpaceId,
-    ) -> Result<Vec<(LogEntry, Change)>, ErrorCode> {
-        let mut controls = Vec::new();
-        let mut after = 0;
-        loop {
-            let page = self.store.read_controls(space, after, PAGE).await?;
-            let Some(last) = page.last() else {
-                return Ok(controls);
-            };
-            after = last.position;
-            for entry in page {
-                // The relay appended only frames that decode.
-                let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
-                controls.push((entry, change));
-            }
         }
     }
 }

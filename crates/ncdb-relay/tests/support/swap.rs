@@ -78,8 +78,7 @@ impl<S: RelayStore> RelayStore for Swap<S> {
         limit: u32,
         max_bytes: u64,
     ) -> Result<Vec<Entry>, StoreError> {
-        self
-            .current()
+        self.current()
             .read_bounded(space, after, limit, max_bytes)
             .await
     }
