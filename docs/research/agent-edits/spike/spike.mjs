@@ -171,7 +171,7 @@ const pair = (agentCopy = AGENT) => {
 
 // S6. The agent writes twice from one read. A fork that leaves out the
 // agent's own first edit reuses its clocks: the same item id with two
-// contents, which RFC 0013 F6 shows diverging. A fork that adds the agent's
+// contents, which RFC 0013's F6 shows diverging. A fork that adds the agent's
 // own updates since the read continues the clock.
 {
   console.log("\nS6: two edits from one read, and the agent's clock");
@@ -250,7 +250,7 @@ const pair = (agentCopy = AGENT) => {
 }
 
 // S8. Several small agent writes as the agent "types": the cost per write in
-// Yjs bytes, which RFC 0013 D3 then wraps in a change each.
+// Yjs bytes, which RFC 0013's D3 then wraps in a change each.
 {
   console.log("\nS8: size of a typed word vs a focused replacement");
   const { agent } = pair();

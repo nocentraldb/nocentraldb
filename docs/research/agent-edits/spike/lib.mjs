@@ -104,12 +104,12 @@ export const insertText = (tr, str, from, to = from) => {
 // The "edit against the version you read" approach. `read` is what the agent
 // got when it read: the document's state as a Yjs update. The edit is made in
 // a fork at that state and the fork's update is merged into the live copy.
-// `writer` is the client id the agent leased (RFC 0013 D1); the live copy is
+// `writer` is the client id the agent leased (RFC 0013's D1); the live copy is
 // the member's folded document, which never writes under that id itself:
 // Yjs gives a document a new client id when an update brings items under its
 // own id that it did not write. `ownSince` are the agent's own updates
 // written after the read, so that the fork continues the agent's clock
-// instead of reusing it (RFC 0013 F6).
+// instead of reusing it (RFC 0013's F6).
 export const readVersion = (doc) => Y.encodeStateAsUpdate(doc);
 
 export const quoteEditAtRead = (

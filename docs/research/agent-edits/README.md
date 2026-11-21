@@ -43,7 +43,7 @@ So yes, a ProseMirror document can be edited exactly. Two things limit what that
 
 ### Simultaneous editing
 
-Yjs is a CRDT: updates commute, and every copy that has the same updates has the same document (RFC 0013, F4 and F8). So the question is not whether the person's and the agent's edits merge. They always do. It is what each edit says, and against which version it was computed. The spike answers that in [What happens while the person keeps typing](#what-happens-while-the-person-keeps-typing).
+Yjs is a CRDT: updates commute, and every copy that has the same updates has the same document (RFC 0013's F4 and F8). So the question is not whether the person's and the agent's edits merge. They always do. It is what each edit says, and against which version it was computed. The spike answers that in [What happens while the person keeps typing](#what-happens-while-the-person-keeps-typing).
 
 ## Four ways to say where an edit goes
 
@@ -91,7 +91,7 @@ The owner's doubt is fair, and S7 shows where it bites:
 
 - **Escapes.** Markdown escapes characters that mean something in it. An agent that copies what it read quotes `5 \* 3` and is found. An agent that quotes from the user's words or from memory writes `5 * 3` and is not.
 - **Marks inside words.** `**Fri**day` does not contain "Friday". An agent that wants to change the word has to quote the markup.
-- **Marks Markdown cannot show.** Underline and highlight render as plain text (RFC 0013, D4). The agent cannot see them, and a replacement cannot say whether they stay. The diff keeps the marks of characters it does not change, so they survive an edit around them, but an agent cannot add or remove them.
+- **Marks Markdown cannot show.** Underline and highlight render as plain text (RFC 0013's D4). The agent cannot see them, and a replacement cannot say whether they stay. The diff keeps the marks of characters it does not change, so they survive an edit around them, but an agent cannot add or remove them.
 - **What the Markdown cannot say must survive the edit.** The parallel research for D4 (NOC-437, `docs/research/rich-text-unknown-nodes/`) found that Yjs keeps every element, attribute and format it does not know, but whatever passes through a ProseMirror schema loses it: an unknown node is deleted, an unknown mark takes its paragraph's whole text with it, and an undeclared attribute is removed when the node is written again. A Markdown round trip has the same risk. So the edit must change only the quoted range, and inside it keep the inline nodes, marks and attributes that the Markdown did not show. The core should diff at the Yrs level, not by rebuilding nodes from a schema. This spike's ProseMirror path stands in for that diff only because it is shorter to write in Node.
 - **Where a quote ends.** A quote that starts or ends inside markup, such as `on **Fri`, has no clean place in the document. The core needs a rule: map Markdown offsets to document positions while rendering, and refuse a quote whose ends fall inside markup.
 
