@@ -54,6 +54,10 @@ export const notAComputedField = (collection: unknown, key: unknown): string =>
 /** `notADatabaseName` (invalidValue): nc.open, given a name that breaks RFC 0006's rule for a browser database's name. */
 export const NOT_ADATABASE_NAME = "a database name is 1 to 64 characters of a-z, 0-9, - and _";
 
+/** `notADay` (invalidValue): A write of an nc.date() field given anything but such a string, a Date included. */
+export const notADay = (collection: unknown, field: unknown): string =>
+  `${collection}.${field} takes a day as a "YYYY-MM-DD" string, from 0001-01-01 to 9999-12-31`;
+
 /** `notAField`: ncdb model build, on a model whose field is not declared with a field function. */
 export const notAField = (path: unknown): string =>
   `${path}: not a field; declare it with a field function such as nc.string().`;
@@ -67,6 +71,10 @@ export const NOT_AQUERY_START_ONE = "not a query; start one from an index, such 
 /** `notASafeInteger` (invalidValue): A write of an nc.int() field given a number that is not a safe integer. */
 export const notASafeInteger = (collection: unknown, field: unknown): string =>
   `${collection}.${field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1`;
+
+/** `notATimestamp` (invalidValue): A write of an nc.timestamp() field given anything but such a Date, a string or a number included. */
+export const notATimestamp = (collection: unknown, field: unknown): string =>
+  `${collection}.${field} takes a valid Date from the year 1 to 9999`;
 
 /** `notAView`: ncdb model build, on a model whose view is not declared with nc.view. */
 export const notAView = (collection: unknown, key: unknown): string =>

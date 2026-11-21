@@ -88,7 +88,7 @@ fn a_system_time_rounds_down_to_the_millisecond_toward_the_past() {
     assert_eq!(Timestamp::try_from(before).unwrap().as_millis(), -1);
     let point = Timestamp::from_millis(1_795_288_124_636).unwrap();
     assert_eq!(
-        SystemTime::from(point),
+        SystemTime::try_from(point).unwrap(),
         UNIX_EPOCH + Duration::from_millis(1_795_288_124_636)
     );
     let far = UNIX_EPOCH + Duration::from_secs(300_000_000_000);

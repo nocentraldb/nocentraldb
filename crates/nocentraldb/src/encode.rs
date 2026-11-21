@@ -61,6 +61,9 @@ impl Site<'_> {
         let invalid = || self.invalid();
         match (field, state, intent) {
             (Field::Basic(basic), FieldState::Basic(state), Intent::Set(value)) => {
+                if !value.fits(&basic.kind) {
+                    return Err(invalid());
+                }
                 let value = match value.0 {
                     Repr::Clear => cbor::Value::Null,
                     _ => value.to_cbor().ok_or_else(invalid)?,

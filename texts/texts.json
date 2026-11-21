@@ -1555,6 +1555,13 @@
       "when": "nc.open in a browser when the database's key record exists but its wrapping key is gone from IndexedDB."
     },
     {
+      "id": "error.notADay",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a day is a date from 0001-01-01 to 9999-12-31, written YYYY-MM-DD",
+      "when": "Date::new or Date::from_str given no such day, or one outside the years 1 to 9999, and the bridge given such a text for an nc.date field."
+    },
+    {
       "id": "error.notAMember",
       "kind": "error",
       "code": "notFound",
@@ -1574,6 +1581,13 @@
       "code": "invalidValue",
       "text": "the words are not a recovery code",
       "when": "Account::remove_member (db.account.removeMember) when the words it was given are no recovery code."
+    },
+    {
+      "id": "error.notATimestamp",
+      "kind": "error",
+      "code": "invalidValue",
+      "text": "a point in time is a millisecond from 0001-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z",
+      "when": "Timestamp::from_millis or Timestamp::try_from(SystemTime) outside the years 1 to 9999, and the bridge given such a value, or no integer, for an nc.timestamp field."
     },
     {
       "id": "error.notAnErasureRequest",
@@ -2228,6 +2242,12 @@
       "when": "What the read asked for, in fieldDoesNotHold: a plugin field's data."
     },
     {
+      "id": "part.kindDate",
+      "kind": "part",
+      "text": "a day",
+      "when": "What the read asked for, in fieldDoesNotHold: a day (Date)."
+    },
+    {
       "id": "part.kindFloat",
       "kind": "part",
       "text": "a float",
@@ -2262,6 +2282,12 @@
       "kind": "part",
       "text": "a text",
       "when": "What the read asked for, in fieldDoesNotHold: a text (&str)."
+    },
+    {
+      "id": "part.kindTimestamp",
+      "kind": "part",
+      "text": "a point in time",
+      "when": "What the read asked for, in fieldDoesNotHold: a point in time (Timestamp)."
     },
     {
       "id": "part.roleAdmin",
@@ -2396,6 +2422,13 @@
       "when": "nc.open, given a name that breaks RFC 0006's rule for a browser database's name."
     },
     {
+      "id": "ts.notADay",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "{collection}.{field} takes a day as a \"YYYY-MM-DD\" string, from 0001-01-01 to 9999-12-31",
+      "when": "A write of an nc.date() field given anything but such a string, a Date included."
+    },
+    {
       "id": "ts.notAField",
       "kind": "ts",
       "text": "{path}: not a field; declare it with a field function such as nc.string().",
@@ -2421,6 +2454,13 @@
       "code": "invalidValue",
       "text": "{collection}.{field} takes a safe integer, between -(2^53 - 1) and 2^53 - 1",
       "when": "A write of an nc.int() field given a number that is not a safe integer."
+    },
+    {
+      "id": "ts.notATimestamp",
+      "kind": "ts",
+      "code": "invalidValue",
+      "text": "{collection}.{field} takes a valid Date from the year 1 to 9999",
+      "when": "A write of an nc.timestamp() field given anything but such a Date, a string or a number included."
     },
     {
       "id": "ts.notAView",

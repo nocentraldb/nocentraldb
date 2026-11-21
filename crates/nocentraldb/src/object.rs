@@ -173,7 +173,7 @@ pub(crate) fn value(field: &Field, row: &Row, name: &str) -> Option<Value> {
     match (field, state) {
         (Field::Basic(basic), FieldState::Basic(state)) => {
             let entry = basic.read(state).value.filter(|entry| entry.known)?;
-            Value::from_cbor(&entry.value, false)
+            Value::from_basic(&basic.kind, &entry.value)
         }
         (Field::Link(link), FieldState::Basic(state)) => {
             let entry = link.read(state).value.filter(|entry| entry.known)?;
@@ -247,7 +247,7 @@ fn personal_value(
     let value = personal::open(key, &place, &sealed.bytes)
         .ok()
         .filter(|value| basic.kind.allows(value))
-        .and_then(|value| Value::from_cbor(&value, false));
+        .and_then(|value| Value::from_basic(&basic.kind, &value));
     Personal::Value(value)
 }
 
