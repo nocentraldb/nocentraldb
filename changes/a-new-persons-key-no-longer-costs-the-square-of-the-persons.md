@@ -1,7 +1,7 @@
 ---
 type: fix
 tickets: [NOC-424]
-introduced: cycle
+introduced: 0.1.0
 components: [core, sdk-rust, sdk-ts]
 ---
 ## Symptom
