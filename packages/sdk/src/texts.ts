@@ -15,6 +15,9 @@ export const ANOTHER_LOCK = "another tab has this database open with another loc
 export const coreFailed = (message: unknown): string =>
   `the database's core failed: ${message}`;
 
+/** `coreStopped` (storageFailed): Every call after the SDK's worker's core failed in this tab, until the app closes the database and opens it again. */
+export const CORE_STOPPED = "the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again";
+
 /** `cursorOfAnotherDatabase` (cursorOfAnotherModel): db.find or space.find, given a page's cursor from another database. */
 export const CURSOR_OF_ANOTHER_DATABASE = "the cursor is not of this database; start from the first page";
 

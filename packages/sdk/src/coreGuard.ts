@@ -1,8 +1,12 @@
 // What the SDK's worker (worker.ts) answers in the core's place when the
 // core fails: the module did not load, or the core trapped, as WebAssembly
 // does when it runs out of memory. Every request still gets an answer, so
-// the page never waits for one that does not come. Internal: the package's
-// entry does not reach it.
+// the page never waits for one that does not come. A core that failed is
+// not called again: a trap leaves its memory as it was mid-call, a bridge
+// taken out among it, so it is broken for good (NOC-426). Every later
+// request fails with `storageFailed` and a text that tells the app to open
+// the database again, which starts a new worker; a `close` succeeds, so the
+// app can. Internal: the package's entry does not reach it.
 
 import { decode, encode } from "./cbor.ts";
 import * as texts from "./texts.ts";
@@ -10,27 +14,43 @@ import * as texts from "./texts.ts";
 /** The core as the worker calls it: one bridge request in, its answer out. */
 export type Handle = (request: Uint8Array) => Promise<Uint8Array>;
 
-/** The id of `request`, or 0 when it has none that can be read. */
-const idOf = (request: Uint8Array): number => {
+/** The id and the call of `request`, as far as they can be read. */
+const read = (request: Uint8Array): { id: number; call?: unknown } => {
   try {
-    const { id } = decode(request) as { id?: unknown };
-    return typeof id === "number" ? id : 0;
+    const { id, call } = decode(request) as { id?: unknown; call?: unknown };
+    return { id: typeof id === "number" ? id : 0, call };
   } catch {
-    return 0;
+    return { id: 0 };
   }
 };
 
 /** A `storageFailed` answer to `request`. */
 const failure = (request: Uint8Array, message: string) =>
-  encode({ id: idOf(request), error: { code: "storageFailed", message } });
+  encode({ id: read(request).id, error: { code: "storageFailed", message } });
 
-/** Answers each request with the core that `ready` gives, or with `storageFailed` when the core fails. */
-export const guardCore = (ready: Promise<Handle>) => ({
-  answer: async (request: Uint8Array): Promise<Uint8Array> => {
-    try {
-      return await (await ready)(request);
-    } catch (error) {
-      return failure(request, texts.coreFailed(String(error)));
-    }
-  },
-});
+/** The answer to `request` once the core failed. */
+const stopped = (request: Uint8Array) => {
+  const { id, call } = read(request);
+  return call === "close"
+    ? encode({ id, ok: null })
+    : encode({
+        id,
+        error: { code: "storageFailed", message: texts.CORE_STOPPED },
+      });
+};
+
+/** Answers each request with the core that `ready` gives, or with `storageFailed` once the core failed. */
+export const guardCore = (ready: Promise<Handle>) => {
+  let broken = false;
+  return {
+    answer: async (request: Uint8Array): Promise<Uint8Array> => {
+      if (broken) return stopped(request);
+      try {
+        return await (await ready)(request);
+      } catch (error) {
+        broken = true;
+        return failure(request, texts.coreFailed(String(error)));
+      }
+    },
+  };
+};
