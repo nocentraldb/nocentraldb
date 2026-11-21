@@ -1,8 +1,9 @@
 //! NOC-427's measurement: what one more person costs the relay, at 100,
 //! 400 and 800 persons in a space. A new person is a person-key entry (a
 //! control change) and then its person-key record, as the SDK writes
-//! them. It prints, per size, the time of the push and of the put, and
-//! how many control entries the relay read for them. It is ignored: run
+//! them. It prints, per size, the time of the push and of the put, how
+//! often and how many frame bytes the relay read for them, and the
+//! process's resident memory once the space holds them all (Linux only). It is ignored: run
 //! it with `cargo test --release -p ncdb-relay --test
 //! relay_person_key_cost -- --ignored --nocapture`.
 
@@ -117,18 +118,32 @@ fn measure(persons: u32, last: u32) -> Cost {
     cost
 }
 
+/// The process's resident memory in MB, where Linux reports it.
+fn resident_mb() -> f64 {
+    let statm = std::fs::read_to_string("/proc/self/statm").unwrap_or_default();
+    let pages: f64 = statm
+        .split_whitespace()
+        .nth(1)
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(0.0);
+    pages * 4096.0 / 1e6
+}
+
 #[test]
 #[ignore = "a measurement: run it with --release --ignored --nocapture"]
 fn what_one_more_person_costs_the_relay() {
-    println!("persons | push (ms) | put (ms) | reads of the log | frame bytes read");
+    println!(
+        "persons | push (ms) | put (ms) | reads of the log | frame bytes read | resident (MB)"
+    );
     for persons in [100, 400, 800] {
         let cost = measure(persons, 10);
         println!(
-            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16}",
+            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16} | {:.0}",
             cost.push.as_secs_f64() * 1e3,
             cost.put.as_secs_f64() * 1e3,
             cost.reads,
             cost.bytes,
+            resident_mb(),
         );
     }
 }

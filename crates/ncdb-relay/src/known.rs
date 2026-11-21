@@ -1,6 +1,6 @@
 //! What the relay remembers of a space between requests (NOC-427): its
 //! control changes up to the last position it read, a
-//! [`membership::Resolver`] that has resolved them, and their resolve.
+//! [`Resolver`] that has resolved them, and their resolve.
 //!
 //! Every check of a control change and every put of person-key records
 //! needs RFC 0008's `resolve` of the space's control changes. Read and
@@ -18,8 +18,14 @@
 //! space is read again from the start. A process without the memory, a
 //! cold start, resolves the space from scratch, as before.
 //!
-//! The memory holds at most [`SPACES`] spaces and forgets the one used
-//! least recently, since a Lambda instance has 256 MB. A request takes a
+//! The memory a space takes grows with the square of its control changes,
+//! since the resolver keeps each one's causal past: a test process that
+//! held one space of 800 persons was 38 MB resident on Linux (NOC-427). A Lambda instance has 256 MB, so
+//! the memory holds at most [`SPACES`] spaces and at most [`WEIGHT`], the
+//! sum of the squares of their control changes, which is about the memory
+//! of one space of 1,200. It forgets the spaces used least recently first,
+//! and keeps no space heavier than all of it: such a space is resolved
+//! from scratch on every request, as before. A request takes a
 //! space's memory out while it works and puts it back when done, so two
 //! requests never share one; a second request on the same space meanwhile
 //! starts from scratch.
@@ -41,7 +47,8 @@ use crate::store::{Entry as LogEntry, Epoch, RelayStore};
 pub const SPACES: usize = 16;
 
 /// The most weight the memory holds: the sum over its spaces of the square
-/// of their control changes.
+/// of their control changes: about the memory of one space of 1,200
+/// control changes.
 pub const WEIGHT: usize = 1_200 * 1_200;
 
 /// A space's control changes as the relay last read them, and their
@@ -69,30 +76,51 @@ impl Known {
 /// The spaces the relay remembers, the one used last at the back.
 #[derive(Default)]
 pub(crate) struct Memory {
-    spaces: Mutex<VecDeque<(SpaceId, Known)>>,
+    spaces: Mutex<VecDeque<Held>>,
+}
+
+/// A space's memory and its weight.
+struct Held {
+    space: SpaceId,
+    weight: usize,
+    known: Known,
 }
 
 impl Memory {
     /// Takes the memory of `space` out, if the relay holds one.
     fn take(&self, space: SpaceId) -> Option<Known> {
         let mut spaces = self.spaces.lock().unwrap_or_else(|e| e.into_inner());
-        let at = spaces.iter().position(|(held, _)| *held == space)?;
-        spaces.remove(at).map(|(_, known)| known)
+        let at = spaces.iter().position(|held| held.space == space)?;
+        spaces.remove(at).map(|held| held.known)
     }
 
-    /// Puts the memory of `space` back, as the one used last, and forgets
-    /// the one used least recently beyond [`SPACES`].
+    /// Puts the memory of `space` back, as the one used last.
     fn keep(&self, space: SpaceId, known: Known) {
-        let mut spaces = self.spaces.lock().unwrap_or_else(|e| e.into_inner());
-        spaces.retain(|(held, _)| *held != space);
-        spaces.push_back((space, known));
-        while spaces.len() > SPACES {
-            spaces.pop_front();
-        }
+        let weight = known.entries.len().saturating_pow(2);
+        self.keep_weighed(space, known, weight);
     }
 
-    fn keep_weighed(&self, space: SpaceId, known: Known, _weight: usize) {
-        self.keep(space, known);
+    /// Puts the memory of `space` back, as the one used last, with this
+    /// weight, and forgets the spaces used least recently beyond [`SPACES`]
+    /// or [`WEIGHT`]. A space heavier than [`WEIGHT`] alone is not kept.
+    fn keep_weighed(&self, space: SpaceId, known: Known, weight: usize) {
+        let mut spaces = self.spaces.lock().unwrap_or_else(|e| e.into_inner());
+        spaces.retain(|held| held.space != space);
+        if weight > WEIGHT {
+            return;
+        }
+        spaces.push_back(Held {
+            space,
+            weight,
+            known,
+        });
+        let mut total: usize = spaces.iter().map(|held| held.weight).sum();
+        while spaces.len() > SPACES || total > WEIGHT {
+            let Some(forgotten) = spaces.pop_front() else {
+                break;
+            };
+            total -= forgotten.weight;
+        }
     }
 
     /// How many spaces it holds.
@@ -208,7 +236,10 @@ mod tests {
             memory.keep_weighed(space(n), Known::new(space(n), epoch), third);
         }
         assert_eq!(memory.len(), 2, "three thirds and more do not fit");
-        assert!(memory.take(space(0)).is_none(), "the first space is forgotten");
+        assert!(
+            memory.take(space(0)).is_none(),
+            "the first space is forgotten"
+        );
     }
 
     #[test]
@@ -217,7 +248,10 @@ mod tests {
         let epoch = Epoch([1; 16]);
         memory.keep_weighed(space(0), Known::new(space(0), epoch), 1);
         memory.keep_weighed(space(1), Known::new(space(1), epoch), WEIGHT + 1);
-        assert!(memory.take(space(1)).is_none(), "the heavy space is not kept");
+        assert!(
+            memory.take(space(1)).is_none(),
+            "the heavy space is not kept"
+        );
         assert!(memory.take(space(0)).is_some(), "the others stay");
     }
 
