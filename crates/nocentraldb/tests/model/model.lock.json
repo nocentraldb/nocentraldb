@@ -14,6 +14,8 @@
           "targets": ["projects"],
           "type": "ncdb/ref"
         },
+        "doneOn": { "rule": 1, "since": 3, "type": "ncdb/date" },
+        "dueAt": { "rule": 1, "since": 3, "type": "ncdb/timestamp" },
         "estimate": { "rule": 1, "since": 1, "type": "ncdb/float" },
         "priority": { "rule": 1, "since": 1, "type": "ncdb/int" },
         "project": {
@@ -38,6 +40,11 @@
         "urgent": { "rule": 1, "since": 1, "type": "ncdb/boolean" }
       },
       "indexes": {
+        "byDueAt": {
+          "equal": 0,
+          "fields": [{ "direction": "desc", "field": "dueAt" }],
+          "since": 3
+        },
         "byPriority": {
           "equal": 0,
           "fields": [{ "direction": "asc", "field": "priority" }],
@@ -66,9 +73,9 @@
   },
   "format": 1,
   "model": {
-    "hash": "sha256:b22eb1bbed1aa1704fb80d17c681b07688ab9e3d123b1644fa059c1d89342cd0",
+    "hash": "sha256:251a81001e1ed800701ec7914645ade168d374ab725b009fe8c6d0246a1c31d2",
     "id": "f959ef26820d478a108e9261abf83a69",
-    "version": 2
+    "version": 3
   },
   "plugins": {}
 }
