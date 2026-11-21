@@ -111,3 +111,66 @@ test("a write too large for the core fails with an nc.Error that has a code", as
   assert.ok(["written", "nc.Error"].includes(result), result);
   assert.deepEqual(errors, []);
 });
+
+// After a write the core could not hold (NOC-426): the core trapped and is
+// broken for good, so every later call fails with `storageFailed` and a
+// text that says to open the database again; `db.close()` succeeds, and the
+// database opened again works and holds what was written before. Where the
+// engine's core holds the value, the later call simply works. Either way
+// nothing reaches the page as an uncaught error.
+test("after a write too large for the core, later calls say to open the database again, and it opens again", async () => {
+  const opened = await (await browser.newContext()).newPage();
+  const errors = [];
+  opened.on("pageerror", (error) => errors.push(error));
+  await opened.goto(`${server.url}/`);
+  await opened.waitForFunction(() => window.ready === true);
+
+  const result = await opened.evaluate(
+    async ({ lock, MODEL }) => {
+      const { nc } = window;
+      const model = new Function("nc", `return ${MODEL}`)(nc);
+      const outcome = (promise) =>
+        promise.then(
+          () => "ok",
+          (e) =>
+            e instanceof nc.Error ? `${e.code}: ${e.message}` : String(e),
+        );
+      const db = await nc.open({ model, lock, name: "after-too-large" });
+      const project = await db.spaces.create();
+      const { ids } = await project.write((tx) => {
+        tx.create(model.tasks, { title: "before", priority: 1 });
+      });
+      const written = await outcome(
+        project.write((tx) => {
+          tx.create(model.tasks, {
+            title: "x".repeat(256 * 1024 * 1024),
+            priority: 2,
+          });
+        }),
+      );
+      const later = await outcome(project.get(model.tasks, ids[0]));
+      const closed = await outcome(db.close());
+      const again = await nc.open({ model, lock, name: "after-too-large" });
+      const [space] = await again.spaces.list();
+      const read = await (await again.spaces.get(space.id)).get(
+        model.tasks,
+        ids[0],
+      );
+      await again.close();
+      return { written, later, closed, title: read?.title };
+    },
+    { lock, MODEL },
+  );
+  assert.deepEqual(errors, []);
+  assert.equal(result.closed, "ok");
+  assert.equal(result.title, "before");
+  if (result.written === "ok") {
+    assert.equal(result.later, "ok");
+  } else {
+    assert.match(result.written, /^storageFailed: /);
+    assert.equal(
+      result.later,
+      "storageFailed: the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again",
+    );
+  }
+});

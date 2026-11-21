@@ -11,6 +11,13 @@ export const AD_HOC_COPY_NOT_READ = "copy takes objects this database read, as s
 /** `anotherLock` (modelRefused): nc.open in a tab while another tab of the origin has the database open with another lock. */
 export const ANOTHER_LOCK = "another tab has this database open with another lock";
 
+/** `coreFailed` (storageFailed): The call the SDK's worker was answering when its core failed, such as a write too large for the core's memory, with the browser's own message. */
+export const coreFailed = (message: unknown): string =>
+  `the database's core failed: ${message}`;
+
+/** `coreStopped` (storageFailed): Every call after the SDK's worker's core failed in this tab, until the app closes the database and opens it again. */
+export const CORE_STOPPED = "the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again";
+
 /** `cursorOfAnotherDatabase` (cursorOfAnotherModel): db.find or space.find, given a page's cursor from another database. */
 export const CURSOR_OF_ANOTHER_DATABASE = "the cursor is not of this database; start from the first page";
 
