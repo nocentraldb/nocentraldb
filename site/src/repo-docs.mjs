@@ -36,7 +36,7 @@ export const REPO_DOCS = [
   {
     file: "bulk-import.md",
     slug: "docs/guides/bulk-import",
-    label: "Importing existing data in bulk",
+    label: "Bursts of writes",
   },
   {
     file: "browser-durability.md",
