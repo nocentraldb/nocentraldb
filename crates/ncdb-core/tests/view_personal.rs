@@ -233,3 +233,32 @@ fn keys_of_one_space_do_not_open_another() {
     copy.receive(vec![field_op::create(P, PROJECT), set], 1);
     assert_eq!(copy.name(), Sql::Null);
 }
+
+/// NOC-424: a key the member has just drawn seals nothing the view holds
+/// yet, so the view takes it without opening every personal field of the
+/// space again; a value folded after it opens with it.
+#[test]
+fn a_new_person_key_opens_what_is_folded_after_it_and_nothing_again() {
+    let mut copy = Copy::new();
+    copy.view.set_person_keys(SPACE, keys(&[ANNA])).unwrap();
+    // Against the rule, a value under Ben's key is held already: adding
+    // the key does not open it, which shows it opens nothing again.
+    let (set, _) = sealed_name(BEN, anna());
+    copy.receive(vec![field_op::create(P, PROJECT), set], 1);
+    copy.view.add_person_key(SPACE, BEN, key(BEN)).unwrap();
+    assert_eq!(copy.name(), Sql::Null, "nothing is opened again");
+    let (set, _) = sealed_name(BEN, Value::Text("Ben".into()));
+    copy.receive(vec![set], 2);
+    assert_eq!(
+        copy.name(),
+        Sql::Text("Ben".into()),
+        "opens with the new key"
+    );
+    let (set, _) = sealed_name(ANNA, anna());
+    copy.receive(vec![set], 3);
+    assert_eq!(
+        copy.name(),
+        Sql::Text("Anna Schmidt".into()),
+        "keeps the others"
+    );
+}
