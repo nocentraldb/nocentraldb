@@ -74,3 +74,14 @@ test("refuses a value it cannot encode", () => {
   expect(() => encode(() => 1)).toThrow();
   expect(() => encode(10n as unknown)).toThrow();
 });
+
+// NOC-425: a value of 125 KiB or more overflowed the stack, since the
+// writer spread every byte as an argument of push.
+test("encodes text and bytes of more than 1 MiB", () => {
+  const size = 2 * 1024 * 1024;
+  const text = "a".repeat(size);
+  const bytes = new Uint8Array(size).fill(7);
+  const value = { id: 1, call: "write", args: { text, bytes } };
+  expect(decode(encode(value))).toEqual(value);
+  expect(hex(encode(text).subarray(0, 5))).toBe("7a00200000");
+});
