@@ -208,7 +208,7 @@ Between steps 2 and 4, Ben has signed up but sees nothing of P, until a device o
 
 ## How to cut spaces
 
-The journey gives the rule: **a space is a group of objects that the same members read**. Cut by who reads, not by object type.
+The journey gives the rule: **a space holds the objects that the same members read**. Cut by who reads, not by object type.
 
 | Space | Members | Holds | When |
 | --- | --- | --- | --- |
