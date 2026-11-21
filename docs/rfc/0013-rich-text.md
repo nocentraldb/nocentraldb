@@ -4,11 +4,15 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-411
 
 This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with anchored edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
 
-It checks Yjs's behaviour against what the decided RFCs need, with a spike on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spike found](#what-the-spike-found)), and fits the type into them: the change and its fold ([RFC 0002](0002-change-and-log-format.md)), the plugin contract C1 to C7 ([RFC 0004](0004-merge-rules-basic-types.md#the-plugin-contract)), the schema and the lock ([RFC 0005](0005-schema-and-model-lock.md)), the view ([RFC 0006](0006-local-view.md)), encryption ([RFC 0003](0003-keys-and-cryptography.md)), un-folding and erasure ([RFC 0008](0008-membership.md)) and the SDKs ([RFC 0009](0009-sdk-api.md)). Where Yjs and the decided design pull apart, it lists the options and recommends one: [Decisions for the owner](#decisions-for-the-owner). [Follow-up tickets](#follow-up-tickets) lists the work it leads to.
+It checks Yjs's behaviour against the decided design with a spike on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spike found](#what-the-spike-found)). Where the two pull apart, it lists the options and recommends one ([Decisions for the owner](#decisions-for-the-owner)), and [Follow-up tickets](#follow-up-tickets) lists the work it leads to.
+
+It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a rich-text update, and on [RFC 0004](0004-merge-rules-basic-types.md), whose plugin contract every field type meets; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 **Status.** Draft, for the owner to decide. Eight choices wait for the owner, each with options and a recommendation, in [Decisions for the owner](#decisions-for-the-owner); the rest of the text assumes the recommendations. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
+
+**At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
 **Out of scope.** Presence and live cursors (Yjs's awareness), which need a channel for messages that are not changes. Comments and suggestions on a passage. Images, files and other embeds, which need a blob store. Full-text search, which GENESIS.md gives up for local reads. Compaction of a document's history, which belongs to the compaction RFC. Personal rich text, unless the owner chooses it ([D7](#d7-personal-rich-text)). Plugin field types, which [RFC 0011](0011-plugin-field-types.md) covers; rich text is a built-in type.
 
@@ -444,6 +448,10 @@ Y.applyUpdate(c, base); Y.applyUpdate(c, bobAfterCarol);
 
 F8 applied 60 updates of three documents, each editing at random and syncing now and then, in 20 random orders to fresh documents, and compared `encodeStateAsUpdate` in v1 and v2 and `mergeUpdates`. F9 wrote six updates (two paragraphs and a heading, bold, an insertion and two concurrent heading levels) from Yjs to files, applied them in Rust with `Update::decode_v1` and `apply_update` in both orders, and compared the XML string and `encode_state_as_update_v1` with Yjs's. F10 read `createNodeFromYElement` and `createTextNodesFromYText` in `@tiptap/y-tiptap`: without `reportInvalidContent` they call `deleteYType` on content the schema rejects, and TipTap's `Collaboration` extension passes `onInvalidContent` only when the editor sets `enableContentCheck`.
 
+## How this RFC relates to the others
+
+It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; and on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type.
+
 ## History
 
-- 2026-11-21 · First draft, for the owner's decision (NOC-411)
+- 2026-11-21 · First published, as a draft for the owner's decision (NOC-411)
