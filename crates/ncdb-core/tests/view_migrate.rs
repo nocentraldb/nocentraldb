@@ -320,3 +320,84 @@ fn a_new_declared_index_is_created_without_folding_anything() {
     let view = View::open(&db.0, &lock()).unwrap();
     assert!(view.get(space, TASK, object(1)).unwrap().is_some());
 }
+
+/// Checks that keep how many times their [`SealChecks`] resolved the
+/// control changes (NOC-438).
+struct Resolving {
+    inner: SealChecks,
+    resolves: Arc<AtomicUsize>,
+}
+
+impl Resolving {
+    fn note(&self) {
+        self.resolves
+            .store(self.inner.resolves(), Ordering::Relaxed);
+    }
+}
+
+impl Checks for Resolving {
+    fn knows_suite(&self, suite: u64) -> bool {
+        self.inner.knows_suite(suite)
+    }
+    fn verify(&self, change: &Change) -> Result<(), Stop> {
+        self.inner.verify(change)
+    }
+    fn is_member(&self, change: &Change) -> bool {
+        self.inner.is_member(change)
+    }
+    fn open(&self, change: &Change) -> Result<Payload, Stop> {
+        self.inner.open(change)
+    }
+    fn still_opens(&self, change: &Change) -> Result<(), Stop> {
+        self.inner.still_opens(change)
+    }
+    fn open_folded(&self, change: &Change) -> Result<Payload, Stop> {
+        self.inner.open_folded(change)
+    }
+    fn space_model_id(&self) -> Option<[u8; 16]> {
+        self.inner.space_model_id()
+    }
+    fn add_control(&mut self, change: &Change) {
+        Checks::add_control(&mut self.inner, change);
+        self.note();
+    }
+    fn add_controls(&mut self, changes: &[Change]) {
+        Checks::add_controls(&mut self.inner, changes);
+        self.note();
+    }
+}
+
+/// NOC-438: a migration gave the checks of a space its control changes one
+/// by one, and each one resolved the whole set again, so it cost the
+/// square of the persons in the space. Now it resolves them once.
+#[test]
+fn a_migration_resolves_a_spaces_control_changes_once_however_many_persons_it_holds() {
+    for persons in [5, 40] {
+        let db = TempDb::new(&format!("migrate-resolves-{persons}"));
+        let mut space = Space::new(A);
+        let genesis = space.genesis.clone();
+        let add = space.add(A, B, Role::Writer, &[&genesis]);
+        let envelope = space.envelope(A, B, &[&add]);
+        let mut all = vec![genesis, add, envelope];
+        for person in 0..persons {
+            let last = all.last().unwrap().clone();
+            all.push(space.person_key(A, person, person, &[&last]));
+        }
+        all.push(space.sealed(A, titled_and_one_ranked().pop().unwrap()));
+        write(&db, &without_rank(), space.space, &all);
+        let resolves = Arc::new(AtomicUsize::new(0));
+        let shared = resolves.clone();
+        let factory = move |id| Resolving {
+            inner: checks_for(id),
+            resolves: shared.clone(),
+        };
+
+        View::open_with(&db.0, &lock(), factory).unwrap();
+
+        assert_eq!(
+            resolves.load(Ordering::Relaxed),
+            1,
+            "with {persons} persons"
+        );
+    }
+}
