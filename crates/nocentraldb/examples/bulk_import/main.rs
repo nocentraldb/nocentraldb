@@ -1,17 +1,23 @@
-//! `bulk_import`: measures a bulk import into one space (NOC-414). An
-//! example of the SDK, not part of it; it uses only the SDK's public API.
+//! `bulk_import`: measures a burst of writes into one space, such as an
+//! import (NOC-414). An example of the SDK, not part of it; it uses only
+//! the SDK's public API.
 //!
 //! ```text
 //! cargo build --release --locked -p ncdb-relay-server --bin ncdb-relay
 //! cargo run --release --locked -p nocentraldb --example bulk_import -- \
-//!   [--operations <n>] [--batch <creates per change>] [--relay-bin <path>] [--dir <path>]
+//!   [--operations <n>] [--batch <creates per change>] [--island] \
+//!   [--relay-bin <path>] [--dir <path>]
 //! ```
 //!
-//! It starts the local relay (`ncdb-relay`, by default the one in the
-//! same target directory), writes `n` records into a new space of a first device,
-//! `batch` creates to one change, waits until the relay holds them, pairs a
-//! second device of the same account and waits until that device holds
-//! them too. It prints what each step took and what the relay received.
+//! It starts the local relay (`ncdb-relay`, by default the one in the same
+//! target directory) and writes `n` synthetic records into a new space of a
+//! first device, `batch` creates to one change. By default, the first
+//! device writes online, waits until the relay holds the burst, and then
+//! pairs a second device of the same account, which catches up as a new
+//! device. With `--island`, the second device is paired first and goes
+//! offline; the first device writes the burst offline, reconnects and
+//! pushes it; then the second device comes back and pulls it. It prints
+//! what each step took and what the relay received.
 //! Everything lives in a temporary directory, removed at the end, or in
 //! `--dir`, a new directory that stays for a look at the databases.
 //! `docs/bulk-import.md` explains the numbers.
@@ -21,20 +27,22 @@ mod device;
 mod import;
 mod memory;
 mod relay;
+mod second;
 
-use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::ExitCode;
+use std::time::Instant;
 
-use nocentraldb::{Invitation, PairKind};
+use second::Second;
 
 const USAGE: &str = "usage: bulk_import [--operations <n>] [--batch <creates per change>] \
-     [--relay-bin <path>] [--dir <path>]";
+     [--island] [--relay-bin <path>] [--dir <path>]";
 
 /// What the command line asks for.
 struct Args {
     operations: u64,
     batch: u64,
+    island: bool,
     relay_bin: Option<PathBuf>,
     dir: Option<PathBuf>,
 }
@@ -43,10 +51,15 @@ fn parse(mut args: impl Iterator<Item = String>) -> Option<Args> {
     let mut parsed = Args {
         operations: 81_000,
         batch: 500,
+        island: false,
         relay_bin: None,
         dir: None,
     };
     while let Some(arg) = args.next() {
+        if arg == "--island" {
+            parsed.island = true;
+            continue;
+        }
         let value = args.next()?;
         match arg.as_str() {
             "--operations" => parsed.operations = value.parse().ok().filter(|&n| n > 0)?,
@@ -107,8 +120,10 @@ async fn main() -> ExitCode {
     let mut args = std::env::args().skip(1).peekable();
     let result = if args.peek().map(String::as_str) == Some("catch-up") {
         args.next();
-        match (args.next(), args.next()) {
-            (Some(dir), Some(relay)) => catch_up::run(&PathBuf::from(dir), &relay).await,
+        match (args.next(), args.next(), args.next()) {
+            (Some(dir), Some(relay), Some(mode)) => {
+                catch_up::run(&PathBuf::from(dir), &relay, &mode).await
+            }
             _ => Err(USAGE.to_owned()),
         }
     } else {
@@ -150,73 +165,77 @@ async fn measure(args: Args) -> Result<(), String> {
         .await
         .to_string();
     let relay = relay::Relay::start(&relay_bin, &dir.0, &invitation)?;
-    let laptop = device::open(&dir.0, "laptop", Some(&relay.url), false).await?;
+    let mut laptop = device::open(&dir.0, "laptop", Some(&relay.url), false).await?;
+    let space = laptop
+        .spaces()
+        .create()
+        .await
+        .map_err(|e| e.to_string())?
+        .id();
     device::synced(&laptop).await?;
 
-    let imported = import::run(&laptop, args.operations, args.batch).await?;
+    let (written, at_relay, tablet) = if args.island {
+        // The second device joins the empty space and goes offline.
+        let mut tablet = Second::start(&exe, &dir.0, &relay.url, "pair")?;
+        tablet.pair(&laptop, space).await?;
+        tablet.leave()?;
+        device::synced(&laptop).await?;
+        // The first device writes the burst offline, then reconnects.
+        drop(laptop);
+        let offline = device::open(&dir.0, "laptop", None, false).await?;
+        let on = offline
+            .spaces()
+            .get(space)
+            .await
+            .map_err(|e| e.to_string())?;
+        let written = import::write(&on, args.operations, args.batch).await?;
+        drop((on, offline));
+        let reconnected = Instant::now();
+        laptop = device::open(&dir.0, "laptop", Some(&relay.url), false).await?;
+        device::synced(&laptop).await?;
+        let at_relay = reconnected.elapsed();
+        // The second device comes back.
+        (
+            written,
+            at_relay,
+            Second::start(&exe, &dir.0, &relay.url, "resume")?,
+        )
+    } else {
+        let on = laptop
+            .spaces()
+            .get(space)
+            .await
+            .map_err(|e| e.to_string())?;
+        let start = Instant::now();
+        let written = import::write(&on, args.operations, args.batch).await?;
+        device::synced(&laptop).await?;
+        let at_relay = start.elapsed();
+        // A new device joins after the burst.
+        let mut tablet = Second::start(&exe, &dir.0, &relay.url, "pair")?;
+        tablet.pair(&laptop, space).await?;
+        (written, at_relay, tablet)
+    };
     let laptop_peak = memory::own_peak();
     let received = relay.received()?;
-
-    // The second device, in a process of its own.
-    let mut tablet = Command::new(&exe)
-        .arg("catch-up")
-        .arg(&dir.0)
-        .arg(&relay.url)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    let mut lines = BufReader::new(tablet.stdout.take().ok_or("no output")?).lines();
-    let mut line = || -> Result<String, String> {
-        lines
-            .next()
-            .ok_or("the second device ended early")?
-            .map_err(|e| e.to_string())
-    };
-    let first = line()?;
-    let text = first
-        .strip_prefix("invitation ")
-        .ok_or_else(|| format!("unexpected line: {first}"))?;
-    let invitation: Invitation = text.parse().map_err(|e| format!("{e}"))?;
-    // In an app, a person compares the fingerprint on both screens first.
-    let paired = laptop
-        .account()
-        .pair(PairKind::Device, &invitation)
-        .await
-        .map_err(|e| e.to_string())?;
-    let mut stdin = tablet.stdin.take().ok_or("no input")?;
-    writeln!(
-        stdin,
-        "answer {} {} {}",
-        paired.answer,
-        imported.space.id(),
-        imported.last
-    )
-    .map_err(|e| e.to_string())?;
-    stdin.flush().map_err(|e| e.to_string())?;
-    let last = line()?;
-    let numbers: Vec<u64> = last
-        .strip_prefix("caught-up ")
-        .ok_or_else(|| format!("unexpected line: {last}"))?
-        .split_whitespace()
-        .map(|n| n.parse().map_err(|_| format!("unexpected line: {last}")))
-        .collect::<Result<_, _>>()?;
-    let [caught_up, items, tablet_file, tablet_wal, tablet_peak] = numbers[..] else {
-        return Err(format!("unexpected line: {last}"));
-    };
-    let _ = tablet.wait();
+    let caught_up = tablet.caught_up(space, written.last)?;
 
     let peak = |bytes: Option<u64>| bytes.map_or("not reported".to_owned(), megabytes);
+    let (scenario, from) = if args.island {
+        ("both devices offline during the burst", "from reconnecting")
+    } else {
+        ("a new device joins after the burst", "from the first write")
+    };
+    println!("scenario:                 {scenario}");
     println!("operations:               {}", args.operations);
     println!("creates per change:       {}", args.batch);
-    println!("changes written:          {}", imported.changes);
+    println!("changes written:          {}", written.changes);
     println!(
         "written on the device:    {}",
-        seconds(imported.written.as_millis())
+        seconds(written.took.as_millis())
     );
     println!(
-        "held by the relay:        {}",
-        seconds(imported.at_relay.as_millis())
+        "held by the relay:        {} {from}",
+        seconds(at_relay.as_millis())
     );
     println!(
         "first device's database:  {}",
@@ -229,20 +248,23 @@ async fn measure(args: Args) -> Result<(), String> {
     println!("frames through an upload: {}", received.large);
     println!("relay database files:     {}", megabytes(received.files));
     println!("relay peak RSS:           {}", peak(relay.peak_memory()));
-    println!("second device caught up:  {}", seconds(caught_up.into()));
-    println!("items it reads:           {items}");
+    println!(
+        "second device caught up:  {}",
+        seconds(caught_up.millis.into())
+    );
+    println!("items it reads:           {}", caught_up.items);
     println!(
         "second device's database: {}",
-        database((tablet_file, tablet_wal))
+        database((caught_up.file, caught_up.wal))
     );
     println!(
         "second device's peak RSS: {}",
-        peak(Some(tablet_peak).filter(|&b| b > 0))
+        peak(Some(caught_up.peak).filter(|&b| b > 0))
     );
-    if items != args.operations {
+    if caught_up.items != args.operations {
         return Err(format!(
-            "the second device reads {items} items, not {}",
-            args.operations
+            "the second device reads {} items, not {}",
+            caught_up.items, args.operations
         ));
     }
     Ok(())

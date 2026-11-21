@@ -1,29 +1,24 @@
-//! The import on the first device: existing records written into one
-//! space, `batch` creates to a change, then pushed to the relay.
+//! The burst on the first device: synthetic records written into one
+//! space, `batch` creates to a change.
 
 use std::time::{Duration, Instant};
 
-use nocentraldb::{Db, ObjectId, Space, Value};
+use nocentraldb::{ObjectId, Space, Value};
 
-use crate::device;
-
-/// What the import measured.
+/// What the writes measured.
 #[derive(Debug)]
-pub struct Imported {
-    pub space: Space,
+pub struct Written {
     /// The last item created, which a device that holds it holds all.
     pub last: ObjectId,
-    /// The changes the import wrote.
+    /// The changes written.
     pub changes: u64,
     /// From the first write until every change was folded on the device.
-    pub written: Duration,
-    /// From the first write until the relay held every change.
-    pub at_relay: Duration,
+    pub took: Duration,
 }
 
-/// The fields of the `i`th imported record, as a record of a task
-/// tracker has them: a title of about 50 characters, a status, a priority,
-/// an estimate, a flag and two tags.
+/// The fields of the `i`th record, as a record of a task tracker has them:
+/// a title of about 50 characters, a status, a priority, an estimate, a
+/// flag and two tags.
 pub fn fields(i: u64) -> [(&'static str, Value); 6] {
     let status = if i.is_multiple_of(3) { "done" } else { "open" };
     [
@@ -42,10 +37,9 @@ pub fn fields(i: u64) -> [(&'static str, Value); 6] {
     ]
 }
 
-/// Writes `operations` records into a new space of `db`, `batch` creates
-/// to one change, and waits until the relay holds them all.
-pub async fn run(db: &Db, operations: u64, batch: u64) -> Result<Imported, String> {
-    let space = db.spaces().create().await.map_err(|e| e.to_string())?;
+/// Writes `operations` records into `space`, `batch` creates to one
+/// change.
+pub async fn write(space: &Space, operations: u64, batch: u64) -> Result<Written, String> {
     let start = Instant::now();
     let (mut changes, mut last) = (0, None);
     let mut next = 0;
@@ -64,14 +58,9 @@ pub async fn run(db: &Db, operations: u64, batch: u64) -> Result<Imported, Strin
         changes += 1;
         next = end;
     }
-    let written = start.elapsed();
-    device::synced(db).await?;
-    let at_relay = start.elapsed();
-    Ok(Imported {
-        space,
-        last: last.ok_or("nothing to import")?,
+    Ok(Written {
+        last: last.ok_or("nothing to write")?,
         changes,
-        written,
-        at_relay,
+        took: start.elapsed(),
     })
 }
