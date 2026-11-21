@@ -266,6 +266,8 @@ fn kind(map: &Map<String, Value>, path: &str) -> Result<Kind, LockError> {
         "ncdb/float" => Kind::Float,
         "ncdb/boolean" => Kind::Boolean,
         "ncdb/choice" => Kind::Choice(list("options")?),
+        "ncdb/date" => Kind::Date,
+        "ncdb/timestamp" => Kind::Timestamp,
         "ncdb/set" => {
             let at = join(path, "of");
             Kind::Set(element(object(required(map, path, "of")?, &at)?, &at)?)

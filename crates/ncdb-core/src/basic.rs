@@ -24,7 +24,22 @@ pub enum Kind {
     Boolean,
     /// One of the options the schema lists.
     Choice(BTreeSet<String>),
+    /// A calendar day: days since 1970-01-01, from 0001-01-01 to
+    /// 9999-12-31 (RFC 0004, "Days and points in time").
+    Date,
+    /// A point in time: milliseconds since 1970-01-01T00:00:00.000Z, from
+    /// 0001-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z.
+    Timestamp,
 }
+
+/// The first and the last day a day field holds, in days since 1970-01-01:
+/// 0001-01-01 and 9999-12-31 (RFC 0004, "Days and points in time").
+pub const DAYS: std::ops::RangeInclusive<i64> = -719_162..=2_932_896;
+
+/// The first and the last point in time a point-in-time field holds, in
+/// milliseconds since 1970-01-01T00:00:00.000Z: 0001-01-01T00:00:00.000Z
+/// and 9999-12-31T23:59:59.999Z.
+pub const MILLISECONDS: std::ops::RangeInclusive<i64> = -62_135_596_800_000..=253_402_300_799_999;
 
 /// What a field lets a member write: the values of a [`Kind`], object ids,
 /// which links hold (RFC 0004, "Links"), or references, a space id and an
@@ -206,8 +221,19 @@ impl Kind {
             | (Kind::Boolean, Value::Bool(_)) => true,
             (Kind::Integer, Value::Unsigned(n) | Value::Negative(n)) => *n <= MAX,
             (Kind::Choice(options), Value::Text(option)) => options.contains(option),
+            (Kind::Date, value) => integer(value).is_some_and(|n| DAYS.contains(&n)),
+            (Kind::Timestamp, value) => integer(value).is_some_and(|n| MILLISECONDS.contains(&n)),
             _ => false,
         }
+    }
+}
+
+/// A CBOR integer as an `i64`, when it is one that fits.
+fn integer(value: &Value) -> Option<i64> {
+    match value {
+        Value::Unsigned(n) => i64::try_from(*n).ok(),
+        Value::Negative(n) => i64::try_from(*n).ok().map(|n| -1 - n),
+        _ => None,
     }
 }
 

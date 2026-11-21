@@ -207,7 +207,12 @@ fn the_ends_of_the_range_fit_and_one_beyond_does_not() {
     let days: Vec<_> = column(&db, DAY).into_iter().take(4).collect();
     assert_eq!(
         days,
-        vec![(1, Some(FIRST_DAY)), (2, Some(LAST_DAY)), (3, None), (4, None)]
+        vec![
+            (1, Some(FIRST_DAY)),
+            (2, Some(LAST_DAY)),
+            (3, None),
+            (4, None)
+        ]
     );
     let points: Vec<_> = column(&db, POINT).into_iter().skip(4).collect();
     assert_eq!(
@@ -246,10 +251,10 @@ fn days_sort_in_time_order_with_unset_first() {
     let view = view_with(
         &db,
         [
-            day(1, int(20_778)),  // 2026-11-21
-            day(2, int(-1)),      // 1969-12-31
-            day(3, Value::Null),  // unset
-            day(4, int(0)),       // 1970-01-01
+            day(1, int(20_778)), // 2026-11-21
+            day(2, int(-1)),     // 1969-12-31
+            day(3, Value::Null), // unset
+            day(4, int(0)),      // 1970-01-01
             day(5, int(FIRST_DAY)),
         ]
         .concat(),
