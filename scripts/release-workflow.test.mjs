@@ -26,9 +26,11 @@ import {
   JOBS,
   job,
   load,
+  moveStepOf,
   STEPS,
   stepAt,
   stepsOf,
+  runs,
   usesAction,
   WRITE,
   workflow,
@@ -49,6 +51,9 @@ const TIMEOUTS = {
 /** The one way a step derives the basic-auth header from GH_TOKEN. */
 /** The GitHub environment crates.io's trusted publishers name (NOC-376). */
 const REGISTRY_ENVIRONMENT = "registry-publish";
+/** The step that builds the npm packages, and the task that installs wasm-bindgen. */
+const NPM_BUILD = "pnpm -r --if-present run build";
+const WASM_RUNNER = "moon run repo:wasm-runner";
 const AUTH = `auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`;
 
 const checks = [
@@ -296,6 +301,48 @@ const checks = [
         ctx.doc.deleteIn(["jobs", "publish", "timeout-minutes"]),
       "deletes the timeout of commit-back": (ctx) =>
         ctx.doc.deleteIn(["jobs", "commit-back", "timeout-minutes"]),
+    },
+  },
+  {
+    // packages/sdk/build.mjs runs wasm-bindgen from target/tools, which only
+    // moon run repo:wasm-runner installs (NOC-407).
+    name: "every job that builds the npm packages installs wasm-bindgen first",
+    check: (ctx) => {
+      const builders = JOBS.filter((id) =>
+        stepsOf(ctx, id).some(runs(NPM_BUILD)),
+      );
+      assert.deepEqual(builders, ["alpha-npm", "build", "publish-npm"]);
+      for (const id of builders) {
+        const build = stepAt(ctx, id, runs(NPM_BUILD));
+        const bindgen = stepsOf(ctx, id).findIndex(runs(WASM_RUNNER));
+        assert.ok(
+          bindgen !== -1 && bindgen < build,
+          `${id} builds before wasm-bindgen exists`,
+        );
+      }
+    },
+    mutants: {
+      "build drops the install": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "build",
+          "steps",
+          stepAt(ctx, "build", runs(WASM_RUNNER)),
+        ]),
+      "publish-npm installs after the build": (ctx) =>
+        moveStepOf(
+          ctx,
+          "publish-npm",
+          stepAt(ctx, "publish-npm", runs(WASM_RUNNER)),
+          stepAt(ctx, "publish-npm", runs(NPM_BUILD)),
+        ),
+      "alpha-npm drops the install": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "alpha-npm",
+          "steps",
+          stepAt(ctx, "alpha-npm", runs(WASM_RUNNER)),
+        ]),
     },
   },
   {
