@@ -7,6 +7,7 @@ use super::Bridge;
 
 mod account;
 mod ad_hoc;
+mod erase;
 mod erasures;
 mod fields;
 mod find;
