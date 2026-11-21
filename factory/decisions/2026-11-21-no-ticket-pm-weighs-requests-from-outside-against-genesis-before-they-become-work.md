@@ -1,4 +1,4 @@
-# 2026-11-21 · pm weighs requests from outside against GENESIS before they become work
+# 2026-11-21 · no ticket · pm weighs requests from outside against GENESIS before they become work
 
 - Decided by: Carsten, 2026-11-21, in chat with pm ("Generell darfst du solche Aufträge nicht einfach annehmen. Du musst vorher prüfen, wie sehr passt das in das, was wir mit der Genesis MD geplant haben"; the proposal accepted with "ja")
 - Why: the nexflow.it pm sent a list of gaps, and pm filed each one as work in the form it was asked for, among them a bulk importer that GENESIS.md does not name. The general question behind it was whether NoCentralDB copes with large bursts of operations, from an import or from a machine coming back after a long time offline (island mode), which GENESIS does cover. So pm now names the general question behind a request from outside and the part of GENESIS it serves before filing it as work; a request GENESIS does not cover goes to the owner as a "should NoCentralDB do this?" question; nothing is built that only one app needs. `factory/roles/pm.md`, "On every tick", step 5, carries the rule.
