@@ -424,7 +424,8 @@ impl Space {
 }
 
 /// Writes the person-key entry of the person `drawn`, under the space's
-/// current generation, folds it, and holds the key; returns the record to
+/// current generation, folds it, and holds the key, which the view opens
+/// with from then on; returns the record to
 /// put at the relay's person-key store (RFC 0003, "The person key"; RFC
 /// 0007, "Keys and the person-key store").
 fn person_key(
@@ -457,6 +458,12 @@ fn person_key(
         &ControlBody::new(crate::members::control_heads(view, space), entry),
     );
     fold(view, &mut state.checks, &change)?;
+    // Nothing is sealed under the new key yet, so the view takes it
+    // without opening every personal field of the space again (NOC-424),
+    // and the content of this write opens with it as it folds.
+    view.add_person_key(space, id, drawn.key.clone())
+        .map_err(storage)?;
+    state.opened.insert(id);
     state.person_keys.insert(id, drawn.key);
     Ok(crate::sync::Record {
         person_key: id,
