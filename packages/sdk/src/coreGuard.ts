@@ -39,18 +39,35 @@ const stopped = (request: Uint8Array) => {
       });
 };
 
-/** Answers each request with the core that `ready` gives, or with `storageFailed` once the core failed. */
+/**
+ * Answers each request with the core that `ready` gives, or with
+ * `storageFailed` once the core failed. `failed` takes an error the core
+ * threw outside a call, which the worker sees as an uncaught one: a trap in
+ * a step the core runs after the call returned leaves that call's promise
+ * unsettled, so the request it was answering gets its answer here.
+ */
 export const guardCore = (ready: Promise<Handle>) => {
   let broken = false;
+  let waiting: ((error: unknown) => void) | undefined;
   return {
     answer: async (request: Uint8Array): Promise<Uint8Array> => {
       if (broken) return stopped(request);
       try {
-        return await (await ready)(request);
+        const core = await ready;
+        return await new Promise<Uint8Array>((resolve, reject) => {
+          waiting = reject;
+          core(request).then(resolve, reject);
+        });
       } catch (error) {
         broken = true;
         return failure(request, texts.coreFailed(String(error)));
+      } finally {
+        waiting = undefined;
       }
+    },
+    failed: (error: unknown) => {
+      broken = true;
+      waiting?.(error);
     },
   };
 };

@@ -52,6 +52,20 @@ const core = guardCore(
 );
 const answer = core.answer;
 
+// An error nothing caught in this worker comes from the core: a trap in a
+// step it runs after a call returned, as when a write is too large for its
+// memory (NOC-426). The guard answers the waiting request and every later
+// one with `storageFailed`; the error stops here, so the page sees the
+// nc.Error and no uncaught one.
+self.addEventListener("error", (event) => {
+  event.preventDefault();
+  core.failed(event.error ?? event.message);
+});
+self.addEventListener("unhandledrejection", (event) => {
+  event.preventDefault();
+  core.failed(event.reason);
+});
+
 /** What the page sends, besides bridge requests, to end the worker (workerHost.ts). */
 const STOP = "stop";
 
