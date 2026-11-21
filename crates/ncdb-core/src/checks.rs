@@ -96,6 +96,9 @@ pub struct SealChecks {
     /// Every key held for a generation, the current one included.
     held: BTreeMap<u64, Vec<SpaceKey>>,
     resolved: Resolved,
+    /// `resolve` with a memory of the control changes added before, so
+    /// that adding one does not judge the others again (NOC-424).
+    resolver: membership::Resolver,
     /// [`SealChecks::model_id`], read again after every control change, so
     /// that the check of every sealed change costs no decryption.
     space_model: Option<[u8; 16]>,
@@ -115,6 +118,7 @@ impl SealChecks {
             chains: Vec::new(),
             held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
+            resolver: membership::Resolver::new(space),
             space_model: None,
         }
     }
@@ -351,7 +355,7 @@ impl Checks for SealChecks {
             }
         }
         self.controls.insert(change.id(), change.clone());
-        self.resolved = membership::resolve(self.space, self.controls.values());
+        self.resolved = self.resolver.resolve(self.controls.values());
         self.walk_key_chain();
         self.hold_keys();
         self.space_model = self.model_id();
