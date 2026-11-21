@@ -328,6 +328,10 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
         run: node scripts/release/set-version.mjs "${TAG#v}"
       - run: cargo build --release --locked
+      # The SDK's build runs wasm-bindgen from target/tools
+      # (packages/sdk/build.mjs).
+      - name: Install wasm-bindgen
+        run: moon run repo:wasm-runner
       - run: pnpm -r --if-present run build
       - name: Publishable packages
         run: node scripts/release/publishable.mjs --json | tee publishable.json
