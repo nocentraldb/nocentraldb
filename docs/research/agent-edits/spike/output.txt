@@ -1,0 +1,54 @@
+
+S1: plain position vs relative position
+plain position now points at                 We shi
+relative position now points at              Friday
+
+S2: quote resolved at write time
+person typed elsewhere, edit applied         true
+result                                       Intro Hello. | We ship on Monday. | Outro.
+person typed inside quote, edit applied      false
+
+S3: quote resolved against the read version (fork and merge)
+live text before the agent writes            Intro. | We ship on Fri-day (tentative). | Outro.
+edit applied                                 true
+update bytes                                 18
+result on both                               Intro. | We ship on -Monday (tentative). | Outro.
+who wrote block 1                            [[1,"We ship on -"],[2,"Mon"],[1,"day (tentative)."]]
+
+S4: simultaneous edits, focused vs whole paragraph
+focused edit                                 Intro. | We ship on Monday. Bob typed this. | Outro.
+whole paragraph replaced                     Intro. | We ship on Monday. | Outro.
+whole text of the paragraph replaced         Intro. |  Bob typed this.We ship on Monday. | Outro.
+
+S5: agent streams words while the person types at the same place
+result                                       Intro. | We ship on Friday. I type here too. The agent adds this. | Outro.
+who wrote block 1                            [[1,"We ship on Friday. I type here too."],[2," The agent adds this."]]
+
+S6: two edits from one read, and the agent's clock
+with own updates in the fork                 Hi. Intro. | We ship on Monday. | Outro, revised.
+second update's client and first clock       [2,3]
+first edit's first clock                     0
+forgetful fork's first clock                 0
+copy that got the first edit first           Intro. | We ship on Monevisedday. | Outro.
+copy that got the forgetful edit first       Intro. | We ship on day. | Outro, revised.
+
+S7: Markdown quotes
+markdown                                     Price: 5 \* 3 = 15 \[draft\]
+markdown                                     We ship on **Fri**day.
+markdown                                     Ship it.
+markdown                                     Ship it.
+quote '5 * 3' found in markdown              false
+quote 'Friday' found in markdown             false
+quote 'Friday' found in text                 true
+quote 'Ship it.' matches                     2
+
+S8: size of a typed word vs a focused replacement
+insert ' afternoon' (bytes)                  21
+'Friday afternoon' -> 'Monday morning' (bytes) 33
+result                                       Intro. | We ship on Monday morning. | Outro.
+
+S9: a mark and a block type while the person types
+bold on 'Friday'                             Intro. | We ship on Friday. Bob typed this. | Outro.
+block 1 as Yjs holds it                      [{"insert":"We ship on "},{"insert":"Friday","attributes":{"strong":{}}},{"insert":". Bob typed this."}]
+paragraph made a heading                     Intro. | We ship on Friday. | Outro.
+block 1's element                            heading
