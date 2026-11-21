@@ -321,6 +321,15 @@ test("an owner that closes while its worker still answers or reports posts nothi
   await ask(first.core, "open", { lock: LOCK });
   const second = await tab();
   await ask(second.core, "open", { lock: LOCK });
+  // Node's process, which the SDK's types leave out (they are the browser's).
+  const process = (
+    globalThis as unknown as {
+      process: {
+        on(event: string, listener: (reason: unknown) => void): void;
+        off(event: string, listener: (reason: unknown) => void): void;
+      };
+    }
+  ).process;
   const unhandled: unknown[] = [];
   const note = (reason: unknown) => unhandled.push(reason);
   process.on("unhandledRejection", note);
