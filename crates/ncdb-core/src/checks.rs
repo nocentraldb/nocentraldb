@@ -378,6 +378,10 @@ impl Checks for SealChecks {
     fn add_control(&mut self, change: &Change) {
         self.add_controls([change]);
     }
+
+    fn add_controls(&mut self, changes: &[Change]) {
+        SealChecks::add_controls(self, changes);
+    }
 }
 
 impl SealChecks {
