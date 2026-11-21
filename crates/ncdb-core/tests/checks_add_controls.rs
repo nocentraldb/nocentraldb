@@ -24,8 +24,8 @@ use ncdb_core::change::Change;
 use ncdb_core::checks::SealChecks;
 use ncdb_core::envelope;
 use ncdb_core::keys::SpaceKey;
-use ncdb_core::receive::Checks;
 use ncdb_core::membership::{self, Entry, KeyChainEntry, PreviousKey, Role};
+use ncdb_core::receive::Checks;
 
 use space::{Space, Who, id, key, space_key};
 
@@ -111,8 +111,14 @@ fn adding_the_control_changes_at_once_gives_what_adding_them_one_by_one_gives() 
 
     at_once.add_controls(&changes);
 
-    assert!(at_once.space_key(generations[0]).is_some(), "the chain opens");
-    assert_eq!(known(&at_once, generations), known(&one_by_one, generations));
+    assert!(
+        at_once.space_key(generations[0]).is_some(),
+        "the chain opens"
+    );
+    assert_eq!(
+        known(&at_once, generations),
+        known(&one_by_one, generations)
+    );
 }
 
 #[test]

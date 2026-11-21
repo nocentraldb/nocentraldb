@@ -143,7 +143,9 @@ impl SpaceState {
                 change.header().kind == Kind::CONTROL
                     && matches!(log.state(change.id()), Some(State::Folded { .. }))
             });
-            state.checks.add_controls(controls.map(|(_, change)| change));
+            state
+                .checks
+                .add_controls(controls.map(|(_, change)| change));
         }
         state
     }
