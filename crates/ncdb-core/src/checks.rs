@@ -47,8 +47,8 @@ use crate::seal::{self, OpenError};
 /// generation graph holds, valid when written, gives the keys of its
 /// previous generations, once a key of its own generation is known, so a
 /// member added after rotations reaches the first generation. The key
-/// chain keys are derived again from scratch after every control change,
-/// from the envelope keys and the set of entries alone: the walk takes the
+/// chain keys are derived again from scratch after every call that adds
+/// control changes, from the envelope keys and the set of entries alone: the walk takes the
 /// entries in change id order, pass after pass until no entry gives a new
 /// key, and a generation keeps the first key a pass opens for it. Two
 /// entries that give different keys for one generation, which only an
@@ -102,6 +102,8 @@ pub struct SealChecks {
     /// `resolve` with a memory of the control changes added before, so
     /// that adding one does not judge the others again (NOC-424).
     resolver: membership::Resolver,
+    /// [`SealChecks::resolves`].
+    resolves: usize,
     /// [`SealChecks::model_id`], read again after every control change, so
     /// that the check of every sealed change costs no decryption.
     space_model: Option<[u8; 16]>,
@@ -123,6 +125,7 @@ impl SealChecks {
             held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
             resolver: membership::Resolver::new(space),
+            resolves: 0,
             space_model: None,
         }
     }
@@ -138,6 +141,31 @@ impl SealChecks {
     /// change written after every other (NOC-424).
     pub fn judged(&self) -> usize {
         self.resolver.judged()
+    }
+
+    /// How many times the checks resolved their control changes (RFC
+    /// 0008, "The function") since they were made: once for each call
+    /// that added a control change they did not hold (NOC-438).
+    pub fn resolves(&self) -> usize {
+        self.resolves
+    }
+
+    /// Adds every control change of `changes` that passed steps 1 to 4, as
+    /// [`Checks::add_control`] adds one, and resolves the set once when
+    /// any of them is new, instead of once after each: a reopened copy
+    /// hands its checks every folded control change of its log at once
+    /// (NOC-438). The checks then know what adding the same changes one by
+    /// one gives them, since the control state and the keys derive from the
+    /// set alone, except the keys a key chain entry gave only before
+    /// another replaced them, which no folded change needs any more.
+    pub fn add_controls<'a>(&mut self, changes: impl IntoIterator<Item = &'a Change>) {
+        let mut added = false;
+        for change in changes {
+            added |= self.take_control(change);
+        }
+        if added {
+            self.settle();
+        }
     }
 
     /// The space key of `generation`: the key a writer seals under, and the
@@ -348,8 +376,16 @@ impl Checks for SealChecks {
     }
 
     fn add_control(&mut self, change: &Change) {
+        self.add_controls([change]);
+    }
+}
+
+impl SealChecks {
+    /// Keeps a control change of the space the checks do not hold yet, and
+    /// the key it names or opens; says whether it was new.
+    fn take_control(&mut self, change: &Change) -> bool {
         if change.header().space != self.space || self.controls.contains_key(&change.id()) {
-            return;
+            return false;
         }
         if let Ok(body) = ControlBody::decode(&change.header().payload) {
             if let Some(key) = named_key(&body) {
@@ -370,14 +406,19 @@ impl Checks for SealChecks {
             }
         }
         self.controls.insert(change.id(), change.clone());
+        true
+    }
+
+    /// Resolves the control changes held, and derives the keys and the
+    /// space's model from the result.
+    fn settle(&mut self) {
         self.resolved = self.resolver.resolve(self.controls.values());
+        self.resolves += 1;
         self.walk_key_chain();
         self.hold_keys();
         self.space_model = self.model_id();
     }
-}
 
-impl SealChecks {
     /// Derives the key chain keys again from scratch: opens the previous
     /// keys of every key chain entry the generation graph holds whose own
     /// generation's key is known, in passes over the entries in change id
