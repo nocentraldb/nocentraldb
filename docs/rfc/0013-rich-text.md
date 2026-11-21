@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner has answered seven of its eight choices: D1, D2, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces (Carsten, 2026-11-21, NOC-430); D5 as option C of the research note of NOC-436 (PR #432, `docs/research/agent-edits/`): the agent quotes the Markdown it read and gives the Markdown that replaces it, the quote is looked up in the version the agent read, and the edit is written as a Yjs update made at that version (Carsten, 2026-11-21, NOC-436). D4, which nodes the core knows, is open until its research note (NOC-437), which asks whether every client can keep editing a document whose parts it cannot interpret. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
+**Status.** Draft. The owner has answered seven of its eight choices: D1, D2, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces (Carsten, 2026-11-21, NOC-430); D5 as the option that F11 to F14 support: the agent quotes the Markdown it read and gives the Markdown that replaces it, the quote is looked up in the version the agent read, and the edit is written as a Yjs update made at that version (Carsten, 2026-11-21, NOC-436). D4, which nodes the core knows, is open: the owner decides it on NOC-440. Whatever D4 decides, the editor binding keeps every client editing a document whose parts it cannot interpret, by the three measures F15 to F19 call for ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)). [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
@@ -68,7 +68,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 ## What the spike found
 
-The spike ran Yjs 13.6.33 (the latest stable release; 14.0 is in beta), Yrs 0.28.2 and `@tiptap/y-tiptap` 3.3.1 with `@tiptap/extension-collaboration` 3.35.0. [Appendix: the spike](#appendix-the-spike) shows the code.
+The spike ran Yjs 13.6.33 (the latest stable release; 14.0 is in beta), Yrs 0.28.2 and `@tiptap/y-tiptap` 3.3.1 with `@tiptap/extension-collaboration` 3.35.0. [Appendix: the spike](#appendix-the-spike) shows the code. F11 to F14 come from a second spike, on how an agent and a person edit one document at the same time, with `y-prosemirror` 1.3.7 and `prosemirror-markdown` 1.14.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-436-research-how-an-agent-and-a-person-edit/docs/research/agent-edits)). F15 to F19 come from a third, on what an older client does with nodes it cannot interpret, with `y-prosemirror` 1.3.7, `@tiptap/y-tiptap` 3.3.1 and TipTap 3.35.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-437-research-can-every-client-keep-editing-a/docs/research/rich-text-unknown-nodes)).
 
 | # | Finding | What it means here |
 | --- | --- | --- |
@@ -81,7 +81,16 @@ The spike ran Yjs 13.6.33 (the latest stable release; 14.0 is in beta), Yrs 0.28
 | F7 | 2,000 insertions and 1,500 deletions came to 42,423 bytes of updates. The document's state was 2,545 bytes with garbage collection, 19,986 without. Its state vector was 4 bytes. | The log grows with every edit; the view's state with the content. Compaction of history is the compaction RFC's. |
 | F8 | 60 updates of three members, applied in 20 random orders, gave one text and the same state bytes, in v1 and in v2. | The state has a canonical encoding in this run; the harness has to show it for every generated case (C1). |
 | F9 | Yrs applied six updates written by Yjs, in both orders, to the same document as Yjs, and its encoded state was byte for byte Yjs's (136 bytes). | The core folds with Yrs and the editor shows Yjs, and the two agree in this run. A test of their agreement belongs in the harness (C3). |
-| F10 | When the editor's schema cannot show a node of the document, y-tiptap deletes that node from the document, unless the editor sets `enableContentCheck`, which makes it report a `contentError` instead. | An editor with an older or narrower schema would delete what it does not know. The binding must set `enableContentCheck` ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)). |
+| F10 | When the editor's schema cannot show a node of the document, y-tiptap deletes that node from the document, unless the editor sets `enableContentCheck`, which makes it report a `contentError` instead. | An editor with an older or narrower schema would delete what it does not know. F15 to F19 measure it and what prevents it. |
+| F11 | An agent kept the position of "Friday" from its read; a person then typed "Good news: " before it. The position pointed at `We shi`; a Yjs relative position still pointed at `Friday`. | A plain position goes stale as soon as anyone types before it, so an agent's edit cannot be addressed by one. |
+| F12 | A quote looked up in the document as it was at write time was not found once the person had typed a hyphen inside it. Looked up in the version the agent read, and written as a Yjs update made at that version, the edit applied as an 18-byte update and both edits stayed: `We ship on -Monday (tentative).` | Resolving the quote in the read version keeps every keystroke of the person, even inside the quote, and the agent never has to read again because the person typed ([D5](#d5-anchored-edits)). |
+| F13 | Two edits of one agent from one read, the second made in a copy that did not hold the first, both used clock 0 of the agent's client id; two copies that received them in different orders ended with different text. | An agent's edits for one field go through one lease, in order, so that its clock continues (D1). |
+| F14 | Making a word bold while a person typed in the same paragraph kept the person's typing; turning the paragraph into a heading lost it, because Yjs cannot rename an element and the binding deletes and re-inserts it. | Changing a block's type is a whole-block rewrite, for an agent and for a person in the editor alike; the person's concurrent typing is `lost` and readable. |
+| F15 | Before any editor opened it, the older client's Yjs document held every node, attribute and mark of the newer app. | Yjs and Yrs keep what a client does not know; the core, which only applies updates, keeps it too. |
+| F16 | y-prosemirror, y-tiptap without `onInvalidContent` and TipTap without `enableContentCheck` deleted an unknown node from the Yjs document when the editor opened it, before anyone typed, also with the editor read-only, and also with no editor at all, in `yXmlFragmentToProseMirrorRootNode` and `initProseMirrorDoc`. An unknown mark deleted the whole text of its paragraph. `yXmlFragmentToProsemirrorJSON`, which reads without a schema, deleted nothing. | The deletion is an ordinary Yjs edit, so every member loses the content. Nothing may convert the document through a ProseMirror schema outside the editor: the core reads the tree from Yrs. |
+| F17 | An attribute the schema does not declare, on a node it knows, raised no error, even with the content check, and the next edit of that node removed it. | The content check alone does not protect attributes. |
+| F18 | With `enableContentCheck`, TipTap kept the content, reported one `contentError`, and refused every edit of the field, even in a paragraph the older app knows. It needs `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. | The check turns "deleted" into "read-only": better, but the person can no longer work on the field. |
+| F19 | With the editor's schema widened from the document before it opened, the content check on and the editor rebuilt on `contentError`, the older client kept editing and lost nothing, also when a new kind of node arrived while it was open. A guard on the binding's transactions flagged every loss of the scenario and nothing in ordinary edits. | Three measures together keep every client editing; the binding requires them ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)). |
 
 ## The field in the schema and the lock
 
@@ -180,10 +189,10 @@ A rich-text field's read value is its document. The core renders it on read, fro
 
 - **As Markdown**, CommonMark with GitHub's tables, strikethrough and task lists. This is what agents read and what `space.get` returns in TypeScript ([D6](#d6-the-read-value-in-typescript), (Carsten, 2026-11-21, NOC-430)).
 - **As plain text**, the text of each block, one block per line, for previews.
-- **As a tree**, the ProseMirror JSON of the document (`{ type, attrs, content, marks, text }`), as `Data` in Rust and as a plain object in TypeScript, for apps that render the document themselves.
+- **As a tree**, the ProseMirror JSON of the document (`{ type, attrs, content, marks, text }`), as `Data` in Rust and as a plain object in TypeScript, for apps that render the document themselves. The core reads it from Yrs, never through y-prosemirror's conversion, which deletes what its schema does not know (F16).
 - **Its mentions**, the references the mention nodes hold, for an app that resolves names.
 
-Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. Which vocabulary that is, or whether the app owns it, is open ([D4](#d4-the-document-vocabulary), NOC-437). With D4's option A, the Markdown rendering knows the names TipTap's StarterKit and its task lists use:
+Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. Which vocabulary that is, or whether the app owns it, is open ([D4](#d4-the-document-vocabulary), NOC-440). With D4's option A, the Markdown rendering knows the names TipTap's StarterKit and its task lists use:
 
 | Node or mark | Markdown |
 | --- | --- |
@@ -191,7 +200,7 @@ Storing and syncing a document needs no vocabulary: the core only applies Yjs up
 | `bold`, `italic`, `strike`, `code`, `link` (`href`) | `**`, `*`, `~~`, a backtick, `[text](href)`. |
 | `underline`, `highlight` | Their text, unmarked: Markdown has no form for them. The tree keeps them. |
 | `mention` (`space`, `id`) | `[@](ncdb:<space id>/<object id>)`, a link without a name ([Mentions](#mentions)). |
-| Any other node or mark | Its text content, as a block or inline. The tree keeps it whole, and the document is never changed because of it. |
+| Any other node or mark | An HTML tag with its name and attributes around its content, as a block or inline, such as `<callout tone="warn">Careful.</callout>`. The tree keeps it whole, and the document is never changed because of it. |
 
 ### Mentions
 
@@ -207,7 +216,7 @@ There are three ways to write a rich-text field, and none of them overwrites the
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
-import { NcMention } from "@nocentraldb/tiptap";
+import { NcMention, NcKeepUnknown } from "@nocentraldb/tiptap";
 
 const body = await notes.richText(model.notes, noteId, "body");
 
@@ -218,9 +227,10 @@ const editor = new Editor({
     StarterKit.configure({ undoRedo: false }),
     Collaboration.configure({ document: body.doc }),
     NcMention.configure({ db }),
+    NcKeepUnknown.configure({ document: body.doc }),
   ],
 });
-editor.on("contentError", () => body.reportUnshown());
+editor.on("contentError", () => body.rebuild(editor));
 
 // later
 await body.close();
@@ -238,11 +248,19 @@ await body.close();
 
 #### An editor that cannot show a node
 
-An editor whose schema lacks a node in the document, such as an older version of the app after a newer one added a node type, would delete that node from the document without `enableContentCheck` (F10). The deletion would be a change like any other, and every member would lose the node. So the binding requires `enableContentCheck: true`: y-tiptap then leaves the document alone and TipTap emits `contentError`. The SDK's guide says to call `reportUnshown()` and to keep the editor read-only for that field until the app is updated. The SDK cannot check the editor's options; an app that leaves the check off can delete content it does not know, as any app can delete content with a write. Whether y-tiptap, with the check on, never deletes the unknown node during later edits of other nodes is a question for the first follow-up spike.
+Every client must keep editing a document even where it cannot interpret parts of it, such as an older version of the app after a newer one added a node, a mark or an attribute. Yjs keeps those parts (F15). The editor binding is what loses them: by default it deletes an unknown node or mark from the Yjs document as soon as the editor opens it, read-only or not, and the deletion reaches every member (F16). TipTap's content check prevents the deletion but makes the whole field read-only (F18), and does not protect an undeclared attribute (F17).
+
+So the binding requires three measures, which together kept every client editing and lost nothing (F19):
+
+1. **A schema widened from the document.** Before the editor opens, the binding scans the field's document and gives each unknown node, mark and attribute a placeholder type: a node of that name, inline or block as it sits, with its attributes declared without a default value of their own; a mark with its attributes; an extra attribute on a known node. The editor shows a placeholder, such as a box with the node's name, and keeps the rest editable. `@nocentraldb/tiptap` ships this as `NcKeepUnknown`. A person can still delete a placeholder on purpose, as any block.
+2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. A rebuild costs the selection and the undo history, once per new kind.
+3. **A guard on what the binding writes.** Before the binding writes an editor's update as a change, it checks which parts the update deletes. An update that deletes an element, a format or an attribute the editor's schema does not know is not written: the binding reloads its `Y.Doc` from the core's state and reports the field as not fully shown. Placeholders count as known, so a deliberate deletion passes. The guard works with any editor that edits a `Y.Doc`, and also catches an app that leaves out the first two measures.
+
+Nothing else in the SDK, an app or an agent's tool may turn the document into ProseMirror nodes with a schema of its own: that conversion deletes what the schema lacks, with no editor (F16). The core never does: it applies updates with Yrs and reads the tree from Yrs.
 
 ### An agent: anchored edits
 
-An agent edits the way Claude edits a file: it quotes the text it read and gives the text that replaces it. The quote is looked up in the version of the document the agent read, not in the document as it is when the agent writes, and the edit is written as a Yjs update made at that version, which Yjs then merges with everything written since ([D5](#d5-anchored-edits), (Carsten, 2026-11-21, NOC-436); the research note of NOC-436 (PR #432, `docs/research/agent-edits/`)).
+An agent edits the way Claude edits a file: it quotes the text it read and gives the text that replaces it. The quote is looked up in the version of the document the agent read, not in the document as it is when the agent writes, and the edit is written as a Yjs update made at that version, which Yjs then merges with everything written since ([D5](#d5-anchored-edits), Carsten, 2026-11-21, NOC-436; F11 to F14).
 
 ```ts
 const body = await notes.readRichText(model.notes, noteId, "body");
@@ -274,7 +292,7 @@ The read gives the Markdown and a version. An edit names the version and one or 
 3. parses the replacement with the same vocabulary and writes the smallest change, text by characters, marks by ranges, blocks by type, under the agent's leased client id ([D1](#d1-yjs-client-ids)), directly on the Yrs document, so that nodes, marks and attributes the Markdown does not show stay untouched;
 4. folds that update into the live document, where Yjs merges it with everything written since the read, as it merges the update of a member that was briefly offline.
 
-In the note's spike, a person who typed inside the quoted sentence while the agent worked kept every keystroke, and the agent's edit applied as an 18-byte update; looked up at write time instead, the same quote was no longer found and the agent would have had to read again. An edit whose quote spans several blocks may also add, remove or reorder whole blocks within the quote, and `{ after: quote, insert: markdown }` or `{ append: markdown }` adds blocks.
+A person who types inside the quoted sentence while the agent works keeps every keystroke, and the agent's edit still applies (F12); looked up at write time instead, the same quote would no longer be found and the agent would have to read again. An edit whose quote spans several blocks may also add, remove or reorder whole blocks within the quote, and `{ after: quote, insert: markdown }` or `{ append: markdown }` adds blocks.
 
 **The version.** It is the document's state at the read. The core keeps it, for an agent's open reads, in a device-local cache with a time limit, no part of the view or the log, at about the size of the document's state (2.5 KB for F7's document). An edit that names a version the core no longer holds is refused, and the agent reads again; the error's name comes with the SDK's API review.
 
@@ -331,8 +349,8 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 | D1 | How Yjs client ids are drawn | Derived from the member and a nonce, checked on fold, reused through a lease | Accepted (Carsten, 2026-11-21) |
 | D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone | Accepted (Carsten, 2026-11-21) |
 | D3 | When the editor writes a change | At each pause: 500 ms idle, at most 2 s, and on close or hide | Accepted (Carsten, 2026-11-21) |
-| D4 | Which nodes the core knows | Open until the research note | Open, research note NOC-437 |
-| D5 | How an agent edits | Markdown quoted and replaced, looked up in the version the agent read, written as a Yjs update at that version | Accepted, the research note's option C (Carsten, 2026-11-21, NOC-436) |
+| D4 | Which nodes the core knows | A, with a lossless fallback | Open, the owner decides on NOC-440 |
+| D5 | How an agent edits | Markdown quoted and replaced, looked up in the version the agent read, written as a Yjs update at that version | Accepted, option C (Carsten, 2026-11-21, NOC-436) |
 | D6 | What `space.get` returns for the field | The Markdown, as a string | Accepted (Carsten, 2026-11-21) |
 | D7 | Personal rich text | Not in rule 1; mentions store only a reference to the person | Accepted, the mention as a recommendation (Carsten, 2026-11-21) |
 | D8 | Presence and live cursors | Not in this RFC; a later RFC with an encrypted channel for messages that are not changes | Accepted (Carsten, 2026-11-21) |
@@ -366,15 +384,17 @@ A change can be rejected after the fact: for example, its author was removed fro
 
 ### D4. The document vocabulary
 
-**Open: a research note first (NOC-437).** The owner wants every client to keep editing a document even where it cannot interpret parts of it, and asked whether the app should decide the vocabulary, since NoCentralDB only stores and syncs Yjs updates. The note works out each option's consequences, with a spike on y-prosemirror. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. D5's accepted option C, anchored edits that quote Markdown, needs the core to render Markdown, so it goes with A or B; with C, an agent can quote only plain text.
+**Open: the owner decides on NOC-440.** The owner wants every client to keep editing a document even where it cannot interpret parts of it, and asked whether the app should decide the vocabulary, since NoCentralDB only stores and syncs Yjs updates. F15 to F19 show that this goal is met or missed in the editor binding, not by D4: under every option an older client meets names it does not know, and the three measures of [An editor that cannot show a node](#an-editor-that-cannot-show-a-node) keep it editing. For storing and syncing, the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. D5's accepted option C, anchored edits that quote Markdown, needs the core to render Markdown, so it goes with A or B; with C, an agent can quote only plain text.
 
-- **A. A fixed vocabulary in rule 1, TipTap's StarterKit, task lists, tables and `mention`; any other node kept in the document, shown in Markdown as its text.** No configuration, and apps that use TipTap's defaults need nothing. A custom node reads as its text in Markdown until a later rule knows it.
+- **A. A fixed vocabulary, TipTap's StarterKit, task lists, tables and `mention`, with a lossless fallback (recommended).** No configuration, and apps that use TipTap's defaults need nothing. Any node or mark outside the vocabulary renders as an HTML tag with its attributes, which CommonMark allows, such as `<callout tone="warn">Careful.</callout>`, so an agent sees that it is there and can quote around it. The vocabulary belongs to the renderer, not to the merge rule: it changes what members read, never the state they converge on, so a new standard node needs no migration. The cost is a fixed list in the core to maintain.
 - **B. The vocabulary declared in the lock,** as the field's configuration, with a Markdown form per node. Custom nodes render properly, but every addition is a change of the field's configuration, which [RFC 0011](0011-plugin-field-types.md#a-type-that-is-not-registered) refuses for a field that exists.
 - **C. The app owns the vocabulary; the core renders only plain text.** The core knows no node names. Agents and the Rust SDK read the document as plain text and as its tree, and the app renders Markdown or HTML itself. Nothing in the core changes when an app adds a node. But `space.get` could no longer return Markdown (D6 would read plain text), and an agent would see no headings, lists or marks unless the app renders them for it.
 
 ### D5. Anchored edits
 
-**Accepted: the research note's option C** (Carsten, 2026-11-21, NOC-436). The owner doubted that quoting Markdown is reliable and stable, and the research note of NOC-436 (PR #432, `docs/research/agent-edits/`) looked at how an agent and a person edit one document at the same time. Its finding: Markdown is a sound language for the quote, and what made the draft fragile was the moment of lookup. A quote looked up in the document at write time is not found exactly when a person types in the same sentence, which is when the two work together. The note's options:
+**Accepted: option C** (Carsten, 2026-11-21, NOC-436). The owner doubted that quoting Markdown is reliable and stable, and asked how an agent and a person can edit one document at the same time. F11 to F14 answer it: a position goes stale as soon as someone types before it (F11); a quote is a sound address, but only if it is looked up in the version the agent read (F12). Looked up at write time, it is not found exactly when a person types in the same sentence, which is when the two work together.
+
+Prior art points the same way. Tiptap's AI Toolkit edits whole nodes by a hash and answers a document that changed meanwhile with a conflict to retry ([Tiptap AI Toolkit](https://tiptap.dev/docs/ai/ai-toolkit/overview.md)). Liveblocks found that a model editing node ids "could easily lose track of structure, break references, or output malformed operations", and moved to letting the model write text and code compute the change ([Liveblocks](https://liveblocks.io/blog/building-an-ai-copilot-inside-your-tiptap-text-editor)). Claude's own editing tools quote exact text that must occur once ([Claude Code tools](https://code.claude.com/docs/en/tools-reference)). The options:
 
 - **A. Markdown quoted and replaced, looked up in the document at write time** (the draft). Refused whenever the person typed inside the quote; the agent retries.
 - **B. Plain text within one block, plus calls that insert and delete whole blocks.** As A, and cannot change a mark or a block by quoting it.
@@ -382,7 +402,7 @@ A change can be rejected after the fact: for example, its author was removed fro
 - **D. Node ids, with new content for the whole node.** Needs ids in every block and replaces whole nodes.
 - **E. An editing session, in which the agent moves a cursor to a quote and types there.** Robust, but many calls and changes per edit; it can be built on C later, once presence exists (D8).
 
-C needs D4's A or B; with D4's C it works on plain-text quotes only ([An agent: anchored edits](#an-agent-anchored-edits)).
+C needs D4's A or B; with D4's C it works on plain-text quotes only ([An agent: anchored edits](#an-agent-anchored-edits)). Sources: the spike behind F11 to F14, with its notes and sources ([branch](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-436-research-how-an-agent-and-a-person-edit/docs/research/agent-edits)).
 
 ### D6. The read value in TypeScript
 
@@ -430,8 +450,8 @@ Once the owner decides this RFC, the pull request that publishes it writes these
 - **No erasure of rich text**, and deleted text stays in the log ([What erasure reaches](#deleted-text-stays-in-the-log)).
 - **No protection against a writer.** A member that may write can delete a whole document, as it can clear any field; the deletion is a change in the log, and an app can bring the text back from history.
 - **Typing in the last 2 s can be lost** if the tab dies before the pause ([D3](#d3-when-the-editor-writes)).
-- **An app that turns off `enableContentCheck`** can delete nodes it does not know ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
-- **Custom nodes read as their text** in Markdown under D4's option A ([D4](#d4-the-document-vocabulary)).
+- **An app that leaves out the binding's measures**, or converts the document with a ProseMirror schema of its own, deletes what that schema does not know; the guard catches it in the binding, not in an app's own code ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)).
+- **Custom nodes read as HTML tags**, not in a Markdown form of their own, under D4's option A ([D4](#d4-the-document-vocabulary)). An attribute the vocabulary does not show, on a node it knows, is kept but not shown.
 - **A rejected change's attribute value** leaves the attribute unset, not restored ([Un-folding a rejected change](#un-folding-a-rejected-change)).
 - **No embeds**, such as images or files, and no comments or suggestions.
 - **No Yjs 14.** Rule 1 is Yjs 13's integration; a later Yjs whose integration differs is a new rule.
@@ -440,14 +460,14 @@ Once the owner decides this RFC, the pull request that publishes it writes these
 
 Each becomes a ticket once the owner decides; the ones marked "spike" can start before, since they decide nothing.
 
-1. **Spike: the TipTap binding.** With `enableContentCheck`, does y-tiptap leave an unknown node alone during later edits? How the binding avoids echoing its own writes, and the latency of a pause-based write between two tabs and two browsers.
+1. **Spike: the TipTap binding in a browser.** How the binding avoids echoing its own writes, the latency of a pause-based write between two tabs and two browsers, and the three measures with IME, paste and undo, which F19 did not run.
 2. **Spike: Yrs under bad input and large documents.** Fuzz decoding and applying of arbitrary updates for panics, natively and in wasm32; measure apply with and without a cached document on a 100 KB document.
 3. **Core: the field type `ncdb/richText` rule 1.** State, operation 5, client ids and their check, the same id twice, outcomes, generators and broken fixtures for C1 to C7, and the Yjs and Yrs agreement vectors.
 4. **Core: un-folding rich text**, as D2 decided: placeholders for the rejected change's items, its deletions undone.
-5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides after its research note (NOC-437).
+5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides (NOC-440), the tree read from Yrs.
 6. **Core: anchored edits**, as D5 decided: the read version and its cache, the lookup, the Yrs-level diff, `anchorNotFound` and `anchorAmbiguous`. With the note's three rules: a quote's ends fall on text, not inside markup; a block's type changes only when the replacement changes it; and an agent's edits for one field go through one lease in order.
 7. **Schema and lock: `nc.richText()`** in `ncdb model build` and the check on the device.
-8. **TypeScript SDK: the binding and `@nocentraldb/tiptap`**, with the lease of client ids and the write at each pause.
+8. **TypeScript SDK: the binding and `@nocentraldb/tiptap`**, with the lease of client ids, the write at each pause, and the three measures, each with a test that fails without it: an older schema opening a newer document loses nothing and stays editable (widening); a node kind arriving while the editor is open pauses and resumes after the rebuild (content check); an update that deletes an unknown element, format or attribute is not written, and a deliberate deletion of a placeholder is (guard).
 9. **Rust SDK: `RichText` reads and writes.**
 10. **Docs: a rich-text guide**, mentions included, and the FAQ on deleted text and erasure.
 11. **RFC texts:** the changes to RFC 0001, 0002, 0004, 0005, 0006 and 0009 listed above.
@@ -505,3 +525,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-21 · The owner's answers to D1, D3, D6, D7 and D8; D2 explained again; D4 gains option C and waits for D5, which goes to a research note (NOC-430, NOC-436, #422)
 - 2026-11-21 · The owner accepts D2; D4 goes to a research note of its own (NOC-430, NOC-437, #422)
 - 2026-11-21 · The owner accepts D5 as the research note's option C: quotes are looked up in the version the agent read (NOC-436, #422)
+- 2026-11-21 · The findings of the two research spikes join the RFC as F11 to F19; the binding requires the three measures that keep every client editing; D4 waits for NOC-440 (NOC-436, NOC-437, #422)
