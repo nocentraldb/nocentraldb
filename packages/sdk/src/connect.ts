@@ -18,6 +18,7 @@ import {
 } from "./connectParts.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
+import { equalToCore, fromCore, toCore } from "./dates.ts";
 import { SetElements } from "./elements.ts";
 import { erasureCallsOf, signOffOf, takeBackOf } from "./eraseCalls.ts";
 import { NcError } from "./error.ts";
@@ -358,7 +359,7 @@ export const connect = async (
     };
     if (state.equal !== undefined) {
       asked.equal = state.equal.map((v) =>
-        typeof v === "string" ? v.normalize("NFC") : v,
+        typeof v === "string" ? v.normalize("NFC") : equalToCore(v),
       );
     }
     if (state.take !== undefined) asked.take = state.take;
@@ -384,7 +385,10 @@ export const connect = async (
     };
     return {
       items: answer.items.map((item) =>
-        read.remember(flatten(item), asked.collection as string),
+        read.remember(
+          dated(asked.collection as string, flatten(item)),
+          asked.collection as string,
+        ),
       ) as T[],
       cursor:
         answer.cursor === null
@@ -443,9 +447,13 @@ export const connect = async (
         texts.notASafeInteger(collection, field),
       );
     }
-    if (typeof written === "string") return written.normalize("NFC");
-    return written;
+    const sent = toCore(kind, collection, field, written);
+    return typeof sent === "string" ? sent.normalize("NFC") : sent;
   };
+
+  /** `object`, read from `collection`, with each point in time as a Date. */
+  const dated = (collection: string, object: Record<string, unknown>) =>
+    fromCore(described[collection]?.fields, object);
 
   const values = (collection: string, written: Record<string, unknown>) => {
     const out: Record<string, unknown> = {};
@@ -565,7 +573,10 @@ export const connect = async (
     })) as { fields: Record<string, unknown> } | null;
     return answer === null
       ? undefined
-      : read.remember(flatten(answer), nameOf(collection));
+      : read.remember(
+          dated(nameOf(collection), flatten(answer)),
+          nameOf(collection),
+        );
   };
 
   return {
