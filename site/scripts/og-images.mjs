@@ -20,15 +20,20 @@ import { OG_HEIGHT, OG_IMAGES, OG_WIDTH } from "../src/og.mjs";
 
 const site = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-const escape = (text) =>
+const escapeHtml = (text) =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** The HTML page an image is rendered from. */
 export const ogHtml = (image) => {
-  const wordmark = readFileSync(join(site, "src/assets/brand/ncdb-wordmark-dark.svg"), "utf8")
+  const wordmark = readFileSync(
+    join(site, "src/assets/brand/ncdb-wordmark-dark.svg"),
+    "utf8",
+  )
     .replace(/<rect[^>]*\/>/, "")
     .replace("<svg ", '<svg class="wordmark" ');
-  const mark = readFileSync(join(site, "public/brand/ncdb-mark-accent-512.png")).toString("base64");
+  const mark = readFileSync(
+    join(site, "public/brand/ncdb-mark-accent-512.png"),
+  ).toString("base64");
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -65,17 +70,18 @@ export const ogHtml = (image) => {
 <body>
   <div class="brand"><img class="mark" alt="" src="data:image/png;base64,${mark}">${wordmark}</div>
   <div class="main">
-    <p class="kicker"><span class="dot"></span>${escape(image.kicker)}</p>
-    <h1>${escape(image.title)}</h1>
+    <p class="kicker"><span class="dot"></span>${escapeHtml(image.kicker)}</p>
+    <h1>${escapeHtml(image.title)}</h1>
   </div>
-  <div class="footer">${escape(image.footer)}</div>
+  <div class="footer">${escapeHtml(image.footer)}</div>
 </body>
 </html>
 `;
 };
 
 /** The SHA-256 of an image's HTML, as hex. */
-export const sourceHash = (html) => createHash("sha256").update(html).digest("hex");
+export const sourceHash = (html) =>
+  createHash("sha256").update(html).digest("hex");
 
 /** A PNG chunk of `type` holding `data`. */
 const chunk = (type, data) => {
@@ -91,7 +97,11 @@ const chunk = (type, data) => {
 export const withText = (png, keyword, text) => {
   const ihdrEnd = 8 + 4 + 4 + 13 + 4;
   const data = Buffer.from(`${keyword}\0${text}`, "latin1");
-  return Buffer.concat([png.subarray(0, ihdrEnd), chunk("tEXt", data), png.subarray(ihdrEnd)]);
+  return Buffer.concat([
+    png.subarray(0, ihdrEnd),
+    chunk("tEXt", data),
+    png.subarray(ihdrEnd),
+  ]);
 };
 
 /** A PNG's width, height and tEXt entries. */
@@ -111,7 +121,10 @@ export const pngInfo = (png) => {
     }
     if (type === "tEXt") {
       const zero = data.indexOf(0);
-      text[data.toString("latin1", 0, zero)] = data.toString("latin1", zero + 1);
+      text[data.toString("latin1", 0, zero)] = data.toString(
+        "latin1",
+        zero + 1,
+      );
     }
     at += 12 + length;
   }
@@ -130,11 +143,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     await page.setContent(html, { waitUntil: "networkidle" });
     await page.evaluate(() => document.fonts.ready);
     const missing = await page.evaluate(() =>
-      ['700 72px "Encode Sans Semi Expanded"', '500 30px "Commissioner"', '26px "Syne Mono"'].filter(
-        (font) => !document.fonts.check(font),
-      ),
+      [
+        '700 72px "Encode Sans Semi Expanded"',
+        '500 30px "Commissioner"',
+        '26px "Syne Mono"',
+      ].filter((font) => !document.fonts.check(font)),
     );
-    if (missing.length > 0) throw new Error(`fonts did not load: ${missing.join(", ")}`);
+    if (missing.length > 0)
+      throw new Error(`fonts did not load: ${missing.join(", ")}`);
     const png = await page.screenshot({ type: "png" });
     const out = join(site, "public", image.file);
     writeFileSync(out, withText(png, "source", sourceHash(html)));

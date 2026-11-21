@@ -9,6 +9,7 @@ import CodeSection from "../components/CodeSection.astro";
 import Demo from "../components/Demo.astro";
 import Hero from "../components/Hero.astro";
 import Scenario from "../components/Scenario.astro";
+import { OG_IMAGES, ogTags } from "../og.mjs";
 import "../styles/tokens.css";
 import "../styles/kit-tokens.css";
 import "../styles/scene.css";
@@ -38,6 +39,8 @@ const links = [
     <meta name="site-kind" content="software" />
     <meta name="page-type" content="software" />
     <meta name="theme-color" content="#111110" />
+    <!-- the landing page's own Open Graph image (NOC-410) -->
+    {ogTags(OG_IMAGES.landing).map(([key, name, content]) => <meta {...{ [key]: name }} content={content} />)}
     <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />

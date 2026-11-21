@@ -33,8 +33,11 @@ const meta = (html, key) => {
   return undefined;
 };
 
-const unescape = (text) =>
-  text.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+const decodeEntities = (text) =>
+  text
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&");
 
 test("every page sets og:image, its size and alt text, and a large card", () => {
   const built = pages();
@@ -43,22 +46,47 @@ test("every page sets og:image, its size and alt text, and a large card", () => 
     const html = readFileSync(join(dist, page), "utf8");
     const image = page === "index.html" ? OG_IMAGES.landing : OG_IMAGES.docs;
     assert.equal(meta(html, "og:image"), ogUrl(image), `${page}: og:image`);
-    assert.equal(meta(html, "og:image:width"), "1200", `${page}: og:image:width`);
-    assert.equal(meta(html, "og:image:height"), "630", `${page}: og:image:height`);
-    assert.equal(unescape(meta(html, "og:image:alt") ?? ""), image.alt, `${page}: og:image:alt`);
-    assert.equal(meta(html, "twitter:card"), "summary_large_image", `${page}: twitter:card`);
+    assert.equal(
+      meta(html, "og:image:width"),
+      "1200",
+      `${page}: og:image:width`,
+    );
+    assert.equal(
+      meta(html, "og:image:height"),
+      "630",
+      `${page}: og:image:height`,
+    );
+    assert.equal(
+      decodeEntities(meta(html, "og:image:alt") ?? ""),
+      image.alt,
+      `${page}: og:image:alt`,
+    );
+    assert.equal(
+      meta(html, "twitter:card"),
+      "summary_large_image",
+      `${page}: twitter:card`,
+    );
   }
 });
 
 test("the landing page keeps its title and description", () => {
   const html = readFileSync(join(dist, "index.html"), "utf8");
-  assert.match(html, /<title>NoCentralDB: a local-first database for people and agents<\/title>/);
-  assert.match(meta(html, "description") ?? "", /^The database puts all the data right next to/);
+  assert.match(
+    html,
+    /<title>NoCentralDB: a local-first database for people and agents<\/title>/,
+  );
+  assert.match(
+    meta(html, "description") ?? "",
+    /^The database puts all the data right next to/,
+  );
 });
 
 test("the landing page and the docs have separate images", () => {
   assert.notEqual(OG_IMAGES.landing.file, OG_IMAGES.docs.file);
-  assert.match(ogUrl(OG_IMAGES.landing), /^https:\/\/nocentraldb\.io\/.+\.png$/);
+  assert.match(
+    ogUrl(OG_IMAGES.landing),
+    /^https:\/\/nocentraldb\.io\/.+\.png$/,
+  );
 });
 
 for (const [name, image] of Object.entries(OG_IMAGES)) {
@@ -66,7 +94,10 @@ for (const [name, image] of Object.entries(OG_IMAGES)) {
     const file = join(dist, image.file);
     assert.ok(existsSync(file), `site/dist/${image.file} is missing`);
     const bytes = readFileSync(file);
-    assert.ok(bytes.length < 1_000_000, `${image.file} is ${bytes.length} bytes`);
+    assert.ok(
+      bytes.length < 1_000_000,
+      `${image.file} is ${bytes.length} bytes`,
+    );
     const info = pngInfo(bytes);
     assert.equal(info.width, 1200);
     assert.equal(info.height, 630);
