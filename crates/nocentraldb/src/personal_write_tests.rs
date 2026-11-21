@@ -358,3 +358,21 @@ fn a_clear_of_a_personal_value_needs_no_person_key() {
     let read = now(space.get("projects", project)).unwrap().unwrap();
     assert_eq!(read.get::<&str>("name").unwrap(), None);
 }
+
+/// NOC-424: the person-key entry of a new person is a control change, and
+/// folding it judged every control change of the space again, each from
+/// its whole causal past, so a write grew with the square of the persons.
+/// Now it judges only itself, however many persons the space holds.
+#[test]
+fn a_new_persons_key_judges_only_its_own_entry_however_many_persons_the_space_holds() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    for persons in [10, 60] {
+        while db.lock().spaces[&space.id().0].person_keys.len() < persons {
+            now(space.create("projects", [("name", Value::from("Anna"))])).unwrap();
+        }
+        now(space.create("projects", [("name", Value::from("Ben"))])).unwrap();
+        let judged = db.lock().spaces[&space.id().0].checks.judged();
+        assert_eq!(judged, 1, "with {persons} persons in the space");
+    }
+}

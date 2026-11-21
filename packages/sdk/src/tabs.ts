@@ -114,7 +114,13 @@ export const tabCore = async (
   const me = crypto.randomUUID();
   const lockName = `nocentraldb/${name}`;
   const channel = platform.channel(lockName);
-  const post = (message: Message) => channel.postMessage(message);
+  // Once closed, the channel throws on postMessage, while this tab's worker
+  // may still answer what it took or report an event (NOC-425): nothing is
+  // posted after the close.
+  let channelClosed = false;
+  const post = (message: Message) => {
+    if (!channelClosed) channel.postMessage(message);
+  };
 
   let listener: ((event: Uint8Array) => void) | undefined;
   const emit = (bytes: Uint8Array) => listener?.(bytes);
@@ -466,6 +472,7 @@ export const tabCore = async (
       entry.reject(new NcError("closed", texts.DATABASE_CLOSED));
     }
     sent.clear();
+    channelClosed = true;
     channel.close();
   };
 

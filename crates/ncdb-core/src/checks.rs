@@ -90,12 +90,18 @@ pub struct SealChecks {
     /// to, by the envelope's change id, with its author.
     envelope_keys: BTreeMap<u64, BTreeMap<ChangeId, (MemberId, SpaceKey)>>,
     chain_keys: BTreeMap<u64, SpaceKey>,
+    /// Every key chain entry among the control changes added, by change
+    /// id, decoded once.
+    key_chain_entries: BTreeMap<ChangeId, KeyChainEntry>,
     /// The key chain entries the generation graph holds, in change id
     /// order, as the last walk found them.
     chains: Vec<(ChangeId, KeyChainEntry)>,
     /// Every key held for a generation, the current one included.
     held: BTreeMap<u64, Vec<SpaceKey>>,
     resolved: Resolved,
+    /// `resolve` with a memory of the control changes added before, so
+    /// that adding one does not judge the others again (NOC-424).
+    resolver: membership::Resolver,
     /// [`SealChecks::model_id`], read again after every control change, so
     /// that the check of every sealed change costs no decryption.
     space_model: Option<[u8; 16]>,
@@ -112,9 +118,11 @@ impl SealChecks {
             keys: BTreeMap::new(),
             envelope_keys: BTreeMap::new(),
             chain_keys: BTreeMap::new(),
+            key_chain_entries: BTreeMap::new(),
             chains: Vec::new(),
             held: BTreeMap::new(),
             resolved: membership::resolve(space, []),
+            resolver: membership::Resolver::new(space),
             space_model: None,
         }
     }
@@ -122,6 +130,14 @@ impl SealChecks {
     /// The control state of the control changes that passed.
     pub fn resolved(&self) -> &Resolved {
         &self.resolved
+    }
+
+    /// How many control changes the last control change added judged from
+    /// the fold of their causal past (RFC 0008, step 1), rather than taking
+    /// the judgement from the [`membership::Resolver`]'s memory: one, for a
+    /// change written after every other (NOC-424).
+    pub fn judged(&self) -> usize {
+        self.resolver.judged()
     }
 
     /// The space key of `generation`: the key a writer seals under, and the
@@ -341,6 +357,9 @@ impl Checks for SealChecks {
             }
             // An envelope to another member, or one that does not open,
             // gives no key.
+            if let Entry::KeyChain(chain) = &body.entry {
+                self.key_chain_entries.insert(change.id(), chain.clone());
+            }
             if let Entry::KeyEnvelope(sealed) = &body.entry
                 && let Ok(key) = envelope::open(sealed, self.space, &self.member)
             {
@@ -351,7 +370,7 @@ impl Checks for SealChecks {
             }
         }
         self.controls.insert(change.id(), change.clone());
-        self.resolved = membership::resolve(self.space, self.controls.values());
+        self.resolved = self.resolver.resolve(self.controls.values());
         self.walk_key_chain();
         self.hold_keys();
         self.space_model = self.model_id();
@@ -370,14 +389,9 @@ impl SealChecks {
     fn walk_key_chain(&mut self) {
         self.chain_keys.clear();
         let chains: Vec<(ChangeId, KeyChainEntry)> = self
-            .controls
+            .key_chain_entries
             .iter()
-            .filter_map(|(&id, change)| {
-                match ControlBody::decode(&change.header().payload).ok()?.entry {
-                    Entry::KeyChain(chain) => Some((id, chain)),
-                    _ => None,
-                }
-            })
+            .map(|(&id, chain)| (id, chain.clone()))
             .filter(|(id, chain)| {
                 self.resolved
                     .generation(chain.generation)

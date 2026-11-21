@@ -38,6 +38,12 @@ test("the two guides, browser durability and the use cases are rendered", () => 
     assert.ok(files.includes(file), file);
 });
 
+test("the bulk import guide is rendered among the guides (NOC-414)", () => {
+  const doc = REPO_DOCS.find((d) => d.file === "bulk-import.md");
+  assert.ok(doc, "docs/bulk-import.md is not rendered");
+  assert.equal(doc.slug, "docs/guides/bulk-import");
+});
+
 test("contributor and operator docs stay in the repository", () => {
   const files = REPO_DOCS.map((doc) => doc.file);
   for (const file of [

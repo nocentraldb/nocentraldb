@@ -331,6 +331,12 @@ pub(crate) const NO_WEB_CRYPTO: &str =
 pub(crate) const NO_WRAPPING_KEY: &str =
     "IndexedDB holds no wrapping key for the database";
 
+/// `notADay` (invalidValue): Date::new or Date::from_str given no such day, or
+/// one outside the years 1 to 9999, and the bridge given such a text for an
+/// nc.date field.
+pub(crate) const NOT_ADAY: &str =
+    "a day is a date from 0001-01-01 to 9999-12-31, written YYYY-MM-DD";
+
 /// `notAMember` (notFound): Members::remove and Members::set_role
 /// (members.remove, members.setRole) when the member id is not a current member
 /// of the space.
@@ -348,6 +354,12 @@ pub(crate) fn not_apairing_answer(why: impl std::fmt::Display) -> String {
 /// (db.account.removeMember) when the words it was given are no recovery code.
 pub(crate) const NOT_ARECOVERY_CODE: &str =
     "the words are not a recovery code";
+
+/// `notATimestamp` (invalidValue): Timestamp::from_millis or
+/// Timestamp::try_from(SystemTime) outside the years 1 to 9999, and the bridge
+/// given such a value, or no integer, for an nc.timestamp field.
+pub(crate) const NOT_ATIMESTAMP: &str =
+    "a point in time is a millisecond from 0001-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z";
 
 /// `notAnErasureRequest` (invalidValue): Parsing an erasure request from text
 /// (ErasureRequest::from_str) when the text is not one; the reason follows

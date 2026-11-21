@@ -7,9 +7,12 @@ use super::Bridge;
 
 mod account;
 mod ad_hoc;
+mod dates;
+mod erase;
 mod erasures;
 mod fields;
 mod find;
+mod find_equal;
 mod members;
 mod refs;
 mod reports;

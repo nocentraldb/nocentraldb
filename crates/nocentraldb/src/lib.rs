@@ -40,6 +40,7 @@ mod browser;
 #[doc(hidden)]
 pub mod bridge;
 mod clock;
+mod date;
 mod db;
 mod durability;
 mod encode;
@@ -70,6 +71,7 @@ mod view_report;
 
 pub use account::Removed;
 pub use ad_hoc::{AdHoc, AdHocCreated};
+pub use date::{Date, Timestamp};
 pub use db::{Db, OpenOptions};
 
 // The Rust snippets of docs/getting-started.md, compiled by the doc tests,
@@ -77,6 +79,11 @@ pub use db::{Db, OpenOptions};
 #[cfg(doctest)]
 #[doc = include_str!("../../../docs/getting-started.md")]
 pub struct GettingStarted;
+
+// The Rust snippet of docs/bulk-import.md, compiled the same way (NOC-414).
+#[cfg(doctest)]
+#[doc = include_str!("../../../docs/bulk-import.md")]
+pub struct BulkImport;
 
 // The Rust code of the landing page's code section, compiled the same way, so
 // the page cannot drift from the SDK either.
