@@ -1,5 +1,5 @@
 ---
-type: feature
+type: breaking
 tickets: [NOC-412]
 components: [core, sdk-rust, sdk-ts, cli]
 ---
@@ -27,3 +27,9 @@ await space.create(model.events, { occurredAt: new Date() });
 ```
 
 In TypeScript a day is a `"YYYY-MM-DD"` string and a point in time a `Date`. In Rust they are `nocentraldb::Date` and `nocentraldb::Timestamp`. Both types cover the years 1 to 9999, and the SDKs refuse anything else with `invalidValue`. A field that holds dates as text keeps its type: add a new `nc.date()` field, write the values into it, and deprecate the text field. An app that needs the time zone a person meant, for example for a weekly meeting at 9:00 in Berlin, stores the zone's name in a field of its own.
+
+## Migration
+
+Apps need no change: nothing that worked before changes meaning, and an existing field keeps its type.
+
+Rust code that matches on `ncdb-core`'s field kinds needs two new arms. Both `ncdb_core::model_lock::Kind` and `ncdb_core::basic::Kind` gain the variants `Date` and `Timestamp`, and neither enum is `#[non_exhaustive]`, so an exhaustive `match` on either stops compiling until it handles them or gets a wildcard arm. The SDKs' own types are unchanged.
