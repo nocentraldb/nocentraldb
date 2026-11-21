@@ -132,6 +132,14 @@ impl SealChecks {
         &self.resolved
     }
 
+    /// How many control changes the last control change added judged from
+    /// the fold of their causal past (RFC 0008, step 1), rather than taking
+    /// the judgement from the [`membership::Resolver`]'s memory: one, for a
+    /// change written after every other (NOC-424).
+    pub fn judged(&self) -> usize {
+        self.resolver.judged()
+    }
+
     /// The space key of `generation`: the key a writer seals under, and the
     /// only one a reader opens with. It is the one key the checks hold for
     /// it, from an envelope to the checks' member or from the key chain.
