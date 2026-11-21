@@ -1,4 +1,4 @@
-# RFC NNNN: Who may create spaces on a relay, without a redeploy
+# RFC 0015: Who may create spaces on a relay, without a redeploy
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-413
 
@@ -6,7 +6,7 @@ This RFC decides how a relay admits a new account, so that an app with open sign
 
 It builds on [RFC 0007](0007-relay.md), which defines the relay and its costs, and on [RFC 0010](0010-accounts.md), which makes the recovery key the account's identity; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC NNNN and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
+**How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0015 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 **Status.** Draft, for the owner's decision. It lists the options, weighs abuse and cost on the relay, and recommends one. Nothing of it is built. RFC 0007 and RFC 0009 still describe the static allowlist; the [follow-up tickets](#follow-up-tickets) rewrite them and build the chosen design.
 
@@ -18,7 +18,7 @@ It builds on [RFC 0007](0007-relay.md), which defines the relay and its costs, a
 
 | Question | Answer |
 | --- | --- |
-| Is the recovery bug real? | Yes. The relay compares the genesis certificate's account key with the list (`Relay::check_genesis`). Recovery from the code and `removeMember` both draw a new account key under the same recovery key, so the account's devices are refused with `not_allowed`. The test `crates/ncdb-relay/tests/relay_recovered_account.rs` shows it. |
+| Is the recovery bug real? | Yes. The relay compares the genesis certificate's account key with the list (`Relay::check_genesis`). Recovery from the code and `removeMember` both draw a new account key under the same recovery key, so the account's devices are refused with `not_allowed`. NOC-420 fixes it, with a test that shows it. |
 | What should the relay key admission by? | The account's identity: the recovery key that the certificate's account key statement names, and the account key only for an account whose certificates carry no statement. The relay already receives the statement in every genesis, and can verify it. |
 | How does a new account get admitted without a redeploy? | Recommended: an **admission token**, signed by the app's backend with an admission key whose public half the operator configures on the relay. The member presents it once; the relay records the identity at runtime. |
 | What does that cost? | One small item per admitted account, and one read on each genesis: below a cent a month for thousands of accounts. |
@@ -39,7 +39,7 @@ Keyed by identity, one question appears that the account key hid: **a lost devic
 
 An account whose certificates carry no statement, one a database drew before RFC 0010 was built, has no recovery key. Its identity is its account key, as the fingerprint already does for such an account ([RFC 0010, "The fingerprint"](0010-accounts.md#the-fingerprint)). When the SDK upgrades it, statement 1 names that same key, so a list entry that holds the account key keeps matching it until its first recovery.
 
-This fix is independent of open signup, and every option below assumes it.
+This fix is independent of open signup and is its own ticket, NOC-420, which waits for the owner to agree to key admission by identity. Every option below assumes it.
 
 ## The options
 
@@ -112,7 +112,7 @@ Both are follow-ups with their own design; a write to AWS and a larger bill wait
 
 ## Recommendation
 
-1. **Fix the recovery bug now, by option A**: the relay reads the account's identity from the certificate's statement, keys the static list and the guest's one space by it, and refuses a genesis whose statement is older than one it has seen. The operator's tooling prints the recovery key of an invitation instead of its account key. A list entry that holds an account key keeps matching that key, so no relay that is deployed today breaks.
+1. **Fix the recovery bug now, by option A** (NOC-420): the relay reads the account's identity from the certificate's statement, keys the static list and the guest's one space by it, and refuses a genesis whose statement is older than one it has seen. The operator's tooling prints the recovery key of an invitation instead of its account key. A list entry that holds an account key keeps matching that key, so no relay that is deployed today breaks.
 2. **Open signup by option C, the admission token**, keyed by the same identity. It keeps the relay without secrets and without a privileged endpoint, behaves the same on every backend, and leaves the fight against fake accounts to the app's signup, which already has to have one.
 3. **A ceiling on spend and quotas per identity**, before an app opens signup on a relay the project pays for.
 
@@ -130,7 +130,7 @@ Option B was not taken: the same trust as C, bought with a privileged endpoint o
 
 Once the owner decides, these tickets carry it out:
 
-- **The relay admits by the account's identity** (recommendation 1): `check_genesis` and the guest's one space key by the recovery key, with the highest statement number kept per identity; RFC 0007's "Who may create a space" and its AWS table rewritten; `docs/relay-deploy.md` prints the recovery key; the failing test of this RFC turns green.
+- **NOC-420, the relay admits by the account's identity** (recommendation 1, already a ticket): `check_genesis` and the guest's one space key by the recovery key, with the highest statement number kept per identity; RFC 0007's "Who may create a space" and its AWS table rewritten; `docs/relay-deploy.md` prints the recovery key; a relay test shows that a listed account still creates spaces after recovering.
 - **Admission tokens** (if C): the format and its test vectors in RFC 0003's style; the `admit` request and its errors in RFC 0007; `NCDB_ADMISSION_KEYS` in the Lambda settings and the CDK stack; the store item on all backends with its conformance tests; the `admission` option and `db.account.identity` in both SDKs and RFC 0009; an example backend in `apps/`.
 - **A ceiling on spend**: throttling and reserved concurrency in `infra/aws`, sized by the owner's answer to question 5.
 - **Quotas**: a short design for stored bytes and changes per minute per member, answered with `rate_limited`, then its build.
