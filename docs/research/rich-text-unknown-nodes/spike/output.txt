@@ -68,6 +68,14 @@
 
 ## Remedies
 
+### headless conversion with the old schema
+  y-prosemirror yXmlFragmentToProseMirrorRootNode: ["callout","calloutAttr","highlightMark","highlightText","chip"]
+  y-prosemirror initProseMirrorDoc: ["callout","calloutAttr","highlightMark","highlightText","chip"]
+  y-prosemirror yXmlFragmentToProsemirrorJSON: []
+  y-tiptap yXmlFragmentToProseMirrorRootNode: ["callout","calloutAttr","highlightMark","highlightText","chip"]
+  y-tiptap initProseMirrorDoc: ["callout","calloutAttr","highlightMark","highlightText","chip"]
+  y-tiptap yXmlFragmentToProsemirrorJSON: []
+
 ### read-only y-prosemirror with the old schema
   readerLost: ["callout","calloutAttr","highlightMark","highlightText","chip"]
 

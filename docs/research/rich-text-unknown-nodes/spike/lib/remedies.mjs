@@ -2,7 +2,9 @@
 // from the document before it opens, rebuild it when a new kind arrives, and a
 // guard that spots an editor's write deleting parts its schema does not know.
 import { Mark, Node } from "@tiptap/core";
+import * as YT from "@tiptap/y-tiptap";
 import { Schema } from "prosemirror-model";
+import * as YP from "y-prosemirror";
 import { prosemirrorJSONToYXmlFragment } from "y-prosemirror";
 import * as Y from "yjs";
 import { tiptap, typeAt, yProsemirror } from "./editors.mjs";
@@ -343,7 +345,29 @@ const readOnlyYProsemirror = () => {
   return { readerLost: lost };
 };
 
+// No editor at all: converting the fragment to a ProseMirror node with the
+// older schema, as a headless reader or an agent tool would.
+const headless = () => {
+  const out = {};
+  for (const [lib, mod] of [
+    ["y-prosemirror", YP],
+    ["y-tiptap", YT],
+  ]) {
+    for (const fn of [
+      "yXmlFragmentToProseMirrorRootNode",
+      "initProseMirrorDoc",
+      "yXmlFragmentToProsemirrorJSON",
+    ]) {
+      const { reader } = openReader();
+      mod[fn](reader.getXmlFragment("default"), oldSchema);
+      out[`${lib} ${fn}`] = lostParts(survivors(reader));
+    }
+  }
+  return out;
+};
+
 export const runRemedies = () => ({
+  "headless conversion with the old schema": headless(),
   "read-only y-prosemirror with the old schema": readOnlyYProsemirror(),
   "attribute only, TipTap with enableContentCheck": attributeOnlyTiptap(),
   "widened schema, y-prosemirror": widenedYProsemirror(),

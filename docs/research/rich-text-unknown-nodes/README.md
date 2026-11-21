@@ -11,7 +11,7 @@ The owner's goal (NOC-437): **every client can keep working on a document, even 
 The short answer:
 
 1. **Yjs keeps everything.** A `Y.XmlFragment` stores any element name, attribute and text format. It knows no schema.
-2. **The editor binding deletes it, from the Yjs document, not just from the view.** y-prosemirror, and TipTap without `enableContentCheck`, delete an unknown node from the `Y.Doc` as soon as the editor opens the document, even when the editor is read-only. An unknown mark deletes all the text of its paragraph. The deletion is an ordinary Yjs edit, so it syncs and every member loses the content.
+2. **The editor binding deletes it, from the Yjs document, not just from the view.** y-prosemirror, and TipTap without `enableContentCheck`, delete an unknown node from the `Y.Doc` as soon as the editor opens the document, even when the editor is read-only, and even when no editor exists and code only converts the fragment into a ProseMirror node. An unknown mark deletes all the text of its paragraph. The deletion is an ordinary Yjs edit, so it syncs and every member loses the content.
 3. **TipTap's `enableContentCheck` stops the deletion but also stops the editing.** The client can no longer edit any part of the field. It also misses one case: an attribute the schema does not declare, on a node the schema knows, raises no error, and the next edit of that node removes the attribute.
 4. **A client can keep editing if its editor schema is widened from the document before the editor opens.** Each unknown node, mark and attribute gets a placeholder type. With the content check on, and the editor rebuilt whenever a new kind arrives, the spike lost nothing and the older client kept editing. A guard in the binding catches whatever the widening misses.
 5. **So D4 does not settle the owner's goal; the binding does.** Under each of A, B and C an older client meets names it does not know. What D4 decides is how the core renders the document for agents and the Rust SDK. The recommendation is **option A with a lossless fallback** ([Recommendation](#recommendation-for-d4)).
@@ -45,6 +45,7 @@ A schema enters only where a ProseMirror editor projects the fragment into its o
 | y-tiptap 3.3.1, `onInvalidContent` | nothing | **refused** | **refused** | nothing | 1 error |
 | TipTap 3.35.0, `enableContentCheck: true` | nothing | **refused** | **refused** | nothing | 1 `contentError` |
 | y-prosemirror 1.3.7, view not editable | callout, chip, the whole highlighted paragraph | (not editable) | (not editable) | — | nothing |
+| No editor: `yXmlFragmentToProseMirrorRootNode` or `initProseMirrorDoc` with the older schema (y-prosemirror and y-tiptap) | callout, chip, the whole highlighted paragraph | — | — | — | nothing |
 | TipTap 3.35.0, `enableContentCheck: true`, only `align` unknown | nothing | — | written, `align` removed | `align` | nothing |
 
 What the table shows, one finding each:
@@ -56,7 +57,9 @@ What the table shows, one finding each:
 - **N5. `enableContentCheck` keeps the content but takes the field away from the person.** y-tiptap then skips what the schema rejects, reports it once, and filters every local transaction that changes the document. TipTap's guide says the editor "shows what it can, pauses editing and sends no changes", and that "editing resumes when a change from another user makes the content fit the schema again" [[TipTap: Invalid schema handling](https://tiptap.dev/docs/guides/invalid-schema)]. In the spike, typing in `Intro.`, a paragraph the older app knows, was refused. The guide also says that the check needs `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later: older versions delete the content even with the check on.
 - **N6. The maintainers know, and plan no passthrough.** Asked about unknown nodes and marks, the Yjs maintainer wrote that y-prosemirror "removes invalid nodes, that don't conform to your schema", advised not to open a document whose schema the editor does not understand and to only extend schemas, and said a passthrough node "is currently not planned" [[discuss.yjs.dev, Dec 2024](https://discuss.yjs.dev/t/handling-unknown-nodes-marks-in-prosemirror-schema/3683)]. Hocuspocus users report the same loss: "if a user receives an update that contains data that is not supported in their schema, it gets deleted" [[hocuspocus #443](https://github.com/ueberdosis/hocuspocus/discussions/443)]. ProseMirror's author: "Schemas can not be updated dynamically"; the advice is to build the schema in advance by scanning the input [[discuss.prosemirror.net](https://discuss.prosemirror.net/t/adding-fallback-extensions-for-unsupported-node-mark-types/4295)].
 
-This confirms RFC 0013's F10, which was found by reading the code, and adds N2 to N5. RFC 0013 asks whether y-tiptap, with the check on, ever deletes the unknown node during later edits. The answer is that with an unknown node or mark there are no later edits; with only an unknown attribute there are, and they remove it (N4).
+- **N7. Converting the fragment deletes too, with no editor.** `yXmlFragmentToProseMirrorRootNode` and `initProseMirrorDoc`, in both libraries, go through the same `createNodeFromYElement` and delete what the schema rejects, from the `Y.Doc` they read. A server-side renderer, a preview or an agent tool that only wants the ProseMirror document of a field would delete content. `yXmlFragmentToProsemirrorJSON` reads without a schema and deleted nothing. (The NOC-436 session suggested testing the headless path.)
+
+This confirms RFC 0013's F10, which was found by reading the code, and adds N2 to N5 and N7. RFC 0013 asks whether y-tiptap, with the check on, ever deletes the unknown node during later edits. The answer is that with an unknown node or mark there are no later edits; with only an unknown attribute there are, and they remove it (N4).
 
 ## 3. How a client keeps the parts and keeps editing
 
@@ -109,7 +112,7 @@ Yjs cannot take back a transaction. So the binding refuses to write the flagged 
 2. **Require `enableContentCheck`, and rebuild the editor on `contentError`** with a schema widened again. Pin `@tiptap/y-tiptap` 3.2.0 or later and `@tiptap/extension-collaboration` 3.33.0 or later.
 3. **Guard every update the editor writes,** and refuse one that deletes a part the editor's schema does not know. This also catches the attribute case (N4) and an app that forgets step 1 or 2.
 
-With these three, every client keeps working on the document. It shows a placeholder for what it cannot interpret and keeps the rest editable. Without them, one older client deletes the newer clients' content on open (N1 to N3). That breaks principle 3 and "Never break an existing client or stored data".
+With these three, every client keeps working on the document. It shows a placeholder for what it cannot interpret and keeps the rest editable. Without them, one older client deletes the newer clients' content on open (N1 to N3). And no code of the SDK, the app or an agent may convert the fragment with a ProseMirror schema outside the editor (N7); the core's tree read must come from Yrs, not from y-prosemirror. That breaks principle 3 and "Never break an existing client or stored data".
 
 The core itself needs none of this. It applies Yjs updates with Yrs and never projects the document into a schema. An agent's edit made in the core, at the Yrs level, deletes only what it addresses.
 
@@ -150,6 +153,7 @@ Sent to the NOC-436 session while this note was written:
 - An edit made at the Yjs/Yrs level keeps every unknown part. An agent that edits through a ProseMirror schema, such as a headless TipTap, loses them as an editor does (N1 to N4).
 - An anchored edit must change only the quoted range. Inside it, it must keep inline nodes, marks and attributes that its Markdown cannot express. A Markdown round trip of a whole block deletes them. With D's fallback, the tags make them visible to the agent, and the core can refuse an edit that drops a tag the quote contained.
 - The guard of section 3 can check an agent's writes as well.
+- An agent tool must never build a ProseMirror node of the document with a schema of its own: the conversion alone deletes what that schema lacks (N7). Reading the tree as JSON, or through Yrs, is safe.
 
 ## What this note does not answer
 
