@@ -81,7 +81,13 @@ test("encodes text and bytes of more than 1 MiB", () => {
   const size = 2 * 1024 * 1024;
   const text = "a".repeat(size);
   const bytes = new Uint8Array(size).fill(7);
-  const value = { id: 1, call: "write", args: { text, bytes } };
-  expect(decode(encode(value))).toEqual(value);
+  const read = decode(encode({ text, bytes })) as {
+    text: string;
+    bytes: Uint8Array;
+  };
+  // Compared by hand: a deep equal of two million elements takes seconds.
+  expect(read.text === text).toBe(true);
+  expect(read.bytes.length).toBe(size);
+  expect(read.bytes.every((b) => b === 7)).toBe(true);
   expect(hex(encode(text).subarray(0, 5))).toBe("7a00200000");
 });
