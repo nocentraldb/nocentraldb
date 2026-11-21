@@ -81,7 +81,7 @@ At 81,000 records of a task tracker (a title of about 50 characters, a status, a
 What the numbers say:
 
 - **One record to a change is the slow way.** Each change carries its own signature, header and encryption, about 310 bytes, so the relay receives almost twice the bytes, and every step takes four to six times as long.
-- **From 50 to 5,000 records a change, the time barely moves.** Most of it is the device folding the records into its SQLite view. 500 records a change is a good default: about 190 KB a change.
+- **Above a few hundred records a change, larger changes gain little.** At 500 records a change the relay held the import after 37 seconds, at 5,000 after 29. Most of the time is the device folding the records into its SQLite view. 500 records a change is a good default: about 195 KB a change, with moderate memory.
 - **Memory grows with the size of a change.** The writer, the relay and every device that receives a change hold it while they encode, check or fold it. Each MB more in the largest change raised the writer's peak memory by about 75 MB, the second device's by about 30 MB and the relay's by about 10 MB. At 40,000 records a change, 15.5 MB, the writer peaked at 1.4 GB. Keep changes small enough for the smallest device that will receive them, such as a phone or a browser tab.
 - **A change above 22 KiB goes through an upload.** The relay's messages are at most 23 KiB, so a larger change goes up through an upload URL, and other devices download it ([RFC 0007, "Large changes"](rfc/0007-relay.md#large-changes)). The SDK does that for you. In the measurement, uploads cost no time: 500 records a change, each uploaded, was faster than 50, each inline.
 
@@ -93,7 +93,7 @@ So never write a whole import in one change. Keep the batch size well below the 
 
 ## What the relay receives
 
-The relay stores what the import sends and cannot read it. At 500 records a change, it received 162 changes of up to 195 KB each, 31.6 MB in all, plus five small changes the SDK wrote to set up the account and the space. Its SQLite database grew to 36 MB. That is about the size of the encrypted records, so the relay holds roughly 390 bytes for each record you import.
+The relay stores what the import sends and cannot read it. At 500 records a change, it received 162 changes of up to 195 KB each, 31.6 MB in all, plus five small changes the SDK wrote to set up the account and the space. Its SQLite database grew to 36 MB, a little more than the encrypted records: about 450 bytes for each record you import.
 
 What the relay sees is the metadata ([The relay](https://nocentraldb.io/docs/concepts/relay/)): one member key wrote 162 changes of these sizes into one space within about 40 seconds. A bulk import is visible to the relay as a bulk import, and its size shows roughly how many records it held. Their content does not.
 
