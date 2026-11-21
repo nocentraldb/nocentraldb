@@ -34,6 +34,11 @@ export const REPO_DOCS = [
     label: "Getting started in the browser",
   },
   {
+    file: "bulk-import.md",
+    slug: "docs/guides/bulk-import",
+    label: "Importing existing data in bulk",
+  },
+  {
     file: "browser-durability.md",
     slug: "docs/browser-durability",
     label: "Browser apps and durability",
