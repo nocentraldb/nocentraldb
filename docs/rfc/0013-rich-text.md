@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner has answered six of its eight choices (Carsten, 2026-11-21, NOC-430): D1, D2, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces. D4 and D5 are open, each waiting for a research note: D4, which nodes the core knows, for NOC-437, which asks whether every client can keep editing a document whose parts it cannot interpret; D5, how an agent edits, for NOC-436. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
+**Status.** Draft. The owner has answered seven of its eight choices: D1, D2, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces (Carsten, 2026-11-21, NOC-430); D5 as option C of the research note of NOC-436 (PR #432, `docs/research/agent-edits/`): the agent quotes the Markdown it read and gives the Markdown that replaces it, the quote is looked up in the version the agent read, and the edit is written as a Yjs update made at that version (Carsten, 2026-11-21, NOC-436). D4, which nodes the core knows, is open until its research note (NOC-437), which asks whether every client can keep editing a document whose parts it cannot interpret. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
@@ -25,7 +25,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 | How does it fold? | The core applies the update to the field's Yrs document, in any order of arrival. Yjs keeps content whose dependencies have not arrived as pending, so a gap delays content and never reorders it. |
 | What can lose? | Text typed into a block that a concurrent change deleted, and a block attribute, such as a heading's level, set at the same time by two members. Both stay identifiable: the outcome is `lost`, and `space.inspect` gives what was lost and who wrote it. |
 | How does TipTap bind? | `space.richText(collection, id, field)` returns a binding with a `Y.Doc`; the app passes it to TipTap's `Collaboration` extension. The SDK collects the editor's updates, writes one change per pause in typing, and applies what other members write. |
-| What does an agent do? | It reads the field as Markdown. How it edits is open ([D5](#d5-anchored-edits)): a research note (NOC-436) looks at how an agent and a person edit one document at the same time, before the owner decides. |
+| What does an agent do? | It reads the field as Markdown, with a version. It edits by quoting the Markdown it read and giving the Markdown that replaces it; the core looks the quote up in the version the agent read and writes the smallest Yjs update made at that version, which Yjs merges with whatever a person typed since ([D5](#d5-anchored-edits)). |
 | What does the Rust SDK read? | `get::<RichText>`, with the document as plain text, as a tree and as the references its mentions hold, and as Markdown unless [D4](#d4-the-document-vocabulary) leaves the vocabulary to the app. |
 | What does the relay see? | Nothing new: the update sits inside the sealed payload. It sees one change per pause in typing, not one per keystroke. |
 | Does erasure reach rich text? | No, as for every unmarked text. The recommendation is that a mention stores only a reference to the person object, never the name, so an erased person's name never was in the text; the core does not enforce it. Deleted text stays in the log. |
@@ -242,31 +242,45 @@ An editor whose schema lacks a node in the document, such as an older version of
 
 ### An agent: anchored edits
 
-**Open.** How an agent edits rich text is not decided ([D5](#d5-anchored-edits)). The owner asked whether quoting Markdown is reliable enough, and a research note (NOC-436) compares it with addressing positions, Yjs relative positions and node ids, and with how an agent's edit shows to a person typing at the same time. This section shows the draft's first proposal, which the note may replace.
+An agent edits the way Claude edits a file: it quotes the text it read and gives the text that replaces it. The quote is looked up in the version of the document the agent read, not in the document as it is when the agent writes, and the edit is written as a Yjs update made at that version, which Yjs then merges with everything written since ([D5](#d5-anchored-edits), (Carsten, 2026-11-21, NOC-436); the research note of NOC-436 (PR #432, `docs/research/agent-edits/`)).
 
 ```ts
+const body = await notes.readRichText(model.notes, noteId, "body");
+// body.markdown: "Intro.\n\nWe ship on **Friday**.\n\nOutro."
+// body.version: opaque
+
 await notes.update(model.notes, noteId, {
-  body: nc.richText.edit({
-    quote: "We ship on **Friday**.",
-    replacement: "We ship on **Monday**, after the review.",
-  }),
+  body: nc.richText.edit(body.version, [
+    { quote: "We ship on **Friday**.", replacement: "We ship on **Monday**, after the review." },
+    { after: "Outro.", insert: "A closing line." },
+  ]),
 });
 ```
 
 ```rust
+let body = note_space.read_rich_text("notes", note_id, "body").await?;
 note_space.update("notes", note_id, [(
     "body",
-    Value::from(RichTextEdit::replace("We ship on **Friday**.", "We ship on **Monday**, after the review.")),
+    Value::from(RichTextEdit::at(&body.version)
+        .replace("We ship on **Friday**.", "We ship on **Monday**, after the review.")
+        .insert_after("Outro.", "A closing line.")),
 )]).await?;
 ```
 
-An anchored edit quotes the Markdown it changes and gives the Markdown that replaces it ([D5](#d5-anchored-edits)). The core, in the member's own copy:
+The read gives the Markdown and a version. An edit names the version and one or more quotes with their replacements; the edits of one call go into one change and apply in order. The core, in the member's own copy:
 
-1. renders the document as Markdown and finds the quote. It must occur exactly once; otherwise the write is refused with `anchorNotFound` or `anchorAmbiguous`, and the agent quotes more;
-2. maps the quoted range back to the document, parses the replacement with the same vocabulary, and compares the two: blocks by type, text within a block character by character;
-3. writes the smallest update that turns one into the other: here, "Friday" becomes "Monday" and ", after the review" is inserted, and the rest of the sentence, its marks and every other block stay as they are.
+1. takes the document as it was at the version, plus the edits this agent's lease has written since;
+2. renders it as Markdown and finds each quote there. A quote must occur exactly once; otherwise the write is refused with `anchorNotFound` or `anchorAmbiguous`, and the agent quotes more. Both depend only on what the agent read, never on what a person typed since;
+3. parses the replacement with the same vocabulary and writes the smallest change, text by characters, marks by ranges, blocks by type, under the agent's leased client id ([D1](#d1-yjs-client-ids)), directly on the Yrs document, so that nodes, marks and attributes the Markdown does not show stay untouched;
+4. folds that update into the live document, where Yjs merges it with everything written since the read, as it merges the update of a member that was briefly offline.
 
-A person typing in another paragraph meanwhile loses nothing, and a person typing inside the quoted sentence keeps what the edit did not touch. An edit whose quote spans several blocks may also add, remove or reorder whole blocks within the quote. An empty quote with a position, `{ append: markdown }` or `{ after: quote, insert: markdown }`, adds blocks. Errors never contain the quote or any other text of the document, since content never goes into errors ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)): they name the field and the number of matches.
+In the note's spike, a person who typed inside the quoted sentence while the agent worked kept every keystroke, and the agent's edit applied as an 18-byte update; looked up at write time instead, the same quote was no longer found and the agent would have had to read again. An edit whose quote spans several blocks may also add, remove or reorder whole blocks within the quote, and `{ after: quote, insert: markdown }` or `{ append: markdown }` adds blocks.
+
+**The version.** It is the document's state at the read. The core keeps it, for an agent's open reads, in a device-local cache with a time limit, no part of the view or the log, at about the size of the document's state (2.5 KB for F7's document). An edit that names a version the core no longer holds is refused, and the agent reads again; the error's name comes with the SDK's API review.
+
+**What it needs from D4.** Quoting Markdown needs the core to render Markdown, so it goes with [D4](#d4-the-document-vocabulary)'s A or B. With D4's C, where the app owns the vocabulary and the core renders only plain text, an agent can quote only plain text: it sees no headings, lists or marks and cannot change them by quoting. The lookup in the read version and the merge by Yjs work for plain-text quotes too.
+
+**What it does not do.** A quote copied from the Markdown is found; one written from memory may not be, since Markdown escapes characters such as `*` and marks can sit inside a word (`**Fri**day`). Two writers who change the same characters at once both keep their edits, which may read oddly. Changing a block's type, such as a paragraph into a heading, rewrites the block in Yjs, so a person's concurrent typing in it is `lost`, as it is when two people do the same in the editor. Errors never contain the quote or any other text of the document, since content never goes into errors ([RFC 0003, "Keys never reach logs, errors or telemetry"](0003-keys-and-cryptography.md#keys-never-reach-logs-errors-or-telemetry)): they name the field and the number of matches.
 
 Anchored edits are core code, so both SDKs have them, and a TypeScript app can use them without an editor.
 
@@ -276,7 +290,7 @@ Anchored edits are core code, so both SDKs have them, and a TypeScript app can u
 
 ### The Rust SDK
 
-The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It writes a first document with `RichText::from_markdown`; its calls for an agent's edits wait for D5. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
+The Rust SDK reads a rich-text field with `object.get::<RichText>("body")`: `markdown()`, `plain_text()`, `tree()` as `Data`, and `mentions()` as `Reference`s. It reads a field with its version through `read_rich_text`, edits it with `RichTextEdit::at(version)` and its `replace`, `insert_after` and `append`, and writes a first document with `RichText::from_markdown`. It has no editor binding in rule 1; a native app that wants one asks for it in a follow-up ticket. `space.inspect` gives the lost operations, as in TypeScript.
 
 ## What the relay and the other RFCs see
 
@@ -318,7 +332,7 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 | D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone | Accepted (Carsten, 2026-11-21) |
 | D3 | When the editor writes a change | At each pause: 500 ms idle, at most 2 s, and on close or hide | Accepted (Carsten, 2026-11-21) |
 | D4 | Which nodes the core knows | Open until the research note | Open, research note NOC-437 |
-| D5 | How an agent edits | Open until the research note | Open, research note NOC-436 |
+| D5 | How an agent edits | Markdown quoted and replaced, looked up in the version the agent read, written as a Yjs update at that version | Accepted, the research note's option C (Carsten, 2026-11-21, NOC-436) |
 | D6 | What `space.get` returns for the field | The Markdown, as a string | Accepted (Carsten, 2026-11-21) |
 | D7 | Personal rich text | Not in rule 1; mentions store only a reference to the person | Accepted, the mention as a recommendation (Carsten, 2026-11-21) |
 | D8 | Presence and live cursors | Not in this RFC; a later RFC with an encrypted channel for messages that are not changes | Accepted (Carsten, 2026-11-21) |
@@ -352,7 +366,7 @@ A change can be rejected after the fact: for example, its author was removed fro
 
 ### D4. The document vocabulary
 
-**Open: a research note first (NOC-437).** The owner wants every client to keep editing a document even where it cannot interpret parts of it, and asked whether the app should decide the vocabulary, since NoCentralDB only stores and syncs Yjs updates. The note works out each option's consequences, with a spike on y-prosemirror. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. How much rendering the core does also depends on how agents edit (D5, NOC-436).
+**Open: a research note first (NOC-437).** The owner wants every client to keep editing a document even where it cannot interpret parts of it, and asked whether the app should decide the vocabulary, since NoCentralDB only stores and syncs Yjs updates. The note works out each option's consequences, with a spike on y-prosemirror. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. D5's accepted option C, anchored edits that quote Markdown, needs the core to render Markdown, so it goes with A or B; with C, an agent can quote only plain text.
 
 - **A. A fixed vocabulary in rule 1, TipTap's StarterKit, task lists, tables and `mention`; any other node kept in the document, shown in Markdown as its text.** No configuration, and apps that use TipTap's defaults need nothing. A custom node reads as its text in Markdown until a later rule knows it.
 - **B. The vocabulary declared in the lock,** as the field's configuration, with a Markdown form per node. Custom nodes render properly, but every addition is a change of the field's configuration, which [RFC 0011](0011-plugin-field-types.md#a-type-that-is-not-registered) refuses for a field that exists.
@@ -360,10 +374,15 @@ A change can be rejected after the fact: for example, its author was removed fro
 
 ### D5. Anchored edits
 
-**Open: a research note first (NOC-436).** The owner doubts that quoting Markdown is reliable and stable, and asked how an agent and a person can edit one Yjs, TipTap or ProseMirror document at the same time without getting in each other's way: by positions, Yjs relative positions, anchored quotes or node ids, and how the agent's edit shows to the person. The note ends with options for D5. The two options below are the draft's first ones.
+**Accepted: the research note's option C** (Carsten, 2026-11-21, NOC-436). The owner doubted that quoting Markdown is reliable and stable, and the research note of NOC-436 (PR #432, `docs/research/agent-edits/`) looked at how an agent and a person edit one document at the same time. Its finding: Markdown is a sound language for the quote, and what made the draft fragile was the moment of lookup. A quote looked up in the document at write time is not found exactly when a person types in the same sentence, which is when the two work together. The note's options:
 
-- **A. Markdown quoted, Markdown replaced.** What an agent reads is what it quotes, and the edit may restructure blocks within the quote. The core needs a Markdown parser and a diff that maps Markdown back to the document.
-- **B. Plain text within one block, plus calls that insert and delete whole blocks.** Simpler and exact, but an agent must translate what it read as Markdown into positions and calls, and cannot change a mark by quoting it.
+- **A. Markdown quoted and replaced, looked up in the document at write time** (the draft). Refused whenever the person typed inside the quote; the agent retries.
+- **B. Plain text within one block, plus calls that insert and delete whole blocks.** As A, and cannot change a mark or a block by quoting it.
+- **C. Markdown quoted and replaced, looked up in the version the agent read, written as a Yjs update made at that version and merged by Yjs (accepted).** Applies, and keeps the person's typing, even inside the quote. It costs a version in the API and a cache of read states in the core, and it binds D5 to D1's lease: an agent's edits for one field go through one lease in order, so that its clock continues.
+- **D. Node ids, with new content for the whole node.** Needs ids in every block and replaces whole nodes.
+- **E. An editing session, in which the agent moves a cursor to a quote and types there.** Robust, but many calls and changes per edit; it can be built on C later, once presence exists (D8).
+
+C needs D4's A or B; with D4's C it works on plain-text quotes only ([An agent: anchored edits](#an-agent-anchored-edits)).
 
 ### D6. The read value in TypeScript
 
@@ -390,8 +409,8 @@ A change can be rejected after the fact: for example, its author was removed fro
 
 - `nc.richText()` builds, and a rich-text field reads as Markdown in `space.get` and queries.
 - `space.richText(collection, id, field)` opens a binding for an editor; `@nocentraldb/tiptap` gives `NcMention`.
-- `nc.richText.fromMarkdown(...)` and its Rust form write a first document without an editor. How an agent edits, and the calls and errors for it, wait for D5.
-- A new error: `richTextNotEmpty`.
+- `readRichText(...)` reads a field's Markdown with its version; `nc.richText.edit(version, [...])` edits it by quotes; `nc.richText.fromMarkdown(...)` writes a first document. The Rust SDK has the same calls.
+- New errors: `anchorNotFound`, `anchorAmbiguous`, `richTextNotEmpty`, and one for a version the core no longer holds, named in the API review.
 - `space.inspect` lists a rich-text field's lost operations, and `$conflicts` names the field while it has any.
 
 ## Changes to the decided RFCs
@@ -403,7 +422,7 @@ Once the owner decides this RFC, the pull request that publishes it writes these
 - **RFC 0004**, "Operation numbers": number 5 is "rich-text update", for `ncdb/richText`.
 - **RFC 0005**, "Field types": `nc.richText()` maps to `ncdb/richText` rule 1; "Personal data in free text" points to this RFC's mentions; "Public names" gains the new names.
 - **RFC 0006**, "Where the view lives": the device-local table of client ids.
-- **RFC 0009**: the binding, the calls for an agent's edits once D5 is decided, the errors and the public names.
+- **RFC 0009**: the binding, the read with a version and the anchored edits, the errors and the public names.
 
 ## What this does not do
 
@@ -426,7 +445,7 @@ Each becomes a ticket once the owner decides; the ones marked "spike" can start 
 3. **Core: the field type `ncdb/richText` rule 1.** State, operation 5, client ids and their check, the same id twice, outcomes, generators and broken fixtures for C1 to C7, and the Yjs and Yrs agreement vectors.
 4. **Core: un-folding rich text**, as D2 decided: placeholders for the rejected change's items, its deletions undone.
 5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides after its research note (NOC-437).
-6. **Core: how an agent edits**, as D5 decides after the research note (NOC-436).
+6. **Core: anchored edits**, as D5 decided: the read version and its cache, the lookup, the Yrs-level diff, `anchorNotFound` and `anchorAmbiguous`. With the note's three rules: a quote's ends fall on text, not inside markup; a block's type changes only when the replacement changes it; and an agent's edits for one field go through one lease in order.
 7. **Schema and lock: `nc.richText()`** in `ncdb model build` and the check on the device.
 8. **TypeScript SDK: the binding and `@nocentraldb/tiptap`**, with the lease of client ids and the write at each pause.
 9. **Rust SDK: `RichText` reads and writes.**
@@ -448,7 +467,7 @@ No code changes with this draft. The spike in the appendix backs its findings. O
 | Principle 4, "Say plainly what it does not do." | [What this does not do](#what-this-does-not-do), and erasure stated plainly. |
 | Principle 6, "The apps only read from a result that is computed." | The binding's `Y.Doc` is loaded from the core's folded state and fed by its folds. |
 | Principle 7, "One core lets you build apps for almost any environment." | The fold and the reads are core code, the same natively and in wasm. Only the binding is TypeScript, since the editor is. |
-| "Never overwrite more than you change. Rich text takes focused edits, never a whole rewrite." | Edits are Yjs updates; a whole document is written only into an empty field. How an agent makes focused edits is D5's research note (NOC-436). |
+| "Never overwrite more than you change. Rich text takes focused edits, never a whole rewrite." | Edits are Yjs updates; an agent's anchored edit writes the smallest change, made at the version it read; a whole document is written only into an empty field. |
 | "Never write content … into logs." | Reads and states print `[redacted]`, and no error names text of the document. |
 
 ## Appendix: the spike
@@ -485,3 +504,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 - 2026-11-21 · First published, as a draft for the owner's decision (NOC-411)
 - 2026-11-21 · The owner's answers to D1, D3, D6, D7 and D8; D2 explained again; D4 gains option C and waits for D5, which goes to a research note (NOC-430, NOC-436, #422)
 - 2026-11-21 · The owner accepts D2; D4 goes to a research note of its own (NOC-430, NOC-437, #422)
+- 2026-11-21 · The owner accepts D5 as the research note's option C: quotes are looked up in the version the agent read (NOC-436, #422)
