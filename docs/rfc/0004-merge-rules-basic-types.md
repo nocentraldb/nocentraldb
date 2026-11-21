@@ -10,7 +10,7 @@ Merge rules are hard to change once a type ships: a changed rule makes old and n
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK.
+**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK. Days and points in time came after 0.1.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/discussions/127), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -814,6 +814,8 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-crate-is-one-namespace-that-exports-plugin-and.md))
 - **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** (Carsten, 2026-11-21, NOC-412; [decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
+- **2026-11-21 · A day travels as a CBOR integer of days since 1970-01-01, a point in time as one of milliseconds.** (Carsten, 2026-11-21, NOC-434, answer 2a; [decision](../../factory/decisions/2026-11-21-NOC-412-a-day-is-a-cbor-integer-of-days-since-1970.md))
+- **2026-11-21 · Days and points in time range over the years 1 to 9999.** (Carsten, 2026-11-21, NOC-434, answer 3a; [decision](../../factory/decisions/2026-11-21-NOC-412-dates-range-over-the-years-1-to-9999.md))
 
 ## History
 
@@ -825,4 +827,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-19 · Personal fields are no later field type, and the core cannot prove a plugin converges (NOC-362, #389)
 - 2026-11-20 · What the merge rules rely on follows the rules, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-21 · Days and points in time, two basic value types (NOC-412)
+- 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)
