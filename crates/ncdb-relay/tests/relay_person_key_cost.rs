@@ -3,7 +3,8 @@
 //! control change) and then its person-key record, as the SDK writes
 //! them. It prints, per size, the time of the push and of the put, how
 //! often and how many frame bytes the relay read for them, and the
-//! process's resident memory once the space holds them all (Linux only). It is ignored: run
+//! process's resident memory once the space holds them all (Linux only),
+//! and the push and put of one more person on a cold relay. It is ignored: run
 //! it with `cargo test --release -p ncdb-relay --test
 //! relay_person_key_cost -- --ignored --nocapture`.
 
@@ -68,6 +69,9 @@ struct Cost {
     put: Duration,
     reads: usize,
     bytes: usize,
+    /// The push and the put of one more person on a relay that remembers
+    /// nothing yet, as on a cold instance.
+    cold: Duration,
 }
 
 /// Adds persons one by one up to `persons`, and returns what each of the
@@ -88,6 +92,7 @@ fn measure(persons: u32, last: u32) -> Cost {
         put: Duration::ZERO,
         reads: 0,
         bytes: 0,
+        cold: Duration::ZERO,
     };
     for n in 0..persons {
         let change = entry(&mut space, n, &[&head]);
@@ -111,6 +116,14 @@ fn measure(persons: u32, last: u32) -> Cost {
         }
         head = change;
     }
+    let cold = Relay::new(dir.store(), config());
+    let change = entry(&mut space, persons, &[&head]);
+    let start = Instant::now();
+    let pushed = block_on(cold.push(id(WRITER), space.space, vec![change.bytes().to_vec()]));
+    assert!(matches!(pushed.results[..], [Pushed::Accepted(_)]));
+    block_on(cold.put_person_keys(id(WRITER), space.space, vec![record(&space, persons)]))
+        .expect("the relay stores the record");
+    cost.cold = start.elapsed();
     cost.push /= last;
     cost.put /= last;
     cost.reads /= last as usize;
@@ -133,17 +146,18 @@ fn resident_mb() -> f64 {
 #[ignore = "a measurement: run it with --release --ignored --nocapture"]
 fn what_one_more_person_costs_the_relay() {
     println!(
-        "persons | push (ms) | put (ms) | reads of the log | frame bytes read | resident (MB)"
+        "persons | push (ms) | put (ms) | reads of the log | frame bytes read | resident (MB) | cold push and put (ms)"
     );
     for persons in [100, 400, 800] {
         let cost = measure(persons, 10);
         println!(
-            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16} | {:.0}",
+            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16} | {:13.0} | {:.0}",
             cost.push.as_secs_f64() * 1e3,
             cost.put.as_secs_f64() * 1e3,
             cost.reads,
             cost.bytes,
             resident_mb(),
+            cost.cold.as_secs_f64() * 1e3,
         );
     }
 }
