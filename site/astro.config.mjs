@@ -2,10 +2,19 @@
 import starlight from "@astrojs/starlight";
 import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
+import { API_REFERENCE } from "./src/api-reference.mjs";
+import { currentInstallLines, expressiveNpmLine } from "./src/install.mjs";
+import { OG_IMAGES, ogTags } from "./src/og.mjs";
+import { REPO_DOCS } from "./src/repo-docs.mjs";
+
+// The SDK's npm line in the docs follows release-notes/index.json (NOC-361).
+const { npm } = currentInstallLines(new URL("../", import.meta.url));
 
 export default defineConfig({
   site: "https://nocentraldb.io",
   output: "static",
+  // The erasure page moved from /shredding/ (owner, 2026-11-20, Q5); old links still arrive.
+  redirects: { "/docs/concepts/shredding/": "/docs/concepts/erasure/" },
   // Inline every stylesheet, so a built page also renders where only the
   // HTML file is served, such as a phone preview of the draft.
   build: { inlineStylesheets: "always" },
@@ -20,6 +29,7 @@ export default defineConfig({
       components: {
         ThemeProvider: "./src/components/starlight/ThemeProvider.astro",
         ThemeSelect: "./src/components/starlight/ThemeSelect.astro",
+        SiteTitle: "./src/components/starlight/SiteTitle.astro",
       },
       description:
         "A local-first database for apps where people and agents work on the same data.",
@@ -44,16 +54,33 @@ export default defineConfig({
             crossorigin: true,
           },
         },
+        // Every docs page shares one Open Graph image (NOC-410); the
+        // twitter:card entry replaces Starlight's own, with the same value.
+        ...ogTags(OG_IMAGES.docs).map(([key, name, content]) => ({
+          tag: "meta",
+          attrs: { [key]: name, content },
+        })),
       ],
       sidebar: [
         { label: "Getting started", slug: "docs" },
+        { label: "Overview", slug: "docs/how-it-works" },
+        // The docs rendered from docs/, the two guides first (NOC-361).
+        ...REPO_DOCS.slice(0, 2).map(({ label, slug }) => ({ label, slug })),
         {
           label: "Concepts",
           items: [{ autogenerate: { directory: "docs/concepts" } }],
         },
+        ...REPO_DOCS.slice(2).map(({ label, slug }) => ({ label, slug })),
         { label: "API", slug: "docs/api" },
+        { label: API_REFERENCE.label, slug: API_REFERENCE.slug },
         { label: "RFCs", slug: "docs/rfcs" },
       ],
+      // A shell command sits in a plain frame: the terminal frame's empty
+      // title bar took a third of a one-line command's height (D1, NOC-360).
+      expressiveCode: {
+        defaultProps: { frame: "code" },
+        plugins: [expressiveNpmLine({ npm })],
+      },
       plugins: [starlightLlmsTxt()],
     }),
   ],

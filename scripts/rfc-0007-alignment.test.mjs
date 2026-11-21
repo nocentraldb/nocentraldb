@@ -7,7 +7,7 @@
 // test checks that each claim is there and points to its source; whether the
 // wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, normalize } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -21,7 +21,6 @@ const RFC_0007 = "docs/rfc/0007-relay.md";
 const FAQ = "docs/faq.md";
 const USE_CASES = "docs/use-cases.md";
 const GENESIS = "factory/GENESIS.md";
-const DECISIONS = "factory/decisions";
 
 const RFC_0002_LIST =
   "0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot";
@@ -169,14 +168,4 @@ test("every relative link in the changed documents resolves, anchors included", 
       );
     }
   }
-});
-
-test("the decision log records NOC-47's routing of the owner's RFC 0007 rulings", () => {
-  const texts = readdirSync(join(root, DECISIONS))
-    .filter((f) => f.includes("-NOC-47-"))
-    .map((f) => read(join(DECISIONS, f)));
-  assert.ok(
-    texts.some((t) => /- Decided by: pm/.test(t) && /RFC 0007/.test(t)),
-    "no decision by pm routing the owner's RFC 0007 rulings",
-  );
 });

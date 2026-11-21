@@ -4,9 +4,11 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-11
 
 This RFC defines how a developer describes the model of an app once, in TypeScript, and the versioned `model.lock.json` that `ncdb model build` produces from it. The Rust core, the TypeScript SDK and the Rust SDK all read `model.lock.json`; none of them reads the TypeScript.
 
-It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format), [RFC 0003](0003-keys-and-cryptography.md) (keys and cryptography) and [RFC 0004](0004-merge-rules-basic-types.md) (merge rules for basic values, sets and links). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
+It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page) and builds on the change, the keys and the merge rules of RFC 0002, RFC 0003 and RFC 0004; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) links each.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
+
+**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/discussions/144), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -14,7 +16,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 - **Computed fields and views.** This RFC names the places where they go in the schema and in `model.lock.json`, so their names are reserved, but it does not design them. A later RFC does. Indexes are declared here (see [Indexes](#indexes)); how a query uses them is RFC 0006's.
 - **Rich text and streams.** The agent task board needs a rich-text body, so this RFC reserves the names `nc.richText` and `nc.stream`. Their field types, and so their entries in `model.lock.json`, belong to later RFCs.
-- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and loaded is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004.
+- **Writing a field type plugin.** This RFC says how a schema uses a plugin's field type and how `model.lock.json` references it. How a plugin is written and registered is [RFC 0011](0011-plugin-field-types.md)'s, under the contract of RFC 0004: it is Rust compiled into the core, never code loaded at run time (Carsten, 2026-11-12, NOC-232).
 - **The crypto of personal fields.** This RFC says how the schema marks a field as personal and ties it to a person. RFC 0003 encrypts it.
 - **Migrations.** A change that is not additive is refused (see [The additive-change rule](#the-additive-change-rule)). That includes moving a field to a new rule version of its type, which RFC 0004 allows only with a migration. Migrations are a later RFC.
 
@@ -30,6 +32,8 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 | Field type | How a field stores its value and merges concurrent changes (RFC 0004), identified by a type id and a rule version. |
 | Model version | A whole number that `ncdb model build` raises by one each time the model changes. |
 | Old client | An app or agent whose lock has a lower model version than the lock that wrote some of the changes it receives. |
+
+The [glossary](../glossary.md) calls the TypeScript module the app's model in code, and uses "schema" only in general. This RFC keeps the module (the schema) and what it describes (the model) apart, because the lock records the second and not the first.
 
 ## The schema in TypeScript
 
@@ -118,13 +122,15 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 
 `nc.link` and `nc.links` take one collection name, or a list of them when a link may point into several collections: `nc.links(["tasks", "milestones"])`. A link always points into the object's own space (RFC 0004).
 
-A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones.
+A field type from a plugin is used the same way: the plugin's package exports a function that returns a field, and the schema calls it next to the built-in ones. In v1 a plugin field is Rust only: only the Rust SDK registers plugins, and the TypeScript SDK has none ([RFC 0011, "TypeScript"](0011-plugin-field-types.md#typescript); Carsten, 2026-11-20, NOC-362).
 
 ```ts
 import { counter } from "@acme/ncdb-counter";
 
 export const model = nc.model({
-  tasks: nc.collection({ votes: counter() }),
+  tasks: nc.collection({
+    votes: counter(), // Rust only in v1
+  }),
 });
 ```
 
@@ -364,7 +370,7 @@ Per field:
 A field type is referenced by its **type id** and its **rule version**:
 
 - **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref`. Rule version 1 is RFC 0004's rule for each.
-- **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so every SDK knows what to load:
+- **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so a developer knows which crate to register with the core ([RFC 0011, "Handing plugins to the core"](0011-plugin-field-types.md#handing-plugins-to-the-core)):
 
 ```json
 {
@@ -376,7 +382,7 @@ A field type is referenced by its **type id** and its **rule version**:
 
   A field then reads `{ "type": "acme/counter", "rule": 2, "since": 3 }`. The package version is not in the lock: the type id and the rule version are the contract (RFC 0004: a merge rule never changes under the same type id and rule version), and any package version that implements that rule will do.
 
-A client must run the exact rule version the lock names. Because the build refuses to move an existing field to another rule version (see the next section), an app that loads its own lock always has the rule for every field in it.
+A client must run the exact rule version the lock names. Because the build refuses to move an existing field to another rule version (see the next section), an app that opens with its own lock always has the rule for every built-in field in it, and for every plugin field whose plugin it registers. A field whose plugin it does not register is parked, never folded by a guess ([RFC 0011, "A type that is not registered"](0011-plugin-field-types.md#a-type-that-is-not-registered)).
 
 ## The additive-change rule
 
@@ -633,6 +639,23 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 
 `scripts/rfc-0005.test.mjs` and `scripts/rfc-0005-integrated.test.mjs`, run by `repo:test` in `pnpm gates`, check that this file links to RFC 0001's "The design in one page", that every link and its anchor resolve, links from other files included, that the sections it needs are present, that every `nc.*` function, modifier and `ncdb model` command used in an example is listed under [Public names](#public-names), that every JSON example parses, that the example lock is byte for byte the file `ncdb model build` writes (`crates/ncdb-core/tests/model_lock/rfc-0005-v2.lock.json`), that each rule of the design stands where it belongs, and that it reads as a fresh text whose choices each name why and the options not taken (`scripts/rfc-0005-fresh.test.mjs`). The design itself is tested where it is built: the Rust tests of `ncdb model build` and `ncdb model check` with a fixture for each accepted and each refused change.
 
+## How this RFC relates to the others
+
+It starts from the example in [RFC 0001, "The design in one page"](0001-nocentraldb.md#the-design-in-one-page), and follows the principles in [GENESIS.md](../../factory/GENESIS.md). It builds on [RFC 0002](0002-change-and-log-format.md) (the change and the log format), [RFC 0003](0003-keys-and-cryptography.md) (keys and cryptography) and [RFC 0004](0004-merge-rules-basic-types.md) (merge rules for basic values, sets and links). [RFC 0006](0006-local-view.md) (the local view) turns the collections, fields and indexes declared here into SQLite tables. Where this RFC differs from RFC 0001, it says so in [Where this differs from RFC 0001](#where-this-differs-from-rfc-0001).
+
+## Decisions
+
+- **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-field-s-config-is-part-of-its-merge.md))
+- **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-20 · A plugin field is Rust only in v1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-plugin-field-types-are-rust-only-in-v1.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-12 · RFC 0011, plugin field types, as the owner decided on NOC-232 (NOC-235, NOC-232, #231)
+- 2026-11-12 · The RFCs record how a personal value is sealed and read (NOC-244, #248)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · A plugin is registered with the core, never loaded (NOC-362, #389)
+- 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · A plugin field is Rust only in v1, as the owner answered (NOC-362, #396)

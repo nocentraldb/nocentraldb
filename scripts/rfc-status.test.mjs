@@ -1,13 +1,11 @@
-// Asserts that a merged RFC never calls itself a draft (NOC-35). An RFC counts
-// as merged once the decision log records the owner's decision on it as a
-// whole: a file in factory/decisions/ whose heading reads "RFC <number>: ..."
-// or "The owner decides RFC <number>, ..." (NOC-64's form), and whose "Decided by:" names the owner from factory/CONFIG.md. The gate
-// cannot ask git which files are on main (CI checks out one commit), so the
-// decision log, which the gate already holds to its format, is the record.
-// Such an RFC's header line carries no draft number, its status paragraph
-// starts with "Decided." or, once rewritten as a fresh text (NOC-165), with
-// "Decided by the owner", and names the owner with a date, and no sentence in it
-// still waits for its own pull request to be merged.
+// Asserts that a decided RFC never calls itself a draft (NOC-35). An RFC is
+// decided once its status paragraph says so: it starts with "Decided." or,
+// once rewritten as a fresh text (NOC-165), with "Decided by the owner", and
+// names the owner from factory/CONFIG.md with a date. The RFC's own status
+// line is the record; the decision log holds the single decisions, each
+// under a title that states it (NOC-378), so no log heading marks a whole
+// RFC as decided. Such an RFC's header line carries no draft number, and no
+// sentence in its status still waits for its own pull request to be merged.
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -26,22 +24,13 @@ const owner = () => {
   return row.split("|")[2].trim();
 };
 
-/** The numbers of the RFCs the owner decided as a whole, from the decision log. */
-const decidedRfcs = () => {
-  const name = owner();
-  const numbers = new Set();
-  for (const file of readdirSync(join(root, "factory/decisions"))) {
-    if (!file.endsWith(".md")) continue;
-    const text = read(`factory/decisions/${file}`);
-    const rfc = text.match(
-      /^# [^\n]*· (?:The owner decides )?RFC (\d{4})[:,] /,
-    )?.[1];
-    if (rfc && new RegExp(`^- Decided by: ${name}\\b`, "m").test(text)) {
-      numbers.add(rfc);
-    }
-  }
-  return [...numbers].sort();
-};
+/** The numbers of the RFCs whose status paragraph says they are decided. */
+const decidedRfcs = () =>
+  readdirSync(join(root, "docs/rfc"))
+    .filter((f) => /^\d{4}-.*\.md$/.test(f))
+    .filter((f) => /^\*\*Status\.\*\* Decided\b/m.test(read(`docs/rfc/${f}`)))
+    .map((f) => f.slice(0, 4))
+    .sort();
 
 const rfcFile = (number) => {
   const file = readdirSync(join(root, "docs/rfc")).find(
@@ -58,7 +47,7 @@ const rfcFile = (number) => {
 const status = (markdown) =>
   markdown.split("\n").find((line) => line.startsWith("**Status.**"));
 
-test("the decision log names the RFCs the owner decided", () => {
+test("RFC 0001 to RFC 0009 say they are decided", () => {
   // RFC 0001 counts as decided since the owner confirmed it with NOC-165.
   assert.deepEqual(decidedRfcs().slice(0, 9), [
     "0001",

@@ -1,7 +1,7 @@
 ---
 // The landing page shell on the vendored design kit (public/assets, see
 // LICENSE-taste-skill.md): the head, the header and the footer. The sections
-// sit in main: the hero, the scroll scenario, the code and the live demo; the footer holds
+// sit in main: the hero, the scenario, the code and the live demo; the footer holds
 // the close and the footer row.
 import wordmark from "../assets/brand/ncdb-wordmark-dark.svg?raw";
 import Closing from "../components/Closing.astro";
@@ -9,18 +9,19 @@ import CodeSection from "../components/CodeSection.astro";
 import Demo from "../components/Demo.astro";
 import Hero from "../components/Hero.astro";
 import Scenario from "../components/Scenario.astro";
+import { OG_IMAGES, ogTags, SITE } from "../og.mjs";
 import "../styles/tokens.css";
 import "../styles/kit-tokens.css";
 import "../styles/scene.css";
 import "../styles/landing-page.css";
 
+// The yellow mark beside the wordmark, and the mark alone on a phone (owner,
+// 2026-11-19). The link carries the name, so both pictures are decoration.
 // The wordmark is inlined, so the page shows it wherever its HTML is served.
-const logo = wordmark.replace(
-  "<svg ",
-  '<svg role="img" aria-label="NoCentralDB" ',
-);
+const logo = wordmark.replace("<svg ", '<svg aria-hidden="true" ');
+const title = "NoCentralDB: a local-first database for people and agents";
 const description =
-  "Each person and each agent reads and writes a full copy on their own machine. The changes sync encrypted through a server that can't read them.";
+  "The database puts all the data right next to the people and agents who use it. A server keeps everyone in sync, yet it only ever sees encrypted data.";
 const links = [
   ["How it works", "#story"],
   ["Code", "#code"],
@@ -34,11 +35,17 @@ const links = [
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>NoCentralDB: a local-first database for people and agents</title>
+    <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="site-kind" content="software" />
     <meta name="page-type" content="software" />
     <meta name="theme-color" content="#111110" />
+    <!-- the link card: the page's own title, description and Open Graph image (NOC-410) -->
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={`${SITE}/`} />
+    <meta property="og:type" content="website" />
+    {ogTags(OG_IMAGES.landing).map(([key, name, content]) => <meta {...{ [key]: name }} content={content} />)}
     <link rel="icon" href="/brand/ncdb-favicon-dark.ico" sizes="any" />
     <link rel="icon" type="image/png" href="/brand/ncdb-favicon-dark-32.png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/brand/ncdb-favicon-dark-180.png" />
@@ -51,19 +58,19 @@ const links = [
     <script is:inline>
       document.documentElement.classList.add("m-enter");
       setTimeout(() => document.documentElement.classList.add("m-enter-done"), 700);
-      document.documentElement.classList.add("mo-js");
-      setTimeout(() => document.documentElement.classList.add("mo-safe"), 2500);
       if (new URLSearchParams(location.search).has("shot")) document.documentElement.dataset.shot = "";
     </script>
-    <link rel="modulepreload" href="/assets/moments/moments.js" />
-    <link rel="modulepreload" href="/assets/moments/lib.js" />
-    <link rel="modulepreload" href="/assets/moments/pinned-chapters/moment.js" />
   </head>
   <body>
     <header class="nav">
       <div class="wrap nav__bar">
         <a class="skip-link" href="#top">Skip to content</a>
-        <a class="nav__logo" href="#top" set:html={logo} />
+        <a class="nav__logo" href="#top" aria-label="NoCentralDB"
+          ><img class="nav__mark" src="/brand/ncdb-mark-accent-512.png" alt="" width="32" height="32" /><span
+            class="nav__wordmark"
+            set:html={logo}
+          /></a
+        >
         <!-- the menu button before the links, so Tab goes from it into the open sheet -->
         <button class="nav__toggle" type="button" aria-expanded="false" aria-label="Menu">
           <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"

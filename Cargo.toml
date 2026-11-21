@@ -5,24 +5,31 @@ exclude = ["apps/tasks-ts"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nocentraldb/nocentraldb"
+# What crates.io shows for the crates that go there (NOC-372): the project's
+# README and its website.
+readme = "README.md"
+homepage = "https://nocentraldb.io"
 
 [workspace.dependencies]
-# Dependencies between workspace crates are declared here, with their path and
-# `version = "=<workspace version>"`, and used as `name.workspace = true`;
-# set-version keeps the pin equal to the version (check-version checks it).
-ncdb-core = { path = "crates/ncdb-core", version = "=0.1.0" }
-ncdb-harness = { path = "crates/ncdb-harness", version = "=0.1.0" }
-ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.1.0" }
-ncdb-test-counter = { path = "crates/ncdb-test-counter", version = "=0.1.0" }
-ncdb-relay = { path = "crates/ncdb-relay", version = "=0.1.0" }
-ncdb-relay-server = { path = "crates/ncdb-relay-server", version = "=0.1.0" }
-ncdb-relay-lambda = { path = "crates/ncdb-relay-lambda", version = "=0.1.0" }
-ncdb-relay-aws = { path = "crates/ncdb-relay-aws", version = "=0.1.0" }
-nocentraldb = { path = "crates/nocentraldb", version = "=0.1.0" }
+# Dependencies between workspace crates are declared here, with their path,
+# and used as `name.workspace = true`. A crate that goes to crates.io is also
+# pinned to `version = "=<workspace version>"`, which set-version keeps equal
+# to the version. A crate with `publish = false` has no version, so cargo
+# drops it from a published crate's dev-dependencies when it packages the
+# crate (check-version checks both, NOC-372).
+ncdb-core = { path = "crates/ncdb-core", version = "=0.2.0" }
+ncdb-harness = { path = "crates/ncdb-harness" }
+ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.2.0" }
+ncdb-test-counter = { path = "crates/ncdb-test-counter" }
+ncdb-relay = { path = "crates/ncdb-relay" }
+ncdb-relay-server = { path = "crates/ncdb-relay-server" }
+ncdb-relay-lambda = { path = "crates/ncdb-relay-lambda" }
+ncdb-relay-aws = { path = "crates/ncdb-relay-aws" }
+nocentraldb = { path = "crates/nocentraldb", version = "=0.2.0" }
 
 # Debug and test builds keep only line tables, not full debug info: panics
 # and backtraces still name file and line, and a full `pnpm gates`, which

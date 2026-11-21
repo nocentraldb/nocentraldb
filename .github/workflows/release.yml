@@ -1,7 +1,8 @@
 # Releases. The alpha job turns every product-changing merge to main into a
 # tagged GitHub prerelease once `ci` is green, and alpha-npm publishes its
 # npm packages under the dist-tag alpha; the publish jobs (verify,
-# build, publish, commit-back) react to beta and release tags. Every decision
+# build, publish, publish-crates, publish-npm, commit-back) react to beta
+# and release tags. Every decision
 # is in scripts/release/*.mjs with tests; this file only wires them. A
 # workflow_dispatch is ALWAYS a dry run: nothing is tagged or published.
 # Without a tag it runs the alpha job; with a tag, verify and build against
@@ -11,7 +12,9 @@
 # scripts/release-workflow-npm.test.mjs (alpha-npm, which publishes the
 # alpha to npm),
 # scripts/release-workflow-publish.test.mjs (verify, build, publish and
-# commit-back) and scripts/release-ruleset.test.mjs (the release app's token
+# commit-back), scripts/release-workflow-registries.test.mjs (publish-crates
+# and publish-npm, which publish betas and releases to crates.io and stage
+# them on npm) and scripts/release-ruleset.test.mjs (the release app's token
 # in commit-back and app-token-check).
 name: release
 
@@ -325,6 +328,10 @@ jobs:
           TAG: ${{ needs.verify.outputs.tag }}
         run: node scripts/release/set-version.mjs "${TAG#v}"
       - run: cargo build --release --locked
+      # The SDK's build runs wasm-bindgen from target/tools
+      # (packages/sdk/build.mjs).
+      - name: Install wasm-bindgen
+        run: moon run repo:wasm-runner
       - run: pnpm -r --if-present run build
       - name: Publishable packages
         run: node scripts/release/publishable.mjs --json | tee publishable.json
@@ -401,22 +408,134 @@ jobs:
           else
             gh release create "$TAG" --latest --verify-tag --title "$TAG" --notes-file notes.md
           fi
-      # Registry publishing is not wired yet: these steps never publish. They
-      # report what publishable says, "would publish" or "skip <reason>". The
-      # registry commands come with Trusted Publishing, once the owner has
-      # published each package by hand (docs/release-management.md, "A new
-      # package's first publish"), and change the permissions check with them.
-      - name: npm
+  publish-crates:
+    # The crates of a beta or a release go to crates.io (NOC-374;
+    # docs/release-management.md, "Beta"), after the GitHub release exists.
+    # crates.io authenticates through Trusted Publishing: the auth action
+    # exchanges this job's OIDC token for a publish token that lasts 30
+    # minutes and is revoked when the job ends, so no crates.io token exists
+    # anywhere. This job holds id-token: write and no contents: write. It
+    # packages and builds every crate (crates-publish --verify-only) before
+    # it fetches the token, so a crate that does not package stops the job
+    # before any crate is published. crates-publish skips a version
+    # crates.io already holds, so "Re-run failed jobs" publishes only what is
+    # missing. It runs in the environment registry-publish, which crates.io's
+    # trusted publisher of each crate names, so no other job can mint a
+    # crates.io token (NOC-376).
+    needs: [verify, publish]
+    if: needs.verify.outputs.dry_run != 'true'
+    environment: registry-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No token stays in .git/config, where the dependency install and
+          # the build could read it.
+          persist-credentials: false
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
+      - run: rustup toolchain install --no-self-update
+      - run: pnpm install --frozen-lockfile
+      # The tag is vX.Y.Z or vX.Y.Z-beta.N; the version to publish drops the v.
+      - name: Write the full version into this checkout
+        run: node scripts/release/set-version.mjs "${TAG#v}"
+      - name: Package and build every crate, without a token
+        run: node scripts/release/crates-publish.mjs --version "${TAG#v}" --verify-only
+      - name: crates.io token through Trusted Publishing
+        id: crates-io-auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
+        run: node scripts/release/crates-publish.mjs --version "${TAG#v}"
+
+  publish-npm:
+    # The npm packages of a beta or a release are staged on npm (NOC-346,
+    # NOC-374; docs/release-management.md, "Approving a staged version on
+    # npm"), after the GitHub release exists: under the dist-tag beta for a
+    # beta, latest for a release. A staged version is public only once the
+    # owner approves it with 2FA; no token this job can hold approves it. npm
+    # authenticates through Trusted Publishing, with this job's OIDC token;
+    # no npm token exists. This job holds id-token: write and no contents:
+    # write. npm-publish skips a version npm already holds. It runs in the
+    # environment registry-publish, as publish-crates does (NOC-376).
+    needs: [verify, publish]
+    if: needs.verify.outputs.dry_run != 'true'
+    environment: registry-publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    concurrency:
+      group: release-publish-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      TAG: ${{ needs.verify.outputs.tag }}
+      STAGE: ${{ needs.verify.outputs.stage }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No token stays in .git/config, where the dependency install and
+          # the build could read it.
+          persist-credentials: false
+      # The toolchain from an exact-key cache; see ci.yml.
+      - name: Cache the proto toolchain
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.proto/bin
+            ~/.proto/shims
+            ~/.proto/tools
+            ~/.proto/plugins
+          key: proto-${{ runner.os }}-${{ hashFiles('.prototools', 'scripts/install-toolchain.sh') }}
+      - name: Install proto and the tools in .prototools
+        run: bash scripts/install-toolchain.sh
+      - run: rustup toolchain install --no-self-update
+      - run: pnpm install --frozen-lockfile
+      # The tag is vX.Y.Z or vX.Y.Z-beta.N; the version to stage drops the v.
+      - name: Write the full version into this checkout
+        run: node scripts/release/set-version.mjs "${TAG#v}"
+      # The SDK's build runs wasm-bindgen from target/tools
+      # (packages/sdk/build.mjs).
+      - name: Install wasm-bindgen
+        run: moon run repo:wasm-runner
+      - name: Build the npm packages
+        run: pnpm -r --if-present run build
+      - name: Stage on npm
         run: |
-          node scripts/release/publishable.mjs --json \
-            | jq -r '.npm[] | if .publishable then "would publish \(.name)" else "skip \(.name): \(.reason)" end'
-      - name: crates.io
-        run: |
-          node scripts/release/publishable.mjs --json \
-            | jq -r '.crates[] | if .publishable then "would publish \(.name)" else "skip \(.name): \(.reason)" end'
+          if [ "$STAGE" = beta ]; then tag=beta; else tag=latest; fi
+          node scripts/release/npm-publish.mjs --version "${TAG#v}" --dist-tag "$tag" --repo "$GITHUB_REPOSITORY"
 
   commit-back:
-    needs: [verify, publish]
+    # After every registry: the index lists a version once crates.io holds
+    # its crates and npm its staged packages.
+    needs: [verify, publish, publish-crates, publish-npm]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:

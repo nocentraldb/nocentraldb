@@ -108,6 +108,12 @@ tasks:
     # scripts/doc-snippets.test.mjs type-checks the snippets of
     # docs/getting-started-browser.md against packages/sdk/src with tsc
     # (NOC-322), hence the SDK's source among the inputs.
+    # scripts/page-snippets.test.mjs and how-it-works-snippets.test.mjs
+    # type-check the examples of the README, of docs pages under
+    # site/src/content and of packages/sdk/README.md (NOC-361).
+    # scripts/landing-snippets.test.mjs type-checks the TypeScript code of
+    # the landing page's "Get started", site/src/components/code-ts.md
+    # (NOC-371).
     command: "node --test 'scripts/*.test.mjs' 'scripts/release/**/*.test.mjs'"
     deps: ["~:rust-toolchain"]
     inputs:
@@ -134,6 +140,9 @@ tasks:
       - "/crates/ncdb-core/tests/**/*"
       - "/packages/sdk/src/**/*"
       - "/tsconfig.base.json"
+      - "/site/src/content/**/*"
+      - "/packages/sdk/README.md"
+      - "/site/src/components/code-ts.md"
   fragments:
     # Every change fragment under changes/ follows the schema in
     # docs/release-management.md. The PR-level required-fragment rule is not
@@ -236,8 +245,15 @@ tasks:
     # site-pages.yml runs the same steps before it deploys. The install needs
     # the network on a cold pnpm store.
     script: "pnpm --dir site install --frozen-lockfile && pnpm --dir site build && node --test 'site/scripts/*.test.mjs'"
+    # NOC-361: the site renders developer docs from docs/ and the SDK's API
+    # report, and its install lines follow the release index and whether the
+    # crate may reach crates.io (NOC-373).
     inputs:
       - "/site/**/*"
+      - "/docs/*.md"
+      - "/packages/sdk/etc/api-report.d.ts"
+      - "/release-notes/index.json"
+      - "/crates/nocentraldb/Cargo.toml"
       - "!/site/dist/**/*"
       - "!/site/node_modules/**/*"
   browser-storage:

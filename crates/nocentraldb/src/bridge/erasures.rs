@@ -17,7 +17,7 @@ pub(super) async fn list(db: &Db, args: &Value) -> Result<Value, Failed> {
 }
 
 /// An erasure as the bridge sends it: `{"shred": id, "state": "final" |
-/// "provisional" | "takenBack", "performer": {"id": member, "account":
+/// "provisional" | "takenBack" | "waiting", "performer": {"id": member, "account":
 /// fingerprint}, "signOff": fingerprint, "members": [{"id": member,
 /// "account": fingerprint, "current": bool, "acknowledged": "deleted" |
 /// "seen" | "missing"}]}`. A member is its 64 lowercase hex digits
@@ -27,6 +27,7 @@ pub(super) fn erasure(erasure: &Erasure) -> Value {
         ErasureState::Final => "final",
         ErasureState::Provisional => "provisional",
         ErasureState::TakenBack => "takenBack",
+        ErasureState::Waiting => "waiting",
     };
     let members = erasure
         .members

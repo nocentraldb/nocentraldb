@@ -1,8 +1,8 @@
 # NoCentralDB use cases
 
-These eight situations show what NoCentralDB is for. In the first five, a central database is the weaker choice by design. In the last three, people often assume that real-time collaboration, notifications and streaming need a central server. NoCentralDB handles them without one.
+These eight situations show what NoCentralDB is for. In the first five, a central database is the weaker choice by design. In the last three, people often assume that live collaboration, notifications and streaming need a central server. NoCentralDB handles them without one.
 
-NoCentralDB is not released yet. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page uses the SDK API of [RFC 0009](rfc/0009-sdk-api.md), which the owner decided and which may still change before it is built. Rich text and streams have no RFC of their own yet, so their calls are sketches, and the code says so ([RFC 0009, "What this RFC does not cover"](rfc/0009-sdk-api.md#what-this-rfc-does-not-cover)). Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
+NoCentralDB 0.1 is a pre-release. [RFC 0001](rfc/0001-nocentraldb.md) describes the design, and this page shows what that design means in practice. The code on this page uses the SDK API of [RFC 0009](rfc/0009-sdk-api.md), which 0.1 ships, and names and formats can still change before 1.0. Some use cases need parts that come after 0.1: computed fields and views, rich text, streams and the cloud adapter. Each says so where it uses them. Rich text and streams have no RFC of their own yet, so their calls are sketches, and the code says so ([RFC 0009, "What this RFC does not cover"](rfc/0009-sdk-api.md#what-this-rfc-does-not-cover)). Every use case ends with a question for you. Your answer helps us more than anything else you could send. [How to tell us](#how-to-tell-us) explains where to send it.
 
 Each use case has five parts:
 
@@ -36,7 +36,7 @@ Each use case has five parts:
 
 **With a central database.** You search the production database, every backup, the logs, the search index and the copies your agents made, and you write down where you looked. Deleting history conflicts with keeping an audit trail. Because of the backups, you can claim the data is deleted, but you cannot prove it.
 
-**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. An erasure is a work order: one member performs it, a second account signs it off, and the key is destroyed. Without the key, those fields are unreadable in every archive, in every old snapshot and on every device that has deleted the key; a device that never comes back online keeps it, and the list below names every limit ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
+**With NoCentralDB.** The schema marks personal fields and ties each one to a person. The SDK encrypts each person's fields with that person's own key. One member performs an erasure, a second account signs it off, and the key is destroyed. Without the key, those fields are unreadable in every archive, in every old snapshot and on every device that has deleted the key; a device that never comes back online keeps it, and the list below names every limit ([RFC 0003, "Shredding a person's key"](rfc/0003-keys-and-cryptography.md#shredding-a-persons-key)). Nobody has to find the copies. The signatures stay valid, so the audit trail still shows who changed what, when, and who signed off the erasure.
 
 **In your app.**
 
@@ -49,8 +49,9 @@ export const model = nc.model({
   }),
 });
 
-await db.workOrders.erase({ person: customerId });  // needs a second account's sign-off
 ```
+
+In 0.1, the Rust SDK erases a person, with `Db::erase` and a second account's sign-off ([Erasing a person](https://nocentraldb.io/docs/concepts/erasure/)); every member, in either SDK, reads the erasure audit with `space.erasures.list()`.
 
 **What it does not cover.**
 
@@ -62,7 +63,7 @@ await db.workOrders.erase({ person: customerId });  // needs a second account's 
 - Removing a member is not erasure: it blocks the member's access from then on, while the data the member wrote and the personal fields about them stay ([RFC 0005, "About whom, not by whom"](rfc/0005-schema-and-model-lock.md#about-whom-not-by-whom)).
 - Each member destroys the key as soon as it accepts the erasure, and the relay deletes its record then; no later change undoes an accepted erasure. A device that is offline keeps the key until it comes back and syncs ([RFC 0008, "A shred is final when accepted"](rfc/0008-membership.md#a-shred-is-final-when-accepted)).
 
-Your data protection officer decides whether destroying a key counts as erasure in your case. This is a design, not legal advice.
+Your data protection officer decides whether destroying a key counts as erasure in your case. This page is not legal advice.
 
 **Tell us.** Would a signed-off work order plus a destroyed key be enough evidence for your data protection officer, and what else would they ask for?
 
@@ -110,7 +111,7 @@ You add the agent with an invitation it accepted and remove it by its member id,
 
 **With a central database.** Every query is a round trip. Each one adds latency, counts against a rate limit, loads a server your users also depend on, and costs money. Agents send far more queries than a typical user, and most central databases were not sized for that load.
 
-**With NoCentralDB.** The agent queries its own local copy. Counts, blockers and rankings are computed fields and views, and the database updates them as changes arrive. A page of 50 ready tasks is one range lookup, and the results arrive in rank order. No query crosses the network, so no rate limit or per-query cost applies.
+**With NoCentralDB.** The agent queries its own local copy. A page of 50 open tasks is one range lookup in a declared index, and the results arrive in index order. No query crosses the network, so no rate limit or per-query cost applies. Counts, blockers and rankings are designed as computed fields and views, which the database updates as changes arrive; they come after 0.1.
 
 **In your app.**
 
@@ -120,9 +121,9 @@ const page = await db.find(query);                       // the first 50 open ta
 const more = await db.find(query.after(page.cursor));    // the next 50
 ```
 
-Ranking the ready tasks by their blockers needs a computed field and a view, which a later RFC designs; they are then queried the same way. Until then, a query runs on a declared index, here `byStatusPriority` ([RFC 0009, "Queries and indexes"](rfc/0009-sdk-api.md#queries-and-indexes)).
+Ranking the ready tasks by their blockers needs a computed field and a view, which come after 0.1 and are then queried the same way. In 0.1, a query runs on a declared index, here `byStatusPriority` ([RFC 0009, "Queries and indexes"](rfc/0009-sdk-api.md#queries-and-indexes)).
 
-**What it does not cover.** Reads are free; writes are not. Every change an agent writes goes through the relay, which delivers it to every other member of the space, so the relay's cost grows with the writes times the members each write reaches. For 1,000 agents that each write one change a minute, RFC 0007 estimates about 800 USD a month on AWS ([RFC 0007, "What it costs"](rfc/0007-relay.md#what-it-costs)). Queries run only through declared indexes and views. NoCentralDB has no queries on the server and no analytics across all users' data. For those, use a central database.
+**What it does not cover.** Reads are free; writes are not. Every change an agent writes goes through the relay, which delivers it to every other member of the space, so the relay's cost grows with the writes times the members each write reaches. For 1,000 agents that each write one change a minute, RFC 0007 estimates about 800 USD a month on AWS ([RFC 0007, "What it costs"](rfc/0007-relay.md#what-it-costs)). Queries run only through declared indexes. NoCentralDB has no queries on the server and no analytics across all users' data. For those, use a central database.
 
 **Tell us.** Which derived value in your app would not fit our planned computed-field functions (follow, count, any, min, max, reach, cycle)?
 
@@ -132,11 +133,11 @@ Ranking the ready tasks by their blockers needs a computed field and a view, whi
 
 **With a central database.** An outage stops the app. Nobody can read or write. A move needs a migration and a maintenance window.
 
-**With NoCentralDB.** Every member keeps reading and writing its full local copy during the outage. Members that can reach each other directly can keep exchanging changes, with the same messages they use with the relay. We call this island mode. When the relay is back, every copy converges to the same state, in whatever order the changes arrive. The relay stores only an append-only log of encrypted changes, which makes it the easiest part of the system to replace.
+**With NoCentralDB.** Every member keeps reading and writing its full local copy during the outage. We call this island mode. When the relay is back, every copy converges to the same state, in whatever order the changes arrive. The relay stores only an append-only log of encrypted changes, which makes it the easiest part of the system to replace.
 
 **In your app.** You write nothing. Reads stay on the device, and the SDK queues writes until the relay answers.
 
-**What it does not cover.** Changes made during the outage reach the other members only when a connection exists again. How members on the same network find each other is not designed yet: RFC 0007 defines the messages two members exchange once they are connected, but not how they find each other, which needs the peer RFC ([RFC 0007, "Island mode"](rfc/0007-relay.md#island-mode)). Until it exists, two members on one network have no designed way to connect to each other. NoCentralDB cannot enforce one global truth at write time, such as unique names or a transaction across all members. We have not yet designed how a move between relay backends works. Your answer below decides it.
+**What it does not cover.** Changes made during the outage reach the other members only when the relay is back: in 0.1, members exchange changes only through the relay. RFC 0007 defines the messages two members could exchange directly, but not how members on one network find each other, which needs the peer RFC ([RFC 0007, "Island mode"](rfc/0007-relay.md#island-mode)), and 0.1 does not fold changes received from another member. NoCentralDB cannot enforce one global truth at write time, such as unique names or a transaction across all members. We have not yet designed how a move between relay backends works. Your answer below decides it.
 
 **Tell us.** Would you rather run the relay yourself on Postgres, run it serverless in your own cloud account, or use a hosted relay that can only ever see ciphertext?
 
@@ -148,9 +149,9 @@ Ranking the ready tasks by their blockers needs a computed field and a view, whi
 
 **The situation.** Two people in two cities edit the same document. Each sees the other's typing after a short delay. Then one of them is on a train that enters a tunnel. Both keep typing, and their changes stop reaching each other. When the train leaves the tunnel, each screen shows the other person's new paragraphs, and no text is lost.
 
-**How NoCentralDB handles it.** Long text is a shared document, built on Yjs, with Yrs in the Rust core. Each person edits their own local copy, so typing never waits for the network. When the two reconnect, both copies converge without conflicts. Agents can edit too. They read the document as Markdown and change it with anchored edits that quote the text they replace, so a person typing elsewhere in the document loses nothing.
+**How NoCentralDB handles it.** This use case needs rich text, which comes after 0.1. Long text is designed as a shared document, built on Yjs, with Yrs in the Rust core. Each person edits their own local copy, so typing never waits for the network. When the two reconnect, both copies converge without conflicts. Agents can edit too. They read the document as Markdown and change it with anchored edits that quote the text they replace, so a person typing elsewhere in the document loses nothing.
 
-**In your app.** NoCentralDB ships a rich-text field type that works with TipTap:
+**In your app.** NoCentralDB will ship a rich-text field type that works with TipTap:
 
 ```ts
 export const model = nc.model({
@@ -164,7 +165,7 @@ const doc = await project.get(model.proposals, proposalId);   // read through th
 const editor = new Editor({ extensions: [StarterKit, nc.tiptap(doc.body)] });  // a sketch until the rich-text RFC
 ```
 
-Rich text is one of several field types. You can also define your own field types, each with its own merge rules, and use them in your schema next to the built-in types.
+Rich text is one of several field types. In the Rust SDK, you can already define your own field types as plugins, each with its own merge rules, and use them next to the built-in types ([RFC 0011](rfc/0011-plugin-field-types.md)).
 
 **Tell us.** Which editor or collaborative data type would you want to plug in, and what would it need from us?
 
@@ -183,7 +184,7 @@ db.subscribe(model.messages.indexes.unreadFor.equal(me, false).take(50), (page) 
 });
 ```
 
-**In the cloud.** The same mechanism starts agents only when something relevant happens. An AWS plugin sends a space's change stream to EventBridge. A function decrypts each change and compares it with the declared subscriptions. The plugin invokes the agent only on a match. Every part is serverless, so nothing polls and nothing costs money while no changes arrive. The decrypting function is a regular member of the space, with its own key, and it appears in the member list like every other member. NoCentralDB has no hidden "server-readable" mode.
+**In the cloud, after 0.1.** The same mechanism starts agents only when something relevant happens, through a cloud adapter that comes after 0.1. An AWS adapter sends a space's change stream to EventBridge. A function decrypts each change and compares it with the declared subscriptions. The adapter invokes the agent only on a match. Every part is serverless, so nothing polls and nothing costs money while no changes arrive. The decrypting function is a regular member of the space, with its own key, and it appears in the member list like every other member. NoCentralDB has no hidden "server-readable" mode.
 
 **Tell us.** Would a cloud function that is a visible member of the space, with its own key, pass your review? If not, what would you need?
 
@@ -191,7 +192,7 @@ db.subscribe(model.messages.indexes.unreadFor.equal(me, false).take(50), (page) 
 
 **The situation.** A user chats with an agent. The answer appears word by word while the agent writes it.
 
-**How NoCentralDB handles it.** The answer is a field of a streaming type. The agent appends chunks to it, and each chunk travels over the same encrypted change stream as every other change. The app needs no separate socket, no second channel to secure and no second store for the conversation. When the agent closes the stream, the field holds the complete answer like any other value.
+**How NoCentralDB handles it.** This use case needs streams, which come after 0.1, so its code is a sketch. The answer is a field of a streaming type. The agent appends chunks to it, and each chunk travels over the same encrypted change stream as every other change. The app needs no separate socket, no second channel to secure and no second store for the conversation. When the agent closes the stream, the field holds the complete answer like any other value.
 
 **In your app**, with TanStack AI:
 

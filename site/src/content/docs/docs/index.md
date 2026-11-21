@@ -1,30 +1,46 @@
 ---
 
 title: Getting started
-description: Install the SDK, describe a model and open a database.
+description: What NoCentralDB 0.1 does, and the two guides that build a first app on it.
 ---
 
-:::caution[Not yet a product]
-NoCentralDB does not exist yet. The commands and the code on this page show the API that [RFC 0009](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0009-sdk-api.md) defines. None of it is released yet.
+:::note[Release 0.1 is a pre-release]
+NoCentralDB 0.1 is the first planned release. Its alphas are out, and names and formats can still change before 1.0. This page says what 0.1 does and what it does not do yet.
 :::
 
-## Install
+## What 0.1 does
 
-The TypeScript SDK, for web apps, Node and agents written in TypeScript:
+- **The Rust SDK,** the crate `nocentraldb`: spaces, members and invitations; sync through a relay, and island mode; accounts, with pairing, a recovery code and removing a device; erasure of a person; ad-hoc spaces for sub-agents.
+- **The TypeScript SDK in the browser,** the package `@nocentraldb/sdk`: the same calls, except starting an erasure. It runs in Chromium, Firefox and Safari, and several tabs of an app share one database.
+- **The relay,** locally on SQLite (`ncdb-relay`) or serverless on AWS, with DynamoDB and S3.
+- **`ncdb model build`,** which turns the model you write in TypeScript into `model.lock.json`.
+
+## What it does not do yet
+
+- **Node.js and native mobile apps.** The TypeScript SDK runs in a browser only; on a server or in an agent, use the Rust SDK.
+- **Rich text and streams.** Their field types are reserved in the schema and wait for their RFC.
+- **Work orders.** Clean-up and maintenance jobs that one member does and another member checks: a second device for a job that can be undone, a second account for one that cannot. The main one is compaction, which moves old history into a signed, encrypted archive so a space's log stays small. 0.1 runs none of them. Erasing a person, which also needs a second account's sign-off, works in 0.1 through its own path, in the Rust SDK ([Erasing a person](/docs/concepts/erasure/)).
+- **Private windows.** A private window of Firefox or Safari has no origin private file system (OPFS), so `nc.open` refuses with `storageUnavailable`. In Chromium's private window the database is deleted when the window closes.
+- **A frozen tab in Safari.** On a phone, Safari can freeze a hidden tab before it gives the database's storage back. The visible tab's writes then wait until that tab runs again, and `db.durability` reports `waitingForTab`.
+
+## Start with a guide
+
+In 0.1 the guides build your first app inside a clone of the repository, with `ncdb` and the Rust SDK from the clone. Each guide starts with one database and ends with members syncing through a relay:
+
+- [Getting started with the Rust SDK](/docs/guides/rust/), with [apps/tasks-rust](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-rust/README.md) as the finished app.
+- [Getting started in the browser](/docs/guides/browser/), with [apps/tasks-ts](https://github.com/nocentraldb/nocentraldb/blob/main/apps/tasks-ts/README.md) as the finished page.
+
+The beta of the TypeScript SDK is on npm, and the Rust SDK and `ncdb` are on crates.io:
 
 ```sh
-npm install @nocentraldb/sdk
+npm install @nocentraldb/sdk@beta
+cargo add nocentraldb@0.1.0-beta.1
+cargo install ncdb --version 0.1.0-beta.1
 ```
 
-The Rust SDK:
+## A first look at the code
 
-```sh
-cargo add nocentraldb
-```
-
-The command-line tool `ncdb` builds `model.lock.json` from your schema. How it is distributed is not decided yet.
-
-## Describe the model
+You describe the model once, in TypeScript:
 
 ```ts
 import { nc } from "@nocentraldb/sdk";
@@ -45,15 +61,10 @@ export const model = nc.model({
 });
 ```
 
-Then build the lock that the Rust core and both SDKs read:
-
-```sh
-ncdb model build
-```
-
-## Open a database and write
+`ncdb model build` turns it into `model.lock.json`, which the core and both SDKs read. Then you open a database and write:
 
 ```ts
+const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, relay: "wss://relay.example.com" });
 const project = await db.spaces.create();
 
@@ -66,4 +77,4 @@ await project.write((tx) => {
 });
 ```
 
-A `write` is designed to resolve once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/).
+A `write` resolves once the change is in the local log and the view, before the relay has it. Read on in [Concepts](/docs/concepts/spaces/), and see [Browser apps and durability](/docs/browser-durability/) for what a browser copy keeps.

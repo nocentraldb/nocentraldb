@@ -4,13 +4,15 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · ticket NOC-13
 
 This RFC defines the relay: the protocol members use to push and pull a space's changes and to follow them live, the checks the relay runs before it appends a change, the interface every relay backend implements, and the first backend, serverless on AWS with DynamoDB and S3.
 
-It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) without redefining them; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
+**At 0.1.** Partly built. The protocol, the relay core and the SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)). The Postgres backend is not built, nor are changes exchanged directly between members in island mode, nor compaction, whose error is only reserved.
+
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0007: The relay protocol and its AWS backend](https://github.com/nocentraldb/nocentraldb/discussions/147), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken. The relay core and a SQLite backend for local runs are built in `crates/ncdb-relay`; the AWS backend is not built or deployed.
+GENESIS.md reserves the wire format for the owner, and anything that writes to AWS or raises the bill; the owner decided what this RFC says about each. Each choice below says why it was made and, where a reader would ask, which options were not taken.
 
 ## What this RFC does not cover
 
@@ -18,10 +20,9 @@ GENESIS.md reserves the wire format for the owner, and anything that writes to A
 - **Cryptography and keys.** [RFC 0003](0003-keys-and-cryptography.md). This RFC uses the member key to authenticate a connection, with its own context string, and invents no primitive. The protection of the person-key store and the key that authenticates a connection are RFC 0003's, in [The person key](0003-keys-and-cryptography.md#the-person-key) and [The member key](0003-keys-and-cryptography.md#the-member-key), because they are key handling.
 - **Membership rules and roles.** Who may add or remove whom is [RFC 0008](0008-membership.md). The relay applies those rules, from the same code the members run; this RFC only says where.
 - **Compaction and the archive.** A later RFC. This RFC reserves the error a member gets when its cursor points before a compacted range.
-- **Peer discovery in island mode.** How two members on one network find each other is a later RFC. This RFC says which messages they exchange once connected.
+- **Finding members in island mode.** How two members on one network find each other is a later RFC. This RFC says which messages they exchange once connected.
 - **Moving a space from one relay to another.** Use case 5 leaves it open, and so does this RFC; [Island mode](#island-mode) says what already works.
 - **Adapters**, such as the EventBridge adapter of use case 7. An adapter is a member of the space, not part of the relay.
-- **Code and infrastructure.** No crate, no template, no AWS resource. The implementation follows in later tickets.
 
 ## Terms
 
@@ -98,14 +99,14 @@ One rule a reader derives from the RFC gives compact CBOR, in the same shape as 
 | `upload` | relay → member | 2 req, 3 id, 4 url |
 | `ping` | member → relay | 2 req |
 | `pong` | relay → member | 2 req |
-| `error` | relay → member | 2 req, 3 code, 4 retry after |
+| `error` | relay → member | 2 req, 3 code, 4 retry after, 5 removal |
 
 | Map | Keys | Where |
 | --- | --- | --- |
 | `limits` | 1 largest message, 2 changes per push, 3 largest frame | `challenge`, key 6 |
 | `upload reference` | 1 upload id | An element of `push`'s frames, in place of a frame's bytes |
 | `result` | 1 accepted position, 2 duplicate position, 3 rejected code | An element of `pushed`'s results; it holds exactly one of the three keys |
-| `entry` | 1 position, 2 accepted at, 3 frame or download | An element of `entries`' entries, and of `keys`' envelopes and chain |
+| `entry` | 1 position, 2 accepted at, 3 frame or download | An element of `entries`' entries, and of `keys`' envelopes and chain; `error`'s removal, always with its frame |
 | `download` | 1 url, 2 size | An entry's key 3, in place of a frame's bytes |
 | `record` | 1 person-key id, 2 generation, 3 writer member id, 4 wrapped, 5 signature | An element of `person-keys`' and `put-person-keys`' records |
 
@@ -149,7 +150,7 @@ result = {accepted: position}
 
 The relay checks each frame (see [What the relay checks](#what-the-relay-checks)) and appends the accepted ones in the order of the array, at the next free positions. One result per frame, in the same order. The frames of one push are checked one by one: a rejected frame does not stop the frames after it, because the changes are independent and convergence never depends on the relay's order.
 
-A **duplicate** is not an error. A member that pushes a change the relay already holds, for example one it received from a peer in island mode, learns the change's position and records it.
+A **duplicate** is not an error. A member that pushes a change the relay already holds, for example one it received directly from another member in island mode, learns the change's position and records it.
 
 A push is **idempotent**: if the connection drops before `pushed` arrives, the member pushes the same frames again and gets `duplicate` for the ones that made it.
 
@@ -178,7 +179,7 @@ member → relay   unsubscribe  {req, space}
 
 A subscription first catches the member up from its cursor, like a pull, and then sends every newly appended entry as it is appended. Live entries carry the frame when it fits in one message and a download link otherwise. Each live message carries the space's head, so a member that missed a message, for example because the relay dropped it, sees the gap and pulls the missing range. Nothing polls (use case 7).
 
-A subscription lives as long as its connection. When the relay appends a membership entry that removes a member, it ends that member's subscriptions to the space with `removed_member`.
+A subscription lives as long as its connection. When the relay appends a membership entry that removes a member, it ends that member's subscriptions to the space with `removed_member`, which carries the control change that removes it and nothing else of the space (see [The errors](#the-errors)). The member folds it like any member, so its own changes above the cutoff become rejected on its own copy too, and the SDK tells the app which of its writes no member accepts ([RFC 0008, "A member removed while offline who keeps writing"](0008-membership.md#a-member-removed-while-offline-who-keeps-writing); Carsten, 2026-11-20, NOC-383). Serving a removed member nothing was not taken: its copy would keep those changes folded, unlike every other copy, and the app could not show the person what was lost.
 
 **A member added while it is connected.** When the relay accepts a control change that makes a member current in a space, such as a membership entry that adds it, it sends `added {space}` to each of that member's open connections. The member then pulls the space and subscribes to it, as it does for a space named in `welcome`; a member that already follows the space has nothing to do. Delivery is best-effort, like live entries: a lost `added` is recovered at the next reconnect, when `welcome` names the space. An invitation then takes effect at once in a live app, for one new message and one index on `connections`; the relay already resolves the membership on each control change, so it knows who was added. A `spaces` request that the SDK sends on a timer, such as every 5 minutes, was not taken: a delay of up to the timer, and every idle member pays the requests. Nor was leaving it to the next reconnect, within 2 hours, unless the app forces one.
 
@@ -231,14 +232,14 @@ The member sends `ping {req}` when its connection has been idle for 5 minutes, a
 
 ### The errors
 
-Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds, optional)}`, or a `rejected` result inside `pushed`. An error never carries a frame, a payload or any content; it names the code, and for a rejected frame its position in the push.
+Every error is a CBOR map `{1: "error", 2: req, 3: code, 4: retry after (seconds, optional), 5: removal (optional)}`, or a `rejected` result inside `pushed`. An error names the code, and for a rejected frame its position in the push. It carries a frame in one case only: when the relay answers a pull or a subscription with `not_member` or `removed_member`, and the member asking was a member whom an accepted control change removed, key 5 holds that change's entry, `{1: position, 2: accepted at, 3: frame}`. It is the member's latest accepted removal, as `resolve` of the space's control changes gives it. The relay reveals nothing else of the space to a former member, and a member id the space never held gets the error alone. A removal is a small control change; one whose frame would not fit into the message is left out, and the error goes without it. A pull and a subscription carry the removal each time they are refused, so a member removed while offline receives it on reconnect, when it pulls first (see [Island mode](#island-mode)), as one connected when it was removed receives it at the end of its subscription.
 
 | Code | When | What the member does |
 | --- | --- | --- |
 | `unsupported_version` | The relay speaks none of the member's protocol versions. | Upgrade. Keep working in island mode. |
 | `unauthenticated` | A request arrived before a valid `auth`, or the signature was wrong. | Reconnect and authenticate. |
-| `not_member` | The connection's member id is not a current member of the space. | Stop syncing the space; the SDK reports it. |
-| `removed_member` | The member was removed from the space; sent once, then the subscription ends. | As `not_member`. The member keeps its local copy (RFC 0003). |
+| `not_member` | The connection's member id is not a current member of the space. | Fold the removal at key 5, if the error carries one, record its position and leave the cursor where it is; then stop syncing the space. The SDK reports it, and the member's own changes above the cutoff as rejected. |
+| `removed_member` | The member was removed from the space while it followed it; sent once, with the removal at key 5, then the subscription ends. | As `not_member`: the member folds its removal and keeps its local copy (RFC 0003). |
 | `unknown_space` | The relay holds no log for this space id. | Create the space, or check the id. |
 | `space_exists` | A space-creating change names a space the relay already holds. | Choose a new space id. |
 | `not_allowed` | The member may not create spaces on this relay (see [What the relay checks](#what-the-relay-checks)). | The SDK reports it. |
@@ -481,7 +482,7 @@ One conformance test suite, run against every backend, holds these rules, so a n
 
 ## The AWS backend
 
-The first backend runs serverless in the AWS account NoCentralDb-Prod (decided by Carsten, see `factory/DECISIONS.md`), in one region, eu-central-1 (Frankfurt): closer to the first users, and the metadata the relay keeps is personal data under the GDPR. It costs about 10 to 20 percent more than us-east-1, N. Virginia, which was not taken.
+The first backend runs serverless in the AWS account NoCentralDb-Prod (decided by Carsten, [the first relay backend runs on AWS](../../factory/decisions/2026-11-07-no-ticket-the-first-relay-backend-runs-on-aws.md)), in one region, eu-central-1 (Frankfurt): closer to the first users, and the metadata the relay keeps is personal data under the GDPR. It costs about 10 to 20 percent more than us-east-1, N. Virginia, which was not taken.
 
 ```text
 member ──WebSocket──▶ API Gateway (WebSocket API)
@@ -520,7 +521,7 @@ Every id is stored as bytes; positions are numbers. "PK" is the partition key, "
 | `log` | space id | position | change id, accepted at, author member id, kind, frame (inline) or S3 key and size | One item per change. A pull is one `Query` on the space from `position > after`, in order. |
 | `changes` | space id | change id | position | Makes "one change id, one position" a condition inside the append transaction. |
 | `spaces` | space id | — | head, suite, created at, creator, quotas | The head is the condition of every append. One reserved item holds the relay epoch: its key is the 5 bytes `epoch`, which no space id of 16 bytes can be (Carsten, 2026-11-12, #275). An account the relay does not list has one item under its 32-byte account key, with `guest_space`, the one space it created; neither a 16-byte space id nor the 5-byte `epoch` can be that key (Carsten, 2026-11-13, #288). A second reserved item, the 5 bytes `sweep`, holds where the orphan sweep stands: the last key a run visited, and when the last pass completed (Carsten, 2026-11-13, NOC-306; NOC-293). |
-| `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id, `by_member`, sorted by space id and carrying `current`, answers "which spaces is this member in" in id order and leaves out former members without reading the table (Carsten, 2026-11-12, #275). The space's generation graph is one item per generation under the same space id. |
+| `members` | space id | member id | signing key, agreement key, certificate, grants with their from generations, revocations with their cutoffs | Written only by an append's effects. A global secondary index on member id, `by_member`, sorted by space id and carrying `current`, answers "which spaces is this member in" in id order and leaves out former members without reading the table (Carsten, 2026-11-12, #275). DynamoDB reads such an index only eventually consistent, so `welcome` may miss a membership an append has just written; the member learns it from `added` or on its next connection. The space's generation graph is one item per generation under the same space id. |
 | `person_keys` | space id | person-key id | generation, writer member id, wrapped record, signature | Written only after the core checked it against its person-key entry (RFC 0003, "The person key"; RFC 0008), in one `TransactWriteItems` with a condition expression on the generation it replaces; deleted only once the relay accepted its shred entry (RFC 0008, "A shred is final when accepted"). |
 | `uploads` | upload id | — | space id, member id, size, expires at, `ttl` | One item per upload a member began ([Large changes](#large-changes)), read consistently by the id a push names (Carsten, 2026-11-12, #275). Its frame goes straight to S3 through a presigned URL; a push takes it on the condition that its object holds exactly the declared size and that it is of that member and space. Each new upload deletes what expired, and the `ttl` attribute, in seconds, lets DynamoDB delete what no such sweep reached. There is no table of tokens: the URLs of large changes are presigned S3 URLs, so the AWS backend serves none of its own (Carsten, 2026-11-13, NOC-295; NOC-303). |
 | `connections` | connection id | space id | member id, connected at, expires at (TTL) | One item per subscription, plus one for the connection itself. A global secondary index on space id finds a space's subscribers, and a global secondary index on member id finds a member's connections, to send `added`. TTL removes what a missed `$disconnect` leaves behind. An operator who keeps connection records keeps them after the connection ends, for the period it chose. |
@@ -632,20 +633,20 @@ At this scale, a long-running WebSocket server on ECS Fargate behind a load bala
 - Reads never touched the relay; they come from the local view.
 - A write enters the member's local log at once, folded, with no relay position (RFC 0002). The SDK reports how many of the member's changes the relay has not confirmed yet.
 - The member retries the connection with exponential backoff and jitter, up to a few minutes between attempts.
-- Members that can reach each other directly, on one network, exchange changes with the same messages as with the relay: `push`, and `pull` or `subscribe` with the peer's own local positions as the cursor. A peer runs the same checks as the relay, plus decryption. How peers find each other is a later RFC.
+- Members that can reach each other directly, on one network, exchange changes with the same messages as with the relay: `push`, and `pull` or `subscribe` with the other member's own local positions as the cursor. A member that answers runs the same checks as the relay, plus decryption. How members find each other on one network is a later RFC.
 - Membership changes and key rotations made on an island are control changes like any other. RFC 0003 says what happens when two islands rotate at the same time.
 
 **On reconnect**, a member:
 
-1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head (from 0, if the relay epoch changed), folding as it goes. It recognises changes it already holds, for example from a peer, by their ids.
-2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received from peers. Changes the relay already holds come back as `duplicate`, with their position.
+1. Authenticates and, for every space, **pulls** from its last confirmed cursor up to the head (from 0, if the relay epoch changed), folding as it goes. It recognises changes it already holds, for example from another member directly, by their ids.
+2. **Pushes** every change in its log that has no relay position yet, in the order of its local log, in pushes of at most 32: its own changes and the ones it received directly from other members. Changes the relay already holds come back as `duplicate`, with their position.
 3. Records the relay position of every change, and **subscribes** from its new cursor.
 
-Pulling first lets the member see a membership entry that removed it before it pushes, and spares the relay the uploads it already holds. Order on the relay does not matter for the result: every member folds the same set of changes to the same state, in any order (principle 2).
+Pulling first lets the member fold a membership entry that removed it, which the relay's `not_member` carries, before it pushes, and spares the relay the uploads it already holds. Order on the relay does not matter for the result: every member folds the same set of changes to the same state, in any order (principle 2).
 
 **What island mode does not do.**
 
-- Changes made on an island reach the members on other islands only when a path exists again, through the relay or a peer.
+- Changes made on an island reach the members on other islands only when a path exists again, through the relay or directly between members.
 - The relay refuses a revoked author's changes above the revocation's cutoff, also when they were written on an island before the revocation (see [What the relay checks](#what-the-relay-checks)). Members reject them too, so the verdict is the same everywhere; the change stays in the logs of the members that hold it, and the SDK reports it ([RFC 0008, "The cutoff"](0008-membership.md#the-cutoff)).
 - Nothing enforces one global truth at write time, on an island or off it (RFC 0001).
 - A relay that comes back after losing data, restored from a backup or empty, draws a new relay epoch, and its members repopulate it by their pushes (see [Restores and the relay epoch](#restores-and-the-relay-epoch)). Members match changes by id (RFC 0002). How a space moves between relays on purpose is a later RFC.
@@ -669,7 +670,7 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 
 - **The relay sees more than RFC 0002's list.** [What the relay sees](#what-the-relay-sees) adds what the protocol shows (when each member is online, its client, its cursors, upload sizes), the person-key records, what the membership rules show, and what the server sees, with the AWS setting each item depends on; it keeps what the relay learns apart from what the server sees. RFC 0002's list, [What the relay can see, and what it cannot](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot), links this one, and RFC 0001, GENESIS.md, use case 2 and the FAQ link both.
 - **Use case 4, "at no cost".** The reads are free; the writes are not ([What it costs](#what-it-costs)). Use case 4 says "reads at no cost" and what the writes cost.
-- **Use case 5, members on the same network.** This RFC defines the messages peers exchange, but not how they find each other. Use case 5 says that is missing until the peer RFC exists.
+- **Use case 5, members on the same network.** This RFC defines the messages members exchange directly, but not how they find each other. Use case 5 says that is missing until that later RFC exists.
 - **Who uploads.** The uploader must be an authenticated current member of the space; the author may still be any member. This narrows RFC 0002 without contradicting it, and RFC 0002 states it in ["On the relay"](0002-change-and-log-format.md#on-the-relay).
 
 ## Summary of the choices
@@ -687,6 +688,37 @@ This RFC agrees with GENESIS.md and RFC 0001. It makes them, and RFC 0002, more 
 | What if the relay is restored from a backup? | It draws a new epoch; members reset their cursors, pull and push what it lacks, and lost shreds are re-applied. |
 | Who may change the person-key store? | A current member, with a signed record for a person key the log names (RFC 0003, "The person key"); only a signed-off shred entry deletes one, or, for a provisional shred, the erasure decision that finalizes it, which the relay accepts no sooner than 7 days after the shred. |
 
+## How this RFC relates to the others
+
+It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), on the principles in [GENESIS.md](../../factory/GENESIS.md), and on [use cases](../use-cases.md) 2, 4, 5 and 7. It uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) (NOC-6, decided) and the keys, membership entries, key envelopes and person-key store of [RFC 0003](0003-keys-and-cryptography.md) (NOC-7, decided), and the genesis, roles, cutoffs and person-key entry of [RFC 0008](0008-membership.md) (NOC-23, decided), without redefining them. Where this RFC needs something from either, it says so in [What this RFC needs from RFC 0002, RFC 0003 and RFC 0008](#what-this-rfc-needs-from-rfc-0002-rfc-0003-and-rfc-0008).
+
+## Decisions
+
+- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (Carsten, 2026-11-11, NOC-230)
+- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
+- **2026-11-12 · An account the relay does not list may create one space, its account space.** (Carsten, 2026-11-12, NOC-286; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-12 · The member index is read eventually consistent.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
+- **2026-11-13 · A guest account's one space is an effect of its genesis append.** (Carsten, 2026-11-13, NOC-283, #288; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** (Carsten, 2026-11-13, NOC-295; [decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
+- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** (Carsten, 2026-11-13, NOC-306; [decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
+- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
+- **2026-11-20 · The relay hands a removed member the control change that removes it.** (Carsten, 2026-11-20, NOC-383; [decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-12 · The Rust SDK syncs from the browser over its WebSocket and fetch(), and the relay's large-change URLs answer CORS (NOC-175, #251)
+- 2026-11-12 · RFC 0007 records the AWS backend's tables and keys as decided on #275 (NOC-270, #278)
+- 2026-11-12 · A leave whose answer was lost is confirmed, not left unconfirmed forever (NOC-276, #285)
+- 2026-11-12 · RFC 0007 lets a guest account create one space, its account space (NOC-283, NOC-286, #286)
+- 2026-11-13 · The relay lets an account it does not list create one space, its account space (NOC-283, #288)
+- 2026-11-13 · The AWS backend keeps no tokens table; token URLs are a trait of backends that serve them (NOC-303, #312)
+- 2026-11-13 · The relay's orphan sweep runs hourly in bounded runs that resume where the last stopped (NOC-293, #315)
+- 2026-11-16 · Every message travels as base64 in one text frame, at most 23 KiB, so the AWS relay accepts it (NOC-338, #354)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · The member index is read eventually consistent (NOC-362, #389)
+- 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-20 · The error that ends a removed member's pull or subscription carries the control change that removes it, so its own copy folds the removal (NOC-383)

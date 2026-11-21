@@ -9,8 +9,10 @@
 //! database at a path as it does natively, and every SQLite call is
 //! synchronous inside the worker (RFC 0006, "The same fold code on every
 //! target"). Where OPFS is missing, as in a private window of Firefox or
-//! WebKit, SQLite's in-memory VFS stays the default, and the copy is
-//! temporary (RFC 0006, "The browser").
+//! WebKit, SQLite's in-memory VFS stays the default and [`install`] says
+//! so; the SDK then refuses to open the database with `storageUnavailable`
+//! before it creates a key, so no browser app keeps a copy in memory
+//! (RFC 0006, "What the SDK reports"; NOC-347).
 //!
 //! [`View::open`]: super::View::open
 
@@ -29,8 +31,9 @@ pub enum Storage {
     /// On OPFS: the browser keeps it across page loads, until it evicts the
     /// origin's data (RFC 0006, "Durability of a browser copy").
     Opfs,
-    /// In the worker's memory: it is gone when the worker ends. OPFS is
-    /// missing, as in a private window of Firefox or WebKit.
+    /// In the worker's memory, gone when the worker ends: OPFS is missing,
+    /// as in a private window of Firefox or WebKit. The SDK refuses to open
+    /// a database here (`storageUnavailable`).
     Memory,
 }
 
@@ -61,7 +64,8 @@ impl std::error::Error for InstallError {}
 /// view opened afterwards lives on OPFS; a second call reuses the pool, and
 /// takes its handles again after [`release`].
 /// Where OPFS is missing, it leaves the in-memory VFS as the default and
-/// returns [`Storage::Memory`] (RFC 0006, "The browser").
+/// returns [`Storage::Memory`], on which the SDK refuses to open
+/// (RFC 0006, "What the SDK reports").
 pub async fn install() -> Result<Storage, InstallError> {
     match pool().await? {
         Some(_) => Ok(Storage::Opfs),

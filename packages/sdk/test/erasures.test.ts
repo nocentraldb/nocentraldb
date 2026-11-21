@@ -84,7 +84,7 @@ test("an erasure's type is RFC 0009's", async () => {
   expectTypeOf(space.erasures.list).returns.toEqualTypeOf<Promise<Erasure[]>>();
   expectTypeOf<Erasure["shred"]>().toEqualTypeOf<string>();
   expectTypeOf<Erasure["state"]>().toEqualTypeOf<
-    "final" | "provisional" | "takenBack"
+    "final" | "provisional" | "takenBack" | "waiting"
   >();
   expectTypeOf<Erasure["performer"]>().toEqualTypeOf<{
     readonly id: string;

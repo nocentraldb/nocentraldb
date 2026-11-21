@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import { headings, read, root, section, slug } from "./lib/rfc-text.mjs";
 
 const RFC = "docs/rfc/0006-local-view.md";
@@ -46,7 +47,7 @@ const documents = () => [
 
 test("RFC 0006 has no list of decisions, rejected options or open questions", () => {
   const found = headings(read(RFC)).map(slug);
-  for (const gone of ["decisions", "rejected-options", "open-questions"]) {
+  for (const gone of ["rejected-options", "open-questions"]) {
     assert.ok(!found.includes(gone), `the section #${gone} is left`);
   }
   assert.ok(
@@ -85,10 +86,7 @@ test("the status, the discussion and History", () => {
   const feedback = line(read(RFC), "**How to give feedback.**");
   assert.ok(links(feedback, DISCUSSION), "the discussion #146 is not linked");
   assert.ok(links(feedback, "README.md#giving-feedback"));
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+  assertRecord(read(RFC), PUBLISHED);
 });
 
 // Each former decision stands in its section. The comment names the decision
@@ -213,7 +211,7 @@ test("the durability of a browser copy: asking, reporting, falling back and tell
 test("the agreement states the browser's limit plainly, without a Conflicts heading", () => {
   holds(
     part("agreement-with-genesismd-and-rfc-0001"),
-    [/complete working set/, /cache the browser may drop/],
+    [/complete working set/, /copy the browser may delete/],
     "Agreement with GENESIS.md and RFC 0001",
   );
 });

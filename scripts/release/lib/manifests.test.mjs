@@ -134,6 +134,9 @@ test("crateManifest detects version.workspace = true", () => {
       inheritsVersion: true,
       ownVersion: null,
       pathDependencies: [],
+      runtimeWorkspaceDependencies: [],
+      workspaceDependencies: [],
+      published: true,
     },
   );
 });
@@ -162,7 +165,49 @@ f = { path = "../f" }
     inheritsVersion: false,
     ownVersion: "0.0.0",
     pathDependencies: ["b", "d", "f"],
+    runtimeWorkspaceDependencies: ["c", "e"],
+    workspaceDependencies: ["c", "e"],
+    published: true,
   });
+});
+
+test("crateManifest leaves dev-dependencies out of the runtime workspace dependencies and reads publish = false", () => {
+  const text = `[package]
+name = "a"
+version.workspace = true
+publish = false
+
+[dev-dependencies]
+b.workspace = true
+
+[target.'cfg(unix)'.dev-dependencies]
+c = { workspace = true, features = ["x"] }
+
+[target.'cfg(unix)'.build-dependencies]
+d.workspace = true
+`;
+  const crate = crateManifest(text);
+  assert.deepEqual(crate.runtimeWorkspaceDependencies, ["d"]);
+  assert.equal(crate.published, false);
+});
+
+test("crateManifest lists every workspace dependency, dev-dependencies included, in the order of the file", () => {
+  const text = `[package]
+name = "a"
+version.workspace = true
+
+[dependencies]
+b.workspace = true
+serde = { version = "1" }
+
+[dev-dependencies]
+c.workspace = true
+d = { path = "../d" }
+
+[target.'cfg(unix)'.dev-dependencies]
+e = { workspace = true, features = ["x"] }
+`;
+  assert.deepEqual(crateManifest(text).workspaceDependencies, ["b", "c", "e"]);
 });
 
 test("lockVersions reads every [[package]] block", () => {

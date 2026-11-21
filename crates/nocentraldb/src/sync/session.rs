@@ -544,11 +544,26 @@ impl<T: Transport> Session<'_, T> {
                 Ok(())
             }
             Answer::Error {
-                code, retry_after, ..
+                code,
+                retry_after,
+                removal,
+                ..
             } => match code.as_str() {
                 "not_member" | "removed_member" => {
-                    with(self.db, |inner| apply::stop(inner, space, code))?;
-                    Ok(())
+                    // The member folds its own removal, as every member
+                    // does, before it stops syncing the space (RFC 0008, "A
+                    // member removed while offline who keeps writing").
+                    // Both happen under one lock, so no reader sees the
+                    // space without a role while the sync status does not
+                    // yet report the code (NOC-402).
+                    with(self.db, |inner| {
+                        if let Some(removal) = removal {
+                            apply::removal(inner, space, removal)?;
+                        }
+                        apply::stop(inner, space, code);
+                        Ok::<(), ncdb_core::view::Error>(())
+                    })?
+                    .map_err(|_| lost())
                 }
                 // No subscription while the relay does not hold the space.
                 "unknown_space" => Ok(()),

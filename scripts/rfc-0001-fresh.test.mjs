@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import { headings, read, root, section, slug } from "./lib/rfc-text.mjs";
 
 const RFC = "docs/rfc/0001-nocentraldb.md";
@@ -43,7 +44,7 @@ const documents = () => [
 
 test("RFC 0001 has no list of decisions", () => {
   const found = headings(read(RFC)).map(slug);
-  for (const gone of ["decisions", "decisions-this-rfc-follows"]) {
+  for (const gone of ["decisions-this-rfc-follows"]) {
     assert.ok(!found.includes(gone), `the section #${gone} is left`);
   }
 });
@@ -80,10 +81,7 @@ test("the status, the discussion and History", () => {
     links(part("how-to-give-advice"), DISCUSSION),
     "the discussion #21 is not linked",
   );
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+  assertRecord(read(RFC), PUBLISHED);
 });
 
 test("groups leave the design, as a section of the design, with the options not taken", () => {

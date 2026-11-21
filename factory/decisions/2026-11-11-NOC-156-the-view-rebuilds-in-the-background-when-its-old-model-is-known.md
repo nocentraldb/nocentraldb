@@ -5,3 +5,4 @@
 - Instead of: running the pages on the sync thread, which only a database with a relay has; holding the lock for the whole rebuild, which would block the app as before; a background rebuild when the old model is unknown, whose old tables could then not serve.
 - What this does not do: a view folded by a model other than the stored lock's still rebuilds inside the open. One case: an app reopened with the newer lock after a rollback finished, whose tables the older lock folded. A rebuild that keeps failing stays reported until the next open. A rebuild does not yet run on wasm32, where the SDK starts no thread.
 - Topics: core, sdk-rust, local-view, rfc-0006, rfc-0009
+- Supersedes: 2026-11-10-NOC-148-an-accepted-change-folds-the-whole-log-again-on-open.md

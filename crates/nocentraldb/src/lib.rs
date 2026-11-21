@@ -78,12 +78,26 @@ pub use db::{Db, OpenOptions};
 #[doc = include_str!("../../../docs/getting-started.md")]
 pub struct GettingStarted;
 
+// The Rust code of the landing page's code section, compiled the same way, so
+// the page cannot drift from the SDK either.
+#[cfg(doctest)]
+#[doc = include_str!("../../../site/src/components/code-rust.md")]
+pub struct LandingPage;
+
+// The Rust snippets of the docs page "How NoCentralDB works", compiled the
+// same way.
+#[cfg(doctest)]
+#[doc = include_str!("../../../site/src/content/docs/docs/how-it-works.md")]
+pub struct HowItWorks;
+
 #[cfg(test)]
 mod agent_tests;
 #[cfg(test)]
 mod clear_tests;
 #[cfg(test)]
 mod durability_tests;
+#[cfg(test)]
+mod erasure_waiting_tests;
 #[cfg(test)]
 mod fold_feed_tests;
 #[cfg(test)]
@@ -94,6 +108,8 @@ mod personal_write_tests;
 mod restore_tests;
 #[cfg(test)]
 mod shorthand_tests;
+#[cfg(test)]
+mod shred_gap_tests;
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests;
 #[cfg(test)]

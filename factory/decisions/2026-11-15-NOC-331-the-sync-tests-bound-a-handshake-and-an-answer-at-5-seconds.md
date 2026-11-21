@@ -1,6 +1,0 @@
-# 2026-11-15 · NOC-331 · The sync tests bound a handshake and an answer at 5 seconds, not 500 ms
-
-- Decided by: coding agent (NOC-331)
-- Why: under load the test build's 500 ms bounds declared a relay that answered late lost. Each loss drops the session, and a session that ends before a full round doubles the wait before the next one, so the sync suites' 20 s wait ran out under `pnpm gates`. The Lambda path, with its extra hops, timed out about three times as often as the WebSocket server (29 against 8 lost answers in one run under the same disk load). A proxy holding each way back by 400 ms reproduces it every time: no handshake completes, and `synced` runs out. At 5 s the same relay is slow but kept, and the timeout tests still see a hung or silent relay lost: they wait the bound plus the idle time and 2 s, derived from the constants. Production keeps 30 s.
-- Instead of: a longer `WAIT` in the tests, which leaves the losses and only waits longer for the backoff to end; counting a session that authenticated as progress, which would reconnect at once to a relay that fails after `welcome`, a change of the SDK's behaviour for a test's sake; or 2 s, which leaves little room on a machine five times slower than usual.
-- Topics: testing, sync, flaky-tests

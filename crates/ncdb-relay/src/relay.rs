@@ -391,12 +391,17 @@ impl<S: RelayStore> Relay<S> {
             return Err(ErrorCode::SpaceExists);
         }
         let mut controls = self.controls(space).await?;
-        let before = current(&membership::resolve(space, &controls));
+        let before = membership::resolve(space, &controls);
         controls.push(change.clone());
         let resolved = membership::resolve(space, &controls);
         verdict(resolved.verdict(change.id()))?;
         self.not_too_early(space, change, &resolved).await?;
-        Ok(Checked::new(&resolved, &before))
+        let mut checked = Checked::new(&resolved, &current(&before));
+        let dropped = record::dropped(&before, &resolved);
+        checked
+            .effects
+            .extend(dropped.into_iter().map(Effect::Member));
+        Ok(checked)
     }
 
     /// Refuses with `too_early` an erasure decision that finalizes a
@@ -439,6 +444,16 @@ impl<S: RelayStore> Relay<S> {
     /// The space's control changes, in position order. It loads no sealed
     /// change's frame.
     pub(crate) async fn controls(&self, space: SpaceId) -> Result<Vec<Change>, ErrorCode> {
+        let entries = self.control_entries(space).await?;
+        Ok(entries.into_iter().map(|(_, change)| change).collect())
+    }
+
+    /// The space's control changes with their log entries, in position
+    /// order. It loads no sealed change's frame.
+    pub(crate) async fn control_entries(
+        &self,
+        space: SpaceId,
+    ) -> Result<Vec<(LogEntry, Change)>, ErrorCode> {
         let mut controls = Vec::new();
         let mut after = 0;
         loop {
@@ -447,10 +462,10 @@ impl<S: RelayStore> Relay<S> {
                 return Ok(controls);
             };
             after = last.position;
-            for entry in &page {
+            for entry in page {
                 // The relay appended only frames that decode.
                 let change = Change::decode(&entry.frame).map_err(|_| ErrorCode::Unavailable)?;
-                controls.push(change);
+                controls.push((entry, change));
             }
         }
     }
@@ -477,7 +492,9 @@ fn verdict(verdict: Option<&Verdict>) -> Result<(), ErrorCode> {
         Some(Verdict::Rejected(Rejection::Malformed)) => Err(ErrorCode::Malformed),
         Some(Verdict::Rejected(Rejection::BadSignature)) => Err(ErrorCode::BadSignature),
         Some(Verdict::Rejected(Rejection::UnknownAuthor)) => Err(ErrorCode::AuthorNotMember),
-        Some(Verdict::Rejected(_)) | None => Err(ErrorCode::MembershipRule),
+        // A shred over a gap in its causal past waits for its verdict, so
+        // the relay does not accept it yet (NOC-391).
+        Some(Verdict::Rejected(_) | Verdict::Waiting) | None => Err(ErrorCode::MembershipRule),
     }
 }
 

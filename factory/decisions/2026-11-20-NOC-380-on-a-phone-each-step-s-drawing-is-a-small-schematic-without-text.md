@@ -1,0 +1,6 @@
+# 2026-11-20 · NOC-380 · On a phone each step's drawing is a small schematic without text
+
+- Decided by: Carsten, 2026-11-20, in chat with pm, on the screenshots of PR #390
+- Why: below 640 px the drawings were still too heavy; they carried far too much information for a phone. There each of the four steps shows a short, crisp schematic that only hints at what happens, with no text in the drawing: no task rows with titles and states, no ciphertext, no labels such as "Cloud server" or "On the train". The step's own title and text carry the words. The three members appear as simple icons (train, house, server), the server between them as a cloud, and each step shows its event with one visual cue: all three hold a copy; one change travels from the train through the cloud to the other two, with a lock; the train in the tunnel, its link cut, a local change marked; the link back and all three marked the same. The site's colours stay. From 640 px the drawings are unchanged. This replaces, for phones, the rule of the same day that no text in a drawing may be larger than the step's text (2026-11-20-NOC-380-the-landing-page-s-story-is-stacked-steps-without-scroll-behaviour.md, whose other points stand).
+- Instead of: the tall phone drawing with every task row, status, label and the ciphertext lens, its type capped at the step text's 16 px.
+- Topics: site, design

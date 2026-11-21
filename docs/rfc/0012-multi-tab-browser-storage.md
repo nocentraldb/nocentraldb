@@ -2,15 +2,17 @@
 
 REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-357
 
-This RFC lets a browser database do without the tab that owns it. Today one tab's worker holds the database for the whole session, and every other tab reaches it through that tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). On iOS, WebKit freezes a hidden tab without a reliable warning, and a frozen owner keeps its lock and its storage. The other tabs then wait for it: their writes (NOC-352, reported as waiting by NOC-355), a new tab's `nc.open` (NOC-356), and the relay's updates, since the owner syncs.
+This RFC lets a browser database do without the tab that owns it. Today one tab's worker holds the database while its tab is visible, and every other tab reaches it through that tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)). On iOS, WebKit freezes a hidden tab without a reliable warning, and a frozen owner keeps its lock and its storage. The other tabs then wait for it: their writes (NOC-352, reported as waiting by NOC-355), a new tab's `nc.open` (NOC-356), and the changes from the relay, since the owner syncs.
 
 A research note shared with the owner on 2026-11-16 ("Local-First SQLite auf dem iPhone: Multi-Tab-Strategien") proposes another design: every tab has its own connection, which holds the storage only for the length of one transaction, and every write goes first into an outbox in IndexedDB, which a frozen tab cannot block. This RFC checks the note's claims against their sources, measures the two mechanisms in WebKit, works out what they mean for a database whose core signs, validates and syncs, and lists the options and the one the owner chose. [What changes for developers](#what-changes-for-developers) lists every change a developer will see, and [Follow-up tickets](#follow-up-tickets) the work it leads to.
 
-It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a dedicated worker with the `opfs-sahpool` VFS; on [RFC 0002](0002-change-and-log-format.md), whose author sequence makes one member key a single writer; on [RFC 0007](0007-relay.md), whose push is idempotent; and on [RFC 0009](0009-sdk-api.md), which says when a write resolves.
+It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a dedicated worker with the `opfs-sahpool` VFS; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0012 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
 **Status.** Decided by the owner (Carsten, 2026-11-16): option B, every tab takes the database per transaction and no tab owns it, with the answers in [What changes for developers](#what-changes-for-developers). The outbox is deferred until telemetry gathered with the app's consent shows whether it is needed (NOC-364). Nothing is built yet. RFC 0006 and RFC 0009 still describe the owning tab; the [follow-up tickets](#follow-up-tickets) rewrite them and build the design.
+
+**At 0.1.** Not built. Release 0.1 keeps RFC 0006's owning tab ([RFC 0006, "The browser"](0006-local-view.md#the-browser)); this design is built after it.
 
 **Out of scope.** Native apps and Node.js, where the database is a file with WAL and several connections already ([RFC 0006, "One writer, many readers"](0006-local-view.md#one-writer-many-readers)). Private windows, which do not open a database at all ([RFC 0006, "What the SDK reports"](0006-local-view.md#what-the-sdk-reports)). Eviction of the copy.
 
@@ -29,13 +31,13 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 
 One tab owns the database (NOC-177). Its worker installs the `opfs-sahpool` pool, which takes an OPFS synchronous access handle for every file of the pool, and keeps them until the tab gives the database up. The other tabs send their calls over a `BroadcastChannel`, and the owner's core runs them, syncs with the relay and passes every event on ([RFC 0006, "The browser"](0006-local-view.md#the-browser)).
 
-Two changes already soften a frozen owner. The owner gives the database up when its page is hidden (NOC-333), and its worker closes the database, pauses the pool and only then releases its lock, so the next worker finds the handles free (NOC-352, `ncdb_core::view::browser::release`). Both rely on the page running when it is hidden. On iOS it often does not:
+Two changes already soften a frozen owner. The owner gives the database up when its tab is hidden (NOC-333), and its worker closes the database, pauses the pool and only then releases its lock, so the next worker finds the handles free (NOC-352, `ncdb_core::view::browser::release`). Both rely on the tab running when it is hidden. On iOS it often does not:
 
 - **`visibilitychange` may not fire before the page is suspended.** WebKit bug 207256, "visibilitychange event does not get always fired on background but it may on foreground", open since 2020. A WebKit engineer comments: "Likely related to process suspension on iOS", and that the event then fires only when the process resumes.
 - **Closing a tab from the tab overview fires nothing.** WebKit bug 205942: "If the user instead closes the tab, then no `visibilitychange` event is fired (neither is `pagehide`, `beforeunload`, or `unload` …)", open since 2020.
 - **A suspended page keeps its locks.** componentor/fs's notes on Safari: a suspended leader keeps "holding the `vfs-server` Web Lock (a suspended process does not release locks)". Whether WebKit also keeps the OPFS access handles of a suspended worker is not stated there; NOC-352 measured that WebKit frees a worker's handles only once its page runs again.
 
-So a write in another tab waits (NOC-352; NOC-355 reports it as `waitingForTab`), a new tab's `nc.open` waits (NOC-356), and nothing syncs, until the owner's page runs again.
+So a write in another tab waits (NOC-352; NOC-355 reports it as `waitingForTab`), a new tab's `nc.open` waits (NOC-356), and nothing syncs, until the owner's tab runs again.
 
 ## What the research note claims, checked
 
@@ -93,7 +95,7 @@ The note's design was written for an app whose SQLite is the whole database. NoC
 
 ### A change is sealed by the one tab that holds the database
 
-A change carries its author's sequence, the heads it depends on and the author's clock, all read from the log ([RFC 0002, "Author and author sequence"](0002-change-and-log-format.md#author-and-author-sequence)). Two tabs share one member key, since they open the same database. If two tabs sealed a change each without seeing the other's, both would carry the same sequence: an equivocation, which every member records and the SDK reports as "one member key now writes from two places". So only the tab that holds the database may seal a change. An outbox entry written by a tab that does not hold it cannot be a signed change. It can only be an **intent**: the app's write function's records, sealed later by whoever holds the database.
+A change carries its author's sequence, the heads it depends on and the author's clock, all read from the log ([RFC 0002, "Author and author sequence"](0002-change-and-log-format.md#author-and-author-sequence)). Two tabs share one member key, since they open the same database. If two tabs sealed a change each without seeing the other's, both would carry the same sequence: an equivocation, which every member records and the SDK reports as "one member key now writes from two places". So only the tab that holds the database may seal a change. An outbox entry written by a tab that does not hold it cannot be a signed change. It can only be an **intent**: the creates and updates of the app's write function, sealed later by whoever holds the database.
 
 An intent has consequences a developer would see:
 
@@ -143,7 +145,7 @@ Every tab runs its own worker and its own core on the same file. A core takes th
 As B. In addition, a write that cannot take the database within its limit goes into an outbox in IndexedDB, `durability: "strict"`, as an intent. The next core that holds the database seals and folds the open intents in one transaction, records each intent's id in a table of the same SQLite transaction, so a replay after a crash applies none twice (shown in the spike), and then deletes them from IndexedDB.
 
 - **Gives:** a write never waits for another tab; it is kept in this browser at once, even in the remaining risk of B.
-- **Costs:** everything in [A change is sealed by the one tab that holds the database](#a-change-is-sealed-by-the-one-tab-that-holds-the-database): a write resolves without a change id, the app does not read it at once, its refusal can arrive after it resolved, and durability needs a count of queued intents. A second store with its own encoding of the write's records, versioned with the model. Whether WebKit flushes a `strict` transaction is unknown.
+- **Costs:** everything in [A change is sealed by the one tab that holds the database](#a-change-is-sealed-by-the-one-tab-that-holds-the-database): a write resolves without a change id, the app does not read it at once, its refusal can arrive after it resolved, and durability needs a count of queued intents. A second store with its own encoding of the write's creates and updates, versioned with the model. Whether WebKit flushes a `strict` transaction is unknown.
 - **Deferred:** the owner decides on the outbox later, from telemetry the SDK gathers with the app's explicit consent, which shows how often a write waits for a tab frozen inside a transaction (Carsten, 2026-11-16). Its own RFC designs that telemetry (NOC-364).
 
 ### D. The note's VFS: `opfs-wl` or `OPFSCoopSyncVFS`
@@ -193,7 +195,7 @@ This RFC changes no other RFC and no code. The decided design leads to these tic
 ## How it is tested
 
 - **Unit and gate tests** for the core's refresh: a core that holds the database after another core wrote must read exactly what a freshly opened core reads. This runs natively and in wasm32 like the fold tests, with two cores on one file.
-- **Browser tests in all three engines** (NOC-344's harness): two tabs writing interleaved, a tab stopped inside a transaction (as in the spike), a stolen sync lock, a crashed tab whose transaction rolls back.
+- **Browser tests in all three engines** (NOC-344's harness): two tabs writing interleaved, a tab stopped inside a transaction (as in the spike), a stolen sync lock, a crashed tab whose transaction rolls back, a tab whose `COMMIT` fails, after which another tab takes the database and writes.
 - **Chromium's DevTools freeze** (`Page.setWebLifecycleState`, as TanStack DB #1883 used) for a real freeze in one engine. It does not reproduce iOS.
 - **A real iPhone,** by hand, from the device checklist: a hidden tab frozen while another writes; a tab closed from the tab overview; a tab frozen mid-sync. Whether iOS honours a `strict` IndexedDB transaction on power loss cannot be tested reliably by hand; it stays a stated unknown.
 
@@ -225,10 +227,11 @@ const locked = (wait, fn) =>
 const sahTx = (wait, body) => locked(wait, async () => {
   if (!pool) pool = await sqlite3.installOpfsSAHPoolVfs({ name: "spike-sah", directory: "/spike-sah" });
   else await pool.unpauseVfs();
-  const db = new pool.OpfsSAHPoolDb("/spike.sqlite");
-  try { db.exec("PRAGMA synchronous=FULL"); db.exec("BEGIN IMMEDIATE"); body(db); db.exec("COMMIT"); }
-  finally { db.close(); }
-  pool.pauseVfs();
+  try {
+    const db = new pool.OpfsSAHPoolDb("/spike.sqlite");
+    try { db.exec("PRAGMA synchronous=FULL"); db.exec("BEGIN IMMEDIATE"); body(db); db.exec("COMMIT"); }
+    finally { db.close(); }
+  } finally { pool.pauseVfs(); } // also when COMMIT throws, so the next tab finds the handles free
 });
 
 /** An outbox entry: one IndexedDB transaction, durability "strict". */
@@ -277,6 +280,14 @@ The Rust port was timed with a wasm example built like `crates/ncdb-core/example
 
 The `opfs-wl` check opened `new sqlite3.oo1.OpfsWlDb("/spike-wl.sqlite")` in each tab, set `PRAGMA busy_timeout=3000`, wrote 100 rows from each tab at the same time, and then had one tab stop after `BEGIN IMMEDIATE`.
 
+## How this RFC relates to the others
+
+It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a dedicated worker with the `opfs-sahpool` VFS; on [RFC 0002](0002-change-and-log-format.md), whose author sequence makes one member key a single writer; on [RFC 0007](0007-relay.md), whose push is idempotent; and on [RFC 0009](0009-sdk-api.md), which says when a write resolves.
+
 ## History
 
 - 2026-11-16 · First published, decided by the owner (NOC-357, #381)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-21 · The spike's `sahTx` pauses the pool in a `finally`, so a failed `COMMIT` no longer leaves the tab holding the handles, and the test plan adds a failed `COMMIT`; reported by u/Discordbothost on Reddit (NOC-409, #419)

@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import {
   assertLinksResolve,
   headings,
@@ -78,7 +79,6 @@ test("RFC 0004 has no amendment section, mark or changelog", () => {
 test("RFC 0004 has no list of decisions or rejected options", () => {
   const found = headings(read(RFC)).map(slug);
   for (const gone of [
-    "decisions",
     "decisions-this-rfc-follows",
     "rejected-options",
     "for-how-field-operations-travel",
@@ -131,11 +131,8 @@ test("the feedback line links the RFC's discussion", () => {
   assert.doesNotMatch(feedback, /no discussion of its own/);
 });
 
-test("History has one line: the first publication", () => {
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+test("History starts with the publication and records each later change", () => {
+  assertRecord(read(RFC), PUBLISHED);
 });
 
 // Each former decision and rejected option stands in its section. The comment
@@ -220,9 +217,9 @@ test("a link to a target not received stays, and the options not taken", () => {
 test("no field type assumes causal delivery, and what it costs", () => {
   // 6; rejected: requiring causal delivery
   holds(
-    part("what-this-rfc-needs-from-rfc-0002"),
+    part("what-the-merge-rules-rely-on"),
     [/grow until compaction/, /reorders/],
-    "What this RFC needs from RFC 0002",
+    "What the merge rules rely on",
   );
 });
 

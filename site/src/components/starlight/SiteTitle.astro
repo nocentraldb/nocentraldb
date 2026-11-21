@@ -1,0 +1,37 @@
+---
+// The docs' site title: the yellow mark beside the wordmark, and only the mark
+// on a phone, as the landing page's header (owner, 2026-11-19). The link keeps
+// the name NoCentralDB for screen readers; both pictures are decoration.
+import wordmark from "../../assets/brand/ncdb-wordmark-dark.svg";
+
+const { siteTitle, siteTitleHref } = Astro.locals.starlightRoute;
+---
+
+<a href={siteTitleHref} class="site-title sl-flex">
+  <img class="ncdb-mark" src="/brand/ncdb-mark-accent-512.png" alt="" width="32" height="32" />
+  <img class="ncdb-wordmark" src={wordmark.src} alt="" width={wordmark.width} height={wordmark.height} />
+  <span class="sr-only" translate="no">{siteTitle}</span>
+</a>
+
+<style>
+  .site-title {
+    align-items: center;
+    gap: 0.75rem;
+    text-decoration: none;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .ncdb-mark {
+    width: 32px;
+    height: 32px;
+  }
+  .ncdb-wordmark {
+    height: 30px;
+    width: auto;
+  }
+  @media (max-width: 639px) {
+    .ncdb-wordmark {
+      display: none;
+    }
+  }
+</style>

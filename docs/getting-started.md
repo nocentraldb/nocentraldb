@@ -2,7 +2,7 @@
 
 This guide builds a small task list on NoCentralDB's Rust SDK, the crate `nocentraldb`. You start with one database on one device. Then you share a space with a second device through a relay that cannot read it, pair a second device of your own account, and keep the account's recovery code.
 
-NoCentralDB is not released yet. The SDK works, and this guide uses only what is merged, but names and formats can still change. Every Rust snippet below is compiled by the repository's tests, so the guide cannot drift from the SDK.
+NoCentralDB 0.1 is a pre-release: this guide uses only what 0.1 ships, and names and formats can still change before 1.0. Every Rust snippet below is compiled by the repository's tests, so the guide cannot drift from the SDK.
 
 For a finished app that does all of this from the command line, see [apps/tasks-rust](../apps/tasks-rust/README.md). [RFC 0009](rfc/0009-sdk-api.md) describes every call. For the TypeScript SDK in a web page, see [the browser guide](getting-started-browser.md).
 
@@ -10,7 +10,7 @@ For a finished app that does all of this from the command line, see [apps/tasks-
 
 - A recent stable Rust. The repository tests with the version in `rust-toolchain.toml`.
 - Node.js 24 or later and pnpm, to build the model's lock.
-- A clone of this repository. Until the first release, you build your app inside it, in a folder under `apps/`, as [apps/tasks-rust](../apps/tasks-rust/README.md) does: the schema build and the SDK come from the clone.
+- A clone of this repository. In 0.1 you build your app inside it, in a folder under `apps/`, as [apps/tasks-rust](../apps/tasks-rust/README.md) does: `ncdb`, which builds the lock, comes from the clone, and so does the Rust SDK until it is on crates.io.
 
 ## 1. Make the app
 
@@ -258,6 +258,8 @@ cargo run -q -p ncdb-relay-server --bin ncdb-relay -- \
   --database relay.sqlite --listen 127.0.0.1:7700 \
   --allow-invitation "ncdb-invite-1:…"
 ```
+
+The local relay is for development and small setups. The same relay core also runs serverless on AWS, with DynamoDB and S3: the function is [crates/ncdb-relay-lambda](../crates/ncdb-relay-lambda/README.md) and its infrastructure a CDK app in [infra/aws](../infra/aws/). [The relay](https://nocentraldb.io/docs/concepts/relay/) says what either one sees.
 
 Each device opens its own database with the relay's URL. The SDK syncs in the background and keeps working offline. On the phone, print its invitation. It holds the device's public keys and its account's fingerprint, and no secret, so send it any way you like:
 

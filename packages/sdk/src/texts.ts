@@ -56,12 +56,9 @@ export const notAField = (path: unknown): string =>
   `${path}: not a field; declare it with a field function such as nc.string().`;
 
 /** `notAPairingAnswer` (invalidValue): nc.pairingAnswer, given a text that does not start with ncdb-pair-1: or is not unpadded base64url. */
-export const NOT_APAIRING_ANSWER = "the text is not a pairing answer: ncdb-pair-1: and unpadded base64url";
+export const NOT_APAIRING_ANSWER = "the text is not a pairing answer, which is ncdb-pair-1: followed by unpadded base64url";
 
-/** `notAQuery` (invalidValue): A subscription to db.find or space.find, given something that is not a query. */
-export const NOT_AQUERY = "not a query";
-
-/** `notAQueryStartOne` (invalidValue): db.find or space.find, given something that is not a query. */
+/** `notAQueryStartOne` (invalidValue): db.find, space.find, or a subscription to either, given something that is not a query. */
 export const NOT_AQUERY_START_ONE = "not a query; start one from an index, such as model.tasks.indexes.byPriority";
 
 /** `notASafeInteger` (invalidValue): A write of an nc.int() field given a number that is not a safe integer. */
@@ -77,14 +74,14 @@ export const notAnIndex = (collection: unknown, key: unknown): string =>
   `${collection}.${key}: not an index; declare it with nc.index(...).`;
 
 /** `notAnInvitation` (invalidValue): nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url. */
-export const NOT_AN_INVITATION = "the text is not an invitation: ncdb-invite-1: and unpadded base64url";
+export const NOT_AN_INVITATION = "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url";
 
 /** `ownerTabClosed` (storageFailed): A call that changes the database, sent to the tab that owned it, when that tab ended before it answered (NOC-177). */
 export const OWNER_TAB_CLOSED = "the tab that held the database closed before it answered; the call may or may not have run";
 
 /** `reservedFieldType`: ncdb model build, on a model with nc.richText or nc.stream, whose field types a later RFC designs. */
 export const reservedFieldType = (path: unknown, type: unknown): string =>
-  `${path}: ${type} is reserved; its field type belongs to a later RFC (RFC 0005).`;
+  `${path}: ${type} is reserved; its field type comes after 0.1 (RFC 0005).`;
 
 /** `setElementModified`: ncdb model build, on a model whose nc.set element is personal, described or deprecated. */
 export const setElementModified = (path: unknown): string =>
@@ -96,4 +93,4 @@ export const setElementNotBasic = (path: unknown): string =>
 
 /** `workerFailed` (storageFailed): Every call waiting on the SDK's worker when the worker fails, with the browser's own message. */
 export const workerFailed = (message: unknown): string =>
-  `the worker failed: ${message}`;
+  `the database's Web Worker failed: ${message}`;

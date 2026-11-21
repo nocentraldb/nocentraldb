@@ -22,7 +22,7 @@ pub(crate) const LOCK_EXPECTED_DIRECTION: &str =
 /// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
 /// cannot be read: `model.id` is not 32 lower-case hex digits.
 pub(crate) const LOCK_EXPECTED_MODEL_ID: &str =
-    "expected 32 lower-case hex digits";
+    "expected 32 lowercase hex digits";
 
 /// `lockExpectedNames`: After the JSON path of the value at fault, when the
 /// schema's description cannot be read (cli.descriptionUnreadable): a
@@ -77,7 +77,7 @@ pub(crate) const LOCK_MISSING: &str =
 /// error.lockRefused) or the schema's description (cli.descriptionUnreadable)
 /// cannot be read: a field's type names no built-in type and no plugin's.
 pub(crate) fn lock_no_field_type(type_id: impl std::fmt::Display) -> String {
-    format!("{type_id} is no field type: expected ncdb/<type> or <plugin>/<type>")
+    format!("{type_id} is not a field type: expected ncdb/<type> or <plugin>/<type>")
 }
 
 /// `lockNotJson`: After the JSON path of the value at fault, when the lock
@@ -102,7 +102,7 @@ pub(crate) fn lock_set_element_not_basic(type_id: impl std::fmt::Display) -> Str
 /// cannot be read: the lock's format is one this version does not read. `known`
 /// is the one it reads.
 pub(crate) fn lock_unknown_format(format: impl std::fmt::Display, known: impl std::fmt::Display) -> String {
-    format!("format {format} is not known to this version; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade.")
+    format!("format {format} is not one this core reads; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade the SDK.")
 }
 
 /// `nameKindCollection`: In core.refusalBadName and core.refusalNameClash, as
@@ -136,7 +136,7 @@ pub(crate) const NAME_KIND_VIEW: &str =
 /// its collection's for a name in a collection. Opening with such a lock shows
 /// it after error.lockInvalid's colon.
 pub(crate) fn refusal_bad_name(kind: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
-    format!("{kind} {name}: the name breaks the naming rules.\u{a}A name starts with a lower-case letter and has at most 63 ASCII letters and digits.")
+    format!("{kind} {name}: the name breaks the naming rules.\u{a}A name starts with a lowercase letter and has at most 63 ASCII letters and digits.")
 }
 
 /// `refusalCollectionRemoved`: Under the lock's name, when `ncdb model build`
@@ -276,7 +276,7 @@ pub(crate) fn refusal_person_link_personal(collection: impl std::fmt::Display, f
 /// field's person is no link field of its collection. Opening with such a lock
 /// shows it after error.lockInvalid's colon.
 pub(crate) fn refusal_person_not_link(collection: impl std::fmt::Display, field: impl std::fmt::Display, person: impl std::fmt::Display) -> String {
-    format!("{collection}.{field}: personal to {person}, which is no link field of {collection}.\u{a}person is \"self\" or the name of an nc.link field of {collection}.")
+    format!("{collection}.{field}: personal to {person}, which is not a link field of {collection}.\u{a}person is \"self\" or the name of an nc.link field of {collection}.")
 }
 
 /// `refusalPersonalNotBasic`: Under the lock's name, when `ncdb model build` or
@@ -341,7 +341,7 @@ pub(crate) fn refusal_unknown_rule(collection: impl std::fmt::Display, field: im
 /// target is no collection of the model. Opening with such a lock shows it
 /// after error.lockInvalid's colon.
 pub(crate) fn refusal_unknown_target(collection: impl std::fmt::Display, field: impl std::fmt::Display, target: impl std::fmt::Display) -> String {
-    format!("{collection}.{field}: target {target} is no collection of the model.")
+    format!("{collection}.{field}: target {target} is not a collection of the model.")
 }
 
 /// `refusalUnmarkedPersonal`: Under the lock's name, when `ncdb model build` or

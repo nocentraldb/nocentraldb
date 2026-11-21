@@ -14,6 +14,7 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { test } from "node:test";
+import { assertRecord } from "./lib/rfc-record.mjs";
 import { headings, read, root, section, slug } from "./lib/rfc-text.mjs";
 
 const RFC = "docs/rfc/0009-sdk-api.md";
@@ -55,7 +56,6 @@ const documents = () => [
 test("RFC 0009 has no list of decisions, rejected options, conflicts or open questions", () => {
   const found = headings(read(RFC)).map(slug);
   for (const gone of [
-    "decisions",
     "rejected-options",
     "conflicts-with-genesismd-and-the-other-rfcs",
     "open-questions",
@@ -112,11 +112,8 @@ test("the feedback lines of RFC 0009 and RFC 0010 link their discussions", () =>
   }
 });
 
-test("History has one line: the first publication", () => {
-  const lines = part("history")
-    .split("\n")
-    .filter((l) => l.trim());
-  assert.deepEqual(lines, [`- ${PUBLISHED}`]);
+test("History starts with the publication and records each later change", () => {
+  assertRecord(read(RFC), PUBLISHED);
 });
 
 // Each former decision stands in its section. The comment names the decision
@@ -357,19 +354,22 @@ test("RFC 0010's fingerprint says how its 60 digits are computed", () => {
   );
 });
 
-test("the fingerprint hashes today's account key until accounts are built", () => {
-  // NOC-154 point 4: both SDKs hash the same input today
+test("the fingerprint hashes the recovery key, or the account key without a statement", () => {
+  // NOC-154 point 4: both SDKs hash the same input; NOC-267 at 0.1
   holds(
     part("invitations-and-members"),
     [
-      /over the database's own account key/,
-      /once RFC 0010 is built, over the recovery key/,
+      /over the account's recovery key/,
+      /over its account key while its certificates carry no statement/,
     ],
     "Invitations and members",
   );
   holds(
     part("the-fingerprint", RFC_0010),
-    [/[Uu]ntil this RFC is built/, /own account key/],
+    [
+      /before this RFC was built/,
+      /over the account key in place of the recovery key/,
+    ],
     "RFC 0010, The fingerprint",
   );
 });

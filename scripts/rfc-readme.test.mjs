@@ -123,3 +123,16 @@ test("every RFC is one complete text, so the README no longer says some are bein
   }
   assert.doesNotMatch(readme(), /being rewritten/);
 });
+
+test("a Decisions entry links its decision, which says why and what was not taken", () => {
+  // NOC-362: pm, 2026-11-19, option (a).
+  const rule = section(readme(), HEADING);
+  assert.match(
+    rule,
+    /what changed, who decided it and when, and a link to its entry in the decision log/,
+  );
+  assert.match(
+    rule,
+    /the decision log's entry says why, and which options were not taken/,
+  );
+});

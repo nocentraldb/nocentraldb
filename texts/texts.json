@@ -292,7 +292,7 @@
     {
       "id": "core.lockExpectedModelId",
       "kind": "core",
-      "text": "expected 32 lower-case hex digits",
+      "text": "expected 32 lowercase hex digits",
       "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: `model.id` is not 32 lower-case hex digits."
     },
     {
@@ -340,7 +340,7 @@
     {
       "id": "core.lockNoFieldType",
       "kind": "core",
-      "text": "{type_id} is no field type: expected ncdb/<type> or <plugin>/<type>",
+      "text": "{type_id} is not a field type: expected ncdb/<type> or <plugin>/<type>",
       "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: a field's type names no built-in type and no plugin's."
     },
     {
@@ -358,7 +358,7 @@
     {
       "id": "core.lockUnknownFormat",
       "kind": "core",
-      "text": "format {format} is not known to this version; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade.",
+      "text": "format {format} is not one this core reads; it reads format {known}. Build the lock with the matching version of ncdb, or upgrade the SDK.",
       "when": "After the JSON path of the value at fault, when the lock (`ncdb model build`, `ncdb model check`, cli.cannotBeRead; opening, error.lockRefused) or the schema's description (cli.descriptionUnreadable) cannot be read: the lock's format is one this version does not read. `known` is the one it reads."
     },
     {
@@ -562,7 +562,7 @@
     {
       "id": "core.refusalBadName",
       "kind": "core",
-      "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lower-case letter and has at most 63 ASCII letters and digits.",
+      "text": "{kind} {name}: the name breaks the naming rules.\nA name starts with a lowercase letter and has at most 63 ASCII letters and digits.",
       "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a name breaks the naming rules. `kind` is a core.nameKind text; `name` is the name, after its collection's for a name in a collection. Opening with such a lock shows it after error.lockInvalid's colon."
     },
     {
@@ -664,7 +664,7 @@
     {
       "id": "core.refusalPersonNotLink",
       "kind": "core",
-      "text": "{collection}.{field}: personal to {person}, which is no link field of {collection}.\nperson is \"self\" or the name of an nc.link field of {collection}.",
+      "text": "{collection}.{field}: personal to {person}, which is not a link field of {collection}.\nperson is \"self\" or the name of an nc.link field of {collection}.",
       "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a personal field's person is no link field of its collection. Opening with such a lock shows it after error.lockInvalid's colon."
     },
     {
@@ -712,7 +712,7 @@
     {
       "id": "core.refusalUnknownTarget",
       "kind": "core",
-      "text": "{collection}.{field}: target {target} is no collection of the model.",
+      "text": "{collection}.{field}: target {target} is not a collection of the model.",
       "when": "Under the lock's name, when `ncdb model build` or `ncdb model check` refuses a model that breaks a rule on its own: a link's target is no collection of the model. Opening with such a lock shows it after error.lockInvalid's colon."
     },
     {
@@ -724,7 +724,7 @@
     {
       "id": "core.unreadableAdHocCopyId",
       "kind": "core",
-      "text": "an ad-hoc copy's id",
+      "text": "ad-hoc copy id",
       "when": "In core.viewCorrupt, as `what`, when the database holds an ad-hoc copy's id it cannot read."
     },
     {
@@ -910,13 +910,13 @@
     {
       "id": "core.viewPlan",
       "kind": "core",
-      "text": "the lookup of index {index} does not run through it",
+      "text": "a query of index {index} does not run through it",
       "when": "The whole error of opening (modelRefused; Db::open, nc.open) when a declared index's lookup would not run through it, or would sort in a temporary B-tree; `index` is <collection>.<index>."
     },
     {
       "id": "core.viewQuery",
       "kind": "core",
-      "text": "the lookup was refused: {error:?}",
+      "text": "the query was refused: {error:?}",
       "when": "The core's reason when a lookup is refused. Not shown to a developer today: Db::find and Space::find replace it with their own errors; only an internal lookup of the account's would show it after error.viewFailed's colon."
     },
     {
@@ -956,7 +956,7 @@
       "id": "error.adHocPersonalLater",
       "kind": "error",
       "code": "notAllowed",
-      "text": "personal fields are not copied into an ad-hoc space yet, until an erasure reaches the copy",
+      "text": "personal fields are not copied into an ad-hoc space yet, as an erasure would not reach the copy",
       "when": "Spaces::create_ad_hoc (db.spaces.createAdHoc) with `personal`: copies of personal fields wait until an erasure reaches a copy in another space (Carsten, 2026-11-15, NOC-320 Q8)."
     },
     {
@@ -1236,7 +1236,7 @@
       "id": "error.cursorOfAnotherQuery",
       "kind": "error",
       "code": "cursorOfAnotherModel",
-      "text": "the cursor belongs to another model, index or equality prefix",
+      "text": "the cursor belongs to another model, index or equality prefix; start from the first page",
       "when": "A query continued with a cursor of another model, index or equality prefix."
     },
     {
@@ -1446,14 +1446,14 @@
       "id": "error.noAccountKeyToSignOff",
       "kind": "error",
       "code": "notAllowed",
-      "text": "this database holds no account key; a device of the account signs off",
+      "text": "this database holds no account key; a device that holds it signs off",
       "when": "Account::sign_off on a database that holds no account key, an agent's or one waiting to be paired (NOC-325)."
     },
     {
       "id": "error.noAccountSpace",
       "kind": "error",
       "code": "notFound",
-      "text": "the device holds no account space",
+      "text": "this database holds no account space",
       "when": "Renewing the account key, on removing a lost member, on a device that holds no account space."
     },
     {
@@ -1474,7 +1474,7 @@
       "id": "error.noPersistentStorage",
       "kind": "error",
       "code": "storageUnavailable",
-      "text": "this browser window offers no storage that outlives its tabs (no OPFS), as a private window of Safari or Firefox; open the app in a normal window",
+      "text": "this browser window has no OPFS, so the database would not outlive its tab, as in a private window of Firefox or Safari; open the app in a normal window",
       "when": "nc.open in a browser window without OPFS, such as a private window of Safari or Firefox, where the database could live only in one tab's memory and would be lost with it."
     },
     {
@@ -1572,7 +1572,7 @@
       "id": "error.notARecoveryCode",
       "kind": "error",
       "code": "invalidValue",
-      "text": "the words are no recovery code",
+      "text": "the words are not a recovery code",
       "when": "Account::remove_member (db.account.removeMember) when the words it was given are no recovery code."
     },
     {
@@ -1614,7 +1614,7 @@
       "id": "error.objectIsNoPerson",
       "kind": "error",
       "code": "noPerson",
-      "text": "the object is no person's: it has no personal field",
+      "text": "the object is not a person's: it has no personal field",
       "when": "Db::erasure_request with an object that has no personal field, so it names no person to erase (NOC-325)."
     },
     {
@@ -1705,7 +1705,7 @@
       "id": "error.personKeyNotHeld",
       "kind": "error",
       "code": "personKeyNotHeld",
-      "text": "the person's key is not held on this device yet",
+      "text": "this member does not hold the person's key yet; try again once sync has fetched it",
       "when": "A write of a personal field whose person's key this device does not hold yet: it holds it once it fetched the key's record."
     },
     {
@@ -1775,14 +1775,14 @@
       "id": "error.rotationMissingGeneration",
       "kind": "error",
       "code": "invalidValue",
-      "text": "the member holds no key of a generation the rotation must chain; it rotates once an envelope for it arrives",
+      "text": "the member holds no space key of a generation the rotation must chain; it can rotate once the key envelope for that generation arrives",
       "when": "A removal, or an add after a rotation, when this member lacks a key generation the rotation must chain; it works once an envelope for it arrives."
     },
     {
       "id": "error.rotationMissingPersonKey",
       "kind": "error",
       "code": "invalidValue",
-      "text": "the member does not hold a person key of the space, which the rotation must re-wrap; it rotates once it fetched the key's record",
+      "text": "the member does not hold a person key of the space, which the rotation must re-wrap; it can rotate once it has fetched the key's record",
       "when": "A removal, or an add after a rotation, when this member lacks a person key of the space that the rotation must re-wrap; it works once it fetched the key's record."
     },
     {
@@ -1845,7 +1845,7 @@
       "id": "error.takeBackNotPending",
       "kind": "error",
       "code": "invalidValue",
-      "text": "the shred is no provisional erasure of this space that is still pending",
+      "text": "the shred is not a provisional erasure of this space that can still be taken back",
       "when": "Erasures::take_back with a shred that is final, already finalized or taken back, or not of the space (NOC-325)."
     },
     {
@@ -1943,7 +1943,7 @@
       "id": "notice.erasurePending",
       "kind": "notice",
       "code": "erasurePending",
-      "text": "Personal data was erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
+      "text": "Personal fields were erased on a device of this account. The erasure becomes final after 7 days; until then an admin of this account can take it back.",
       "when": "No call returns it: the space status gives it with each provisional erasure (provisional_erasures, provisionalErasures), on every device of the account, while an erasure in a space with one account waits out its 7 days. pm's text, NOC-234."
     },
     {
@@ -1978,7 +1978,7 @@
       "id": "notice.takenBack",
       "kind": "notice",
       "code": "takenBack",
-      "text": "The erasure is taken back in this space, and the person's fields read again; a finalize another device of the account wrote before it saw this take-back still wins, and the person stays erased.",
+      "text": "The erasure is taken back in this space, and the person's fields read again; an erasure that another device of the account made final before it saw this take-back still wins, and the person stays erased.",
       "when": "space.erasures().take_back(shred) returns it once an admin of the performer's account took a provisional erasure back within its 7 days. pm, NOC-326, on the coding agent's proposal (Q7)."
     },
     {
@@ -2080,7 +2080,7 @@
     {
       "id": "part.erasureTextVersion",
       "kind": "part",
-      "text": "its version is not 1",
+      "text": "its version is not one this database knows",
       "when": "Why a text is not an erasure request or a set of sign-offs: its version byte."
     },
     {
@@ -2170,7 +2170,7 @@
     {
       "id": "part.invitationVersion",
       "kind": "part",
-      "text": "its version is unknown",
+      "text": "its version is not one this database knows",
       "when": "Why, in notAnInvitation: its version byte is one this SDK does not know."
     },
     {
@@ -2398,22 +2398,15 @@
       "id": "ts.notAPairingAnswer",
       "kind": "ts",
       "code": "invalidValue",
-      "text": "the text is not a pairing answer: ncdb-pair-1: and unpadded base64url",
+      "text": "the text is not a pairing answer, which is ncdb-pair-1: followed by unpadded base64url",
       "when": "nc.pairingAnswer, given a text that does not start with ncdb-pair-1: or is not unpadded base64url."
-    },
-    {
-      "id": "ts.notAQuery",
-      "kind": "ts",
-      "code": "invalidValue",
-      "text": "not a query",
-      "when": "A subscription to db.find or space.find, given something that is not a query."
     },
     {
       "id": "ts.notAQueryStartOne",
       "kind": "ts",
       "code": "invalidValue",
       "text": "not a query; start one from an index, such as model.tasks.indexes.byPriority",
-      "when": "db.find or space.find, given something that is not a query."
+      "when": "db.find, space.find, or a subscription to either, given something that is not a query."
     },
     {
       "id": "ts.notASafeInteger",
@@ -2438,7 +2431,7 @@
       "id": "ts.notAnInvitation",
       "kind": "ts",
       "code": "invalidValue",
-      "text": "the text is not an invitation: ncdb-invite-1: and unpadded base64url",
+      "text": "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url",
       "when": "nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url."
     },
     {
@@ -2451,7 +2444,7 @@
     {
       "id": "ts.reservedFieldType",
       "kind": "ts",
-      "text": "{path}: {type} is reserved; its field type belongs to a later RFC (RFC 0005).",
+      "text": "{path}: {type} is reserved; its field type comes after 0.1 (RFC 0005).",
       "when": "ncdb model build, on a model with nc.richText or nc.stream, whose field types a later RFC designs."
     },
     {
@@ -2470,7 +2463,7 @@
       "id": "ts.workerFailed",
       "kind": "ts",
       "code": "storageFailed",
-      "text": "the worker failed: {message}",
+      "text": "the database's Web Worker failed: {message}",
       "when": "Every call waiting on the SDK's worker when the worker fails, with the browser's own message."
     }
   ]

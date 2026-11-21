@@ -1,43 +1,44 @@
 ---
-// The scroll scenario on the kit's pinned-chapters moment (see the kit's
-// moments/_demo/in-page-service.html): four steps, each with its drawing.
-// moment.js moves the four figures into the shared frame while the section is held.
-// Each figure carries the drawing twice: wide for screens from 640px, tall for a
-// phone (scene.css shows one of them).
+// The scenario: four steps stacked one under the other at every width, each with
+// its title, its text and its drawing; nothing on it is driven by the scroll (owner,
+// 2026-11-20, NOC-380). From 640px a step is a row, the words at the left and the
+// drawing at the right; a phone stacks the drawing under the words. Each figure
+// carries two drawings: the wide one for screens from 640px, which plays its loop
+// when it comes into view (owner, 2026-11-20, NOC-384; story-motion.mjs), and for a
+// phone a small schematic without text that stands still (owner, 2026-11-20);
+// scene.css shows one of them. The pause control in each figure holds all four
+// drawings; the markup carries it hidden, so without script none stands dead.
 import { STEPS, scene } from "./scene.mjs";
 ---
 
-<section
-  class="section"
-  id="story"
-  style="--h: 2"
-  data-moment="pinned-chapters"
-  data-scene-scope
-  aria-labelledby="story-h"
->
-  <div class="wrap mo-pc__grid">
-    <div class="mo-pc__text">
-      <h2 id="story-h">One task list on a train, in a home office and with an agent</h2>
-      <ol class="mo-pc__steps">
-        {
-          STEPS.map((step, i) => (
-            <li class="mo-pc__step">
-              <h3>{step.title}</h3>
-              <p>{step.text}</p>
-              <figure class="mo-pc__visual" set:html={scene(i, `s${i}`) + scene(i, `s${i}`, "tall")} />
-            </li>
-          ))
-        }
-      </ol>
-    </div>
-    <div class="mo-pc__visuals frame">
-      <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-scene-pause hidden>
-        Pause
-      </button>
-    </div>
+<section class="section" id="story" aria-labelledby="story-h">
+  <div class="wrap story">
+    <h2 id="story-h">Two people, one of them travelling, and an agent work on the same task list</h2>
+    <ol class="story__steps">
+      {
+        STEPS.map((step, i) => (
+          <li class="story__step">
+            <h3>{step.title}</h3>
+            <p>{step.text}</p>
+            <figure class="story__visual">
+              <Fragment set:html={scene(i, `s${i}`, "wide") + scene(i, `s${i}`, "phone")} />
+              <button class="scene-pause" type="button" aria-pressed="false" aria-label="Pause the animation" data-story-pause hidden>
+                Pause
+              </button>
+            </figure>
+          </li>
+        ))
+      }
+    </ol>
   </div>
 </section>
 
 <script>
-  import "./scene-pause.mjs";
+  import { wire } from "./story-motion.mjs";
+
+  wire(document.getElementById("story"), {
+    reduced:
+      matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.shot !== undefined,
+    Observer: IntersectionObserver,
+  });
 </script>

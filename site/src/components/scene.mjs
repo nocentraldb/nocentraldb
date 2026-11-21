@@ -3,9 +3,9 @@
 // function returns the SVG as a string in four states. Colours and type live in
 // site/src/styles/scene.css, on the classes used here.
 // Ported from the prototype the owner accepted on 2026-11-12.
-// Two layouts draw the same states: "wide" (800x600, three copies side by side) for
-// screens from 640px, and "tall" (400x704, the copies stacked, one line per task)
-// for a phone, where the wide drawing's labels would be too small to read.
+// Two layouts: "wide" (800x600, three copies side by side, with their tasks) for
+// screens from 640px, and "phone" (400x260), a schematic of the same step without
+// any text, for a phone (owner, 2026-11-20, NOC-380).
 
 const W = 230;
 const X = { train: 20, home: 285, agent: 550 };
@@ -27,6 +27,9 @@ const pulse = (d, t0, t1) => `
     <animateMotion dur="3.6s" repeatCount="indefinite" calcMode="linear" keyPoints="0;0;1;1" keyTimes="0;${t0};${t1};1" path="${d}"/>
     <animate attributeName="opacity" dur="3.6s" repeatCount="indefinite" values="0;0;1;1;0;0" keyTimes="0;${t0};${(t0 + 0.01).toFixed(2)};${(t1 - 0.01).toFixed(2)};${t1};1"/>
   </circle>`;
+// The agent's reads: a point circling its card's edge once every 1.4 s.
+const circling = (perimeter) =>
+  `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>`;
 
 // One copy of the task list. rows: [title, status, kind]; kind is "origin" (changed here) or "got" (arrived here).
 const card = (who, label, rows, { offline = false, loop = false } = {}) => {
@@ -48,7 +51,7 @@ const card = (who, label, rows, { offline = false, loop = false } = {}) => {
     <text x="${x + 22}" y="${ry + 36}" class="sc-status ${kind === "origin" ? "sc-on-accent" : ""}">${status}</text>`;
       })
       .join("")}
-    ${loop ? `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>` : ""}
+    ${loop ? circling(perimeter) : ""}
   </g>`;
 };
 
@@ -208,110 +211,135 @@ const wide = (st, id) => `${links(st.offline)}${cloud(st.lens, id)}
   ${card("agent", LABEL.agent, st.cards.agent, { loop: st.loop })}
   ${trainPlace(st.tunnel, id)}${housePlace()}${rackPlace()}`;
 
-// The tall layout: the cloud on top, the three copies stacked under it, each with its
-// place drawn small in its header and its own line up the left edge to the cloud.
-const T = { x: 50, w: 336, top: 176, h: 164, gap: 12, head: 56, foot: 138 };
-const LANE = { train: [36, 160], home: [25, 142], agent: [14, 124] }; // [lane x, x at the cloud's foot]
-const tallY = (who) => T.top + WHO.indexOf(who) * (T.h + T.gap);
-const tallUp = (who) => {
-  const [lx, cx] = LANE[who];
-  const by = tallY(who) + 28;
-  return `M${T.x} ${by} H${lx + 10} Q${lx} ${by} ${lx} ${by - 10} V170 C${lx} 150 ${cx} 162 ${cx} ${T.foot}`;
+// The phone layout (owner, 2026-11-20, NOC-380): one small schematic per step and no
+// text at all, since the step's title and text carry the words. The three places as
+// icons with their copy under them (a card of three bars, one per task), the server as
+// a cloud, and one cue for what the step does: a change marked on a bar and its way
+// drawn as an arrow, the lock on the cloud, the train in its tunnel with its link cut.
+const PX = { train: 70, home: 200, agent: 330 }; // the places' centres
+const GROUND = 200;
+const SMALL = 0.38;
+// [the place's centre in the wide drawing, how it is drawn]
+const ICON = {
+  train: [161, (st, id) => trainPlace(st.tunnel, id)],
+  home: [405, () => housePlace()],
+  agent: [665, () => rackPlace()],
 };
-const tallDown = (who) => {
-  const [lx, cx] = LANE[who];
-  const by = tallY(who) + 28;
-  return `M${cx} ${T.foot} C${cx} 162 ${lx} 150 ${lx} 170 V${by - 10} Q${lx} ${by} ${lx + 10} ${by} H${T.x}`;
+const icon = (who, st, id) => {
+  const [centre, draw] = ICON[who];
+  return `<g transform="translate(${(PX[who] - centre * SMALL).toFixed(2)} ${(GROUND - 566 * SMALL).toFixed(2)}) scale(${SMALL})">${draw(st, id)}</g>`;
 };
-// A place at 0.45 of its size, its right edge at `right` and its ground line at `ground`.
-const PLACE = {
-  train: [322, trainPlace],
-  home: [470, housePlace],
-  agent: [735, rackPlace],
+const UP = {
+  train: "M70 152 C70 118 168 122 176 86",
+  home: "M200 152 V86",
+  agent: "M330 152 C330 118 232 122 224 86",
 };
-const tallPlace = (who, tunnel, id, right, ground) => {
-  const [x1, draw] = PLACE[who];
-  return `<g transform="translate(${right - x1 * 0.45} ${ground - 566 * 0.45}) scale(0.45)">${draw(tunnel, id)}</g>`;
+const DOWN = {
+  train: "M176 86 C168 122 70 118 70 152",
+  home: "M200 86 V152",
+  agent: "M224 86 C232 122 330 118 330 152",
 };
-const tallCard = (who, rows, st, id) => {
-  const { x, w, h, head } = T;
-  const y = tallY(who);
-  const offline = who === "train" && st.offline;
-  const perimeter = `M${x + 14} ${y} H${x + w - 14} a14 14 0 0 1 14 14 V${y + h - 14} a14 14 0 0 1 -14 14 H${x + 14} a14 14 0 0 1 -14 -14 V${y + 14} a14 14 0 0 1 14 -14 Z`;
+// The marks on each copy's three bars, and the flows: [who, "up" | "down" | "both"].
+const SKETCH = [
+  {
+    marks: { train: ["", "", ""], home: ["", "", ""], agent: ["", "", ""] },
+    flows: [],
+  },
+  {
+    lock: true,
+    marks: {
+      train: ["origin", "", ""],
+      home: ["got", "", ""],
+      agent: ["got", "", ""],
+    },
+    flows: [
+      ["train", "up"],
+      ["home", "down"],
+      ["agent", "down"],
+    ],
+  },
+  {
+    offline: true,
+    tunnel: "in",
+    marks: {
+      train: ["", "origin", ""],
+      home: ["", "", "origin"],
+      agent: ["", "", "got"],
+    },
+    flows: [
+      ["home", "up"],
+      ["agent", "down"],
+    ],
+  },
+  {
+    tunnel: "out",
+    marks: {
+      train: ["", "got", "got"],
+      home: ["", "got", "got"],
+      agent: ["", "got", "got"],
+    },
+    flows: [["train", "both"]],
+  },
+];
+const copy = (who, marks, offline) => {
+  const x = PX[who];
   return `
-  <g>
-    <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" class="sc-card"/>
-    <text x="${x + 16}" y="${y + 35}" class="sc-label">${LABEL[who]}</text>
-    ${tallPlace(who, st.tunnel, id, x + w - 40, y + head - 6)}
-    <circle cx="${x + w - 20}" cy="${y + 28}" r="5" class="${offline ? "sc-dot-off" : "sc-dot-on"}"/>
-    ${rows
-      .map(([title, status, kind], i) => {
-        const ry = y + head + i * 34;
-        const on = kind === "origin" ? " sc-on-accent" : "";
-        return `
-    <rect x="${x + 8}" y="${ry}" width="${w - 16}" height="30" rx="8" class="sc-row ${kind ? `sc-row-${kind}` : ""}"/>
-    <text x="${x + 20}" y="${ry + 21}" class="sc-title${on}">${title}</text>
-    <text x="${x + w - 20}" y="${ry + 21}" text-anchor="end" class="sc-status${on}">${status}</text>`;
-      })
-      .join("")}
-    ${who === "agent" && st.loop ? `<circle r="5" class="sc-pulse"><animateMotion dur="1.4s" repeatCount="indefinite" path="${perimeter}"/></circle>` : ""}
-  </g>`;
+  <rect x="${x - 32}" y="210" width="64" height="46" rx="8" class="sc-card"/>
+  ${marks.map((mark, i) => `<rect x="${x - 26}" y="${216 + i * 14}" width="52" height="10" rx="3" class="sc-row${mark ? ` sc-row-${mark}` : ""}"/>`).join("")}
+  <circle cx="${x + 42}" cy="214" r="5" class="${offline ? "sc-dot-off" : "sc-dot-on"}"/>`;
 };
-const tallCloud = (lens, id) => `
-  <path transform="translate(-190 -12)" d="M312 150 H490 a44 44 0 0 0 6 -87 a58 58 0 0 0 -108 -20 a50 50 0 0 0 -92 26 a41 41 0 0 0 16 81 Z" class="sc-cloud"/>
-  <text x="210" y="80" text-anchor="middle" class="sc-label">Cloud server</text>
-  <text x="210" y="104" text-anchor="middle" class="sc-cipher">9f3a c01e 77b2</text>
-  <text x="210" y="124" text-anchor="middle" class="sc-cipher">0c6e 1f8b 3d92</text>
-  ${
-    lens
-      ? `
-  <line x1="361" y1="109" x2="384" y2="132" class="sc-handle"/>
-  <circle cx="322" cy="70" r="54" class="sc-lens"/>
-  <clipPath id="${id}-lens-clip"><circle cx="322" cy="70" r="50"/></clipPath>
-  <g clip-path="url(#${id}-lens-clip)">
-    <text x="322" y="50" text-anchor="middle" class="sc-cipher-big">e77b2d54</text>
-    <text x="322" y="79" text-anchor="middle" class="sc-cipher-big">a0c6e1f8</text>
-    <text x="322" y="108" text-anchor="middle" class="sc-cipher-big">b3d92a7e</text>
-  </g>`
-      : ""
-  }`;
-const tall = (st, id) => `
-  ${WHO.map((who) => `<path d="${tallUp(who)}" class="sc-link ${who === "train" && st.offline ? "sc-link-cut" : ""}"/>`).join("")}
-  ${tallCloud(st.lens, id)}
-  ${st.pulses.map(([who, dir, t0, t1]) => pulse((dir === "up" ? tallUp : tallDown)(who), t0, t1)).join("")}
-  ${WHO.map((who) => tallCard(who, st.cards[who], st, id)).join("")}`;
+const flow = ([who, dir], id) => {
+  const d = (dir === "down" ? DOWN : UP)[who];
+  const start = dir === "both" ? ` marker-start="url(#${id}-arrow)"` : "";
+  return `<path d="${d}" class="sc-flow"${start} marker-end="url(#${id}-arrow)"/>`;
+};
+const lock = () => `
+  <path d="M191 50 V44 a9 9 0 0 1 18 0 V50" class="sc-lock"/>
+  <rect x="186" y="50" width="28" height="22" rx="4" class="sc-lock-body"/>`;
+const small = (step, id) => {
+  const st = SKETCH[step];
+  return `
+  <defs><marker id="${id}-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" class="sc-arrow"/></marker></defs>
+  ${WHO.map((who) => `<path d="${UP[who]}" class="sc-link${who === "train" && st.offline ? " sc-link-cut" : ""}"/>`).join("")}
+  <path transform="translate(-48 -7) scale(0.62)" d="M312 150 H490 a44 44 0 0 0 6 -87 a58 58 0 0 0 -108 -20 a50 50 0 0 0 -92 26 a41 41 0 0 0 16 81 Z" class="sc-cloud"/>
+  ${st.lock ? lock() : ""}
+  ${st.flows.map((f) => flow(f, id)).join("")}
+  ${WHO.map((who) => icon(who, st, id)).join("")}
+  ${WHO.map((who) => copy(who, st.marks[who], who === "train" && st.offline)).join("")}`;
+};
 
 // title and text for the step, alt for the drawing's aria-label.
 export const STEPS = [
   {
-    title: "Everyone holds a full copy",
-    text: "The laptop on the train, the desk at home and the agent each keep the whole task list on their own disk. The agent reads its copy as often as it likes, and no read crosses the network.",
-    alt: "A laptop on a train, a desk in a home office and an agent each hold the same three tasks. A cloud server sits between them.",
+    title: "Everyone has the full task list",
+    text: "The traveller, the person in the home office and the agent in the cloud each keep the whole task list on their own disk. Everyone reads locally; reading needs no network connection.",
+    alt: "The traveller on a train, a person in a home office and an agent each hold the same three tasks. A server in the cloud sits between them.",
   },
   {
-    title: "A change travels as ciphertext",
-    text: "The train marks a task as in progress. The change goes through a server in the cloud to the other two. Hold a lens over that server and you see bytes it has no key for.",
-    alt: "The train changes one task. The change travels through the cloud server to the home office and the agent. A lens on the server shows only ciphertext.",
+    title: "A change travels encrypted",
+    text: "The traveller claims a task. The change goes through the server to the other two. The server sees only encrypted bytes and has no key to read them.",
+    alt: "The traveller claims a task. The change travels encrypted through the server to the home office and the agent. A lens on the server shows only encrypted bytes.",
   },
   {
-    title: "The train enters a tunnel",
-    text: "The laptop is offline and its owner keeps working; the change is stored locally. At home and with the agent the work goes on too. They don't see the train's change yet.",
-    alt: "The train is in a tunnel and offline. Its change is stored locally. The home office and the agent keep exchanging changes.",
+    title: "The traveller goes offline",
+    text: "The train enters a tunnel, but the traveller keeps working; the changes are stored locally. The other two carry on from the last state they know and don't see the traveller's changes yet.",
+    alt: "The traveller's train is in a tunnel and offline. The change is stored locally. The home office and the agent keep exchanging changes.",
   },
   {
-    title: "Out of the tunnel, every copy matches",
-    text: "The laptop reconnects. Its change goes out, the others' changes come in, and all three copies end in the same state.",
-    alt: "The train has left the tunnel. Changes cross in both directions and all three copies show the same tasks.",
+    title: "The traveller reconnects",
+    text: "The traveller's changes go out and the others' changes come in. All three copies end up in the same state.",
+    alt: "The traveller is back online. Changes cross in both directions, and all three copies show the same tasks.",
   },
 ];
 
-// The drawing for step 0..3 as an SVG string, in the "wide" or the "tall" layout.
+// The drawing for step 0..3 as an SVG string, in the "wide" or the "phone" layout.
 // idPrefix starts every id inside it, so several drawings can share one page; the
-// tall layout adds "-tall", so a wide and a tall drawing may share a prefix.
+// phone layout adds "-phone", so a wide and a phone drawing may share a prefix.
+// The wide layout loops; the phone layout never moves.
 export function scene(step, idPrefix, layout = "wide") {
   const [box, body] =
-    layout === "tall"
-      ? ["0 0 400 704", tall(STATES[step], `${idPrefix}-tall`)]
+    layout === "phone"
+      ? ["0 0 400 260", small(step, `${idPrefix}-phone`)]
       : ["0 0 800 600", wide(STATES[step], idPrefix)];
   return `<svg class="sc sc--${layout}" viewBox="${box}" role="img" aria-label="${STEPS[step].alt}">${body}</svg>`;
 }

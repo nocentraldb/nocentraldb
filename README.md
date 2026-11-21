@@ -2,7 +2,7 @@
 
 A local-first database for apps where people and agents work on the same data. Everyone works on their own copy, under their own keys, and the server in the middle cannot read any of it.
 
-> **NoCentralDB is not yet a product.** We are currently working on the design and strongly encourage you to share your feedback while changes are still cheap (see the [RFCs](docs/rfc/README.md)). The install commands and the code on this page give you an impression of what the product will look like once the current design is fully implemented.
+> **NoCentralDB 0.1 is a pre-release.** The Rust SDK, the TypeScript SDK in the browser and the relay work today, and names and formats can still change before 1.0. [Getting started](https://nocentraldb.io/docs/) says what 0.1 does and does not do yet, and its two guides take you to a first synced app. We still want your feedback on the design while changes are cheap (see the [RFCs](docs/rfc/README.md)).
 
 ## What it is for
 
@@ -19,31 +19,31 @@ What it does:
 - **Queries that cost only their result.** Queries run through declared indexes and return sorted pages with a cursor.
 - **No keys in your code.** The SDK creates, stores and rotates every key. You work with spaces, members and invitations.
 - **Erasure that destroys a key.** The schema marks personal fields, and each is encrypted with one key per person per space. Erasing the person destroys those keys, which reaches archives and old snapshots too, while the audit trail of who changed what survives.
-- **One core on every platform.** The same Rust core runs natively on desktop and mobile and as WebAssembly in the browser.
+- **One core on every platform.** The same Rust core runs natively and as WebAssembly in the browser, so behaviour never forks by platform.
 
-Check out more [use cases](docs/use-cases.md) for **NoCentralDB** and read the [FAQ](docs/faq.md) for answers to the questions readers ask most often.
+Check out more [use cases](https://nocentraldb.io/docs/use-cases/) for **NoCentralDB** and read the [FAQ](https://nocentraldb.io/docs/faq/) for answers to the questions readers ask most often.
 
 ## Install
 
-Once the first release is out, you will install:
+NoCentralDB 0.1 is in beta: 0.1.0-beta.1 is on npm and crates.io. You install:
 
-- the TypeScript SDK, `@nocentraldb/sdk`, from npm, for web apps, Node and agents written in TypeScript:
-
-  ```sh
-  npm install @nocentraldb/sdk
-  ```
-
-- the Rust SDK, `nocentraldb`, from crates.io:
+- the TypeScript SDK, `@nocentraldb/sdk`, from npm, for web apps in the browser:
 
   ```sh
-  cargo add nocentraldb
+  npm install @nocentraldb/sdk@beta
   ```
 
-- the command-line tool `ncdb`, which builds `model.lock.json` from your schema. How it is distributed is not decided yet.
+- the Rust SDK, `nocentraldb`, for native apps, servers and agents, from crates.io:
+
+  ```sh
+  cargo add nocentraldb@0.1.0-beta.1
+  ```
+
+- the command-line tool `ncdb`, which builds `model.lock.json` from your model, from crates.io with `cargo install ncdb --version 0.1.0-beta.1`. The [guides](https://nocentraldb.io/docs/guides/rust/) run it from a clone of this repository.
 
 ## Code examples
 
-These examples show the planned API, as [RFC 0009](docs/rfc/0009-sdk-api.md) defines it.
+These examples use the TypeScript SDK of 0.1, whose API [RFC 0009](docs/rfc/0009-sdk-api.md) defines; the Rust SDK has the same calls in Rust's style. The [browser guide](https://nocentraldb.io/docs/guides/browser/) builds a whole app with them.
 
 ### Describe the model
 
@@ -119,7 +119,9 @@ A query names a declared index, fixes its leading fields and returns a page in i
 ```ts
 const query = model.tasks.indexes.byStatusPriority.equal("open").take(50);
 const page = await db.find(query);
-const more = await db.find(query.after(page.cursor));
+if (page.cursor) {
+  const more = await db.find(query.after(page.cursor));
+}
 
 const stop = db.subscribe(query, (fresh) => render(fresh));
 ```
@@ -149,7 +151,7 @@ db.sync.current(); // { connection: "connected", unconfirmed: 0, ... }
 
 ## Contributing
 
-NoCentralDB is designed in the open. The contribution we want most right now is feedback on the RFCs: tell us about your app and where the design would break for you, as [Giving feedback](docs/rfc/README.md#giving-feedback) describes.
+NoCentralDB is designed in the open. The contributions we want most right now: build with 0.1 and tell us where it breaks, and give feedback on the RFCs, telling us about your app and where the design would break for you, as [Giving feedback](docs/rfc/README.md#giving-feedback) describes.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) says what we ask for, from RFC feedback to bug reports and offers to take a roadmap milestone, and what a pull request needs.
 - [docs/repository.md](docs/repository.md) explains the repository: its layout, the tools to install and the gates every change passes.

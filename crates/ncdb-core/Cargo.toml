@@ -4,7 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
+homepage.workspace = true
+readme.workspace = true
+description = "The core of NoCentralDB, a local-first database: the signed and encrypted change log, spaces, members and keys, and the local SQLite view it folds into. Apps use it through the Rust SDK, nocentraldb."
+keywords = ["local-first", "database", "crdt", "encryption", "sqlite"]
+categories = ["database-implementations", "cryptography"]
 
 # The change and the log (RFC 0002, NOC-14); signing and sealing it
 # (RFC 0003, NOC-15). Every dependency is pinned to one

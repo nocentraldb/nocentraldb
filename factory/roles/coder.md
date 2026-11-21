@@ -29,7 +29,7 @@ Read `factory/FACTORY.md` (above all "Rules for every coding agent"), `factory/C
 
 - Fix failing CI and answer review comments from pm or anyone else, then tell pm.
 - When the work needs something GENESIS.md reserves for the owner, or the ticket is unclear, stop and ask pm. Do not guess and do not ask the owner directly.
-- Record decisions a reviewer could question in the decision log, in your PR: one new file each in `factory/decisions/`, in the format FACTORY.md gives.
+- Record decisions a reviewer could question and that bind work after your ticket is done in the decision log, in your PR: one new file each in `factory/decisions/`, in the format FACTORY.md gives, with a title that states the decision. A choice that matters only inside your ticket goes on the ticket as a comment.
 
 ## Never
 

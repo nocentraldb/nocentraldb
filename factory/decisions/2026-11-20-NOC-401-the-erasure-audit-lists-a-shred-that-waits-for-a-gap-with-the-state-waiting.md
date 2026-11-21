@@ -1,0 +1,6 @@
+# 2026-11-20 · NOC-401 · The erasure audit lists a shred that waits for a gap in its causal past with the state `waiting`, its performer and sign-off, and no members
+
+- Decided by: Carsten (NOC-392, option A, 2026-11-20); the members left out and the move out of `waiting`: coding agent (NOC-401), following that answer, for the owner's review on the PR
+- Why: a shred over a gap has no verdict and no effect (NOC-391), but the audit should show an erasure that exists and has not taken effect; it waits until sync fills the gap, with no timeout, since a timeout would need a verdict RFC 0008 does not give. The members are those of the shred's causal past, which the copy lacks, so none are listed. Once the gap fills, the shred takes the state its verdict gives (final, provisional, taken back) or leaves the list when rejected, as every rejected shred does. `ncdb-core` keeps each waiting shred in `Resolved::waiting_shreds`. An erasure decision that finalizes and waits leaves its shred `provisional`, which is what it still is.
+- Instead of: a `SpaceStatus` value `erasureWaiting` (option B), which names no erasure; nothing new in 0.1 (option C), which shows a user who erased someone no sign of it
+- Topics: erasure, sdk-ts, sdk-rust, public-api

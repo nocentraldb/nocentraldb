@@ -1,13 +1,17 @@
 // Asserts the rules of .github/workflows/release.yml (epic mt08.q8rt §11,
 // docs/release-management.md "Alpha", "Beta" and "Release") that hold for the
 // workflow as a whole and for every job: the triggers; read-only by default,
-// contents: write on the jobs alpha, publish and commit-back only, verify and
-// build inheriting read; every step of every job runs in bash with pipefail;
+// contents: write on the jobs alpha and publish only, id-token: write with
+// contents: read on alpha-npm, publish-crates and publish-npm, the other jobs
+// inheriting read; the GitHub environment registry-publish on publish-crates
+// and publish-npm only, so no job outside it but alpha-npm holds id-token; every step of every job runs in bash with pipefail;
 // every action is SHA-pinned; every job is bounded in time; a step that
 // derives the basic-auth header from the token masks it before git sees it.
 // The alpha job's own rules are in scripts/release-workflow-alpha.test.mjs,
 // those of alpha-npm in scripts/release-workflow-npm.test.mjs,
-// those of the publish side in scripts/release-workflow-publish.test.mjs.
+// those of the publish side in scripts/release-workflow-publish.test.mjs,
+// and those of its registry jobs in
+// scripts/release-workflow-registries.test.mjs.
 //
 // The workflow is parsed with the `yaml` package and checked by structure.
 // Every check is also run against mutants of the file and must reject each
@@ -22,6 +26,8 @@ import {
   JOBS,
   job,
   load,
+  moveStepOf,
+  runs,
   STEPS,
   stepAt,
   stepsOf,
@@ -37,10 +43,17 @@ const TIMEOUTS = {
   verify: 45,
   build: 45,
   publish: 20,
+  "publish-crates": 45,
+  "publish-npm": 45,
   "commit-back": 15,
   "app-token-check": 5,
 };
 /** The one way a step derives the basic-auth header from GH_TOKEN. */
+/** The GitHub environment crates.io's trusted publishers name (NOC-376). */
+const REGISTRY_ENVIRONMENT = "registry-publish";
+/** The step that builds the npm packages, and the task that installs wasm-bindgen. */
+const NPM_BUILD = "pnpm -r --if-present run build";
+const WASM_RUNNER = "moon run repo:wasm-runner";
 const AUTH = `auth="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"`;
 
 const checks = [
@@ -103,9 +116,15 @@ const checks = [
       // verify and build inherit contents: read from the workflow.
       assert.equal(wf.jobs.verify.permissions, undefined);
       assert.equal(wf.jobs.build.permissions, undefined);
-      // Exactly contents: write; id-token and attestations come with the
-      // registry publishing, which changes this check.
+      // Exactly contents: write: the GitHub release. The registries are
+      // published by jobs that hold the OIDC token and no write (NOC-374).
       assert.deepEqual(wf.jobs.publish.permissions, WRITE);
+      for (const id of ["publish-crates", "publish-npm"])
+        assert.deepEqual(
+          wf.jobs[id].permissions,
+          { contents: "read", "id-token": "write" },
+          id,
+        );
       // commit-back pushes with the release app's token, not github.token,
       // so it inherits contents: read (scripts/release-ruleset.test.mjs).
       assert.equal(wf.jobs["commit-back"].permissions, undefined);
@@ -135,8 +154,61 @@ const checks = [
         ctx.doc.setIn(["jobs", "commit-back", "permissions"], WRITE),
       "drops the publish permissions": (ctx) =>
         ctx.doc.deleteIn(["jobs", "publish", "permissions"]),
+      "grants publish-crates contents: write": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "publish-crates", "permissions", "contents"],
+          "write",
+        ),
+      "drops the id-token of publish-npm": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-npm", "permissions", "id-token"]),
       "adds a job": (ctx) =>
         ctx.doc.setIn(["jobs", "extra"], { "runs-on": "ubuntu-latest" }),
+    },
+  },
+  {
+    // crates.io's trusted publishers name the GitHub environment
+    // registry-publish, so only a job in it can mint a crates.io token
+    // (NOC-376). alpha-npm mints npm tokens for the alphas without it: npm
+    // knows one trusted publisher per package, and alpha-npm must not reach
+    // crates.io.
+    name: "puts exactly publish-crates and publish-npm in the environment registry-publish, and no other job holds id-token: write",
+    check: (ctx) => {
+      const jobs = Object.entries(workflow(ctx).jobs);
+      const inEnvironment = jobs
+        .filter(([, j]) => j.environment !== undefined)
+        .map(([id, j]) => [id, j.environment]);
+      assert.deepEqual(inEnvironment, [
+        ["publish-crates", REGISTRY_ENVIRONMENT],
+        ["publish-npm", REGISTRY_ENVIRONMENT],
+      ]);
+      const outsideWithToken = jobs
+        .filter(([, j]) => j.permissions?.["id-token"] !== undefined)
+        .filter(([, j]) => j.environment !== REGISTRY_ENVIRONMENT)
+        .map(([id]) => id);
+      assert.deepEqual(outsideWithToken, ["alpha-npm"]);
+    },
+    mutants: {
+      "publish-crates leaves the environment": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-crates", "environment"]),
+      "publish-npm leaves the environment": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-npm", "environment"]),
+      "publish-crates in another environment": (ctx) =>
+        ctx.doc.setIn(["jobs", "publish-crates", "environment"], "release"),
+      "alpha-npm in the environment": (ctx) =>
+        ctx.doc.setIn(
+          ["jobs", "alpha-npm", "environment"],
+          REGISTRY_ENVIRONMENT,
+        ),
+      "build holds id-token: write without the environment": (ctx) =>
+        ctx.doc.setIn(["jobs", "build", "permissions"], {
+          contents: "read",
+          "id-token": "write",
+        }),
+      "a new job holds id-token: write without the environment": (ctx) =>
+        ctx.doc.setIn(["jobs", "extra"], {
+          "runs-on": "ubuntu-latest",
+          permissions: { "id-token": "write" },
+        }),
     },
   },
   {
@@ -157,6 +229,8 @@ const checks = [
         ctx.doc.deleteIn(["jobs", "publish", "defaults"]),
       "drops the defaults of commit-back": (ctx) =>
         ctx.doc.deleteIn(["jobs", "commit-back", "defaults"]),
+      "drops the defaults of publish-crates": (ctx) =>
+        ctx.doc.deleteIn(["jobs", "publish-crates", "defaults"]),
     },
   },
   {
@@ -227,6 +301,48 @@ const checks = [
         ctx.doc.deleteIn(["jobs", "publish", "timeout-minutes"]),
       "deletes the timeout of commit-back": (ctx) =>
         ctx.doc.deleteIn(["jobs", "commit-back", "timeout-minutes"]),
+    },
+  },
+  {
+    // packages/sdk/build.mjs runs wasm-bindgen from target/tools, which only
+    // moon run repo:wasm-runner installs (NOC-407).
+    name: "every job that builds the npm packages installs wasm-bindgen first",
+    check: (ctx) => {
+      const builders = JOBS.filter((id) =>
+        stepsOf(ctx, id).some(runs(NPM_BUILD)),
+      );
+      assert.deepEqual(builders, ["alpha-npm", "build", "publish-npm"]);
+      for (const id of builders) {
+        const build = stepAt(ctx, id, runs(NPM_BUILD));
+        const bindgen = stepsOf(ctx, id).findIndex(runs(WASM_RUNNER));
+        assert.ok(
+          bindgen !== -1 && bindgen < build,
+          `${id} builds before wasm-bindgen exists`,
+        );
+      }
+    },
+    mutants: {
+      "build drops the install": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "build",
+          "steps",
+          stepAt(ctx, "build", runs(WASM_RUNNER)),
+        ]),
+      "publish-npm installs after the build": (ctx) =>
+        moveStepOf(
+          ctx,
+          "publish-npm",
+          stepAt(ctx, "publish-npm", runs(WASM_RUNNER)),
+          stepAt(ctx, "publish-npm", runs(NPM_BUILD)),
+        ),
+      "alpha-npm drops the install": (ctx) =>
+        ctx.doc.deleteIn([
+          "jobs",
+          "alpha-npm",
+          "steps",
+          stepAt(ctx, "alpha-npm", runs(WASM_RUNNER)),
+        ]),
     },
   },
   {

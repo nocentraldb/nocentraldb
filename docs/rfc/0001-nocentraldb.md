@@ -4,15 +4,17 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · nocentraldb.io
 
 A local-first database for people and agents.
 
-## For when a central database is the wrong place
+## Reads like local files, syncs like shared docs
 
-Everyone works on their own copy, under their own keys. The relay in the middle cannot read any of it.
+NoCentralDB puts all the data right next to the people and agents who use it. A relay, the server in the middle, keeps everyone in sync, yet it only ever sees encrypted data.
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-NoCentralDB is not released yet. We have started building the core, and this RFC describes the design we are building toward. We want you to challenge it while changes are still cheap. The roadmap shows where we are.
+**At 0.1.** Partly built. Built: spaces, members and roles; the full copy, folded into an SQLite view; the relay, locally on SQLite and on AWS with DynamoDB and S3; island mode; the lock and `ncdb model build`; declared indexes and ordered pages; basic values, sets, links, references and personal fields; plugin field types in the Rust SDK; erasure and its audit; accounts with pairing and a recovery code; synced ad-hoc spaces for sub-agents. Not built: rich text, streams, computed fields and views, work orders with compaction and the archive, the Postgres relay, adapters, the TypeScript SDK outside the browser, and native mobile apps.
 
-Agents now read and write the same data as the people they work with, hundreds of records per task. Today almost every app routes each of those reads through a server, and that server can read everything it stores. NoCentralDB is a local-first database for teams of people and agents. Every member, human or agent, works on a full local copy of the spaces it belongs to, under its own keys. A relay that holds no keys carries the encrypted changes between the members.
+NoCentralDB 0.1 is a pre-release: its alphas are out, and names and formats can still change before 1.0. This RFC describes the whole design we are building toward, and each RFC says under its status what 0.1 builds of it. We want you to challenge the design while changes are still cheap.
+
+Agents now read and write the same data as the people they work with, hundreds of objects per task. Today almost every app routes each of those reads through a server, and that server can read everything it stores. NoCentralDB is a local-first database for teams of people and agents. Every member, human or agent, works on a full local copy of the spaces it belongs to, under its own keys. A relay that holds no keys carries the encrypted changes between the members.
 
 ## The problem
 
@@ -22,11 +24,11 @@ You are building an app where people and agents work on the same data: tickets, 
 - **The server in the middle can read everything.** Row-level rights protect users from each other. They do not protect users from the server, its operators, its backups or the next breach. You have to explain that to your security review every time.
 - **Erasure is a search.** When someone asks you to delete their data, you search the database, the backups, the logs, the search index and the copies your agents made.
 
-For many apps a central database is still the right choice. If you need queries on the server, analytics across all users' data, or one global truth enforced at write time, keep it. This RFC is for the apps where a central database is the wrong place.
+For many apps a central database is still the right choice. If you need queries on the server, analytics across all users' data, or one global truth enforced at write time, keep it. This RFC is for the apps where the data belongs with the people and agents who use it.
 
 ## Why now
 
-Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use, at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold a non-exportable key that a passkey unlocks. A phone can store a team's complete working set. One core written in Rust runs natively and as WebAssembly in the browser.
+Two things changed. First, agents became members of teams. They run on laptops, in sandboxes and on servers, and they need the same data their people use. But agents read text, search data and process it far faster than people do, so the network becomes the bottleneck. Coding agents are fast and capable because everything they need is right next to them, on the same disk. MCP servers work well for occasional searches or changes. Data that an agent searches and processes often, though, has to be there at the speed of local memory. Second, devices can now hold the data and the keys. A browser can hold keys its page cannot read, sealed under a non-extractable WebCrypto key. A phone can store a team's complete working set.
 
 So "trust the server" no longer has to be the default security model. Many apps need neither SQL on a server nor a central database. Your data can live where the work happens, on every device and with every agent you trust, under your own keys. Cloud services carry the encrypted changes but never hold the keys.
 
@@ -41,8 +43,8 @@ So "trust the server" no longer has to be the default security model. Many apps 
 - **Reads cost only their result.** Queries run only through declared indexes. A list of 100 entries is one range lookup, not a hundred fetches. Counts, blockers and rankings are to become computed fields and views that the database updates as it folds new changes; their names are reserved until a later RFC designs them ([RFC 0005, "What this RFC does not cover"](0005-schema-and-model-lock.md#what-this-rfc-does-not-cover)).
 - **Ordered pages.** Every index keeps its order, so results arrive sorted, and you load the next page from a cursor only when you need it. "What should I work on next?" returns the first 50 open tasks in priority order. The next 50 come when you ask for them.
 - **Field types.** Every field has a type, and the type declares how concurrent changes to the field merge. NoCentralDB ships a set of field types (see [Field types we ship](#field-types-we-ship)). You can add your own as a plugin, with its own merge rules, and use it in the schema next to the built-in ones. Each member's core runs the same field types, so every copy merges the same way.
-- **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. The relay sees only an opaque envelope and content-free effects, such as the shred entry an erasure writes ([RFC 0008, "Shred entry"](0008-membership.md#shred-entry)).
-- **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)). Erasing a person destroys every one of those keys: each member destroys its copy as soon as it accepts the erasure, which no later change can undo ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)). The person's fields become unreadable in archives, in old snapshots and on every device that has deleted the key, but not where someone kept the key: on a device that never comes back online, in a modified client that ignores the shred, or for a member of the space who obtains a relay backup taken before the shred ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key); [the team lead](#the-team-lead-who-has-to-pass-the-data-protection-review) below lists every limit). Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design shredding to leave the signatures intact while the person's fields become unreadable.
+- **Work orders.** One member performs a job such as compaction or an erasure, and another member checks it. For a reversible job, a second device cross-checks it. For a job that cannot be undone, a second account signs it off. In 0.1 an erasure runs through `Db::erase` of the Rust SDK, an interim call that the work-order RFC will replace ([RFC 0009, "The Rust SDK"](0009-sdk-api.md#the-rust-sdk); Carsten, 2026-11-20, NOC-362). The relay sees only an opaque envelope and content-free effects, such as the shred entry an erasure writes ([RFC 0008, "Shred entry"](0008-membership.md#shred-entry)).
+- **Shred and audit.** The schema marks personal fields, and the SDK encrypts them with one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)). Erasing a person destroys every one of those keys: each member destroys its copy as soon as it accepts the erasure, which no later change can undo ([RFC 0008, "A shred is final when accepted"](0008-membership.md#a-shred-is-final-when-accepted)). The person's fields become unreadable in archives, in old snapshots and on every device that has deleted the key, but not where someone kept the key: on a device that never comes back online, in a modified client that ignores the shred, or for a member of the space who obtains a relay backup taken before the shred ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key); [the team lead](#the-team-lead-who-has-to-pass-the-data-protection-review) below lists every limit). Compaction does not throw history away. It moves the history, encrypted and signed, into an archive, so who changed what and when stays provable. An audit is a work order that loads the archive and verifies it. We design erasure to leave the signatures intact while the person's fields become unreadable.
 
 ```ts
 import { nc } from "@nocentraldb/sdk";
@@ -89,7 +91,7 @@ Each field type defines how a field stores its value and how concurrent changes 
 
 - **Basic values.** Strings, numbers, booleans and a choice from a fixed list. The last writer wins.
 - **Sets and links.** A set merges additions and removals from every member. A link points to another object in the same space, and computed fields and views, once a later RFC designs them, will follow links, for example to find the open tasks a task depends on.
-- **Rich text** (planned). A shared document, built on Yjs, with Yrs in the core. People edit it in an editor such as TipTap, and concurrent edits merge without conflicts. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the engine turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
+- **Rich text** (planned). A shared document, built on Yjs, with Yrs in the core. People edit it in an editor such as TipTap, and concurrent edits merge without conflicts. Agents read it as Markdown and change it with anchored edits. An anchored edit quotes the text it changes, and the core turns it into minimal operations, so a person typing elsewhere in the document loses nothing.
 - **Stream** (planned). A field that grows chunk by chunk, for example an agent's answer that appears word by word in the user interface. Each chunk travels over the same encrypted change stream as every other change. When the writer closes the stream, the field holds the complete value.
 - **Personal fields.** Only a basic value can be marked as personal, and only when the field is added; it is tied to a person ([RFC 0005, "Personal fields"](0005-schema-and-model-lock.md#personal-fields); [RFC 0005, "What the build checks"](0005-schema-and-model-lock.md#what-the-build-checks)). The SDK then encrypts it with that person's own key, one key per person per space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), so that destroying those keys makes it unreadable wherever the key is gone (see [Shred and audit](#the-design-in-one-page) for where it is not).
 
@@ -136,7 +138,7 @@ Your data protection officer decides whether destroying a key counts as erasure 
 
 ## Example applications
 
-We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above.
+We plan to ship example applications, so that you can try the design in a working app instead of reading about it. Each one follows one of the three people above. The first one's task list, without its agent, is built in Rust and in the browser ([apps/tasks-rust](../../apps/tasks-rust/README.md), [apps/tasks-ts](../../apps/tasks-ts/README.md)); the rest are planned.
 
 1. **Agent task board.** A team's tasks with dependencies, and an agent that is a member of the project's space. The agent picks the next task from its own copy and writes its changes under its own key. It shows spaces, membership, declared indexes and ordered pages, and computed fields and views once a later RFC designs them.
 2. **Customer records with erasure.** A small customer database with personal fields. An erasure is a work order that one member performs and a second account signs off, and the audit trail survives it. It shows personal fields, work orders and the audit.
@@ -156,7 +158,7 @@ Which example would show you whether NoCentralDB fits your app? Tell us, or prop
 
 ## Who is behind it
 
-nxsflow started NoCentralDB. Our own products (nexus-flow, nexflow.it and manufakt.io) are meant to be its first users. In them we hit the limits of folding everyone's data on a server. We would rather design the database in the open than build it in private and ask for trust afterwards. The roadmap shows what is designed, what is being built and what is still open.
+nxsflow started NoCentralDB. Our own products (nexus-flow, nexflow.it and manufakt.io) are meant to be its first users. In them we hit the limits of folding everyone's data on a server. We would rather design the database in the open than build it in private and ask for trust afterwards. Each RFC says under its status what release 0.1 builds of it.
 
 ## Where we want your advice
 
@@ -184,6 +186,23 @@ Groups are not part of the design for now: they were withdrawn by the owner (Car
 
 Two forms were not taken. Groups as members of many spaces, as the first draft of this text had them: a group's membership would live outside the space, and one space's fold would depend on another space's log ([RFC 0008, "Groups"](0008-membership.md#groups)). And groups as lists of members that the SDK expands, which this text followed for part of the same day before the owner withdrew groups altogether.
 
+## Decisions
+
+- **2026-11-11 · A shred is final once a member accepts it; a space with one account erases provisionally for 7 days.** (Carsten, 2026-11-11, NOC-224, NOC-230)
+- **2026-11-11 · No passkey unlocks the browser's wrapping key in v1.** (Carsten, 2026-11-11, NOC-210; [decision](../../factory/decisions/2026-11-11-NOC-175-the-browser-keys-sit-in-indexeddb-under-a-webcrypto-key-and-chromium-tests-them.md))
+- **2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does.** (Carsten, 2026-11-19, NOC-362; [decision](../../factory/decisions/2026-11-19-NOC-362-rfc-0001-opens-with-what-the-product-is-for.md))
+- **2026-11-20 · An erasure stays a work order; 0.1's `Db::erase` is an interim call the work-order RFC will replace.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-erasure-is-a-work-order-0-1-s-db-erase-is-an-interim-call.md))
+
 ## History
 
 - 2026-11-10 · First published (RFC 0001 to RFC 0010 rewritten as fresh texts, NOC-165)
+- 2026-11-11 · The erasure sign-off compares accounts by account key and every recovery key (NOC-196, NOC-201, NOC-205, #200)
+- 2026-11-11 · RFC 0008 makes a shred final when accepted, and widens the sign-off for one admin account (NOC-229, #220)
+- 2026-11-11 · RFC 0001 follows RFC 0008, a shred is final when accepted (NOC-224, #229)
+- 2026-11-12 · RFC 0008 gains the account key statement entry and the provisional erasure (NOC-187, NOC-230, #227)
+- 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
+- 2026-11-19 · RFC 0001 opens with what the product is for, as the landing page's hero does (NOC-362, #387)
+- 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
+- 2026-11-19 · No passkey unlocks the browser's keys in v1 (NOC-362, #389)
+- 2026-11-20 · "Why now" says why agents need their data at the speed of local memory, in the owner's words (NOC-362, #387)
+- 2026-11-20 · Erasure stays a work order, with 0.1's `Db::erase` as an interim call, as the owner answered (NOC-362, #396)

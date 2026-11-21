@@ -2,7 +2,7 @@
 
 This guide builds a small task list on NoCentralDB's TypeScript SDK, the package `@nocentraldb/sdk`, in a web page. You start with one database in one browser. Then you open the page in a second tab, sync through a relay that cannot read your data, and add a second member to a space.
 
-NoCentralDB is not released yet. The SDK works in the browser, and this guide uses only what is merged, but names and formats can still change. Every TypeScript snippet below is type-checked against the SDK in the repository's gates, so the guide cannot drift from the SDK's API.
+NoCentralDB 0.1 is a pre-release: this guide uses only what 0.1 ships, and names and formats can still change before 1.0. Every TypeScript snippet below is type-checked against the SDK in the repository's gates, so the guide cannot drift from the SDK's API.
 
 For a finished page that does the first half of this, see [apps/tasks-ts](../apps/tasks-ts/README.md). [RFC 0009](rfc/0009-sdk-api.md) describes every call. The Rust SDK has [a guide of its own](getting-started.md).
 
@@ -11,7 +11,7 @@ For a finished page that does the first half of this, see [apps/tasks-ts](../app
 - Rust, as `rust-toolchain.toml` pins it, to compile the SDK's core to WebAssembly. `rustup` installs it on the first `cargo` call.
 - Node.js 24 or later and pnpm.
 - A browser with the origin private file system (OPFS), Web Locks and `BroadcastChannel`. Current Chromium, Firefox and Safari have them. The repository runs the SDK's browser tests in Playwright's builds of Chromium, Firefox and WebKit, in a normal window, and the owner handover in a private window too; Playwright's WebKit is not Safari, and no test is skipped in any of them.
-- A clone of this repository. Until the SDK is published to npm, you build your app inside it, in a folder under `apps/`, as [apps/tasks-ts](../apps/tasks-ts/README.md) does: the SDK and the schema build come from the clone. Run every command below from the clone's root.
+- A clone of this repository. In 0.1 you build your app inside it, in a folder under `apps/`, as [apps/tasks-ts](../apps/tasks-ts/README.md) does: `ncdb`, which builds the lock, comes from the clone, and the app's build compiles the SDK from it. The SDK's pre-releases are also on npm, as [Getting started](https://nocentraldb.io/docs/) shows; `ncdb` is not. Run every command below from the clone's root.
 
 ## 1. Make the app
 
@@ -279,7 +279,7 @@ const lock: unknown = await (await fetch("/model.lock.json")).json();
 const db = await nc.open({ model, lock, name: "tasks" });
 
 const otherTab = document.createElement("p");
-otherTab.textContent = "Another tab of this app is open. Until it is back, nothing is saved here.";
+otherTab.textContent = "Another tab of this app is open in this browser, and this app can't save here until that tab runs again. Your changes here wait and are saved then.";
 document.body.append(otherTab);
 
 db.durability.subscribe((durability) => {
@@ -322,6 +322,8 @@ cargo run -q -p ncdb-relay-server --bin ncdb-relay -- \
 ```
 
 Reload both pages once the relay listens; the SDK also connects on its own, after a backoff.
+
+The local relay is for development and small setups. The same relay core also runs serverless on AWS, with DynamoDB and S3: the function is [crates/ncdb-relay-lambda](../crates/ncdb-relay-lambda/README.md) and its infrastructure a CDK app in [infra/aws](../infra/aws/). [The relay](https://nocentraldb.io/docs/concepts/relay/) says what either one sees.
 
 ## 10. Add a member to a space
 
