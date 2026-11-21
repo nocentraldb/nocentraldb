@@ -208,7 +208,7 @@ The lock writes each as a basic value, with its own type id:
 | | Day, `nc.date()` | Point in time, `nc.timestamp()` |
 | --- | --- | --- |
 | TypeScript, read and write | A `string` `"YYYY-MM-DD"`, such as `"2026-11-21"` | A JavaScript `Date` |
-| Rust, read and write | `Date`, with `Date::new(2026, 11, 21)`, `year()`, `month()`, `day()`, and `"2026-11-21"` as its `Display` and `FromStr` | `Timestamp`, with `Timestamp::from_millis(1795288124636)`, `as_millis()`, conversions from and to `std::time::SystemTime`, and `"2026-11-21T19:08:44.636Z"` as its `Display` |
+| Rust, read and write | `Date`, with `Date::new(2026, 11, 21)`, `year()`, `month()`, `day()`, and `"2026-11-21"` as its `Display` and `FromStr` | `Timestamp`, with `Timestamp::from_millis(1795288124636)`, `as_millis()`, `TryFrom` conversions from and to `std::time::SystemTime`, and `"2026-11-21T19:08:44.636Z"` as its `Display` |
 | Written with | `{ birthday: "1990-04-02" }`, and in Rust `Value::from(date)` | `{ occurredAt: new Date() }`, and in Rust `Value::from(timestamp)` |
 | Refused with `invalidValue` | A text that is not `YYYY-MM-DD`, a day that does not exist (`"2026-02-30"`), a year outside 1 to 9999, or a `Date` | An invalid `Date` (`new Date("x")`), one outside the years 1 to 9999, or a `string` or `number` |
 

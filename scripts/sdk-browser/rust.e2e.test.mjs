@@ -61,12 +61,15 @@ const MODEL = `nc.model({
       tags: nc.set(nc.string()),
       project: nc.link("projects"),
       customer: nc.ref("projects"),
+      doneOn: nc.date(),
+      dueAt: nc.timestamp(),
     },
     {
       indexes: {
         byPriority: nc.index(["priority"]),
         byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
         open: nc.index(["status", "priority"], { equal: 1, scope: "space" }),
+        byDueAt: nc.index([{ field: "dueAt", direction: "desc" }]),
       },
     },
   ),

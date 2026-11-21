@@ -239,6 +239,7 @@ The order of an index must be the same on every member and every target, or two 
 - **Text sorts by its UTF-8 bytes** (SQLite's `BINARY` collation), never by a locale's rules. Locale-aware collation depends on the platform's ICU or OS version, which would fork behaviour by platform (principle 7). An app that wants "Ä" next to "A" declares a computed sort key (the later RFC). Locale-aware collation in the index was not taken, because two members could then order the same page differently.
 - **Numbers** sort numerically; integers and floats as SQLite compares them. The canonical encoding of RFC 0002 gives every value one representation, so equal values sort as equal.
 - **An unset field** sorts first in ascending order and last in descending order (SQLite's `NULL` order).
+- **A day and a point in time sort as numbers,** the days since 1970-01-01 or the milliseconds since 1970-01-01T00:00:00.000Z in an `INTEGER` column, which is time order, before 1970 included ([RFC 0005, "Days and points in time"](0005-schema-and-model-lock.md#days-and-points-in-time)). A value that does not fit sorts as unset.
 - **A reference sorts by its 32 bytes** (SQLite's `BLOB` comparison, `memcmp`): first by the target's space id, then by its object id, the same on every target.
 - **The same SQLite version on every target** ([SQLite on each target](#sqlite-on-each-target)), so the comparison code itself is the same.
 
@@ -465,3 +466,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that every member "
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · The table `ad_hoc_copies`, what a rebuild keeps, and RFC 0012's verdict on `OPFSCoopSyncVFS` (NOC-362, #389)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-21 · A day and a point in time sort as numbers, in time order (NOC-412, #430)
