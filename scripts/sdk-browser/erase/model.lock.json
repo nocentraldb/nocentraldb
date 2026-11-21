@@ -1,0 +1,22 @@
+{
+  "collections": {
+    "people": {
+      "fields": {
+        "name": {
+          "personal": { "person": "self" },
+          "rule": 1,
+          "since": 1,
+          "type": "ncdb/string"
+        }
+      },
+      "since": 1
+    }
+  },
+  "format": 1,
+  "model": {
+    "hash": "sha256:15756a80577f6b5c61452efca697aa9b822bf2405fea77f93a1f74223f467ed8",
+    "id": "fb37864e29d1c9de11bffcbf2d42c67b",
+    "version": 1
+  },
+  "plugins": {}
+}

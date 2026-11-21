@@ -37,3 +37,11 @@ fn the_lock_of_the_rust_sdk_tests_is_what_the_build_writes_from_its_schema() {
         "crates/nocentraldb/tests/model/model.lock.json",
     );
 }
+
+#[test]
+fn the_lock_of_the_browser_erasure_test_is_what_the_build_writes_from_its_schema() {
+    check(
+        "scripts/sdk-browser/erase/model.ts",
+        "scripts/sdk-browser/erase/model.lock.json",
+    );
+}

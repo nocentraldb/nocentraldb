@@ -4,6 +4,7 @@ import { defineConfig } from "astro/config";
 import starlightLlmsTxt from "starlight-llms-txt";
 import { API_REFERENCE } from "./src/api-reference.mjs";
 import { currentInstallLines, expressiveNpmLine } from "./src/install.mjs";
+import { OG_IMAGES, ogTags } from "./src/og.mjs";
 import { REPO_DOCS } from "./src/repo-docs.mjs";
 
 // The SDK's npm line in the docs follows release-notes/index.json (NOC-361).
@@ -53,6 +54,12 @@ export default defineConfig({
             crossorigin: true,
           },
         },
+        // Every docs page shares one Open Graph image (NOC-410); the
+        // twitter:card entry replaces Starlight's own, with the same value.
+        ...ogTags(OG_IMAGES.docs).map(([key, name, content]) => ({
+          tag: "meta",
+          attrs: { [key]: name, content },
+        })),
       ],
       sidebar: [
         { label: "Getting started", slug: "docs" },

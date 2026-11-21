@@ -195,7 +195,7 @@ This RFC changes no other RFC and no code. The decided design leads to these tic
 ## How it is tested
 
 - **Unit and gate tests** for the core's refresh: a core that holds the database after another core wrote must read exactly what a freshly opened core reads. This runs natively and in wasm32 like the fold tests, with two cores on one file.
-- **Browser tests in all three engines** (NOC-344's harness): two tabs writing interleaved, a tab stopped inside a transaction (as in the spike), a stolen sync lock, a crashed tab whose transaction rolls back.
+- **Browser tests in all three engines** (NOC-344's harness): two tabs writing interleaved, a tab stopped inside a transaction (as in the spike), a stolen sync lock, a crashed tab whose transaction rolls back, a tab whose `COMMIT` fails, after which another tab takes the database and writes.
 - **Chromium's DevTools freeze** (`Page.setWebLifecycleState`, as TanStack DB #1883 used) for a real freeze in one engine. It does not reproduce iOS.
 - **A real iPhone,** by hand, from the device checklist: a hidden tab frozen while another writes; a tab closed from the tab overview; a tab frozen mid-sync. Whether iOS honours a `strict` IndexedDB transaction on power loss cannot be tested reliably by hand; it stays a stated unknown.
 
@@ -227,10 +227,11 @@ const locked = (wait, fn) =>
 const sahTx = (wait, body) => locked(wait, async () => {
   if (!pool) pool = await sqlite3.installOpfsSAHPoolVfs({ name: "spike-sah", directory: "/spike-sah" });
   else await pool.unpauseVfs();
-  const db = new pool.OpfsSAHPoolDb("/spike.sqlite");
-  try { db.exec("PRAGMA synchronous=FULL"); db.exec("BEGIN IMMEDIATE"); body(db); db.exec("COMMIT"); }
-  finally { db.close(); }
-  pool.pauseVfs();
+  try {
+    const db = new pool.OpfsSAHPoolDb("/spike.sqlite");
+    try { db.exec("PRAGMA synchronous=FULL"); db.exec("BEGIN IMMEDIATE"); body(db); db.exec("COMMIT"); }
+    finally { db.close(); }
+  } finally { pool.pauseVfs(); } // also when COMMIT throws, so the next tab finds the handles free
 });
 
 /** An outbox entry: one IndexedDB transaction, durability "strict". */
@@ -289,3 +290,4 @@ It builds on [RFC 0006](0006-local-view.md), which puts the view on SQLite in a 
 - 2026-11-19 · The RFC follows the glossary's terms, says under its status what 0.1 builds, and states no stale fact about the code (NOC-362, #387)
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-21 · The spike's `sahTx` pauses the pool in a `finally`, so a failed `COMMIT` no longer leaves the tab holding the handles, and the test plan adds a failed `COMMIT`; reported by u/Discordbothost on Reddit (NOC-409, #419)

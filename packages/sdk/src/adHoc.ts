@@ -36,11 +36,11 @@ export const readObjects = () => {
       }
       return object;
     },
-    /** Where `object` came from; `invalidValue` when the SDK did not read it. */
-    sourceOf(object: object): Source {
+    /** Where `object` came from; `invalidValue` with `message` when the SDK did not read it. */
+    sourceOf(object: object, message = texts.AD_HOC_COPY_NOT_READ): Source {
       const source = read.get(object);
       if (source === undefined) {
-        throw new NcError("invalidValue", texts.AD_HOC_COPY_NOT_READ);
+        throw new NcError("invalidValue", message);
       }
       return source;
     },

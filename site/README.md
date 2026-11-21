@@ -30,3 +30,13 @@ With the preview running, `pnpm --dir site shots` writes `drafts/landing-desktop
 ## Brand
 
 Colours, type, logo and copy follow the NoCentralDB brand in `nxsflow/brand`, commit 74bf76f: BRAND.md, section "NoCentralDB (endorsed)". `src/styles/tokens.css` copies `tokens/nocentraldb.css`, formatted by Biome. On top of it the landing page uses two colours: near-black for its grounds and safety yellow #F2DC4B as the one accent, with one section flooded yellow, the close. Hot magenta #FF3D8B (the brand's role `loud`, `--ncdb-loud`) appears only inside the scenario's drawing, as the mark of a live connection. `factory/decisions/2026-11-12-no-ticket-the-landing-page-uses-near-black-and-yellow-with-magenta-only.md` records this; it supersedes the earlier 60/30/10 decision. The landing page is built on a vendored copy of the tasteskill design kit in `public/assets/` (MIT, see `public/assets/LICENSE-taste-skill.md`), which is never edited.
+
+## Open Graph images
+
+Link cards show `public/og/landing.png` for the landing page and `public/og/docs.png` for every docs page (NOC-410), both 1200x630. Their texts and alt texts are in `src/og.mjs`, which `Landing.astro` and the Starlight head in `astro.config.mjs` read for the meta tags. After changing a text, the template or the logo, render them again and commit the PNGs:
+
+```sh
+node site/scripts/og-images.mjs
+```
+
+It needs Playwright's Chromium and the network, for the brand's Google fonts. Each PNG carries the hash of the HTML it was rendered from, so `scripts/og-images.test.mjs` fails on an image that was not rendered again, on a page without `og:image` and on a missing image.
