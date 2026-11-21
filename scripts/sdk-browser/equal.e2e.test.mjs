@@ -1,8 +1,9 @@
 // `.equal()` on every field type an index may fix (RFC 0005, "Indexes":
-// nc.string, nc.int, nc.float, nc.boolean, nc.oneOf, nc.link and nc.ref),
-// in the browser, as an app writes and queries them (NOC-423): a link is
-// the target's `$id`, a reference `{ space, id }`, and a whole float a
-// whole number. Each query finds the one task that holds the value. The
+// nc.string, nc.int, nc.float, nc.boolean, nc.oneOf, nc.date,
+// nc.timestamp, nc.link and nc.ref), in the browser, as an app writes and
+// queries them (NOC-423, NOC-412): a link is the target's `$id`, a
+// reference `{ space, id }`, a whole float a whole number, a day its
+// "YYYY-MM-DD" text and a point in time a Date. Each query finds the one task that holds the value. The
 // bridge's own test is crates/nocentraldb/src/bridge/tests/find_equal.rs.
 //
 // Not part of `pnpm gates`, which runs without browsers: the task
@@ -38,6 +39,8 @@ const FIELDS = [
   "urgent",
   "project",
   "customer",
+  "doneOn",
+  "dueAt",
 ];
 
 /**
@@ -65,6 +68,8 @@ const MODEL = `nc.model({
       urgent: nc.boolean(),
       project: nc.link("projects"),
       customer: nc.ref("projects"),
+      doneOn: nc.date(),
+      dueAt: nc.timestamp(),
     },
     {
       indexes: Object.fromEntries(
@@ -100,6 +105,8 @@ test(".equal() finds the object on every field type an index may fix", async () 
         urgent: true,
         project: p,
         customer: ref(p),
+        doneOn: "1969-12-31",
+        dueAt: new Date(-1),
       });
       const b = await created(model.tasks, {
         title: "b",
@@ -109,6 +116,8 @@ test(".equal() finds the object on every field type an index may fix", async () 
         urgent: false,
         project: q,
         customer: ref(q),
+        doneOn: "2026-11-21",
+        dueAt: new Date(1795288124636),
       });
       const name = (task) =>
         task.$id === a ? "a" : task.$id === b ? "b" : "?";
@@ -123,6 +132,10 @@ test(".equal() finds the object on every field type an index may fix", async () 
         ["project", q],
         ["customer", ref(p)],
         ["customer", ref(q)],
+        ["doneOn", "1969-12-31"],
+        ["doneOn", "2026-11-21"],
+        ["dueAt", new Date(-1)],
+        ["dueAt", new Date(1795288124636)],
       ];
       const results = [];
       for (const [field, value] of cases) {
@@ -150,6 +163,10 @@ test(".equal() finds the object on every field type an index may fix", async () 
     ["project", ["b"]],
     ["customer", ["a"]],
     ["customer", ["b"]],
+    ["doneOn", ["a"]],
+    ["doneOn", ["b"]],
+    ["dueAt", ["a"]],
+    ["dueAt", ["b"]],
   ]);
   assert.deepEqual(errors, []);
 });

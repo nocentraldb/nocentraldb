@@ -8,7 +8,7 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript.
+**At 0.1.** Partly built. Built: the schema functions `nc.*`, `ncdb model build` and `ncdb model check`, the lock and its checks when a database opens, personal fields and references. Not built: rich text and streams, which the build refuses; computed fields and views, which keep their names only; plugin field types in the TypeScript schema; `space.inspect`, `$raw` and `$conflicts`; and `samePersonAs` in TypeScript. Days and points in time, `nc.date()` and `nc.timestamp()`, came after 0.1.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0005: The schema language and model.lock.json](https://github.com/nocentraldb/nocentraldb/discussions/144), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -111,6 +111,8 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.float()` | `ncdb/float` | Basic value | An IEEE 754 binary64 number |
 | `nc.boolean()` | `ncdb/boolean` | Basic value | `true` or `false` |
 | `nc.oneOf([...])` | `ncdb/choice` | Basic value | One of the listed options, or an unknown option kept as written |
+| `nc.date()` | `ncdb/date` | Basic value whose value is a calendar day ([RFC 0004, "Days and points in time"](0004-merge-rules-basic-types.md#days-and-points-in-time)) | A day, with no time and no time zone |
+| `nc.timestamp()` | `ncdb/timestamp` | Basic value whose value is a point in time to the millisecond, in UTC | A point in time |
 | `nc.set(element)` | `ncdb/set` | Set: add wins, lost removals stay readable | The elements, in the order of their canonical bytes |
 | `nc.link("collection")` | `ncdb/link` | Basic value whose value is an object id | The target, with its resolution status |
 | `nc.links("collection")` | `ncdb/links` | Set of object ids | The targets, each with its resolution status |
@@ -118,7 +120,7 @@ Each function returns a field. The functions map to the field types of [RFC 0001
 | `nc.richText()` | reserved | Later RFC (Yjs and Yrs) | Later RFC |
 | `nc.stream()` | reserved | Later RFC | Later RFC |
 
-`nc.set` takes one of the basic value functions as its element: `nc.set(nc.string())`, `nc.set(nc.oneOf(["bug", "feature"]))`. A set of links is `nc.links`, not `nc.set(nc.link(...))`.
+`nc.set` takes one of the basic value functions as its element, except `nc.date()` and `nc.timestamp()`: `nc.set(nc.string())`, `nc.set(nc.oneOf(["bug", "feature"]))`. A set of links is `nc.links`, not `nc.set(nc.link(...))`.
 
 `nc.link` and `nc.links` take one collection name, or a list of them when a link may point into several collections: `nc.links(["tasks", "milestones"])`. A link always points into the object's own space (RFC 0004).
 
@@ -171,6 +173,57 @@ A reference gives no access to the target's space, and keeps no referential inte
 
 A reference takes `.describe(` and `.deprecated(`. It cannot be `.personal(`, and cannot be the `person` of a personal field: a personal field is sealed under its person's key in its own space ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)), and a person who lives in another space has no key there that a shred could destroy. There is no field of many references in v1: `nc.set` takes basic values only, and there is no `nc.refs`. `nc.refs("collection")`, a set of references, was not taken: it would be a second type, and a field with many values cannot be indexed in v1. Many references can come later as a field type of their own, without changing `ncdb/ref`.
 
+### Days and points in time
+
+Two field types hold dates, and they answer two different questions (Carsten, 2026-11-21, NOC-412). `nc.date()` holds a calendar day, such as a birthday or the day a task was done: it has no time and no time zone, and is the same day wherever it is read. `nc.timestamp()` holds a point in time, such as when an event occurred: an instant to the millisecond, in UTC. Both merge as basic values, the last writer wins ([RFC 0004, "Days and points in time"](0004-merge-rules-basic-types.md#days-and-points-in-time)):
+
+```ts
+import { nc } from "@nocentraldb/sdk";
+
+export const model = nc.model({
+  people: nc.collection({
+    name: nc.string().personal({ person: "self" }),
+    birthday: nc.date().personal({ person: "self" }),
+    diedOn: nc.date().personal({ person: "self" }),
+  }),
+  events: nc.collection(
+    {
+      title: nc.string(),
+      occurredAt: nc.timestamp(),
+      doneOn: nc.date(),
+    },
+    { indexes: { byOccurredAt: nc.index([{ field: "occurredAt", direction: "desc" }]) } },
+  ),
+});
+```
+
+The lock writes each as a basic value, with its own type id:
+
+```json
+{ "birthday": { "personal": { "person": "self" }, "rule": 1, "since": 1, "type": "ncdb/date" } }
+```
+
+**How the SDKs give them to the app.**
+
+| | Day, `nc.date()` | Point in time, `nc.timestamp()` |
+| --- | --- | --- |
+| TypeScript, read and write | A `string` `"YYYY-MM-DD"`, such as `"2026-11-21"` | A JavaScript `Date` |
+| Rust, read and write | `Date`, with `Date::new(2026, 11, 21)`, `year()`, `month()`, `day()`, and `"2026-11-21"` as its `Display` and `FromStr` | `Timestamp`, with `Timestamp::from_millis(1795288124636)`, `as_millis()`, `TryFrom` conversions from and to `std::time::SystemTime`, and `"2026-11-21T19:08:44.636Z"` as its `Display` |
+| Written with | `{ birthday: "1990-04-02" }`, and in Rust `Value::from(date)` | `{ occurredAt: new Date() }`, and in Rust `Value::from(timestamp)` |
+| Refused with `invalidValue` | A text that is not `YYYY-MM-DD`, a day that does not exist (`"2026-02-30"`), a year outside 1 to 9999, or a `Date` | An invalid `Date` (`new Date("x")`), one outside the years 1 to 9999, or a `string` or `number` |
+
+- **A day in TypeScript is a `string`.** The text sorts, compares with `===`, survives `JSON.stringify` unchanged and reads as what it is. A JavaScript `Date` was not taken for a day: a `Date` is a point in time, and which day it falls on depends on a time zone the SDK cannot know, so a birthday written at midnight in Berlin would read as the day before in New York. `Temporal.PlainDate`, the type JavaScript's Temporal adds for exactly this, was not taken for v1: the SDK would need it in every engine it supports, or ship a polyfill. A field function typed `Temporal.PlainDate` can come later, with the same field type `ncdb/date`, as a `bigint` variant of `nc.int` can.
+- **A point in time in TypeScript is a `Date`.** It holds exactly a millisecond in UTC, which is the field's value, and every library that formats dates takes it. The read gives a new `Date` each time, so an app that changes it changes nothing stored. A `number` of milliseconds was not taken: `nc.Infer` could not tell it from an `nc.int`, and an app would write seconds where milliseconds are meant without an error. An ISO text was not taken: an app could write `"2026-11-21T20:08:44+01:00"`, and the SDK would have to choose what that means.
+- **The Rust SDK has two types of its own,** `Date` and `Timestamp`, as it has `Reference`, read with `get::<Date>` and `get::<Timestamp>`. A `SystemTime` converts to a `Timestamp` by rounding down to the millisecond, toward the past, so the TypeScript and the Rust SDK store the same value for the same instant. The types of `chrono`, `time` or `jiff` were not taken for the public API: the SDK's API would then follow another crate's major versions, and apps use different ones. Conversions to them can come later, behind features.
+
+**Time zones.** A point in time is one absolute moment. It is stored in UTC, with no zone, and every reader shows the same moment in its own zone: a moment entered at 12:00 in London shows as 13:00 in Berlin, in winter and in summer alike, with `toLocaleString` or `Intl.DateTimeFormat`. The SDKs never apply a zone; showing a moment in the reader's zone is the app's job. A day is never converted: a birthday on 21 November stays the 21st in every zone, which is why it is a type of its own. Which day "today" is, or which moment "9:00 in Berlin" is, depends on a zone the app chooses, so the app works it out before it writes. A future appointment fixed to a local wall-clock time, such as "every Monday at 9:00 in Berlin", needs the zone's name as well, which the app stores in a field of its own: the moment alone would move the appointment when the zone's rules change, for example when a country changes its summer time. A time zone stored with each point in time was not taken ([RFC 0004, "Days and points in time"](0004-merge-rules-basic-types.md#days-and-points-in-time)).
+
+**Indexes.** Both can be indexed. The view stores each as an SQLite `INTEGER`, the day count or the milliseconds, so an index sorts them as numbers, which is chronological order, the same on every member and every target ([RFC 0006, "The order of values"](0006-local-view.md#the-order-of-values)). An unset field and a value that does not fit sort as unset, first in ascending order.
+
+**Dates kept as text.** A field that holds dates as text, such as `nc.string()` with `"2026-11-21"`, stays a text field: moving it to `nc.date()` changes its type, which [the additive-change rule](#the-additive-change-rule) refuses, because old clients would merge and read its values by another rule. The app adds a new `nc.date()` field, writes each value into it, and deprecates the text field. Old clients keep and forward the new field's changes and fold them after they upgrade, as for every new field ([Data from a newer model](#data-from-a-newer-model)).
+
+`nc.date()` and `nc.timestamp()` take `.personal(`, `.describe(` and `.deprecated(`, as every basic value does: a birthday is personal data and can be erased like a name. They cannot be the element of `nc.set` in v1. A set orders its elements by their canonical bytes ([RFC 0004, "Sets"](0004-merge-rules-basic-types.md#sets)), where every positive integer comes before every negative one, so a set of days before and after 1970 would read out of order. A set of days can come later as a new field function, without changing `ncdb/date`.
+
 ### No required fields and no defaults
 
 Every field may be unset. A field nobody has written reads as unset (`undefined` in TypeScript), whatever its type. There is no `required` and no default value in v1.
@@ -196,7 +249,7 @@ GENESIS.md's principle 6 says queries run only through declared indexes. The sch
 - `nc.index(fields, options)` takes the fields in index order. Each is a field name, which sorts ascending, or `{ field, direction }` with `direction` `"asc"` or `"desc"`.
 - The option `equal` is the number of leading fields a query must fix with equality, 0 by default. `byStatusPriority` above has `equal: 1`: a query on it names one status and pages through that status's tasks by priority.
 - The option `scope: "space"` puts the space id before the index's fields, so that a query on it runs in one space, through `space.find` ([RFC 0009, "Queries and indexes"](0009-sdk-api.md#queries-and-indexes)). Without it, an index spans every space of the member. Where the space id goes among the index's columns is RFC 0006's.
-- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`), single links (`nc.link`) and references (`nc.ref`). A reference indexes as one column, the target's space id followed by its object id, as stored and whatever its state, so the index is the same on every member of the space ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
+- An index can use basic values (`nc.string`, `nc.int`, `nc.float`, `nc.boolean`, `nc.oneOf`, `nc.date`, `nc.timestamp`), single links (`nc.link`) and references (`nc.ref`). A reference indexes as one column, the target's space id followed by its object id, as stored and whatever its state, so the index is the same on every member of the space ([RFC 0006, "Declared indexes"](0006-local-view.md#declared-indexes)). Sets, many links, rich text, streams and plugin types cannot be indexed in v1: a field with many values, or with no order of its own, needs its own rule for which rows it puts in an index. Computed fields in indexes belong to the computed-fields RFC.
 - A personal field can be indexed. The view holds it in plaintext on the device anyway, and erases it from the view and its indexes after a shred (RFC 0006).
 
 Everything else about an index is [RFC 0006, "Declared indexes and ordered pages"](0006-local-view.md#declared-indexes-and-ordered-pages): every index ends with the space id and the object id so its order is total, how values compare (text by its UTF-8 bytes, unset first in ascending order), the one query shape, the check that every query uses its index, and keyset cursors.
@@ -205,7 +258,7 @@ An index is local: it is built from the view on each device and never travels in
 
 ### Types for the app
 
-`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional; a choice as the union of its options and `nc.Unknown`, `{ unknown: rawValue }`, for an option the lock does not list yet; a link as an object id; and a reference as `{ space, id }`, the target's space id and object id, in the form `$space` and `$id` carry them ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)). It types an `nc.int` field as a `number`: a write must be a safe integer, between −(2^53 − 1) and 2^53 − 1, or the SDK refuses it with `invalidValue`. A stored value beyond that range, which another member or the Rust SDK can write, reads `undefined` and is named in `$raw`, and `space.inspect` returns it exactly, as a `bigint`. A set of ints that holds such an element reads the same way, as a whole. Ints in apps are priorities, counts, sizes and positions, far below 2^53, while a JavaScript `number` holds integers exactly only up to 2^53 − 1; values beyond the range show up in `$raw`, never silently rounded (principle 4). `bigint` was not taken: exact, but every read and write would use `3n`, `JSON.stringify` throws on it, and mixing it with a `number` throws. Nor was `number | bigint`, where every use of every int field has to handle both types. A variant typed `bigint` can come later as a new field function, with the same field type `ncdb/int`. How reads expose conflicts, lost removals, a link's status and a reference's state is [RFC 0009's](0009-sdk-api.md#conflicts-lost-removals-and-link-states): `space.inspect` gives a reference's state as `status`, `"ok"`, `"notAccessible"` or `"missing"`.
+`nc.Infer<typeof model.tasks>` is the TypeScript type of a task as the app reads it: every field optional; a choice as the union of its options and `nc.Unknown`, `{ unknown: rawValue }`, for an option the lock does not list yet; a day as a `string` `"YYYY-MM-DD"` and a point in time as a `Date` ([Days and points in time](#days-and-points-in-time)); a link as an object id; and a reference as `{ space, id }`, the target's space id and object id, in the form `$space` and `$id` carry them ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)). It types an `nc.int` field as a `number`: a write must be a safe integer, between −(2^53 − 1) and 2^53 − 1, or the SDK refuses it with `invalidValue`. A stored value beyond that range, which another member or the Rust SDK can write, reads `undefined` and is named in `$raw`, and `space.inspect` returns it exactly, as a `bigint`. A set of ints that holds such an element reads the same way, as a whole. Ints in apps are priorities, counts, sizes and positions, far below 2^53, while a JavaScript `number` holds integers exactly only up to 2^53 − 1; values beyond the range show up in `$raw`, never silently rounded (principle 4). `bigint` was not taken: exact, but every read and write would use `3n`, `JSON.stringify` throws on it, and mixing it with a `number` throws. Nor was `number | bigint`, where every use of every int field has to handle both types. A variant typed `bigint` can come later as a new field function, with the same field type `ncdb/int`. How reads expose conflicts, lost removals, a link's status and a reference's state is [RFC 0009's](0009-sdk-api.md#conflicts-lost-removals-and-link-states): `space.inspect` gives a reference's state as `status`, `"ok"`, `"notAccessible"` or `"missing"`.
 
 ## The structure of model.lock.json
 
@@ -369,7 +422,7 @@ Per field:
 
 A field type is referenced by its **type id** and its **rule version**:
 
-- **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref`. Rule version 1 is RFC 0004's rule for each.
+- **Built-in types** have ids in the namespace `ncdb/`, which is reserved: `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/date`, `ncdb/timestamp`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref`. Rule version 1 is RFC 0004's rule for each.
 - **Plugin types** have ids `<namespace>/<name>`, where the namespace is a key of `plugins`. The entry names the plugin's packages, so a developer knows which crate to register with the core ([RFC 0011, "Handing plugins to the core"](0011-plugin-field-types.md#handing-plugins-to-the-core)):
 
 ```json
@@ -599,6 +652,8 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 | `nc.float` | A binary64 number, basic value | new |
 | `nc.boolean` | A boolean, basic value | new |
 | `nc.oneOf` | A choice from a fixed list of options, basic value | RFC 0001 |
+| `nc.date` | A calendar day, basic value | new |
+| `nc.timestamp` | A point in time to the millisecond, in UTC, basic value | new |
 | `nc.set` | A set of basic values | new |
 | `nc.link` | A link to one object | new |
 | `nc.links` | Links to many objects | RFC 0001 |
@@ -633,7 +688,7 @@ Every public name this RFC introduces or keeps, in one place. They are the first
 | Index keys `fields` (`field`, `direction`), `equal`, `scope`, `since` | new |
 | Field keys `type`, `rule`, `since`, `options`, `of`, `targets`, `personal` (`person`), `description`, `deprecated`, `deprecatedReason`, `config` | new |
 | Plugin keys `npm`, `crate` | new |
-| The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref` | new |
+| The type id namespace `ncdb/` and the ids `ncdb/string`, `ncdb/int`, `ncdb/float`, `ncdb/boolean`, `ncdb/choice`, `ncdb/date`, `ncdb/timestamp`, `ncdb/set`, `ncdb/link`, `ncdb/links`, `ncdb/ref` | new |
 
 ## How this RFC is tested
 
@@ -648,6 +703,11 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - **2026-11-12 · A plugin field's `config` is part of its merge rule and cannot change.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-field-s-config-is-part-of-its-merge.md))
 - **2026-11-12 · The core keeps the person id in the hidden field `$person`.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
 - **2026-11-20 · A plugin field is Rust only in v1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-plugin-field-types-are-rust-only-in-v1.md))
+- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** (Carsten, 2026-11-21, NOC-412; [decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
+- **2026-11-21 · A day is `nc.date()` and `ncdb/date`, a point in time `nc.timestamp()` and `ncdb/timestamp`, in Rust `Date` and `Timestamp`.** (Carsten, 2026-11-21, NOC-434, answer 1a; [decision](../../factory/decisions/2026-11-21-NOC-412-day-and-point-in-time-are-nc-date-and-nc-timestamp.md))
+- **2026-11-21 · TypeScript reads and writes a day as a `"YYYY-MM-DD"` string and a point in time as a `Date`.** (Carsten, 2026-11-21, NOC-434, answer 4a; [decision](../../factory/decisions/2026-11-21-NOC-412-typescript-reads-a-day-as-a-string-and-a-point-in-time-as-a-date.md))
+- **2026-11-21 · The Rust SDK has its own `Date` and `Timestamp` types, and a `SystemTime` rounds down to the millisecond.** (Carsten, 2026-11-21, NOC-434, answer 5a; [decision](../../factory/decisions/2026-11-21-NOC-412-the-rust-sdk-has-its-own-date-and-timestamp-types.md))
+- **2026-11-21 · Days and points in time are no set elements in v1.** (Carsten, 2026-11-21, NOC-434, answer 6a; [decision](../../factory/decisions/2026-11-21-NOC-412-days-and-points-in-time-are-no-set-elements-in-v1.md))
 
 ## History
 
@@ -659,3 +719,4 @@ It starts from the example in [RFC 0001, "The design in one page"](0001-nocentra
 - 2026-11-19 · A plugin is registered with the core, never loaded (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A plugin field is Rust only in v1, as the owner answered (NOC-362, #396)
+- 2026-11-21 · Days and points in time: `nc.date()` and `nc.timestamp()`, as the owner answered (NOC-412, NOC-434, #430)

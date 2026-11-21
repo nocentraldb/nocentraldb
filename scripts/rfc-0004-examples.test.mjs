@@ -1,6 +1,7 @@
 // Checks the byte-exact examples of RFC 0004, "Byte-exact examples": E1 to
 // E14 (NOC-37), which NOC-16 and NOC-17 build their encoders from, and E15
-// to E17 (NOC-63, the reference): every example's hex in the
+// to E17 (NOC-63, the reference), and E18 to E20 (NOC-412, a day and a point
+// in time): every example's hex in the
 // RFC decodes as canonical CBOR under RFC 0002's profile (read strictly and
 // re-encoded to the same bytes), and equals the committed vector that
 // docs/rfc/vectors/0004/generate.py writes with Python's cbor2, independently
@@ -51,10 +52,10 @@ const examples = () => {
   return found;
 };
 
-test("the RFC has the examples E1 to E17", () => {
+test("the RFC has the examples E1 to E20", () => {
   assert.deepEqual(
     Object.keys(examples()),
-    Array.from({ length: 17 }, (_, i) => `E${i + 1}`),
+    Array.from({ length: 20 }, (_, i) => `E${i + 1}`),
   );
 });
 

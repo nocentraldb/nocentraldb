@@ -1,4 +1,4 @@
-//! The byte-exact examples E1 to E17 of RFC 0004 ("Byte-exact examples"), with the ids, members and types they use.
+//! The byte-exact examples E1 to E20 of RFC 0004 ("Byte-exact examples"), with the ids, members and types they use.
 //! The vectors are written by
 //! `docs/rfc/vectors/0004/generate.py` with cbor2, independently of this
 //! crate; include_str! puts them into the test binary, so the tests also
@@ -35,6 +35,9 @@ pub const E14: &str = include_str!("../../../../docs/rfc/vectors/0004/E14.hex");
 pub const E15: &str = include_str!("../../../../docs/rfc/vectors/0004/E15.hex");
 pub const E16: &str = include_str!("../../../../docs/rfc/vectors/0004/E16.hex");
 pub const E17: &str = include_str!("../../../../docs/rfc/vectors/0004/E17.hex");
+pub const E18: &str = include_str!("../../../../docs/rfc/vectors/0004/E18.hex");
+pub const E19: &str = include_str!("../../../../docs/rfc/vectors/0004/E19.hex");
+pub const E20: &str = include_str!("../../../../docs/rfc/vectors/0004/E20.hex");
 
 pub fn hex(text: &str) -> Vec<u8> {
     let text: String = text.split_whitespace().collect();
@@ -130,6 +133,20 @@ pub fn customer() -> Reference {
 /// The reference to `object` in `S`, as a set writes it.
 pub fn reference(object: ObjectId) -> Value {
     reference::value(Target { space: S, object })
+}
+
+// The fields `doneOn` and `occurredAt` of the collection `events` (RFC 0004's
+// byte-exact examples E18 to E20).
+pub fn done_on() -> BasicValue {
+    BasicValue {
+        kind: basic::Kind::Date,
+    }
+}
+
+pub fn occurred_at() -> BasicValue {
+    BasicValue {
+        kind: basic::Kind::Timestamp,
+    }
 }
 
 /// A set, from the example's origin.

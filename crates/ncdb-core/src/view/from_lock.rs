@@ -180,6 +180,8 @@ fn field_type(field: &model_lock::Field, registry: &Registry) -> Option<Field> {
         model_lock::Kind::Float => basic(Kind::Float),
         model_lock::Kind::Boolean => basic(Kind::Boolean),
         model_lock::Kind::Choice(options) => basic(choice(options)),
+        model_lock::Kind::Date => basic(Kind::Date),
+        model_lock::Kind::Timestamp => basic(Kind::Timestamp),
         model_lock::Kind::Set(element) => Some(Field::Set(Set {
             kind: element_kind(element),
         })),
