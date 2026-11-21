@@ -26,7 +26,6 @@ use ncdb_core::log::{Position, State};
 use ncdb_core::membership::MemberKind;
 use ncdb_core::model_lock::ModelLock;
 use ncdb_core::plugins::Registry;
-use ncdb_core::receive::Checks;
 use ncdb_core::view::{Model, View};
 
 use crate::durability::Storage;
@@ -135,16 +134,16 @@ impl SpaceState {
     /// A space whose log `view` holds, as a reopened database finds it:
     /// its checks learn every folded control change of the log, and with
     /// them the membership and the space keys the envelopes give the
-    /// member. The clock observes the log on the next write (`crate::next`).
+    /// member, all at once, so the checks resolve them once (NOC-438). The
+    /// clock observes the log on the next write (`crate::next`).
     pub(crate) fn from_log(view: &View, space: CoreSpaceId, member: MemberKey) -> SpaceState {
         let mut state = SpaceState::new(space, member);
         if let Some(log) = view.log(space) {
-            for (_, change) in log.after(Position::START) {
-                let folded = matches!(log.state(change.id()), Some(State::Folded { .. }));
-                if folded && change.header().kind == Kind::CONTROL {
-                    state.checks.add_control(change);
-                }
-            }
+            let controls = log.after(Position::START).filter(|(_, change)| {
+                change.header().kind == Kind::CONTROL
+                    && matches!(log.state(change.id()), Some(State::Folded { .. }))
+            });
+            state.checks.add_controls(controls.map(|(_, change)| change));
         }
         state
     }
