@@ -10,7 +10,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0013 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft. The owner has answered five of its eight choices (Carsten, 2026-11-21, NOC-430): D1, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces. D2 waits for the owner, explained again. D4 and D5 are open: D5, how an agent edits, goes to a research note first (NOC-436), and D4 is decided with it. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
+**Status.** Draft. The owner has answered six of its eight choices (Carsten, 2026-11-21, NOC-430): D1, D2, D3, D6 and D8 as recommended, and D7 with mentions as a recommendation, not a rule the core enforces. D4 and D5 are open, each waiting for a research note: D4, which nodes the core knows, for NOC-437, which asks whether every client can keep editing a document whose parts it cannot interpret; D5, how an agent edits, for NOC-436. [Decisions for the owner](#decisions-for-the-owner) shows each. Nothing is built. Once decided, the [changes to the decided RFCs](#changes-to-the-decided-rfcs) are written into their texts.
 
 **At 0.1.** Not built. Release 0.1 has no rich text: `nc.richText` stays reserved, and nothing of this design is built.
 
@@ -183,7 +183,7 @@ A rich-text field's read value is its document. The core renders it on read, fro
 - **As a tree**, the ProseMirror JSON of the document (`{ type, attrs, content, marks, text }`), as `Data` in Rust and as a plain object in TypeScript, for apps that render the document themselves.
 - **Its mentions**, the references the mention nodes hold, for an app that resolves names.
 
-Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. Which vocabulary that is, or whether the app owns it, is open ([D4](#d4-the-document-vocabulary)). With D4's option A, the Markdown rendering knows the names TipTap's StarterKit and its task lists use:
+Storing and syncing a document needs no vocabulary: the core only applies Yjs updates. It needs one only where it renders the document itself, as Markdown. Which vocabulary that is, or whether the app owns it, is open ([D4](#d4-the-document-vocabulary), NOC-437). With D4's option A, the Markdown rendering knows the names TipTap's StarterKit and its task lists use:
 
 | Node or mark | Markdown |
 | --- | --- |
@@ -315,9 +315,9 @@ The versions of Yrs and Yjs are pinned exactly, and an upgrade of either has to 
 | # | Choice | Recommendation | State |
 | --- | --- | --- | --- |
 | D1 | How Yjs client ids are drawn | Derived from the member and a nonce, checked on fold, reused through a lease | Accepted (Carsten, 2026-11-21) |
-| D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone | Waits for the owner, explained again |
+| D2 | How a rejected change is un-folded | Its items stay as deleted placeholders; its deletions are undone | Accepted (Carsten, 2026-11-21) |
 | D3 | When the editor writes a change | At each pause: 500 ms idle, at most 2 s, and on close or hide | Accepted (Carsten, 2026-11-21) |
-| D4 | Which nodes the core knows | Open until D5 is settled | Open, decided with D5 |
+| D4 | Which nodes the core knows | Open until the research note | Open, research note NOC-437 |
 | D5 | How an agent edits | Open until the research note | Open, research note NOC-436 |
 | D6 | What `space.get` returns for the field | The Markdown, as a string | Accepted (Carsten, 2026-11-21) |
 | D7 | Personal rich text | Not in rule 1; mentions store only a reference to the person | Accepted, the mention as a recommendation (Carsten, 2026-11-21) |
@@ -335,7 +335,9 @@ The owner answered on NOC-430.
 
 ### D2. Un-folding a rejected change
 
-**Waits for the owner.** A change can be rejected after the fact: for example, its author was removed from the space, and the removal arrives after the change. Its edits must then come out of the document. With most field types that is easy: recompute the field without the change. With Yjs it is not, because other people's later edits are tied to the characters it inserted. [Un-folding a rejected change](#un-folding-a-rejected-change) walks through an example: Bob typed right after a character Carol's rejected change inserted.
+**Accepted: A** (Carsten, 2026-11-21, NOC-430).
+
+A change can be rejected after the fact: for example, its author was removed from the space, and the removal arrives after the change. Its edits must then come out of the document. With most field types that is easy: recompute the field without the change. With Yjs it is not, because other people's later edits are tied to the characters it inserted. [Un-folding a rejected change](#un-folding-a-rejected-change) walks through an example: Bob typed right after a character Carol's rejected change inserted.
 
 - **A. Keep its characters as invisible placeholders, and bring back what it deleted (recommended).** The document reads as if the rejected change had never happened, and everything others wrote after it stays. Two limits: text someone typed inside a paragraph the rejected change added goes with that paragraph, and is shown as `lost` and readable; and an attribute the rejected change set, such as a heading's level, ends up unset instead of going back to its old value.
 - **B. Leave the rejected change out, as other field types do.** The simplest rule. But every later edit placed next to its text, like Bob's, disappears for good, although its author did nothing wrong. The SDK could only report it.
@@ -350,7 +352,7 @@ The owner answered on NOC-430.
 
 ### D4. The document vocabulary
 
-**Open, decided together with D5.** The owner asked whether the app should decide this, since NoCentralDB only stores and syncs Yjs updates. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. How much rendering the core does depends on how agents edit, so D4 waits for D5.
+**Open: a research note first (NOC-437).** The owner wants every client to keep editing a document even where it cannot interpret parts of it, and asked whether the app should decide the vocabulary, since NoCentralDB only stores and syncs Yjs updates. The note works out each option's consequences, with a spike on y-prosemirror. For storing and syncing, that is so: the core needs no vocabulary. It needs one only where it renders the document itself: as Markdown for `space.get` (D6), for agents (D5) and in the Rust SDK. How much rendering the core does also depends on how agents edit (D5, NOC-436).
 
 - **A. A fixed vocabulary in rule 1, TipTap's StarterKit, task lists, tables and `mention`; any other node kept in the document, shown in Markdown as its text.** No configuration, and apps that use TipTap's defaults need nothing. A custom node reads as its text in Markdown until a later rule knows it.
 - **B. The vocabulary declared in the lock,** as the field's configuration, with a Markdown form per node. Custom nodes render properly, but every addition is a change of the field's configuration, which [RFC 0011](0011-plugin-field-types.md#a-type-that-is-not-registered) refuses for a field that exists.
@@ -422,8 +424,8 @@ Each becomes a ticket once the owner decides; the ones marked "spike" can start 
 1. **Spike: the TipTap binding.** With `enableContentCheck`, does y-tiptap leave an unknown node alone during later edits? How the binding avoids echoing its own writes, and the latency of a pause-based write between two tabs and two browsers.
 2. **Spike: Yrs under bad input and large documents.** Fuzz decoding and applying of arbitrary updates for panics, natively and in wasm32; measure apply with and without a cached document on a 100 KB document.
 3. **Core: the field type `ncdb/richText` rule 1.** State, operation 5, client ids and their check, the same id twice, outcomes, generators and broken fixtures for C1 to C7, and the Yjs and Yrs agreement vectors.
-4. **Core: un-folding rich text**, as D2 decides.
-5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides.
+4. **Core: un-folding rich text**, as D2 decided: placeholders for the rejected change's items, its deletions undone.
+5. **Core: reading.** Markdown, plain text, tree and mentions, in the vocabulary D4 decides after its research note (NOC-437).
 6. **Core: how an agent edits**, as D5 decides after the research note (NOC-436).
 7. **Schema and lock: `nc.richText()`** in `ncdb model build` and the check on the device.
 8. **TypeScript SDK: the binding and `@nocentraldb/tiptap`**, with the lease of client ids and the write at each pause.
@@ -482,3 +484,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 
 - 2026-11-21 · First published, as a draft for the owner's decision (NOC-411)
 - 2026-11-21 · The owner's answers to D1, D3, D6, D7 and D8; D2 explained again; D4 gains option C and waits for D5, which goes to a research note (NOC-430, NOC-436, #422)
+- 2026-11-21 · The owner accepts D2; D4 goes to a research note of its own (NOC-430, NOC-437, #422)
