@@ -215,6 +215,10 @@ pub enum Kind {
     Boolean,
     /// `ncdb/choice`, with its options in schema order.
     Choice(Vec<String>),
+    /// `ncdb/date`, a calendar day (RFC 0005, "Days and points in time").
+    Date,
+    /// `ncdb/timestamp`, a point in time to the millisecond, in UTC.
+    Timestamp,
     /// `ncdb/set`, with its element's type.
     Set(Element),
     /// `ncdb/link`, with the collections a target may be in.
@@ -276,6 +280,8 @@ impl Kind {
             Kind::Float => "ncdb/float",
             Kind::Boolean => "ncdb/boolean",
             Kind::Choice(_) => "ncdb/choice",
+            Kind::Date => "ncdb/date",
+            Kind::Timestamp => "ncdb/timestamp",
             Kind::Set(_) => "ncdb/set",
             Kind::Link(_) => "ncdb/link",
             Kind::Links(_) => "ncdb/links",
@@ -285,11 +291,17 @@ impl Kind {
     }
 
     /// Whether the type is a basic value (string, int, float, boolean,
-    /// choice): the types that can be personal.
+    /// choice, day, point in time): the types that can be personal.
     pub fn is_basic(&self) -> bool {
         matches!(
             self,
-            Kind::String | Kind::Int | Kind::Float | Kind::Boolean | Kind::Choice(_)
+            Kind::String
+                | Kind::Int
+                | Kind::Float
+                | Kind::Boolean
+                | Kind::Choice(_)
+                | Kind::Date
+                | Kind::Timestamp
         )
     }
 

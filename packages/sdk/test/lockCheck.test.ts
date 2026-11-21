@@ -22,12 +22,16 @@ const fullModel = nc.model({
       urgent: nc.boolean(),
       tags: nc.set(nc.string()),
       project: nc.link("projects"),
+      customer: nc.ref("projects"),
+      doneOn: nc.date(),
+      dueAt: nc.timestamp(),
     },
     {
       indexes: {
         byPriority: nc.index(["priority"]),
         byStatusPriority: nc.index(["status", "priority"], { equal: 1 }),
         open: nc.index(["status", "priority"], { equal: 1, scope: "space" }),
+        byDueAt: nc.index([{ field: "dueAt", direction: "desc" }]),
       },
     },
   ),
@@ -86,6 +90,8 @@ test("a field of another type or with other options is out of date", () => {
     [tasks({ title: nc.int() }), "tasks.title"],
     [tasks({ status: nc.oneOf(["open", "done", "late"]) }), "tasks.status"],
     [tasks({ tags: nc.set(nc.int()) }), "tasks.tags"],
+    [tasks({ doneOn: nc.timestamp() }), "tasks.doneOn"],
+    [tasks({ dueAt: nc.date() }), "tasks.dueAt"],
     [
       tasks({ priority: nc.int().personal({ person: "self" }) }),
       "tasks.priority",

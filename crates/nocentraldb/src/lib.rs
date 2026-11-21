@@ -40,6 +40,7 @@ mod browser;
 #[doc(hidden)]
 pub mod bridge;
 mod clock;
+mod date;
 mod db;
 mod durability;
 mod encode;
@@ -70,6 +71,7 @@ mod view_report;
 
 pub use account::Removed;
 pub use ad_hoc::{AdHoc, AdHocCreated};
+pub use date::{Date, Timestamp};
 pub use db::{Db, OpenOptions};
 
 // The Rust snippets of docs/getting-started.md, compiled by the doc tests,

@@ -177,7 +177,7 @@ fn column_type(field: &Field) -> &'static str {
     match field {
         Field::Basic(t) => match t.kind {
             Kind::Text | Kind::Choice(_) => "TEXT",
-            Kind::Integer | Kind::Boolean => "INTEGER",
+            Kind::Integer | Kind::Boolean | Kind::Date | Kind::Timestamp => "INTEGER",
             Kind::Float => "REAL",
         },
         _ => "BLOB",

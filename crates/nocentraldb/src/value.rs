@@ -1,6 +1,7 @@
 //! A field value, read and written by the field's name (RFC 0009, "The Rust
-//! SDK"): a text, an integer, a float, a boolean, an object id or a
-//! [`Reference`], as the field's type in the lock asks; a set or many links
+//! SDK"): a text, an integer, a float, a boolean, a [`Date`], a
+//! [`Timestamp`], an object id or a [`Reference`], as the field's type in
+//! the lock asks; a set or many links
 //! reads as the list of its elements and is written with [`Value::add`] and
 //! [`Value::remove`], never whole (RFC 0009, "Field operations per field
 //! type"). [`Value::clear`] empties a basic field, a link or a reference.
@@ -8,10 +9,12 @@
 
 use std::fmt;
 
+use ncdb_core::basic::Kind;
 use ncdb_core::cbor;
 use ncdb_core::reference::Target;
 use ncdb_plugin::Data;
 
+use crate::date::{Date, Timestamp};
 use crate::error::{Error, ErrorCode};
 use crate::id::{ObjectId, SpaceId};
 
@@ -25,6 +28,10 @@ pub(crate) enum Repr {
     Integer(i64),
     Float(f64),
     Boolean(bool),
+    /// A calendar day (RFC 0005, "Days and points in time").
+    Date(Date),
+    /// A point in time to the millisecond, in UTC.
+    Timestamp(Timestamp),
     Id(ObjectId),
     /// A reference: the target's space id and object id (RFC 0004,
     /// "References").
@@ -127,6 +134,18 @@ impl Reference {
     }
 }
 
+impl From<Date> for Value {
+    fn from(day: Date) -> Value {
+        Value(Repr::Date(day))
+    }
+}
+
+impl From<Timestamp> for Value {
+    fn from(point: Timestamp) -> Value {
+        Value(Repr::Timestamp(point))
+    }
+}
+
 impl From<Reference> for Value {
     fn from(reference: Reference) -> Value {
         Value(Repr::Ref(reference))
@@ -166,6 +185,8 @@ read_as!(&'a str, crate::texts::part::KIND_TEXT, Repr::Text(text) => text.as_str
 read_as!(i64, crate::texts::part::KIND_INTEGER, Repr::Integer(n) => *n);
 read_as!(f64, crate::texts::part::KIND_FLOAT, Repr::Float(x) => *x);
 read_as!(bool, crate::texts::part::KIND_BOOLEAN, Repr::Boolean(b) => *b);
+read_as!(Date, crate::texts::part::KIND_DATE, Repr::Date(day) => *day);
+read_as!(Timestamp, crate::texts::part::KIND_TIMESTAMP, Repr::Timestamp(point) => *point);
 read_as!(ObjectId, crate::texts::part::KIND_OBJECT_ID, Repr::Id(id) => *id);
 read_as!(Reference, crate::texts::part::KIND_REFERENCE, Repr::Ref(reference) => *reference);
 read_as!(&'a [Value], crate::texts::part::KIND_LIST, Repr::List(elements) => elements.as_slice());
@@ -190,6 +211,8 @@ impl Value {
             Repr::Integer(n) => cbor::Value::Negative((-1 - *n).unsigned_abs()),
             Repr::Float(x) => cbor::Value::Float(*x),
             Repr::Boolean(b) => cbor::Value::Bool(*b),
+            Repr::Date(day) => integer(day.days()),
+            Repr::Timestamp(point) => integer(point.as_millis()),
             Repr::Id(id) => ncdb_core::link::value(id.0),
             Repr::Ref(reference) => ncdb_core::reference::value(Target {
                 space: reference.space.0,
@@ -218,6 +241,34 @@ impl Value {
         Some(Value(repr))
     }
 
+    /// The value a basic field of `kind` holds: a day or a point in time
+    /// for those kinds (RFC 0005, "Days and points in time"), otherwise as
+    /// [`Value::from_cbor`] reads it. `None` for a value the SDK cannot read
+    /// as one: the field reads unset.
+    pub(crate) fn from_basic(kind: &Kind, value: &cbor::Value) -> Option<Value> {
+        let n = || match Value::from_cbor(value, false)?.0 {
+            Repr::Integer(n) => Some(n),
+            _ => None,
+        };
+        match kind {
+            Kind::Date => Date::from_days(n()?).map(Value::from),
+            Kind::Timestamp => Timestamp::from_millis(n()?).ok().map(Value::from),
+            _ => Value::from_cbor(value, false),
+        }
+    }
+
+    /// Whether a basic field of `kind` takes this value as written: a day
+    /// only a [`Date`], a point in time only a [`Timestamp`], and no other
+    /// kind either of them. Anything else the merge rule checks.
+    pub(crate) fn fits(&self, kind: &Kind) -> bool {
+        match (&self.0, kind) {
+            (Repr::Clear, _) => true,
+            (Repr::Date(_), Kind::Date) | (Repr::Timestamp(_), Kind::Timestamp) => true,
+            (Repr::Date(_) | Repr::Timestamp(_), _) | (_, Kind::Date | Kind::Timestamp) => false,
+            _ => true,
+        }
+    }
+
     /// The reference a field of `ncdb/ref` holds, or `None` for a value
     /// that names no target: the field reads unset (RFC 0004, "The value
     /// and its encoding").
@@ -227,5 +278,13 @@ impl Value {
             SpaceId(target.space),
             ObjectId(target.object),
         )))
+    }
+}
+
+/// An `i64` as the CBOR integer RFC 0002's profile writes.
+fn integer(n: i64) -> cbor::Value {
+    match n >= 0 {
+        true => cbor::Value::Unsigned(n.unsigned_abs()),
+        false => cbor::Value::Negative((-1 - n).unsigned_abs()),
     }
 }

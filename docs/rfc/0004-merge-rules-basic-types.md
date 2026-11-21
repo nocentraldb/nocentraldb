@@ -10,7 +10,7 @@ Merge rules are hard to change once a type ships: a changed rule makes old and n
 
 **Status.** Decided by the owner (Carsten, 2026-11-10).
 
-**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK.
+**At 0.1.** Partly built. Built in the core: basic values, sets, links and references, creating and deleting objects, the operation numbers, and the plugin contract with its harness. Not built: the calls that let an app read a field's conflicts, an outcome, or the state of a link or reference (`space.inspect`, `$conflicts`), in either SDK. Days and points in time came after 0.1.
 
 **How to give feedback.** Reply in this RFC's discussion, [RFC 0004: Merge rules for basic values, sets and links](https://github.com/nocentraldb/nocentraldb/discussions/127), one topic per reply, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
@@ -34,7 +34,7 @@ The sections below define each rule and say why it was chosen.
 
 | Type                                                      | State                                                         | Read value                                         | Concurrent writes                                                 | What stays visible to the app                                    |
 | --------------------------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Basic value (string, number, boolean, choice from a list) | The writes no other write has replaced                        | The write with the highest stamp: last writer wins | One wins by stamp order; the others stay as conflicts             | Each losing write, with its value, author and stamp              |
+| Basic value (string, number, boolean, choice from a list, day, point in time) | The writes no other write has replaced                        | The write with the highest stamp: last writer wins | One wins by stamp order; the others stay as conflicts             | Each losing write, with its value, author and stamp              |
 | Set                                                       | The additions no removal has seen, and the removals           | The elements with at least one live addition       | An addition wins over a removal that did not see it (add wins)    | Each removal that lost to a concurrent addition                  |
 | Link (one target)                                         | A basic value whose value is an object id                     | The winning target, with its resolution status     | As for basic values                                               | As for basic values; plus a target that is deleted or missing    |
 | Links (many targets)                                      | A set of object ids                                           | The targets, each with its resolution status       | As for sets                                                       | As for sets; plus each target that is deleted or missing         |
@@ -56,7 +56,7 @@ In one sentence: every field's state is a pure function of the set of changes a 
 
 ## Basic values
 
-Basic values are strings, numbers (integers and floats), booleans and a choice from a fixed list. All four merge the same way. RFC 0001 promises that "the last writer wins". This RFC keeps that promise for the value an app reads, and adds that the writes which lost stay readable instead of disappearing.
+Basic values are strings, numbers (integers and floats), booleans, a choice from a fixed list, a calendar day and a point in time. All of them merge the same way. RFC 0001 promises that "the last writer wins". This RFC keeps that promise for the value an app reads, and adds that the writes which lost stay readable instead of disappearing.
 
 ### State and operations
 
@@ -122,12 +122,41 @@ Keeping the losing writes is what keeps RFC 0001's promise and principle 3 toget
 
 ### Value rules per kind
 
-The merge is the same for all four kinds. The kind only constrains the value:
+The merge is the same for every kind. The kind only constrains the value:
 
 - **String.** Any Unicode string, stored as written. The SDK normalises to NFC before writing, so that two members typing the same text produce the same bytes (this matters for sets, not for basic values).
 - **Number.** An integer (64-bit signed) or a float (IEEE 754 binary64), as the schema declares. Concurrent writes do not add up: the last writer wins. A counter that adds concurrent increments is a different field type with different semantics, and not part of this RFC: RFC 0001 ships numbers as last writer wins, and a counter can come later as its own type. For floats, RFC 0002 gives NaN one canonical encoding and negative and positive zero one each (O5). Negative and positive zero stay different values, so a set may hold both.
 - **Boolean.** True or false.
 - **Choice from a list.** One of the options the schema lists. A value that the reader's schema does not list (because a newer schema added the option) is kept as written, not dropped and not replaced. The app reads it as "unknown option", with the raw value. This keeps the promise that old clients keep data they do not understand yet.
+- **Day.** A calendar day with no time and no time zone, such as a birthday: the number of days since 1970-01-01, from 0001-01-01 to 9999-12-31 ([Days and points in time](#days-and-points-in-time)).
+- **Point in time.** An instant, to the millisecond, in UTC: the number of milliseconds since 1970-01-01T00:00:00.000Z, from 0001-01-01T00:00:00.000Z to 9999-12-31T23:59:59.999Z ([Days and points in time](#days-and-points-in-time)).
+
+### Days and points in time
+
+Apps store dates: when a task was done, a person's birthday, when an event occurred. Stored as text, such as `"2026-11-21"`, a date sorts by its bytes, which is right for one format and wrong for the next, and nothing stops `"21.11.2026"` or `"2026-02-30"` in the same field. So two field types hold dates, and they answer two different questions (Carsten, 2026-11-21, NOC-412):
+
+| Type | Type id | Answers | Value | CBOR | Range |
+| --- | --- | --- | --- | --- | --- |
+| Day | `ncdb/date`, rule 1 | Which calendar day? A birthday, a due date, the day something was done | Days since 1970-01-01, a signed integer | an integer, major type 0 or 1 | −719162 (0001-01-01) to 2932896 (9999-12-31) |
+| Point in time | `ncdb/timestamp`, rule 1 | When exactly? An event, a measurement, a deadline at a time of day | Milliseconds since 1970-01-01T00:00:00.000Z, a signed integer | an integer, major type 0 or 1 | −62135596800000 (0001-01-01T00:00:00.000Z) to 253402300799999 (9999-12-31T23:59:59.999Z) |
+
+Both are basic values, written only by **set** (1) with set's arguments `{1: value, 2: replaces}`; `null` clears the field. Add, remove and delete are not defined on them, so a member parks them as "unknown operation" ([Operations a member does not understand](#operations-a-member-does-not-understand)). Like `ncdb/ref`, each is a type id of its own with no merge rule of its own: the operation table stays as it is, the merge needs no new proof, and an old client that does not know the type id parks its operations instead of misreading them. A day is not a point in time with the time left out: a birthday is the same day in Berlin and in Tokyo, while every point in time falls on two different days somewhere on Earth. One type for both, a point in time at midnight UTC standing for a day, was not taken, because an app that shows it in a time zone west of UTC shows the day before.
+
+**The encoding.** The value is a plain CBOR integer in RFC 0002's profile, in its shortest form, so each value has one encoding: 2026-11-21 is day 20778, written `19 512a`, three bytes; the point in time 2026-11-21T19:08:44.636Z is 1795288124636, written `1b 000001a1ff82ccdc`, nine bytes. A day or a point in time before 1970 is a negative integer. The forms not taken:
+
+| Rejected | Why |
+| --- | --- |
+| CBOR's date tags (tag 1, tag 100, tag 1004) | RFC 0002's profile allows no tags, and a payload that holds one does not decode, so an old client would park the whole change, not just the operation. |
+| Text, `"2026-11-21"` or RFC 3339's `"2026-11-21T19:08:44.636Z"` | Three to four times the bytes, a format every reader must parse and check (`"2026-02-30"` is text but no day), and for points in time several texts for one instant (`Z`, `+00:00`, `.6` or `.600`), so a value would have more than one encoding. |
+| A day as the integer `20261121` | It reads like the date, but most integers name no day, so every reader needs the same check text needs, and the difference between two days is no longer a subtraction. |
+| A point in time as `[seconds, nanoseconds]`, or to the microsecond | The owner chose the millisecond: it is what a JavaScript `Date` and the clock of RFC 0002 carry, and one integer sorts and compares as it is. |
+| A point in time with its time zone or UTC offset | Two writes of one instant with different offsets would be two values, a conflict where nothing differs, and zone rules change after the fact. The value is the instant; an app that needs the zone a person meant stores it in a field of its own, such as `nc.string()` holding `"Europe/Berlin"`. |
+
+**The range.** Years 1 to 9999 of the proleptic Gregorian calendar. Every value in it prints as RFC 3339 with a four-digit year, and every target holds every value exactly: a JavaScript `Date` holds points in time up to 8.64 × 10^15 milliseconds from 1970, a JavaScript `number` holds every integer of the range, and Rust's `i64` holds them all. The whole 64-bit range was not taken: a JavaScript `Date` cannot hold it, and years beyond 9999 print in a form most parsers refuse. A point in time counts every day as 86,400,000 milliseconds, as Unix time, a JavaScript `Date` and RFC 3339 printers do: a leap second has no value of its own.
+
+**A value that does not fit,** such as a float, a text, or an integer outside the range, written by a buggy or hostile member, is applied and kept as written, as every basic value is (NOC-16). It reads as a value outside the field's kind, unset, with the field named in `$raw`, and `space.inspect` returns it as written ([RFC 0009, "Get by id"](0009-sdk-api.md#get-by-id)); it indexes as unset. The SDKs refuse to write one with `invalidValue` ([RFC 0005, "Days and points in time"](0005-schema-and-model-lock.md#days-and-points-in-time)).
+
+**The value is not the stamp.** A point in time is what the app writes, such as when an event occurred, read from the writer's clock or typed by a person. It does not take part in the merge: the stamp of RFC 0002 decides which write wins, as for every basic value, so a point in time far in the past or the future wins or loses like any other value.
 
 ## Sets
 
@@ -403,7 +432,7 @@ The arguments sit in key 5 as a map with small integer keys, because RFC 0002's 
 | Number    | Operation                     | Field types                                                      | Arguments                             |
 | --------- | ----------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
 | 0         | create the object (RFC 0002)  | none: it names a collection, not a field                         | none: keys 3 and 5 are absent         |
-| 1         | **set**                       | basic value (string, number, boolean, choice), link (one target), reference | `{1: value, 2: replaces}`             |
+| 1         | **set**                       | basic value (string, number, boolean, choice, day, point in time), link (one target), reference | `{1: value, 2: replaces}`             |
 | 2         | **add**                       | set, links (many targets)                                        | `{1: element, 2: replaces}`           |
 | 3         | **remove**                    | set, links (many targets)                                        | `{1: element, 3: observed}`           |
 | 4         | **delete**                    | none: it writes whether the object is deleted                    | `{1: true or false, 2: replaces}`; key 3 absent |
@@ -746,6 +775,42 @@ a501501111111111111111111111111111111102666f72646572730368637573
 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa04
 ```
 
+**Days and points in time.** E18 to E20 use the ids above. The object `T1` is an event in the collection `events`, whose field `doneOn` is `nc.date()` and whose field `occurredAt` is `nc.timestamp()`. The same generator writes them into `vectors/0004/E18.hex` to `E20.hex`, and the same test checks them. They follow [Days and points in time](#days-and-points-in-time): the types `ncdb/date` and `ncdb/timestamp`, written by set, and their values, plain CBOR integers.
+
+**E18. set, a day.** `doneOn` of `events` is set to 2026-11-21, day 20778 since 1970-01-01, written `19 512a` ([Days and points in time](#days-and-points-in-time)); nothing is replaced.
+
+```text
+{1: h'1111…11', 2: "events", 3: "doneOn", 4: 1, 5: {1: 20778, 2: []}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e74730366646f6e
+654f6e040105a20119512a0280
+```
+
+**E19. set, a day before 1970.** `doneOn` is set to 1969-12-31, day −1, a negative integer written `20`, replacing `[A, 0]`.
+
+```text
+{1: h'1111…11', 2: "events", 3: "doneOn", 4: 1, 5: {1: -1, 2: [[h'aaaa…aa', 0]]}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e74730366646f6e
+654f6e040105a201200281825820aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaaaaaa00
+```
+
+**E20. set, a point in time.** `occurredAt` of `events` is set to 2026-11-21T19:08:44.636Z, 1795288124636 milliseconds since 1970-01-01T00:00:00.000Z, written in nine bytes; nothing is replaced.
+
+```text
+{1: h'1111…11', 2: "events", 3: "occurredAt", 4: 1, 5: {1: 1795288124636, 2: []}}
+```
+
+```text
+a501501111111111111111111111111111111102666576656e7473036a6f6363
+75727265644174040105a2011b000001a1ff82ccdc0280
+```
+
 ### What the relay sees
 
 Nothing changes for the relay. Field operations, their numbers, values, `replaces` and `observed` live only inside the payload, which is AEAD ciphertext (RFC 0002, The payload). The header, the frame and control changes are untouched, and the relay still sees exactly what [RFC 0002 lists](0002-change-and-log-format.md#what-the-relay-can-see-and-what-it-cannot).
@@ -760,7 +825,8 @@ This RFC agrees with `factory/GENESIS.md` and [RFC 0001](0001-nocentraldb.md) on
 - **Principle 3, nothing is lost silently.** Losing writes and lost removals stay in the state and readable; deleted or missing link targets keep their links.
 - **Principle 7, one core.** C3 requires identical results natively and in WebAssembly.
 - **RFC 0001, field types.** Basic values: the last writer wins. Sets: additions and removals from every member merge. Links: point to another object in the same space. The FAQ's answer "both changes are kept" holds: the losing change stays readable.
-- **"A client keeps data it does not understand yet."** A choice outside the reader's list is kept as written.
+- **"A client keeps data it does not understand yet."** A choice outside the reader's list is kept as written. An old client parks the operations of a day or point-in-time field it does not know, and folds them after its upgrade.
+- **"Never break an existing client or stored data."** Days and points in time are two new type ids. Nothing written before changes meaning, and an existing field keeps its type: a text field that holds dates stays a text field, and an app that wants the new type adds a field and deprecates the old one ([RFC 0005, "Days and points in time"](0005-schema-and-model-lock.md#days-and-points-in-time)).
 - **RFC 0002.** It meets O1 to O5, confirms that causal delivery is not guaranteed, and leaves concurrent creates of one object id to this RFC, which [Two creates of one object id](#two-creates-of-one-object-id) answers.
 - **"Late" in principle 3.** GENESIS.md says a change that loses to a change its author had not seen stays identifiable as such. Arrival time cannot be part of the converged state without breaking principle 2, which ranks higher, so this RFC makes identifiable what converges: that a change lost to a change its author had not seen. Arrival time can only be local, per-member information.
 
@@ -783,6 +849,9 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 
 - **2026-11-12 · A plugin field type is Rust compiled into the core, through RFC 0011's registry.** (Carsten, 2026-11-12, NOC-232; [decision](../../factory/decisions/2026-11-12-NOC-232-a-plugin-crate-is-one-namespace-that-exports-plugin-and.md))
 - **2026-11-12 · A personal field is a set whose value is sealed, with `replaces` readable to members.** (Carsten, 2026-11-12, NOC-244; [decision](../../factory/decisions/2026-11-12-NOC-244-personal-values-are-sealed-under-a-subkey-and-person-is-the-hidden-field.md))
+- **2026-11-21 · Two date types, a calendar day and a point in time to the millisecond in UTC, merge as basic values.** (Carsten, 2026-11-21, NOC-412; [decision](../../factory/decisions/2026-11-21-NOC-412-a-calendar-day-and-a-millisecond-point-in-time-in-utc-are-two-basic-value-types.md))
+- **2026-11-21 · A day travels as a CBOR integer of days since 1970-01-01, a point in time as one of milliseconds.** (Carsten, 2026-11-21, NOC-434, answer 2a; [decision](../../factory/decisions/2026-11-21-NOC-412-a-day-is-a-cbor-integer-of-days-since-1970.md))
+- **2026-11-21 · Days and points in time range over the years 1 to 9999.** (Carsten, 2026-11-21, NOC-434, answer 3a; [decision](../../factory/decisions/2026-11-21-NOC-412-dates-range-over-the-years-1-to-9999.md))
 
 ## History
 
@@ -794,3 +863,4 @@ It builds on [RFC 0001](0001-nocentraldb.md), which promises that "the same set 
 - 2026-11-19 · Personal fields are no later field type, and the core cannot prove a plugin converges (NOC-362, #389)
 - 2026-11-20 · What the merge rules rely on follows the rules, restructured for readers, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · A plain introduction to the ideas behind it, and its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
+- 2026-11-21 · Days and points in time, two basic value types, as the owner answered (NOC-412, NOC-434, #430)

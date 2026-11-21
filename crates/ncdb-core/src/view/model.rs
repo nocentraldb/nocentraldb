@@ -393,6 +393,8 @@ fn describe(kind: &Kind) -> Value {
         Kind::Integer => Value::Unsigned(1),
         Kind::Float => Value::Unsigned(2),
         Kind::Boolean => Value::Unsigned(3),
+        Kind::Date => Value::Unsigned(4),
+        Kind::Timestamp => Value::Unsigned(5),
         Kind::Choice(options) => {
             Value::Array(options.iter().map(|o| Value::Text(o.clone())).collect())
         }
