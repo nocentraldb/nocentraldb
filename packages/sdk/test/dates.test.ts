@@ -58,12 +58,11 @@ const core = (fields: Record<string, unknown> = {}) => {
   return { fake, requests };
 };
 
-const written = (requests: Request[]) =>
-  (
-    requests.find((r) => r.call === "write")?.args.ops as {
-      values: Record<string, unknown>;
-    }[]
-  )[0]?.values;
+const written = (requests: Request[]) => {
+  const write = requests.find((r) => r.call === "write");
+  const ops = (write?.args.ops ?? []) as { values: Record<string, unknown> }[];
+  return ops[0]?.values;
+};
 
 describe("writing a day and a point in time", () => {
   test("a day travels as its text, a point in time as its milliseconds", async () => {
@@ -155,6 +154,6 @@ describe("reading a day and a point in time", () => {
       "1969-12-31T23:59:59.999Z",
     );
     const find = requests.find((r) => r.call === "find");
-    expect((find?.args.query as { equal: unknown[] }).equal).toEqual([-1]);
+    expect(find?.args.query).toMatchObject({ equal: [-1] });
   });
 });

@@ -16,9 +16,9 @@ import {
   randomId,
   type Subscription,
 } from "./connectParts.ts";
+import { equalToCore, fromCore, toCore } from "./dates.ts";
 import type { Db, open, Page, Space, Tx } from "./db.ts";
 import { reportsOf } from "./durabilityReport.ts";
-import { equalToCore, fromCore, toCore } from "./dates.ts";
 import { SetElements } from "./elements.ts";
 import { erasureCallsOf, signOffOf, takeBackOf } from "./eraseCalls.ts";
 import { NcError } from "./error.ts";

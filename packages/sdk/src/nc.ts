@@ -65,9 +65,9 @@ type Indexes = Record<string, Index>;
 
 /** The fields of `F` that are not deprecated, each optional, as the app reads them. */
 type Readable<F extends Fields> = {
-  [
-    K in keyof F as F[K] extends Value<unknown, true> ? never : K
-  ]?: F[K]["nc.reads"];
+  [K in keyof F as F[K] extends Value<unknown, true>
+    ? never
+    : K]?: F[K]["nc.reads"];
 };
 
 /** An object of a collection with the fields `F`, as a read gives it: its fields and its ids (RFC 0009, "Get by id"). */
@@ -120,9 +120,9 @@ export type Unknown = { unknown: string };
 export type Infer<C extends Collection<Fields, boolean>> =
   C extends Collection<infer F, false>
     ? {
-        [
-          K in keyof F as F[K] extends Value<unknown, true> ? never : K
-        ]?: F[K]["nc.reads"];
+        [K in keyof F as F[K] extends Value<unknown, true>
+          ? never
+          : K]?: F[K]["nc.reads"];
       }
     : never;
 
@@ -334,7 +334,8 @@ export const view = (..._args: unknown[]): Named => name();
 /** Declares an index: fields in index order, each ascending unless it says otherwise, how many leading fields a query fixes with equality (`equal`, 0 by default), and with `scope: "space"` an index that runs in one space at a time instead of across every space of the member. */
 export const index = <
   const K extends readonly (
-    string | { field: string; direction: "asc" | "desc" }
+    | string
+    | { field: string; direction: "asc" | "desc" }
   )[],
   const N extends number = 0,
 >(
