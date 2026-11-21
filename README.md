@@ -25,21 +25,21 @@ Check out more [use cases](https://nocentraldb.io/docs/use-cases/) for **NoCentr
 
 ## Install
 
-NoCentralDB 0.1 comes as pre-releases; [Getting started](https://nocentraldb.io/docs/) shows the install lines of the newest one. You install:
+NoCentralDB 0.1 is in beta: 0.1.0-beta.1 is on npm and crates.io. You install:
 
 - the TypeScript SDK, `@nocentraldb/sdk`, from npm, for web apps in the browser:
 
   ```sh
-  npm install @nocentraldb/sdk@alpha
+  npm install @nocentraldb/sdk@beta
   ```
 
-- the Rust SDK, `nocentraldb`, for native apps, servers and agents, from this repository until it is on crates.io:
+- the Rust SDK, `nocentraldb`, for native apps, servers and agents, from crates.io:
 
   ```sh
-  cargo add nocentraldb --git https://github.com/nocentraldb/nocentraldb
+  cargo add nocentraldb@0.1.0-beta.1
   ```
 
-- the command-line tool `ncdb`, which builds `model.lock.json` from your model. In 0.1 it runs from a clone of this repository, as the [guides](https://nocentraldb.io/docs/guides/rust/) show.
+- the command-line tool `ncdb`, which builds `model.lock.json` from your model, from crates.io with `cargo install ncdb --version 0.1.0-beta.1`. The [guides](https://nocentraldb.io/docs/guides/rust/) run it from a clone of this repository.
 
 ## Code examples
 

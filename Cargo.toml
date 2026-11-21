@@ -5,7 +5,7 @@ exclude = ["apps/tasks-ts"]
 resolver = "3"
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/nocentraldb/nocentraldb"
@@ -21,15 +21,15 @@ homepage = "https://nocentraldb.io"
 # to the version. A crate with `publish = false` has no version, so cargo
 # drops it from a published crate's dev-dependencies when it packages the
 # crate (check-version checks both, NOC-372).
-ncdb-core = { path = "crates/ncdb-core", version = "=0.1.0" }
+ncdb-core = { path = "crates/ncdb-core", version = "=0.2.0" }
 ncdb-harness = { path = "crates/ncdb-harness" }
-ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.1.0" }
+ncdb-plugin = { path = "crates/ncdb-plugin", version = "=0.2.0" }
 ncdb-test-counter = { path = "crates/ncdb-test-counter" }
 ncdb-relay = { path = "crates/ncdb-relay" }
 ncdb-relay-server = { path = "crates/ncdb-relay-server" }
 ncdb-relay-lambda = { path = "crates/ncdb-relay-lambda" }
 ncdb-relay-aws = { path = "crates/ncdb-relay-aws" }
-nocentraldb = { path = "crates/nocentraldb", version = "=0.1.0" }
+nocentraldb = { path = "crates/nocentraldb", version = "=0.2.0" }
 
 # Debug and test builds keep only line tables, not full debug info: panics
 # and backtraces still name file and line, and a full `pnpm gates`, which
