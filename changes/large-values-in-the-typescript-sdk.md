@@ -1,7 +1,7 @@
 ---
 type: fix
 tickets: [NOC-425]
-introduced: cycle
+introduced: 0.1.0
 components: [sdk-ts]
 ---
 ## Symptom
