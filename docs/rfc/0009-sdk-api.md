@@ -885,4 +885,4 @@ Every public name this RFC defines or uses, in one place, each with the RFC it b
 - 2026-11-20 · The erasure audit gains the state `waiting`, in both SDKs (NOC-401)
 - 2026-11-21 · The TypeScript SDK erases a person: `db.erasureRequest`, `db.account.signOff`, `db.erase` and `space.erasures.takeBack` (NOC-406)
 - 2026-11-21 · Days and points in time in both SDKs: `Date` and `Timestamp` in Rust, a `"YYYY-MM-DD"` string and a `Date` in TypeScript (NOC-412, NOC-434, #430)
-- 2026-11-22 · The error table names the codes of removing oneself or a non-member, the last admin lowering its role, a lost owning tab's write, another tab's lock, creating a space while waiting to be paired, and recovering onto an existing database (NOC-379, NOC-169, NOC-177, NOC-267)
+- 2026-11-22 · The error table names the codes of removing oneself or a non-member, the last admin lowering its role, a lost owning tab's write, another tab's lock, creating a space while waiting to be paired, and recovering onto an existing database (NOC-379, NOC-169, NOC-177, NOC-267, #449)

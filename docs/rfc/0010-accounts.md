@@ -303,7 +303,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-19 · `removeMember` takes the recovery code (NOC-362, #389)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
-- 2026-11-22 · The account space says when a device creates it, which one is the account's, how its records' ids and indexes work, and what the table `joined` keeps (NOC-379, NOC-266, NOC-310, NOC-311)
+- 2026-11-22 · The account space says when a device creates it, which one is the account's, how its records' ids and indexes work, and what the table `joined` keeps (NOC-379, NOC-266, NOC-310, NOC-311, #449)
 
 ## How this RFC is tested
 
