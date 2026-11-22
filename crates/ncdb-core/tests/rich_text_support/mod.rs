@@ -170,3 +170,4 @@ pub fn string_item(client: u64, clock: u64, text: &str) -> Vec<u8> {
         .uint(0)
         .0
 }
+pub mod harness;
