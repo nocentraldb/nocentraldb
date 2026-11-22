@@ -64,6 +64,12 @@ data-encoding = { version = "=2.11.1", default-features = false, features = ["al
 # release, which tests/sqlite_release.rs checks on both targets.
 rusqlite = { version = "=0.41.1", default-features = false, features = ["bundled", "ffi-sqlite-wasm-rs"] }
 
+# Rich text, `ncdb/richText` rule 1 (RFC 0013): Yrs applies a field's Yjs
+# updates. Pinned exactly, since rule 1 is Yjs's integration as this
+# version implements it (RFC 0013, "How rich text meets the plugin
+# contract"). Only the feature `rich-text` brings it.
+yrs = { version = "=0.28.2", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "=0.4.3", default-features = false, features = ["wasm_js"] }
 # The browser's SQLite (RFC 0006, "The browser"), pinned here although
@@ -84,6 +90,14 @@ web-sys = { version = "=0.3.107", default-features = false, features = ["std", "
 # reason: libsqlite3-sys 0.39.1 builds SQLite 3.54.1 with `bundled`.
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 libsqlite3-sys = { version = "=0.39.1", default-features = false }
+
+# The feature `rich-text` folds operation 5, the rich-text update, with Yrs.
+# It is off by default and no published build or package turns it on: the
+# fold stays off in every published build until its guard is complete
+# (NOC-468). Without it, a rich-text field's operations park as "unknown
+# type" and are kept.
+[features]
+rich-text = ["dep:yrs"]
 
 [dev-dependencies]
 # The test plugin, test/counter, which the view folds (RFC 0011).
