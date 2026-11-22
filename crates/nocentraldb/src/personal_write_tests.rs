@@ -376,3 +376,25 @@ fn a_new_persons_key_judges_only_its_own_entry_however_many_persons_the_space_ho
         assert_eq!(judged, 1, "with {persons} persons in the space");
     }
 }
+
+/// NOC-438: opening a database gave each space's checks its control
+/// changes one by one, and each one resolved the whole set again, so
+/// opening a space with many persons cost the square of its persons.
+/// Now the space resolves them once, to the state the writes left.
+#[test]
+fn a_reopened_space_resolves_its_control_changes_once_however_many_persons_it_holds() {
+    let db = open();
+    let space = now(db.spaces().create()).unwrap();
+    for persons in [10, 60] {
+        while db.lock().spaces[&space.id().0].person_keys.len() < persons {
+            now(space.create("projects", [("name", Value::from("Anna"))])).unwrap();
+        }
+        let inner = db.lock();
+        let member = inner.member.key();
+        let reopened = crate::db::SpaceState::from_log(&inner.view, space.id().0, member);
+
+        assert_eq!(reopened.checks.resolves(), 1, "with {persons} persons");
+        let written = inner.spaces[&space.id().0].checks.resolved();
+        assert_eq!(reopened.checks.resolved(), written);
+    }
+}

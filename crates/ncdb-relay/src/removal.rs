@@ -6,10 +6,10 @@
 //! else of the space to it.
 
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership;
 
 use crate::Relay;
 use crate::error::ErrorCode;
+use crate::known::Known;
 use crate::store::{Entry, RelayStore};
 
 impl<S: RelayStore> Relay<S> {
@@ -22,21 +22,25 @@ impl<S: RelayStore> Relay<S> {
         member: MemberId,
         space: SpaceId,
     ) -> Result<Option<Entry>, ErrorCode> {
-        let entries = self.control_entries(space).await?;
-        let controls = entries.iter().map(|(_, change)| change);
-        let resolved = membership::resolve(space, controls);
-        let Some(state) = resolved.member(member) else {
-            return Ok(None);
-        };
-        if state.role.is_some() {
-            return Ok(None);
-        }
-        let Some(revocation) = state.revocations.iter().rev().find(|r| r.role.is_none()) else {
-            return Ok(None);
-        };
-        Ok(entries
-            .into_iter()
-            .map(|(entry, _)| entry)
-            .find(|entry| entry.change == revocation.change))
+        let known = self.known(space).await?;
+        let removal = removal(&known, member);
+        self.keep(space, known);
+        Ok(removal)
     }
+}
+
+/// The entry of `member`'s latest accepted remove among the control
+/// changes `known` holds, when it is no longer a member.
+fn removal(known: &Known, member: MemberId) -> Option<Entry> {
+    let state = known.resolved.member(member)?;
+    if state.role.is_some() {
+        return None;
+    }
+    let revocation = state.revocations.iter().rev().find(|r| r.role.is_none())?;
+    known
+        .entries
+        .iter()
+        .map(|(entry, _)| entry)
+        .find(|entry| entry.change == revocation.change)
+        .cloned()
 }

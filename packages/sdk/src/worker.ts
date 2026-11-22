@@ -21,6 +21,7 @@
 
 import { decode, encode } from "./cbor.ts";
 import { guardCore } from "./coreGuard.ts";
+import { keepAlive } from "./keepAlive.ts";
 import { waitNotice } from "./waitNotice.ts";
 // @ts-expect-error: generated into dist/wasm/ by the build step.
 import init, { Core } from "./wasm/nocentraldb_wasm.js";
@@ -108,6 +109,17 @@ const hold = (name: string) =>
     });
   });
 
+/**
+ * The directory of the core's pool on OPFS: the default of `opfs-sahpool`
+ * (crates/ncdb-core/src/view/browser.rs installs it with its defaults).
+ */
+const POOL = ".opfs-sahpool";
+
+/** Keeps the pool on OPFS alive while the database is open (NOC-444, keepAlive.ts): Chromium drops a private window's OPFS after ten minutes without a file operation. */
+const alive = keepAlive(async () =>
+  (await navigator.storage.getDirectory()).getDirectoryHandle(POOL),
+);
+
 /** The database an `open` request names, or undefined for any other request. */
 const opens = (request: Uint8Array): string | undefined => {
   try {
@@ -132,6 +144,10 @@ const opens = (request: Uint8Array): string | undefined => {
 const RETRIES = 30;
 const RETRY_AFTER = 100;
 
+/** Whether `answer` is an error. */
+const failed = (answer: Uint8Array) =>
+  (decode(answer) as { error?: unknown }).error !== undefined;
+
 /** Whether `answer` says the storage could not be opened. */
 const storageFailed = (answer: Uint8Array) =>
   (decode(answer) as { error?: { code?: string } }).error?.code ===
@@ -140,16 +156,20 @@ const storageFailed = (answer: Uint8Array) =>
 /** The answer to an open of the database `name`: once its lock is held, and tried again while another worker's handles are not yet free. */
 const open = async (name: string, request: Uint8Array) => {
   if (held === undefined && "locks" in navigator) await hold(name);
+  // From the open on, which may run for minutes on a large database.
+  alive.start();
   let answered = await answer(request.slice());
   for (let tried = 0; tried < RETRIES && storageFailed(answered); tried++) {
     await new Promise((resolve) => setTimeout(resolve, RETRY_AFTER));
     answered = await answer(request.slice());
   }
+  if (failed(answered)) alive.stop();
   return answered;
 };
 
 /** Closes the database, gives its handles and the lock back, and ends the worker. */
 const stop = async () => {
+  alive.stop();
   try {
     (await ready).release();
   } catch {
