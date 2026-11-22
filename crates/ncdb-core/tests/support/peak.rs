@@ -54,13 +54,6 @@ pub struct Held {
     pub kept: usize,
 }
 
-impl Held {
-    /// What the run held at its peak beyond what it returned or kept.
-    pub fn transient(&self) -> usize {
-        self.peak - self.kept
-    }
-}
-
 /// What `run` returns, and what it held.
 pub fn peak<T>(run: impl FnOnce() -> T) -> (T, Held) {
     let start = LIVE.with(Cell::get);
