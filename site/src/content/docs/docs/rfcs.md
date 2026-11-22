@@ -18,3 +18,4 @@ NoCentralDB is designed in RFCs. Each RFC says its status at the top. Feedback i
 - [RFC 0010: Accounts](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0010-accounts.md)
 - [RFC 0011: Plugin field types](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0011-plugin-field-types.md)
 - [RFC 0012: Several tabs on one browser database, without one owning tab](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0012-multi-tab-browser-storage.md)
+- [RFC 0013: Rich text as a field type](https://github.com/nocentraldb/nocentraldb/blob/main/docs/rfc/0013-rich-text.md)
