@@ -93,7 +93,7 @@ What each project's `gates` task runs:
 
 | Project | Tasks |
 | --- | --- |
-| Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`), `build-wasm` (`cargo build --locked --target wasm32-unknown-unknown`: the crate builds for the browser target, so it uses nothing the browser lacks), `test-wasm` (`cargo test --locked --target wasm32-unknown-unknown`: its tests pass as WebAssembly, run in Node by `wasm-bindgen-test-runner`) |
+| Rust crates (`ncdb-core`) | `format-check` (`cargo fmt --check`), `lint` (`cargo clippy --locked --all-targets -- -D warnings`), `test` (`cargo test --locked`), `build-wasm` (`cargo build --locked --target wasm32-unknown-unknown`: the crate builds for the browser target, so it uses nothing the browser lacks), `test-wasm` (`cargo test --locked --target wasm32-unknown-unknown`: its tests pass as WebAssembly, run in Node by `wasm-bindgen-test-runner`); and, for rich text, which folds only with the cargo feature `rich-text` that no published build turns on until its guard is complete (NOC-468), `lint-rich-text` and `test-rich-text` (the same `lint` and `test` with `--features rich-text`) and `test-wasm-rich-text` (the rich-text tests with the feature on wasm32) |
 | Rust plugin crate (`ncdb-plugin`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: every plugin runs natively and in the browser, so the crate does too |
 | Rust harness (`ncdb-harness`) | `format-check`, `lint`, `test`, `build-wasm` and `test-wasm` as for `ncdb-core`: a plugin's author runs it natively and on wasm32 (C3) |
 | Rust test plugin (`ncdb-test-counter`) | `format-check`, `lint` and `test` as for `ncdb-core`; the core's tests run it on wasm32, so it has no wasm tasks of its own |
@@ -117,6 +117,9 @@ moon run ncdb-core:lint --force
 moon run ncdb-core:test --force
 moon run ncdb-core:build-wasm --force
 moon run ncdb-core:test-wasm --force
+moon run ncdb-core:lint-rich-text --force
+moon run ncdb-core:test-rich-text --force
+moon run ncdb-core:test-wasm-rich-text --force
 moon run ncdb-plugin:format-check --force
 moon run ncdb-plugin:lint --force
 moon run ncdb-plugin:test --force
