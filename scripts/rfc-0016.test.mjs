@@ -11,8 +11,8 @@ import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { headings, read, root, section } from "./lib/rfc-text.mjs";
 import { historyLines } from "./lib/rfc-record.mjs";
+import { headings, read, root, section } from "./lib/rfc-text.mjs";
 
 const file = () => {
   const found = readdirSync(join(root, "docs/rfc")).filter(
@@ -34,7 +34,10 @@ test("RFC 0016 is decided and is about moving an object", () => {
     markdown.split("\n")[2],
     "REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447",
   );
-  assert.match(markdown, /^\*\*Status\.\*\* Decided\. .*\(Carsten, 2026-11-22\)/m);
+  assert.match(
+    markdown,
+    /^\*\*Status\.\*\* Decided\. .*\(Carsten, 2026-11-22\)/m,
+  );
 });
 
 test("RFC 0016 states its design directly, with no list of decisions", () => {
