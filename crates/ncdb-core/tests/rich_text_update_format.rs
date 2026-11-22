@@ -102,7 +102,12 @@ fn a_count_larger_than_the_bytes_left_is_refused() {
     // About 416 million clients in five bytes.
     let update = Bytes::default().uint(416_000_000).0;
     assert!(read(&update).is_err());
-    let structs = Bytes::default().uint(1).uint(u32::MAX.into()).uint(7).uint(0).0;
+    let structs = Bytes::default()
+        .uint(1)
+        .uint(u32::MAX.into())
+        .uint(7)
+        .uint(0)
+        .0;
     assert!(read(&structs).is_err());
 }
 

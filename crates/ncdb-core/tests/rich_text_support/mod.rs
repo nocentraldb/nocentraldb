@@ -101,7 +101,8 @@ pub fn apply(doc: &Doc, update: &[u8]) {
 
 /// The whole document as one update, encoding v1.
 pub fn state(doc: &Doc) -> Vec<u8> {
-    doc.transact().encode_state_as_update_v1(&StateVector::default())
+    doc.transact()
+        .encode_state_as_update_v1(&StateVector::default())
 }
 
 /// The document as XML.

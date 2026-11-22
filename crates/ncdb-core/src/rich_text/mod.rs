@@ -8,5 +8,6 @@
 //! as "unknown type" and are kept.
 
 mod client_id;
+pub mod update;
 
 pub use client_id::client_id;
