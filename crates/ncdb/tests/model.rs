@@ -447,14 +447,14 @@ fn a_schema_that_cannot_be_described_is_reported() {
         &dir.join("model.ts"),
         &SCHEMA_V1.replace(
             "priority: nc.int(),",
-            "priority: nc.int(), body: nc.richText(),",
+            "priority: nc.int(), body: nc.stream(),",
         ),
     );
     let run = ncdb(&dir, &["model", "build"]);
     assert_eq!(run.code, 1);
     assert!(
         run.stderr
-            .contains("model.ts: tasks.body: nc.richText is reserved"),
+            .contains("model.ts: tasks.body: nc.stream is reserved"),
         "{}",
         run.stderr
     );
