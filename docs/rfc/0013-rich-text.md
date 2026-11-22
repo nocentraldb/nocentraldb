@@ -498,4 +498,4 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carr
 ## History
 
 - 2026-11-22 · First published (NOC-411, #422)
-- 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467)
+- 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
