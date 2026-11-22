@@ -8,7 +8,7 @@
 //! A put that a condition cancelled reads the stored generations back and
 //! names the first put, in order, that no longer replaces its own.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use aws_sdk_dynamodb::operation::transact_write_items::TransactWriteItemsError;
 use aws_sdk_dynamodb::types::{AttributeValue, Put, TransactWriteItem};
@@ -102,6 +102,33 @@ pub async fn person_keys(aws: &Aws, space: SpaceId) -> Result<Vec<PersonKeyRecor
         let page = page.map_err(failed("read person keys"))?;
         for item in page.items() {
             records.push(record(item)?);
+        }
+    }
+    Ok(records)
+}
+
+/// The stored records of `ids`, in id order: one consistent `GetItem` per
+/// id, so a put reads the records it touches and not the space's others.
+pub async fn person_keys_of(
+    aws: &Aws,
+    space: SpaceId,
+    ids: Vec<PersonKeyId>,
+) -> Result<Vec<PersonKeyRecord>, StoreError> {
+    let ids: BTreeSet<PersonKeyId> = ids.into_iter().collect();
+    let mut records = Vec::new();
+    for id in ids {
+        let out = aws
+            .db
+            .get_item()
+            .table_name(&aws.names.person_keys)
+            .key("space", b(&space.0))
+            .key("id", b(&id.0))
+            .consistent_read(true)
+            .send()
+            .await
+            .map_err(failed("read a person key"))?;
+        if let Some(item) = out.item {
+            records.push(record(&item)?);
         }
     }
     Ok(records)

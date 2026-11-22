@@ -297,6 +297,16 @@ pub trait RelayStore: Send + Sync {
         space: SpaceId,
     ) -> impl Future<Output = Result<Vec<PersonKeyRecord>, StoreError>> + Send;
 
+    /// The stored records of the person-key ids `ids` in `space`, in
+    /// person-key id order, each once: an id without a stored record has
+    /// none. It reads those records alone, so its cost follows `ids`, not
+    /// the persons of the space (NOC-435).
+    fn person_keys_of(
+        &self,
+        space: SpaceId,
+        ids: Vec<PersonKeyId>,
+    ) -> impl Future<Output = Result<Vec<PersonKeyRecord>, StoreError>> + Send;
+
     /// Stores records the core has matched to their person-key entries,
     /// each replacing the record of its person-key id, if and only if every
     /// put still replaces the generation it names, and nothing otherwise:

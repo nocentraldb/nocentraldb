@@ -16,6 +16,8 @@ NoCentralDB is designed in the open. Each RFC here describes one part of the des
 | [0010](0010-accounts.md) | Accounts: the account key, the recovery code, adding and linking devices |
 | [0011](0011-plugin-field-types.md) | Plugin field types: how a field type is written, registered and loaded |
 | [0012](0012-multi-tab-browser-storage.md) | Several tabs on one browser database, without one owning tab |
+| [0013](0013-rich-text.md) | Rich text as a field type: Yjs updates in a change, TipTap, anchored edits |
+| [0015](0015-relay-admission.md) | Who may create spaces on a relay, without a redeploy |
 | [0016](0016-moving-an-object.md) | Moving an object to another space, so a single note can be shared |
 
 ## Giving feedback
