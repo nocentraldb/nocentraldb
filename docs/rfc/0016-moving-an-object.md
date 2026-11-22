@@ -8,7 +8,7 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0016 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft, for the owner to decide. The owner asked for this design on 2026-11-22, when deciding the user journey of the draft RFC 0015 (NOC-429). It adds an operation to the change format, a link status and SDK names, which GENESIS.md reserves for the owner. Each open choice names its options and a recommendation; [Questions to the owner](#questions-to-the-owner) lists them. The text describes the recommended answers.
+**Status.** Draft, for the owner to decide. The owner asked for this design on 2026-11-22, when deciding RFC 0015 on relay admission and its user journey (#423, NOC-429). It adds an operation to the change format, a link status and SDK names, which GENESIS.md reserves for the owner. Each open choice names its options and a recommendation; [Questions to the owner](#questions-to-the-owner) lists them. The text describes the recommended answers.
 
 **At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes. The [follow-up tickets](#follow-up-tickets) build the chosen design.
 
@@ -291,7 +291,7 @@ Once the owner decides, these tickets carry it out:
 
 ## How this RFC relates to the others
 
-It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [RFC 0004](0004-merge-rules-basic-types.md)'s table, a link status to RFC 0004's links and a step to its references' resolution, and a hidden field to [RFC 0005](0005-schema-and-model-lock.md); it seals personal values under [RFC 0003](0003-keys-and-cryptography.md)'s person keys and gives the notice RFC 0003 left for later; it checks rights by [RFC 0008](0008-membership.md)'s roles; it keeps the view as [RFC 0006](0006-local-view.md) defines it; and it would add calls to [RFC 0009](0009-sdk-api.md). It serves the user journey of the draft RFC 0015, which needs a single note shared, and leaves deleting a space to the draft RFC 0014.
+It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [RFC 0004](0004-merge-rules-basic-types.md)'s table, a link status to RFC 0004's links and a step to its references' resolution, and a hidden field to [RFC 0005](0005-schema-and-model-lock.md); it seals personal values under [RFC 0003](0003-keys-and-cryptography.md)'s person keys and gives the notice RFC 0003 left for later; it checks rights by [RFC 0008](0008-membership.md)'s roles; it keeps the view as [RFC 0006](0006-local-view.md) defines it; and it would add calls to [RFC 0009](0009-sdk-api.md). It serves the user journey of RFC 0015 (#423), which needs a single note shared, and leaves deleting a space to the draft RFC 0014.
 
 ## History
 
