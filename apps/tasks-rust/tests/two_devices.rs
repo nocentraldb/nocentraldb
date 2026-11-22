@@ -121,22 +121,27 @@ impl Drop for Relay {
     }
 }
 
+/// The build of the `ncdb-relay` binary, with the cargo that runs this
+/// test, into the same target directory.
+fn relay_build() -> Command {
+    let mut cargo = Command::new(env!("CARGO"));
+    cargo.args([
+        "build",
+        "--locked",
+        "-q",
+        "-p",
+        "ncdb-relay-server",
+        "--bin",
+        "ncdb-relay",
+    ]);
+    cargo
+}
+
 /// The `ncdb-relay` binary, built by the same cargo into the same target
 /// directory as this test: a test sees only its own package's binaries,
 /// and the app depends on no relay crate.
 fn relay_binary() -> PathBuf {
-    let built = Command::new(env!("CARGO"))
-        .args([
-            "build",
-            "--locked",
-            "-q",
-            "-p",
-            "ncdb-relay-server",
-            "--bin",
-            "ncdb-relay",
-        ])
-        .status()
-        .expect("cargo runs");
+    let built = relay_build().status().expect("cargo runs");
     assert!(built.success(), "cargo build of ncdb-relay failed");
     // target/<profile>/deps/two_devices-<hash> → target/<profile>/ncdb-relay
     let exe = std::env::current_exe().expect("the test's path");
@@ -266,4 +271,27 @@ fn a_task_added_on_one_device_is_seen_and_completed_on_the_other() {
     let status = phone.run(&["status", &space]);
     assert!(status.contains("role: writer"), "{status}");
     assert!(status.contains("initial sync complete: true"), "{status}");
+}
+
+/// `cargo test` hands this test the variables it sets for the package:
+/// CARGO_MANIFEST_DIR, CARGO_PKG_NAME and the rest. A build script that
+/// watches one of them (ring's does) would run again in the relay's build
+/// and its crate would be rebuilt under the file name every other cargo
+/// uses, deleted under another cargo's running doctest (NOC-450). So the
+/// relay's build runs without them.
+#[test]
+fn the_relay_build_runs_without_the_variables_cargo_set_for_this_test() {
+    let build = relay_build();
+    let removed: Vec<_> = build
+        .get_envs()
+        .filter(|(_, value)| value.is_none())
+        .map(|(name, _)| name.to_owned())
+        .collect();
+    for name in ["CARGO_MANIFEST_DIR", "CARGO_PKG_NAME", "CARGO_PKG_VERSION"] {
+        assert!(std::env::var_os(name).is_some(), "cargo test sets {name}");
+        assert!(
+            removed.iter().any(|removed| removed == name),
+            "the relay's build keeps {name}"
+        );
+    }
 }
