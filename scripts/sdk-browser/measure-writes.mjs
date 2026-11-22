@@ -31,7 +31,9 @@ if (![objects, batch, window_].every((n) => Number.isInteger(n) && n > 0)) {
   throw new Error("--objects, --batch and --window take positive integers");
 }
 if (window_ % batch !== 0 || objects % window_ !== 0) {
-  throw new Error("--window must be a multiple of --batch, --objects of --window");
+  throw new Error(
+    "--window must be a multiple of --batch, --objects of --window",
+  );
 }
 
 const lock = JSON.parse(readFileSync(LOCK, "utf8"));
