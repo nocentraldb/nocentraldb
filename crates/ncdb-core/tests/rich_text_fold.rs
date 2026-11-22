@@ -211,6 +211,9 @@ impl Tap for Operation {}
 
 #[test]
 fn an_unknown_must_understand_argument_parks_and_one_from_64_is_ignored() {
+    // Keys 1 to 3 are RFC 0004's: key 3, which operation 5 does not
+    // define, is malformed; keys 4 to 63 are unknown (RFC 0013, "How an
+    // edit travels in a change").
     let alice = Writer::new(ALICE);
     let op = alice.operation(&add_block(&alice.doc, "paragraph", "Hello"));
     let with = |key: u64| {
@@ -222,6 +225,10 @@ fn an_unknown_must_understand_argument_parks_and_one_from_64_is_ignored() {
     };
     assert_eq!(
         RichText.decode(&with(3), origin(1, ALICE, 10)).err(),
+        Some(MalformedArguments)
+    );
+    assert_eq!(
+        RichText.decode(&with(4), origin(1, ALICE, 10)).err(),
         Some(UnknownArgument)
     );
     edit(&with(64), origin(1, ALICE, 10));
@@ -445,7 +452,7 @@ fn the_state_and_the_read_print_redacted() {
         format!("{a1:?}"),
     ] {
         assert!(!printed.contains("Secret"), "{printed}");
-        assert!(printed.contains("[redacted]"), "{printed}");
+        assert!(printed.contains("<redacted>"), "{printed}");
     }
     let _: BTreeMap<u64, [u8; 8]> = a1.clients.clone();
 }
