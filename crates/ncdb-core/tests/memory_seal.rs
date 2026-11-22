@@ -15,7 +15,7 @@ mod peak;
 use std::collections::{BTreeMap, BTreeSet};
 
 use ncdb_core::cbor::{Key, Value};
-use ncdb_core::change::{Operation, Payload};
+use ncdb_core::change::{Change, Operation, Payload};
 use ncdb_core::clock::Hlc;
 use ncdb_core::ids::{ObjectId, SpaceId};
 use ncdb_core::keys::{MemberKey, SpaceKey};
@@ -99,6 +99,29 @@ fn an_opened_payload_holds_a_few_times_its_bytes() {
     assert!(
         held.kept <= 4 * size && held.peak <= 6 * size,
         "opening {size} bytes kept {:.1} times as many, and held {:.1} times at its peak",
+        ratio(held.kept),
+        ratio(held.peak)
+    );
+}
+
+/// A change keeps its frame's bytes and the header's payload, which the
+/// relay and the checks read: the ciphertext twice, not a third time as
+/// the header's bytes, which are part of the frame. Decoding a frame
+/// builds no tree of it, which would copy the ciphertext again.
+#[test]
+fn a_decoded_change_holds_its_ciphertext_twice() {
+    let payload = payload(2_000);
+    let frame = seal::seal(&member(), &space_key(), SpaceId([4; 16]), 1, 1, &payload)
+        .bytes()
+        .to_vec();
+    drop(payload);
+    let size = frame.len();
+    let (change, held) = peak::peak(|| Change::decode(&frame).unwrap());
+    assert_eq!(change.bytes(), frame.as_slice());
+    let ratio = |bytes: usize| bytes as f64 / size as f64;
+    assert!(
+        held.kept <= 2 * size + 1_000 && held.peak <= 2 * size + 1_000,
+        "decoding a frame of {size} bytes kept {:.1} times as many, and held {:.1} times at its peak",
         ratio(held.kept),
         ratio(held.peak)
     );
