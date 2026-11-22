@@ -2,8 +2,9 @@
 //! log back into the database at every checkpoint, but keeps the file at
 //! the largest size it reached until the database closes: after a burst,
 //! such as a new device catching up, the log stood next to the database
-//! at about its size. The view truncates it after each checkpoint to the
-//! size it grows to between two checkpoints, 4 MiB.
+//! at about its size. The view has SQLite truncate it to the size it grows
+//! to between two checkpoints, 4 MiB, when it starts the log again: at the
+//! first write after a checkpoint.
 
 mod support;
 
@@ -11,7 +12,7 @@ use nocentraldb::{Db, OpenOptions, Value};
 use support::{LOCK, TempDir, now};
 
 #[test]
-fn after_a_large_write_the_write_ahead_log_is_at_most_4_mib() {
+fn after_a_large_write_and_the_next_the_write_ahead_log_is_at_most_4_mib() {
     let dir = TempDir::new("write-ahead-log");
     let options = OpenOptions::new(LOCK)
         .path(dir.join("db"))
@@ -37,6 +38,8 @@ fn after_a_large_write_the_write_ahead_log_is_at_most_4_mib() {
         }))
         .unwrap();
     }
+    // The next write, as any later write or pull, starts the log again.
+    now(space.create("projects", [("name", Value::from("next"))])).unwrap();
     let log =
         std::fs::metadata(dir.join("db").join("nocentraldb.sqlite-wal")).map_or(0, |m| m.len());
     assert!(
