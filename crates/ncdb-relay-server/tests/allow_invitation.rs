@@ -1,8 +1,9 @@
 //! `ncdb-relay --allow-invitation <ncdb-invite-1:…>` (NOC-257; the owner's
-//! NOC-239 A, Carsten, 2026-11-12): the relay reads the account key from an
-//! invitation's text, RFC 0003's layout ("Invitation"), and lets that
-//! account's members create spaces, as `--allow-account` does with the key
-//! in hex. A developer who uses only the public SDK starts the relay with
+//! NOC-239 A, Carsten, 2026-11-12): the relay reads the account's identity
+//! from an invitation's text, RFC 0003's layout ("Invitation"): the
+//! recovery key of its statement, or its account key when it has none (RFC
+//! 0015, "The account's identity"; NOC-420). It lets that account's members
+//! create spaces, as `--allow-account` does with the key in hex. A developer who uses only the public SDK starts the relay with
 //! their app's invitation. A text that is not an invitation stops the relay
 //! at start, with a message that names the flag and repeats nothing of the
 //! text.

@@ -1,9 +1,13 @@
-//! The account key of a member's invitation, for `--allow-invitation`
-//! (NOC-257; the owner's NOC-239 A, Carsten, 2026-11-12). An invitation's
-//! text is `ncdb-invite-1:` and unpadded base64url of RFC 0003's layout
-//! ("Invitation"); the account key is key 1 of the member's certificate, at
-//! offset 65. A developer who uses only the public SDK gets that text from
-//! their app's invitation, which never shows a key.
+//! The account's identity in a member's invitation, for
+//! `--allow-invitation` (NOC-257; the owner's NOC-239 A, Carsten,
+//! 2026-11-12). An invitation's text is `ncdb-invite-1:` and unpadded
+//! base64url of RFC 0003's layout ("Invitation"). The identity is the
+//! recovery key of its account key statement, at offset 163, which a
+//! recovery or a lost device leaves as it is; an invitation without a
+//! statement names only its account key, key 1 of the member's
+//! certificate, at offset 65 (RFC 0015, "The account's identity"; NOC-420).
+//! A developer who uses only the public SDK gets that text from their
+//! app's invitation, which never shows a key.
 //!
 //! The text is checked as RFC 0003 has every reader check it, and refused
 //! when it is not an invitation. The relay never verifies the certificate:
@@ -22,9 +26,9 @@ const VERSION: u8 = 1;
 const PLAIN: usize = 163;
 const WITH_STATEMENT: usize = 267;
 
-/// The account key the invitation `text` names, or why `text` is not an
-/// invitation.
-pub(crate) fn account_key(text: &str) -> Result<[u8; 32], &'static str> {
+/// The identity of the account the invitation `text` names, or why `text`
+/// is not an invitation.
+pub(crate) fn identity(text: &str) -> Result<[u8; 32], &'static str> {
     let body = text
         .strip_prefix(PREFIX)
         .ok_or("it does not start with ncdb-invite-1:")?;
@@ -40,17 +44,18 @@ pub(crate) fn account_key(text: &str) -> Result<[u8; 32], &'static str> {
     if !matches!(bytes[97], 1 | 2) {
         return Err("its kind is neither 1 (device) nor 2 (agent)");
     }
-    match (bytes[162], bytes.len()) {
-        (0, PLAIN) => {}
+    let identity = match (bytes[162], bytes.len()) {
+        (0, PLAIN) => &bytes[65..97],
         (1, WITH_STATEMENT) => {
             if bytes[195..203] == [0; 8] {
                 return Err("its account key number is 0");
             }
+            &bytes[163..195]
         }
         (0 | 1, _) => return Err("its length is not the one its statement byte gives"),
         _ => return Err("its statement byte is neither 0 nor 1"),
-    }
-    Ok(bytes[65..97].try_into().expect("32 bytes"))
+    };
+    Ok(identity.try_into().expect("32 bytes"))
 }
 
 /// The bytes of unpadded base64url (RFC 4648, section 5), strictly: no
@@ -84,19 +89,19 @@ fn base64url(text: &str) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{account_key, base64url};
+    use super::{base64url, identity};
 
     const VECTOR: &str = include_str!("../../../docs/rfc/vectors/0003/invitation.txt");
     const VECTOR_STATEMENT: &str =
         include_str!("../../../docs/rfc/vectors/0003/invitation-statement.txt");
     const FIELDS: &str = include_str!("../../../docs/rfc/vectors/0003/fields.txt");
 
-    /// The vectors' account key, from `fields.txt`.
-    fn vector_account() -> [u8; 32] {
+    /// The 32-byte field of the vectors that `fields.txt` names `name`.
+    fn vector_field(name: &str) -> [u8; 32] {
         let hex = FIELDS
             .lines()
-            .find_map(|line| line.strip_prefix("account key: "))
-            .expect("fields.txt names the account key");
+            .find_map(|line| line.strip_prefix(name)?.strip_prefix(": "))
+            .expect("fields.txt names the field");
         let bytes: Vec<u8> = (0..64)
             .step_by(2)
             .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).unwrap())
@@ -105,9 +110,12 @@ mod tests {
     }
 
     #[test]
-    fn the_vectors_name_their_account_key() {
-        assert_eq!(account_key(VECTOR.trim()), Ok(vector_account()));
-        assert_eq!(account_key(VECTOR_STATEMENT.trim()), Ok(vector_account()));
+    fn the_vectors_name_their_identity() {
+        assert_eq!(identity(VECTOR.trim()), Ok(vector_field("account key")));
+        assert_eq!(
+            identity(VECTOR_STATEMENT.trim()),
+            Ok(vector_field("recovery key"))
+        );
     }
 
     #[test]
