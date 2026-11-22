@@ -312,6 +312,7 @@ impl RelayStore for SqliteStore {
                     )
                     .map_err(failed("guest space"))?;
                 }
+                Effect::Statement { .. } => {}
             }
         }
         tx.commit().map_err(failed("commit"))?;
@@ -416,6 +417,10 @@ impl RelayStore for SqliteStore {
             )
             .optional()
             .map_err(failed("member"))
+    }
+
+    async fn statement(&self, _identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
+        Ok(None)
     }
 
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError> {

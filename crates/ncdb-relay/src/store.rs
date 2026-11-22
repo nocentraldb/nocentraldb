@@ -136,6 +136,16 @@ pub enum Effect {
     /// of the append is applied, and the append is
     /// [`AppendOutcome::GuestSpaceTaken`].
     GuestSpace([u8; 32]),
+    /// Raises the highest account key statement number the relay has seen
+    /// for the identity, the recovery key, to `number` (RFC 0015, "The
+    /// account's identity"). It never lowers the stored number and never
+    /// keeps the append from holding.
+    Statement {
+        /// The recovery key the statement names.
+        identity: [u8; 32],
+        /// The statement's number.
+        number: u64,
+    },
 }
 
 /// A person-key record (RFC 0003, "Person-key record"): opaque wrapped bytes and the
@@ -286,6 +296,14 @@ pub trait RelayStore: Send + Sync {
         space: SpaceId,
         member: MemberId,
     ) -> impl Future<Output = Result<Option<MemberRecord>, StoreError>> + Send;
+
+    /// The highest account key statement number the relay has seen for
+    /// the identity, the recovery key, if any (RFC 0015, "The account's
+    /// identity"). Written only through [`Effect::Statement`].
+    fn statement(
+        &self,
+        identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<u64>, StoreError>> + Send;
 
     /// The spaces the member currently belongs to, in id order.
     fn members_of(
@@ -498,6 +516,11 @@ mod debug {
                     f.write_str("GuestSpace(")?;
                     hex(f, account)?;
                     f.write_str(")")
+                }
+                Effect::Statement { identity, number } => {
+                    f.write_str("Statement(")?;
+                    hex(f, identity)?;
+                    write!(f, ", {number})")
                 }
             }
         }

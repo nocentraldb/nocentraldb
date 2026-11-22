@@ -275,6 +275,13 @@ impl RelayStore for AwsStore {
         self.run(move |aws| async move { keys::member(&aws, space, member).await })
     }
 
+    fn statement(
+        &self,
+        _identity: [u8; 32],
+    ) -> impl Future<Output = Result<Option<u64>, StoreError>> + Send {
+        async { Ok(None) }
+    }
+
     fn members_of(
         &self,
         member: MemberId,

@@ -80,6 +80,7 @@ fn member_rows(effects: Vec<Effect>) -> (Vec<MemberRecord>, Option<[u8; 32]>) {
                 rows.push(record);
             }
             Effect::GuestSpace(account) => guest = Some(account),
+            Effect::Statement { .. } => {}
         }
     }
     (rows, guest)
