@@ -2,8 +2,9 @@
 //! and the lock"): a built-in type at rule 1, without configuration, which
 //! the lock reads and writes back, which cannot be personal or indexed, and
 //! which a field of another type cannot become. A device opens a lock with
-//! it; until the core implements rule 1, its operations park as "unknown
-//! type", as a plugin type without code does (RFC 0011).
+//! it; without the feature `rich-text`, its operations park as "unknown
+//! type", as a plugin type without code does (RFC 0011), and with it the
+//! core folds them (tests/rich_text_view.rs).
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;
@@ -166,6 +167,9 @@ fn model_build_adds_a_rich_text_field_with_the_version_that_added_it() {
     );
 }
 
+/// Without the feature `rich-text`, which no published build turns on
+/// (NOC-468), the core does not fold rich text: the field parks.
+#[cfg(not(feature = "rich-text"))]
 #[test]
 fn a_device_opens_the_lock_and_parks_the_field_until_the_core_folds_it() {
     let model = Model::from_lock(&lock()).expect("the device opens the lock");
