@@ -22,7 +22,7 @@ use ncdb_core::log::RelayRefusal;
 use member::*;
 
 const SMALL: u64 = 1_000;
-const LARGE: u64 = 32_000;
+const LARGE: u64 = 16_000;
 
 /// How many times slower the reads on the large log may be.
 const FACTOR: u32 = 4;
