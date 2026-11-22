@@ -10,7 +10,6 @@
 use wasm_bindgen_test::wasm_bindgen_test as test;
 
 use ncdb_core::model_lock::{Draft, Kind, ModelId, ModelLock, Refusal, build, check};
-use ncdb_core::view::Model;
 
 /// Notes with a title and a rich-text body.
 const LOCK: &str = r#"{
@@ -172,7 +171,7 @@ fn model_build_adds_a_rich_text_field_with_the_version_that_added_it() {
 #[cfg(not(feature = "rich-text"))]
 #[test]
 fn a_device_opens_the_lock_and_parks_the_field_until_the_core_folds_it() {
-    let model = Model::from_lock(&lock()).expect("the device opens the lock");
+    let model = ncdb_core::view::Model::from_lock(&lock()).expect("the device opens the lock");
     assert!(model.field("notes", "title").is_some());
     assert!(model.field("notes", "body").is_none());
     assert_eq!(

@@ -64,6 +64,8 @@ impl View {
                 }
                 Field::Set(_) | Field::Links(_) => FieldState::Set(state::set(&bytes)?),
                 Field::Plugin(_) => FieldState::Plugin(bytes),
+                #[cfg(feature = "rich-text")]
+                Field::RichText(_) => FieldState::RichText(super::state::rich_text(&bytes)?),
             };
             fields.insert(name, state);
         }

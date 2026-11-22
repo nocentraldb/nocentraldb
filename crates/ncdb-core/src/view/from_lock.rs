@@ -195,6 +195,11 @@ fn field_type(field: &model_lock::Field, registry: &Registry) -> Option<Field> {
         model_lock::Kind::Ref(t) => Some(Field::Ref(Reference {
             collections: targets(t),
         })),
+        // Rich text folds only with the feature `rich-text` (NOC-468);
+        // without it, the field is unregistered and its operations park.
+        #[cfg(feature = "rich-text")]
+        model_lock::Kind::RichText => Some(Field::RichText(crate::rich_text::RichText)),
+        #[cfg(not(feature = "rich-text"))]
         model_lock::Kind::RichText => None,
         model_lock::Kind::Plugin { type_id, config } => {
             plugin(type_id, field.rule, config, registry)

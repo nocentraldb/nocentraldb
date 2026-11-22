@@ -60,6 +60,12 @@ pub(super) struct SqlFold<'a> {
     /// cleared, by the view's name of the collection (RFC 0006,
     /// "Folding", step 6).
     touched: BTreeSet<(String, ObjectId)>,
+    /// Whether the rich-text operation just folded is earlier than others
+    /// the field holds that give its ids other content (RFC 0013, "The
+    /// same id twice").
+    displaces: std::cell::Cell<bool>,
+    /// The fields to fold again in stamp order, as the changes name them.
+    refolds: BTreeSet<(ObjectId, String, String)>,
 }
 
 impl<'a> SqlFold<'a> {
@@ -73,6 +79,8 @@ impl<'a> SqlFold<'a> {
             shipped: false,
             error: None,
             touched: BTreeSet::new(),
+            displaces: std::cell::Cell::new(false),
+            refolds: BTreeSet::new(),
         }
     }
 
@@ -275,6 +283,12 @@ impl<'a> SqlFold<'a> {
             (Field::Plugin(t), FieldState::Plugin(s)) => {
                 plugin::apply(t, &s, operation, origin)?.map(|bytes| (bytes, None))
             }
+            #[cfg(feature = "rich-text")]
+            (Field::RichText(t), FieldState::RichText(s)) => {
+                let (folded, displaces) = rich_text(t, s, operation, origin);
+                self.displaces.set(displaces);
+                folded.map(|bytes| (bytes, None))
+            }
             _ => unreachable!("a field's state matches its type"),
         };
         Ok(match folded {
@@ -422,7 +436,32 @@ pub(super) fn load(
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),
         (Some(bytes), FieldState::Set(_)) => FieldState::Set(state::set(&bytes)?),
         (Some(bytes), FieldState::Plugin(_)) => FieldState::Plugin(bytes),
+        #[cfg(feature = "rich-text")]
+        (Some(bytes), FieldState::RichText(_)) => FieldState::RichText(state::rich_text(&bytes)?),
     })
+}
+
+/// Folds a rich-text operation into `state`: the new state's bytes, or why
+/// it parks, and whether it displaces operations the state holds, which
+/// park when the field is folded again in stamp order.
+#[cfg(feature = "rich-text")]
+fn rich_text(
+    field_type: &crate::rich_text::RichText,
+    mut state: crate::rich_text::State,
+    operation: &Operation,
+    origin: Origin,
+) -> (Result<Vec<u8>, OperationParkReason>, bool) {
+    use crate::field::FieldType;
+    use crate::rich_text::Fit;
+    let edit = match field_type.decode(operation, origin) {
+        Ok(edit) => edit,
+        Err(reason) => return (Err(reason), false),
+    };
+    let displaces = matches!(field_type.fit(&state, &edit), Fit::Displaces(_));
+    let folded = field_type
+        .try_apply(&mut state, &edit)
+        .map(|()| field_type.state_bytes(&state));
+    (folded, displaces)
 }
 
 /// Decodes `operation` with its field type, applies it to `state`, and
@@ -605,6 +644,7 @@ impl Fold for SqlFold<'_> {
         if self.error.is_some() {
             return Ok(());
         }
+        let original_collection = operation.collection.clone();
         let renamed;
         let operation = match self.name(&operation.collection) {
             Some(name) if name != operation.collection => {
@@ -615,11 +655,19 @@ impl Fold for SqlFold<'_> {
             }
             _ => operation,
         };
+        let named = (
+            operation.object,
+            original_collection.clone(),
+            operation.field.clone().expect("a field operation"),
+        );
         match self.fold_field(origin, operation) {
             Ok(folded) => {
                 if folded.is_ok() {
                     self.touched
                         .insert((operation.collection.clone(), operation.object));
+                }
+                if self.displaces.take() {
+                    self.refolds.insert(named);
                 }
                 folded
             }
@@ -669,6 +717,10 @@ impl Fold for SqlFold<'_> {
             }
             self.keep(result);
         }
+    }
+
+    fn take_refolds(&mut self) -> Vec<(ObjectId, String, String)> {
+        std::mem::take(&mut self.refolds).into_iter().collect()
     }
 
     fn clear_object(&mut self, object: ObjectId) {

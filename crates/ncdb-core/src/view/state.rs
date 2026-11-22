@@ -116,6 +116,12 @@ pub(super) fn set(bytes: &[u8]) -> Result<set::State, Error> {
     Ok(state)
 }
 
+/// A rich-text field's state from its canonical bytes.
+#[cfg(feature = "rich-text")]
+pub(super) fn rich_text(bytes: &[u8]) -> Result<crate::rich_text::State, Error> {
+    crate::rich_text::State::from_bytes(bytes).map_err(|_| CORRUPT)
+}
+
 /// The creates and deletes an object received, by operation id. The
 /// object is a function of them, as a field's state is of its operations.
 #[derive(Default)]
