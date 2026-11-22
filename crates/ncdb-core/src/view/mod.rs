@@ -30,6 +30,8 @@ mod read;
 mod rebuild;
 mod refold;
 mod relay;
+#[cfg(feature = "rich-text")]
+mod rich_text_lease;
 mod schema;
 mod shreds_held;
 mod state;
@@ -60,6 +62,8 @@ pub use model::{
 pub use query::{Cursor, Page, QueryError};
 pub use read::Row;
 pub use rebuild::RebuildProgress;
+#[cfg(feature = "rich-text")]
+pub use rich_text_lease::Lease;
 
 /// A member's local view: its database, its model and the log of each of
 /// its spaces.
