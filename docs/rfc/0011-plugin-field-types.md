@@ -168,6 +168,7 @@ A plugin is code in the member's process. It sees the decrypted content of its f
 - **It gives TypeScript no plugins in v1.** A plugin field reads as unset on a TypeScript member and cannot be written there, until `ncdb core build` lands.
 - **It does not change a field's rule or `config`.** Both stay as the field was added, until migrations exist.
 - **It does not index a plugin field.** There is no column and no order for its values yet.
+- **It does not copy a plugin field into an ad-hoc space.** A plugin's read is no intent its `write` takes, as a counter reads 5 and takes an increment, and a plugin has no copy operation, so the SDK cannot copy a plugin field from what it reads. An ad-hoc copy leaves the field unset and counts each set plugin field it left out, in `plugin_fields_not_copied` in Rust and `pluginFieldsNotCopied` in TypeScript, beside the notice ([RFC 0009, "Sub-agents and ad-hoc spaces"](0009-sdk-api.md#sub-agents-and-ad-hoc-spaces); pm, 2026-11-15, NOC-318; [decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md)). Refusing an object with a set plugin field, which would keep a sub-agent from objects its task needs, was not taken. A copy operation in the plugin API is later work.
 - **It does not keep old rule versions for a plugin.** A plugin release that drops a rule version makes the fields that name it park.
 
 ## Agreement with GENESIS.md and the decided RFCs
@@ -197,6 +198,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 
 ## Decisions
 
+- **2026-11-15 · An ad-hoc copy leaves a plugin field unset and counts it.** (pm, 2026-11-15, NOC-318; [decision](../../factory/decisions/2026-11-15-NOC-318-an-ad-hoc-copy-leaves-plugin-fields-unset-and-counts-what-it-left-out.md))
 - **2026-11-20 · `ncdb-harness` is published to crates.io after 0.1.** (Carsten, 2026-11-20, NOC-362; [decision](../../factory/decisions/2026-11-20-NOC-362-ncdb-harness-stays-unpublished-until-after-0-1.md))
 
 ## History
@@ -206,6 +208,7 @@ It builds on [RFC 0001](0001-nocentraldb.md), which lets developers add field ty
 - 2026-11-19 · Decisions and History record the decisions and changes since the RFC's publication (NOC-362, #388)
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · `ncdb-harness` is published after 0.1, as the owner answered (NOC-362, #396)
+- 2026-11-22 · An ad-hoc copy leaves a plugin field unset and counts it (NOC-379, NOC-318)
 
 ## How this RFC is tested
 
