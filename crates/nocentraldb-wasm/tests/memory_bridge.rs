@@ -2,7 +2,9 @@
 //! write a browser tab's worker answers for the TypeScript SDK. The
 //! request comes as CBOR; the bridge must not hold the request's tree, the
 //! records parsed from it and the transaction's copy of them, all of them
-//! whole, next to each other.
+//! whole, next to each other. It holds what a write through the Rust SDK
+//! holds (tests/memory_write.rs of the crate nocentraldb): at most ten times
+//! the change's bytes.
 
 #[path = "../../nocentraldb/tests/support/peak.rs"]
 mod peak;
@@ -48,6 +50,10 @@ fn ok(bridge: &mut Bridge, call: &str, args: Value) -> Value {
     }
 }
 
+/// The bytes of a change for one record of [`create`], as the bulk import
+/// measured them (docs/bulk-import.md).
+const CHANGE_BYTES_PER_RECORD: usize = 390;
+
 /// A create of the `i`th record, as the bulk import measurement writes it.
 fn create(i: u64) -> Value {
     let status = if i.is_multiple_of(3) { "done" } else { "open" };
@@ -75,8 +81,10 @@ fn create(i: u64) -> Value {
     ])
 }
 
+const RECORDS: u64 = 2_000;
+
 #[test]
-fn a_write_through_the_bridge_holds_a_few_times_its_requests_bytes() {
+fn a_write_through_the_bridge_holds_what_a_write_through_the_rust_sdk_holds() {
     let mut bridge = Bridge::new();
     ok(
         &mut bridge,
@@ -94,19 +102,19 @@ fn a_write_through_the_bridge_holds_a_few_times_its_requests_bytes() {
             "args",
             map(vec![
                 ("space", space),
-                ("ops", Value::Array((0..2_000).map(create).collect())),
+                ("ops", Value::Array((0..RECORDS).map(create).collect())),
             ]),
         ),
     ]));
-    let size = request.len();
+    let change = RECORDS as usize * CHANGE_BYTES_PER_RECORD;
     let (answer, held) = peak::peak(|| now(bridge.handle(&request)));
     assert!(
         matches!(cbor::decode(&answer), Ok(Value::Map(ref m)) if m.contains_key(&Key::Text("ok".into()))),
         "the write failed"
     );
     assert!(
-        held.peak <= 20 * size,
-        "a write of a {size}-byte request held {:.1} times as many at its peak",
-        held.peak as f64 / size as f64
+        held.peak <= 10 * change,
+        "a write of a {change}-byte change held {:.1} times as many at its peak",
+        held.peak as f64 / change as f64
     );
 }
