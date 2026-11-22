@@ -4,7 +4,7 @@ REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-411
 
 This RFC designs `nc.richText`, the field type that [RFC 0005](0005-schema-and-model-lock.md#field-types) reserves and [RFC 0001](0001-nocentraldb.md#field-types-we-ship) promises: a shared document built on Yjs, with Yrs in the core, that people edit in TipTap and agents change with focused edits. It says how a rich-text field's operations travel in a change and fold, how Yjs updates map to those operations, how the TypeScript SDK binds an editor, and what the Rust SDK reads. nexflow.it waits for it: every note body there is rich text.
 
-It checks Yjs's behaviour against the design with three spikes on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spikes found](#what-the-spikes-found)), and its findings are the reasons for the choices below. [Follow-up tickets](#follow-up-tickets) lists the work it leads to, in order.
+It checks Yjs's behaviour against the design with four spikes on Yjs 13.6.33, Yrs 0.28.2 and TipTap 3.35 ([What the spikes found](#what-the-spikes-found)), and its findings are the reasons for the choices below. [Follow-up tickets](#follow-up-tickets) lists the work it leads to, in order.
 
 It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a rich-text update, and on [RFC 0004](0004-merge-rules-basic-types.md), whose plugin contract every field type meets; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
@@ -68,7 +68,7 @@ It builds on [RFC 0002](0002-change-and-log-format.md), whose operations carry a
 
 ## What the spikes found
 
-F1 to F10 come from a first spike, on Yjs 13.6.33 (the latest stable release; 14.0 is in beta), Yrs 0.28.2 and `@tiptap/y-tiptap` 3.3.1 with `@tiptap/extension-collaboration` 3.35.0; [Appendix: the spike](#appendix-the-spike) shows its code. F11 to F14 come from a second spike, on how an agent and a person edit one document at the same time, with `y-prosemirror` 1.3.7 and `prosemirror-markdown` 1.14.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-436-research-how-an-agent-and-a-person-edit/docs/research/agent-edits)). F15 to F19 come from a third, on what an older client does with nodes it cannot interpret, with `y-prosemirror` 1.3.7, `@tiptap/y-tiptap` 3.3.1 and TipTap 3.35.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-437-research-can-every-client-keep-editing-a/docs/research/rich-text-unknown-nodes)).
+F1 to F10 come from a first spike, on Yjs 13.6.33 (the latest stable release; 14.0 is in beta), Yrs 0.28.2 and `@tiptap/y-tiptap` 3.3.1 with `@tiptap/extension-collaboration` 3.35.0; [Appendix: the spike](#appendix-the-spike) shows its code. F11 to F14 come from a second spike, on how an agent and a person edit one document at the same time, with `y-prosemirror` 1.3.7 and `prosemirror-markdown` 1.14.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-436-research-how-an-agent-and-a-person-edit/docs/research/agent-edits)). F15 to F19 come from a third, on what an older client does with nodes it cannot interpret, with `y-prosemirror` 1.3.7, `@tiptap/y-tiptap` 3.3.1 and TipTap 3.35.0 ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-437-research-can-every-client-keep-editing-a/docs/research/rich-text-unknown-nodes)). F20 to F24 come from a fourth, the binding in a browser with IME input, paste and undo, in Chromium with the same versions ([code and notes](https://github.com/nocentraldb/nocentraldb/tree/carstenkoch/noc-455-rich-text-1a-spike-the-tiptap-binding-in/docs/research/rich-text-browser-binding)); it also found the echo stopped by the binding's own origin, a pause-based write reaching another tab in about 540 ms and another browser through a local relay in about 600 ms, and the three measures losing nothing with IME input, paste and undo.
 
 | # | Finding | What it means here |
 | --- | --- | --- |
@@ -91,6 +91,11 @@ F1 to F10 come from a first spike, on Yjs 13.6.33 (the latest stable release; 14
 | F17 | An attribute the schema does not declare, on a node it knows, raised no error, even with the content check, and the next edit of that node removed it. | The content check alone does not protect attributes. |
 | F18 | With `enableContentCheck`, TipTap kept the content, reported one `contentError`, and refused every edit of the field, even in a paragraph the older app knows. It needs `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. | The check turns "deleted" into "read-only": better, but the person can no longer work on the field. |
 | F19 | With the editor's schema widened from the document before it opened, the content check on and the editor rebuilt on `contentError`, the older client kept editing and lost nothing, also when a new kind of node arrived while it was open. A guard on the binding's transactions flagged every loss of the scenario and nothing in ordinary edits. | Three measures together keep every client editing; the binding requires them ([An editor that cannot show a node](#an-editor-that-cannot-show-a-node)). |
+| F20 | A listener registered on the editor's `contentError` event never ran: TipTap's default `onContentError` option threw first, and the editor stayed paused. Given as the editor's `onContentError` option, the rebuild ran. | The rebuild goes in the editor's option. |
+| F21 | An IME composition held open past the pause was written before the person committed it, and replaced by a second change when they did. | A pause does not end inside a composition ([An editor: the binding](#an-editor-the-binding)). |
+| F22 | A rebuild while a composition was open kept the uncommitted text in the document, lost the committed text, and left the editor without focus. | A rebuild waits for `compositionend` and restores focus and selection. |
+| F23 | After a rebuild, undo did nothing with the new editor's own UndoManager; with one UndoManager kept for the `Y.Doc` and passed to each editor, undo took back the text typed before the rebuild. | A rebuild need not cost the undo history. |
+| F24 | A guard without the other two measures refused the editor's deletion of unknown parts, reloaded, and the rebuilt editor deleted them again, at every pause; the person's typing, in the same pending write, was refused with it. | The guard reloads once and then makes the field read-only. |
 
 ## The field in the schema and the lock
 
@@ -237,15 +242,18 @@ const body = await notes.richText(model.notes, noteId, "body");
 
 const editor = new Editor({
   enableContentCheck: true,
+  onContentError: () => body.rebuild(editor),
   editable: body.writable,
   extensions: [
     StarterKit.configure({ undoRedo: false }),
-    Collaboration.configure({ document: body.doc }),
+    Collaboration.configure({
+      document: body.doc,
+      yUndoOptions: { undoManager: body.undoManager },
+    }),
     NcMention.configure({ db }),
     NcKeepUnknown.configure({ document: body.doc }),
   ],
 });
-editor.on("contentError", () => body.rebuild(editor));
 
 // later
 await body.close();
@@ -254,7 +262,7 @@ await body.close();
 `space.richText(collection, id, field)` opens a binding: a `Y.Doc` the SDK keeps in step with the field's document in the core, which runs in a worker ([RFC 0009, "Open and close"](0009-sdk-api.md#open-and-close)).
 
 - **On open,** the SDK leases a client id ([Client ids name their author](#client-ids-name-their-author)), creates the `Y.Doc` with it and loads the field's state into it. The object must exist; a binding on an object the copy does not hold is refused with `notFound`.
-- **What the editor writes,** the SDK collects. It merges the editor's updates and writes them as one change at each pause in typing: after 500 ms without an edit, after at most 2 s of continuous typing, and when the binding closes or the page is hidden. Each such change is a `space.write` like any other, folded before it is sent. Collaborators see text within about half a second of a pause, and the relay and the log see writing sessions, not keystrokes. If the tab is killed before a pause, up to 2 s of typing is lost, which the SDK's guide says.
+- **What the editor writes,** the SDK collects. It merges the editor's updates and writes them as one change at each pause in typing: after 500 ms without an edit, after at most 2 s of continuous typing, and when the binding closes or the page is hidden. Each such change is a `space.write` like any other, folded before it is sent. Collaborators see text within about half a second of a pause, and the relay and the log see writing sessions, not keystrokes. If the tab is killed before a pause, up to 2 s of typing is lost, which the SDK's guide says. A pause does not end inside an IME composition: while one is open, the binding holds the write and writes at `compositionend`, or after 2 s if the composition is still open, so collaborators and the log never see characters the person has not committed, and the person never waits longer than for typing.
 - **What other members write,** the core folds, and the SDK passes the binding the part of the document it does not hold yet, which Yjs computes from the binding's state vector. It applies that with an origin of its own, so the editor's undo leaves it alone and the SDK does not write it back.
 - **A reader** gets a binding with `writable` false, and the editor is made read-only. If an edit reaches the binding anyway, the write is refused with `notAllowed`, and the SDK reloads the `Y.Doc` from the core's state, so the editor never shows text that no change holds.
 - **Several tabs** each open their own binding, with their own client id. What one tab writes reaches the other through the shared database's fold ([RFC 0012](0012-multi-tab-browser-storage.md)).
@@ -270,8 +278,10 @@ Every client must keep editing a document even where it cannot interpret parts o
 So the binding requires three measures, which together kept every client editing and lost nothing (F19):
 
 1. **A schema widened from the document.** Before the editor opens, the binding scans the field's document and gives each unknown node, mark and attribute a placeholder type: a node of that name, inline or block as it sits, with its attributes declared without a default value of their own; a mark with its attributes; an extra attribute on a known node. The editor shows a placeholder, such as a box with the node's name, and keeps the rest editable. `@nocentraldb/tiptap` ships this as `NcKeepUnknown`. A person can still delete a placeholder on purpose, as any block.
-2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. A rebuild costs the selection and the undo history, once per new kind.
-3. **A guard on what the binding writes.** Before the binding writes an editor's update as a change, it checks which parts the update deletes. An update that deletes an element, a format or an attribute the editor's schema does not know is not written: the binding reloads its `Y.Doc` from the core's state and reports the field as not fully shown. Placeholders count as known, so a deliberate deletion passes. The guard works with any editor that edits a `Y.Doc`, and also catches an app that leaves out the first two measures.
+2. **The content check, with a rebuild.** The binding requires `enableContentCheck: true`, with `@tiptap/extension-collaboration` 3.33.0 and `@tiptap/y-tiptap` 3.2.0 or later. When a kind of node arrives that the open editor does not know, TipTap reports `contentError` and pauses editing instead of deleting; `body.rebuild(editor)` builds the editor again with a schema widened anew. The rebuild goes in the editor's `onContentError` option, not in a listener on the editor's events: TipTap's default for that option throws before any such listener runs, and the editor would stay paused (F20). A rebuild waits while an IME composition is open and runs at `compositionend`, so the person's committed text is never lost (F22). After it, the binding restores the focus and the selection, kept as a Yjs relative position. The binding keeps one UndoManager for its `Y.Doc`, `body.undoManager`, which each editor it builds uses, so a rebuild keeps the undo history (F23).
+3. **A guard on what the binding writes.** Before the binding writes an editor's update as a change, it checks which parts the update deletes. An update that deletes an element, a format or an attribute the editor's schema does not know is not written, and the binding reloads once: it loads its `Y.Doc` again from the core's state and reports the field as not fully shown. If the guard refuses again, the binding makes the field read-only: it writes nothing more from that editor, makes the editor read-only and keeps reporting the field as not fully shown, until the app rebuilds the editor with a schema widened anew. It never reloads in a loop, which would refuse the person's typing at every pause (F24). Placeholders count as known, so a deliberate deletion passes. The guard works with any editor that edits a `Y.Doc`.
+
+An editor without `enableContentCheck` is refused: `NcKeepUnknown` throws, as the editor is created, an error that names the missing option, so an app that leaves out the content check finds out at once and not when a newer app writes a node it does not know.
 
 Nothing else in the SDK, an app or an agent's tool may turn the document into ProseMirror nodes with a schema of its own: that conversion deletes what the schema lacks, with no editor (F16). The core never does: it applies updates with Yrs and reads the tree from Yrs.
 
@@ -422,7 +432,7 @@ The build plan, in order. Steps on one line of the table may run in parallel; a 
 3. **The core's un-folding and reads.**
    - **3a. Core: un-folding rich text**: placeholders for the rejected change's items, its deletions undone.
    - **3b. Core: reading.** Markdown in the core's vocabulary, with HTML tags for any other part; plain text; the tree, read from Yrs, never through y-prosemirror's conversion; and mentions.
-4. **TypeScript: the binding and `@nocentraldb/tiptap`**, through the bridge to the core: the lease of client ids, the write at each pause, the reload of a refused write, `NcMention`, and the three measures, each with a test that fails without it: an older schema opening a newer document loses nothing and stays editable (widening); a node kind arriving while the editor is open pauses and resumes after the rebuild (content check); an update that deletes an unknown element, format or attribute is not written, and a deliberate deletion of a placeholder is (guard).
+4. **TypeScript: the binding and `@nocentraldb/tiptap`**, through the bridge to the core: the lease of client ids, the write at each pause, the reload of a refused write, `NcMention`, and the three measures, each with a test that fails without it: an older schema opening a newer document loses nothing and stays editable (widening); a node kind arriving while the editor is open pauses and resumes after the rebuild (content check); an update that deletes an unknown element, format or attribute is not written, a second refusal makes the field read-only, and a deliberate deletion of a placeholder is written (guard); an editor without `enableContentCheck` is refused; a composition is not written before `compositionend`, and a rebuild waits for it and keeps the undo history.
 5. **Core: anchored edits**: the read version and its cache, the lookup, the Yrs-level diff, `anchorNotFound` and `anchorAmbiguous`. With three rules: a quote's ends fall on text, not inside markup; a block's type changes only when the replacement changes it; and an agent's edits for one field go through one lease in order.
 6. **Rust SDK: `RichText` reads**: Markdown, plain text, tree and mentions, and `RichText::from_markdown`.
 7. **The rest.**
@@ -478,6 +488,14 @@ F8 applied 60 updates of three documents, each editing at random and syncing now
 
 It builds on [RFC 0002](0002-change-and-log-format.md), whose operation map carries the rich-text update and whose fold never waits for a gap; on [RFC 0004](0004-merge-rules-basic-types.md), whose operation numbers and plugin contract C1 to C7 the type meets; on [RFC 0005](0005-schema-and-model-lock.md), which reserves `nc.richText` and leaves the mention token to this RFC; on [RFC 0006](0006-local-view.md), which keeps the field's state in `fs_<collection>`; on [RFC 0003](0003-keys-and-cryptography.md), whose space key seals the update; on [RFC 0008](0008-membership.md), whose un-folding this RFC applies to a document; on [RFC 0009](0009-sdk-api.md), whose write, read and inspect calls it extends; and on [RFC 0012](0012-multi-tab-browser-storage.md), whose tabs each open their own binding. [RFC 0011](0011-plugin-field-types.md) leaves rich text out: it is a built-in type.
 
+## Decisions
+
+- **2026-11-22 · The binding holds a write while an IME composition is open, until `compositionend` and for at most 2 s.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-holds-a-write-during-an-ime-composition-for-at-most-2-s.md))
+- **2026-11-22 · A rebuild waits for `compositionend`, then restores the focus and the selection.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-a-rich-text-editor-rebuild-waits-for-compositionend-and-restores-focus-and-selection.md))
+- **2026-11-22 · One UndoManager per binding outlives the rebuilds, so a rebuild keeps the undo history.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-binding-keeps-one-undomanager-across-editor-rebuilds.md))
+- **2026-11-22 · The guard reloads once, then makes the field read-only; an editor without `enableContentCheck` is refused.** (Carsten, 2026-11-22, NOC-467; [decision](../../factory/decisions/2026-11-22-NOC-467-the-rich-text-guard-reloads-once-then-the-field-is-read-only-and-an-editor-without-the-content-check-is-refused.md))
+
 ## History
 
 - 2026-11-22 · First published (NOC-411, #422)
+- 2026-11-22 · The binding's example rebuilds from `onContentError`; a composition holds the write and a rebuild; one UndoManager outlives rebuilds; the guard reloads once, as the owner decided after the browser spike (NOC-455, NOC-467, #454)
