@@ -14,8 +14,6 @@ use minicbor::{Decoder, Encoder};
 use super::{Operation, PAYLOAD_DEPTH, Payload};
 use crate::cbor::{self, Value};
 
-const INFALLIBLE: &str = "writing to a Vec or a count cannot fail";
-
 /// One entry of the payload map, before it is written.
 enum Entry<'a> {
     Value(Value),
@@ -78,14 +76,20 @@ fn write<W: Write<Error = Infallible>>(payload: &Payload, padding: Option<&[u8]>
     // bytes order like the number.
     entries.sort_by_key(|(key, _)| *key);
     let mut encoder = Encoder::new(out);
-    encoder.map(entries.len() as u64).expect(INFALLIBLE);
+    encoder
+        .map(entries.len() as u64)
+        .expect("writing to a Vec or a count cannot fail");
     for (key, entry) in entries {
-        encoder.u64(key).expect(INFALLIBLE);
+        encoder
+            .u64(key)
+            .expect("writing to a Vec or a count cannot fail");
         match entry {
             Entry::Value(value) => put(&mut encoder, &value),
             Entry::Borrowed(value) => put(&mut encoder, value),
             Entry::Operations(operations) => {
-                encoder.array(operations.len() as u64).expect(INFALLIBLE);
+                encoder
+                    .array(operations.len() as u64)
+                    .expect("writing to a Vec or a count cannot fail");
                 for operation in operations {
                     operation_into(&mut encoder, operation);
                 }
@@ -117,14 +121,18 @@ fn operation_into<W: Write<Error = Infallible>>(encoder: &mut Encoder<W>, operat
     entries.sort_by_key(|(key, _)| *key);
     let value = operation.value.as_deref();
     let count = entries.len() + usize::from(value.is_some());
-    encoder.map(count as u64).expect(INFALLIBLE);
+    encoder
+        .map(count as u64)
+        .expect("writing to a Vec or a count cannot fail");
     let mut value_written = value.is_none();
     for (key, entry) in entries {
         if key > 5 && !value_written {
             value_into(encoder, value);
             value_written = true;
         }
-        encoder.u64(key).expect(INFALLIBLE);
+        encoder
+            .u64(key)
+            .expect("writing to a Vec or a count cannot fail");
         match entry {
             Entry::Value(value) => put(encoder, &value),
             Entry::Borrowed(value) => put(encoder, value),
@@ -139,7 +147,9 @@ fn operation_into<W: Write<Error = Infallible>>(encoder: &mut Encoder<W>, operat
 /// Writes key 5 and the value's kept bytes.
 fn value_into<W: Write<Error = Infallible>>(encoder: &mut Encoder<W>, value: Option<&[u8]>) {
     if let Some(bytes) = value {
-        encoder.u64(5).expect(INFALLIBLE);
+        encoder
+            .u64(5)
+            .expect("writing to a Vec or a count cannot fail");
         let _ = encoder.writer_mut().write_all(bytes);
     }
 }
@@ -207,6 +217,6 @@ fn canonical_head(
     ) -> Result<&mut Encoder<Vec<u8>>, minicbor::encode::Error<Infallible>>,
 ) -> Option<()> {
     let mut encoder = Encoder::new(Vec::new());
-    write(&mut encoder).expect(INFALLIBLE);
+    write(&mut encoder).expect("writing to a Vec or a count cannot fail");
     (encoder.writer().as_slice() == &bytes[start..end]).then_some(())
 }
