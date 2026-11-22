@@ -249,6 +249,12 @@ impl View {
         // journal_mode answers with the mode it set, so it is a query.
         conn.query_row("PRAGMA journal_mode = WAL", [], |_| Ok(()))?;
         conn.execute_batch("PRAGMA synchronous = FULL; PRAGMA secure_delete = ON;")?;
+        // A checkpoint folds the write-ahead log back at about 4 MiB (1,000
+        // pages); after one, the file shrinks to that size again, instead of
+        // keeping the size a burst grew it to until the database closes
+        // (NOC-422). Where a browser keeps a rollback journal, it does not
+        // apply.
+        conn.execute_batch("PRAGMA journal_size_limit = 4194304;")?;
         let tx = conn.unchecked_transaction()?;
         // A rebuild cut off by a close starts again (NOC-227).
         schema::drop_staging(&tx)?;
