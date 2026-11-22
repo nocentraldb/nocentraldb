@@ -247,6 +247,18 @@ pub struct Log {
     /// The changes of each author and sequence, kept as changes are
     /// appended; two or more are an equivocation (RFC 0002).
     sequences: BTreeMap<(MemberId, u64), Vec<ChangeId>>,
+    /// The authors and sequences with two or more changes, kept as changes
+    /// are appended. This, `refused` and `parked` let a space's status,
+    /// which the SDK reads after every write, be read without a pass over
+    /// the log (NOC-439).
+    equivocating: BTreeSet<(MemberId, u64)>,
+    /// The positions of each author's changes the relay refused, kept as
+    /// refusals are recorded and forgotten.
+    refused: BTreeMap<MemberId, BTreeSet<Position>>,
+    /// The positions of the changes with parked data: parked for an
+    /// unknown "must understand" payload key, or folded with parked
+    /// operations; kept as states are set.
+    parked: BTreeSet<Position>,
 }
 
 impl fmt::Debug for Log {
@@ -270,6 +282,9 @@ impl Log {
             relay_counts: BTreeMap::new(),
             state_counts: StateCounts::default(),
             sequences: BTreeMap::new(),
+            equivocating: BTreeSet::new(),
+            refused: BTreeMap::new(),
+            parked: BTreeSet::new(),
         }
     }
 
@@ -290,7 +305,11 @@ impl Log {
         self.tips.appended(&change);
         self.counts_mut(change.header().author).unconfirmed += 1;
         let key = (change.header().author, change.header().sequence);
-        self.sequences.entry(key).or_default().push(id);
+        let same = self.sequences.entry(key).or_default();
+        same.push(id);
+        if same.len() > 1 {
+            self.equivocating.insert(key);
+        }
         self.entries.push(Entry {
             change,
             state: None,
@@ -339,10 +358,14 @@ impl Log {
         &self,
         author: MemberId,
     ) -> impl Iterator<Item = (ChangeId, &RelayRefusal)> + '_ {
-        self.entries.iter().filter_map(move |entry| {
-            let refusal = entry.refusal.as_ref()?;
-            (entry.change.header().author == author).then(|| (entry.change.id(), refusal))
-        })
+        self.refused
+            .get(&author)
+            .into_iter()
+            .flatten()
+            .filter_map(|position| {
+                let entry = &self.entries[index(*position)];
+                Some((entry.change.id(), entry.refusal.as_ref()?))
+            })
     }
 
     /// Records the relay's refusal of a change the log holds, beside the
@@ -356,6 +379,8 @@ impl Log {
         let newly = entry.refusal.replace(refusal).is_none();
         let (author, confirmed) = (entry.change.header().author, entry.confirmed);
         if newly {
+            let position = self.position_of(id).expect("the log holds the change");
+            self.refused.entry(author).or_default().insert(position);
             let counts = self.counts_mut(author);
             counts.refused += 1;
             if !confirmed {
@@ -379,6 +404,10 @@ impl Log {
             return false;
         }
         let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        let position = self.position_of(id).expect("the log holds the change");
+        if let Some(positions) = self.refused.get_mut(&author) {
+            positions.remove(&position);
+        }
         let counts = self.counts_mut(author);
         counts.refused -= 1;
         if !confirmed {
@@ -425,13 +454,9 @@ impl Log {
     /// does one without key 64. It opens each such change with `checks`,
     /// so it costs one decryption per counted change.
     pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
-        self.entries
+        self.parked
             .iter()
-            .filter(|entry| match &entry.state {
-                Some(State::Parked(ParkReason::UnknownPayloadKey)) => true,
-                Some(State::Folded { parked }) => !parked.is_empty(),
-                _ => false,
-            })
+            .map(|position| &self.entries[index(*position)])
             .filter_map(|entry| {
                 let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
                 (writer.id == model).then_some(writer.version)
@@ -451,10 +476,9 @@ impl Log {
     /// them.
     pub fn equivocations(&self) -> Vec<ChangeId> {
         let mut ids: Vec<ChangeId> = self
-            .sequences
-            .values()
-            .filter(|ids| ids.len() > 1)
-            .flatten()
+            .equivocating
+            .iter()
+            .flat_map(|key| &self.sequences[key])
             .copied()
             .collect();
         ids.sort_by_key(|id| self.position_of(*id));
@@ -490,6 +514,12 @@ impl Log {
             self.state_counts.count(old, false);
         }
         self.state_counts.count(&state, true);
+        let position = Position(index as u64 + 1);
+        if has_parked_data(&state) {
+            self.parked.insert(position);
+        } else {
+            self.parked.remove(&position);
+        }
         entry.state = Some(state);
         if folded(&entry.state) {
             self.tips.folded(&entry.change, opened);
@@ -587,5 +617,22 @@ impl Log {
             .zip(1..)
             .skip(skip)
             .map(|(entry, position)| (Position(position), &entry.change))
+    }
+}
+
+/// The index in a log's entries of the entry at `position`, which the log
+/// holds.
+fn index(position: Position) -> usize {
+    usize::try_from(position.0 - 1).expect("a position the log holds fits its entries")
+}
+
+/// Whether a change in `state` holds parked data whose model
+/// [`Log::newest_model`] reads: parked for an unknown "must understand"
+/// payload key, or folded with parked operations.
+fn has_parked_data(state: &State) -> bool {
+    match state {
+        State::Parked(ParkReason::UnknownPayloadKey) => true,
+        State::Folded { parked } => !parked.is_empty(),
+        _ => false,
     }
 }
