@@ -46,12 +46,31 @@ unsafe impl GlobalAlloc for Counting {
     }
 }
 
-/// What `run` returns, and the most heap it held above what was live
-/// when it started, in bytes. What `run` returns counts while `run` runs.
-pub fn peak<T>(run: impl FnOnce() -> T) -> (T, usize) {
+/// What one run held: the most heap at any point, and what was still
+/// held when it returned, both above what was live when it started, in
+/// bytes. What the run returns counts in both.
+pub struct Held {
+    pub peak: usize,
+    pub kept: usize,
+}
+
+impl Held {
+    /// What the run held at its peak beyond what it returned or kept.
+    pub fn transient(&self) -> usize {
+        self.peak - self.kept
+    }
+}
+
+/// What `run` returns, and what it held.
+pub fn peak<T>(run: impl FnOnce() -> T) -> (T, Held) {
     let start = LIVE.with(Cell::get);
     PEAK.with(|peak| peak.set(start));
     let out = run();
     let top = PEAK.with(Cell::get);
-    (out, (top - start).max(0) as usize)
+    let end = LIVE.with(Cell::get);
+    let held = Held {
+        peak: (top - start).max(0) as usize,
+        kept: (end - start).max(0) as usize,
+    };
+    (out, held)
 }

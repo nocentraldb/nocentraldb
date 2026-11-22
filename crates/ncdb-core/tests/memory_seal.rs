@@ -73,9 +73,33 @@ fn sealing_holds_a_few_copies_of_the_payloads_bytes_and_no_tree_of_them() {
     let key = space_key();
     let (_change, held) =
         peak::peak(|| seal::seal(&author, &key, SpaceId([4; 16]), 1, 1, &payload));
+    let held = held.peak;
     assert!(
         held <= 8 * size,
         "sealing {size} bytes held {held} bytes, {:.1} times as many",
         held as f64 / size as f64
+    );
+}
+
+/// An opened payload holds each operation's value as the bytes the change
+/// carries, not as a tree: a few times the payload's bytes, where a tree
+/// of maps takes about twenty. Opening holds the decrypted bytes and one
+/// operation's tree at a time beyond it, never a tree of the whole payload.
+#[test]
+fn an_opened_payload_holds_a_few_times_its_bytes() {
+    let payload = payload(2_000);
+    let size = payload.encode().len();
+    let author = member();
+    let key = space_key();
+    let change = seal::seal(&author, &key, SpaceId([4; 16]), 1, 1, &payload);
+    drop(payload);
+    let (opened, held) = peak::peak(|| seal::open(&change, &author.public(), &key).unwrap());
+    assert_eq!(opened.operations.len(), 14_000);
+    let ratio = |bytes: usize| bytes as f64 / size as f64;
+    assert!(
+        held.kept <= 4 * size && held.peak <= 6 * size,
+        "opening {size} bytes kept {:.1} times as many, and held {:.1} times at its peak",
+        ratio(held.kept),
+        ratio(held.peak)
     );
 }
