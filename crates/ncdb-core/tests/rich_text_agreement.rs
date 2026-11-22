@@ -8,7 +8,7 @@
 //! from the largest id down, Yrs from the smallest up. tests/vectors/rich-text/generate.mjs wrote
 //! the files with Yjs itself. An upgrade of Yjs or Yrs must pass them
 //! unchanged; one that does not changes rule 1.
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;

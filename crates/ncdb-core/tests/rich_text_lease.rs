@@ -4,7 +4,7 @@
 //! one for as long as it writes; two at once lease two different ids, and
 //! a released id is leased again with the clock it reached. The table is
 //! no part of the view: the file keeps it, and no fold touches it.
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 mod support;
 

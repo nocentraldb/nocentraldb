@@ -35,7 +35,7 @@
 //! and on wasm32, as RFC 0006 (`docs/rfc/0006-local-view.md`) defines it
 //! ([`view`]).
 //!
-//! With the feature `rich-text`, it also holds rich text, RFC 0013's
+//! With the compiler cfg `ncdb_rich_text`, it also holds rich text, RFC 0013's
 //! `ncdb/richText` (`rich_text`).
 
 pub mod basic;
@@ -63,7 +63,7 @@ pub mod receive;
 pub mod recovery;
 mod redact;
 pub mod reference;
-#[cfg(feature = "rich-text")]
+#[cfg(ncdb_rich_text)]
 pub mod rich_text;
 pub mod seal;
 pub mod set;

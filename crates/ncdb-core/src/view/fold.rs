@@ -280,7 +280,7 @@ impl<'a> SqlFold<'a> {
             (Field::Plugin(t), FieldState::Plugin(s)) => {
                 plugin::apply(t, &s, operation, origin)?.map(|bytes| (bytes, None))
             }
-            #[cfg(feature = "rich-text")]
+            #[cfg(ncdb_rich_text)]
             (Field::RichText(t), FieldState::RichText(s)) => {
                 let (folded, displaces) = rich_text(t, s, operation, origin);
                 self.displaces.set(displaces);
@@ -433,7 +433,7 @@ pub(super) fn load(
         (Some(bytes), FieldState::Basic(_)) => FieldState::Basic(state::basic(&bytes)?),
         (Some(bytes), FieldState::Set(_)) => FieldState::Set(state::set(&bytes)?),
         (Some(bytes), FieldState::Plugin(_)) => FieldState::Plugin(bytes),
-        #[cfg(feature = "rich-text")]
+        #[cfg(ncdb_rich_text)]
         (Some(bytes), FieldState::RichText(_)) => FieldState::RichText(state::rich_text(&bytes)?),
     })
 }
@@ -441,7 +441,7 @@ pub(super) fn load(
 /// Folds a rich-text operation into `state`: the new state's bytes, or why
 /// it parks, and whether it displaces operations the state holds, which
 /// park when the field is folded again in stamp order.
-#[cfg(feature = "rich-text")]
+#[cfg(ncdb_rich_text)]
 fn rich_text(
     field_type: &crate::rich_text::RichText,
     mut state: crate::rich_text::State,

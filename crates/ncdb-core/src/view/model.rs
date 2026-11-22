@@ -94,9 +94,9 @@ pub enum Field {
     /// A field of a plugin type, with the code registered for it (RFC
     /// 0011).
     Plugin(PluginField),
-    /// Rich text, `ncdb/richText` rule 1 (RFC 0013), with the feature
-    /// `rich-text`.
-    #[cfg(feature = "rich-text")]
+    /// Rich text, `ncdb/richText` rule 1 (RFC 0013), with the compiler cfg
+    /// `ncdb_rich_text`.
+    #[cfg(ncdb_rich_text)]
     RichText(crate::rich_text::RichText),
 }
 
@@ -163,8 +163,8 @@ pub enum FieldState {
     Set(set::State),
     /// The state of a plugin field, as the plugin's code encodes it.
     Plugin(Vec<u8>),
-    /// The state of a rich-text field, with the feature `rich-text`.
-    #[cfg(feature = "rich-text")]
+    /// The state of a rich-text field, with the compiler cfg `ncdb_rich_text`.
+    #[cfg(ncdb_rich_text)]
     RichText(crate::rich_text::State),
 }
 
@@ -257,7 +257,7 @@ impl Field {
             }
             Field::Set(_) | Field::Links(_) => FieldState::Set(set::State::default()),
             Field::Plugin(plugin) => FieldState::Plugin(plugin.code.initial()),
-            #[cfg(feature = "rich-text")]
+            #[cfg(ncdb_rich_text)]
             Field::RichText(_) => FieldState::RichText(Default::default()),
         }
     }
@@ -391,7 +391,7 @@ impl Field {
                 Value::Unsigned(t.rule),
                 Value::Bytes(t.config.clone()),
             ]),
-            #[cfg(feature = "rich-text")]
+            #[cfg(ncdb_rich_text)]
             Field::RichText(_) => Value::Array(vec![Value::Unsigned(7)]),
         }
     }

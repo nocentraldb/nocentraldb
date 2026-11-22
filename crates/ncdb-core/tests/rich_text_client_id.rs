@@ -1,7 +1,7 @@
 //! A rich-text Yjs client id names its author (RFC 0013, "Client ids name
 //! their author"): the low 53 bits of SHA-256 over a fixed label, the
 //! member id and an 8-byte nonce, read as a big-endian number.
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen_test::wasm_bindgen_test as test;

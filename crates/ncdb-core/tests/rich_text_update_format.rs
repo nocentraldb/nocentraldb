@@ -3,7 +3,7 @@
 //! update that does not follow the format, so that only well-formed updates
 //! reach Yrs. An update the check refuses parks as "malformed arguments"
 //! (RFC 0013, "Folding", step 1).
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 mod rich_text_support;
 

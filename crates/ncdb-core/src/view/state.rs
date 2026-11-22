@@ -117,7 +117,7 @@ pub(super) fn set(bytes: &[u8]) -> Result<set::State, Error> {
 }
 
 /// A rich-text field's state from its canonical bytes.
-#[cfg(feature = "rich-text")]
+#[cfg(ncdb_rich_text)]
 pub(super) fn rich_text(bytes: &[u8]) -> Result<crate::rich_text::State, Error> {
     crate::rich_text::State::from_bytes(bytes).map_err(|_| CORRUPT)
 }

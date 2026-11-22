@@ -1,11 +1,11 @@
-//! A rich-text field in the view (RFC 0013, "Folding"): with the feature
-//! `rich-text`, the view's model holds `ncdb/richText` rule 1 as a field
+//! A rich-text field in the view (RFC 0013, "Folding"): with the compiler
+//! cfg `ncdb_rich_text`, the view's model holds `ncdb/richText` rule 1 as a field
 //! type of its own, without a column, and folds its operations into
 //! `fs_<collection>` in any order of arrival. Of two operations that give
 //! one id different content, the earlier in stamp order keeps it and the
 //! other parks as "malformed arguments" on every copy, also when the later
 //! one was folded first ("The same id twice").
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 mod rich_text_support;
 mod support;

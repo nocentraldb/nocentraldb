@@ -8,7 +8,7 @@
 //! writes again under ids it used before, is checked on its own: the
 //! harness's C4 asks that a deletion name only what its author had seen,
 //! and a deletion of a reused id names both writes of it.
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 mod rich_text_support;
 

@@ -3,7 +3,7 @@
 //! client ids against the change's author, applies the update with Yrs in
 //! any order of arrival, keeps the state as canonical bytes, and gives each
 //! operation its outcome: applied, replaced or lost.
-#![cfg(feature = "rich-text")]
+#![cfg(ncdb_rich_text)]
 
 mod rich_text_support;
 
