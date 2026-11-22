@@ -1,8 +1,8 @@
 // While a worker holds a database open it touches OPFS every minute
 // (NOC-444): Chromium drops an off-the-record origin's OPFS after about ten
 // minutes without a file operation, with every access handle and file in
-// it. worker.ts starts the keep-alive once an open succeeds and stops it
-// when the worker stops.
+// it. worker.ts starts the keep-alive when an open begins and stops it
+// when the open fails or the worker stops.
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { KEEP_ALIVE_EVERY, keepAlive } from "../src/keepAlive.ts";
 
@@ -48,16 +48,10 @@ test("a touch that fails is swallowed, and the next one still runs", async () =>
     .fn<() => Promise<unknown>>()
     .mockRejectedValueOnce(new Error("NotFoundError"))
     .mockResolvedValue(undefined);
-  const unhandled = vi.fn();
-  process.on("unhandledRejection", unhandled);
-  try {
-    const alive = keepAlive(touch);
-    alive.start();
-    await vi.advanceTimersByTimeAsync(2 * KEEP_ALIVE_EVERY);
-    expect(touch).toHaveBeenCalledTimes(2);
-    expect(unhandled).not.toHaveBeenCalled();
-    alive.stop();
-  } finally {
-    process.off("unhandledRejection", unhandled);
-  }
+  // An unhandled rejection would fail the run.
+  const alive = keepAlive(touch);
+  alive.start();
+  await vi.advanceTimersByTimeAsync(2 * KEEP_ALIVE_EVERY);
+  expect(touch).toHaveBeenCalledTimes(2);
+  alive.stop();
 });
