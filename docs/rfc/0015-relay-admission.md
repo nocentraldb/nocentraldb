@@ -8,7 +8,7 @@ It builds on [RFC 0007](0007-relay.md), which defines the relay and its costs, a
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0015 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Decided by the owner (Carsten, 2026-11-22, NOC-429): the relay admits by the account's identity, open signup goes through an admission token from the app's backend (option C), and the answers in [What the owner decided](#what-the-owner-decided). The monthly ceiling on the project's own relay is still open. Nothing of it is built. RFC 0007 and RFC 0009 still describe the static allowlist; the [follow-up tickets](#follow-up-tickets) rewrite them and build the chosen design.
+**Status.** Decided by the owner (Carsten, 2026-11-22), on NOC-429: the relay admits by the account's identity, open signup goes through an admission token from the app's backend (option C), and the answers in [What the owner decided](#what-the-owner-decided). Nothing of it is built. RFC 0007 and RFC 0009 still describe the static allowlist; the [follow-up tickets](#follow-up-tickets) rewrite them and build the chosen design.
 
 **At 0.1.** Not built. Release 0.1 keeps RFC 0007's static allowlist of account keys.
 
@@ -234,13 +234,13 @@ Option B was not taken: the same trust as C, bought with a privileged endpoint o
 
 ## What the owner decided
 
-The owner followed the recommendation on each question (Carsten, 2026-11-22, NOC-429), except the ceiling's number, which had none.
+The owner followed the recommendation on each question (Carsten, 2026-11-22, NOC-429); for the ceiling, the question to the owner on NOC-429 recommended today's budget.
 
 1. **Admission is keyed by the account's identity**: the recovery key, and the account key for an account whose certificates carry no statement. The fix ships now, as NOC-420 (Carsten, 2026-11-22, NOC-429).
 2. **Open signup goes through the admission token, option C** (Carsten, 2026-11-22, NOC-429). Options B and D are not taken.
 3. **An admission lapses at a time the app chooses** (Carsten, 2026-11-22, NOC-429). The SDK fetches a new one through the app's `admission` function, so an app withdraws an account by no longer issuing admissions.
 4. **The names are** `admit`, `NCDB_ADMISSION_KEYS`, `ncdb-admit-1:`, the `admission` option of `nc.open` and `db.account.identity` (Carsten, 2026-11-22, NOC-429).
-5. **The monthly ceiling** that the throttling of the project's own relay holds is still open; today's budget is 20 USD. The ceiling's follow-up ticket waits for the owner's number.
+5. **The throttling of the project's own relay holds the relay under 20 USD a month**, today's budget (Carsten, 2026-11-22, NOC-429).
 6. **An app may pass the fingerprint its directory reports** for a new account, without a person comparing it, as its own choice (Carsten, 2026-11-22, NOC-429). `members.add` then returns a notice that says the directory vouched for the account, and the app offers a screen where people compare fingerprints later. A backend that swaps an invitation adds a reader nobody chose; the notice says so to the developer.
 7. **The SDK does not carry out pending invitations** while the inviting admin's devices are off (Carsten, 2026-11-22, NOC-429). The app's backend notifies the admin's devices; an app may run an admin agent of the inviter's account in the cloud, as a visible member, on its own.
 8. **Moving an object between spaces is designed now**, as its own RFC, with the notice RFC 0003 says comes later (Carsten, 2026-11-22, NOC-429).
@@ -251,7 +251,7 @@ These tickets carry out the decided design:
 
 - **NOC-420, the relay admits by the account's identity** (decision 1, already a ticket): `check_genesis` and the guest's one space key by the recovery key, with the highest statement number kept per identity; RFC 0007's "Who may create a space" and its AWS table rewritten; `docs/relay-deploy.md` prints the recovery key; a relay test shows that a listed account still creates spaces after recovering.
 - **Admission tokens**: the format and its test vectors in RFC 0003's style; the `admit` request and its errors in RFC 0007; `NCDB_ADMISSION_KEYS` in the Lambda settings and the CDK stack; the store item on all backends with its conformance tests; the `admission` option and `db.account.identity` in both SDKs and RFC 0009; an example backend in `apps/`.
-- **A ceiling on spend**: throttling and reserved concurrency in `infra/aws`, sized once the owner names the ceiling (decision 5).
+- **A ceiling on spend**: throttling and reserved concurrency in `infra/aws`, sized to hold the relay under 20 USD a month (decision 5).
 - **A guide for developers**: how to cut spaces and how invitations flow through an app's backend, from [A user's journey](#a-users-journey) and [How to cut spaces](#how-to-cut-spaces), with an example backend in `apps/` that issues admissions and keeps a directory.
 - **The directory's notice**: the notice `members.add` returns when an app passes a fingerprint its directory reported, and the screen to compare fingerprints later, in RFC 0009 and both SDKs (decision 6).
 - **Moving an object between spaces**: an RFC of its own, with its notice (decision 8).
@@ -265,4 +265,4 @@ It changes who may create a space in [RFC 0007](0007-relay.md#what-the-relay-che
 
 - 2026-11-21 · First published as a draft (NOC-413)
 - 2026-11-21 · A user's journey and how to cut spaces, at the owner's request (NOC-413)
-- 2026-11-22 · Decided by the owner, who followed every recommendation; the ceiling's number stays open (NOC-429, #423)
+- 2026-11-22 · Decided by the owner, who followed every recommendation (NOC-429, #423)
