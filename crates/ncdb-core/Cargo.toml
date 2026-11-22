@@ -108,6 +108,9 @@ ncdb-harness.workspace = true
 # with proptest. Without default features it uses no threads, no fork and no
 # OS randomness, so the harness also runs on wasm32 (NOC-10).
 proptest = { version = "=1.12.0", default-features = false, features = ["alloc", "no_std"] }
+# The rich-text tests write real Yjs updates with Yrs, as a member's editor
+# would (RFC 0013). The version the core pins.
+yrs = "=0.28.2"
 
 # The test-wasm task (crates/ncdb-core/moon.yml) runs the tests on wasm32
 # with wasm-bindgen-test. The runner, wasm-bindgen-cli, must be the version of
