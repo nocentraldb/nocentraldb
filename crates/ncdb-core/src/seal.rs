@@ -22,7 +22,7 @@
 use std::fmt;
 
 use chacha20poly1305::XChaCha20Poly1305;
-use chacha20poly1305::aead::{Aead, KeyInit, Payload as Aad};
+use chacha20poly1305::aead::{Aead, AeadInOut, KeyInit, Payload as Aad};
 use ed25519_dalek::{Signature, Signer, VerifyingKey};
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -109,27 +109,53 @@ pub fn verify(change: &Change, author: &MemberPublicKey) -> Result<(), OpenError
 /// multiple of [`PADDING_BLOCK`] bytes.
 pub fn pad(payload: &Payload) -> Payload {
     let mut padded = payload.clone();
-    padded.padding = None;
-    let length = padded.encode().len();
+    padded.padding = padding(payload, payload.unpadded_length()).map(|zeros| vec![0; zeros]);
+    padded
+}
+
+/// How many zero bytes of padding (key 5) make the payload's encoding a
+/// multiple of [`PADDING_BLOCK`] bytes, or `None` when its `length`
+/// bytes without padding are one. The lengths are counted, not encoded: the padding entry costs
+/// its key, the byte string's length and the zeros, and the map's own
+/// length may grow by a byte.
+fn padding(payload: &Payload, length: usize) -> Option<usize> {
     if length.is_multiple_of(PADDING_BLOCK) {
-        return padded;
+        return None;
     }
-    padded.padding = Some(Vec::new());
+    let with = |zeros: usize| length + padded_growth(payload, zeros);
     // The encoding with empty padding; n zero bytes add n, and from 24 and
     // 256 bytes on one and two more for the byte string's length.
-    let base = padded.encode().len();
+    let base = with(0);
     let mut target = length.next_multiple_of(PADDING_BLOCK);
     loop {
         for growth in [0, 1, 2, 4] {
             let Some(zeros) = target.checked_sub(base + growth) else {
                 continue;
             };
-            padded.padding = Some(vec![0; zeros]);
-            if padded.encode().len() == target {
-                return padded;
+            if with(zeros) == target {
+                return Some(zeros);
             }
         }
         target += PADDING_BLOCK;
+    }
+}
+
+/// How many bytes `zeros` bytes of padding add to the payload's encoding:
+/// the padding entry's key, the byte string's length and the zeros, and a
+/// byte more for the map's own length where it grows.
+fn padded_growth(payload: &Payload, zeros: usize) -> usize {
+    let entries = payload.entries_without_padding();
+    head(entries + 1) - head(entries) + 1 + head(zeros) + zeros
+}
+
+/// The bytes of a CBOR head that carries the number `n`.
+fn head(n: usize) -> usize {
+    match n {
+        0..24 => 1,
+        24..256 => 2,
+        256..65_536 => 3,
+        _ if u32::try_from(n).is_ok() => 5,
+        _ => 9,
     }
 }
 
@@ -176,17 +202,28 @@ pub fn seal_with_nonce(
         Vec::new(),
         SUITE,
     );
-    let plaintext = Zeroizing::new(pad(payload).encode());
-    let ciphertext = cipher(space_key, &header)
-        .encrypt(
+    // One buffer, sized once, so that no reallocation leaves plaintext
+    // behind in freed memory: the nonce, then the padded payload, which is
+    // encrypted where it lies, then the tag (NOC-422).
+    let unpadded = payload.unpadded_length();
+    let zeros = padding(payload, unpadded).map(|zeros| vec![0; zeros]);
+    let length = unpadded
+        + zeros
+            .as_ref()
+            .map_or(0, |zeros| padded_growth(payload, zeros.len()));
+    let mut sealed = Vec::with_capacity(NONCE_LEN + length + TAG_LEN);
+    sealed.extend_from_slice(&nonce);
+    payload.encode_padded_into(zeros.as_deref(), &mut sealed);
+    debug_assert_eq!(sealed.len(), NONCE_LEN + length);
+    let tag = cipher(space_key, &header)
+        .encrypt_inout_detached(
             &nonce.into(),
-            Aad {
-                msg: &plaintext,
-                aad: &header.associated_data(),
-            },
+            &header.associated_data(),
+            (&mut sealed[NONCE_LEN..]).into(),
         )
         .expect("a payload is far below XChaCha20-Poly1305's length limit");
-    header.payload = [nonce.as_slice(), &ciphertext].concat();
+    sealed.extend_from_slice(&tag);
+    header.payload = sealed;
     sign(author, header)
 }
 

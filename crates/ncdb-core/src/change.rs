@@ -26,6 +26,8 @@ use crate::redact::Size;
 use crate::texts;
 pub use crate::writer_model::{WriterModel, WrongShape};
 
+mod stream;
+
 /// The depth of the header map in a change: inside the frame.
 const HEADER_DEPTH: usize = 2;
 /// The depth of the payload map in a change: inside the header's key 6.
@@ -470,27 +472,27 @@ impl Payload {
 
     /// The canonical bytes of the payload map.
     pub fn encode(&self) -> Vec<u8> {
-        let mut known = vec![
-            (1, Value::Unsigned(self.format)),
-            (2, Value::Unsigned(self.clock.0)),
-            (
-                3,
-                Value::Array(
-                    self.dependencies
-                        .iter()
-                        .map(|id| Value::Bytes(id.0.to_vec()))
-                        .collect(),
-                ),
-            ),
-            (
-                4,
-                Value::Array(self.operations.iter().map(Operation::to_value).collect()),
-            ),
-        ];
-        if let Some(padding) = &self.padding {
-            known.push((5, Value::Bytes(padding.clone())));
-        }
-        cbor::encode(&map(known, &self.extensions))
+        let mut out = Vec::new();
+        stream::encode_into(self, self.padding.as_deref(), &mut out);
+        out
+    }
+
+    /// Appends the canonical bytes of the payload map, with `padding` as
+    /// key 5 in place of its own, to `out`: what sealing encrypts, written
+    /// without a copy of the payload or a tree of it (NOC-422).
+    pub fn encode_padded_into(&self, padding: Option<&[u8]>, out: &mut Vec<u8>) {
+        stream::encode_into(self, padding, out);
+    }
+
+    /// The length of the payload map's canonical bytes without padding,
+    /// counted without encoding them.
+    pub fn unpadded_length(&self) -> usize {
+        stream::length(self)
+    }
+
+    /// The number of entries of the payload map without padding.
+    pub(crate) fn entries_without_padding(&self) -> usize {
+        4 + self.extensions.0.len()
     }
 
     /// Decodes canonical bytes of a payload map. The payload sits at depth
