@@ -55,8 +55,8 @@ impl Model {
                 .iter()
                 .filter(|(field, _)| !fields.contains_key(*field))
                 .filter_map(|(field, f)| match &f.kind {
-                    model_lock::Kind::Plugin { type_id, .. } => {
-                        Some((field.clone(), (type_id.clone(), f.rule)))
+                    model_lock::Kind::Plugin { .. } | model_lock::Kind::RichText => {
+                        Some((field.clone(), (f.kind.type_id().to_owned(), f.rule)))
                     }
                     _ => None,
                 })
@@ -169,7 +169,8 @@ impl Model {
 }
 
 /// The view's field type of a lock's field; none for a plugin type
-/// without code.
+/// without code, and for rich text, whose rule the core does not fold yet
+/// (RFC 0013): its operations park as an unknown type until it does.
 fn field_type(field: &model_lock::Field, registry: &Registry) -> Option<Field> {
     let kind = &field.kind;
     let basic = |kind| Some(Field::Basic(BasicValue { kind }));
@@ -194,6 +195,7 @@ fn field_type(field: &model_lock::Field, registry: &Registry) -> Option<Field> {
         model_lock::Kind::Ref(t) => Some(Field::Ref(Reference {
             collections: targets(t),
         })),
+        model_lock::Kind::RichText => None,
         model_lock::Kind::Plugin { type_id, config } => {
             plugin(type_id, field.rule, config, registry)
         }

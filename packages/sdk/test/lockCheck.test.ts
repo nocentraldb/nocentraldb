@@ -121,3 +121,30 @@ test("a description, which is no type or option, does not make the lock out of d
     lockOutOfDate(tasks({ title: nc.string().describe("What to do") }), lock),
   ).toBeUndefined();
 });
+
+test("a rich-text field matches its lock entry, and a field of another type does not (RFC 0013)", () => {
+  const notesLock = {
+    collections: {
+      notes: {
+        fields: { body: { rule: 1, since: 1, type: "ncdb/richText" } },
+        since: 1,
+      },
+    },
+  };
+  const notes = (body: Parameters<typeof nc.collection>[0][string]) =>
+    nc.model({ notes: nc.collection({ body }) });
+  expect(lockOutOfDate(notes(nc.richText()), notesLock)).toBeUndefined();
+  expect(lockOutOfDate(notes(nc.string()), notesLock)).toContain(
+    "notes.body differs from the lock",
+  );
+  expect(
+    lockOutOfDate(notes(nc.richText()), {
+      collections: {
+        notes: {
+          fields: { body: { rule: 1, since: 1, type: "ncdb/string" } },
+          since: 1,
+        },
+      },
+    }),
+  ).toContain("notes.body differs from the lock");
+});

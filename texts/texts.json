@@ -2520,7 +2520,7 @@
       "id": "ts.reservedFieldType",
       "kind": "ts",
       "text": "{path}: {type} is reserved; its field type comes after 0.1 (RFC 0005).",
-      "when": "ncdb model build, on a model with nc.richText or nc.stream, whose field types a later RFC designs."
+      "when": "ncdb model build, on a model with nc.stream, whose field type a later RFC designs."
     },
     {
       "id": "ts.setElementModified",

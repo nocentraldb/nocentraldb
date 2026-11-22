@@ -103,7 +103,7 @@ export const NOT_SIGN_OFFS = "the text is not a sign-off, which is ncdb-sign-off
 /** `ownerTabClosed` (storageFailed): A call that changes the database, sent to the tab that owned it, when that tab ended before it answered (NOC-177). */
 export const OWNER_TAB_CLOSED = "the tab that held the database closed before it answered; the call may or may not have run";
 
-/** `reservedFieldType`: ncdb model build, on a model with nc.richText or nc.stream, whose field types a later RFC designs. */
+/** `reservedFieldType`: ncdb model build, on a model with nc.stream, whose field type a later RFC designs. */
 export const reservedFieldType = (path: unknown, type: unknown): string =>
   `${path}: ${type} is reserved; its field type comes after 0.1 (RFC 0005).`;
 

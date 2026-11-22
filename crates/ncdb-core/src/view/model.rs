@@ -38,10 +38,10 @@ pub struct Model {
     pub collections: BTreeMap<String, BTreeMap<String, Field>>,
     /// The declared indexes.
     pub indexes: Vec<Index>,
-    /// The fields of each collection that the lock names with a plugin
-    /// type no code implements, each with that type id and rule: their
-    /// operations park as "unknown type" (RFC 0011, "A type that is not
-    /// registered").
+    /// The fields of each collection that the lock names with a type no
+    /// code implements, a plugin type or rich text, each with that type id
+    /// and rule: their operations park as "unknown type" (RFC 0011, "A type
+    /// that is not registered").
     pub unregistered: BTreeMap<String, BTreeMap<String, (String, u64)>>,
     /// The personal fields, by collection and field, each with whom it is
     /// about (RFC 0005, "Personal fields"). The fold keeps a personal
@@ -265,8 +265,8 @@ impl Model {
         self.collections.get(collection)?.get(field)
     }
 
-    /// Whether the lock names `field` of `collection` with a plugin type
-    /// no code implements.
+    /// Whether the lock names `field` of `collection` with a type no code
+    /// implements, a plugin type or rich text.
     pub fn unregistered(&self, collection: &str, field: &str) -> bool {
         self.unregistered_type(collection, field).is_some()
     }
