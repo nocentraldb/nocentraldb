@@ -1,20 +1,18 @@
 // RFC 0016 designs moving an object from one space to another (NOC-447), so
-// that a single note can be shared. It weighs options for each open choice:
-// the object's identity, its history, its links and references, its
-// personal fields, erasure, and what the members of the old space keep, and
-// names the GENESIS principles it serves and touches. The owner followed
-// every recommendation on NOC-449 (Carsten, 2026-11-22), so the RFC is
-// decided: each choice names the option chosen, "What the owner decided"
-// records the answers, and the decision log holds one file per decision.
-// These tests check that each part is there; whether the design is right
-// was the owner's review.
+// that a single note can be shared. It is decided and published as a fresh
+// text, as docs/rfc/README.md asks of a newly published RFC: each section
+// states what the design does and why, then the options not taken, in plain
+// words. It has no list of decisions, no option labels to decode and no
+// Decisions section; who decided each choice stays in factory/decisions/.
+// It names the GENESIS principles it serves and touches. These tests check
+// that each part is there; whether the design is right was the owner's
+// review.
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { headings, read, root, section } from "./lib/rfc-text.mjs";
-
-const DECIDED = "(Carsten, 2026-11-22, NOC-449)";
+import { historyLines } from "./lib/rfc-record.mjs";
 
 const file = () => {
   const found = readdirSync(join(root, "docs/rfc")).filter(
@@ -26,43 +24,66 @@ const file = () => {
 
 const text = () => read(file());
 
-test("RFC 0016 is decided by the owner and is about moving an object", () => {
+/** The prose of the RFC: no fenced code. */
+const prose = () => text().replace(/^```[\s\S]*?^```$/gm, "");
+
+test("RFC 0016 is decided and is about moving an object", () => {
   const markdown = text();
   assert.match(markdown.split("\n")[0], /^# RFC 0016: .*[Mm]ov/);
   assert.equal(
     markdown.split("\n")[2],
     "REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447",
   );
-  assert.match(
-    markdown,
-    /^\*\*Status\.\*\* Decided by the owner \(Carsten, 2026-11-22\), on NOC-449\b/m,
-  );
-  assert.doesNotMatch(markdown, /\*\*Recommended[:.]/);
+  assert.match(markdown, /^\*\*Status\.\*\* Decided\. .*\(Carsten, 2026-11-22\)/m);
 });
 
-// Each open choice has its own section, which weighs at least two options
-// and names the one the owner chose.
+test("RFC 0016 states its design directly, with no list of decisions", () => {
+  const found = headings(text());
+  for (const heading of [
+    "What the owner decided",
+    "Questions to the owner",
+    "Decisions",
+  ]) {
+    assert.ok(!found.includes(heading), `it has a section "${heading}"`);
+  }
+  const body = prose();
+  assert.doesNotMatch(body, /\*\*Chosen\b/);
+  assert.doesNotMatch(body, /\bRecommended\b/);
+  assert.doesNotMatch(body, /[Dd]ecided by the owner/);
+  assert.doesNotMatch(body, /NOC-449/, "who decided stays in the decision log");
+  const label = body.match(/\b(?:[HLKMRPET]\d|option [A-Z]\b)/);
+  assert.ok(!label, `an option label the reader must decode: ${label?.[0]}`);
+});
+
+test("RFC 0016's History is its one publication line", () => {
+  const lines = historyLines(text());
+  assert.deepEqual(lines, ["- 2026-11-22 · First published (NOC-447)"]);
+});
+
+// Each open choice has its own section, which states what the design does
+// and then the options not taken, each with why.
 const CHOICES = [
-  ["the-objects-identity", "identity", "A"],
-  ["its-history", "history", "H1"],
-  ["later-edits", "later edits", "L1"],
-  ["links-in-the-moved-object", "links in the moved object", "K1"],
-  ["links-to-the-moved-object", "links to the moved object", "M1"],
-  ["references-to-the-moved-object", "references", "R1"],
-  ["its-personal-fields", "personal fields", "P1"],
-  ["erasure", "erasure", "E1"],
-  ["what-the-members-of-the-old-space-keep", "what the old space keeps", "T1"],
+  ["the-objects-identity", "identity"],
+  ["its-history", "history"],
+  ["later-edits", "later edits"],
+  ["links-in-the-moved-object", "links in the moved object"],
+  ["links-to-the-moved-object", "links to the moved object"],
+  ["references-to-the-moved-object", "references"],
+  ["its-personal-fields", "personal fields"],
+  ["erasure", "erasure"],
+  ["what-the-members-of-the-old-space-keep", "what the old space keeps"],
 ];
 
-for (const [anchor, name, chosen] of CHOICES) {
-  test(`RFC 0016 weighs options on ${name} and names ${chosen} as chosen`, () => {
+for (const [anchor, name] of CHOICES) {
+  test(`RFC 0016 states its design on ${name}, then the options not taken`, () => {
     const part = section(text(), anchor);
-    const options = part.match(/^\| \*\*[A-Z]\d?\.?/gm) ?? [];
-    assert.ok(options.length >= 2, `fewer than two options: ${options}`);
-    assert.ok(
-      part.includes(`**Chosen: ${chosen}.** ${DECIDED}`),
-      `no "**Chosen: ${chosen}.** ${DECIDED}"`,
-    );
+    const at = part.indexOf("**Options not taken.**");
+    assert.ok(at > 0, 'no "**Options not taken.**" after the design');
+    const options = part
+      .slice(at)
+      .split("\n")
+      .filter((l) => l.startsWith("- "));
+    assert.ok(options.length >= 1, "no option not taken is listed");
   });
 }
 
@@ -72,17 +93,6 @@ test("RFC 0016 names the GENESIS principles it serves and where it touches them"
     assert.match(part, new RegExp(`\\*\\*Principle ${n}\\b`), `principle ${n}`);
   }
   assert.match(part, /[Tt]ouches/);
-});
-
-test("RFC 0016 records the owner's eight answers, each dated, and asks nothing open", () => {
-  const found = headings(text());
-  assert.ok(found.includes("What the owner decided"));
-  assert.ok(!found.includes("Questions to the owner"));
-  const answers = section(text(), "what-the-owner-decided")
-    .split("\n")
-    .filter((l) => /^\d+\. /.test(l));
-  assert.equal(answers.length, 8);
-  for (const a of answers) assert.ok(a.includes(DECIDED), a.slice(0, 60));
 });
 
 test("the decision log holds one file per decision of RFC 0016", () => {
