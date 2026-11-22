@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NOC-455 spike: the TipTap binding in a browser</title>
+<style>
+  #editor .tiptap { border: 1px solid #888; padding: 8px; min-height: 120px; }
+  .nc-unknown { display: block; border: 1px dashed #c60; padding: 2px 4px; }
+  span.nc-unknown { display: inline-block; }
+  .nc-unknown::before { content: attr(data-nc-unknown) " "; color: #c60; font-size: 80%; }
+  .nc-unknown-mark { background: #eee; }
+</style>
+<div id="editor"></div>
+<script type="module">
+  // The SDK, when the server serves it (the latency runs only).
+  try {
+    const { nc } = await import("/sdk/index.js");
+    window.nc = nc;
+  } catch {}
+  await import("/spike.js");
+</script>

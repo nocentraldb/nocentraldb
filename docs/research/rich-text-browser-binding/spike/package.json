@@ -1,0 +1,19 @@
+{
+  "name": "spike-rich-text-browser-binding",
+  "private": true,
+  "type": "module",
+  "description": "NOC-455 spike: the TipTap binding of RFC 0013 in a browser. Not part of the workspace or the gates.",
+  "scripts": {
+    "build": "node build.mjs",
+    "spike": "node build.mjs && node run.mjs"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.35.0",
+    "@tiptap/extension-collaboration": "3.35.0",
+    "@tiptap/pm": "3.35.0",
+    "@tiptap/starter-kit": "3.35.0",
+    "@tiptap/y-tiptap": "3.3.1",
+    "esbuild": "0.28.2",
+    "yjs": "13.6.33"
+  }
+}

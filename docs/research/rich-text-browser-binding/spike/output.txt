@@ -1,0 +1,294 @@
+engine: chromium 157.0.8103.78
+
+== echo
+-- own writes come back
+   writes: [{"reason":"idle","parts":5,"bytes":57,"clients":[2]},{"reason":"idle","parts":6,"bytes":35,"clients":[2]}]
+   pullsAfterOwnWrites: [{"bytes":2,"changed":false},{"bytes":2,"changed":false}]
+   localUpdates: 11
+   problems: []
+-- a collaborator writes, origin checked
+   filterOwnOrigin: true
+   editorText: "Mine. A B C"
+   writesOfTheBinding: [{"reason":"idle","parts":5,"bytes":57,"clients":[2]}]
+   echoedUpdates: 0
+   coreWrites: [{"clientID":0,"bytes":2},{"clientID":2,"bytes":57},{"clientID":3,"bytes":11},{"clientID":3,"bytes":11},{"clientID":3,"bytes":11}]
+   problems: []
+-- a collaborator writes, origin not checked
+   filterOwnOrigin: false
+   editorText: "Mine. A B C"
+   writesOfTheBinding: [{"reason":"idle","parts":5,"bytes":57,"clients":[2]},{"reason":"idle","parts":3,"bytes":23,"clients":[3]}]
+   echoedUpdates: 3
+   coreWrites: [{"clientID":0,"bytes":2},{"clientID":2,"bytes":57},{"clientID":3,"bytes":11},{"clientID":3,"bytes":11},{"clientID":3,"bytes":11},{"clientID":2,"bytes":23}]
+   problems: []
+-- the delete set in every pull
+   sizes: [{"deletions":25,"pullBytes":63,"changed":false},{"deletions":50,"pullBytes":100,"changed":false},{"deletions":75,"pullBytes":118,"changed":false},{"deletions":100,"pullBytes":129,"changed":false}]
+   problems: []
+-- undo with a collaborator
+   afterUndo: {"editorText":" Theirs.","core":"<paragraph> Theirs.</paragraph>"}
+   afterRedo: {"editorText":"Mine. Theirs.","core":"<paragraph>Mine. Theirs.</paragraph>"}
+   writes: [{"reason":"idle","parts":5,"bytes":57,"clients":[2]},{"reason":"idle","parts":1,"bytes":6,"clients":[]},{"reason":"idle","parts":1,"bytes":14,"clients":[2]}]
+   problems: []
+-- hiding the page
+   writesBeforeHide: 0
+   writesAfterHide: [{"reason":"hidden","parts":3,"bytes":47,"clients":[2]}]
+   problems: []
+
+== measures
+-- IME in the aligned paragraph, held past the pause
+   duringComposition: {"writes":1,"core":"<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.にほん</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"}
+   editorText: "Intro.\n\nCareful.\n\nCentered.日本\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.日本</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 2
+   editable: true
+   problems: []
+-- IME next to the chip and inside the highlight
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked字 text.\n\nSee 漢 here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked字</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip>漢 here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- IME while a new kind arrives
+   focusedAfterRebuild: false
+   editorText: "Intro. okとう\n\n\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro. okとう</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 1
+   rebuilds: 1
+   writes: 2
+   editable: true
+   problems: []
+-- undo of a composition
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 2
+   editable: true
+   problems: []
+-- paste over a selection spanning the chip
+   deliberatelyDeleted: ["chip"]
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nReplaced."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>Replaced.</paragraph>"
+   lost: ["chip","chipParagraphText"]
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- copy and paste the chip, with parse rules
+   roundTrip: true
+   clipboardHtml: "<span data-nc-unknown=\"chip\" data-nc-attrs=\"{&quot;ref&quot;:&quot;obj-42&quot;}\" class=\"nc-unknown\" data-pm-slice=\"0 0 []\"></span>"
+   copiesInCore: 2
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.<chip ref=\"obj-42\"></chip></paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- copy and paste the chip, without parse rules
+   roundTrip: false
+   clipboardHtml: "<span data-nc-unknown=\"chip\" data-nc-attrs=\"{&quot;ref&quot;:&quot;obj-42&quot;}\" class=\"nc-unknown\" data-pm-slice=\"0 0 []\"></span>"
+   copiesInCore: 1
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 0
+   editable: true
+   problems: []
+-- copy and paste the callout, with parse rules
+   roundTrip: true
+   clipboardHtml: "<div data-nc-unknown=\"callout\" data-nc-attrs=\"{&quot;tone&quot;:&quot;warn&quot;}\" class=\"nc-unknown\" data-pm-slice=\"0 0 []\">Careful.</div>"
+   copiesInCore: 2
+   editorText: "Intro.\n\nCareful.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- copy and paste the highlighted word
+   clipboardHtml: "<p data-pm-slice=\"1 1 []\"><span data-nc-unknown-mark=\"highlight\" data-nc-attrs=\"{&quot;color&quot;:&quot;green&quot;}\" class=\"nc-unknown-mark\">marked</span></p>"
+   highlightsInCore: 2
+   editorText: "Intro.marked\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.<highlight color=\"green\">marked</highlight></paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- paste HTML from another app
+   editorText: "Intro.Pasted aside\n\npasted mark\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.Pasted aside</paragraph><paragraph>pasted mark</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 1
+   editable: true
+   problems: []
+-- undo and redo in the aligned paragraph
+   editorText: "Intro.\n\nCareful.\n\nCentered. Now\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered. Now</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 3
+   editable: true
+   problems: []
+-- delete the chip, then undo
+   node: "chip"
+   deletedInCore: true
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 2
+   editable: true
+   problems: []
+-- delete the callout, then undo
+   node: "callout"
+   deletedInCore: true
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 2
+   editable: true
+   problems: []
+-- undo across a rebuild, editor's own UndoManager
+   keepUndo: false
+   undoCommandRan: false
+   editorText: "Intro. Typed before.\n\n\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro. Typed before.</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 1
+   rebuilds: 1
+   writes: 1
+   editable: true
+   problems: []
+-- undo across a rebuild, UndoManager kept by the binding
+   keepUndo: true
+   undoCommandRan: true
+   editorText: "Intro.\n\n\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 1
+   rebuilds: 1
+   writes: 2
+   editable: true
+   problems: []
+-- a new kind arrives, rebuild from the onContentError option
+   errorVia: "option"
+   editorText: "Intro. after\n\n\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro. after</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 1
+   rebuilds: 1
+   writes: 1
+   editable: true
+   problems: []
+-- a new kind arrives, rebuild from editor.on as in RFC 0013
+   errorVia: "listener"
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 0
+   rebuilds: 0
+   writes: 0
+   editable: false
+   problems: ["error: Unknown node type: figure"]
+-- content check paused, no rebuild
+   editorText: "Intro.\n\nCareful.\n\nCentered.\n\nSome marked text.\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><figure src=\"img-7\"></figure><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: []
+   reloads: 0
+   contentErrors: 1
+   rebuilds: 0
+   writes: 0
+   editable: false
+   problems: []
+-- guard alone, no widening, no content check
+   watchedMs: 3000
+   editorText: "Intro.\n\nCentered.\n\n\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: ["node callout","attribute tone","mark highlight","node chip","attribute ref"]
+   reloads: 5
+   contentErrors: 0
+   rebuilds: 5
+   writes: 0
+   editable: true
+   problems: []
+-- guard alone, and the person types
+   editorText: "Intro.\n\nCentered.\n\n\n\nSee  here."
+   core: "<paragraph>Intro.</paragraph><callout tone=\"warn\">Careful.</callout><paragraph align=\"center\">Centered.</paragraph><paragraph>Some <highlight color=\"green\">marked</highlight> text.</paragraph><paragraph>See <chip ref=\"obj-42\"></chip> here.</paragraph>"
+   lost: []
+   flagged: ["node callout","attribute tone","mark highlight","node chip","attribute ref"]
+   reloads: 3
+   contentErrors: 0
+   rebuilds: 3
+   writes: 0
+   editable: true
+   problems: []
+   typedKept: false
+
+== latency
+-- two tabs of one browser
+   bursts: {"visibility":{"writer":"visible","reader":"visible"},"total":{"n":10,"min":541,"median":544,"p90":550,"max":550},"pause":{"n":10,"min":501,"median":502,"p90":502,"max":502},"writeCall":{"n":10,"min":33,"median":35,"p90":40,"max":40},"fromWriteToOther":{"n":10,"min":39,"median":42,"p90":49,"max":49}}
+   continuous: {"keysRecorded":57,"charactersArrived":57,"perCharacter":{"n":57,"min":97,"median":1125,"p90":1946,"max":2058},"missing":0,"writes":[{"reason":"max","parts":20,"bytes":105},{"reason":"max","parts":20,"bytes":105},{"reason":"max","parts":17,"bytes":90}]}
+   tab closed before the pause, runBeforeUnload false: {"arrived":true,"startedBy":"hidden"}
+   tab closed before the pause, runBeforeUnload true: {"arrived":true,"startedBy":"hidden"}
+   problems: []
+-- two browsers through the local relay
+   bursts: {"visibility":{"writer":"visible","reader":"visible"},"total":{"n":10,"min":583,"median":597,"p90":603,"max":603},"pause":{"n":10,"min":501,"median":502,"p90":502,"max":502},"writeCall":{"n":10,"min":34,"median":38,"p90":47,"max":47},"fromWriteToOther":{"n":10,"min":82,"median":96,"p90":102,"max":102}}
+   continuous: {"keysRecorded":57,"charactersArrived":57,"perCharacter":{"n":57,"min":135,"median":1167,"p90":1979,"max":2096},"missing":0,"writes":[{"reason":"max","parts":20,"bytes":105},{"reason":"max","parts":20,"bytes":105},{"reason":"max","parts":17,"bytes":90}]}
+   problems: []
