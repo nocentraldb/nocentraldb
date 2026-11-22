@@ -27,6 +27,7 @@ use crate::texts;
 pub use crate::writer_model::{WriterModel, WrongShape};
 
 mod fields;
+mod frame;
 mod stream;
 
 use fields::{Fields, bytes, fixed, map, text, unsigned};
@@ -157,8 +158,10 @@ pub struct Operation {
 pub struct Change {
     bytes: Vec<u8>,
     header: Header,
-    header_bytes: Vec<u8>,
-    signature: Vec<u8>,
+    /// Where the frame holds the header bytes and the signature: a change
+    /// keeps the frame's bytes once (NOC-422).
+    header_range: std::ops::Range<usize>,
+    signature_range: std::ops::Range<usize>,
     id: ChangeId,
 }
 
@@ -214,7 +217,7 @@ impl fmt::Debug for Change {
         f.debug_struct("Change")
             .field("id", &self.id)
             .field("header", &self.header)
-            .field("signature", &Size(self.signature.len(), "bytes"))
+            .field("signature", &Size(self.signature().len(), "bytes"))
             .finish()
     }
 }
@@ -313,7 +316,7 @@ impl Header {
 
     /// The canonical bytes of the header map.
     pub fn encode(&self) -> Vec<u8> {
-        cbor::encode(&map(self.known(), &self.extensions))
+        frame::encode_header(self, true)
     }
 
     /// The canonical bytes of the header map without the payload (key 6):
@@ -321,19 +324,18 @@ impl Header {
     /// (RFC 0003, "How a member signs and encrypts a change"), unknown keys
     /// included.
     pub fn associated_data(&self) -> Vec<u8> {
-        let mut known = self.known();
-        known.retain(|(key, _)| *key != 6);
-        cbor::encode(&map(known, &self.extensions))
+        frame::encode_header(self, false)
     }
 
-    fn known(&self) -> Vec<(u64, Value)> {
+    /// The known entries but the payload (key 6), which is written from
+    /// its buffer.
+    fn known_without_payload(&self) -> Vec<(u64, Value)> {
         vec![
             (1, Value::Bytes(self.space.0.to_vec())),
             (2, Value::Bytes(self.author.0.to_vec())),
             (3, Value::Unsigned(self.sequence)),
             (4, Value::Unsigned(self.key_generation)),
             (5, Value::Unsigned(self.kind.0)),
-            (6, Value::Bytes(self.payload.clone())),
             (7, Value::Unsigned(self.format)),
             (8, Value::Unsigned(self.suite)),
         ]
@@ -341,8 +343,17 @@ impl Header {
 
     /// Decodes canonical bytes of a header map. The header sits at depth
     /// 2, inside the frame, as [`cbor::MAX_DEPTH`] counts.
+    /// Its payload is read into one buffer, without a tree of the header.
     pub fn decode(bytes: &[u8]) -> Result<Header, ChangeError> {
-        let mut fields = Fields::decode(bytes, HEADER_DEPTH)?;
+        let streamed =
+            frame::header_entries(bytes).and_then(|entries| Header::of(Fields(entries)).ok());
+        match streamed {
+            Some(header) => Ok(header),
+            None => Header::of(Fields::decode(bytes, HEADER_DEPTH)?),
+        }
+    }
+
+    fn of(mut fields: Fields) -> Result<Header, ChangeError> {
         Ok(Header {
             space: SpaceId(fixed(fields.required(1)?)?),
             author: MemberId(fixed(fields.required(2)?)?),
@@ -512,24 +523,48 @@ impl Change {
     /// The change of this header and signature.
     pub fn new(header: Header, signature: Vec<u8>) -> Change {
         let header_bytes = header.encode();
-        let bytes = cbor::encode(&Value::Array(vec![
-            Value::Unsigned(Change::FRAME_VERSION),
-            Value::Bytes(header_bytes.clone()),
-            Value::Bytes(signature.clone()),
-        ]));
-        Change::from_parts(bytes, header, header_bytes, signature)
+        Change::signed(header, &header_bytes, &signature)
+    }
+
+    /// The change of this header, its canonical bytes `header_bytes`, and
+    /// their signature.
+    pub(crate) fn signed(header: Header, header_bytes: &[u8], signature: &[u8]) -> Change {
+        let (bytes, header_range, signature_range) =
+            frame::encode(Change::FRAME_VERSION, header_bytes, signature);
+        Change::from_parts(bytes, header, header_range, signature_range)
     }
 
     /// Decodes the canonical bytes of a frame. The change keeps exactly
-    /// these bytes.
+    /// these bytes, once.
     pub fn decode(bytes: &[u8]) -> Result<Change, ChangeError> {
+        let (version, header_range, signature_range) = match frame::split(bytes) {
+            Some(parts) => parts,
+            None => Change::split_whole(bytes)?,
+        };
+        if version != Change::FRAME_VERSION {
+            return Err(ChangeError::FrameVersion(version));
+        }
+        let header = Header::decode(&bytes[header_range.clone()])?;
+        Ok(Change::from_parts(
+            bytes.to_vec(),
+            header,
+            header_range,
+            signature_range,
+        ))
+    }
+
+    /// Why bytes are no frame, by decoding them as one tree; for bytes
+    /// [`frame::split`] takes after all, their parts.
+    fn split_whole(
+        bytes: &[u8],
+    ) -> Result<(u64, std::ops::Range<usize>, std::ops::Range<usize>), ChangeError> {
         let Value::Array(items) = cbor::decode(bytes)? else {
             return Err(ChangeError::FrameShape);
         };
         let Ok([version, header_bytes, signature]) = <[Value; 3]>::try_from(items) else {
             return Err(ChangeError::FrameShape);
         };
-        let (Value::Unsigned(version), Value::Bytes(header_bytes), Value::Bytes(signature)) =
+        let (Value::Unsigned(version), Value::Bytes(_), Value::Bytes(_)) =
             (version, header_bytes, signature)
         else {
             return Err(ChangeError::FrameShape);
@@ -537,28 +572,22 @@ impl Change {
         if version != Change::FRAME_VERSION {
             return Err(ChangeError::FrameVersion(version));
         }
-        let header = Header::decode(&header_bytes)?;
-        Ok(Change::from_parts(
-            bytes.to_vec(),
-            header,
-            header_bytes,
-            signature,
-        ))
+        frame::split(bytes).ok_or(ChangeError::FrameShape)
     }
 
     fn from_parts(
         bytes: Vec<u8>,
         header: Header,
-        header_bytes: Vec<u8>,
-        signature: Vec<u8>,
+        header_range: std::ops::Range<usize>,
+        signature_range: std::ops::Range<usize>,
     ) -> Change {
         let version = u8::try_from(Change::FRAME_VERSION).expect("the frame version is 1");
-        let id = ids::change_id(version, &header_bytes);
+        let id = ids::change_id(version, &bytes[header_range.clone()]);
         Change {
             bytes,
             header,
-            header_bytes,
-            signature,
+            header_range,
+            signature_range,
             id,
         }
     }
@@ -575,12 +604,12 @@ impl Change {
 
     /// The signed header bytes, as the frame holds them.
     pub fn header_bytes(&self) -> &[u8] {
-        &self.header_bytes
+        &self.bytes[self.header_range.clone()]
     }
 
     /// The signature, as the frame holds it.
     pub fn signature(&self) -> &[u8] {
-        &self.signature
+        &self.bytes[self.signature_range.clone()]
     }
 
     /// The change id.

@@ -89,8 +89,9 @@ impl std::error::Error for OpenError {}
 /// The header signed by the author: the change of these header bytes and
 /// their Ed25519 signature.
 pub fn sign(author: &MemberKey, header: Header) -> Change {
-    let signature = author.signing().sign(&header.encode());
-    Change::new(header, signature.to_bytes().to_vec())
+    let header_bytes = header.encode();
+    let signature = author.signing().sign(&header_bytes);
+    Change::signed(header, &header_bytes, &signature.to_bytes())
 }
 
 /// Verifies the change's signature against the author's public keys,
