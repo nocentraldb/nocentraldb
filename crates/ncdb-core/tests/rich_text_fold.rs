@@ -47,9 +47,17 @@ impl Writer {
         client_id(&self.member, &NONCE)
     }
 
-    /// The operation 5 that carries `update`, with this writer's nonce.
+    /// The operation 5 that carries `update`, with this writer's nonce when
+    /// the update adds items; an update that only deletes lists none.
     fn operation(&self, update: &[u8]) -> Operation {
-        operation(update, &[(self.client(), NONCE)])
+        let adds = !ncdb_core::rich_text::update::read(update)
+            .expect("an update Yrs wrote")
+            .runs
+            .is_empty();
+        match adds {
+            true => operation(update, &[(self.client(), NONCE)]),
+            false => operation(update, &[]),
+        }
     }
 }
 
