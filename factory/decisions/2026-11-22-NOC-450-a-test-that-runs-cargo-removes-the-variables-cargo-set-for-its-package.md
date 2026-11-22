@@ -1,0 +1,6 @@
+# 2026-11-22 · NOC-450 · A test that runs cargo removes the variables cargo set for its package
+
+- Decided by: coding agent, NOC-450
+- Why: `cargo test` hands a test the variables it sets for the test's package (`CARGO_MANIFEST_DIR`, `CARGO_PKG_NAME`, `CARGO_PKG_VERSION_*` and the rest). A nested `cargo build` that inherits them reruns every build script that watches one of them with `rerun-if-env-changed`, as ring's does, and rebuilds that crate and its dependents under the same file names that every other cargo run uses. The next plain cargo rebuilds them back. Cargo deletes a library before it rebuilds it, so in `pnpm gates` a doctest of another cargo that linked against `librustls-*.rlib` at that moment failed ("extern location for rustls does not exist"). A nested cargo therefore removes those variables first (`cargo_build` in `crates/nocentraldb/tests/bulk_import.rs`), and the test beside it fails when the nested build rebuilds a dependency from a registry.
+- Instead of: running doctests in a target directory of their own, which builds every dependency twice and only hides the rebuilds; serializing every cargo task in moon, which makes the gate much slower; building the example in a target directory of its own, which builds the SDK and the relay a second time.
+- Topics: testing, ci, gates, cargo
