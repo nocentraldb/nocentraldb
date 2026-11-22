@@ -146,6 +146,22 @@ describe("field functions and modifiers", () => {
     });
   });
 
+  test("rich text is ncdb/richText at rule 1, without options, and takes a description and a deprecation (RFC 0013)", () => {
+    expect(
+      fields(
+        nc.collection({
+          body: nc.richText(),
+          summary: nc.richText().describe("The gist."),
+          oldBody: nc.richText().deprecated("Use body."),
+        }),
+      ),
+    ).toEqual({
+      body: { type: "ncdb/richText", rule: 1 },
+      summary: { type: "ncdb/richText", rule: 1, description: "The gist." },
+      oldBody: { type: "ncdb/richText", rule: 1, deprecated: "Use body." },
+    });
+  });
+
   test("a set takes a choice as its element, and links take several collections", () => {
     expect(
       fields(
@@ -227,13 +243,9 @@ describe("a deprecated collection", () => {
 });
 
 describe("what model build refuses before the lock", () => {
-  test("rich text and streams are reserved, not designed yet", () => {
-    for (const reserved of [nc.richText(), nc.stream()]) {
-      const model = nc.model({ tasks: nc.collection({ body: reserved }) });
-      expect(() => draft(model)).toThrow(
-        /tasks\.body: nc\.(richText|stream) is reserved/,
-      );
-    }
+  test("streams are reserved, not designed yet", () => {
+    const model = nc.model({ tasks: nc.collection({ body: nc.stream() }) });
+    expect(() => draft(model)).toThrow(/tasks\.body: nc\.stream is reserved/);
   });
 
   test("a set's element is a basic value without modifiers", () => {
@@ -249,8 +261,9 @@ describe("what model build refuses before the lock", () => {
     expect(() => draft(model(nc.links("tasks")))).toThrow(
       /tasks\.tags: a set's element is a basic value/,
     );
-    // Not a day or a point in time in v1 (RFC 0005, "Days and points in time").
-    for (const element of [nc.date(), nc.timestamp()]) {
+    // Not a day or a point in time in v1 (RFC 0005, "Days and points in
+    // time"), and not rich text, which is no basic value (RFC 0013).
+    for (const element of [nc.date(), nc.timestamp(), nc.richText()]) {
       expect(() => draft(model(element))).toThrow(
         /tasks\.tags: a set's element is a basic value: nc\.string\(\)/,
       );
