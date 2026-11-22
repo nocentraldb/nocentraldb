@@ -498,7 +498,11 @@ pub fn person_key_records_are_read_by_id<B: Backend>(backend: &B) {
     assert_eq!(got, [person_key(1, 1), person_key(3, 1)]);
     let got = block_on(backend.connect().person_keys_of(a, ids(&[2]))).unwrap();
     assert!(got.is_empty(), "space 2's record is not space 1's");
-    assert!(block_on(store.person_keys_of(a, ids(&[]))).unwrap().is_empty());
+    assert!(
+        block_on(store.person_keys_of(a, ids(&[])))
+            .unwrap()
+            .is_empty()
+    );
 }
 
 /// A person-key put is conditional on the stored generation: a put that

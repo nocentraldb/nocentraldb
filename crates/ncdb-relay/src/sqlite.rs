@@ -141,7 +141,13 @@ fn array<const N: usize>(bytes: Vec<u8>) -> Result<[u8; N], StoreError> {
 type RecordColumns = (Vec<u8>, i64, Vec<u8>, Vec<u8>, Vec<u8>);
 
 fn record_columns(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordColumns> {
-    Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+    ))
 }
 
 fn stored_record(

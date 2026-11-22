@@ -57,7 +57,10 @@ fn record(space: &Space, n: u8) -> PersonKeyRecord {
 
 fn push(relay: &Relay<Counting<SqliteStore>>, by: u8, space: &Space, change: &Change) {
     let pushed = block_on(relay.push(id(by), space.space, vec![change.bytes().to_vec()]));
-    assert!(matches!(pushed.results[..], [Pushed::Accepted(_)]), "{pushed:?}");
+    assert!(
+        matches!(pushed.results[..], [Pushed::Accepted(_)]),
+        "{pushed:?}"
+    );
 }
 
 #[test]
