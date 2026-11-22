@@ -122,7 +122,8 @@ impl Drop for Relay {
 }
 
 /// The build of the `ncdb-relay` binary, with the cargo that runs this
-/// test, into the same target directory.
+/// test, into the same target directory, without the variables cargo sets
+/// for this test's package (NOC-450).
 fn relay_build() -> Command {
     let mut cargo = Command::new(env!("CARGO"));
     cargo.args([
@@ -134,7 +135,28 @@ fn relay_build() -> Command {
         "--bin",
         "ncdb-relay",
     ]);
+    for (name, _) in std::env::vars_os() {
+        if name.to_str().is_some_and(set_for_the_package) {
+            cargo.env_remove(name);
+        }
+    }
     cargo
+}
+
+/// Whether cargo sets the variable `name` for the package whose test runs
+/// (the Cargo Book, "Environment variables Cargo sets for crates"). CARGO
+/// itself, CARGO_HOME, CARGO_TARGET_DIR and cargo's own configuration stay.
+fn set_for_the_package(name: &str) -> bool {
+    ["CARGO_PKG_", "CARGO_MANIFEST_", "CARGO_BIN_"]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+        || [
+            "CARGO_CRATE_NAME",
+            "CARGO_PRIMARY_PACKAGE",
+            "CARGO_TARGET_TMPDIR",
+            "OUT_DIR",
+        ]
+        .contains(&name)
 }
 
 /// The `ncdb-relay` binary, built by the same cargo into the same target
