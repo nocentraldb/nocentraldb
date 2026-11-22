@@ -2,7 +2,8 @@
 //! 400 and 800 persons in a space. A new person is a person-key entry (a
 //! control change) and then its person-key record, as the SDK writes
 //! them. It prints, per size, the time of the push and of the put, how
-//! often and how many frame bytes the relay read for them, and the
+//! often and how many frame bytes the relay read for them, how many
+//! person-key records the put read, and the
 //! process's resident memory once the space holds them all (Linux only),
 //! and the push and put of one more person on a cold relay. It is ignored: run
 //! it with `cargo test --release -p ncdb-relay --test
@@ -69,6 +70,8 @@ struct Cost {
     put: Duration,
     reads: usize,
     bytes: usize,
+    /// The person-key records the put read.
+    records: usize,
     /// The push and the put of one more person on a relay that remembers
     /// nothing yet, as on a cold instance.
     cold: Duration,
@@ -92,6 +95,7 @@ fn measure(persons: u32, last: u32) -> Cost {
         put: Duration::ZERO,
         reads: 0,
         bytes: 0,
+        records: 0,
         cold: Duration::ZERO,
     };
     for n in 0..persons {
@@ -99,6 +103,7 @@ fn measure(persons: u32, last: u32) -> Cost {
         let measured = n >= persons - last;
         relay.store().take_reads();
         relay.store().take_bytes();
+        relay.store().take_records();
         let start = Instant::now();
         let frames = vec![change.bytes().to_vec()];
         let pushed = block_on(relay.push(id(WRITER), space.space, frames)).results;
@@ -113,6 +118,7 @@ fn measure(persons: u32, last: u32) -> Cost {
             cost.put += put;
             cost.reads += relay.store().take_reads();
             cost.bytes += relay.store().take_bytes().0;
+            cost.records += relay.store().take_records();
         }
         head = change;
     }
@@ -128,6 +134,7 @@ fn measure(persons: u32, last: u32) -> Cost {
     cost.put /= last;
     cost.reads /= last as usize;
     cost.bytes /= last as usize;
+    cost.records /= last as usize;
     cost
 }
 
@@ -146,16 +153,17 @@ fn resident_mb() -> f64 {
 #[ignore = "a measurement: run it with --release --ignored --nocapture"]
 fn what_one_more_person_costs_the_relay() {
     println!(
-        "persons | push (ms) | put (ms) | reads of the log | frame bytes read | resident (MB) | cold push and put (ms)"
+        "persons | push (ms) | put (ms) | reads of the log | frame bytes read | records read by the put | resident (MB) | cold push and put (ms)"
     );
     for persons in [100, 400, 800] {
         let cost = measure(persons, 10);
         println!(
-            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16} | {:13.0} | {:.0}",
+            "{persons:7} | {:9.2} | {:8.2} | {:16} | {:16} | {:24} | {:13.0} | {:.0}",
             cost.push.as_secs_f64() * 1e3,
             cost.put.as_secs_f64() * 1e3,
             cost.reads,
             cost.bytes,
+            cost.records,
             resident_mb(),
             cost.cold.as_secs_f64() * 1e3,
         );

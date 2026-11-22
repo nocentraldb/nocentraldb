@@ -613,6 +613,9 @@ fn append(
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
         log_table::insert(tx, log, change.id(), written_at)?;
+        if let Some(at) = written_at {
+            log.record_written_at(change.id(), at);
+        }
         // A passing control change can change the state of others.
         for id in log.take_changed() {
             if id != change.id() {

@@ -17,7 +17,7 @@ use super::{Error, View};
 use crate::change::Change;
 use crate::ids::MemberId;
 use crate::ids::{ChangeId, SpaceId};
-use crate::log::{RelayCounts, RelayRefusal};
+use crate::log::{Log, RelayCounts, RelayRefusal};
 use crate::texts;
 
 impl View {
@@ -72,14 +72,15 @@ impl View {
     /// position, in any space: what would be lost first if the copy were
     /// deleted now (RFC 0006, "What the SDK reports"). A change the relay
     /// refused counts, since it exists only on this device.
+    ///
+    /// Each log keeps it as changes are written and confirmed, so the
+    /// SDK, which reads it after every write, reads no row (NOC-439).
     pub fn oldest_unconfirmed_own(&self) -> Result<Option<u64>, Error> {
-        let oldest: Option<i64> = self.conn.query_row(
-            "SELECT MIN(written_at) FROM log
-             WHERE written_at IS NOT NULL AND relay_position IS NULL",
-            [],
-            |row| row.get(0),
-        )?;
-        Ok(oldest.map(|at| u64::try_from(at).unwrap_or(0)))
+        Ok(self
+            .logs
+            .values()
+            .filter_map(Log::oldest_unconfirmed_written)
+            .min())
     }
 
     /// The relay position of a change, once the relay confirmed it.

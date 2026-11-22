@@ -219,13 +219,15 @@ impl StateCounts {
 }
 
 /// One entry: the change, and on a member its state, whether the relay
-/// confirmed it and the relay's refusal.
+/// confirmed it, the relay's refusal and when the member wrote it.
 #[derive(Clone)]
 struct Entry {
     change: Change,
     state: Option<State>,
     confirmed: bool,
     refusal: Option<RelayRefusal>,
+    /// When the member wrote the change, for one it wrote.
+    written_at: Option<u64>,
 }
 
 /// The log of one space. Its `Debug` output shows the space and the number
@@ -247,6 +249,23 @@ pub struct Log {
     /// The changes of each author and sequence, kept as changes are
     /// appended; two or more are an equivocation (RFC 0002).
     sequences: BTreeMap<(MemberId, u64), Vec<ChangeId>>,
+    /// The authors and sequences with two or more changes, kept as changes
+    /// are appended. This, `refused` and `parked` let a space's status,
+    /// which the SDK reads after every write, be read without a pass over
+    /// the log (NOC-439).
+    equivocating: BTreeSet<(MemberId, u64)>,
+    /// The positions of each author's changes the relay refused, kept as
+    /// refusals are recorded and forgotten.
+    refused: BTreeMap<MemberId, BTreeSet<Position>>,
+    /// The positions of the changes with parked data: parked for an
+    /// unknown "must understand" payload key, or folded with parked
+    /// operations; kept as states are set.
+    parked: BTreeSet<Position>,
+    /// The changes the member wrote that the relay has not confirmed, by
+    /// the time they were written, kept as times are recorded and the
+    /// relay confirms; a refused change counts, since only this device
+    /// holds it.
+    unconfirmed_written: BTreeSet<(u64, Position)>,
 }
 
 impl fmt::Debug for Log {
@@ -270,6 +289,10 @@ impl Log {
             relay_counts: BTreeMap::new(),
             state_counts: StateCounts::default(),
             sequences: BTreeMap::new(),
+            equivocating: BTreeSet::new(),
+            refused: BTreeMap::new(),
+            parked: BTreeSet::new(),
+            unconfirmed_written: BTreeSet::new(),
         }
     }
 
@@ -290,12 +313,17 @@ impl Log {
         self.tips.appended(&change);
         self.counts_mut(change.header().author).unconfirmed += 1;
         let key = (change.header().author, change.header().sequence);
-        self.sequences.entry(key).or_default().push(id);
+        let same = self.sequences.entry(key).or_default();
+        same.push(id);
+        if same.len() > 1 {
+            self.equivocating.insert(key);
+        }
         self.entries.push(Entry {
             change,
             state: None,
             confirmed: false,
             refusal: None,
+            written_at: None,
         });
         let position = self.head();
         self.positions.insert(id, position);
@@ -339,10 +367,14 @@ impl Log {
         &self,
         author: MemberId,
     ) -> impl Iterator<Item = (ChangeId, &RelayRefusal)> + '_ {
-        self.entries.iter().filter_map(move |entry| {
-            let refusal = entry.refusal.as_ref()?;
-            (entry.change.header().author == author).then(|| (entry.change.id(), refusal))
-        })
+        self.refused
+            .get(&author)
+            .into_iter()
+            .flatten()
+            .filter_map(|position| {
+                let entry = &self.entries[index(*position)];
+                Some((entry.change.id(), entry.refusal.as_ref()?))
+            })
     }
 
     /// Records the relay's refusal of a change the log holds, beside the
@@ -356,6 +388,8 @@ impl Log {
         let newly = entry.refusal.replace(refusal).is_none();
         let (author, confirmed) = (entry.change.header().author, entry.confirmed);
         if newly {
+            let position = self.position_of(id).expect("the log holds the change");
+            self.refused.entry(author).or_default().insert(position);
             let counts = self.counts_mut(author);
             counts.refused += 1;
             if !confirmed {
@@ -379,6 +413,10 @@ impl Log {
             return false;
         }
         let (author, confirmed) = (entry.change.header().author, entry.confirmed);
+        let position = self.position_of(id).expect("the log holds the change");
+        if let Some(positions) = self.refused.get_mut(&author) {
+            positions.remove(&position);
+        }
         let counts = self.counts_mut(author);
         counts.refused -= 1;
         if !confirmed {
@@ -396,18 +434,53 @@ impl Log {
         };
         let newly = !std::mem::replace(&mut entry.confirmed, true);
         let (author, refused) = (entry.change.header().author, entry.refusal.is_some());
+        let written_at = entry.written_at;
         if newly && !refused {
             self.counts_mut(author).unconfirmed -= 1;
         }
+        if let Some(at) = written_at {
+            let position = self.position_of(id).expect("the log holds the change");
+            self.unconfirmed_written.remove(&(at, position));
+        }
         true
+    }
+
+    /// Records when the member wrote a change the log holds, in
+    /// milliseconds since the Unix epoch. Returns `false`, and records
+    /// nothing, when the log does not hold the change.
+    pub fn record_written_at(&mut self, id: ChangeId, at: u64) -> bool {
+        let Some(position) = self.position_of(id) else {
+            return false;
+        };
+        let entry = &mut self.entries[index(position)];
+        if let Some(old) = entry.written_at.replace(at) {
+            self.unconfirmed_written.remove(&(old, position));
+        }
+        if !entry.confirmed {
+            self.unconfirmed_written.insert((at, position));
+        }
+        true
+    }
+
+    /// When the member wrote the oldest of its changes the relay has not
+    /// confirmed, in milliseconds since the Unix epoch; `None` when every
+    /// change it wrote, or recorded a time for, is confirmed.
+    pub fn oldest_unconfirmed_written(&self) -> Option<u64> {
+        self.unconfirmed_written.first().map(|(at, _)| *at)
     }
 
     /// Forgets every confirmation of the relay, whose epoch changed;
     /// refusals stay (RFC 0007, "Restores and the relay epoch").
     pub fn forget_relay_confirmations(&mut self) {
         let mut returned = Vec::new();
-        for entry in &mut self.entries {
-            if std::mem::take(&mut entry.confirmed) && entry.refusal.is_none() {
+        for (entry, position) in self.entries.iter_mut().zip(1..) {
+            if !std::mem::take(&mut entry.confirmed) {
+                continue;
+            }
+            if let Some(at) = entry.written_at {
+                self.unconfirmed_written.insert((at, Position(position)));
+            }
+            if entry.refusal.is_none() {
                 returned.push(entry.change.header().author);
             }
         }
@@ -425,13 +498,9 @@ impl Log {
     /// does one without key 64. It opens each such change with `checks`,
     /// so it costs one decryption per counted change.
     pub fn newest_model(&self, checks: &impl Checks, model: [u8; 16]) -> Option<u64> {
-        self.entries
+        self.parked
             .iter()
-            .filter(|entry| match &entry.state {
-                Some(State::Parked(ParkReason::UnknownPayloadKey)) => true,
-                Some(State::Folded { parked }) => !parked.is_empty(),
-                _ => false,
-            })
+            .map(|position| &self.entries[index(*position)])
             .filter_map(|entry| {
                 let writer = checks.open(&entry.change).ok()?.writer_model()?.ok()?;
                 (writer.id == model).then_some(writer.version)
@@ -451,10 +520,9 @@ impl Log {
     /// them.
     pub fn equivocations(&self) -> Vec<ChangeId> {
         let mut ids: Vec<ChangeId> = self
-            .sequences
-            .values()
-            .filter(|ids| ids.len() > 1)
-            .flatten()
+            .equivocating
+            .iter()
+            .flat_map(|key| &self.sequences[key])
             .copied()
             .collect();
         ids.sort_by_key(|id| self.position_of(*id));
@@ -490,6 +558,12 @@ impl Log {
             self.state_counts.count(old, false);
         }
         self.state_counts.count(&state, true);
+        let position = Position(index as u64 + 1);
+        if has_parked_data(&state) {
+            self.parked.insert(position);
+        } else {
+            self.parked.remove(&position);
+        }
         entry.state = Some(state);
         if folded(&entry.state) {
             self.tips.folded(&entry.change, opened);
@@ -587,5 +661,22 @@ impl Log {
             .zip(1..)
             .skip(skip)
             .map(|(entry, position)| (Position(position), &entry.change))
+    }
+}
+
+/// The index in a log's entries of the entry at `position`, which the log
+/// holds.
+fn index(position: Position) -> usize {
+    usize::try_from(position.0 - 1).expect("a position the log holds fits its entries")
+}
+
+/// Whether a change in `state` holds parked data whose model
+/// [`Log::newest_model`] reads: parked for an unknown "must understand"
+/// payload key, or folded with parked operations.
+fn has_parked_data(state: &State) -> bool {
+    match state {
+        State::Parked(ParkReason::UnknownPayloadKey) => true,
+        State::Folded { parked } => !parked.is_empty(),
+        _ => false,
     }
 }

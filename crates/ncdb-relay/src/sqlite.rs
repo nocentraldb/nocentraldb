@@ -17,6 +17,7 @@
 //! future. A server that runs these futures on an asynchronous runtime
 //! moves them to a thread that may block.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::thread;
@@ -133,6 +134,32 @@ fn array<const N: usize>(bytes: Vec<u8>) -> Result<[u8; N], StoreError> {
     bytes
         .try_into()
         .map_err(|_| StoreError("a stored id has the wrong length".into()))
+}
+
+/// The columns of a `person_keys` row: id, generation, writer, wrapped,
+/// signature.
+type RecordColumns = (Vec<u8>, i64, Vec<u8>, Vec<u8>, Vec<u8>);
+
+fn record_columns(row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordColumns> {
+    Ok((
+        row.get(0)?,
+        row.get(1)?,
+        row.get(2)?,
+        row.get(3)?,
+        row.get(4)?,
+    ))
+}
+
+fn stored_record(
+    (id, generation, writer, wrapped, signature): RecordColumns,
+) -> Result<PersonKeyRecord, StoreError> {
+    Ok(PersonKeyRecord {
+        id: PersonKeyId(array(id)?),
+        generation: unsigned(generation),
+        writer: MemberId(array(writer)?),
+        wrapped,
+        signature,
+    })
 }
 
 fn head_of(tx: &Connection, space: SpaceId) -> Result<Option<Position>, StoreError> {
@@ -415,27 +442,37 @@ impl RelayStore for SqliteStore {
             )
             .map_err(failed("person keys"))?;
         let rows = statement
-            .query_map([space.0], |row| {
-                Ok((
-                    row.get::<_, Vec<u8>>(0)?,
-                    row.get::<_, i64>(1)?,
-                    row.get::<_, Vec<u8>>(2)?,
-                    row.get::<_, Vec<u8>>(3)?,
-                    row.get::<_, Vec<u8>>(4)?,
-                ))
-            })
+            .query_map([space.0], record_columns)
             .map_err(failed("person keys"))?;
         let mut records = Vec::new();
         for row in rows {
-            let (id, generation, writer, wrapped, signature) =
-                row.map_err(failed("person keys"))?;
-            records.push(PersonKeyRecord {
-                id: PersonKeyId(array(id)?),
-                generation: unsigned(generation),
-                writer: MemberId(array(writer)?),
-                wrapped,
-                signature,
-            });
+            records.push(stored_record(row.map_err(failed("person keys"))?)?);
+        }
+        Ok(records)
+    }
+
+    async fn person_keys_of(
+        &self,
+        space: SpaceId,
+        ids: Vec<PersonKeyId>,
+    ) -> Result<Vec<PersonKeyRecord>, StoreError> {
+        let ids: BTreeSet<PersonKeyId> = ids.into_iter().collect();
+        let connection = self.connection();
+        let mut statement = connection
+            .prepare(
+                "SELECT id, generation, writer, wrapped, signature FROM person_keys
+                 WHERE space = ?1 AND id = ?2",
+            )
+            .map_err(failed("person keys"))?;
+        let mut records = Vec::new();
+        for id in ids {
+            let row = statement
+                .query_row(params![space.0, id.0], record_columns)
+                .optional()
+                .map_err(failed("person keys"))?;
+            if let Some(row) = row {
+                records.push(stored_record(row)?);
+            }
         }
         Ok(records)
     }
