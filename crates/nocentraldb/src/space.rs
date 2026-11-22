@@ -216,11 +216,17 @@ fn hex(bytes: &[u8; 16]) -> String {
 /// written (NOC-231), and folds it. Every check passes on a change the
 /// member wrote itself, so a change that does not fold is a bug of the SDK.
 pub(crate) fn fold(view: &mut View, checks: &mut SealChecks, change: &Change) -> Result<(), Error> {
-    let space = change.header().space;
-    view.receive_own(change.bytes(), checks, crate::clock::now_millis())
+    fold_change(view, checks, change.clone())
+}
+
+/// [`fold`], handing the change to the log: a change of megabytes is
+/// held once, not copied (NOC-422).
+fn fold_change(view: &mut View, checks: &mut SealChecks, change: Change) -> Result<(), Error> {
+    let (space, id) = (change.header().space, change.id());
+    view.receive_own_change(change, checks, crate::clock::now_millis())
         .map_err(storage)?;
     crate::status::note_shreds(view, space, checks.resolved()).map_err(storage)?;
-    match view.state(space, change.id()) {
+    match view.state(space, id) {
         Some(State::Folded { parked }) if parked.is_empty() => Ok(()),
         other => panic!("the member's own change was not folded: {other:?}"),
     }
@@ -347,9 +353,13 @@ pub(crate) fn write_change(
         .space_key(generation)
         .expect("a writable space's key is held");
     let change = seal::seal(&member, key, space, next.sequence, generation, &payload);
+    // The fold reads the operations from the change; the payload's own,
+    // as large as the change's operations in memory, go first (NOC-422).
+    drop(payload);
+    let id = ChangeId(change.id());
     // What other folds of the space touched before is not this write's.
     view.take_touched(space);
-    fold(view, &mut state.checks, &change)?;
+    fold_change(view, &mut state.checks, change)?;
     let objects = view.take_touched(space);
     crate::personal::refresh(view, space, state).map_err(storage)?;
     touched(
@@ -365,10 +375,7 @@ pub(crate) fn write_change(
         crate::sync::put_person_keys(inner, space, records);
     }
     crate::sync::wake(inner);
-    Ok(Written {
-        change: ChangeId(change.id()),
-        ids,
-    })
+    Ok(Written { change: id, ids })
 }
 
 impl Space {

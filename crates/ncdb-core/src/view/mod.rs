@@ -405,7 +405,28 @@ impl View {
     ) -> Result<Appended, Error> {
         let change =
             Change::decode(bytes).map_err(|error| Error::Receive(ReceiveError::Decode(error)))?;
-        let result = self.receive_change(&change, bytes, checks, written_at);
+        self.receive_decoded(change, checks, written_at)
+    }
+
+    /// Receives a change the member wrote itself, as [`View::receive_own`]
+    /// does, without decoding its frame again: the log keeps this change,
+    /// so a change of megabytes is held once (NOC-422).
+    pub fn receive_own_change(
+        &mut self,
+        change: Change,
+        checks: &mut impl Checks,
+        written_at: u64,
+    ) -> Result<Appended, Error> {
+        self.receive_decoded(change, checks, Some(written_at))
+    }
+
+    fn receive_decoded(
+        &mut self,
+        change: Change,
+        checks: &mut impl Checks,
+        written_at: Option<u64>,
+    ) -> Result<Appended, Error> {
+        let result = self.receive_change(change, checks, written_at);
         if result.is_err() {
             // The transaction rolled back; the logs in memory follow it.
             self.logs = log_table::load(&self.conn)?;
@@ -415,11 +436,11 @@ impl View {
 
     fn receive_change(
         &mut self,
-        change: &Change,
-        bytes: &[u8],
+        change: Change,
         checks: &mut impl Checks,
         written_at: Option<u64>,
     ) -> Result<Appended, Error> {
+        let space = change.header().space;
         let tx = self.conn.transaction()?;
         let (appended, touched) = append(
             Target {
@@ -429,13 +450,12 @@ impl View {
             },
             &mut self.logs,
             change,
-            bytes,
             checks,
             written_at,
         )?;
         tx.commit()?;
         // Only a committed fold counts (RFC 0006, "Folding", step 6).
-        self.add_touched(change.header().space, touched);
+        self.add_touched(space, touched);
         Ok(appended)
     }
 
@@ -511,7 +531,8 @@ impl View {
         let tx = self.conn.transaction()?;
         let mut appended = Vec::with_capacity(frames.len());
         let mut touched = Vec::with_capacity(frames.len());
-        for (change, bytes) in changes.iter().zip(frames) {
+        for change in changes {
+            let space = change.header().space;
             let (one, its) = append(
                 Target {
                     tx: &tx,
@@ -520,12 +541,11 @@ impl View {
                 },
                 &mut self.logs,
                 change,
-                bytes,
                 checks,
                 written_at,
             )?;
             appended.push(one);
-            touched.push((change.header().space, its));
+            touched.push((space, its));
         }
         tx.commit()?;
         // Only committed folds count (RFC 0006, "Folding", step 6).
@@ -591,12 +611,12 @@ struct Target<'a> {
 fn append(
     target: Target<'_>,
     logs: &mut BTreeMap<SpaceId, Log>,
-    change: &Change,
-    bytes: &[u8],
+    change: Change,
     checks: &mut impl Checks,
     written_at: Option<u64>,
 ) -> Result<(Appended, BTreeSet<(String, ObjectId)>), Error> {
     let space = change.header().space;
+    let id = change.id();
     let log = logs.entry(space).or_insert_with(|| Log::new(space));
     log.take_changed();
     let Target {
@@ -608,18 +628,18 @@ fn append(
     let mut fold = fold::SqlFold::new(tx, model, space)
         .with_keys(keys)
         .for_space(checks.space_model_id());
-    let appended = log.receive(bytes, checks, &mut fold);
+    let appended = log.receive_change(change, checks, &mut fold);
     let touched = fold.finish()?;
     let appended = appended.map_err(Error::Receive)?;
     if let Appended::New(_) = appended {
-        log_table::insert(tx, log, change.id(), written_at)?;
+        log_table::insert(tx, log, id, written_at)?;
         if let Some(at) = written_at {
-            log.record_written_at(change.id(), at);
+            log.record_written_at(id, at);
         }
         // A passing control change can change the state of others.
-        for id in log.take_changed() {
-            if id != change.id() {
-                log_table::update(tx, log, id)?;
+        for other in log.take_changed() {
+            if other != id {
+                log_table::update(tx, log, other)?;
             }
         }
     }
