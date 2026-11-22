@@ -40,8 +40,11 @@ type Task = nc.Infer<typeof model.tasks>;
 describe("nc.Infer types every field as RFC 0005 defines", () => {
   test("rich text as its Markdown, a string (RFC 0013), and never personal", () => {
     expectTypeOf<Task["body"]>().toEqualTypeOf<string | undefined>();
-    // @ts-expect-error: only basic values can be personal (RFC 0005, "Personal fields").
-    nc.richText().personal({ person: "self" });
+    // A type-level check only: rich text has no `personal` to call.
+    expectTypeOf(() =>
+      // @ts-expect-error: only basic values can be personal (RFC 0005, "Personal fields").
+      nc.richText().personal({ person: "self" }),
+    ).toBeFunction();
   });
 
   test('a day as a "YYYY-MM-DD" string, a point in time as a Date', () => {
