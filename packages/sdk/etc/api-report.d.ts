@@ -72,6 +72,7 @@ export interface Space {
     }>;
     readonly erasures: {
         list(): Promise<ErasureEntry[]>;
+        takeBack(shred: string): Promise<import("./members.ts").Notice>;
     };
     readonly status: {
         current(): SpaceStatus;
@@ -178,7 +179,13 @@ export interface Db {
             readonly askAdmins: readonly Id[];
             readonly notice: import("./members.ts").Notice;
         }>;
+        signOff(request: import("./erase.ts").ErasureRequest): Promise<{
+            readonly signOffs: import("./erase.ts").SignOffs;
+            readonly notSigned: readonly Id[];
+        }>;
     };
+    erasureRequest(object: object): Promise<import("./erase.ts").ErasureRequest>;
+    erase(request: import("./erase.ts").ErasureRequest, signOffs: import("./erase.ts").SignOffs): Promise<import("./erase.ts").Erased>;
     close(): Promise<void>;
 }
 interface OpenOptions {
@@ -208,6 +215,30 @@ export interface ViewStatus {
         readonly total: number;
     } | null;
 }
+// file: erase.d.ts
+import type { Notice } from "./members.ts";
+type Id = string;
+export interface ErasureRequest {
+    toString(): string;
+}
+export interface SignOffs {
+    toString(): string;
+}
+export interface Erased {
+    readonly shreds: readonly {
+        readonly space: Id;
+        readonly shred: string;
+        readonly provisional: boolean;
+    }[];
+    readonly skipped: readonly {
+        readonly space: Id;
+        readonly reason: "noSignOff" | "notWriter" | "noKey";
+    }[];
+    readonly notice: Notice;
+}
+export declare const erasureRequest: (text: string) => ErasureRequest;
+export declare const signOffs: (text: string) => SignOffs;
+export {};
 // file: error.d.ts
 export declare class NcError extends Error {
     readonly code: string;
@@ -220,6 +251,7 @@ export declare function name(): string;
 export type { RecoveryCode } from "./account.ts";
 export type { Db, Page, Query, Space, Tx } from "./db.ts";
 export type { Durability } from "./durability.ts";
+export type { Erased, ErasureRequest, SignOffs } from "./erase.ts";
 export type { Invitation, Notice } from "./members.ts";
 export * as nc from "./nc.ts";
 export type { SpaceStatus } from "./status.ts";
@@ -361,6 +393,7 @@ export declare const index: <const K extends readonly (string | {
 }) => Index<Names<K>, N>;
 export { pairingAnswer } from "./account.ts";
 export { add, open, remove } from "./db.ts";
+export { erasureRequest, signOffs } from "./erase.ts";
 export { NcError as Error } from "./error.ts";
 export { invitation } from "./members.ts";
 // file: status.d.ts

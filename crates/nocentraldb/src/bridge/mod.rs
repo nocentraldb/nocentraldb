@@ -70,6 +70,16 @@
 //! `{"space": id}`, the audit of the space's erasures (RFC 0009,
 //! "Erasures").
 //!
+//! The calls of NOC-406, erasing a person (RFC 0009, "The Rust SDK",
+//! "Erasing a person"), in `erase.rs`: `erasureRequest` `{"space": id,
+//! "collection": text, "id": id}` answers the request's text;
+//! `account.signOff` `{"request": text}` answers `{"signOffs": text,
+//! "notSigned": [id]}`; `erase` `{"request": text, "signOffs": text}`
+//! answers `{"shreds": [{"space": id, "shred": id, "provisional": bool}],
+//! "skipped": [{"space": id, "reason": text}], "notice": notice}`. In
+//! `erasures.rs`: `erasures.takeBack` `{"space": id, "shred": id}` answers
+//! the notice `takenBack`.
+//!
 //! The calls of NOC-315, slice 3 (RFC 0006, "What the SDK reports"; RFC
 //! 0009, "Sync and status"), in `reports.rs`: `open` also answers
 //! `"durability"` and `"view"`; `durability` `{}` reads again whether the
@@ -111,6 +121,7 @@
 
 mod account;
 mod ad_hoc;
+mod erase;
 mod erasures;
 mod events;
 mod members;
@@ -121,7 +132,7 @@ mod values;
 
 pub use events::Events;
 use events::{space_list, space_status, sync_status};
-use values::{elements, fields, read};
+use values::{equal, fields, read};
 
 use std::collections::BTreeMap;
 use std::str::FromStr;
@@ -248,6 +259,10 @@ impl Bridge {
                 Ok(Value::Null)
             }
             "erasures.list" => erasures::list(&db, args).await,
+            "erasures.takeBack" => erasures::take_back(&db, args).await,
+            "erasureRequest" => erase::request(&db, args).await,
+            "account.signOff" => erase::sign_off(&db, args).await,
+            "erase" => erase::erase(&db, args).await,
             "spaces.createAdHoc" => ad_hoc::create(&db, args).await,
             "space.sourceOf" => ad_hoc::source_of(&db, args).await,
             "space.copyOf" => ad_hoc::copy_of(&db, args).await,
@@ -383,9 +398,13 @@ impl Bridge {
         let Some(query) = get(args, "query") else {
             return Err(invalid(crate::texts::bridge::FIND_TAKES_AQUERY));
         };
-        let mut built = db.index(text(query, "collection")?, text(query, "index")?)?;
+        let (collection, index) = (text(query, "collection")?, text(query, "index")?);
+        let mut built = db.index(collection, index)?;
         match get(query, "equal") {
-            Some(Value::Array(values)) => built = built.equal(elements(values)?),
+            Some(Value::Array(values)) => {
+                let values = equal(&db.lock().model, collection, index, values)?;
+                built = built.equal(values);
+            }
             None => {}
             Some(_) => return Err(invalid(crate::texts::bridge::EQUAL_IS_AN_ARRAY)),
         }

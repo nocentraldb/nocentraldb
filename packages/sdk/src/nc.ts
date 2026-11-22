@@ -452,6 +452,7 @@ export { pairingAnswer } from "./account.ts";
 /** Opens this member's database (RFC 0009, "Open and close"). */
 /** Field operations on sets and many links (RFC 0009, "Field operations per field type"). */
 export { add, open, remove } from "./db.ts";
+export { erasureRequest, signOffs } from "./erase.ts";
 /** The one error class the SDK throws (RFC 0009, "Errors"). */
 export { NcError as Error } from "./error.ts";
 export { invitation } from "./members.ts";

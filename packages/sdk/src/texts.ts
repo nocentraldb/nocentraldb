@@ -11,11 +11,21 @@ export const AD_HOC_COPY_NOT_READ = "copy takes objects this database read, as s
 /** `anotherLock` (modelRefused): nc.open in a tab while another tab of the origin has the database open with another lock. */
 export const ANOTHER_LOCK = "another tab has this database open with another lock";
 
+/** `coreFailed` (storageFailed): The call the SDK's worker was answering when its core failed, such as a write too large for the core's memory, with the browser's own message. */
+export const coreFailed = (message: unknown): string =>
+  `the database's core failed: ${message}`;
+
+/** `coreStopped` (storageFailed): Every call after the SDK's worker's core failed in this tab, until the app closes the database and opens it again. */
+export const CORE_STOPPED = "the database's core stopped after an earlier failure, such as a write too large for its memory: close the database and open it again";
+
 /** `cursorOfAnotherDatabase` (cursorOfAnotherModel): db.find or space.find, given a page's cursor from another database. */
 export const CURSOR_OF_ANOTHER_DATABASE = "the cursor is not of this database; start from the first page";
 
 /** `databaseClosed` (closed): Any call after db.close(), and the calls still waiting when it closes. */
 export const DATABASE_CLOSED = "the database is closed";
+
+/** `erasureRequestNotRead` (invalidValue): db.erasureRequest, given an object the SDK of this database did not read, such as a spread of one or an object of another database. */
+export const ERASURE_REQUEST_NOT_READ = "erasureRequest takes an object this database read, as space.get, find or subscribe gives it, not a copy of one";
 
 /** `lockFieldDiffers` (lockOutOfDate): nc.open, on a model whose field has another type or other options in the lock, as when the lock was not built again after the field changed. */
 export const lockFieldDiffers = (collection: unknown, field: unknown): string =>
@@ -69,12 +79,18 @@ export const notASafeInteger = (collection: unknown, field: unknown): string =>
 export const notAView = (collection: unknown, key: unknown): string =>
   `${collection}.${key}: not a view; declare it with nc.view(...).`;
 
+/** `notAnErasureRequest` (invalidValue): nc.erasureRequest, given a text that does not start with ncdb-erase-1: or is not unpadded base64url. */
+export const NOT_AN_ERASURE_REQUEST = "the text is not an erasure request, which is ncdb-erase-1: followed by unpadded base64url";
+
 /** `notAnIndex`: ncdb model build, on a model whose index is not declared with nc.index. */
 export const notAnIndex = (collection: unknown, key: unknown): string =>
   `${collection}.${key}: not an index; declare it with nc.index(...).`;
 
 /** `notAnInvitation` (invalidValue): nc.invitation, given a text that does not start with ncdb-invite-1: or is not unpadded base64url. */
 export const NOT_AN_INVITATION = "the text is not an invitation, which is ncdb-invite-1: followed by unpadded base64url";
+
+/** `notSignOffs` (invalidValue): nc.signOffs, given a text that does not start with ncdb-sign-off-1: or is not unpadded base64url. */
+export const NOT_SIGN_OFFS = "the text is not a sign-off, which is ncdb-sign-off-1: followed by unpadded base64url";
 
 /** `ownerTabClosed` (storageFailed): A call that changes the database, sent to the tab that owned it, when that tab ended before it answered (NOC-177). */
 export const OWNER_TAB_CLOSED = "the tab that held the database closed before it answered; the call may or may not have run";

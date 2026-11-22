@@ -29,8 +29,9 @@ use super::current::{self, MergeRotation};
 use super::fields;
 use super::generations::{Generation, Generations};
 use super::input::{Input, Node};
-use super::judge::{Judged, judge};
+use super::judge::Judged;
 use super::person_keys::{self, PersonKey, PersonKeys, WaitingShred};
+use super::resolver::Resolver;
 use super::rights;
 use super::state::{self, Grant, MemberState, Members, Rejection, Revocation, Verdict};
 use super::statement::AccountKeyStatement;
@@ -62,29 +63,20 @@ pub struct Resolved {
 
 /// Folds the control changes of `space` among `changes` into its control
 /// state. Changes of other spaces and sealed changes are left out; every
-/// control change of the space gets a verdict.
+/// control change of the space gets a verdict. A [`Resolver`] computes the
+/// same with a memory of its earlier calls.
 pub fn resolve<'a>(space: SpaceId, changes: impl IntoIterator<Item = &'a Change>) -> Resolved {
-    let input = Input::new(space, changes);
-    let mut judged = Judged::default();
-    // Smaller causal pasts first: a node's past holds only nodes with
-    // smaller pasts, so every fold below finds their judgement.
-    let mut nodes: Vec<&Node> = input.nodes.values().collect();
-    nodes.sort_by_key(|node| (node.past.len(), node.id));
-    for node in nodes {
-        let past = fold(&input, &judged, &node.past);
-        let judgement = judge(&input, &judged, node, &past);
-        if judgement.valid && matches!(node.body.entry, Entry::Shred(_)) {
-            let members = past.members().map(|(member, _)| member);
-            judged.shred_past_members.insert(node.id, members.collect());
-        }
-        judged.judgements.insert(node.id, judgement);
-    }
-    let all: BTreeSet<ChangeId> = input.nodes.keys().copied().collect();
-    let mut resolved = fold(&input, &judged, &all);
-    resolved.seen = seen(&input, &resolved.members);
-    resolved.verdicts.extend(input.verdicts);
-    resolved.gaps = input.gaps;
-    resolved
+    Resolver::new(space).resolve(changes)
+}
+
+/// The control state of the space from `folded`, steps 2 to 5 over every
+/// node of `input` once step 1 judged each: with the revocations each
+/// grant saw, the verdicts of the changes that are no nodes, and the gaps.
+pub(super) fn finish(input: Input, mut folded: Resolved) -> Resolved {
+    folded.seen = seen(&input, &folded.members);
+    folded.verdicts.extend(input.verdicts);
+    folded.gaps = input.gaps;
+    folded
 }
 
 /// For each accepted grant, the accepted revocations of its subject that it
@@ -310,7 +302,7 @@ impl Resolved {
 
 /// Steps 2 to 5 over `set`, a set of nodes closed under dependencies or
 /// all of them.
-fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
+pub(super) fn fold(input: &Input, judged: &Judged, set: &BTreeSet<ChangeId>) -> Resolved {
     let mut resolved = Resolved {
         space: input.space,
         genesis: None,
