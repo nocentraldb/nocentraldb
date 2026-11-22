@@ -8,15 +8,13 @@ mod support;
 
 use std::collections::BTreeSet;
 
-use ed25519_dalek::SigningKey;
 use ncdb_core::change::Change;
 use ncdb_core::keys::RecoveryKey;
-use ncdb_core::membership::{
-    self, AccountKeyStatement, Certificate, ControlBody, Entry, Genesis, MemberKind, Role,
-};
+use ncdb_core::membership::{Certificate, MemberKind, Role};
 use ncdb_relay::sqlite::SqliteStore;
 use ncdb_relay::{ErrorCode, Pushed, Relay};
-use support::space::{MODEL, Space, Who, account, key, other_account, space_key};
+use support::genesis::{certified, genesis_of};
+use support::space::{Space, Who, account, key, other_account};
 use support::{TempDir, config, push, push_one};
 
 /// The listed account's member, which creates the shared space.
@@ -34,30 +32,6 @@ fn host_recovery() -> RecoveryKey {
 /// The recovery key of the guest's account.
 fn guest_recovery() -> RecoveryKey {
     RecoveryKey::from_code(&[0x47; 16])
-}
-
-/// A certificate of `who` by `account`, with the statement that names it
-/// under `recovery` with `number`.
-fn certified(who: Who, account: &SigningKey, recovery: &RecoveryKey, number: u64) -> Certificate {
-    let statement = AccountKeyStatement::sign(recovery, account.verifying_key().to_bytes(), number);
-    Certificate::sign(account, key(who).id(), MemberKind::Device).with_statement(statement)
-}
-
-/// A genesis that `creator`, certified by `certificate`, writes with
-/// `nonce`.
-fn genesis_of(creator: Who, certificate: Certificate, nonce: [u8; 16]) -> Change {
-    let creator_key = key(creator);
-    let space = membership::space_id(creator_key.id(), &nonce);
-    let first_generation = membership::generation_id(space, creator_key.id(), &[]);
-    let genesis = Genesis {
-        nonce,
-        creator: creator_key.public(),
-        certificate,
-        first_generation,
-        model_id: membership::seal_model_id(&space_key(), space, creator_key.id(), MODEL),
-    };
-    let body = ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis));
-    membership::write(&creator_key, space, 1, first_generation, &body)
 }
 
 /// A relay whose allowlist holds `listed`, holding a space the host

@@ -12,13 +12,11 @@ mod support;
 use std::collections::BTreeSet;
 
 use ed25519_dalek::SigningKey;
-use ncdb_core::change::Change;
 use ncdb_core::keys::RecoveryKey;
-use ncdb_core::membership::{
-    self, AccountKeyStatement, Certificate, ControlBody, Entry, Genesis, MemberKind,
-};
+use ncdb_core::membership::{Certificate, MemberKind};
 use ncdb_relay::{ErrorCode, Pushed, Relay};
-use support::space::{MODEL, Who, key, space_key};
+use support::genesis;
+use support::space::{Who, key};
 use support::{TempDir, config, push_one};
 
 /// The recovery code of the listed account.
@@ -44,28 +42,14 @@ fn recovered_key() -> SigningKey {
 }
 
 /// A certificate of `who` by `account`, with the statement that names
-/// `account` under the recovery key with `number`.
+/// `account` under the listed account's recovery key with `number`.
 fn certified(who: Who, account: &SigningKey, number: u64) -> Certificate {
-    let statement =
-        AccountKeyStatement::sign(&recovery(), account.verifying_key().to_bytes(), number);
-    Certificate::sign(account, key(who).id(), MemberKind::Device).with_statement(statement)
+    genesis::certified(who, account, &recovery(), number)
 }
 
 /// A genesis that `creator` writes, certified by `certificate`.
-fn genesis_of(creator: Who, certificate: Certificate) -> Change {
-    let creator_key = key(creator);
-    let nonce = [9; 16];
-    let space = membership::space_id(creator_key.id(), &nonce);
-    let first_generation = membership::generation_id(space, creator_key.id(), &[]);
-    let genesis = Genesis {
-        nonce,
-        creator: creator_key.public(),
-        certificate,
-        first_generation,
-        model_id: membership::seal_model_id(&space_key(), space, creator_key.id(), MODEL),
-    };
-    let body = ControlBody::new(BTreeSet::new(), Entry::Genesis(genesis));
-    membership::write(&creator_key, space, 1, first_generation, &body)
+fn genesis_of(creator: Who, certificate: Certificate) -> ncdb_core::change::Change {
+    genesis::genesis_of(creator, certificate, [9; 16])
 }
 
 /// A relay whose allowlist holds `listed` alone.
