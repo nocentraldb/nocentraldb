@@ -22,7 +22,7 @@ use ncdb_core::ids::{ChangeId, SpaceId};
 use ncdb_relay::store::{AppendOutcome, Effect, MemberRecord, NewEntry, Position, StoreError};
 
 use crate::item::{self, ATTEMPTS, b, failed, get_n, n};
-use crate::{Aws, INLINE_LIMIT, frame_key};
+use crate::{Aws, INLINE_LIMIT, frame_key, statement};
 
 /// The most items DynamoDB takes in one transaction.
 pub const TRANSACTION_ITEMS: usize = 100;
@@ -67,12 +67,23 @@ pub async fn find(
     }
 }
 
-/// The member rows of `effects`, the last row of each member only: the
-/// effects apply in order, and one transaction writes an item once. And the
-/// account whose one space this is, when the relay does not list it.
-fn member_rows(effects: Vec<Effect>) -> (Vec<MemberRecord>, Option<[u8; 32]>) {
+/// What an append's effects write, each item once, as one transaction
+/// writes an item once.
+struct Writes {
+    /// The member rows, the last row of each member only: the effects
+    /// apply in order.
+    rows: Vec<MemberRecord>,
+    /// The account whose one space this is, when the relay does not list
+    /// it.
+    guest: Option<[u8; 32]>,
+    /// The statement numbers to raise, the highest of each identity only.
+    statements: Vec<([u8; 32], u64)>,
+}
+
+fn writes(effects: Vec<Effect>) -> Writes {
     let mut rows: Vec<MemberRecord> = Vec::new();
     let mut guest = None;
+    let mut statements: Vec<([u8; 32], u64)> = Vec::new();
     for effect in effects {
         match effect {
             Effect::Member(record) => {
@@ -80,10 +91,19 @@ fn member_rows(effects: Vec<Effect>) -> (Vec<MemberRecord>, Option<[u8; 32]>) {
                 rows.push(record);
             }
             Effect::GuestSpace(account) => guest = Some(account),
-            Effect::Statement { .. } => {}
+            Effect::Statement { identity, number } => {
+                match statements.iter_mut().find(|(held, _)| *held == identity) {
+                    Some((_, held)) => *held = (*held).max(number),
+                    None => statements.push((identity, number)),
+                }
+            }
         }
     }
-    (rows, guest)
+    Writes {
+        rows,
+        guest,
+        statements,
+    }
 }
 
 pub async fn append(
@@ -93,8 +113,13 @@ pub async fn append(
     entries: Vec<NewEntry>,
     effects: Vec<Effect>,
 ) -> Result<AppendOutcome, StoreError> {
-    let (rows, guest) = member_rows(effects);
-    if 2 * entries.len() + 1 + rows.len() + usize::from(guest.is_some()) > TRANSACTION_ITEMS {
+    let Writes {
+        rows,
+        guest,
+        statements,
+    } = writes(effects);
+    let effect_items = rows.len() + usize::from(guest.is_some()) + statements.len();
+    if 2 * entries.len() + 1 + effect_items > TRANSACTION_ITEMS {
         return Err(StoreError(format!(
             "an append of {} changes and {} member rows is more than one transaction holds",
             entries.len(),
@@ -122,6 +147,11 @@ pub async fn append(
     let guest_at = items.len();
     if let Some(account) = guest {
         items.push(guest_item(aws, space, account)?);
+    }
+    // The statement numbers it raises (RFC 0015, "The account's identity").
+    let statements_at = items.len();
+    for (identity, number) in statements {
+        items.push(statement::raise(aws, identity, number)?);
     }
     let new_head = expected_head + entries.len() as u64;
     for attempt in 1..=ATTEMPTS {
@@ -158,6 +188,17 @@ pub async fn append(
                 .is_some_and(|code| code == "ConditionalCheckFailed")
         {
             return Ok(AppendOutcome::GuestSpaceTaken);
+        }
+        // An equal or higher number is stored: that update is not needed,
+        // and the transaction goes again without it.
+        let stored: Vec<usize> = (statements_at..items.len())
+            .filter(|&i| codes.get(i).is_some_and(|c| c == "ConditionalCheckFailed"))
+            .collect();
+        if !stored.is_empty() {
+            for i in stored.into_iter().rev() {
+                items.remove(i);
+            }
+            continue;
         }
         // A condition that failed but whose head or change read back does
         // not show it is retried too: the read saw a later state.
@@ -407,6 +448,6 @@ mod tests {
             Effect::Member(row(2, 2)),
             Effect::Member(row(1, 3)),
         ];
-        assert_eq!(member_rows(effects).0, [row(2, 2), row(1, 3)]);
+        assert_eq!(writes(effects).rows, [row(2, 2), row(1, 3)]);
     }
 }
