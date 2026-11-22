@@ -449,10 +449,7 @@ runWorkflowChecks({
         },
         "the tests name no engine": (ctx) => {
           const { step } = longStep(ctx, LONG_TESTS);
-          step.run = step.run.replace(
-            "SDK_BROWSER_ENGINE=${{ matrix.engine }}",
-            "X=1",
-          );
+          step.run = step.run.replace(/SDK_BROWSER_ENGINE=\S+/, "X=1");
         },
         "no long tests run": (ctx) => {
           const all = longJob(ctx).steps;
