@@ -1,6 +1,7 @@
 //! A store that counts how often the core reads a space's log, so a test
-//! can tell whether an append made the relay read and resolve the log, and
-//! how many frame bytes its reads loaded.
+//! can tell whether an append made the relay read and resolve the log, how
+//! many frame bytes its reads loaded, and how many person-key records it
+//! read.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -11,12 +12,14 @@ use ncdb_relay::store::{
     UploadId,
 };
 
-/// Passes every call to `inner`, and counts the calls to `read`.
+/// Passes every call to `inner`, and counts the calls to `read` and the
+/// person-key records read.
 pub struct Counting<S> {
     inner: S,
     reads: AtomicUsize,
     bytes: AtomicUsize,
     largest: AtomicUsize,
+    records: AtomicUsize,
 }
 
 impl<S> Counting<S> {
@@ -26,7 +29,13 @@ impl<S> Counting<S> {
             reads: AtomicUsize::new(0),
             bytes: AtomicUsize::new(0),
             largest: AtomicUsize::new(0),
+            records: AtomicUsize::new(0),
         }
+    }
+
+    /// The person-key records read since the last call to this.
+    pub fn take_records(&self) -> usize {
+        self.records.swap(0, Ordering::SeqCst)
     }
 
     /// The calls to `read` since the last call to this.
@@ -123,7 +132,19 @@ impl<S: RelayStore> RelayStore for Counting<S> {
     }
 
     async fn person_keys(&self, space: SpaceId) -> Result<Vec<PersonKeyRecord>, StoreError> {
-        self.inner.person_keys(space).await
+        let records = self.inner.person_keys(space).await?;
+        self.records.fetch_add(records.len(), Ordering::SeqCst);
+        Ok(records)
+    }
+
+    async fn person_keys_of(
+        &self,
+        space: SpaceId,
+        ids: Vec<PersonKeyId>,
+    ) -> Result<Vec<PersonKeyRecord>, StoreError> {
+        let records = self.inner.person_keys_of(space, ids).await?;
+        self.records.fetch_add(records.len(), Ordering::SeqCst);
+        Ok(records)
     }
 
     async fn put_person_keys(
