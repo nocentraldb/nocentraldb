@@ -15,5 +15,18 @@ tasks:
     deps: ["repo:wasm-runner"]
     env:
       CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
+  # Rich text folds only with the feature `rich-text`, which no published
+  # build turns on until the fold's guard is complete (NOC-468). Its code
+  # and tests are gated here all the same: lint and the whole suite with
+  # the feature, natively, and the rich-text tests on wasm32 (C3).
+  lint-rich-text:
+    command: "cargo clippy --locked -p $project --features rich-text --all-targets -- -D warnings"
+  test-rich-text:
+    command: "cargo test --locked -p $project --features rich-text"
+  test-wasm-rich-text:
+    command: "cargo test --locked -p $project --features rich-text --target wasm32-unknown-unknown --test rich_text_agreement --test rich_text_client_id --test rich_text_contract --test rich_text_fold --test rich_text_lease --test rich_text_update_format --test rich_text_view"
+    deps: ["repo:wasm-runner"]
+    env:
+      CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: "$workspaceRoot/target/tools/bin/wasm-bindgen-test-runner"
   gates:
-    deps: ["~:build-wasm", "~:test-wasm"]
+    deps: ["~:build-wasm", "~:test-wasm", "~:lint-rich-text", "~:test-rich-text", "~:test-wasm-rich-text"]
