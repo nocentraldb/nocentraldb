@@ -127,9 +127,11 @@ pub enum Effect {
     /// Writes a member's row of the space's membership table, replacing the
     /// row it had.
     Member(MemberRecord),
-    /// Records that the account, by its account key, created this space as
-    /// the one space an account the relay does not list may create (RFC
-    /// 0007, "Who may create a space"; Carsten, 2026-11-12, NOC-286). It
+    /// Records that the account, by its identity (the recovery key, or the
+    /// account key of an account without one; RFC 0015, "The account's
+    /// identity"), created this space as the one space an account the
+    /// relay does not list may create (RFC 0007, "Who may create a space";
+    /// Carsten, 2026-11-12, NOC-286). It
     /// holds only if the account has no such space yet; otherwise nothing
     /// of the append is applied, and the append is
     /// [`AppendOutcome::GuestSpaceTaken`].

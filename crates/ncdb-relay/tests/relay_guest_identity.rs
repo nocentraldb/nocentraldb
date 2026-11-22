@@ -39,8 +39,7 @@ fn guest_recovery() -> RecoveryKey {
 /// A certificate of `who` by `account`, with the statement that names it
 /// under `recovery` with `number`.
 fn certified(who: Who, account: &SigningKey, recovery: &RecoveryKey, number: u64) -> Certificate {
-    let statement =
-        AccountKeyStatement::sign(recovery, account.verifying_key().to_bytes(), number);
+    let statement = AccountKeyStatement::sign(recovery, account.verifying_key().to_bytes(), number);
     Certificate::sign(account, key(who).id(), MemberKind::Device).with_statement(statement)
 }
 

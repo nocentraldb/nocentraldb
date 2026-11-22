@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, ControlBody, Entry, Rejection, Verdict};
+use ncdb_core::membership::{self, BodyError, Certificate, ControlBody, Entry, Rejection, Verdict};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -42,8 +42,12 @@ pub const FINALIZE_AFTER: u64 = 7 * 24 * 60 * 60 * 1000;
 /// What a relay deployment configures.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// The account keys whose members may create spaces on this relay
-    /// (RFC 0007, "What the relay checks", who may create a space).
+    /// The accounts whose members may create spaces on this relay, by
+    /// their identity: the recovery key, or the account key of an account
+    /// without one (RFC 0007, "What the relay checks", who may create a
+    /// space; RFC 0015, "The account's identity"). An entry that holds an
+    /// account key also matches a certificate of that key whose statement
+    /// names a recovery key, until the account's first recovery.
     pub allowed_accounts: BTreeSet<[u8; 32]>,
     /// The largest frame the relay accepts.
     pub max_frame: usize,
@@ -60,6 +64,17 @@ impl Config {
             clock: now,
         }
     }
+}
+
+/// The identity of the account that issued `certificate` (RFC 0015, "The
+/// account's identity"): the recovery key its account key statement names,
+/// which survives a recovery and a lost device; the account key for an
+/// account without a statement.
+fn identity(certificate: &Certificate) -> [u8; 32] {
+    certificate
+        .statement
+        .as_ref()
+        .map_or(certificate.account_key, |statement| statement.recovery_key)
 }
 
 /// The system clock in milliseconds since the Unix epoch.
@@ -319,8 +334,8 @@ impl<S: RelayStore> Relay<S> {
         if genesis.creator.id() != uploader {
             return Err(ErrorCode::NotMember);
         }
-        let account = genesis.certificate.account_key;
-        let guest = match self.config.allowed_accounts.contains(&account) {
+        let identity = identity(&genesis.certificate);
+        let guest = match self.allowed(&genesis.certificate) {
             true => false,
             false if self.guest(uploader).await? => true,
             false => return Err(ErrorCode::NotAllowed),
@@ -329,11 +344,20 @@ impl<S: RelayStore> Relay<S> {
         verdict(resolved.verdict(change.id()))?;
         let mut checked = Checked::new(&resolved, &BTreeSet::new());
         // The one space of an account the relay does not list: the append
-        // records it, and holds only if the account has none yet.
+        // records it by the account's identity, and holds only if the
+        // account has none yet.
         if guest {
-            checked.effects.push(Effect::GuestSpace(account));
+            checked.effects.push(Effect::GuestSpace(identity));
         }
         Ok(checked)
+    }
+
+    /// Whether the allowlist holds the identity of the account that issued
+    /// `certificate`, or its account key (RFC 0015, "The account's
+    /// identity").
+    fn allowed(&self, certificate: &Certificate) -> bool {
+        let allowed = &self.config.allowed_accounts;
+        allowed.contains(&identity(certificate)) || allowed.contains(&certificate.account_key)
     }
 
     /// Whether `member` currently belongs to a space that an account the
@@ -355,10 +379,7 @@ impl<S: RelayStore> Relay<S> {
                 entry: Entry::Genesis(genesis),
                 ..
             }) = control_body(&change)
-                && self
-                    .config
-                    .allowed_accounts
-                    .contains(&genesis.certificate.account_key)
+                && self.allowed(&genesis.certificate)
             {
                 return Ok(true);
             }

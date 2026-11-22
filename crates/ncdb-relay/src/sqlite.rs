@@ -3,8 +3,8 @@
 //! transaction on the head, a row in `spaces`; "one change id, one
 //! position" is a unique index on (space, change id); the one space of an
 //! account the relay does not list is a row of `guest_spaces`, keyed by
-//! the account, in the same transaction; frames are kept
-//! inline; a person-key put is one write transaction that reads each
+//! the account's identity (RFC 0015, "The account's identity"), in the
+//! same transaction; frames are kept inline; a person-key put is one write transaction that reads each
 //! stored generation before it writes. An upload's frame (RFC 0007, "Large
 //! changes") waits in `uploads` until a push takes it, and is then kept
 //! inline in the log like any other; a download token names a log row.

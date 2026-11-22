@@ -116,7 +116,7 @@ pub async fn append(
     }
     let mut items = transaction(aws, space, expected_head, &entries, &rows)?;
     // The account's one space, when the relay does not list it: an item
-    // in `spaces` under the account key, on the condition that none is
+    // in `spaces` under the account's identity, on the condition that none is
     // there (RFC 0007, "Who may create a space").
     let guest_at = items.len();
     if let Some(account) = guest {
@@ -210,7 +210,9 @@ async fn refused(
 }
 
 /// The item that records `space` as the one space of `account`, which the
-/// relay does not list: in `spaces`, keyed by the 32-byte account key,
+/// relay does not list: in `spaces`, keyed by the account's 32-byte
+/// identity, the recovery key or the account key of an account without
+/// one (RFC 0015, "The account's identity"),
 /// which no 16-byte space id and no 5-byte [`EPOCH_ITEM`](crate::EPOCH_ITEM)
 /// can be, on the condition that the account has no such item yet.
 fn guest_item(
