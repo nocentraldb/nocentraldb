@@ -107,6 +107,14 @@ impl<S: RelayStore> RelayStore for Swap<S> {
         self.current().person_keys(space).await
     }
 
+    async fn person_keys_of(
+        &self,
+        space: SpaceId,
+        ids: Vec<PersonKeyId>,
+    ) -> Result<Vec<PersonKeyRecord>, StoreError> {
+        self.current().person_keys_of(space, ids).await
+    }
+
     async fn put_person_keys(
         &self,
         space: SpaceId,

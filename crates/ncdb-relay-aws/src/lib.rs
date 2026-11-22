@@ -289,6 +289,14 @@ impl RelayStore for AwsStore {
         self.run(move |aws| async move { keys::person_keys(&aws, space).await })
     }
 
+    fn person_keys_of(
+        &self,
+        space: SpaceId,
+        ids: Vec<PersonKeyId>,
+    ) -> impl Future<Output = Result<Vec<PersonKeyRecord>, StoreError>> + Send {
+        self.run(move |aws| async move { keys::person_keys_of(&aws, space, ids).await })
+    }
+
     fn put_person_keys(
         &self,
         space: SpaceId,

@@ -97,6 +97,7 @@ macro_rules! conformance_suite {
             effects_write_the_membership_table,
             effects_of_a_refused_append_are_not_applied,
             person_key_records_are_stored_replaced_and_deleted,
+            person_key_records_are_read_by_id,
             a_person_key_put_on_a_moved_record_stores_nothing,
             concurrent_person_key_puts_on_one_generation_store_one,
             the_epoch_is_shared_and_a_new_one_differs,
@@ -478,6 +479,26 @@ pub fn person_key_records_are_stored_replaced_and_deleted<B: Backend>(backend: &
         .unwrap();
     assert_eq!(block_on(store.person_keys(a)).unwrap(), [person_key(3, 2)]);
     assert_eq!(block_on(store.person_keys(b)).unwrap(), [person_key(2, 1)]);
+}
+
+/// The records of some ids are read alone: each stored one once, in id
+/// order, none for an id without a record or of another space.
+pub fn person_key_records_are_read_by_id<B: Backend>(backend: &B) {
+    let store = backend.connect();
+    let (a, b) = (space(1), space(2));
+    let stored = [(person_key(1, 1), None), (person_key(3, 1), None)];
+    assert_eq!(put(&store, a, &stored), PutOutcome::Stored);
+    assert_eq!(
+        put(&store, b, &[(person_key(2, 1), None)]),
+        PutOutcome::Stored
+    );
+    let ids = |ids: &[u8]| ids.iter().map(|&id| PersonKeyId([id; 16])).collect();
+
+    let got = block_on(store.person_keys_of(a, ids(&[3, 9, 1, 3]))).unwrap();
+    assert_eq!(got, [person_key(1, 1), person_key(3, 1)]);
+    let got = block_on(backend.connect().person_keys_of(a, ids(&[2]))).unwrap();
+    assert!(got.is_empty(), "space 2's record is not space 1's");
+    assert!(block_on(store.person_keys_of(a, ids(&[]))).unwrap().is_empty());
 }
 
 /// A person-key put is conditional on the stored generation: a put that
