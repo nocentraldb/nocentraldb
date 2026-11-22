@@ -1,6 +1,6 @@
 # RFC 0016: Moving an object to another space
 
-REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447 · Draft
+REQUEST FOR COMMENTS · NOVEMBER 2026 · Ticket NOC-447
 
 This RFC lets an app move an object, such as a note, from one space to another. Sharing a single note with a collaborator needs it: membership is per space, so a note that sits in a personal space or a project can only be shared alone once it lives in a space of its own. Today an app can only copy the note into a new space and delete the original, which gives the note a new id, cuts its history and leaves every link to it pointing at a deleted object ([The problem today](#the-problem-today)).
 
@@ -8,9 +8,9 @@ It builds on the object model of [RFC 0002](0002-change-and-log-format.md) and [
 
 **How to give feedback.** Start a discussion in the category [RFC feedback](https://github.com/nocentraldb/nocentraldb/discussions/categories/rfc-feedback), naming RFC 0016 and the section you mean, or open a pull request against this file to change its text. [Giving feedback](README.md#giving-feedback) says how, and what happens to your point.
 
-**Status.** Draft, for the owner to decide. The owner asked for this design on 2026-11-22, when deciding RFC 0015 on relay admission and its user journey (#423, NOC-429). It adds an operation to the change format, a link status and SDK names, which GENESIS.md reserves for the owner. Each open choice names its options and a recommendation; [Questions to the owner](#questions-to-the-owner) lists them. The text describes the recommended answers.
+**Status.** Decided by the owner (Carsten, 2026-11-22), on NOC-449, who followed the recommendation on every open choice; [What the owner decided](#what-the-owner-decided) lists the answers. The owner asked for this design on 2026-11-22, when deciding RFC 0015 on relay admission and its user journey (#423, NOC-429). Nothing of it is built. RFC 0002, RFC 0004, RFC 0005 and RFC 0009 do not describe the move yet; the [follow-up tickets](#follow-up-tickets) rewrite them and build it.
 
-**At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes. The [follow-up tickets](#follow-up-tickets) build the chosen design.
+**At 0.1.** Not built. Release 0.1 has no call that moves an object; an app copies and deletes. The [follow-up tickets](#follow-up-tickets) build it.
 
 **Out of scope.** Moving a whole space to another relay. Deleting a space, which the draft RFC 0014 designs. Moving an object between two databases that share no space. Rich text and streams, which carry their state as their RFCs define it; this RFC says only that a move carries a field's current value, whatever its type.
 
@@ -92,7 +92,7 @@ sequenceDiagram
 | **A. The same id in the new space** | The app's URLs and its own tables keep working; links between objects moved together stay valid; moving back revives the trace; a reference needs only the new space to find the object. | One id now names a trace in one space and a live object in another, so anything keyed by the id alone, across spaces, must also look at the space. A hostile mover can move an object into a space that already holds that id; RFC 0004's rule for two creates of one id makes them one object, which a member that may write there could do anyway. |
 | **B. A new id, and the trace names it** | Each id names one object in one space, as today. | The app must update every URL and table; links between objects moved together must be rewritten; the trace must carry the new id. |
 
-**Recommended: A.** An app names an object by its id and reads it through a space, which RFC 0009 already requires (`space.get(collection, id)`); the move changes the space and leaves the name alone. A reference already names both, `{ space, id }` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). GENESIS.md says every object belongs to exactly one space. Under A, that stays true of the live object; the old space keeps a trace that reads as moved and holds no fields in the view ([What the members of the old space keep](#what-the-members-of-the-old-space-keep)).
+**Chosen: A.** (Carsten, 2026-11-22, NOC-449) An app names an object by its id and reads it through a space, which RFC 0009 already requires (`space.get(collection, id)`); the move changes the space and leaves the name alone. A reference already names both, `{ space, id }` ([RFC 0004, "References"](0004-merge-rules-basic-types.md#references)). GENESIS.md says every object belongs to exactly one space. Under A, that stays true of the live object; the old space keeps a trace that reads as moved and holds no fields in the view ([What the members of the old space keep](#what-the-members-of-the-old-space-keep)).
 
 ## Its history
 
@@ -104,7 +104,7 @@ The old space's log holds every change ever made to the object, signed by its au
 | **H2. The mover writes the history into the new space** | The new space shows every earlier version and author. | The mover would restate other members' changes in its own signed change. The new space could not verify any of it, because the original signatures cover ciphertext under keys it does not hold. The new space's members would read every draft, which a share of the current note does not intend. |
 | **H3. The old space's keys go to the new space's members** | The original changes stay verifiable. | Gives the new space's members the whole old space, every other object included: the opposite of sharing one note. |
 
-**Recommended: H1.** The new space's history starts at the move, and the old space keeps the rest, verifiable as it always was. Principle 3 asks that nothing be lost silently; nothing is lost here, and the split is stated in the move's notice. H3 breaks GENESIS.md's rule that an agent, or a person, gets no more than its spaces.
+**Chosen: H1.** (Carsten, 2026-11-22, NOC-449) The new space's history starts at the move, and the old space keeps the rest, verifiable as it always was. Principle 3 asks that nothing be lost silently; nothing is lost here, and the split is stated in the move's notice. H3 breaks GENESIS.md's rule that an agent, or a person, gets no more than its spaces.
 
 **Conflicts at the move.** A field may hold a winner and readable conflicts, and a set may hold lost removals ([RFC 0002, "A late change stays identifiable"](0002-change-and-log-format.md#a-late-change-stays-identifiable)). The move writes each field's winning value, as RFC 0009 says every `write` resolves the conflicts its copy holds ([RFC 0009, "Field operations per field type"](0009-sdk-api.md#field-operations-per-field-type)). The conflicts stay readable in the old space's log, and the move's result lists the fields that held one, so an app can show them before it moves. Refusing to move an object with conflicts was not taken: an object that is never edited again would keep its conflict for good, and could then never be shared.
 
@@ -120,7 +120,7 @@ Bob's laptop is offline and edits the note while Ana's phone moves it. The lapto
 | **L2. The mover's devices carry them over by themselves** | Bob's edit appears in the shared note with no work by the app. | A device writes changes no one asked for, which RFC 0009 declined for re-sealing values ([RFC 0009, "Personal fields"](0009-sdk-api.md#personal-fields)). A carried-over edit gets a new stamp, so it overwrites what Ben wrote since, without Ben's write being concurrent to it. It also waits until one of the mover's devices runs. |
 | **L3. Any member of both spaces carries them over** | Faster than L2. | As L2, and two members may carry over the same edit twice. |
 
-**Recommended: L1.** `space.moves.laterEdits()` lists them per moved object, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
+**Chosen: L1.** (Carsten, 2026-11-22, NOC-449) `space.moves.laterEdits()` lists them per moved object, and `space.moves.carryOver(edits)` writes the chosen ones into the new space as one `write`. Nothing is lost silently: the edits stay in the old space, identifiable on every member, and the SDK names them. An automatic carry-over can come later, as an option, once apps show how they use it.
 
 ### Two moves at once
 
@@ -138,7 +138,7 @@ A link points only into its own space ([RFC 0004, "Links"](0004-merge-rules-basi
 | **K2. Refused, until the move includes every target** | No link is cleared without the app knowing. | A note that links to one other note drags the whole graph along, and the move of a single note fails for a reason far from the note. |
 | **K3. Turned into a reference** | The relation survives. | A link field cannot hold a reference: the field's type would change, which the schema forbids ([RFC 0005, "The additive-change rule"](0005-schema-and-model-lock.md#the-additive-change-rule)). |
 
-**Recommended: K1**, with the count in the move's result as `clearedLinks`, as `createAdHoc` gives it. A reference in the moved object stays as it is: it names its target's space, and it resolves in the new space as it did in the old.
+**Chosen: K1.** (Carsten, 2026-11-22, NOC-449) The move gives the count in the move's result as `clearedLinks`, as `createAdHoc` gives it. A reference in the moved object stays as it is: it names its target's space, and it resolves in the new space as it did in the old.
 
 ### Links to the moved object
 
@@ -149,7 +149,7 @@ A link in the old space to the moved object finds the trace. Today it would read
 | **M1. A new link status, `moved`, with the new space** | The app sees where the object went and can read it there, if its member holds the new space. The status is a function of the old space's copy, as every link status is, so it converges ([RFC 0004, "Resolution"](0004-merge-rules-basic-types.md#resolution)). | A fifth status for every app that reads links, and a change to the read side of a shipped type. |
 | **M2. Read as `deleted`** | No new status. | The app cannot tell a moved object from a deleted one, which is the problem this RFC exists to solve. |
 
-**Recommended: M1.** The link itself stays as written; only how it resolves gains a status. Its merge rule does not change. Computed fields and views, once a later RFC designs them, treat a moved target as one they cannot follow, since it lives in another space, as they never follow a reference (principle 2). The SDK reads the link as `{ status: "moved", space }`, so the app can show "moved to a shared note" or read the object there.
+**Chosen: M1.** (Carsten, 2026-11-22, NOC-449) The link itself stays as written; only how it resolves gains a status. Its merge rule does not change. Computed fields and views, once a later RFC designs them, treat a moved target as one they cannot follow, since it lives in another space, as they never follow a reference (principle 2). The SDK reads the link as `{ status: "moved", space }`, so the app can show "moved to a shared note" or read the object there.
 
 ### References to the moved object
 
@@ -160,7 +160,7 @@ A reference names a space and an object ([RFC 0004, "How a reference resolves"](
 | **R1. Resolution follows the trace** | A reference keeps working with no write. Resolution is already local to each member and never part of the shared state, so following a trace breaks no convergence. | A member that does not hold the old space cannot follow the trace and reads `notAccessible`, even when it holds the new space. |
 | **R2. Read as `missing`, and the app rewrites the reference** | No change to resolution. | Every reference to a moved object breaks until some member rewrites it, and only a member of the referencing space can. |
 
-**Recommended: R1.** The SDK follows the traces, up to 8 in a row so that a cycle of moves ends, and resolves the reference to `ok`, `notAccessible` or `missing` where the object is now. The read gives the space where it found the object, so an app that wants the reference to name the new space writes it once, as it writes any reference. The three states stay as RFC 0005 named them.
+**Chosen: R1.** (Carsten, 2026-11-22, NOC-449) The SDK follows the traces, up to 8 in a row so that a cycle of moves ends, and resolves the reference to `ok`, `notAccessible` or `missing` where the object is now. The read gives the space where it found the object, so an app that wants the reference to name the new space writes it once, as it writes any reference. The three states stay as RFC 0005 named them.
 
 ## Its personal fields
 
@@ -172,7 +172,7 @@ A personal value is sealed under the person key of its space, and the seal binds
 | **P2. Personal fields stay behind, and the move counts them** | Nothing about the person reaches the new space. | The note arrives without fields the user expects, and the app must write them again, by hand, under the right person. |
 | **P3. An object with personal values cannot be moved** | Nothing to design now. | A customer record or a note about a person can never be shared alone. |
 
-**Recommended: P1**, built after the rest ([Follow-up tickets](#follow-up-tickets)); until then the SDK refuses to move an object that holds a personal value, with `notAllowed`, as P3. The move then works like this:
+**Chosen: P1.** (Carsten, 2026-11-22, NOC-449) It is built after the rest ([Follow-up tickets](#follow-up-tickets)); until then the SDK refuses to move an object that holds a personal value, with `notAllowed`, as P3. The move then works like this:
 
 - **The object is the person** (`person: "self"`). Its hidden field `$person` moves with the same person id and a new person-key id, drawn for the new space, and its personal values are sealed under the new space's person key.
 - **The object names its person by a link** (`person: "assignee"`). The person's object must move along, or the new space must already hold an object with the same person id in a collection the link allows; the SDK then sets the link to that object. Otherwise the move is refused with `noPerson`, naming the field, as RFC 0009 refuses a write that seals under no person. Choosing a person would guess.
@@ -188,7 +188,7 @@ After the move, the person's data lives in two places: in the new space, sealed 
 | **E1. The move erases nothing; an erasure finds both spaces by person id** | No new rule. The person key in the old space keeps serving the person's other objects there. An erasure by the person id shreds the key in each space of the database where the performer may write ([RFC 0003, "The person key"](0003-keys-and-cryptography.md#the-person-key)). | Until an erasure, the old values stay readable to the old space's members. An erasure by a member who is not in both spaces reaches only the spaces it may write in. |
 | **E2. The move shreds the old person key** | The old values become unreadable at the move. | The person key belongs to the person, not the object: shredding it erases the person's other objects in the old space too. A shred is final and needs a second account's sign-off, which a move does not have ([RFC 0003, "Shredding a person's key"](0003-keys-and-cryptography.md#shredding-a-persons-key)). |
 
-**Recommended: E1.** A move is not an erasure, as removing a member is not one ([RFC 0005, "About whom, not by whom"](0005-schema-and-model-lock.md#about-whom-not-by-whom)). The move's notice says that the old space's members keep what they received. An app that must remove a person's data from the old space erases the person, which reaches every space where it lives, the new one included.
+**Chosen: E1.** (Carsten, 2026-11-22, NOC-449) A move is not an erasure, as removing a member is not one ([RFC 0005, "About whom, not by whom"](0005-schema-and-model-lock.md#about-whom-not-by-whom)). The move's notice says that the old space's members keep what they received. An app that must remove a person's data from the old space erases the person, which reaches every space where it lives, the new one included.
 
 ## What the members of the old space keep
 
@@ -199,7 +199,7 @@ Every member of the old space holds the object's log up to the move, under keys 
 | **T1. The trace shows no fields; the log keeps them** | The object leaves the old space's queries, indexes and pages, as the app means it to; a read returns the trace with the new space, and `space.inspect` shows the history. | A member who wants the last state must read the log. |
 | **T2. The trace keeps its last state readable** | Old members still see the note as it was. | The note shows in two places, the old one frozen, and the app must hide it from every query itself. |
 
-**Recommended: T1.** The view keeps no plaintext of the moved object's fields, so no index holds them, as for an erased field ([RFC 0006, "What the view stores in plaintext"](0006-local-view.md#what-the-view-stores-in-plaintext)). That is about what the app reads, not what the device holds: the log keeps every earlier change, and the move's notice says so. What the old space's members keep:
+**Chosen: T1.** (Carsten, 2026-11-22, NOC-449) The view keeps no plaintext of the moved object's fields, so no index holds them, as for an erased field ([RFC 0006, "What the view stores in plaintext"](0006-local-view.md#what-the-view-stores-in-plaintext)). That is about what the app reads, not what the device holds: the log keeps every earlier change, and the move's notice says so. What the old space's members keep:
 
 - **The history and the state at the move**, in their log and in any archive, readable to every member of the old space, a member who joins later included.
 - **No change made after the move.** Later changes are written in the new space, under keys they do not hold, unless they are members of it too.
@@ -213,7 +213,7 @@ The relay sees two changes by one author, in two spaces, close together in time,
 
 ## The SDK call and its notice
 
-The names below are recommendations for the owner, after RFC 0009's conventions.
+The names follow RFC 0009's conventions (Carsten, 2026-11-22, NOC-449).
 
 ```ts
 const shared = await db.spaces.create();
@@ -238,7 +238,7 @@ await personal.moves.carryOver(later[0].edits);
 
 ## Formats
 
-These touch the change format, which GENESIS.md reserves for the owner.
+These touch the change format, which GENESIS.md reserves for the owner, who decided them (Carsten, 2026-11-22, NOC-449).
 
 - **Move, operation 5**, on the object, with no field (key 3 absent), like delete: `{1: object id, 2: collection, 4: 5, 5: {1: destination, 2: replaces}}`. The destination is the new space's 16-byte id, or `null` to take a move back. It merges as a basic value of the object, as delete does ([RFC 0004, "Creating and deleting an object"](0004-merge-rules-basic-types.md#creating-and-deleting-an-object)). It takes the first number of RFC 0004's reserved range 5 to 63 ([RFC 0004, "Operation numbers"](0004-merge-rules-basic-types.md#operation-numbers)); numbers 0, 4 and 5 then belong to the object. An old core parks it as an unknown operation, so it shows the object as live until it upgrades, and its edits there become later edits. A set on a reserved field `$moved` was not taken, for the reason RFC 0004 gives for deletion: a member without the special case would read it as a write to an unknown field.
 - **`$movedFrom`**, a hidden field set in the new space's change: `{1: old space id}`, merged as a basic value, as `$person` is ([RFC 0005, "Identifying the person"](0005-schema-and-model-lock.md#identifying-the-person)). It lets a member of both spaces find the history. It tells the new space's members the old space's random id and nothing more. Leaving it out was considered: the new space would learn nothing of where the note came from, but no member, Ana included, could find its history from the new space.
@@ -268,31 +268,34 @@ Stated plainly (principle 4):
 
 It touches GENESIS.md's "every object belongs to exactly one space": under option A the id stays, and the old space keeps a trace with no fields, not the object. It follows "never give an agent more than its spaces": the new space's members get the state, not the old space's history or keys.
 
-## Questions to the owner
+## What the owner decided
 
-1. Does a moved object keep its id, with a trace left in the old space? Recommended: yes, option A.
-2. Does the new space's history start at the move, with the earlier history staying in the old space? Recommended: yes, option H1.
-3. Are later edits reported and carried over by the app, not by a device on its own? Recommended: yes, option L1, with an automatic carry-over possible later.
-4. Links to objects left behind are cleared and counted; links to the moved object read a new status `moved`; references follow the trace. Recommended: yes, options K1, M1 and R1.
-5. Are personal fields sealed again under a person key of the new space, for the same person id, with the person's object moving along or already in the new space? Recommended: yes, option P1, built after the rest, with objects that hold personal values refused until then.
-6. Does a move erase nothing, leaving erasure to find both spaces by person id? Recommended: yes, option E1.
-7. Does the trace show no fields, while the old space's members keep the log? Recommended: yes, option T1, with the notice text above.
-8. Are operation 5, `$movedFrom`, `space.move` (`move_objects` in Rust), `space.moves`, the notice `objectMoved`, the error `moved` and the link status `moved` the right formats and names? Recommended: accept.
+The owner followed the recommendation on each open choice (Carsten, 2026-11-22, NOC-449):
+
+1. **A moved object keeps its id**, and the old space keeps a trace (option A) (Carsten, 2026-11-22, NOC-449).
+2. **The new space's history starts at the move**, and the earlier history stays in the old space (option H1) (Carsten, 2026-11-22, NOC-449).
+3. **The app carries over later edits**, which the SDK reports; no device carries them over on its own (option L1) (Carsten, 2026-11-22, NOC-449). An automatic carry-over can come later.
+4. **Links to objects left behind are cleared and counted, links to the moved object read `moved`, and references follow the trace** (options K1, M1 and R1) (Carsten, 2026-11-22, NOC-449).
+5. **Personal fields are sealed again under a person key of the new space**, for the same person id, with the person's object moving along or already in the new space (option P1) (Carsten, 2026-11-22, NOC-449). It is built after the rest; until then the SDK refuses to move an object that holds a personal value.
+6. **A move erases nothing**; an erasure finds both spaces by person id (option E1) (Carsten, 2026-11-22, NOC-449).
+7. **The trace shows no fields**, while the old space's members keep the log, and the move returns the notice `objectMoved` with the text above (option T1) (Carsten, 2026-11-22, NOC-449).
+8. **The formats and names are** operation 5 (move), `$movedFrom`, `space.move` (`move_objects` in Rust), `space.moves`, the notice `objectMoved`, the error `moved` and the link status `moved` (Carsten, 2026-11-22, NOC-449).
 
 ## Follow-up tickets
 
-Once the owner decides, these tickets carry it out:
+These tickets carry it out; pm files them once this RFC is merged:
 
 - **Rewrite the decided RFCs**: operation 5 and the `moved` link status in RFC 0004, `$movedFrom` in RFC 0005, the call, its errors and its notice in RFC 0009, and RFC 0003's sentence on the notice that comes later.
 - **The move in the core and the Rust SDK**, without personal fields: both changes, the pending record, the trace, later edits, two moves at once, links and references; convergence tests in the harness for the move and later edits in any order of arrival.
 - **The move in the TypeScript SDK**, after the Rust SDK.
 - **Personal fields in a move** (option P1), with the person-key entry in the new space and the test that one erasure reaches both spaces.
-- **RFC 0015's user journey** says how to share a single note with a move, once this RFC is decided.
+- **RFC 0015's user journey** says how to share a single note with a move.
 
 ## How this RFC relates to the others
 
-It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [RFC 0004](0004-merge-rules-basic-types.md)'s table, a link status to RFC 0004's links and a step to its references' resolution, and a hidden field to [RFC 0005](0005-schema-and-model-lock.md); it seals personal values under [RFC 0003](0003-keys-and-cryptography.md)'s person keys and gives the notice RFC 0003 left for later; it checks rights by [RFC 0008](0008-membership.md)'s roles; it keeps the view as [RFC 0006](0006-local-view.md) defines it; and it would add calls to [RFC 0009](0009-sdk-api.md). It serves the user journey of RFC 0015 (#423), which needs a single note shared, and leaves deleting a space to the draft RFC 0014.
+It adds an operation to [RFC 0002](0002-change-and-log-format.md)'s format and [RFC 0004](0004-merge-rules-basic-types.md)'s table, a link status to RFC 0004's links and a step to its references' resolution, and a hidden field to [RFC 0005](0005-schema-and-model-lock.md); it seals personal values under [RFC 0003](0003-keys-and-cryptography.md)'s person keys and gives the notice RFC 0003 left for later; it checks rights by [RFC 0008](0008-membership.md)'s roles; it keeps the view as [RFC 0006](0006-local-view.md) defines it; and it adds calls to [RFC 0009](0009-sdk-api.md). It serves the user journey of RFC 0015 (#423), which needs a single note shared, and leaves deleting a space to the draft RFC 0014.
 
 ## History
 
 - 2026-11-22 · First published as a draft (NOC-447)
+- 2026-11-22 · Decided by the owner, who followed every recommendation (NOC-449, #445)
