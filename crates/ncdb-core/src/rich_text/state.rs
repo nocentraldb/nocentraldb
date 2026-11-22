@@ -61,6 +61,12 @@ const EDITS: u64 = 2;
 const CLIENTS: u64 = 3;
 
 impl State {
+    /// The document's whole state as a Yjs update, encoding v1, empty for a
+    /// field nobody wrote: what a binding loads its `Y.Doc` from.
+    pub fn document(&self) -> &[u8] {
+        &self.document
+    }
+
     /// The canonical CBOR: `{1: document, 2: [[[change, position], author,
     /// stamp, [[client, clock, len, digest]…], [[client, clock, len]…]]…],
     /// 3: {client: nonce}}`, operations in id order. Not a wire format.

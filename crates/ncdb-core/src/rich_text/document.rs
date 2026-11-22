@@ -41,10 +41,16 @@ fn apply_to(doc: &Doc, update: &[u8]) -> Result<(), Refused> {
 pub(super) fn apply(state: &[u8], update: &[u8]) -> Result<Vec<u8>, Refused> {
     let (doc, _) = load(state)?;
     apply_to(&doc, update)?;
-    let encoded = doc
-        .transact()
-        .encode_state_as_update_v1(&StateVector::default());
-    Ok(encoded)
+    let encoded = encode(&doc);
+    // Loaded again in one transaction, the document's items merge as far
+    // as they can, whatever order they arrived in.
+    let (again, _) = load(&encoded)?;
+    Ok(encode(&again))
+}
+
+fn encode(doc: &Doc) -> Vec<u8> {
+    doc.transact()
+        .encode_state_as_update_v1(&StateVector::default())
 }
 
 /// The root fragment of `state` as XML; empty for a state Yrs cannot load,
