@@ -313,7 +313,18 @@ impl RelayStore for SqliteStore {
                     )
                     .map_err(failed("guest space"))?;
                 }
-                Effect::Statement { .. } => {}
+                // MAX compares the signed integers SQLite stores, which
+                // orders every number below 2^63; a statement's number is
+                // a count or Unix seconds.
+                Effect::Statement { identity, number } => {
+                    tx.execute(
+                        "INSERT INTO statements (identity, number) VALUES (?1, ?2)
+                         ON CONFLICT (identity)
+                         DO UPDATE SET number = MAX(number, excluded.number)",
+                        params![identity, int(number)],
+                    )
+                    .map_err(failed("statement"))?;
+                }
             }
         }
         tx.commit().map_err(failed("commit"))?;
@@ -420,8 +431,17 @@ impl RelayStore for SqliteStore {
             .map_err(failed("member"))
     }
 
-    async fn statement(&self, _identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
-        Ok(None)
+    async fn statement(&self, identity: [u8; 32]) -> Result<Option<u64>, StoreError> {
+        let number: Option<i64> = self
+            .connection()
+            .query_row(
+                "SELECT number FROM statements WHERE identity = ?1",
+                [identity],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(failed("statement"))?;
+        Ok(number.map(unsigned))
     }
 
     async fn members_of(&self, member: MemberId) -> Result<Vec<SpaceId>, StoreError> {

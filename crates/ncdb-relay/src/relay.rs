@@ -6,7 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use ncdb_core::change::{Change, Kind};
 use ncdb_core::ids::{MemberId, SpaceId};
-use ncdb_core::membership::{self, BodyError, Certificate, ControlBody, Entry, Rejection, Verdict};
+use ncdb_core::membership::{
+    self, AccountKeyStatement, Action, BodyError, Certificate, ControlBody, Entry, Rejection,
+    Verdict,
+};
 use ncdb_core::seal;
 
 use crate::error::ErrorCode;
@@ -75,6 +78,40 @@ fn identity(certificate: &Certificate) -> [u8; 32] {
         .statement
         .as_ref()
         .map_or(certificate.account_key, |statement| statement.recovery_key)
+}
+
+/// How a statement's number stands against the highest the relay has seen
+/// for its identity.
+enum Standing {
+    /// A higher number is stored: an account key replaced this one.
+    Superseded,
+    /// The stored number is this one, or the entry brings no statement.
+    Seen,
+    /// No higher number is stored: the effect raises it to this one.
+    New(Effect),
+}
+
+impl Standing {
+    /// The effect that raises the stored number, if any.
+    fn effect(self) -> Option<Effect> {
+        match self {
+            Standing::New(effect) => Some(effect),
+            Standing::Superseded | Standing::Seen => None,
+        }
+    }
+}
+
+/// The account key statement a control entry brings: the one in the
+/// certificate of an add, or of an account key statement entry.
+fn statement_in(entry: &Entry) -> Option<&AccountKeyStatement> {
+    match entry {
+        Entry::Membership(membership) => match &membership.action {
+            Action::Add { certificate, .. } => certificate.statement.as_deref(),
+            _ => None,
+        },
+        Entry::AccountKeyStatement(statement) => Some(statement),
+        _ => None,
+    }
 }
 
 /// The system clock in milliseconds since the Unix epoch.
@@ -334,6 +371,15 @@ impl<S: RelayStore> Relay<S> {
         if genesis.creator.id() != uploader {
             return Err(ErrorCode::NotMember);
         }
+        // A lost device's certificate, whose statement an account key with
+        // a higher number replaced (RFC 0015, "The account's identity").
+        let standing = match genesis.certificate.statement.as_deref() {
+            Some(statement) => self.standing(statement).await?,
+            None => Standing::Seen,
+        };
+        if let Standing::Superseded = standing {
+            return Err(ErrorCode::NotAllowed);
+        }
         let identity = identity(&genesis.certificate);
         let guest = match self.allowed(&genesis.certificate) {
             true => false,
@@ -349,7 +395,22 @@ impl<S: RelayStore> Relay<S> {
         if guest {
             checked.effects.push(Effect::GuestSpace(identity));
         }
+        checked.effects.extend(standing.effect());
         Ok(checked)
+    }
+
+    /// How a statement's number stands against the highest the relay has
+    /// seen for its identity (RFC 0015, "The account's identity").
+    async fn standing(&self, statement: &AccountKeyStatement) -> Result<Standing, ErrorCode> {
+        let stored = self.store.statement(statement.recovery_key).await?;
+        Ok(match stored {
+            Some(stored) if stored > statement.number => Standing::Superseded,
+            Some(stored) if stored == statement.number => Standing::Seen,
+            _ => Standing::New(Effect::Statement {
+                identity: statement.recovery_key,
+                number: statement.number,
+            }),
+        })
     }
 
     /// Whether the allowlist holds the identity of the account that issued
@@ -431,7 +492,7 @@ impl<S: RelayStore> Relay<S> {
             Ok(()) => self.not_too_early(space, change, &resolved).await,
             Err(code) => Err(code),
         };
-        let checked = checked.map(|()| {
+        let mut checked = checked.map(|()| {
             let mut checked = Checked::new(&resolved, &current(before));
             let dropped = record::dropped(before, &resolved);
             checked
@@ -439,6 +500,14 @@ impl<S: RelayStore> Relay<S> {
                 .extend(dropped.into_iter().map(Effect::Member));
             checked
         });
+        // An add or a statement entry may bring a newer statement.
+        if let Ok(checked) = &mut checked
+            && let Some(statement) = statement_in(&control_body(change)?.entry)
+        {
+            checked
+                .effects
+                .extend(self.standing(statement).await?.effect());
+        }
         // The resolver remembers a refused change's judgement too; it is
         // forgotten with the space rather than kept.
         if checked.is_ok() {
