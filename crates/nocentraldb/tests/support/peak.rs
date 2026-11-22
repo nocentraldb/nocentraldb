@@ -1,8 +1,9 @@
 //! The peak heap of one piece of code, counted by a global allocator that
-#![allow(dead_code)]
 //! a test binary installs: `#[global_allocator] static A: Counting =
 //! Counting;`. Counts are per thread, so tests that run side by side on
 //! other threads do not disturb each other.
+
+#![allow(dead_code)]
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
