@@ -77,7 +77,9 @@ export interface RelayProps extends StackProps {
   readonly stage: string;
   /// The relay's stable id, 32 hex digits, drawn once per deployment.
   readonly relayId: string;
-  /// The account keys whose members may create spaces, 64 hex digits each.
+  /// The identities of the accounts whose members may create spaces, 64
+  /// hex digits each: each account's recovery key, or the account key of
+  /// an account without one (RFC 0015, "The account's identity").
   readonly allowedAccounts: readonly string[];
   /// Where the budget and the alarms send their mails.
   readonly alarmEmail: string;
