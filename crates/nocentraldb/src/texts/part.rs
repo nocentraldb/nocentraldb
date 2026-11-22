@@ -204,6 +204,10 @@ pub(crate) const KIND_BOOLEAN: &str =
 pub(crate) const KIND_DATA: &str =
     "a plugin's data";
 
+/// `kindDate`: What the read asked for, in fieldDoesNotHold: a day (Date).
+pub(crate) const KIND_DATE: &str =
+    "a day";
+
 /// `kindFloat`: What the read asked for, in fieldDoesNotHold: a float (f64).
 pub(crate) const KIND_FLOAT: &str =
     "a float";
@@ -230,6 +234,11 @@ pub(crate) const KIND_REFERENCE: &str =
 /// `kindText`: What the read asked for, in fieldDoesNotHold: a text (&str).
 pub(crate) const KIND_TEXT: &str =
     "a text";
+
+/// `kindTimestamp`: What the read asked for, in fieldDoesNotHold: a point in
+/// time (Timestamp).
+pub(crate) const KIND_TIMESTAMP: &str =
+    "a point in time";
 
 /// `roleAdmin`: The role needed, in roleRequired: an admin.
 pub(crate) const ROLE_ADMIN: &str =

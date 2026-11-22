@@ -51,7 +51,10 @@ impl Judged {
     }
 }
 
-/// Step 1 for one node, given the fold of its causal past.
+/// Step 1 for one node, given the fold of its causal past. It reads
+/// nothing of `input` or `judged` outside that past: the
+/// [`super::Resolver`] keeps a judgement while the past stays the same set
+/// (NOC-424).
 pub(crate) fn judge(input: &Input, judged: &Judged, node: &Node, past: &Resolved) -> Judgement {
     if node.is_genesis() {
         return Judgement {

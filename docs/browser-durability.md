@@ -59,6 +59,12 @@ Your app does not open in a private window of Firefox or Safari, and in Chromium
 
 Each private session of Chromium is a new device: its member key is created in the session, kept across reloads in it, and deleted with it (measured: Chromium (Playwright) · Private window: after close (off-the-record context)), so the person pairs it again every time. When `nc.open` fails with `storageUnavailable`, tell your users with the private-window text below.
 
+## A write too large for the tab's memory
+
+The database runs in a Web Worker of the tab that owns it, in WebAssembly, and its memory is limited. In Playwright's Chromium on Linux, a write of one value from about 200 MiB runs out of that memory and fails with `nc.Error` `storageFailed`, as the browser tests of NOC-425 and NOC-426 measured with a value of 256 MiB. Firefox and WebKit run the same tests. Whether such a value fits there has not been measured: a write either goes through or fails the same way. Values that large are not what the database is made for. Keep a large file elsewhere and store its address.
+
+After such a failure, the database in that tab stops for good: every later call fails with `storageFailed` and a message that says to close the database and open it again. Nothing written before is lost; only the failed write is missing. So when a call fails with `storageFailed`, call `db.close()`, which succeeds, and `nc.open` again, which starts the database afresh.
+
 ## What the SDK tells you
 
 The SDK reports how durable this copy is, how many changes would be lost with it, and whether this tab waits for another tab of your app. The names below are decided in [RFC 0006, "What the SDK reports"](rfc/0006-local-view.md#what-the-sdk-reports).

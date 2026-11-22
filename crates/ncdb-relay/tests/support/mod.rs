@@ -8,6 +8,7 @@ pub mod space;
 
 pub mod counting;
 pub mod interleave;
+pub mod swap;
 
 use std::collections::BTreeSet;
 use std::path::PathBuf;

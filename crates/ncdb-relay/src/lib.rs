@@ -35,6 +35,7 @@ pub mod auth;
 pub mod conformance;
 mod error;
 mod keys;
+mod known;
 mod large;
 pub mod page;
 pub mod record;

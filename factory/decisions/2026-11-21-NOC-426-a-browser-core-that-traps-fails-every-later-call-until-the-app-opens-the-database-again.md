@@ -1,0 +1,6 @@
+# 2026-11-21 · NOC-426 · A browser core that traps fails every later call until the app opens the database again
+
+- Decided by: coding agent, NOC-426
+- Why: a WebAssembly trap, as when a write runs out of the core's memory, leaves the core's memory as it was mid-call (the bridge taken out, the allocator possibly mid-change), so the core is never called again. The worker catches every trap, from the call or from a step the core runs after it returned (an uncaught error or rejection in the worker, which it stops there), answers the waiting call with `storageFailed`, every later call with `storageFailed` and `ts.coreStopped`, and a `close` with success, so the app closes and opens the database. The SDK caps no memory: the limit stays the browser's, and the browser tests accept either outcome of a 256 MiB write, written or `storageFailed`, but never an uncaught error.
+- Instead of: restarting the worker on its own and reconnecting the open handles, which would have to replay subscriptions, the tab layer's ownership and the storage lock handover (NOC-352) behind the app's back; or capping the WebAssembly memory, which would lower what Firefox and WebKit can hold today to make one test's outcome the same in every engine.
+- Topics: sdk-ts, browser, errors

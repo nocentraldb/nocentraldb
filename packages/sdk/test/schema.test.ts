@@ -124,6 +124,28 @@ describe("field functions and modifiers", () => {
       }
     ).collections.things.fields;
 
+  test("a day and a point in time are basic values, and a day can be personal", () => {
+    expect(
+      fields(
+        nc.collection({
+          birthday: nc.date().personal({ person: "self" }),
+          occurredAt: nc.timestamp().describe("When it happened."),
+        }),
+      ),
+    ).toEqual({
+      birthday: {
+        type: "ncdb/date",
+        rule: 1,
+        personal: { person: "self" },
+      },
+      occurredAt: {
+        type: "ncdb/timestamp",
+        rule: 1,
+        description: "When it happened.",
+      },
+    });
+  });
+
   test("a set takes a choice as its element, and links take several collections", () => {
     expect(
       fields(
@@ -227,6 +249,12 @@ describe("what model build refuses before the lock", () => {
     expect(() => draft(model(nc.links("tasks")))).toThrow(
       /tasks\.tags: a set's element is a basic value/,
     );
+    // Not a day or a point in time in v1 (RFC 0005, "Days and points in time").
+    for (const element of [nc.date(), nc.timestamp()]) {
+      expect(() => draft(model(element))).toThrow(
+        /tasks\.tags: a set's element is a basic value: nc\.string\(\)/,
+      );
+    }
   });
 
   test("something other than a field is refused with its name", () => {

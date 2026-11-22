@@ -132,9 +132,7 @@ pub(super) fn run<C: Checks>(
         let factory = checks.as_mut().ok_or(Error::Model)?;
         let mut space_checks = factory(*space);
         let controls: Vec<_> = log.folded_controls().cloned().collect();
-        for control in &controls {
-            space_checks.add_control(control);
-        }
+        space_checks.add_controls(&controls);
         for (change, parked) in waiting {
             // A change that no longer opens keeps its parked operations,
             // as the fold before left them.

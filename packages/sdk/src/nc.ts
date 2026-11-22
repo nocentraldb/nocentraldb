@@ -112,7 +112,8 @@ export type Unknown = { unknown: string };
 /**
  * An object of the collection `C` as the app reads it (RFC 0005, "Types for
  * the app"): every field optional, without the deprecated ones. A choice
- * reads as its options or `Unknown`, an `nc.int` as a `number`, a set as
+ * reads as its options or `Unknown`, an `nc.int` as a `number`, an
+ * `nc.date` as a `"YYYY-MM-DD"` string, an `nc.timestamp` as a `Date`, a set as
  * an array, a link as an object id, a reference as `{ space, id }`
  * (RFC 0009, "Get by id").
  */
@@ -290,7 +291,11 @@ export const boolean = (): Field<boolean> => basic("ncdb/boolean");
 export const oneOf = <const O extends readonly string[]>(
   options: O,
 ): Field<O[number] | Unknown> => basic("ncdb/choice", options);
-/** A set of basic values. */
+/** A calendar day, basic value, read and written as a `"YYYY-MM-DD"` string, never converted to a time zone (RFC 0005, "Days and points in time"). */
+export const date = (): Field<string> => basic("ncdb/date");
+/** A point in time to the millisecond, in UTC, basic value, read and written as a `Date` (RFC 0005, "Days and points in time"). */
+export const timestamp = (): Field<Date> => basic("ncdb/timestamp");
+/** A set of basic values, other than days and points in time. */
 export const set = <T>(element: Field<T>): Field<T[]> =>
   field({ spec: { kind: "set", of: element } });
 /** A link to one object, in one collection or in one of several. */
@@ -433,7 +438,12 @@ const describeType = (path: string, spec: Spec): Record<string, unknown> => {
       throw new Error(texts.reservedFieldType(path, spec.name));
     case "set": {
       const element = fieldStates.get(spec.of);
-      if (element === undefined || element.spec.kind !== "basic") {
+      if (
+        element === undefined ||
+        element.spec.kind !== "basic" ||
+        element.spec.type === "ncdb/date" ||
+        element.spec.type === "ncdb/timestamp"
+      ) {
         throw new Error(texts.setElementNotBasic(path));
       }
       if (
@@ -452,6 +462,7 @@ export { pairingAnswer } from "./account.ts";
 /** Opens this member's database (RFC 0009, "Open and close"). */
 /** Field operations on sets and many links (RFC 0009, "Field operations per field type"). */
 export { add, open, remove } from "./db.ts";
+export { erasureRequest, signOffs } from "./erase.ts";
 /** The one error class the SDK throws (RFC 0009, "Errors"). */
 export { NcError as Error } from "./error.ts";
 export { invitation } from "./members.ts";

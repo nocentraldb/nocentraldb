@@ -128,6 +128,8 @@ export interface Space {
   readonly erasures: {
     /** Each erasure, with who deleted the person key, who only saw it and who never answered. */
     list(): Promise<ErasureEntry[]>;
+    /** Takes the provisional erasure `shred` back within its 7 days, and gives `takenBack`: only an admin of the performer's account may, others are refused with `notAllowed`; a shred that is final, decided or not of this space is refused with `invalidValue` (RFC 0009, "Erasing a person"; Carsten, 2026-11-15, NOC-326). */
+    takeBack(shred: string): Promise<import("./members.ts").Notice>;
   };
   /** What this space holds that a read does not show, as a report (RFC 0009, "Sync and status"). */
   readonly status: {
@@ -310,7 +312,19 @@ export interface Db {
       readonly askAdmins: readonly Id[];
       readonly notice: import("./members.ts").Notice;
     }>;
+    /** On a device of another account, or of the performer's own where every member of a space belongs to it: signs off `request` with the account key in each space where the account may, checked against this copy, and names the others in `notSigned`. A database that holds no account key is refused with `notAllowed` (RFC 0009, "Erasing a person"). */
+    signOff(request: import("./erase.ts").ErasureRequest): Promise<{
+      readonly signOffs: import("./erase.ts").SignOffs;
+      readonly notSigned: readonly Id[];
+    }>;
   };
+  /** The request to erase the person of `object`, one of the person's objects as this database read it: every space where this member may write and the person has a key. An object of no person is refused with `noPerson` (RFC 0009, "Erasing a person"; Carsten, 2026-11-15, NOC-326). */
+  erasureRequest(object: object): Promise<import("./erase.ts").ErasureRequest>;
+  /** Erases the person of `request` in every space `signOffs` signs off: one shred per space, each sign-off checked first; one that would not hold refuses the call with `invalidValue`, and nothing is written. Erasure does not reach devices that never come back online, copies made outside the database or unmarked free text, as its notice `erased` says. */
+  erase(
+    request: import("./erase.ts").ErasureRequest,
+    signOffs: import("./erase.ts").SignOffs,
+  ): Promise<import("./erase.ts").Erased>;
   /** Closes the database; every later call fails with `closed`, and every subscription stops. */
   close(): Promise<void>;
 }
