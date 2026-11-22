@@ -1,11 +1,13 @@
 //! `ncdb/richText` meets RFC 0004's plugin contract C1 to C7 (RFC 0013,
 //! "How rich text meets the plugin contract"), checked by the convergence
 //! harness: members type, delete, format, split and join blocks, delete
-//! blocks and set attributes, sync now and then, and now and then write
-//! again from a backup under a client id they used before; copies receive
-//! it all in random orders, with duplicates and malformed operations. The
-//! broken fixtures, a fold that lets client ids collide and one that
-//! accepts any client id, must be caught (C6).
+//! blocks and set attributes, and sync now and then; copies receive it all
+//! in random orders, with duplicates and malformed operations. The broken
+//! fixtures, a fold that lets client ids collide and one that accepts any
+//! client id, must be caught (C6). A member restored from a backup, which
+//! writes again under ids it used before, is checked on its own: the
+//! harness's C4 asks that a deletion name only what its author had seen,
+//! and a deletion of a reused id names both writes of it.
 #![cfg(feature = "rich-text")]
 
 mod rich_text_support;
@@ -72,7 +74,10 @@ fn c3_the_same_cases_end_in_the_same_state_bytes_on_every_target() {
         &[0, 1, 2],
         &Edits,
     );
-    assert_eq!(digest, "unset");
+    assert_eq!(
+        digest,
+        "661b36930ba1b1625c11322d17e3c5356848e9f9b3c8a5354f4d9d2f192680f1"
+    );
 }
 
 /// Broken on purpose: a fold that applies every update as it arrives,
@@ -173,7 +178,7 @@ fn the_same_generated_edits_are_refused_under_another_members_client_id() {
     // What the broken fold lets through, the core parks: an edit under
     // another member's client id does not decode.
     let doc = member_doc(client(1), &[]);
-    let raw: Raw = (0, 0, 0, 0, false);
+    let raw: Raw = (0, 0, 0, 0);
     let op = Op {
         id: 0,
         author: 0,
@@ -186,4 +191,77 @@ fn the_same_generated_edits_are_refused_under_another_members_client_id() {
     let mut copy = Copy::default();
     copy.apply(&op);
     assert_eq!(copy.outcome(0), Outcome::Parked);
+}
+
+/// Every order of `ops`, by Heap's algorithm.
+fn orders(n: usize) -> Vec<Vec<usize>> {
+    fn heap(k: usize, a: &mut Vec<usize>, out: &mut Vec<Vec<usize>>) {
+        if k <= 1 {
+            out.push(a.clone());
+            return;
+        }
+        for i in 0..k {
+            heap(k - 1, a, out);
+            let j = if k.is_multiple_of(2) { i } else { 0 };
+            a.swap(j, k - 1);
+        }
+    }
+    let mut out = Vec::new();
+    heap(n, &mut (0..n).collect(), &mut out);
+    out
+}
+
+#[test]
+fn a_member_restored_from_a_backup_converges_in_every_order() {
+    use rich_text_support::harness::{NONCE, edit_text};
+    use rich_text_support::{apply, type_text};
+    let alice = client(0);
+    let bob = client(1);
+    let a = member_doc(alice, &[]);
+    let first = edit_text(&a, "Alice first.");
+    let typed = type_text(&a, 0, 12, " More.");
+    // Bob sees Alice's first write and types after it.
+    let b = member_doc(bob, &first);
+    let by_bob = type_text(&b, 0, 0, "Bob: ");
+    // Alice, restored from a backup taken before she wrote, writes again
+    // under the same client id and clocks; Carol sees only that write and
+    // deletes part of it.
+    let restored = member_doc(alice, &[]);
+    let again = edit_text(&restored, "Alice again.");
+    let c = member_doc(client(2), &again);
+    let by_carol = rich_text_support::delete_text(&c, 0, 0, 6);
+    apply(&c, &by_bob);
+    let ops: Vec<Op<Body>> = [
+        (0, 0, first, Some(alice)),
+        (0, 1, typed, Some(alice)),
+        (1, 2, by_bob, Some(bob)),
+        (0, 3, again, Some(alice)),
+        (2, 4, by_carol, None),
+    ]
+    .into_iter()
+    .map(|(author, stamp, update, client)| Op {
+        id: stamp as OpId,
+        author,
+        body: Body {
+            stamp,
+            update,
+            clients: client.map(|c| vec![(c, NONCE)]).unwrap_or_default(),
+        },
+    })
+    .collect();
+    let mut ends = Vec::new();
+    for order in orders(ops.len()) {
+        let mut copy = Copy::default();
+        for i in order {
+            copy.apply(&ops[i]);
+            copy.apply(&ops[i]);
+        }
+        let outcomes: Vec<Outcome> = ops.iter().map(|op| copy.outcome(op.id)).collect();
+        ends.push((copy.state_bytes(), outcomes, copy.read()));
+    }
+    assert!(ends.iter().all(|end| *end == ends[0]));
+    // The earlier write keeps the ids, and Carol's deletion of them takes
+    // its characters; the restored write parks.
+    assert_eq!(ends[0].1[0], Outcome::Replaced(4));
+    assert_eq!(ends[0].1[3], Outcome::Parked);
 }

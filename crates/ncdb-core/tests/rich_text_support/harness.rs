@@ -19,7 +19,7 @@ use proptest::prelude::*;
 use yrs::types::text::Text;
 use yrs::types::xml::{Xml, XmlElementPrelim, XmlFragment, XmlIn, XmlOut, XmlTextPrelim};
 use yrs::updates::decoder::Decode;
-use yrs::{Any, Doc, GetString, OffsetKind, Options, ReadTxn, Transact, Update, XmlFragmentRef};
+use yrs::{Any, Doc, OffsetKind, Options, ReadTxn, Transact, Update, XmlFragmentRef};
 
 use super::ROOT;
 use ncdb_harness::{Author, Generator, Member, Mergeable, Op, OpId, Outcome};
@@ -174,9 +174,8 @@ impl Mergeable for Copy {
 }
 
 /// What a member does in one edit, drawn by the harness: the kind of edit,
-/// two positions, a word, and whether the member was restored from a
-/// backup and writes again from an empty copy under its old client id.
-pub type Raw = (u8, u16, u16, u8, bool);
+/// two positions and a word.
+pub type Raw = (u8, u16, u16, u8);
 
 const WORDS: &[&str] = &["ship", "Friday", " ", "für", "日本", "😀", "a", "lost"];
 
@@ -193,18 +192,17 @@ pub fn member_doc(client: u64, state: &[u8]) -> Doc {
         ..Options::default()
     });
     let _ = doc.get_or_insert_xml_fragment(ROOT);
-    if !state.is_empty() {
-        let update = Update::decode_v1(state).expect("the core's state");
-        doc.transact_mut()
-            .apply_update(update)
-            .expect("the core's state applies");
+    // A broken fold's document may not load whole; its member edits what
+    // loads, and the harness then finds the copies apart.
+    if let Ok(update) = Update::decode_v1(state) {
+        let _ = doc.transact_mut().apply_update(update);
     }
     doc
 }
 
 /// One edit of a TipTap-shaped document: blocks are paragraphs and
 /// headings holding one text each. Returns the transaction's update.
-pub fn edit(doc: &Doc, &(kind, a, b, word, _): &Raw) -> Vec<u8> {
+pub fn edit(doc: &Doc, &(kind, a, b, word): &Raw) -> Vec<u8> {
     let body = doc.get_or_insert_xml_fragment(ROOT);
     let mut txn = doc.transact_mut();
     let blocks = body.len(&txn);
@@ -257,7 +255,7 @@ pub fn edit(doc: &Doc, &(kind, a, b, word, _): &Raw) -> Vec<u8> {
         (7, Some(text)) => {
             // Split: the text after a point moves into a new block.
             let at = boundary(&text, &txn, b);
-            let all = text.get_string(&txn);
+            let all = plain(&text, &txn);
             let tail = utf16_from(&all, at);
             let len = text.len(&txn);
             if at < len {
@@ -272,7 +270,7 @@ pub fn edit(doc: &Doc, &(kind, a, b, word, _): &Raw) -> Vec<u8> {
         (_, Some(text)) => {
             // Join: the next block's text moves to the end of this one.
             if let Some(next) = text_of(&body, &txn, block + 1) {
-                let moved = next.get_string(&txn);
+                let moved = plain(&next, &txn);
                 body.remove_range(&mut txn, block + 1, 1);
                 let end = text.len(&txn);
                 text.insert(&mut txn, end, &moved);
@@ -280,6 +278,22 @@ pub fn edit(doc: &Doc, &(kind, a, b, word, _): &Raw) -> Vec<u8> {
         }
     }
     txn.encode_update_v1()
+}
+
+/// Appends a paragraph holding `text`; returns the whole document, which
+/// is what a member restored from an empty copy writes.
+pub fn edit_text(doc: &Doc, text: &str) -> Vec<u8> {
+    let body = doc.get_or_insert_xml_fragment(ROOT);
+    let mut txn = doc.transact_mut();
+    let at = body.len(&txn);
+    body.insert(
+        &mut txn,
+        at,
+        XmlElementPrelim::new("paragraph", [XmlIn::from(XmlTextPrelim::new(text))]),
+    );
+    drop(txn);
+    doc.transact()
+        .encode_state_as_update_v1(&yrs::StateVector::default())
 }
 
 /// The text a block holds, when it is an element that holds one.
@@ -296,7 +310,7 @@ fn text_of(body: &XmlFragmentRef, txn: &impl ReadTxn, block: u32) -> Option<yrs:
 /// A position between two characters of `text`, in UTF-16 code units,
 /// picked by `pick`.
 fn boundary(text: &yrs::XmlTextRef, txn: &impl ReadTxn, pick: u16) -> u32 {
-    let all = text.get_string(txn);
+    let all = plain(text, txn);
     let mut at = 0u32;
     let mut points = vec![0u32];
     for c in all.chars() {
@@ -304,6 +318,17 @@ fn boundary(text: &yrs::XmlTextRef, txn: &impl ReadTxn, pick: u16) -> u32 {
         points.push(at);
     }
     points[usize::from(pick) % points.len()]
+}
+
+/// The characters of `text`, without its formatting.
+fn plain(text: &yrs::XmlTextRef, txn: &impl ReadTxn) -> String {
+    text.diff(txn, |_| ())
+        .into_iter()
+        .filter_map(|diff| match diff.insert {
+            yrs::Out::Any(Any::String(s)) => Some(s.to_string()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The part of `s` from the UTF-16 offset `at`, a character boundary.
@@ -319,33 +344,19 @@ fn utf16_from(s: &str, at: u32) -> String {
 }
 
 /// Generates the edits members make, each from its author's copy, under
-/// the author's client id; now and then a member restored from a backup
-/// writes from an empty copy, under the client id it used before.
+/// the author's client id, through one lease: its clocks continue.
 pub struct Edits;
 
 impl Generator<Copy> for Edits {
     type Raw = Raw;
 
     fn raw(&self, _: Member) -> BoxedStrategy<Raw> {
-        (
-            any::<u8>(),
-            any::<u16>(),
-            any::<u16>(),
-            any::<u8>(),
-            proptest::bool::weighted(0.05),
-        )
-            .boxed()
+        any::<Raw>().boxed()
     }
 
     fn make(&self, author: &Author<'_, Copy>, raw: &Raw) -> Body {
-        let restored = raw.4;
         let client = client(author.member);
-        let state = if restored {
-            Vec::new()
-        } else {
-            author.copy.document()
-        };
-        let update = edit(&member_doc(client, &state), raw);
+        let update = edit(&member_doc(client, &author.copy.document()), raw);
         body(author, update, client, NONCE)
     }
 
