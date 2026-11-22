@@ -1,0 +1,6 @@
+# 2026-11-22 · NOC-444 · A browser worker touches OPFS every minute while a database is open
+
+- Decided by: coding agent, NOC-444
+- Why: in an off-the-record context, a Chromium private window and every Playwright `browser.newContext()`, Chromium drops the origin's OPFS after about ten minutes without a file operation. That takes every access handle and file with it, held handles or not (measured in Chromium 157: kept after 450 s, gone after 600 s). A call on a file or directory handle once a minute keeps all of it, even a call that finds nothing; `getDirectory()` and `estimate()` do not. The worker cannot tell a private window from a normal one, so it touches the pool's directory in every browser, from the start of an open until the open fails or the worker stops (`packages/sdk/src/keepAlive.ts`). A later design of the tab layer, such as the lock per transaction of RFC 0012 (NOC-368), keeps the touch: releasing the handles does not save the files.
+- Instead of: reopening the pool's handles after an I/O error, which cannot bring back files Chromium already dropped; touching only through SQLite reads, which miss a quiet database; refusing Chromium's private window as Firefox's and WebKit's are (NOC-347), which the SDK cannot detect and which is the owner's call.
+- Topics: browser, private-window, sdk-ts, opfs, rfc-0012
