@@ -93,6 +93,25 @@ The relay accepts no change larger than 16 MiB ([RFC 0007, "Large changes"](rfc/
 
 So never write a whole burst in one change. Keep the batch size well below the limit, and check `refused` afterwards.
 
+## In a browser
+
+The TypeScript SDK writes the same way: `space.write` with many `tx.create` calls is one change. In the browser its database lives in the origin private file system (OPFS), and every write costs more than it does natively. This table shows what a write cost in Chromium as the database grew to 100,000 objects, written into one space without a relay, each object a task with a title and a priority. Each cell is the mean over the 10,000 objects before it.
+
+| Objects in the database | One object to a write | 1,000 objects to a write |
+| ----------------------: | --------------------: | -----------------------: |
+|                  10,000 |                6.7 ms |                   274 ms |
+|                  30,000 |                6.8 ms |                   335 ms |
+|                  60,000 |                6.1 ms |                   531 ms |
+|                 100,000 |                7.3 ms |                   620 ms |
+|  All 100,000, in total |             11 minutes |                     46 s |
+
+- **A write of one object costs the same at any size.** It stayed between 6 and 7.5 ms from the first object to the 100,000th. Most of it is the commit: SQLite in a browser keeps a rollback journal, and each commit writes and flushes the journal and the database on OPFS.
+- **A batch costs more per object as the database grows.** Each object of a batch updates the tables and indexes of the view, and the larger they are, the more of their pages a batch touches and must write. A write of 1,000 objects took 274 ms at 10,000 objects and 620 ms at 100,000: 3,600 objects a second, then 1,600. The growth slowed towards the end, and natively the same write grew from 185 to 310 ms.
+- **Batch in a browser too.** 100,000 objects took 46 seconds in batches of 1,000, and 11 minutes one write each.
+- **Measure in a normal window.** A private window keeps OPFS in memory. In Chromium's off-the-record context, which Playwright's `browser.newContext()` opens, a write of 1,000 objects took 2.4 s at the start and 11 s at 100,000 objects, 9 to 18 times as long as in a normal window. Every number in this section comes from a normal window on a profile on disk.
+
+The SDK reads two reports after every write: the status of each space your app holds a handle on, and the durability report. Before NOC-439, both read the whole log of the space each time, so a write of one object grew slower with every change the space held: in Chromium it took 6.3 ms at 2,000 objects and 16.4 ms at 30,000. They now keep what they report as changes arrive, so the cost no longer grows. A browser test, run in each engine, checks that a write at 20,000 objects costs at most half again what it cost at 4,000 ([scripts/sdk-browser/writeCost.e2e.test.mjs](../scripts/sdk-browser/writeCost.e2e.test.mjs)).
+
 ## A device that comes back after working offline
 
 Island mode lets members keep working without a relay. When a device comes back, its burst goes up, and the other devices pull it. In this table, a second device of the same account joined the space and went offline. The first device then wrote the 81,000 operations offline, reconnected and pushed them. Then the second device came back and pulled them.
@@ -131,13 +150,13 @@ Every copy of the space takes space on disk, on each device:
 
 ## What was measured
 
-Each row of the tables is one run of the example: 81,000 operations into one space, a first and a second device of the same account, both on the Rust SDK, both syncing with the local relay `ncdb-relay` on SQLite over the loopback interface. It ran on one Linux machine with 4 virtual CPUs (Intel Xeon, 2.30 GHz) and 16 GB of memory, in a release build. Both devices and the relay shared that machine.
+Each row of the tables before [In a browser](#in-a-browser) is one run of the example: 81,000 operations into one space, a first and a second device of the same account, both on the Rust SDK, both syncing with the local relay `ncdb-relay` on SQLite over the loopback interface. It ran on one Linux machine with 4 virtual CPUs (Intel Xeon, 2.30 GHz) and 16 GB of memory, in a release build. Both devices and the relay shared that machine. The browser section ran the TypeScript SDK in the Chromium of Playwright 1.63, headless, on the same machine, one run per column.
 
 What it does not show:
 
 - **A network.** The relay ran on the same machine. Over the internet, each push and pull also waits for the round trip, and the bytes of the tables travel over your connection.
 - **The relay on AWS.** API Gateway, DynamoDB and S3 have their own latency and cost. This guide did not measure them.
-- **A browser or a phone.** The TypeScript SDK in a browser stores its database in the origin private file system, where writes are slower, and a tab has less memory than a process. Neither was measured. The memory columns are the best guide to what a smaller device must hold.
+- **A phone, or a browser with a relay.** [In a browser](#in-a-browser) measured writing in Chromium alone, without a relay, other engines or the memory a tab holds; a tab has less memory than a process. A phone was not measured. The memory columns are the best guide to what a smaller device must hold.
 - **Other records, or edits.** Every operation here creates a record. Larger records make larger changes: with larger records, put fewer to a change, so that each change stays a few hundred KB. Updates and deletes were not measured.
 - **Several writers at once.** One device wrote the burst. Bursts from several members into one space at the same time were not measured.
 
@@ -154,3 +173,12 @@ cargo run --release --locked -p nocentraldb --example bulk_import -- \
 `--operations` is the number of operations, `--batch` the operations to a change, and `--island` runs the second table's case instead of the first's. `--relay-bin` names the relay binary if it is not in the same target directory, and `--dir` a new directory that keeps the databases after the run, for a look inside them. Without `--dir`, the run uses a temporary directory and removes it. One run at 81,000 operations takes about a minute; at one operation a change, about five.
 
 The repository's tests run both cases at 2,000 operations, 50 to a change, so that the example keeps working ([crates/nocentraldb/tests/bulk_import.rs](../crates/nocentraldb/tests/bulk_import.rs)). The runs at full size are not part of the gate, because they take minutes. Run them by hand after a change that could affect writing, syncing or folding, and update the tables here when the numbers change.
+
+To measure a browser, build the SDK and run the measurement in a normal window of the engine `SDK_BROWSER_ENGINE` names, Chromium when it names none:
+
+```sh
+node scripts/sdk-browser/build.mjs
+node scripts/sdk-browser/measure-writes.mjs --objects 100000 --batch 1
+```
+
+`--batch` is the objects to a write, and `--window` how many objects each printed mean covers, 10,000 by default. The browser test that keeps a write of one object flat runs with the other browser tests, not in the gate.
