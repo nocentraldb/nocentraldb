@@ -7,13 +7,14 @@
 import { expect, expectTypeOf, test } from "vitest";
 import { decode, encode } from "../src/cbor.ts";
 import { type Core, connect } from "../src/connect.ts";
-import { nc, pairingAnswer } from "../src/index.ts";
+import { nc } from "../src/index.ts";
 
 const model = nc.model({
   tasks: nc.collection({ title: nc.string() }),
 });
 const lock = { model: { id: "00112233445566778899aabbccddeeff" } };
-const IDENTITY = "90e506d6c805585c4901c7b7cd36405df43b0cb4678fc9afb7378af4d438d743";
+const IDENTITY =
+  "90e506d6c805585c4901c7b7cd36405df43b0cb4678fc9afb7378af4d438d743";
 
 const fake = (identity: string | null) => {
   const core: Core = {
@@ -43,6 +44,6 @@ test("db.account.identity is the identity the core answers on open", async () =>
 test("a database waiting to be paired has none until the pairing completes", async () => {
   const db = await connect(fake(null), { model, lock, pairing: "request" });
   expect(db.account.identity).toBeNull();
-  await db.account.completePairing(pairingAnswer("ncdb-pair-1:AQ"));
+  await db.account.completePairing(nc.pairingAnswer("ncdb-pair-1:AQ"));
   expect(db.account.identity).toBe(IDENTITY);
 });

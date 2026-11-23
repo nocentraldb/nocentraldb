@@ -644,7 +644,7 @@ export const connect = async (
         }
       },
     },
-    account: { ...accountOf(ask), signOff: signOffOf(ask) },
+    account: Object.assign(accountOf(ask, opened), { signOff: signOffOf(ask) }),
     ...erasureCallsOf(ask, read),
     durability: reports.durability,
     view: reports.view,

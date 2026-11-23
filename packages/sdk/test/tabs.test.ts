@@ -163,6 +163,7 @@ test("the first tab owns the database, and a second reaches it through the first
   const second = await tab();
   expect((await ask(second.core, "open", { lock: LOCK })).ok).toEqual({
     sync: { connection: "none" },
+    identity: IDENTITY,
   });
   expect((await ask(second.core, "spaces.list")).ok).toEqual([]);
   expect(first.log).toEqual(["open", "spaces.list"]);

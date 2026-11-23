@@ -280,6 +280,8 @@ export interface Db {
   };
   /** This member's account: its recovery code, and whether this open recovered it (RFC 0009, "Accounts and devices"). */
   readonly account: {
+    /** The account's identity, its recovery key in hexadecimal: public, the same on every device and agent of the account and after a recovery, and what the app's backend signs an admission for (RFC 0015, "In the SDK"). `null` while the database waits to be paired. */
+    readonly identity: string | null;
     /** The recovery code while the person has not confirmed they stored it, else `null`; shown again on every open until then. */
     recoveryCode(): Promise<RecoveryCode | null>;
     /** `accountRecovered` on the open that recovered the account with `recover`, else `null`. */

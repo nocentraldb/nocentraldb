@@ -93,11 +93,15 @@
 //! `null`; `account.confirmRecoveryCode` `{}` forgets the code;
 //! `account.recovered` `{}` answers a notice or `null`.
 //!
+//! For RFC 0015's `db.account.identity` (NOC-469), `open` and
+//! `account.completePairing` also answer `"identity"`: the account's
+//! recovery key in hex, or `null` while the database waits to be paired.
+//!
 //! The calls of NOC-316, slice 2, in `account.rs`: `account.pair` `{"kind":
 //! "device" | "agent", "invitation": text}` answers `{"answer": text,
 //! "added": [{"space": id, "notice": notice}], "askAdmins": [id]}`;
 //! `account.completePairing` `{"answer": text}` answers `{"notices":
-//! [notice]}`.
+//! [notice], "identity": text}`.
 //!
 //! The call of NOC-316, slice 3, in `account.rs`: `account.removeMember`
 //! `{"member": id, "recover": words}` answers `{"removed": [{"space": id,
@@ -380,8 +384,10 @@ impl Bridge {
             durability: Arc::new(Mutex::new(durability_watch)),
             view: Arc::new(Mutex::new(view_watch)),
         });
+        let identity = account::identity(&db);
         self.db = Some(db);
         Ok(entries([
+            ("identity", identity),
             ("sync", sync_status(&status)),
             ("durability", reports::durability(&durability)),
             ("view", reports::view(&view)),
