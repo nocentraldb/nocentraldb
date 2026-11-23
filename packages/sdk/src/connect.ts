@@ -27,6 +27,7 @@ import { lockOutOfDate } from "./lockCheck.ts";
 import type { Notice } from "./members.ts";
 import { membersOf, ownInvitation } from "./membership.ts";
 import { Cursor, queryState } from "./query.ts";
+import { relayAskOf } from "./relayAsk.ts";
 import { notify, spaceStatusOf, syncStatusOf } from "./reports.ts";
 import { spaceListOf } from "./spaceList.ts";
 import type { SpaceStatus } from "./status.ts";
@@ -140,7 +141,7 @@ export const connect = async (
     opened = await ask("open", {
       lock: JSON.stringify(options.lock),
       name: options.name ?? "default",
-      relay: options.relay,
+      relay: typeof options.relay === "function" ? true : options.relay,
       pairing: options.pairing === "request" ? true : undefined,
       recover: options.recover,
       admission: options.admission ? true : undefined,
@@ -154,8 +155,11 @@ export const connect = async (
   // events, so that `db.sync.current()` answers at once.
   // The relay that serves this database: this tab's option, or, when
   // another tab owns the database, that tab's (NOC-177).
-  let relay = (opened as { relay?: string } | null)?.relay ?? options.relay;
-  let sync = syncStatusOf((opened as { sync?: unknown } | null)?.sync, relay);
+  let relay =
+    (opened as { relay?: string } | null)?.relay ??
+    (typeof options.relay === "string" ? options.relay : undefined);
+  let rawSync = (opened as { sync?: unknown } | null)?.sync;
+  let sync = syncStatusOf(rawSync, relay);
   const reports = reportsOf(
     ask,
     (opened ?? {}) as { durability?: unknown; view?: unknown },
@@ -177,6 +181,7 @@ export const connect = async (
     return { promise, cancel: () => syncWaiters.delete(waiter) };
   };
   const synced = (raw: unknown) => {
+    rawSync = raw;
     sync = syncStatusOf(raw, relay);
     notify(syncListeners, sync);
     for (const waiter of [...syncWaiters]) {
@@ -214,6 +219,16 @@ export const connect = async (
   };
 
   const admitted = admissionOf(ask, options.admission);
+  // The app's relay function: the status names the relay it last gave.
+  const relayAsked = relayAskOf(
+    ask,
+    typeof options.relay === "function" ? options.relay : undefined,
+    (url) => {
+      relay = url;
+      sync = syncStatusOf(rawSync, relay);
+      notify(syncListeners, sync);
+    },
+  );
   // The identity of this database, which its cursors carry.
   const identity = {};
   const subscriptions = new Set<Subscription>();
@@ -231,6 +246,7 @@ export const connect = async (
       return;
     }
     if (message.event === "admission") return admitted(message);
+    if (message.event === "relay") return relayAsked(message);
     if (message.event === "durability") {
       reports.durabilityChanged(
         (message as { durability?: unknown }).durability,
