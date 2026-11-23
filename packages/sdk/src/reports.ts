@@ -6,11 +6,20 @@ import type { SpaceStatus } from "./status.ts";
 import type { SyncStatus } from "./sync.ts";
 
 /**
- * The relay's URL as the SDK shows it: without its query string and
- * fragment, which may carry a token for the relay's authorizer (NOC-495).
- * The core still connects with the whole URL.
+ * The relay's URL as the SDK shows it: without the user and password before
+ * its host, and without its query string and fragment, any of which may
+ * carry a credential for the relay's authorizer (NOC-495). The core still
+ * connects with the whole URL.
  */
-const shownRelay = (url: string): string => url.split(/[?#]/, 1)[0] ?? url;
+const shownRelay = (url: string): string => {
+  const cut = url.split(/[?#]/, 1)[0] ?? url;
+  const start = cut.indexOf("://") + 3;
+  if (start < 3) return cut;
+  const end = cut.indexOf("/", start);
+  const host = end < 0 ? cut.slice(start) : cut.slice(start, end);
+  const at = host.lastIndexOf("@");
+  return at < 0 ? cut : cut.slice(0, start) + cut.slice(start + at + 1);
+};
 
 /** The sync status the core sent, with the relay that serves the database, shown by `shownRelay`. */
 export const syncStatusOf = (
