@@ -75,7 +75,7 @@ test("no document links a removed anchor of RFC 0001", () => {
 test("the status, the discussion and History", () => {
   assert.equal(
     line(read(RFC), "**Status.**"),
-    "**Status.** Decided by the owner (Carsten, 2026-11-10).",
+    "**Status.** Decided, 2026-11-10.",
   );
   assert.ok(
     links(part("how-to-give-advice"), DISCUSSION),

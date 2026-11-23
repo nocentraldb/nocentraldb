@@ -326,7 +326,9 @@ impl PersonKeys {
 /// effect (Carsten, 2026-11-12, NOC-242).
 /// `saw(a, b)` is whether `b` is in `a`'s causal past, and
 /// `provisional(shred)` whether a shred is provisional, and
-/// `past_members(shred)` the members of its causal past.
+/// `past_members(shred)` the members of its causal past. Also returns the
+/// shreds an accepted take-back names, and the first accepted shred of
+/// each id, which a change after every one of `order` reads (NOC-442).
 pub(crate) fn settle(
     order: &[ChangeId],
     nodes: &BTreeMap<ChangeId, &Node>,
@@ -334,7 +336,7 @@ pub(crate) fn settle(
     saw: impl Fn(ChangeId, ChangeId) -> bool,
     provisional: impl Fn(ChangeId) -> bool,
     past_members: impl Fn(ChangeId) -> BTreeSet<MemberId>,
-) -> PersonKeys {
+) -> (PersonKeys, BTreeSet<ChangeId>, BTreeMap<[u8; 16], ChangeId>) {
     let accepted =
         |verdicts: &BTreeMap<ChangeId, Verdict>, id| verdicts.get(id) == Some(&Verdict::Accepted);
     let mut shreds: BTreeMap<[u8; 16], Vec<ChangeId>> = BTreeMap::new();
@@ -385,5 +387,6 @@ pub(crate) fn settle(
     for id in order.iter().filter(|id| accepted(verdicts, id)) {
         keys.apply(nodes[id], provisional(*id), &past_members(*id), &taken_back);
     }
-    keys
+    let first = shreds.into_iter().map(|(key, ids)| (key, ids[0]));
+    (keys, taken_back, first.collect())
 }

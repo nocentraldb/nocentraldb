@@ -67,15 +67,12 @@ test("RFC 0010 exists and the RFC index lists it", () => {
   assert.doesNotMatch(row, /draft/i, "the index still calls it a draft");
 });
 
-test("RFC 0010 says it is decided, by the owner, with the date", () => {
+test("RFC 0010 says it is decided, with the date", () => {
   const rfc = read();
   assert.match(rfc.split("\n")[0], /^# RFC 0010: Accounts/);
   assert.doesNotMatch(rfc.split("\n")[2], /draft/i, "the header names a draft");
   const status = line(rfc, "**Status.**");
-  assert.match(
-    status,
-    /^\*\*Status\.\*\* Decided\. [^.]*\(Carsten, 2026-11-10\)\.$/,
-  );
+  assert.match(status, /^\*\*Status\.\*\* Decided, 2026-11-10\.$/);
   assert.doesNotMatch(status, /NOC-\d+|#\d+/, "the status tags a ticket or PR");
 });
 

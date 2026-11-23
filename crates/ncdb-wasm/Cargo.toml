@@ -1,0 +1,22 @@
+[package]
+name = "ncdb-wasm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# The core of @nocentraldb/sdk's `ncdb` bin, never published on its own:
+# the SDK ships the module it builds (Carsten, 2026-11-23, NOC-443, A).
+publish = false
+description = "crates/ncdb compiled to WebAssembly for @nocentraldb/sdk's ncdb bin: the command line run on a host its Node.js script provides (NOC-415)."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The command line itself; this crate only connects it to the bin's host.
+ncdb.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# The export to JavaScript and the host's calls; the versions the SDK pins.
+wasm-bindgen = { version = "=0.2.130", default-features = false, features = ["std"] }
+js-sys = { version = "=0.3.107", default-features = false, features = ["std"] }

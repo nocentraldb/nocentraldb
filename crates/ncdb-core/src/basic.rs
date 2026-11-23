@@ -12,7 +12,26 @@ use crate::ids::{MemberId, OperationId};
 use crate::texts;
 
 /// The kind of a basic value field, as the schema declares it.
+///
+/// A new field type adds a variant, so a match outside `ncdb-core` needs a
+/// wildcard arm (NOC-441):
+///
+/// ```compile_fail
+/// fn name(kind: &ncdb_core::basic::Kind) -> &'static str {
+///     use ncdb_core::basic::Kind;
+///     match kind {
+///         Kind::Text => "text",
+///         Kind::Integer => "integer",
+///         Kind::Float => "float",
+///         Kind::Boolean => "boolean",
+///         Kind::Choice(_) => "choice",
+///         Kind::Date => "date",
+///         Kind::Timestamp => "timestamp",
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Kind {
     /// Any Unicode string, stored as written.
     Text,

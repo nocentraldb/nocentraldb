@@ -1,7 +1,8 @@
 // Asserts that RFC 0007 says how a backend keeps the one space of an
 // account the relay does not list (NOC-286, built in NOC-283): a backend
 // rule, its row in the table of how each backend keeps the rules, and the
-// item in DynamoDB's `spaces` table under the 32-byte account key. Each
+// item in DynamoDB's `spaces` table under the account's 32-byte identity
+// (RFC 0015, "The account's identity"; NOC-420). Each
 // passage carries the owner's decision on #288. Whether
 // the wording is right is the owner's review of the PR.
 import assert from "node:assert/strict";
@@ -34,9 +35,9 @@ test("each backend says how it keeps the rule", () => {
   assert.ok(row.includes(MARK));
 });
 
-test("DynamoDB keeps it as an item of spaces under the 32-byte account key", () => {
+test("DynamoDB keeps it as an item of spaces under the account's 32-byte identity", () => {
   const row = line("| `spaces` |");
-  assert.match(row, /32-byte account key/);
+  assert.match(row, /under its 32-byte identity/);
   assert.match(row, /`guest_space`/);
   assert.ok(row.includes(MARK));
 });

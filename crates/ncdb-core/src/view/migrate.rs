@@ -23,7 +23,7 @@ use crate::field_op::Origin;
 use crate::ids::SpaceId;
 use crate::log::{Log, OperationParkReason, ParkedOperation, State};
 use crate::receive::{Checks, Fold, fold_one, understand};
-use crate::unfold::fold_revived;
+use crate::unfold::{fold_revived, refold_displaced};
 
 /// What a model adds to the model the view's tables were folded by.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -188,6 +188,7 @@ pub(super) fn fold_parked<C: Checks>(
         let mut fold = SqlFold::new(conn, model, *space).for_space(space_checks.space_model_id());
         fold.revived = revived;
         fold_revived(log, &space_checks, &mut fold);
+        refold_displaced(log, &space_checks, &mut fold);
         fold.finish()?;
     }
     Ok(())

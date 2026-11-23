@@ -143,7 +143,7 @@ pub fn decode_object(
     origin: Origin,
 ) -> Result<ObjectOperation, OperationParkReason> {
     match operation.op {
-        CREATE if operation.value.is_some() => Err(OperationParkReason::MalformedArguments),
+        CREATE if operation.has_value() => Err(OperationParkReason::MalformedArguments),
         CREATE => Ok(ObjectOperation::Create(Create {
             id: origin.id,
             author: origin.author,
@@ -325,7 +325,7 @@ impl Arguments {
 /// stays parked on every version.
 fn arguments(operation: &Operation, defined: &[u64]) -> Result<Arguments, OperationParkReason> {
     let malformed = OperationParkReason::MalformedArguments;
-    let Some(Value::Map(entries)) = &operation.value else {
+    let Some(Value::Map(entries)) = &operation.value() else {
         return Err(malformed);
     };
     // Keys 1 to 3 are this RFC's: one an operation does not define is
