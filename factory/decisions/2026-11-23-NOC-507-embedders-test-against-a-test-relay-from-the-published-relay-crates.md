@@ -1,0 +1,6 @@
+# 2026-11-23 · NOC-507 · Embedders test against a test relay from the published relay crates, `ncdb_relay_server::local::TestRelay`
+
+- Decided by: Carsten, 2026-11-23, on NOC-507 (option A); the test relay's place in `ncdb-relay-server` and its names are coder's proposal, for the owner's review in the PR
+- Why: an app or engine that embeds the Rust SDK proves in its own tests that a write reaches another member and that a refused creator gets `not_allowed`, against a real relay. `ncdb-relay` and `ncdb-relay-server` go to crates.io, which keeps the SDK's API free of the relay and serves self-hosting too. The test relay lives in `ncdb-relay-server`, not `ncdb-relay`, because the WebSocket server it starts is there and `ncdb-relay-server` depends on `ncdb-relay`. `ncdb-relay-lambda` and `ncdb-relay-aws` stay unpublished.
+- Instead of: B, a `test-relay` feature of `nocentraldb`, which makes the relay part of the SDK's public API and needs the relay crates published anyway; C, only the relay binary, which embedder tests spawn from PATH, slower and more brittle.
+- Topics: relay, crates-io, sdk-rust, release, testing
