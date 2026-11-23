@@ -171,3 +171,43 @@ async fn two_moves_at_once_name_the_space_that_won_and_the_one_that_lost() {
     let trace = now(project.get("tasks", task)).unwrap().unwrap();
     assert_eq!(trace.moved_to(), Some(conflict.moved_to));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_later_tag_and_a_later_delete_carry_over_as_one_write() {
+    let relay = LocalRelay::start().await;
+    let a = open(A, &relay.url()).await;
+    let b = open(B, &relay.url()).await;
+    let (project, on_b, task) = shared_task(&a, &b).await;
+    let private = now(a.spaces().create()).unwrap();
+    synced(&a).await;
+
+    relay.proxy.cut();
+    let read = now(project.get("tasks", task)).unwrap().unwrap();
+    now(project.move_objects(&[read], &private)).unwrap();
+    now(on_b.update("tasks", task, [("tags", Value::add(["late"]))])).unwrap();
+    now(on_b.delete("tasks", task)).unwrap();
+    relay.proxy.restore();
+    synced(&a).await;
+    synced(&b).await;
+    holds_all(&relay, &a, &project).await;
+
+    let later = now(project.moves().later_edits()).unwrap();
+    let edits: Vec<&Edit> = later[0].edits.iter().map(|e| &e.edit).collect();
+    assert_eq!(
+        edits,
+        [
+            &Edit::Add {
+                field: "tags".into(),
+                elements: vec![Value::from("late")]
+            },
+            &Edit::Delete
+        ]
+    );
+    now(project.moves().carry_over(&later[0].edits)).unwrap();
+    let there = now(private.get("tasks", task)).unwrap().unwrap();
+    assert!(there.deleted());
+    assert_eq!(
+        there.get::<&[Value]>("tags").unwrap().unwrap(),
+        [Value::from("late")]
+    );
+}
