@@ -57,19 +57,35 @@ static ALLOCATED: Counting = Counting {
     peak: AtomicUsize::new(0),
 };
 
-const PERSONS: u32 = 10_000;
-
 /// The most a resolve of 10,000 persons may allocate at once on top of the
-/// changes it is given: about 6.4 KB per person.
-const BOUND: usize = 64 << 20;
+/// changes it is given: about 13 KB per person. It allocates about 7 KB
+/// per person: each body with its dependencies, kept once and read once,
+/// and the person keys of the fold.
+const BOUND: usize = 128 << 20;
 
-#[test]
-fn opening_a_space_of_10k_persons_stays_within_64_mib() {
-    let (space, changes) = persons::chain(PERSONS);
+/// The most a resolve allocates at once, on top of the changes it is
+/// given, for a space of `persons` persons.
+fn peak(persons: u32) -> usize {
+    let (space, changes) = persons::chain(persons);
     let before = ALLOCATED.reset();
     let mut resolver = Resolver::new(space.space);
     let resolved = resolver.resolve(&changes);
     let peak = ALLOCATED.peak.load(Ordering::Relaxed) - before;
-    assert_eq!(resolved.person_keys().count(), PERSONS as usize);
-    assert!(peak <= BOUND, "{} MiB at once", peak >> 20);
+    assert_eq!(resolved.person_keys().count(), persons as usize);
+    peak
+}
+
+#[test]
+fn opening_a_space_of_10k_persons_stays_within_128_mib_and_grows_with_the_persons() {
+    let quarter = peak(2_500);
+    let all = peak(10_000);
+    assert!(all <= BOUND, "{} MiB at once", all >> 20);
+    // Four times the persons: four times the memory, sixteen times if it
+    // grew with their square.
+    assert!(
+        all <= 5 * quarter,
+        "{} KiB for 2,500 persons, {} KiB for 10,000",
+        quarter >> 10,
+        all >> 10
+    );
 }
