@@ -4,10 +4,11 @@
 // `wasm-runner` installs into target/tools, into the directory given.
 // dist/ncdb.js loads it from dist/ncdb/.
 //
-// The build is optimized for size (LTO, opt-level "s", one codegen unit,
-// stripped), which only the profile variables below set, so it uses a
-// target directory of its own: the same variables in target/ would rebuild
-// every other release build there.
+// The build is optimized for size (LTO, opt-level "s", one codegen unit),
+// which only the profile variables below set, so it uses a target directory
+// of its own: the same variables in target/ would rebuild every other
+// release build there. wasm-bindgen drops the name and producers sections;
+// stripping in cargo instead would hide the module's wasm features from it.
 //
 //   node packages/sdk/build-ncdb.mjs <out-dir>
 import { spawnSync } from "node:child_process";
@@ -61,12 +62,13 @@ run(
     CARGO_PROFILE_RELEASE_LTO: "true",
     CARGO_PROFILE_RELEASE_OPT_LEVEL: "s",
     CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1",
-    CARGO_PROFILE_RELEASE_STRIP: "true",
   },
 );
 run(BINDGEN, [
   "--target",
   "web",
+  "--remove-name-section",
+  "--remove-producers-section",
   "--out-dir",
   out,
   "--out-name",
