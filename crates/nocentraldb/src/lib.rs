@@ -51,6 +51,7 @@ mod id;
 mod keys;
 mod list;
 mod members;
+mod moving;
 mod next;
 mod object;
 mod options;
@@ -130,6 +131,7 @@ pub use members::{
     AddMember, Fingerprint, Invitation, MemberId, MemberInfo, MemberKind, Members, Notice,
     NoticeCode, Role,
 };
+pub use moving::Moved;
 pub use ncdb_plugin::Data;
 pub use object::Object;
 pub use pairing::{Account, PairKind, Paired, PairingAnswer, RecoveryCode};

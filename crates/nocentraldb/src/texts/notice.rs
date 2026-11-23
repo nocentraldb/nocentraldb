@@ -72,6 +72,11 @@ pub(crate) const MEMBER_ADDED: &str =
 pub(crate) const MEMBER_REMOVED: &str =
     "The removed member keeps its copy of everything it received before now.";
 
+/// `objectMoved`: Space::move_objects (space.move) returns it once both changes
+/// are written. The text is RFC 0016's, decided by the owner on 2026-11-22.
+pub(crate) const OBJECT_MOVED: &str =
+    "The members of the old space keep the history of these objects and their state at the move, and see no change after it. The members of the new space read them from the move on, not their history.";
+
 /// `roleSet`: Members::set_role (members.setRole) returns it on every role
 /// change, raised or lowered: a lowered member keeps what it received. The
 /// owner's text, NOC-203.
