@@ -53,11 +53,12 @@ impl Remembering {
         let mut resolver = self.resolver.0.borrow_mut();
         let resolver = resolver.get_or_insert_with(|| Resolver::new(*space));
         let remembered = resolver.resolve(changes.iter().copied());
+        let oracle = Resolver::from_scratch(*space).resolve(changes.iter().copied());
         assert_eq!(
-            remembered,
-            resolve(*space, changes.iter().copied()),
-            "the resolver gives what resolve gives"
+            remembered, oracle,
+            "the resolver gives what resolve gives, every past folded from scratch"
         );
+        assert_eq!(resolve(*space, changes.iter().copied()), oracle);
         assert_eq!(remembered.encode(), self.copy.resolved().encode());
     }
 }
@@ -126,6 +127,20 @@ fn the_resolver_gives_what_resolve_gives_for_every_set_in_any_order() {
             shreds: false,
         },
         32,
+    );
+}
+
+#[test]
+fn the_resolver_gives_what_resolve_gives_for_person_keys_shreds_and_revocations() {
+    // Every change a person-key entry, a shred or a revocation, without
+    // equivocations: most person-key entries then extend the fold of the
+    // set before them (NOC-442).
+    check(
+        Members {
+            forks: false,
+            shreds: true,
+        },
+        64,
     );
 }
 
