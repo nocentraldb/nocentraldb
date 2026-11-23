@@ -54,7 +54,13 @@ fn object(n: u8) -> ObjectId {
 
 fn title(n: u8, title: &str) -> Operation {
     let write = write(Value::Text(title.into()), BTreeSet::new());
-    field_op::encode(&BasicValue { kind: Kind::Text }, &write, object(n), TASK, TITLE)
+    field_op::encode(
+        &BasicValue { kind: Kind::Text },
+        &write,
+        object(n),
+        TASK,
+        TITLE,
+    )
 }
 
 fn rank(n: u8, rank: u64) -> Operation {
@@ -67,7 +73,11 @@ fn rank(n: u8, rank: u64) -> Operation {
 
 /// Task `n` with a title and a rank.
 fn task(n: u8, name: &str, r: u64) -> Vec<Operation> {
-    vec![field_op::create(object(n), TASK), title(n, name), rank(n, r)]
+    vec![
+        field_op::create(object(n), TASK),
+        title(n, name),
+        rank(n, r),
+    ]
 }
 
 /// Moves task `n` to the new space.
@@ -212,7 +222,11 @@ fn taking_the_move_back_folds_the_fields_again_from_the_log() {
     assert_eq!(copy.plaintext(1), (2, 1));
     let later = [Value::Text("later".into())];
     let page = copy.view.page(TASK, BY_TITLE, &later, None, 50).unwrap();
-    assert_eq!(page.rows.len(), 1, "the title written while moved is folded");
+    assert_eq!(
+        page.rows.len(),
+        1,
+        "the title written while moved is folded"
+    );
 }
 
 #[test]

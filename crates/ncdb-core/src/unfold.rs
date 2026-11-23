@@ -98,6 +98,26 @@ pub(crate) fn unfold(log: &mut Log, checks: &impl Checks, fold: &mut impl Fold) 
     }
 }
 
+/// Folds again the field operations of the objects whose move was taken
+/// back ([`Fold::take_revived`]), from every change still folded: the
+/// fold kept none of their fields while they were traces (RFC 0016).
+pub(crate) fn fold_revived(log: &Log, checks: &impl Checks, fold: &mut impl Fold) {
+    let revived = fold.take_revived();
+    if revived.is_empty() {
+        return;
+    }
+    for (change, parked) in log.folded_sealed() {
+        for (origin, operation) in folded_operations(&change, &parked, checks) {
+            if operation.field.is_some() && revived.contains(&operation.object) {
+                // It folded before and the model has not changed, so it
+                // folds again.
+                let _ =
+                    understand(&operation, fold).and_then(|()| fold_one(&operation, origin, fold));
+            }
+        }
+    }
+}
+
 /// The operations of a folded change that were folded, not parked, each
 /// with its origin. The change opened when it was folded, and
 /// [`Checks::open_folded`] opens it again with that key.

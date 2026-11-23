@@ -13,6 +13,8 @@
 //! says where the change stops, as a [`Stop`]. [`crate::checks`] implements
 //! [`Checks`] with the signature and decryption of RFC 0003.
 
+use std::collections::BTreeSet;
+
 use std::fmt;
 
 use crate::change::{Change, ChangeError, Header, Kind, Operation, Payload};
@@ -192,8 +194,17 @@ pub trait Fold {
     /// touched it: un-folding then folds it again from the operations of
     /// the changes still folded (RFC 0006, "Un-folding").
     fn clear_field(&mut self, object: ObjectId, collection: &str, field: &str);
-    /// Forgets the creates and deletes of an object, for the same reason.
+    /// Forgets the creates, deletes and moves of an object, for the same
+    /// reason.
     fn clear_object(&mut self, object: ObjectId);
+    /// The objects whose move was taken back since the last call, and
+    /// whose fields the fold did not keep while they were moved (RFC 0016,
+    /// "What the members of the old space keep"): the log then folds
+    /// their field operations again from the changes still folded. A fold
+    /// that keeps the fields of a moved object names none.
+    fn take_revived(&mut self) -> BTreeSet<ObjectId> {
+        BTreeSet::new()
+    }
 }
 
 /// Why a received frame was not appended.
@@ -257,6 +268,7 @@ impl Log {
                 self.check_rejected_again(checks, fold);
                 crate::unfold::unfold(self, checks, fold);
             }
+            crate::unfold::fold_revived(self, checks, fold);
         }
         Ok(appended)
     }

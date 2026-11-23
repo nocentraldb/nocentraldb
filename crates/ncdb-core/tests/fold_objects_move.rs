@@ -94,7 +94,12 @@ fn two_moves_at_once_keep_one_winner_and_the_other_as_a_conflict() {
 fn a_move_and_a_delete_are_independent_values() {
     let mut object = Object::default();
     object.apply(&ObjectOperation::Move(write(1, 1, to(U), &[])));
-    object.apply(&ObjectOperation::Delete(write(2, 2, Value::Bool(true), &[])));
+    object.apply(&ObjectOperation::Delete(write(
+        2,
+        2,
+        Value::Bool(true),
+        &[],
+    )));
     assert_eq!(object.moved_to(), Some(U));
     assert!(object.is_deleted());
 }
@@ -102,7 +107,12 @@ fn a_move_and_a_delete_are_independent_values() {
 #[test]
 fn a_destination_that_is_no_space_id_reads_as_not_moved() {
     let mut object = Object::default();
-    object.apply(&ObjectOperation::Move(write(1, 1, Value::Text("x".into()), &[])));
+    object.apply(&ObjectOperation::Move(write(
+        1,
+        1,
+        Value::Text("x".into()),
+        &[],
+    )));
     assert_eq!(object.moved_to(), None);
 }
 

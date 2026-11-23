@@ -16,6 +16,7 @@ use super::model::{Field, FieldState, Model, RESERVED, reserved_name};
 use super::plugin;
 use super::schema::{STAGING, column, objects_in, rows_in, states_in};
 use super::state::{self, ObjectState};
+use super::trace::out_of_indexes;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::basic::{BasicValue, Entry};
@@ -41,9 +42,9 @@ pub(super) static NO_KEYS: PersonKeys = BTreeMap::new();
 /// The fold of one change's operations into the tables of a space's
 /// collections, on the connection of the transaction that appends it.
 pub(super) struct SqlFold<'a> {
-    conn: &'a Connection,
-    model: &'a Model,
-    space: SpaceId,
+    pub(super) conn: &'a Connection,
+    pub(super) model: &'a Model,
+    pub(super) space: SpaceId,
     /// The prefix of the tables it folds into: empty for the view's own,
     /// `r_` for a rebuild's staging tables.
     prefix: &'static str,
@@ -60,6 +61,10 @@ pub(super) struct SqlFold<'a> {
     /// cleared, by the view's name of the collection (RFC 0006,
     /// "Folding", step 6).
     touched: BTreeSet<(String, ObjectId)>,
+    /// The objects whose move was taken back: the fold kept none of their
+    /// fields while they were traces, so the log's fold takes them again
+    /// ([`Fold::take_revived`]; RFC 0016, "Moving back, and moving again").
+    pub(super) revived: BTreeSet<ObjectId>,
 }
 
 impl<'a> SqlFold<'a> {
@@ -73,6 +78,7 @@ impl<'a> SqlFold<'a> {
             shipped: false,
             error: None,
             touched: BTreeSet::new(),
+            revived: BTreeSet::new(),
         }
     }
 
@@ -110,11 +116,11 @@ impl<'a> SqlFold<'a> {
         }
     }
 
-    fn rows(&self, collection: &str) -> String {
+    pub(super) fn rows(&self, collection: &str) -> String {
         rows_in(self.prefix, collection)
     }
 
-    fn states(&self, collection: &str) -> String {
+    pub(super) fn states(&self, collection: &str) -> String {
         states_in(self.prefix, collection)
     }
 
@@ -175,7 +181,7 @@ impl<'a> SqlFold<'a> {
     }
 
     /// Makes sure `c_<collection>` has a row for the object; a new row
-    /// takes whether the object is deleted.
+    /// takes whether the object is out of the indexes.
     fn row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
         let inserted = self.conn.execute(
             &format!(
@@ -184,14 +190,14 @@ impl<'a> SqlFold<'a> {
             ),
             params![self.space.0, object.0],
         )?;
-        if inserted == 1 && self.object(object)?.object().is_deleted() {
+        if inserted == 1 && out_of_indexes(&self.object(object)?) {
             self.mark_deleted(collection, object, true)?;
         }
         Ok(())
     }
 
-    /// The object's creates and deletes, empty when it has none.
-    fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
+    /// The object's creates, deletes and moves, empty when it has none.
+    pub(super) fn object(&self, object: ObjectId) -> Result<ObjectState, Error> {
         let bytes: Option<Vec<u8>> = self
             .conn
             .query_row(
@@ -210,8 +216,11 @@ impl<'a> SqlFold<'a> {
     }
 
     /// Records in the object's row of `c_<collection>`, if it has one,
-    /// whether the object is deleted: the declared indexes hold only the
-    /// rows of objects that are not (RFC 0006, "Declared indexes").
+    /// whether the object is out of the indexes, deleted or moved: the
+    /// declared indexes hold only the rows of objects that are neither
+    /// (RFC 0006, "Declared indexes"; RFC 0016, "What the members of the
+    /// old space keep"). The column keeps its name `deleted`, so that no
+    /// view's tables change.
     fn mark_deleted(&self, collection: &str, object: ObjectId, deleted: bool) -> Result<(), Error> {
         self.conn.execute(
             &format!(
@@ -277,7 +286,12 @@ impl<'a> SqlFold<'a> {
             }
             _ => unreachable!("a field's state matches its type"),
         };
+        // The trace of a moved object keeps no field: the operation is
+        // decoded and folded, so that it parks as on every copy, but the
+        // view keeps nothing of it (RFC 0016).
+        let trace = self.object(operation.object)?.object().moved_to().is_some();
         Ok(match folded {
+            Ok(_) if trace => Ok(()),
             Ok((bytes, read)) => {
                 self.write(collection, name, operation.object, bytes, read)?;
                 Ok(())
@@ -287,12 +301,13 @@ impl<'a> SqlFold<'a> {
     }
 
     fn fold_object_operation(
-        &self,
+        &mut self,
         object: ObjectId,
         operation: &ObjectOperation,
     ) -> Result<(), Error> {
         let mut state = self.object(object)?;
-        let was_deleted = state.object().is_deleted();
+        let was_out = out_of_indexes(&state);
+        let was_moved = state.object().moved_to().is_some();
         state.insert(operation.clone());
         self.conn.execute(
             &format!(
@@ -302,14 +317,21 @@ impl<'a> SqlFold<'a> {
             ),
             params![self.space.0, object.0, state.bytes()],
         )?;
-        // A delete or a restore takes the object's rows out of the
-        // declared indexes or puts them back, in whichever collection's
-        // table the object has one.
-        let deleted = state.object().is_deleted();
-        if deleted != was_deleted {
+        // A delete, a move, a restore or a take-back takes the object's
+        // rows out of the declared indexes or puts them back, in whichever
+        // collection's table the object has one.
+        let out = out_of_indexes(&state);
+        if out != was_out {
             for collection in self.model.collections.keys() {
-                self.mark_deleted(collection, object, deleted)?;
+                self.mark_deleted(collection, object, out)?;
             }
+        }
+        match (was_moved, state.object().moved_to().is_some()) {
+            (false, true) => self.drop_fields(object)?,
+            (true, false) => {
+                self.revived.insert(object);
+            }
+            _ => {}
         }
         // A create puts the object into the table of its collection, when
         // the space's model has it: a space of the app's model never
@@ -352,10 +374,15 @@ impl SqlFold<'_> {
         self.drop_empty_row(collection, object)
     }
 
-    /// Forgets the object's creates and deletes: it is no longer deleted,
-    /// and a row only its create held goes.
-    fn clear_object_state(&self, object: ObjectId) -> Result<(), Error> {
-        let was_deleted = self.object(object)?.object().is_deleted();
+    /// Forgets the object's creates, deletes and moves: it is no longer
+    /// deleted or moved, and a row only its create held goes. A trace is
+    /// revived, as by a take-back.
+    fn clear_object_state(&mut self, object: ObjectId) -> Result<(), Error> {
+        let state = self.object(object)?;
+        let was_out = out_of_indexes(&state);
+        if state.object().moved_to().is_some() {
+            self.revived.insert(object);
+        }
         self.conn.execute(
             &format!(
                 "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
@@ -364,7 +391,7 @@ impl SqlFold<'_> {
             params![self.space.0, object.0],
         )?;
         for collection in self.model.collections.keys() {
-            if was_deleted {
+            if was_out {
                 self.mark_deleted(collection, object, false)?;
             }
             self.drop_empty_row(collection, object)?;
@@ -375,7 +402,7 @@ impl SqlFold<'_> {
     /// Removes the object's row of `c_<collection>` when neither a field
     /// state of the collection nor a create into it holds it: [`Self::row`]
     /// makes a row only for those.
-    fn drop_empty_row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
+    pub(super) fn drop_empty_row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
         let has_state: bool = self.conn.query_row(
             &format!(
                 "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
@@ -647,9 +674,7 @@ impl Fold for SqlFold<'_> {
             let result = self.fold_object_operation(object, &operation);
             let collection = match &operation {
                 ObjectOperation::Create(create) => Some(create.collection.clone()),
-                ObjectOperation::Delete(_) | ObjectOperation::Move(_) => {
-                    self.collection_of(object)
-                }
+                ObjectOperation::Delete(_) | ObjectOperation::Move(_) => self.collection_of(object),
             };
             if result.is_ok()
                 && let Some(collection) = collection
@@ -671,6 +696,10 @@ impl Fold for SqlFold<'_> {
             }
             self.keep(result);
         }
+    }
+
+    fn take_revived(&mut self) -> BTreeSet<ObjectId> {
+        std::mem::take(&mut self.revived)
     }
 
     fn clear_object(&mut self, object: ObjectId) {
