@@ -289,3 +289,37 @@ test("a pull request that only adds tests passes untouched", () => {
   );
   assert.deepEqual({ status, out }, { status: 0, out: "" });
 });
+
+test("tests, markers and assertions in strings and comments do not count", () => {
+  const rsBase = rust(
+    rustTest("one", 'let s = "#[test] fn gone() {} assert!(x)";\n    // assert_eq!(a, 1);\n    assert_eq!(s.len(), 2);'),
+  );
+  const rsHead = rust(
+    rustTest("one", 'let s = r#"#[ignore] fn x() {} "#;\n    /* assert!(y) */\n    let c = \'(\';\n    assert_eq!(s.len(), 2);'),
+  );
+  const tsBase = ts(
+    tsTest("one", 'const s = "it(\\"ghost\\", () => {})";\n  // expect(a).toBe(1);\n  expect(s.length).toBe(2);'),
+  );
+  const tsHead = ts(
+    tsTest("one", "const s = `it.skip(${\"x\"}) skip: t.skip()`;\n  const r = /[(]\\)/;\n  /* expect(b).toBe(2); */\n  expect(s.length).toBe(2);"),
+  );
+  const { status, out } = pr({ [RS]: rsBase, [TS]: tsBase }, { [RS]: rsHead, [TS]: tsHead });
+  assert.deepEqual({ status, out }, { status: 0, out: "" });
+});
+
+test("an assertion with a bracket in a string is read to its real end", () => {
+  const { status, out } = pr(
+    {
+      [RS]: rust(rustTest("one", 'assert_eq!(f(")"), 1);\n    assert!(g());')),
+      [TS]: ts(tsTest("one", 'expect(f(")")).toBe(1);\n  expect(g()).toBe(true);')),
+    },
+    {
+      [RS]: rust(rustTest("one", 'assert_eq!(f(")"), 2);\n    assert!(g());')),
+      [TS]: ts(tsTest("one", 'expect(f(")")).toBe(2);\n  expect(g()).toBe(true);')),
+    },
+  );
+  assert.equal(status, 1, out);
+  assert.ok(out.includes('`assert_eq!(f(")"), 1)` became `assert_eq!(f(")"), 2)`'), out);
+  assert.ok(out.includes('`expect(f(")")).toBe(1)` became `expect(f(")")).toBe(2)`'), out);
+  assert.doesNotMatch(out, /g\(\)/);
+});
