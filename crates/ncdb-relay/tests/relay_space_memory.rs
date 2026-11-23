@@ -185,7 +185,10 @@ fn measure(persons: u32) -> Taken {
 #[ignore = "a measurement: run it with --release --ignored --nocapture"]
 fn what_a_remembered_space_takes_in_the_relay() {
     let sizes: Vec<u32> = match std::env::var("NCDB_PERSONS") {
-        Ok(sizes) => sizes.split(',').map(|n| n.parse().expect("a number")).collect(),
+        Ok(sizes) => sizes
+            .split(',')
+            .map(|n| n.parse().expect("a number"))
+            .collect(),
         Err(_) => vec![100, 1_000, 5_000, 10_000],
     };
     println!(
