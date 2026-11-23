@@ -12,6 +12,7 @@
 //! ([`note_shreds`]; the owner's NOC-218 A). The struct is
 //! `#[non_exhaustive]`, so a field added later breaks no app.
 
+mod only_member;
 mod reasons;
 #[cfg(test)]
 mod only_member_tests;
@@ -105,6 +106,13 @@ pub struct SpaceStatus {
     /// space with one account"; Carsten, 2026-11-11, NOC-230). Every device
     /// of the account sees them, and an app must show them.
     pub provisional_erasures: Vec<ProvisionalErasure>,
+    /// Whether this member is the space's only member. Recovery restores
+    /// the account, not its spaces, and nobody else holds the space's key,
+    /// so losing this device, or this agent's storage, loses the space for
+    /// good (RFC 0010, "What it restores"). An app that must not lose the
+    /// space adds a second member: another device, another person or an
+    /// agent. `false` once this member was removed.
+    pub only_member: bool,
 }
 
 /// A provisional erasure of a space with one account (RFC 0009, "Sync and
@@ -222,6 +230,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
         waiting_for_key: false,
         bad_person_key_records: Vec::new(),
         provisional_erasures: Vec::new(),
+        only_member: false,
     };
     let Some(state) = inner.spaces.get(&space) else {
         return status;
@@ -230,6 +239,7 @@ fn status(inner: &Inner, space: CoreSpaceId) -> SpaceStatus {
     if !crate::sync::stopped(inner, space) {
         status.role = resolved.role(me).map(Role::of);
     }
+    status.only_member = status.role.is_some() && only_member::only_member(resolved, me);
     status.gaps = resolved.gaps().iter().map(|id| ChangeId(*id)).collect();
     status.lost_grants = resolved
         .verdicts()
