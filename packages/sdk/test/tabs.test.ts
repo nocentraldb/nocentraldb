@@ -41,6 +41,9 @@ const fakeLocks = (): Platform["locks"] => {
   };
 };
 
+/** The account's identity the fake worker answers on open (RFC 0015). */
+const IDENTITY = "ab".repeat(32);
+
 /** A worker that answers like the bridge, logs each call, and answers the calls in `hold` only when `release` is called. */
 const fakeWorker = (log: string[], hold: Set<string>) => {
   let listener: ((event: Uint8Array) => void) | undefined;
@@ -56,7 +59,10 @@ const fakeWorker = (log: string[], hold: Set<string>) => {
         });
       switch (call) {
         case "open":
-          return encode({ id, ok: { sync: { connection: "none" } } });
+          return encode({
+            id,
+            ok: { sync: { connection: "none" }, identity: IDENTITY },
+          });
         case "spaces.list":
           return encode({ id, ok: [] });
         case "write":
@@ -263,7 +269,7 @@ test("closing a follower ends only its own connection", async () => {
   expect((await ask(first.core, "spaces.list")).ok).toEqual([]);
 });
 
-test("a follower's open names the owner's relay, which serves every tab", async () => {
+test("a follower's open names the owner's relay, which serves every tab, and the account's identity", async () => {
   const { tab } = origin();
   const first = await tab();
   await ask(first.core, "open", { lock: LOCK, relay: "ws://owner" });
@@ -274,6 +280,7 @@ test("a follower's open names the owner's relay, which serves every tab", async 
   });
   expect(answer.ok).toEqual({
     sync: { connection: "none" },
+    identity: IDENTITY,
     relay: "ws://owner",
   });
 });
