@@ -38,7 +38,11 @@ test("Decisions records NOC-383 with its decision file, and History a dated line
   const entry = decisions.split("\n").find((l) => l.includes("NOC-383"));
   assert.ok(entry, "no Decisions entry for NOC-383");
   assert.match(entry, /^- \*\*2026-11-20 · /);
-  assert.doesNotMatch(entry, /\bCarsten\b/, "the decision log says who decided");
+  assert.doesNotMatch(
+    entry,
+    /\bCarsten\b/,
+    "the decision log says who decided",
+  );
   const file = entry.match(/\]\(\.\.\/\.\.\/(factory\/decisions\/[^)]+)\)/);
   assert.ok(file, `the entry links no decision file: ${entry}`);
   assert.ok(existsSync(file[1]), `${file[1]} is missing`);
