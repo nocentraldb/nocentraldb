@@ -14,10 +14,16 @@
       "default": "./dist/index.js"
     }
   },
+  "bin": {
+    "ncdb": "dist/ncdb.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2"
   }
 }

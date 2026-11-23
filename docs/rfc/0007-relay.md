@@ -6,7 +6,7 @@ This RFC defines the relay: the protocol members use to push and pull a space's 
 
 It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page](0001-nocentraldb.md#the-design-in-one-page), and uses the change, the log and the cursor of [RFC 0002](0002-change-and-log-format.md) without redefining them; [How this RFC relates to the others](#how-this-rfc-relates-to-the-others) names the rest.
 
-**Status.** Decided by the owner (Carsten, 2026-11-10).
+**Status.** Decided, 2026-11-10.
 
 **At 0.1.** Partly built. The protocol, the relay core and the SQLite backend for local runs are built in `crates/ncdb-relay`. The AWS backend is built in `crates/ncdb-relay-aws` and `crates/ncdb-relay-lambda`, with its infrastructure in `infra/aws`, and deployed in the account NoCentralDb-Prod ([Deploying the relay to AWS](../relay-deploy.md)). The Postgres backend is not built, nor are changes exchanged directly between members in island mode, nor compaction, whose error is only reserved.
 
@@ -222,7 +222,7 @@ member → (url)   PUT the frame bytes
 member → relay   push      {req, space, frames: [{upload: id}]}
 ```
 
-The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads. The SDK never writes a change above the limit: it splits a larger write, between objects only, into several changes, and refuses one operation or one object that alone would exceed it with `tooLarge` before anything is written. A split write is not atomic on other members: the parts reach them one by one, and the relay may refuse one part while the others stand ([RFC 0009, "One write, one change"](0009-sdk-api.md#one-write-one-change); Carsten, 2026-11-23, NOC-431).
+The relay reads the uploaded bytes and checks them like any other frame. On a pull, a large entry carries a short-lived download URL instead of the frame. The largest frame the relay accepts is a protocol limit too: 16 MiB, large enough for rich-text pastes with images inlined, small enough that one change cannot block a member's pull. Files are a later RFC. 4 MiB was not taken, nor no limit with multipart uploads. The SDK never writes a change above the limit: it splits a larger write, between objects only, into several changes, and refuses one operation or one object that alone would exceed it with `tooLarge` before anything is written. A split write is not atomic on other members: the parts reach them one by one, and the relay may refuse one part while the others stand ([RFC 0009, "One write, one change"](0009-sdk-api.md#one-write-one-change); NOC-431).
 
 The upload and download URLs answer CORS for any origin, the browser's preflight of the `PUT` included, so an app in a browser reaches them with `fetch()`. A URL is a one-time capability, valid for minutes, and carries no cookie, so an origin gains nothing by it that the URL's holder did not already have. Refusing large changes in the browser was not taken: a large paste would then sync from every device but a browser.
 
@@ -695,17 +695,17 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 
 ## Decisions
 
-- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (Carsten, 2026-11-11, NOC-230)
-- **2026-11-12 · The AWS backend's tables and keys.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
-- **2026-11-12 · An account the relay does not list may create one space, its account space.** (Carsten, 2026-11-12, NOC-286; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
-- **2026-11-12 · The member index is read eventually consistent.** (Carsten, 2026-11-12, NOC-270, #275; [decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
-- **2026-11-13 · A guest account's one space is an effect of its genesis append.** (Carsten, 2026-11-13, NOC-283, #288; [decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
-- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** (Carsten, 2026-11-13, NOC-295; [decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
-- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** (Carsten, 2026-11-13, NOC-306; [decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
-- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** (Carsten, 2026-11-15, NOC-338; [decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
-- **2026-11-20 · The relay hands a removed member the control change that removes it.** (Carsten, 2026-11-20, NOC-383; [decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
-- **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** (Carsten, 2026-11-22, NOC-429; [decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
-- **2026-11-23 · The SDK splits a write above the largest frame between objects, and refuses one object above it.** (Carsten, 2026-11-23, NOC-431; [decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
+- **2026-11-11 · The relay refuses an erasure decision that comes too early.** (NOC-230)
+- **2026-11-12 · The AWS backend's tables and keys.** ([decision](../../factory/decisions/2026-11-12-NOC-270-the-aws-backend-keeps-uploads-in-a-table-of-its.md); [decision](../../factory/decisions/2026-11-12-NOC-270-s3-keys-and-the-epoch-item-name-ids-in-lowercase-hex.md))
+- **2026-11-12 · An account the relay does not list may create one space, its account space.** ([decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-12 · The member index is read eventually consistent.** ([decision](../../factory/decisions/2026-11-12-NOC-270-members-of-reads-the-member-index-eventually-consistent.md))
+- **2026-11-13 · A guest account's one space is an effect of its genesis append.** ([decision](../../factory/decisions/2026-11-12-NOC-283-a-guest-accounts-one-space-is-an-effect-of-its-genesis-append.md))
+- **2026-11-13 · Token URLs are a second backend trait, and the AWS backend keeps no tokens.** ([decision](../../factory/decisions/2026-11-13-NOC-303-token-urls-are-a-second-backend-trait-and-the-aws-backend-keeps-no-tokens-table.md))
+- **2026-11-13 · The orphan sweep keeps where it stands in a reserved item.** ([decision](../../factory/decisions/2026-11-13-NOC-293-the-orphan-sweep-runs-hourly-in-bounded-runs-that-resume-from-a-cursor.md))
+- **2026-11-15 · Every message travels as base64 in one WebSocket text frame.** ([decision](../../factory/decisions/2026-11-15-NOC-338-every-message-travels-as-base64-in-one-text-frame-of-at-most-32-kb.md))
+- **2026-11-20 · The relay hands a removed member the control change that removes it.** ([decision](../../factory/decisions/2026-11-20-NOC-383-the-relay-hands-a-removed-member-the-control-change-that-removes-it.md); [decision](../../factory/decisions/2026-11-20-NOC-383-the-error-that-ends-a-removed-member-s-read-carries-its-removal-at-key-5.md))
+- **2026-11-22 · The relay admits by the account's identity, the recovery key, with the account key for an account without one.** ([decision](../../factory/decisions/2026-11-22-NOC-413-the-relay-admits-by-the-account-s-identity-the-recovery-key.md))
+- **2026-11-23 · The SDK splits a write above the largest frame between objects, and refuses one object above it.** ([decision](../../factory/decisions/2026-11-23-NOC-421-a-write-above-the-relay-change-limit-is-split-between-objects.md))
 
 ## History
 
@@ -726,4 +726,5 @@ It builds on [RFC 0001](0001-nocentraldb.md), above all [the design in one page]
 - 2026-11-20 · Its dependencies moved to the end, content unchanged, at the owner's request (NOC-362, #387)
 - 2026-11-20 · The error that ends a removed member's pull or subscription carries the control change that removes it, so its own copy folds the removal (NOC-383)
 - 2026-11-22 · The relay admits an account by its identity, keys the guest's one space by it, and refuses a genesis whose statement a newer one superseded, as RFC 0015 decides (NOC-420, #453)
+- 2026-11-23 · Its status line and its Decisions entries name nobody who decided; the decision log records it (NOC-454, #449)
 - 2026-11-23 · The SDK splits a write above the largest frame between objects and refuses one object above it, so its own writes no longer meet `too_large` (NOC-421)

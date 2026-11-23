@@ -40,6 +40,12 @@
 # assets from the package built above, and a page in the image loads it
 # after the page renders, on pull requests that touch the site, the demo's
 # tests or the TypeScript SDK.
+#
+# NOC-448: the TypeScript SDK's long tests (scripts/sdk-browser/long/), an
+# eleven-minute idle in Chromium and a write-cost guard of minutes per
+# engine, run in the job `long`, one job per engine beside `view`, which
+# leaves them out and stays near ten minutes. Each long job builds only the
+# TypeScript SDK; every engine still runs every test.
 name: browser-view
 
 on:
@@ -232,3 +238,61 @@ jobs:
           -e SITE_DEMO_PREBUILT=1
           "$PLAYWRIGHT_IMAGE"
           node --test 'scripts/site-demo/*.test.mjs'
+
+  # NOC-448: the TypeScript SDK's long tests, one job per engine, beside
+  # `view`, so neither nears its 30 minutes; the TypeScript SDK built on the
+  # runner as in `view`, the tests run in Playwright's image.
+  long:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: true
+
+      - name: Rust toolchain from rust-toolchain.toml
+        run: |
+          rustup toolchain install --no-self-update
+          rustup show active-toolchain
+
+      - name: Cache Cargo registry and target
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-browser-view-${{ runner.os }}-${{ hashFiles('rust-toolchain.toml', 'Cargo.lock') }}
+
+      - run: pnpm install --frozen-lockfile
+
+      # wasm-bindgen, which the TypeScript SDK's build runs, as `view` installs it.
+      - name: wasm-bindgen, installed on the runner
+        run: moon exec repo:wasm-runner --force --base HEAD --head HEAD
+
+      - name: The TypeScript SDK, built on the runner
+        run: node scripts/sdk-browser/build.mjs
+
+      - name: Playwright's image, with a short timeout and one retry
+        timeout-minutes: 10
+        run: |
+          for attempt in 1 2; do
+            if timeout 240 docker pull "$PLAYWRIGHT_IMAGE"; then exit 0; fi
+            echo "docker pull failed (attempt $attempt)"
+            sleep 15
+          done
+          exit 1
+
+      - name: The TypeScript SDK's long tests in ${{ matrix.engine }}
+        run: >-
+          docker run --rm --ipc=host
+          -v "$PWD:/work" -w /work
+          -e SDK_BROWSER_PREBUILT=1 -e SDK_BROWSER_ENGINE=${{ matrix.engine }}
+          "$PLAYWRIGHT_IMAGE"
+          node --test 'scripts/sdk-browser/long/*.test.mjs'

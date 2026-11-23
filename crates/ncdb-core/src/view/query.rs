@@ -17,7 +17,7 @@ use std::fmt;
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, params_from_iter};
 
-use super::fold::{reference_sql, sql_value};
+use super::columns::{reference_sql, sql_value};
 use super::model::{Direction, Field, Index, Scope};
 use super::schema::{index_columns, index_name, prefix, rows};
 use super::{Error, View};

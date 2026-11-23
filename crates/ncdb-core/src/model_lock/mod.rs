@@ -203,7 +203,23 @@ pub struct Deprecation {
 }
 
 /// A field type, by type id, with the keys that type needs.
+///
+/// A new field type adds a variant, so a match outside `ncdb-core` needs a
+/// wildcard arm (NOC-441):
+///
+/// ```compile_fail
+/// fn plugin(kind: &ncdb_core::model_lock::Kind) -> bool {
+///     use ncdb_core::model_lock::Kind;
+///     match kind {
+///         Kind::String | Kind::Int | Kind::Float | Kind::Boolean => false,
+///         Kind::Choice(_) | Kind::Date | Kind::Timestamp | Kind::Set(_) => false,
+///         Kind::Link(_) | Kind::Links(_) | Kind::Ref(_) | Kind::RichText => false,
+///         Kind::Plugin { .. } => true,
+///     }
+/// }
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum Kind {
     /// `ncdb/string`.
     String,
