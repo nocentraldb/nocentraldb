@@ -7,6 +7,9 @@
 //!
 //! Personal fields in a move come with NOC-477: until then an object that
 //! holds a personal value is refused with `NotAllowed`, as RFC 0016 says.
+//! A plugin's read is no value its write takes, so an object with a set
+//! plugin field is refused with `NotAllowed` too, until a plugin can carry
+//! its state (NOC-475).
 
 use std::collections::BTreeSet;
 
@@ -58,7 +61,7 @@ impl Space {
     /// member that may not write in either space (`NotAllowed`,
     /// `NotMember`); a destination of another model
     /// (`SpaceOfAnotherModel`); and, until NOC-477, an object that holds
-    /// a personal value (`NotAllowed`).
+    /// a personal value, or a set plugin field (`NotAllowed`).
     pub async fn move_objects(
         &self,
         objects: &[Object],
@@ -201,6 +204,12 @@ fn carried(
                 let targets: Vec<Value> = elements.iter().filter_map(kept).collect();
                 carried.cleared_links += elements.len() - targets.len();
                 (!targets.is_empty()).then(|| Value::add(targets))
+            }
+            Some(Field::Plugin(_)) => {
+                return Err(Error::new(
+                    ErrorCode::NotAllowed,
+                    crate::texts::error::move_plugin_later(object.id(), name),
+                ));
             }
             _ => None,
         };

@@ -267,6 +267,13 @@ pub(crate) fn move_personal_later(id: impl std::fmt::Display) -> String {
     format!("the object {id} holds a personal value, and an object with personal values cannot be moved yet")
 }
 
+/// `movePluginLater` (notAllowed): Space::move_objects (space.move) when an
+/// object to move has a set plugin field: a plugin's read is no value its write
+/// takes, so the move cannot carry it yet (NOC-475).
+pub(crate) fn move_plugin_later(id: impl std::fmt::Display, name: impl std::fmt::Display) -> String {
+    format!("the object {id} has a value in the plugin field {name}, and a plugin's value cannot be moved yet")
+}
+
 /// `newerAccountKeyNotTaken` (invalidValue): Account::remove_member
 /// (db.account.removeMember) while the account space records an account key
 /// newer than this device's own: the device takes it when it syncs.

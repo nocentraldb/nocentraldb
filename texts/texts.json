@@ -1471,6 +1471,13 @@
       "when": "Space::move_objects (space.move) when an object to move holds a personal value: sealing it again in the new space comes with NOC-477 (RFC 0016, \"Its personal fields\")."
     },
     {
+      "id": "error.movePluginLater",
+      "kind": "error",
+      "code": "notAllowed",
+      "text": "the object {id} has a value in the plugin field {name}, and a plugin's value cannot be moved yet",
+      "when": "Space::move_objects (space.move) when an object to move has a set plugin field: a plugin's read is no value its write takes, so the move cannot carry it yet (NOC-475)."
+    },
+    {
       "id": "error.newerAccountKeyNotTaken",
       "kind": "error",
       "code": "invalidValue",
