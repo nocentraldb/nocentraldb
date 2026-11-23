@@ -3,10 +3,10 @@
 //! of a change, inside the transaction that appends it. A field operation
 //! loads the field's merge state from `fs_<collection>`, applies the
 //! operation through its field type, writes the state back and the read
-//! value into the field's column of `c_<collection>`. A create or a delete
-//! goes into the object's state in `objects`. Un-folding clears a field's
-//! state or an object's, and the row of an object nothing else holds,
-//! before the changes still folded fold into them again.
+//! value into the field's column of `c_<collection>`. A create, a delete or
+//! a move goes into the object's state in `objects`; a moved object keeps
+//! no fields (`super::trace`). Un-folding clears a field's state or an
+//! object's first (`super::clear`).
 
 use rusqlite::types::Value as Sql;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -47,7 +47,7 @@ pub(super) struct SqlFold<'a> {
     pub(super) space: SpaceId,
     /// The prefix of the tables it folds into: empty for the view's own,
     /// `r_` for a rebuild's staging tables.
-    prefix: &'static str,
+    pub(super) prefix: &'static str,
     /// The person keys the fold opens the space's personal values with.
     keys: &'a PersonKeys,
     /// Whether the space folds by the model the SDK ships: its collections
@@ -221,7 +221,12 @@ impl<'a> SqlFold<'a> {
     /// (RFC 0006, "Declared indexes"; RFC 0016, "What the members of the
     /// old space keep"). The column keeps its name `deleted`, so that no
     /// view's tables change.
-    fn mark_deleted(&self, collection: &str, object: ObjectId, deleted: bool) -> Result<(), Error> {
+    pub(super) fn mark_deleted(
+        &self,
+        collection: &str,
+        object: ObjectId,
+        deleted: bool,
+    ) -> Result<(), Error> {
         self.conn.execute(
             &format!(
                 "UPDATE {} SET deleted = ?3 WHERE space_id = ?1 AND object_id = ?2",
@@ -341,84 +346,6 @@ impl<'a> SqlFold<'a> {
             && self.shipped == create.collection.starts_with(RESERVED)
         {
             self.row(&create.collection, object)?;
-        }
-        Ok(())
-    }
-}
-
-impl SqlFold<'_> {
-    /// Forgets a field's state and empties its column.
-    fn clear_field_state(
-        &self,
-        collection: &str,
-        field: &str,
-        object: ObjectId,
-    ) -> Result<(), Error> {
-        self.conn.execute(
-            &format!(
-                "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2 AND field = ?3",
-                self.states(collection)
-            ),
-            params![self.space.0, object.0, field],
-        )?;
-        if let Some(Field::Basic(_) | Field::Link(_)) = self.model.field(collection, field) {
-            self.conn.execute(
-                &format!(
-                    "UPDATE {} SET {} = NULL WHERE space_id = ?1 AND object_id = ?2",
-                    self.rows(collection),
-                    column(field)
-                ),
-                params![self.space.0, object.0],
-            )?;
-        }
-        self.drop_empty_row(collection, object)
-    }
-
-    /// Forgets the object's creates, deletes and moves: it is no longer
-    /// deleted or moved, and a row only its create held goes. A trace is
-    /// revived, as by a take-back.
-    fn clear_object_state(&mut self, object: ObjectId) -> Result<(), Error> {
-        let state = self.object(object)?;
-        let was_out = out_of_indexes(&state);
-        if state.object().moved_to().is_some() {
-            self.revived.insert(object);
-        }
-        self.conn.execute(
-            &format!(
-                "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
-                objects_in(self.prefix)
-            ),
-            params![self.space.0, object.0],
-        )?;
-        for collection in self.model.collections.keys() {
-            if was_out {
-                self.mark_deleted(collection, object, false)?;
-            }
-            self.drop_empty_row(collection, object)?;
-        }
-        Ok(())
-    }
-
-    /// Removes the object's row of `c_<collection>` when neither a field
-    /// state of the collection nor a create into it holds it: [`Self::row`]
-    /// makes a row only for those.
-    pub(super) fn drop_empty_row(&self, collection: &str, object: ObjectId) -> Result<(), Error> {
-        let has_state: bool = self.conn.query_row(
-            &format!(
-                "SELECT EXISTS (SELECT 1 FROM {} WHERE space_id = ?1 AND object_id = ?2)",
-                self.states(collection)
-            ),
-            params![self.space.0, object.0],
-            |r| r.get(0),
-        )?;
-        if !has_state && !self.object(object)?.creates_in(collection) {
-            self.conn.execute(
-                &format!(
-                    "DELETE FROM {} WHERE space_id = ?1 AND object_id = ?2",
-                    self.rows(collection)
-                ),
-                params![self.space.0, object.0],
-            )?;
         }
         Ok(())
     }

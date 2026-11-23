@@ -16,6 +16,7 @@ mod accounts;
 mod ad_hoc;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
+mod clear;
 mod fold;
 mod from_lock;
 mod joined;
