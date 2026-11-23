@@ -3,8 +3,8 @@
 //! identity. When the relay refuses a genesis with `not_allowed`, the SDK
 //! calls it, presents the answer with `admit`, and pushes the genesis
 //! again, once. A function that fails, or a text that is no admission,
-//! leaves the genesis refused as before (pm, 2026-11-23, NOC-469; names
-//! waiting on the owner's NOC-493).
+//! leaves the genesis refused as before (pm, 2026-11-23, NOC-469; names by
+//! Carsten, 2026-11-23, NOC-493).
 
 use std::collections::BTreeSet;
 use std::convert::Infallible;

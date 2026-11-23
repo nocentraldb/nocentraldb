@@ -1,5 +1,5 @@
 //! The account's identity through the bridge (RFC 0015, "In the SDK";
-//! names as pm built them on NOC-469, waiting on the owner's NOC-493):
+//! names as the owner decided them, Carsten, 2026-11-23, NOC-493):
 //! `open` answers `"identity"`, the recovery key in hex or `null` while
 //! the database waits to be paired, and `account.completePairing` answers
 //! the identity the pairing gave.

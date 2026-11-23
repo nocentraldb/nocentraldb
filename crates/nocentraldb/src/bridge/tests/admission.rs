@@ -1,5 +1,5 @@
 //! The app's admission function through the bridge (RFC 0015, "In the
-//! SDK"; names waiting on the owner's NOC-493): `open` takes
+//! SDK"; Carsten, 2026-11-23, NOC-493): `open` takes
 //! `"admission": true`; when the sync needs an admission, the worker sends
 //! `{"event": "admission", "request": n, "identity": hex}`, and the SDK
 //! answers with `admission.answer` `{"request": n, "admission": text |

@@ -1,5 +1,5 @@
-// `db.account.identity` (RFC 0015, "In the SDK"; names as pm built them on
-// NOC-469, waiting on the owner's NOC-493): the account's recovery key in
+// `db.account.identity` (RFC 0015, "In the SDK"; Carsten, 2026-11-23,
+// NOC-493): the account's recovery key in
 // hexadecimal, public, which the core answers on open, or null while the
 // database waits to be paired; completing a pairing gives it. Against a
 // fake core.

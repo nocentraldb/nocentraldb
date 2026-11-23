@@ -1,5 +1,5 @@
-// nc.open's `admission` option (RFC 0015, "In the SDK"; names waiting on
-// the owner's NOC-493): the app's function that fetches an admission from
+// nc.open's `admission` option (RFC 0015, "In the SDK"; Carsten,
+// 2026-11-23, NOC-493): the app's function that fetches an admission from
 // its backend. The core asks for one with an `admission` event; the SDK
 // calls the function with the identity and answers with
 // `admission.answer`, null when the function fails. Against a fake core.

@@ -1,5 +1,5 @@
-// nc.open's `admission` option (RFC 0015, "In the SDK"; names waiting on
-// the owner's NOC-493). The core asks for an admission with `{"event":
+// nc.open's `admission` option (RFC 0015, "In the SDK"; Carsten,
+// 2026-11-23, NOC-493). The core asks for an admission with `{"event":
 // "admission", "request": n, "identity": hex}` when the relay refuses a new
 // space; the SDK calls the app's function with the identity and answers
 // `admission.answer`, with null when the function throws or answers no

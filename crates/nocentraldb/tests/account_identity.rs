@@ -2,7 +2,7 @@
 //! account's identity"): the account's recovery key in lowercase
 //! hexadecimal, public, the same on every device and agent of the account
 //! and after a recovery; none for a database waiting to be paired (names
-//! as pm built them on NOC-469, waiting on the owner's NOC-493).
+//! as the owner decided them, Carsten, 2026-11-23, NOC-493).
 
 mod support;
 
