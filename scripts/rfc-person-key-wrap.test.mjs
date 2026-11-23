@@ -33,7 +33,7 @@ test("RFC 0003 gives the associated data and the 72 wrapped bytes", () => {
     /wrapped bytes\s+= nonce \(24 bytes\) \|\| ciphertext \(32 bytes\) \|\| tag \(16 bytes\)\s+72 bytes/,
   );
   assert.match(record, /XChaCha20-Poly1305, random nonce/);
-  assert.match(record, /Carsten, 2026-11-11/);
+  assert.match(record, /2026-11-11/);
 });
 
 test("RFC 0003 names the options not taken for the wrap", () => {

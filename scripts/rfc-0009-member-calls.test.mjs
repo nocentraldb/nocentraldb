@@ -48,13 +48,13 @@ test("the Rust SDK names MemberId, MemberInfo, MemberKind, list, remove and set_
   for (const pattern of [
     /`Members::list\(\) -> Result<Vec<MemberInfo>, Error>`/,
     /`MemberInfo \{ id: MemberId, account: Fingerprint, linked_to: Option<Fingerprint>, kind: MemberKind, role: Option<Role>, is_self: bool \}`/,
-    /`MemberInfo` is `#\[non_exhaustive\]`, so that a later field is no breaking change \(Carsten, 2026-11-13, NOC-307 A1\)/,
+    /`MemberInfo` is `#\[non_exhaustive\]`, so that a later field is no breaking change \(2026-11-13, NOC-307 A1\)/,
     /`MemberKind` is `Device`, `Agent` or `SubAgent`, `#\[non_exhaustive\]`/,
     /`MemberId` is public and opaque: `Copy`, `Eq`, `Ord`, `Hash` and `Debug`, and it prints and parses as 64 lowercase hex digits/,
     /`Members::remove\(MemberId\) -> Result<Notice, Error>` returns `NoticeCode::MemberRemoved`/,
     /`Members::set_role\(MemberId, Role\) -> Result<Notice, Error>` returns `NoticeCode::RoleSet`/,
     /`&Invitation` as the argument of `remove` and `set_role` was not taken/,
-    /Carsten, 2026-11-11, NOC-203/,
+    /2026-11-11, NOC-203/,
   ]) {
     assert.match(
       rust,

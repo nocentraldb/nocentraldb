@@ -11,7 +11,7 @@ import { read, section } from "./lib/rfc-text.mjs";
 
 const RFC_0002 = "docs/rfc/0002-change-and-log-format.md";
 const RFC_0006 = "docs/rfc/0006-local-view.md";
-const SOURCE = /Carsten, 2026-11-12, NOC-231/;
+const SOURCE = /2026-11-12, NOC-231/;
 
 test("RFC 0002's log holds written_at, set for the member's own changes", () => {
   const log = section(read(RFC_0002), "on-a-member");

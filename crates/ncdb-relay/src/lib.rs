@@ -5,7 +5,8 @@
 //! stores. [`Relay`] runs "What the relay checks" on every pushed frame and
 //! on every read, with RFC 0008's `resolve` from `ncdb-core` for
 //! membership, and answers with the codes of "The errors" ([`ErrorCode`]).
-//! [`auth`] verifies the signed challenge that opens a connection. The
+//! [`Relay::admit`] takes an admission token (RFC 0015, "Admission
+//! tokens"). [`auth`] verifies the signed challenge that opens a connection. The
 //! backend interface is [`store::RelayStore`], the membership table's rows
 //! are [`record`], the one test suite every backend passes is
 //! [`conformance`], and the first backend, SQLite, is [`sqlite`].
@@ -31,6 +32,7 @@
 //! **What this does not do yet.** No restore procedure beyond drawing a
 //! new epoch.
 
+mod admission;
 pub mod auth;
 pub mod conformance;
 mod error;

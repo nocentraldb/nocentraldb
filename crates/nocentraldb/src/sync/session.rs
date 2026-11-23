@@ -18,6 +18,7 @@ use super::wire::{self, Answer};
 use super::{Connection, apply, finalize, large, merge};
 use crate::db::{Inner, lock};
 
+mod admission;
 mod upload;
 
 use upload::{Retries, Uploaded};
@@ -410,6 +411,7 @@ impl<T: Transport> Session<'_, T> {
             }
             match self.ask(req).await? {
                 Answer::Pushed { results, .. } => {
+                    let results = self.admitted(space, &batch, results).await?;
                     let stopped = with(self.db, |inner| {
                         apply::pushed(inner, space, &batch_ids, results)
                     })?

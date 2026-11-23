@@ -14,7 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const RFC = "docs/rfc/0007-relay.md";
-const MARK = "(Carsten, 2026-11-12, NOC-286)";
+const MARK = "(2026-11-12, NOC-286)";
 
 /** The paragraph that starts "**Who may create a space.**". */
 const paragraph = () => {
