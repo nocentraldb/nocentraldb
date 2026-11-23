@@ -30,5 +30,5 @@ test("space.leave() names its notice spaceLeft, with the owner's text and its so
   const leave = line(section(read(RFC), "spaces"), "- **`space.leave()`**");
   assert.match(leave, /`spaceLeft`/);
   assert.ok(leave.includes(TEXT), "the leave bullet does not give the text");
-  assert.match(leave, /Carsten, 2026-11-11, NOC-219/);
+  assert.match(leave, /2026-11-11, NOC-219/);
 });

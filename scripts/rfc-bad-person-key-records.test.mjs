@@ -22,7 +22,7 @@ test("the Rust space status names the accounts whose person-key records failed",
   const text = bullet("- **The space status.**");
   assert.match(text, /`bad_person_key_records: Vec<Fingerprint>`/);
   assert.match(text, /\(0003-keys-and-cryptography\.md#the-person-key\)/);
-  assert.match(text, /Carsten, 2026-11-11, NOC-222/);
+  assert.match(text, /2026-11-11, NOC-222/);
 });
 
 test("RFC 0009's public names list the field with SpaceStatus", () => {

@@ -81,7 +81,7 @@ test("the text no longer waits for RFC 0007 or says nothing is built", () => {
 
 test("groups have left the design, withdrawn by the owner (NOC-76)", () => {
   const rfc = read();
-  const withdrawn = /withdrawn by the owner \(Carsten, 2026-11-09\)/i;
+  const withdrawn = /withdrawn by the owner \(2026-11-09\)/i;
   assert.match(section(rfc, "groups"), withdrawn);
   assert.match(line(rfc, "- **Groups.**"), withdrawn);
   assert.match(line(rfc, "| Groups? |"), withdrawn);
