@@ -73,7 +73,7 @@ const MAGIC = Buffer.from("nocentraldb-keys");
 test("RFC 0003 gives the key record's format 2 and still reads format 1", () => {
   const part = section(read(RFC_0003), "the-member-key");
   for (const pattern of [
-    /\*\*Format 2\*\* \(Carsten, 2026-11-12, NOC-285\)/,
+    /\*\*Format 2\*\* \(2026-11-12, NOC-285\)/,
     /\| 16 \| 1 \| format \| `2` \|/,
     /\| 81 \| 1 \| account \|/,
     /`0`: no account yet/,
@@ -96,7 +96,7 @@ test("RFC 0003 gives the key record's format 2 and still reads format 1", () => 
 test("RFC 0010 gives the number of a recovered account key and what an existing database gets", () => {
   const part = section(read(RFC_0010), "the-recovery-code");
   for (const pattern of [
-    /one more than the highest number the device has learned, and the current time in Unix seconds \(Carsten, 2026-11-12, NOC-285\)/,
+    /one more than the highest number the device has learned, and the current time in Unix seconds \(2026-11-12, NOC-285\)/,
     /\*\*Databases that exist today\.\*\*/,
     /recovery code and statement number 1 for the account key it holds/,
     /entries already written stay as written/,
