@@ -104,7 +104,7 @@ pub(super) fn decode(operation: &Operation, origin: Origin) -> Result<Edit, Oper
     if operation.op != UPDATE {
         return Err(UnknownOperation);
     }
-    let Some(Value::Map(entries)) = &operation.value else {
+    let Some(Value::Map(entries)) = operation.value() else {
         return Err(MalformedArguments);
     };
     let unknown = FIRST_UNKNOWN_ARGUMENT..=LAST_MUST_UNDERSTAND_ARGUMENT;
@@ -115,7 +115,7 @@ pub(super) fn decode(operation: &Operation, origin: Origin) -> Result<Edit, Oper
         return Err(UnknownArgument);
     }
     let (mut update, mut clients) = (None, None);
-    for (key, value) in entries {
+    for (key, value) in &entries {
         match (key, value) {
             (Key::Unsigned(ARGUMENT_UPDATE), Value::Bytes(bytes)) => update = Some(bytes),
             (Key::Unsigned(ARGUMENT_CLIENTS), Value::Map(map)) => clients = Some(map),
